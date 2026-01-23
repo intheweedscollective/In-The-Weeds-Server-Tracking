@@ -229,7 +229,7 @@ export default function ReviewGeneration() {
                         <div className="hidden md:flex gap-6 ml-8">
                           <div className="text-center">
                             <div className="text-lg font-serif font-bold text-primary">
-                              {employee.total_score?.toFixed(1) || 'N/A'}
+                              {employee.cumulative_score?.toFixed(1) || 'N/A'}
                             </div>
                             <div className="text-xs text-muted-foreground uppercase">
                               Total Score
