@@ -399,6 +399,9 @@ def generate_pdf(employee: Employee, review_content: str, quarter: str, year: in
     # Line graph PDFs/images are appended as page 2 via pypdf in generate_employee_review.
     # Build PDF
     doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
+
 
 
 def _create_graph_pdf_from_image_bytes(image_bytes: bytes) -> bytes:
