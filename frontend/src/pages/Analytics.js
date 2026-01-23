@@ -160,7 +160,7 @@ export default function Analytics() {
     return Math.round((count / total) * 100);
   };
 
-  const formatMetricValue = (metric, value) => {
+  const formatMetricValueOld = (metric, value) => {
     switch (metric) {
       case 'ppa':
       case 'gpg':
