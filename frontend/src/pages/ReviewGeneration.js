@@ -265,7 +265,7 @@ export default function ReviewGeneration() {
               Employee Line Graph (Optional)
             </CardTitle>
             <CardDescription>
-              Upload a quarterly PDF/image that will be appended as page 2 to the selected employees review.
+              Upload a quarterly PDF/image that will be appended as page 2 to the selected employee&apos;s review.
             </CardDescription>
           </CardHeader>
           <CardContent>
