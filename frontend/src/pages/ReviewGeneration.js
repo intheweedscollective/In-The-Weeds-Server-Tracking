@@ -253,7 +253,7 @@ export default function ReviewGeneration() {
           </CardContent>
         </Card>
 
-        {/* Employee List */}
+        {/* Line Graph Upload Section */}\n        <Card className=\"bubba-card mb-8\" data-testid=\"line-graph-upload-card\">\n          <CardHeader>\n            <CardTitle className=\"flex items-center gap-2\">\n              <FileText className=\"w-5 h-5\" />\n              Quarterly Performance Graph\n            </CardTitle>\n            <CardDescription>\n              Upload quarterly line graph to include as second page in all reviews\n            </CardDescription>\n          </CardHeader>\n          <CardContent>\n            <LineGraphUpload \n              quarter={selectedQuarter}\n              year={parseInt(selectedYear)}\n              onUploadSuccess={() => {\n                toast.success(\"Line graph uploaded successfully!\");\n                // Refresh any necessary data\n              }}\n            />\n          </CardContent>\n        </Card>\n\n        {/* Employee List */}
         {employees.length === 0 ? (
           <Card className="bubba-card" data-testid="no-employees">
             <CardContent className="text-center py-12">
