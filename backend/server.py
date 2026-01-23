@@ -356,7 +356,9 @@ def generate_pdf(employee: Employee, review_content: str, quarter: str, year: in
         ["Cumulative Score", str(employee.cumulative_score or 'N/A'), peer_rankings['cumulative'], get_performance_level(employee.cumulative_score)]
     ]
     
-    kpi_table = Table(kpi_data, colWidths=[2.2*inch, 1.0*inch, 0.9*inch, 1.4*inch])
+    # Match the full content width (A4: 595.27pt; margins: 0.6"+0.6" => 86.4pt)
+    # Available width ≈ 508.9pt = 7.07 inches
+    kpi_table = Table(kpi_data, colWidths=[2.75*inch, 1.15*inch, 1.05*inch, 2.12*inch])
     kpi_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#005B96')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),

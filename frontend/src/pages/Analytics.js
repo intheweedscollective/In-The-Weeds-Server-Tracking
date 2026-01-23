@@ -7,6 +7,7 @@ import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { formatCurrency, formatLSCRatio, formatNumber, KPI_DEFINITIONS } from "../utils/formatters";
+import { toast } from "sonner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -15,6 +16,28 @@ export default function Analytics() {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [analytics, setAnalytics] = useState({});
+
+
+  const handlePrint = async () => {
+    try {
+      const response = await axios.get(`${API}/analytics/pdf`, {
+        responseType: "blob",
+      });
+
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "analytics_report.pdf";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error(error);
+      toast.error("Could not download Analytics PDF");
+    }
+  };
 
   useEffect(() => {
     fetchEmployees();
@@ -144,21 +167,31 @@ export default function Analytics() {
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="flex items-center gap-4 mb-8">
-          <Link to="/" className="print:hidden">
-            <Button variant="outline" size="sm">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Dashboard
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-3xl font-serif font-bold text-primary mb-2" data-testid="page-title">
-              📊 Performance Analytics
-            </h1>
-            <p className="text-muted-foreground" data-testid="page-subtitle">
-              Performance distribution and benchmark analysis for all metrics
-            </p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <Link to="/" className="print:hidden">
+              <Button variant="outline" size="sm" className="w-full sm:w-auto">
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Dashboard
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-3xl font-serif font-bold text-primary mb-2" data-testid="page-title">
+                📊 Performance Analytics
+              </h1>
+              <p className="text-muted-foreground" data-testid="page-subtitle">
+                Performance distribution and benchmark analysis for all metrics
+              </p>
+            </div>
           </div>
+
+          <Button
+            onClick={handlePrint}
+            className="bubba-btn-primary w-full sm:w-auto print:hidden"
+            data-testid="download-analytics-pdf"
+          >
+            Download PDF Report
+          </Button>
         </div>
 
         {/* Overview Stats */}
