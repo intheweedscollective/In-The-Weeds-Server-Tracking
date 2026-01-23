@@ -387,7 +387,7 @@ async def upload_excel(file: UploadFile = File(...)):
                 'metric_bonus_points': row.get('metric_bonus_points', row.get('metric bonus points', row.get('bonus_points', row.get('bonus points', None)))),
                 'cumulative_score': row.get('cumulative_score', row.get('cumulative score', row.get('cummulative_score', row.get('cummulative score', row.get('total_score', row.get('total score', None)))))),
                 'overall_rank': format_overall_rank(row.get('overall_rank', row.get('overall rank', None))),
-                'ranking': row.get('ranking', row.get('rank', None)),
+                'ranking': str(row.get('ranking', row.get('rank', ''))) if pd.notna(row.get('ranking', row.get('rank', None))) else None,
                 'performance_tier': row.get('performance_tier', row.get('performance tier', None))
             }
             
