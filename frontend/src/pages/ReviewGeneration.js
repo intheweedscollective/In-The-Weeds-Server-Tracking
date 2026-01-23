@@ -50,18 +50,33 @@ export default function ReviewGeneration() {
     setGenerating(prev => ({ ...prev, [employeeId]: true }));
     
     try {
+      toast.loading("Generating review with AI...", {
+        id: `review-${employeeId}`,
+        duration: 30000
+      });
+      
       const response = await axios.post(`${API}/employees/${employeeId}/generate-review`, {
         quarter: selectedQuarter,
         year: parseInt(selectedYear)
+      }, {
+        timeout: 60000 // 60 second timeout
       });
 
+      toast.dismiss(`review-${employeeId}`);
+
       if (response.data.success) {
-        toast.success("Review generated successfully!");
+        toast.success("Review generated successfully!", {
+          description: "Processing PDF download...",
+          duration: 2000
+        });
         
         // Download PDF
         if (response.data.pdf_base64) {
           const employee = employees.find(emp => emp.id === employeeId);
-          downloadPDF(response.data.pdf_base64, `${employee.name}_${selectedQuarter}_${selectedYear}_Review.pdf`);
+          const filename = `${employee?.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'Employee'}_${selectedQuarter}_${selectedYear}_Review.pdf`;
+          downloadPDF(response.data.pdf_base64, filename);
+        } else {
+          toast.warning("Review generated but PDF creation failed");
         }
         
         fetchReviews();
@@ -69,8 +84,16 @@ export default function ReviewGeneration() {
         toast.error(response.data.message || "Failed to generate review");
       }
     } catch (error) {
+      toast.dismiss(`review-${employeeId}`);
       console.error("Error generating review:", error);
-      toast.error("Error generating review: " + (error.response?.data?.detail || error.message));
+      
+      if (error.code === 'ECONNABORTED') {
+        toast.error("Review generation timed out. Please try again.");
+      } else if (error.response?.status === 500) {
+        toast.error("Server error. Please check your API key and try again.");
+      } else {
+        toast.error("Error generating review: " + (error.response?.data?.detail || error.message));
+      }
     } finally {
       setGenerating(prev => ({ ...prev, [employeeId]: false }));
     }
