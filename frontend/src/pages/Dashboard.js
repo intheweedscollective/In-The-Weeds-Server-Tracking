@@ -301,6 +301,20 @@ export default function Dashboard() {
                           <p className="text-muted-foreground" data-testid={`employee-position-${employee.id}`}>
                             {employee.position}
                           </p>
+                          {(employee.overall_rank || employee.ranking) && (
+                            <div className="flex gap-2 mt-1">
+                              {employee.overall_rank && (
+                                <span className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded">
+                                  Rank: {formatOverallRank(employee.overall_rank)}
+                                </span>
+                              )}
+                              {employee.ranking && (
+                                <span className={`text-xs px-2 py-1 rounded ${getRankingHierarchy(employee.ranking).bgColor} ${getRankingHierarchy(employee.ranking).color}`}>
+                                  {formatRanking(employee.ranking)} - {getRankingHierarchy(employee.ranking).level}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                         <span className={`performance-badge ${performance.class}`} data-testid={`employee-performance-${employee.id}`}>
                           {performance.text}
