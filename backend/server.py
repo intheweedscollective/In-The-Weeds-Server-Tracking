@@ -91,6 +91,29 @@ class ReviewResponse(BaseModel):
     pdf_base64: Optional[str] = None
 
 # Helper function to generate review content
+# Helper functions
+def format_overall_rank(rank_value):
+    """Convert overall rank to proper string format"""
+    if rank_value is None or pd.isna(rank_value):
+        return None
+    
+    # If it's already a string like "9 of 26", return as is
+    if isinstance(rank_value, str):
+        if ' of ' in rank_value:
+            return rank_value
+        # If it's just a number as string, convert it
+        try:
+            rank_num = int(rank_value)
+            return f"{rank_num} of 26"
+        except ValueError:
+            return str(rank_value)
+    
+    # If it's a number, convert to "X of 26" format
+    if isinstance(rank_value, (int, float)):
+        return f"{int(rank_value)} of 26"
+    
+    return str(rank_value)
+
 def format_lsc_ratio(value):
     """Format LSC ratio as '1 in xxx'"""
     if value is None or value == 0:
