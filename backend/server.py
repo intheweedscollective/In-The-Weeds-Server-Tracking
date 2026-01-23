@@ -384,7 +384,7 @@ def generate_pdf(employee: Employee, review_content: str, quarter: str, year: in
     for paragraph in paragraphs:
         story.append(Paragraph(paragraph, body_style))
     
-    story.append(Spacer(1, 12))
+    story.append(Spacer(1, 14))
     
     # Compact signature section
     signature_data = [
