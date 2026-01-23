@@ -388,7 +388,7 @@ async def upload_excel(file: UploadFile = File(...)):
                 'cumulative_score': row.get('cumulative_score', row.get('cumulative score', row.get('cummulative_score', row.get('cummulative score', row.get('total_score', row.get('total score', None)))))),
                 'overall_rank': format_overall_rank(row.get('overall_rank', row.get('overall rank', None))),
                 'ranking': str(row.get('ranking', row.get('rank', ''))) if pd.notna(row.get('ranking', row.get('rank', None))) else None,
-                'performance_tier': row.get('performance_tier', row.get('performance tier', None))
+                'performance_tier': str(row.get('performance_tier', row.get('performance tier', ''))) if pd.notna(row.get('performance_tier', row.get('performance tier', None))) else None
             }
             
             # Add any additional columns to additional_data
