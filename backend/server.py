@@ -59,8 +59,8 @@ class EmployeeCreate(BaseModel):
     gpg: Optional[float] = None
     pplbw: Optional[float] = None
     lsc_ratio: Optional[float] = None
-    bonus_points: Optional[float] = None
-    total_score: Optional[float] = None
+    metric_bonus_points: Optional[float] = None
+    cumulative_score: Optional[float] = None
     additional_data: Dict[str, Any] = Field(default_factory=dict)
 
 class Review(BaseModel):
