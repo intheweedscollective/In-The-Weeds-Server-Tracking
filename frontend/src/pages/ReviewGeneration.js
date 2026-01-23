@@ -77,12 +77,60 @@ export default function ReviewGeneration() {
   };
 
   const downloadPDF = (base64Data, filename) => {
-    const link = document.createElement('a');
-    link.href = `data:application/pdf;base64,${base64Data}`;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      // Create blob from base64 data
+      const binaryString = atob(base64Data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      
+      // Check if we're on mobile
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      
+      if (isMobile) {
+        // For mobile devices, open PDF in new window/tab
+        const url = URL.createObjectURL(blob);
+        const newWindow = window.open(url, '_blank');
+        if (!newWindow) {
+          // If popup blocked, show message with URL
+          toast.success("Review generated! PDF will download shortly.", {
+            description: "If download doesn't start, check your downloads folder.",
+            duration: 5000
+          });
+          // Fallback: still try the download link method
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = filename;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
+        
+        // Clean up URL after a delay
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+      } else {
+        // Desktop: use standard download method
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }
+      
+      toast.success("Review PDF generated successfully!", {
+        description: `${filename} ready for download`,
+        duration: 3000
+      });
+      
+    } catch (error) {
+      console.error('PDF download error:', error);
+      toast.error("PDF generated but download failed. Please try again.");
+    }
   };
 
   const hasRecentReview = (employeeId) => {
