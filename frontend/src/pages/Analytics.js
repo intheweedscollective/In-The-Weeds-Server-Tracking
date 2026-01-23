@@ -51,30 +51,40 @@ export default function Analytics() {
         return;
       }
 
-      const sortedValues = validValues.sort((a, b) => b - a);
+      // For high/medium/low: top/middle/bottom thirds. Note LSC is inverse (lower is better).
+      const sortedValues = [...validValues].sort((a, b) => {
+        if (metric === 'lsc_ratio') return a - b;
+        return b - a;
+      });
+
       const benchmark = KPI_DEFINITIONS[metric]?.benchmark || 0;
       const average = validValues.reduce((sum, val) => sum + val, 0) / validValues.length;
-      
-      // Calculate percentile thresholds
-      const highThreshold = sortedValues[Math.floor(sortedValues.length * 0.25)] || 0;
-      const lowThreshold = sortedValues[Math.floor(sortedValues.length * 0.75)] || 0;
+
+      const topThirdIndex = Math.floor(sortedValues.length * (1 / 3));
+      const bottomThirdIndex = Math.floor(sortedValues.length * (2 / 3));
+
+      // Thresholds to classify *raw values* into buckets
+      // For normal metrics: high if >= highThreshold, low if < lowThreshold
+      // For LSC (inverse): high if <= highThreshold, low if > lowThreshold
+      const highThreshold = sortedValues[topThirdIndex] ?? sortedValues[sortedValues.length - 1] ?? 0;
+      const lowThreshold = sortedValues[bottomThirdIndex] ?? sortedValues[sortedValues.length - 1] ?? 0;
       
       let high = 0, medium = 0, low = 0, aboveBenchmark = 0;
       
       validValues.forEach(val => {
         if (metric === 'lsc_ratio') {
-          // For LSC ratio, lower is better
-          if (val <= lowThreshold) high++;
-          else if (val <= highThreshold) medium++;
+          // Inverse: smaller denominator is better (e.g., 1 in 34 better than 1 in 100)
+          if (val <= highThreshold) high++;
+          else if (val <= lowThreshold) medium++;
           else low++;
-          
-          if (val <= (1 / benchmark)) aboveBenchmark++; // 1 in 100 = 0.01
+
+          const benchmarkDenominator = Math.round(1 / benchmark); // e.g. 0.01 -> 100
+          if (val <= benchmarkDenominator) aboveBenchmark++;
         } else {
-          // For other metrics, higher is better
           if (val >= highThreshold) high++;
           else if (val >= lowThreshold) medium++;
           else low++;
-          
+
           if (val >= benchmark) aboveBenchmark++;
         }
       });
