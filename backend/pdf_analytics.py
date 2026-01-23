@@ -1,6 +1,6 @@
 import io
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import requests
 from io import BytesIO
@@ -91,10 +91,9 @@ def _distribution_bar(high: int, medium: int, low: int, total: int) -> Table:
     """Create a stacked bar using a 1-row table with 3 colored cells."""
     total = total or 1
 
-    total_width = 6.8 * inch
+    total_width = 7.4 * inch
 
-    # Ensure each segment has a minimum width so it remains visible.
-    min_w = 0.2 * inch
+    min_w = 0.15 * inch
     high_w = max(min_w, total_width * (high / total)) if high > 0 else min_w
     med_w = max(min_w, total_width * (medium / total)) if medium > 0 else min_w
     low_w = max(min_w, total_width * (low / total)) if low > 0 else min_w
@@ -105,7 +104,7 @@ def _distribution_bar(high: int, medium: int, low: int, total: int) -> Table:
     bar = Table(
         [["", "", ""]],
         colWidths=[high_w * scale, med_w * scale, low_w * scale],
-        rowHeights=[0.22 * inch],
+        rowHeights=[0.15 * inch],
     )
     bar.setStyle(
         TableStyle(
@@ -148,9 +147,9 @@ def _metric_block(
         )
     )
 
-    blocks.append(Spacer(1, 6))
+    blocks.append(Spacer(1, 3))
     blocks.append(_distribution_bar(high, medium, low, total))
-    blocks.append(Spacer(1, 6))
+    blocks.append(Spacer(1, 3))
 
     counts_line = (
         f"High {high} ({_pct(high, total)})  •  "
@@ -165,7 +164,7 @@ def _metric_block(
 
     details = Table(
         [["Above Benchmark", above_display, "Team Average", avg_display]],
-        colWidths=[1.6 * inch, 1.7 * inch, 1.6 * inch, 1.9 * inch],
+        colWidths=[1.55 * inch, 1.65 * inch, 1.55 * inch, 2.1 * inch],
     )
     details.setStyle(
         TableStyle(
@@ -177,37 +176,37 @@ def _metric_block(
                 ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E5E7EB")),
                 ("ALIGN", (0, 0), (-1, -1), "CENTER"),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("TOPPADDING", (0, 0), (-1, -1), 8),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
             ]
         )
     )
 
-    blocks.append(Spacer(1, 8))
+    blocks.append(Spacer(1, 4))
     blocks.append(details)
 
     meeting_pct = _pct(above, total) if not bench_is_na else "N/A"
-    blocks.append(Spacer(1, 6))
+    blocks.append(Spacer(1, 3))
     blocks.append(Paragraph(f"Meeting benchmark: {meeting_pct}", styles["metric_text"]))
 
     return blocks
 
 
 def build_analytics_pdf(analytics: Dict[str, Dict[str, Any]], kpi_defs: Dict[str, Dict[str, Any]]) -> bytes:
-    """Generate a branded Analytics PDF report.
+    """Generate a branded Analytics PDF report condensed to ~2 pages.
 
-    - Page 1: logo + overview tiles + summary table
-    - Next pages: metric detail sections (2 metrics per page)
+    - Page 1: logo + overview tiles + summary table + 3 metric blocks
+    - Page 2: remaining 3 metric blocks
     """
 
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        topMargin=0.55 * inch,
-        bottomMargin=0.55 * inch,
-        leftMargin=0.6 * inch,
-        rightMargin=0.6 * inch,
+        topMargin=0.3 * inch,
+        bottomMargin=0.3 * inch,
+        leftMargin=0.35 * inch,
+        rightMargin=0.35 * inch,
     )
 
     base_styles = getSampleStyleSheet()
@@ -219,7 +218,7 @@ def build_analytics_pdf(analytics: Dict[str, Dict[str, Any]], kpi_defs: Dict[str
         fontSize=18,
         textColor=colors.HexColor("#005B96"),
         alignment=1,
-        spaceAfter=6,
+        spaceAfter=4,
     )
     subtitle_style = ParagraphStyle(
         "subtitle",
@@ -228,16 +227,16 @@ def build_analytics_pdf(analytics: Dict[str, Dict[str, Any]], kpi_defs: Dict[str
         fontSize=10,
         textColor=colors.HexColor("#374151"),
         alignment=1,
-        spaceAfter=10,
+        spaceAfter=8,
     )
     section_style = ParagraphStyle(
         "section",
         parent=base_styles["Heading2"],
         fontName="Helvetica-Bold",
-        fontSize=12,
+        fontSize=11,
         textColor=colors.HexColor("#005B96"),
-        spaceBefore=6,
-        spaceAfter=6,
+        spaceBefore=4,
+        spaceAfter=4,
         backColor=colors.HexColor("#EFF6FF"),
     )
 
@@ -245,9 +244,9 @@ def build_analytics_pdf(analytics: Dict[str, Dict[str, Any]], kpi_defs: Dict[str
         "metric_title",
         parent=base_styles["Heading3"],
         fontName="Helvetica-Bold",
-        fontSize=12,
+        fontSize=11,
         textColor=colors.HexColor("#005B96"),
-        spaceAfter=2,
+        spaceAfter=1,
     )
     metric_subtitle = ParagraphStyle(
         "metric_subtitle",
@@ -255,7 +254,7 @@ def build_analytics_pdf(analytics: Dict[str, Dict[str, Any]], kpi_defs: Dict[str
         fontName="Helvetica",
         fontSize=9,
         textColor=colors.HexColor("#374151"),
-        spaceAfter=4,
+        spaceAfter=2,
     )
     metric_text = ParagraphStyle(
         "metric_text",
@@ -263,7 +262,7 @@ def build_analytics_pdf(analytics: Dict[str, Dict[str, Any]], kpi_defs: Dict[str
         fontName="Helvetica",
         fontSize=9,
         textColor=colors.HexColor("#111827"),
-        spaceAfter=2,
+        spaceAfter=1,
     )
 
     local_styles = {
@@ -282,7 +281,7 @@ def build_analytics_pdf(analytics: Dict[str, Dict[str, Any]], kpi_defs: Dict[str
         logo_img = Image(logo_buffer, width=0.78 * inch, height=0.78 * inch)
         logo_img.hAlign = "CENTER"
         story.append(logo_img)
-        story.append(Spacer(1, 6))
+        story.append(Spacer(1, 4))
     except Exception:
         pass
 
@@ -302,7 +301,7 @@ def build_analytics_pdf(analytics: Dict[str, Dict[str, Any]], kpi_defs: Dict[str
     above_all = sum(int((analytics.get(k, {}) or {}).get("benchmark") or 0) for k in kpi_defs.keys())
 
     overview_rows = [[f"Above Benchmark\n{_pct(above_all, total_all)}", f"High\n{_pct(high_all, total_all)}", f"Medium\n{_pct(med_all, total_all)}", f"Low\n{_pct(low_all, total_all)}"]]
-    overview = Table(overview_rows, colWidths=[1.7 * inch, 1.7 * inch, 1.7 * inch, 1.7 * inch])
+    overview = Table(overview_rows, colWidths=[1.85 * inch, 1.85 * inch, 1.85 * inch, 1.85 * inch])
     overview.setStyle(
         TableStyle(
             [
@@ -315,19 +314,19 @@ def build_analytics_pdf(analytics: Dict[str, Dict[str, Any]], kpi_defs: Dict[str
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
                 ("FONTSIZE", (0, 0), (-1, -1), 10),
-                ("TOPPADDING", (0, 0), (-1, -1), 10),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
             ]
         )
     )
 
     story.append(overview)
-    story.append(Spacer(1, 12))
+    story.append(Spacer(1, 8))
 
     # Summary table
     story.append(Paragraph("Summary Table", section_style))
 
-    rows = [["Metric", "High", "Medium", "Low", "Benchmark", "Above Bench", "Avg", "N"]]
+    rows = [["Metric", "High", "Medium", "Low", "Benchmark", "Above", "Avg", "N"]]
     for metric_key in kpi_defs.keys():
         meta = kpi_defs.get(metric_key, {}) or {}
         data = analytics.get(metric_key, {}) or {}
@@ -356,7 +355,16 @@ def build_analytics_pdf(analytics: Dict[str, Dict[str, Any]], kpi_defs: Dict[str
 
     summary = Table(
         rows,
-        colWidths=[2.0 * inch, 0.75 * inch, 0.85 * inch, 0.75 * inch, 0.9 * inch, 1.05 * inch, 0.75 * inch, 0.45 * inch],
+        colWidths=[
+            1.95 * inch,
+            0.72 * inch,
+            0.78 * inch,
+            0.72 * inch,
+            0.82 * inch,
+            0.8 * inch,
+            0.72 * inch,
+            0.45 * inch,
+        ],
     )
     summary.setStyle(
         TableStyle(
@@ -369,30 +377,35 @@ def build_analytics_pdf(analytics: Dict[str, Dict[str, Any]], kpi_defs: Dict[str
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E5E7EB")),
                 ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F9F9F9")]),
+                ("TOPPADDING", (0, 0), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
             ]
         )
     )
 
     story.append(summary)
+    story.append(Spacer(1, 8))
 
-    # Metric details pages (2 per page)
+    # Metric details blocks (3 on page 1, 3 on page 2)
+    story.append(Paragraph("Metric Details", section_style))
+    story.append(Spacer(1, 6))
+
     metric_keys = list(kpi_defs.keys())
-    pairs: List[Tuple[str, str]] = []
-    i = 0
-    while i < len(metric_keys):
-        a = metric_keys[i]
-        b = metric_keys[i + 1] if i + 1 < len(metric_keys) else ""
-        pairs.append((a, b))
-        i += 2
 
-    for a, b in pairs:
-        story.append(PageBreak())
-        story.append(Paragraph("Metric Details", section_style))
-        story.append(Spacer(1, 8))
-        story.extend(_metric_block(analytics, kpi_defs, a, local_styles))
-        if b:
-            story.append(Spacer(1, 16))
-            story.extend(_metric_block(analytics, kpi_defs, b, local_styles))
+    # First 3
+    for idx in range(3):
+        story.extend(_metric_block(analytics, kpi_defs, metric_keys[idx], local_styles))
+        if idx < 2:
+            story.append(Spacer(1, 10))
+
+    story.append(PageBreak())
+    story.append(Paragraph("Metric Details (continued)", section_style))
+    story.append(Spacer(1, 6))
+
+    for idx in range(3, 6):
+        story.extend(_metric_block(analytics, kpi_defs, metric_keys[idx], local_styles))
+        if idx < 5:
+            story.append(Spacer(1, 10))
 
     doc.build(story)
     buffer.seek(0)
