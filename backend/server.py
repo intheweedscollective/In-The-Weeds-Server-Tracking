@@ -191,61 +191,75 @@ PLEASE DO NOT include any headers, titles, or formatting markers. Just provide e
 # Helper function to generate PDF
 def generate_pdf(employee: Employee, review_content: str, quarter: str, year: int) -> bytes:
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5*inch, bottomMargin=0.5*inch)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5*inch, bottomMargin=0.5*inch,
+                          leftMargin=0.75*inch, rightMargin=0.75*inch)
     
-    # Create custom styles
+    # Create custom styles with enhanced branding
     styles = getSampleStyleSheet()
     
-    # Custom styles for Bubba Gump branding
+    # Enhanced Bubba Gump branding styles
     title_style = ParagraphStyle(
-        'CustomTitle',
+        'BubbaTitle',
         parent=styles['Title'],
         fontName='Helvetica-Bold',
-        fontSize=24,
-        spaceAfter=20,
+        fontSize=26,
+        spaceAfter=8,
         textColor=colors.HexColor('#D12E2E'),
         alignment=TA_CENTER
     )
     
+    subtitle_style = ParagraphStyle(
+        'BubbaSubtitle', 
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=14,
+        textColor=colors.HexColor('#005B96'),
+        alignment=TA_CENTER,
+        spaceAfter=20
+    )
+    
     header_style = ParagraphStyle(
-        'CustomHeader',
+        'BubbaHeader',
         parent=styles['Heading1'],
         fontName='Helvetica-Bold',
         fontSize=16,
-        textColor=colors.HexColor('#005B96'),
-        spaceAfter=10,
-        spaceBefore=15
+        textColor=colors.HexColor('#D12E2E'),
+        spaceAfter=12,
+        spaceBefore=20,
+        borderWidth=0,
+        borderColor=colors.HexColor('#D12E2E'),
+        borderPadding=8,
+        backColor=colors.HexColor('#FFF5F5')
     )
     
     body_style = ParagraphStyle(
-        'CustomBody',
+        'BubbaBody',
         parent=styles['Normal'],
         fontName='Helvetica',
         fontSize=11,
-        spaceAfter=8,
-        leading=14
+        spaceAfter=12,
+        leading=16,
+        textColor=colors.HexColor('#2C3E50')
     )
     
-    kpi_style = ParagraphStyle(
-        'KPIStyle',
-        parent=styles['Normal'],
-        fontName='Helvetica-Bold',
-        fontSize=12,
-        textColor=colors.HexColor('#D12E2E'),
-        spaceAfter=4
-    )
-    
-    # Build PDF content
+    # Build PDF content with enhanced branding
     story = []
     
-    # Header with branding
-    story.append(Paragraph("BUBBA GUMP SHRIMP CO.", title_style))
-    story.append(Paragraph("Restaurant & Market", ParagraphStyle('subtitle', parent=styles['Normal'], fontSize=12, alignment=TA_CENTER, textColor=colors.HexColor('#005B96'))))
-    story.append(Spacer(1, 20))
+    # Header section with branding
+    story.append(Paragraph("🦐 BUBBA GUMP SHRIMP CO. 🦐", title_style))
+    story.append(Paragraph("Restaurant & Market • Las Vegas", subtitle_style))
+    story.append(Spacer(1, 10))
     
-    # Review title
-    story.append(Paragraph(f"QUARTERLY PERFORMANCE REVIEW - {quarter} {year}", header_style))
+    # Decorative line
+    story.append(Paragraph('<para align="center">~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~</para>',
+                          ParagraphStyle('decorative', fontSize=8, textColor=colors.HexColor('#8B5A2B'), alignment=TA_CENTER)))
     story.append(Spacer(1, 15))
+    
+    # Review title with styling
+    story.append(Paragraph(f"QUARTERLY PERFORMANCE REVIEW", header_style))
+    story.append(Paragraph(f"{quarter} {year} Performance Assessment", 
+                          ParagraphStyle('quarter', fontSize=12, textColor=colors.HexColor('#005B96'), alignment=TA_CENTER)))
+    story.append(Spacer(1, 20))
     
     # Employee info section
     emp_info_data = [
