@@ -41,8 +41,8 @@ export default function Dashboard() {
 
   const calculateStats = () => {
     const total = employees.length;
-    const avgScore = employees.reduce((sum, emp) => sum + (emp.total_score || 0), 0) / total;
-    const topPerformers = employees.filter(emp => (emp.total_score || 0) >= 85).length;
+    const avgScore = employees.reduce((sum, emp) => sum + (emp.cumulative_score || 0), 0) / total;
+    const topPerformers = employees.filter(emp => (emp.cumulative_score || 0) >= 85).length;
     const recentUploads = employees.filter(emp => {
       const uploadDate = new Date(emp.created_at);
       const weekAgo = new Date();
