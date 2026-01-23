@@ -27,12 +27,14 @@ export const KPI_DEFINITIONS = {
   metric_bonus_points: {
     name: "Metric Bonus Points",
     shortName: "Metric Bonus",
+    benchmark: 5,
     description: "Special incentives when an employee exceeds the benchmark for the store",
     format: "number"
   },
   cumulative_score: {
     name: "Cumulative Score",
     shortName: "Final Grade",
+    benchmark: 80,
     description: "Overall performance score",
     format: "number"
   }

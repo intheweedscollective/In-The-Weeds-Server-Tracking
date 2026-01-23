@@ -44,9 +44,8 @@ KPI_DEFINITIONS = {
     "gpg": {"name": "Glassware $ Per Guest (GPG)", "format": "currency", "benchmark": 1.0},
     "pplbw": {"name": "Per Person Liquor Beer Wine (PPLBW)", "format": "currency", "benchmark": 8.0},
     "lsc_ratio": {"name": "Landry's Select Card Ratio (LSC)", "format": "ratio", "benchmark": 0.01},
-    # No fixed benchmark provided in the source UI for these:
-    "metric_bonus_points": {"name": "Metric Bonus Points", "format": "number", "benchmark": 0},
-    "cumulative_score": {"name": "Cumulative Score", "format": "number", "benchmark": 0},
+    "metric_bonus_points": {"name": "Metric Bonus Points", "format": "number", "benchmark": 5},
+    "cumulative_score": {"name": "Cumulative Score", "format": "number", "benchmark": 80},
 }
 
 
