@@ -284,20 +284,30 @@ def generate_pdf(employee: Employee, review_content: str, quarter: str, year: in
     story.append(emp_table)
     story.append(Spacer(1, 20))
     
-    # KPI Performance Metrics
-    story.append(Paragraph("KEY PERFORMANCE INDICATORS", header_style))
+    # KPI Performance Metrics with Peer Rankings
+    story.append(Paragraph("KEY PERFORMANCE INDICATORS & PEER RANKINGS", header_style))
+    
+    # Extract peer rankings
+    peer_rankings = {
+        'ppa': employee.additional_data.get('ppa rank vs peers', 'N/A'),
+        'gpg': employee.additional_data.get('gpg vs peers', 'N/A'), 
+        'pplbw': employee.additional_data.get('pplbw vs peers', 'N/A'),
+        'lsc_ratio': employee.additional_data.get('lsc ratio vs peers', 'N/A'),
+        'metric_bonus': employee.additional_data.get('metric bonus points vs peers', 'N/A'),
+        'cumulative': employee.additional_data.get('cummulative score vs peers', 'N/A')
+    }
     
     kpi_data = [
-        ["Metric", "Score", "Performance Level"],
-        ["PPA (Per Person Average)", str(employee.ppa or 'N/A'), get_performance_level(employee.ppa)],
-        ["GPG (Glassware $ Per Guest)", str(employee.gpg or 'N/A'), get_performance_level(employee.gpg)],
-        ["PPLBW (Per Person Liquor Beer Wine)", str(employee.pplbw or 'N/A'), get_performance_level(employee.pplbw)],
-        ["LSC Ratio (Landry's Select Card)", format_lsc_ratio(employee.lsc_ratio), get_performance_level(employee.lsc_ratio)],
-        ["Metric Bonus Points", str(employee.metric_bonus_points or 'N/A'), get_performance_level(employee.metric_bonus_points)],
-        ["Cumulative Score", str(employee.cumulative_score or 'N/A'), get_performance_level(employee.cumulative_score)]
+        ["Metric", "Score", "Peer Rank", "Performance Level"],
+        ["PPA (Per Person Average)", format_currency_for_prompt(employee.ppa), peer_rankings['ppa'], get_performance_level(employee.ppa)],
+        ["GPG (Glassware $ Per Guest)", format_currency_for_prompt(employee.gpg), peer_rankings['gpg'], get_performance_level(employee.gpg)],
+        ["PPLBW (Per Person Liquor Beer Wine)", format_currency_for_prompt(employee.pplbw), peer_rankings['pplbw'], get_performance_level(employee.pplbw)],
+        ["LSC Ratio (Landry's Select Card)", format_lsc_ratio(employee.lsc_ratio), peer_rankings['lsc_ratio'], get_performance_level(employee.lsc_ratio)],
+        ["Metric Bonus Points", str(employee.metric_bonus_points or 'N/A'), peer_rankings['metric_bonus'], get_performance_level(employee.metric_bonus_points)],
+        ["Cumulative Score", str(employee.cumulative_score or 'N/A'), peer_rankings['cumulative'], get_performance_level(employee.cumulative_score)]
     ]
     
-    kpi_table = Table(kpi_data, colWidths=[3*inch, 1.5*inch, 2*inch])
+    kpi_table = Table(kpi_data, colWidths=[2.5*inch, 1.2*inch, 1.0*inch, 1.8*inch])
     kpi_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#D12E2E')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
