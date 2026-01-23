@@ -4,6 +4,8 @@ import json
 import io
 import pandas as pd
 from datetime import datetime
+import base64
+from pypdf import PdfReader
 
 class BubbaGumpAPITester:
     def __init__(self, base_url="https://eatery-reports.preview.emergentagent.com"):
