@@ -605,42 +605,58 @@ async def get_reviews():
     
     return reviews
 
-@api_router.post("/upload-line-graph")
-async def upload_line_graph(quarter: str, year: int, file: UploadFile = File(...)):
-    if not file.filename.endswith(('.png', '.jpg', '.jpeg', '.pdf')):
-        raise HTTPException(status_code=400, detail="Only image files (PNG, JPG) or PDF files are allowed")
-    
+@api_router.post("/line-graphs")
+async def upload_line_graph(
+    quarter: str,
+    year: int,
+    employee_id: str,
+    graph_kind: str = "quarter",
+    file: UploadFile = File(...),
+):
+    if not file.filename.endswith((".png", ".jpg", ".jpeg", ".pdf")):
+        raise HTTPException(
+            status_code=400,
+            detail="Only image files (PNG, JPG) or PDF files are allowed",
+        )
+
+    if graph_kind not in {"quarter", "ytd"}:
+        raise HTTPException(status_code=400, detail="graph_kind must be 'quarter' or 'ytd'")
+
     try:
-        # Read file content
         contents = await file.read()
-        
-        # Convert to base64 for storage
-        file_base64 = base64.b64encode(contents).decode('utf-8')
-        
-        # Create line graph record
+        file_base64 = base64.b64encode(contents).decode("utf-8")
+
         line_graph = LineGraph(
+            employee_id=employee_id,
             quarter=quarter,
             year=year,
+            graph_kind=graph_kind,
             filename=file.filename,
-            file_data=file_base64
+            content_type=file.content_type or "application/octet-stream",
+            file_data=file_base64,
         )
-        
-        # Save to database
+
         graph_doc = line_graph.model_dump()
-        graph_doc['created_at'] = graph_doc['created_at'].isoformat()
-        
-        # Remove any existing graph for this quarter/year
-        await db.line_graphs.delete_many({"quarter": quarter, "year": year})
-        
-        # Insert new graph
+        graph_doc["created_at"] = graph_doc["created_at"].isoformat()
+
+        # One graph per employee per period per kind
+        await db.line_graphs.delete_many(
+            {
+                "employee_id": employee_id,
+                "quarter": quarter,
+                "year": year,
+                "graph_kind": graph_kind,
+            }
+        )
+
         await db.line_graphs.insert_one(graph_doc)
-        
+
         return {
             "success": True,
-            "message": f"Line graph uploaded for {quarter} {year}",
-            "graph_id": line_graph.id
+            "message": f"Line graph uploaded for {employee_id} ({quarter} {year}, {graph_kind})",
+            "graph_id": line_graph.id,
         }
-        
+
     except Exception as e:
         logging.error(f"Error uploading line graph: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error uploading graph: {str(e)}")
