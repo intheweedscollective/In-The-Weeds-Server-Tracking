@@ -114,6 +114,12 @@ def format_overall_rank(rank_value):
     
     return str(rank_value)
 
+def format_currency_for_prompt(value):
+    """Format currency for GPT prompt"""
+    if value is None:
+        return 'N/A'
+    return f"${float(value):.2f}"
+
 def format_lsc_ratio(value):
     """Format LSC ratio as '1 in xxx'"""
     if value is None or value == 0:
