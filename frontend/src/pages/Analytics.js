@@ -1,0 +1,323 @@
+import { useState, useEffect } from "react";
+import { ArrowLeft, BarChart3, TrendingUp, Target } from "lucide-react";
+import { Link } from "react-router-dom";
+import axios from "axios";
+import Navigation from "../components/Navigation";
+import { Button } from "../components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
+import { Badge } from "../components/ui/badge";
+import { formatCurrency, formatLSCRatio, formatNumber, KPI_DEFINITIONS } from "../utils/formatters";
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const API = `${BACKEND_URL}/api`;
+
+export default function Analytics() {
+  const [employees, setEmployees] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [analytics, setAnalytics] = useState({});
+
+  useEffect(() => {
+    fetchEmployees();
+  }, []);
+
+  useEffect(() => {
+    if (employees.length > 0) {
+      calculateAnalytics();
+    }
+  }, [employees]);
+
+  const fetchEmployees = async () => {
+    try {
+      const response = await axios.get(`${API}/employees`);
+      setEmployees(response.data);
+    } catch (error) {
+      console.error("Error fetching employees:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const calculateAnalytics = () => {
+    const metrics = ['ppa', 'gpg', 'pplbw', 'lsc_ratio', 'metric_bonus_points', 'cumulative_score'];
+    const analyticsData = {};
+
+    metrics.forEach(metric => {
+      const validValues = employees
+        .map(emp => emp[metric])
+        .filter(val => val != null && !isNaN(val));
+      
+      if (validValues.length === 0) {
+        analyticsData[metric] = { high: 0, medium: 0, low: 0, benchmark: 0, average: 0, total: 0 };
+        return;
+      }
+
+      const sortedValues = validValues.sort((a, b) => b - a);
+      const benchmark = KPI_DEFINITIONS[metric]?.benchmark || 0;
+      const average = validValues.reduce((sum, val) => sum + val, 0) / validValues.length;
+      
+      // Calculate percentile thresholds
+      const highThreshold = sortedValues[Math.floor(sortedValues.length * 0.25)] || 0;
+      const lowThreshold = sortedValues[Math.floor(sortedValues.length * 0.75)] || 0;
+      
+      let high = 0, medium = 0, low = 0, aboveBenchmark = 0;
+      
+      validValues.forEach(val => {
+        if (metric === 'lsc_ratio') {
+          // For LSC ratio, lower is better
+          if (val <= lowThreshold) high++;
+          else if (val <= highThreshold) medium++;
+          else low++;
+          
+          if (val <= (1 / benchmark)) aboveBenchmark++; // 1 in 100 = 0.01
+        } else {
+          // For other metrics, higher is better
+          if (val >= highThreshold) high++;
+          else if (val >= lowThreshold) medium++;
+          else low++;
+          
+          if (val >= benchmark) aboveBenchmark++;
+        }
+      });
+      
+      analyticsData[metric] = {
+        high,
+        medium, 
+        low,
+        benchmark: aboveBenchmark,
+        average,
+        total: validValues.length,
+        highThreshold,
+        lowThreshold,
+        benchmarkValue: benchmark
+      };
+    });
+
+    setAnalytics(analyticsData);
+  };
+
+  const getPercentage = (count, total) => {
+    if (total === 0) return 0;
+    return Math.round((count / total) * 100);
+  };
+
+  const formatMetricValue = (metric, value) => {
+    switch (metric) {
+      case 'ppa':
+      case 'gpg':
+      case 'pplbw':
+        return formatCurrency(value);
+      case 'lsc_ratio':
+        return formatLSCRatio(value);
+      case 'metric_bonus_points':
+      case 'cumulative_score':
+        return formatNumber(value);
+      default:
+        return value?.toString() || 'N/A';
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-paper-bg">
+        <Navigation />
+        <div className="flex items-center justify-center h-96">
+          <div className="loading-spinner"></div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-paper-bg">
+      <Navigation />
+      
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="flex items-center gap-4 mb-8">
+          <Link to="/" className="print:hidden">
+            <Button variant="outline" size="sm">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Dashboard
+            </Button>
+          </Link>
+          <div>
+            <h1 className="text-3xl font-serif font-bold text-primary mb-2" data-testid="page-title">
+              📊 Performance Analytics
+            </h1>
+            <p className="text-muted-foreground" data-testid="page-subtitle">
+              Performance distribution and benchmark analysis for all metrics
+            </p>
+          </div>
+        </div>
+
+        {/* Overview Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
+          <Card className="bubba-card">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-3">
+                <TrendingUp className="w-8 h-8 text-green-500" />
+                <div>
+                  <p className="text-2xl font-bold text-primary">
+                    {getPercentage(
+                      Object.values(analytics).reduce((sum, metric) => sum + (metric.benchmark || 0), 0),
+                      Object.values(analytics).reduce((sum, metric) => sum + (metric.total || 0), 0)
+                    )}%
+                  </p>
+                  <p className="text-sm text-muted-foreground">Above Benchmark</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="bubba-card">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-3">
+                <BarChart3 className="w-8 h-8 text-blue-500" />
+                <div>
+                  <p className="text-2xl font-bold text-primary">
+                    {getPercentage(
+                      Object.values(analytics).reduce((sum, metric) => sum + (metric.high || 0), 0),
+                      Object.values(analytics).reduce((sum, metric) => sum + (metric.total || 0), 0)
+                    )}%
+                  </p>
+                  <p className="text-sm text-muted-foreground">High Performers</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="bubba-card">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-3">
+                <Target className="w-8 h-8 text-yellow-500" />
+                <div>
+                  <p className="text-2xl font-bold text-primary">
+                    {getPercentage(
+                      Object.values(analytics).reduce((sum, metric) => sum + (metric.medium || 0), 0),
+                      Object.values(analytics).reduce((sum, metric) => sum + (metric.total || 0), 0)
+                    )}%
+                  </p>
+                  <p className="text-sm text-muted-foreground">Medium Performers</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="bubba-card">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-3">
+                <BarChart3 className="w-8 h-8 text-orange-500" />
+                <div>
+                  <p className="text-2xl font-bold text-primary">
+                    {getPercentage(
+                      Object.values(analytics).reduce((sum, metric) => sum + (metric.low || 0), 0),
+                      Object.values(analytics).reduce((sum, metric) => sum + (metric.total || 0), 0)
+                    )}%
+                  </p>
+                  <p className="text-sm text-muted-foreground">Needs Improvement</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Analytics by Metric */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {Object.entries(KPI_DEFINITIONS).map(([metricKey, metricInfo]) => {
+            const data = analytics[metricKey] || {};
+            const total = data.total || 1;
+            
+            return (
+              <Card key={metricKey} className="bubba-card">
+                <CardHeader>
+                  <CardTitle className="text-xl font-serif text-primary">
+                    {metricInfo.name}
+                  </CardTitle>
+                  <CardDescription>
+                    Benchmark: {metricInfo.format === 'currency' ? '$' + metricInfo.benchmark : 
+                              metricKey === 'lsc_ratio' ? '1 in 100' : metricInfo.benchmark}
+                  </CardDescription>
+                </CardHeader>
+                
+                <CardContent>
+                  <div className="space-y-4">
+                    {/* Performance Distribution Bar */}
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm font-medium">
+                        <span>Performance Distribution</span>
+                        <span>{total} employees</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-6 overflow-hidden">
+                        <div className="h-full flex">
+                          <div 
+                            className="bg-green-500 h-full flex items-center justify-center text-white text-xs font-medium"
+                            style={{ width: `${getPercentage(data.high, total)}%` }}
+                          >
+                            {getPercentage(data.high, total) > 10 ? `${getPercentage(data.high, total)}%` : ''}
+                          </div>
+                          <div 
+                            className="bg-yellow-500 h-full flex items-center justify-center text-white text-xs font-medium"
+                            style={{ width: `${getPercentage(data.medium, total)}%` }}
+                          >
+                            {getPercentage(data.medium, total) > 10 ? `${getPercentage(data.medium, total)}%` : ''}
+                          </div>
+                          <div 
+                            className="bg-orange-500 h-full flex items-center justify-center text-white text-xs font-medium"
+                            style={{ width: `${getPercentage(data.low, total)}%` }}
+                          >
+                            {getPercentage(data.low, total) > 10 ? `${getPercentage(data.low, total)}%` : ''}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>High ({data.high})</span>
+                        <span>Medium ({data.medium})</span>
+                        <span>Low ({data.low})</span>
+                      </div>
+                    </div>
+                    
+                    {/* Key Metrics */}
+                    <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+                      <div className="text-center">
+                        <div className="text-2xl font-serif font-bold text-green-600">
+                          {data.benchmark || 0}
+                        </div>
+                        <div className="text-xs text-muted-foreground uppercase tracking-wider">
+                          Above Benchmark
+                        </div>
+                      </div>
+                      
+                      <div className="text-center">
+                        <div className="text-2xl font-serif font-bold text-primary">
+                          {formatMetricValue(metricKey, data.average)}
+                        </div>
+                        <div className="text-xs text-muted-foreground uppercase tracking-wider">
+                          Team Average
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Benchmark Status */}
+                    <div className="pt-2">
+                      <Badge 
+                        className={`w-full justify-center ${
+                          getPercentage(data.benchmark, total) >= 60 
+                            ? 'bg-green-100 text-green-800' 
+                            : getPercentage(data.benchmark, total) >= 40
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}
+                      >
+                        {getPercentage(data.benchmark, total)}% Meeting Benchmark
+                      </Badge>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
