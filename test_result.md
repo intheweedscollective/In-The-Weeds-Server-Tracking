@@ -101,3 +101,84 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+## user_problem_statement: "Restaurant employee quarterly reviews + Top Performers + Analytics + line-graph PDF append"
+## backend:
+##   - task: "Line graph upload + append graph as page 2 via PDF merge"
+##     implemented: true
+##     working: true
+##     file: "backend/server.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##       - working: false
+##         agent: "main"
+##         comment: "Backend previously crashed due to missing ReviewResponse; fixed by adding model"
+##       - working: true
+##         agent: "main"
+##         comment: "Implemented /api/line-graphs upload (per employee, quarter/year, graph_kind) and PDF merge using pypdf so review output is 2 pages when a graph exists"
+##   - task: "Review generation (base review PDF)"
+##     implemented: true
+##     working: true
+##     file: "backend/server.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##       - working: true
+##         agent: "main"
+##         comment: "Generate review returns PDF base64; verified via curl"
+## frontend:
+##   - task: "Fix build-breaking LineGraphUpload syntax error"
+##     implemented: true
+##     working: true
+##     file: "frontend/src/components/LineGraphUpload.js"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##       - working: false
+##         agent: "user"
+##         comment: "Build failed: Expecting Unicode escape sequence in LineGraphUpload.js"
+##       - working: true
+##         agent: "main"
+##         comment: "Rewrote LineGraphUpload.js with valid JS/JSX and correct API call"
+##   - task: "Top Performers page (Top 10 per metric + Top 10 overall)"
+##     implemented: true
+##     working: true
+##     file: "frontend/src/pages/TopPerformers.js"
+##     stuck_count: 0
+##     priority: "medium"
+##     needs_retesting: true
+##     status_history:
+##       - working: true
+##         agent: "main"
+##         comment: "Added Top 10 Overall by cumulative_score"
+##   - task: "Analytics page (top/middle/bottom third; LSC inverse)"
+##     implemented: true
+##     working: true
+##     file: "frontend/src/pages/Analytics.js"
+##     stuck_count: 0
+##     priority: "medium"
+##     needs_retesting: true
+##     status_history:
+##       - working: true
+##         agent: "main"
+##         comment: "Adjusted high/medium/low buckets to thirds and treated lsc_ratio as inverse"
+## metadata:
+##   created_by: "main_agent"
+##   version: "1.0"
+##   test_sequence: 1
+##   run_ui: true
+## test_plan:
+##   current_focus:
+##     - "Line graph upload + append graph as page 2 via PDF merge"
+##     - "Review Generation page loads and can generate/download PDF"
+##     - "Top Performers page renders and print works"
+##     - "Analytics page renders and LSC inverse logic looks correct"
+##   stuck_tasks: []
+##   test_all: true
+##   test_priority: "high_first"
+## agent_communication:
+##   - agent: "main"
+##     message: "Please run end-to-end tests: /reviews loads, upload line graph, generate review returns PDF (2 pages), check TopPerformers and Analytics pages. Verify no console errors and main API endpoints respond."
