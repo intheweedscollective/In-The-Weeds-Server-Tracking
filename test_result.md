@@ -182,3 +182,5 @@
 ## agent_communication:
 ##   - agent: "main"
 ##     message: "Please run end-to-end tests: /reviews loads, upload line graph, generate review returns PDF (2 pages), check TopPerformers and Analytics pages. Verify no console errors and main API endpoints respond."
+##   - agent: "testing"
+##     message: "Completed comprehensive end-to-end testing. All major functionality working: /reviews page loads with 26 employees, line graph upload successful, review generation working with PDF download, Top Performers page shows 'Top 10 Overall (Cumulative Score)' section, Analytics page displays High/Medium/Low distribution metrics across all KPIs. No console errors detected. All requirements from review request satisfied."
