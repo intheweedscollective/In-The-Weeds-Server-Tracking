@@ -346,16 +346,17 @@ async def upload_excel(file: UploadFile = File(...)):
         
         employees_added = 0
         for _, row in df.iterrows():
-            # Create employee object with flexible column mapping
+            # Create employee object with flexible column mapping - try multiple column name variations
             employee_data = {
-                'name': row.get('name', row.get('employee_name', 'Unknown')),
+                'name': row.get('name', row.get('employee_name', row.get('employee', 'Unknown'))),
                 'position': row.get('position', row.get('job_title', row.get('title', 'Staff'))),
                 'ppa': row.get('ppa', None),
                 'gpg': row.get('gpg', None),
                 'pplbw': row.get('pplbw', None),
                 'lsc_ratio': row.get('lsc_ratio', row.get('lsc ratio', None)),
                 'metric_bonus_points': row.get('metric_bonus_points', row.get('metric bonus points', row.get('bonus_points', row.get('bonus points', None)))),
-                'cumulative_score': row.get('cumulative_score', row.get('cumulative score', row.get('total_score', row.get('total score', None))))
+                'cumulative_score': row.get('cumulative_score', row.get('cumulative score', row.get('cummulative_score', row.get('cummulative score', row.get('total_score', row.get('total score', None))))))
+            }
             }
             
             # Add any additional columns to additional_data
