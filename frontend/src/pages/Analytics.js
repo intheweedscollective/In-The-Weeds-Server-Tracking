@@ -38,6 +38,7 @@ export default function Analytics() {
       console.error(error);
       toast.error("Could not download Analytics PDF");
     }
+  };
 
   const getTopEmployees = (metric, limit = 10) => {
     const valid = employees.filter((e) => e[metric] != null);
@@ -62,8 +63,6 @@ export default function Analytics() {
       default:
         return formatNumber(value);
     }
-  };
-
   };
 
   useEffect(() => {
