@@ -212,11 +212,11 @@ export default function EmployeeList() {
                     {/* KPI Grid */}
                     <div className="grid grid-cols-2 gap-4 mb-6">
                       <div className="text-center">
-                        <div className="text-2xl font-serif font-bold text-primary" data-testid={`employee-total-score-${employee.id}`}>
-                          {employee.total_score?.toFixed(1) || 'N/A'}
+                        <div className="text-2xl font-serif font-bold text-primary" data-testid={`employee-cumulative-score-${employee.id}`}>
+                          {employee.cumulative_score?.toFixed(1) || 'N/A'}
                         </div>
                         <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                          Total Score
+                          Cumulative Score
                         </div>
                       </div>
                       
