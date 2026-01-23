@@ -365,6 +365,58 @@ export default function Analytics() {
                             style={{ width: `${getPercentage(data.medium, total)}%` }}
                           >
                             {getPercentage(data.medium, total) > 10 ? `${getPercentage(data.medium, total)}%` : ''}
+
+        {/* Top 10 per Metric */}
+        <div className="mt-12 space-y-8" data-testid="analytics-top-10-metrics">
+          <h2 className="text-2xl font-serif font-bold text-primary">Top 10 by Metric</h2>
+
+          {Object.keys(KPI_DEFINITIONS).map((metric) => {
+            const metricInfo = KPI_DEFINITIONS[metric];
+            const top = getTopEmployees(metric, 10);
+
+            return (
+              <Card key={metric} className="bubba-card">
+                <CardHeader>
+                  <CardTitle className="text-xl font-serif text-primary">
+                    {metricInfo.shortName} — {metricInfo.name}
+                  </CardTitle>
+                  <CardDescription>Top 10 employees for this metric</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {top.map((emp, idx) => (
+                      <div
+                        key={emp.id}
+                        className="flex items-center justify-between p-3 border border-border rounded-lg bg-background"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-primary">#{idx + 1}</span>
+                            <span className="font-semibold text-primary truncate">{emp.name}</span>
+                            {emp.ranking && (
+                              <Badge variant="secondary" className="text-xs">
+                                {emp.ranking}
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-sm text-muted-foreground truncate">{emp.position}</div>
+                          <div className="text-xs text-muted-foreground">Overall Rank: {emp.overall_rank || "N/A"}</div>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <div className="font-bold text-primary">
+                            {formatMetricValue(metric, emp[metric])}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+
                           </div>
                           <div 
                             className="bg-orange-500 h-full flex items-center justify-center text-white text-xs font-medium"
