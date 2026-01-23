@@ -135,10 +135,10 @@ export default function TopPerformers() {
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
             <Link to="/" className="print:hidden">
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" className="w-full sm:w-auto">
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back to Dashboard
               </Button>
@@ -152,10 +152,14 @@ export default function TopPerformers() {
               </p>
             </div>
           </div>
-          
-          <Button onClick={handlePrint} className="bubba-btn-primary print:hidden" data-testid="print-btn">
+
+          <Button
+            onClick={handlePrint}
+            className="bubba-btn-primary w-full sm:w-auto print:hidden"
+            data-testid="print-btn"
+          >
             <Printer className="w-4 h-4 mr-2" />
-            Print Report
+            Download PDF Report
           </Button>
         </div>
 
