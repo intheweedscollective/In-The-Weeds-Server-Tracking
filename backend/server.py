@@ -25,6 +25,8 @@ import asyncio
 import requests
 from pypdf import PdfReader, PdfWriter
 from pdf_top_performers import build_top_performers_pdf
+from pdf_analytics import build_analytics_pdf
+
 
 
 from io import BytesIO
@@ -756,6 +758,87 @@ async def clear_all_employees():
 
 
 @api_router.get("/top-performers/pdf")
+
+@api_router.get("/analytics/pdf")
+async def analytics_pdf():
+    employees = await db.employees.find({}, {"_id": 0}).to_list(5000)
+
+    # replicate frontend analytics calculation (thirds, LSC inverse)
+    metrics = ["ppa", "gpg", "pplbw", "lsc_ratio", "metric_bonus_points", "cumulative_score"]
+    analytics: Dict[str, Dict[str, Any]] = {}
+
+    for metric in metrics:
+        values = [e.get(metric) for e in employees]
+        valid_values = [v for v in values if v is not None and isinstance(v, (int, float))]
+
+        if not valid_values:
+            analytics[metric] = {
+                "high": 0,
+                "medium": 0,
+                "low": 0,
+                "benchmark": 0,
+                "average": 0,
+                "total": 0,
+                "highThreshold": 0,
+                "lowThreshold": 0,
+                "benchmarkValue": KPI_DEFINITIONS.get(metric, {}).get("benchmark", 0),
+            }
+            continue
+
+        sorted_vals = sorted(valid_values, reverse=(metric != "lsc_ratio"))
+        top_third_index = int(len(sorted_vals) * (1 / 3))
+        bottom_third_index = int(len(sorted_vals) * (2 / 3))
+
+        high_threshold = sorted_vals[top_third_index] if top_third_index < len(sorted_vals) else sorted_vals[-1]
+        low_threshold = sorted_vals[bottom_third_index] if bottom_third_index < len(sorted_vals) else sorted_vals[-1]
+
+        high = medium = low = above_benchmark = 0
+        benchmark_val = KPI_DEFINITIONS.get(metric, {}).get("benchmark", 0)
+        avg = sum(valid_values) / len(valid_values)
+
+        for v in valid_values:
+            if metric == "lsc_ratio":
+                # inverse (lower is better)
+                if v <= high_threshold:
+                    high += 1
+                elif v <= low_threshold:
+                    medium += 1
+                else:
+                    low += 1
+
+                benchmark_denominator = round(1 / benchmark_val) if benchmark_val else 0
+                if benchmark_denominator and v <= benchmark_denominator:
+                    above_benchmark += 1
+            else:
+                if v >= high_threshold:
+                    high += 1
+                elif v >= low_threshold:
+                    medium += 1
+                else:
+                    low += 1
+
+                if benchmark_val and v >= benchmark_val:
+                    above_benchmark += 1
+
+        analytics[metric] = {
+            "high": high,
+            "medium": medium,
+            "low": low,
+            "benchmark": above_benchmark,
+            "average": avg,
+            "total": len(valid_values),
+            "highThreshold": high_threshold,
+            "lowThreshold": low_threshold,
+            "benchmarkValue": benchmark_val,
+        }
+
+    pdf_bytes = build_analytics_pdf(analytics, KPI_DEFINITIONS)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=analytics_report.pdf"},
+    )
+
 async def top_performers_pdf():
     employees = await db.employees.find({}, {"_id": 0}).to_list(5000)
     pdf_bytes = build_top_performers_pdf(employees, KPI_DEFINITIONS)
