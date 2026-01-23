@@ -239,9 +239,9 @@ def generate_pdf(employee: Employee, review_content: str, quarter: str, year: in
     kpi_data = [
         ["Metric", "Score", "Performance Level"],
         ["PPA (Per Person Average)", str(employee.ppa or 'N/A'), get_performance_level(employee.ppa)],
-        ["GPG (Gross Profit Generated)", str(employee.gpg or 'N/A'), get_performance_level(employee.gpg)],
-        ["PPLBW (People Per Labor Budget Week)", str(employee.pplbw or 'N/A'), get_performance_level(employee.pplbw)],
-        ["LSC Ratio (Labor Sales Cost)", str(employee.lsc_ratio or 'N/A'), get_performance_level(employee.lsc_ratio)],
+        ["GPG (Glassware $ Per Guest)", str(employee.gpg or 'N/A'), get_performance_level(employee.gpg)],
+        ["PPLBW (Per Person Liquor Beer Wine)", str(employee.pplbw or 'N/A'), get_performance_level(employee.pplbw)],
+        ["LSC Ratio (Landry's Select Card)", format_lsc_ratio(employee.lsc_ratio), get_performance_level(employee.lsc_ratio)],
         ["Metric Bonus Points", str(employee.metric_bonus_points or 'N/A'), get_performance_level(employee.metric_bonus_points)],
         ["Cumulative Score", str(employee.cumulative_score or 'N/A'), get_performance_level(employee.cumulative_score)]
     ]
