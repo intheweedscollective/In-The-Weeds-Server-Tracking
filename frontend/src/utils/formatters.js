@@ -55,6 +55,60 @@ export const formatNumber = (value, decimals = 2) => {
   return parseFloat(value).toFixed(decimals);
 };
 
+export const formatOverallRank = (rank) => {
+  if (!rank) return 'N/A';
+  // Handle formats like "3 of 26" or "3/26" 
+  if (typeof rank === 'string' && (rank.includes(' of ') || rank.includes('/'))) {
+    return rank;
+  }
+  // If it's just a number, assume it's out of 26
+  return `${rank} of 26`;
+};
+
+export const formatRanking = (ranking) => {
+  if (!ranking) return 'N/A';
+  return ranking.toString();
+};
+
+export const getRankingHierarchy = (ranking) => {
+  if (!ranking) return { level: 'Unknown', color: 'text-gray-500', bgColor: 'bg-gray-100' };
+  
+  const rank = ranking.toString().toUpperCase();
+  
+  if (rank.startsWith('T')) return { 
+    level: 'Trainer', 
+    color: 'text-purple-700', 
+    bgColor: 'bg-purple-100',
+    priority: 1 
+  };
+  if (rank.startsWith('BAR')) return { 
+    level: 'Bartender', 
+    color: 'text-blue-700', 
+    bgColor: 'bg-blue-100',
+    priority: 2 
+  };
+  if (rank.startsWith('A')) return { 
+    level: 'Top Server', 
+    color: 'text-green-700', 
+    bgColor: 'bg-green-100',
+    priority: 3 
+  };
+  if (rank.startsWith('B')) return { 
+    level: 'Middle Server', 
+    color: 'text-yellow-700', 
+    bgColor: 'bg-yellow-100',
+    priority: 4 
+  };
+  if (rank.startsWith('C')) return { 
+    level: 'Bottom Server', 
+    color: 'text-orange-700', 
+    bgColor: 'bg-orange-100',
+    priority: 5 
+  };
+  
+  return { level: 'Staff', color: 'text-gray-700', bgColor: 'bg-gray-100', priority: 6 };
+};
+
 export const getPerformanceLevel = (score) => {
   if (!score) return { text: "Not Assessed", class: "performance-below" };
   
