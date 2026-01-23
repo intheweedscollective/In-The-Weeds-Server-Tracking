@@ -107,8 +107,8 @@ PERFORMANCE METRICS (Focus on these 6 key KPIs):
 - GPG (Gross Profit Generated): {employee.gpg or 'N/A'}
 - PPLBW (People Per Labor Budget Week): {employee.pplbw or 'N/A'}
 - LSC Ratio (Labor Sales Cost): {employee.lsc_ratio or 'N/A'}
-- Bonus Points: {employee.bonus_points or 'N/A'}
-- Total Score: {employee.total_score or 'N/A'}
+- Bonus Points: {employee.metric_bonus_points or 'N/A'}
+- Total Score: {employee.cumulative_score or 'N/A'}
 
 ADDITIONAL DATA: {employee.additional_data}
 
