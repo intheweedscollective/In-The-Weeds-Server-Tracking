@@ -95,8 +95,27 @@ export default function TopPerformers() {
     }
   };
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = async () => {
+    try {
+      const response = await axios.get(`${API}/top-performers/pdf`, {
+        responseType: "blob",
+      });
+
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "top_performers_report.pdf";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+      toast.success("Top Performers PDF downloaded");
+    } catch (error) {
+      console.error(error);
+      toast.error("Could not download Top Performers PDF");
+    }
   };
 
   if (loading) {
