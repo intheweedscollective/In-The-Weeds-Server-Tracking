@@ -225,30 +225,54 @@ export default function ReviewGeneration() {
                           </p>
                         </div>
                         
-                        {/* KPI Summary */}
-                        <div className="hidden md:flex gap-6 ml-8">
+                        {/* KPI Summary - All 6 Metrics */}
+                        <div className="hidden md:flex gap-4 ml-8">
                           <div className="text-center">
-                            <div className="text-lg font-serif font-bold text-primary">
-                              {employee.cumulative_score?.toFixed(1) || 'N/A'}
+                            <div className="text-sm font-serif font-bold text-primary">
+                              {formatNumber(employee.cumulative_score)}
                             </div>
                             <div className="text-xs text-muted-foreground uppercase">
-                              Cumulative Score
+                              Final Grade
                             </div>
                           </div>
                           <div className="text-center">
-                            <div className="text-lg font-serif font-bold text-secondary">
-                              {employee.ppa?.toFixed(1) || 'N/A'}
+                            <div className="text-sm font-serif font-bold text-secondary">
+                              {formatCurrency(employee.ppa)}
                             </div>
                             <div className="text-xs text-muted-foreground uppercase">
                               PPA
                             </div>
                           </div>
                           <div className="text-center">
-                            <div className="text-lg font-serif font-bold text-accent-foreground">
-                              {employee.gpg?.toFixed(1) || 'N/A'}
+                            <div className="text-sm font-serif font-bold text-accent-foreground">
+                              {formatCurrency(employee.gpg)}
                             </div>
                             <div className="text-xs text-muted-foreground uppercase">
                               GPG
+                            </div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-sm font-serif font-bold text-wood-texture">
+                              {formatCurrency(employee.pplbw)}
+                            </div>
+                            <div className="text-xs text-muted-foreground uppercase">
+                              PPLBW
+                            </div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-sm font-serif font-bold text-muted-foreground">
+                              {formatLSCRatio(employee.lsc_ratio)}
+                            </div>
+                            <div className="text-xs text-muted-foreground uppercase">
+                              LSC
+                            </div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-sm font-serif font-bold text-brand-yellow">
+                              {formatNumber(employee.metric_bonus_points)}
+                            </div>
+                            <div className="text-xs text-muted-foreground uppercase">
+                              Bonus
                             </div>
                           </div>
                         </div>
