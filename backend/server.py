@@ -558,7 +558,12 @@ async def generate_employee_review(employee_id: str, review_data: ReviewCreate):
         
         # Get employee line graph for this quarter/year if available
         line_graph = await db.line_graphs.find_one(
-            {"employee_id": employee_id, "quarter": review_data.quarter, "year": review_data.year},
+            {
+                "employee_id": employee_id,
+                "quarter": review_data.quarter,
+                "year": review_data.year,
+                "graph_kind": "quarter",
+            },
             {"_id": 0},
         )
         
