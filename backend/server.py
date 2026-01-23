@@ -651,7 +651,17 @@ async def upload_line_graph(
     graph_kind: str = "quarter",
     file: UploadFile = File(...),
 ):
-    if not file.filename.endswith((".png", ".jpg", ".jpeg", ".pdf")):
+    filename_lower = (file.filename or "").lower()
+    content_type_lower = (file.content_type or "").lower()
+
+    allowed_content_types = {"image/png", "image/jpeg", "application/pdf"}
+    allowed_extensions = (".png", ".jpg", ".jpeg", ".pdf")
+
+    # iOS/Safari sometimes uploads images with no extension; prefer content-type check.
+    if not (
+        content_type_lower in allowed_content_types
+        or filename_lower.endswith(allowed_extensions)
+    ):
         raise HTTPException(
             status_code=400,
             detail="Only image files (PNG, JPG) or PDF files are allowed",
