@@ -412,18 +412,42 @@ def generate_pdf(employee: Employee, review_content: str, quarter: str, year: in
                                  ParagraphStyle('emp_info', fontSize=11, textColor=colors.HexColor('#005B96'), alignment=TA_CENTER)))
             story.append(Spacer(1, 15))
             
-            # Decode and add line graph image
-            image_data = base64.b64decode(line_graph['file_data'])
-            image_buffer = BytesIO(image_data)
-            
-            # Create image - size it to fit page width
-            graph_img = Image(image_buffer, width=6.5*inch, height=4.5*inch)
-            graph_img.hAlign = 'CENTER'
-            story.append(graph_img)
-            
-            story.append(Spacer(1, 15))
-            story.append(Paragraph("Performance trends and quarterly metrics visualization", 
-                                 ParagraphStyle('graph_desc', fontSize=10, textColor=colors.HexColor('#6B7280'), alignment=TA_CENTER)))
+            # If PDF, we cannot embed directly as an Image; add a note and rely on true PDF-merge in a later step.
+            # For now, we embed images (png/jpg). PDFs will be handled via post-processing merge.
+            if line_graph.get("content_type") == "application/pdf" or (line_graph.get("filename") or "").lower().endswith(".pdf"):
+                story.append(
+                    Paragraph(
+                        "(Graph attached as a PDF and will be merged as page 2.)",
+                        ParagraphStyle(
+                            "graph_desc",
+                            fontSize=10,
+                            textColor=colors.HexColor("#6B7280"),
+                            alignment=TA_CENTER,
+                        ),
+                    )
+                )
+            else:
+                # Decode and add line graph image
+                image_data = base64.b64decode(line_graph["file_data"])
+                image_buffer = BytesIO(image_data)
+
+                # Create image - size it to fit page width
+                graph_img = Image(image_buffer, width=6.5 * inch, height=4.5 * inch)
+                graph_img.hAlign = "CENTER"
+                story.append(graph_img)
+
+                story.append(Spacer(1, 15))
+                story.append(
+                    Paragraph(
+                        "Performance trends and quarterly metrics visualization",
+                        ParagraphStyle(
+                            "graph_desc",
+                            fontSize=10,
+                            textColor=colors.HexColor("#6B7280"),
+                            alignment=TA_CENTER,
+                        ),
+                    )
+                )
             
         except Exception as e:
             # If line graph processing fails, continue without it
