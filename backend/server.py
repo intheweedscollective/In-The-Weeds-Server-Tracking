@@ -95,12 +95,15 @@ class ReviewResponse(BaseModel):
 
 class LineGraph(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    
+
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    employee_id: str
     quarter: str
     year: int
+    graph_kind: str = "quarter"  # quarter | ytd
     filename: str
-    file_data: str  # base64 encoded image data
+    content_type: str
+    file_data: str  # base64 encoded file bytes
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class LineGraphUpload(BaseModel):
@@ -553,8 +556,11 @@ async def generate_employee_review(employee_id: str, review_data: ReviewCreate):
         # Generate review content
         review_content = await generate_review_content(employee, review_data.quarter, review_data.year)
         
-        # Get line graph for this quarter/year if available
-        line_graph = await db.line_graphs.find_one({"quarter": review_data.quarter, "year": review_data.year}, {"_id": 0})
+        # Get employee line graph for this quarter/year if available
+        line_graph = await db.line_graphs.find_one(
+            {"employee_id": employee_id, "quarter": review_data.quarter, "year": review_data.year},
+            {"_id": 0},
+        )
         
         # Create review record
         review = Review(
@@ -682,7 +688,7 @@ app.include_router(api_router)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
+    allow_credentials=False,
     allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
     allow_methods=["*"],
     allow_headers=["*"],
