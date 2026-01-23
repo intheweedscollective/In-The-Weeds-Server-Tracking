@@ -314,7 +314,10 @@ export default function Dashboard() {
                             {formatCurrency(employee.ppa)}
                           </div>
                           <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                            PPA
+                            {KPI_DEFINITIONS.ppa.shortName}
+                          </div>
+                          <div className={`text-xs ${getBenchmarkStatus('ppa', employee.ppa).class}`}>
+                            {getBenchmarkStatus('ppa', employee.ppa).text}
                           </div>
                         </div>
                         
@@ -323,7 +326,10 @@ export default function Dashboard() {
                             {formatCurrency(employee.gpg)}
                           </div>
                           <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                            GPG
+                            {KPI_DEFINITIONS.gpg.shortName}
+                          </div>
+                          <div className={`text-xs ${getBenchmarkStatus('gpg', employee.gpg).class}`}>
+                            {getBenchmarkStatus('gpg', employee.gpg).text}
                           </div>
                         </div>
                         
@@ -332,7 +338,10 @@ export default function Dashboard() {
                             {formatCurrency(employee.pplbw)}
                           </div>
                           <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                            PPLBW
+                            {KPI_DEFINITIONS.pplbw.shortName}
+                          </div>
+                          <div className={`text-xs ${getBenchmarkStatus('pplbw', employee.pplbw).class}`}>
+                            {getBenchmarkStatus('pplbw', employee.pplbw).text}
                           </div>
                         </div>
                         
@@ -341,7 +350,10 @@ export default function Dashboard() {
                             {formatLSCRatio(employee.lsc_ratio)}
                           </div>
                           <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                            LSC Ratio
+                            {KPI_DEFINITIONS.lsc_ratio.shortName}
+                          </div>
+                          <div className={`text-xs ${getBenchmarkStatus('lsc_ratio', employee.lsc_ratio).class}`}>
+                            {getBenchmarkStatus('lsc_ratio', employee.lsc_ratio).text}
                           </div>
                         </div>
                         
@@ -350,7 +362,10 @@ export default function Dashboard() {
                             {formatNumber(employee.metric_bonus_points)}
                           </div>
                           <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                            Metric Bonus
+                            {KPI_DEFINITIONS.metric_bonus_points.shortName}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Exceeds Benchmark
                           </div>
                         </div>
                         
@@ -359,7 +374,10 @@ export default function Dashboard() {
                             {formatNumber(employee.cumulative_score)}
                           </div>
                           <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                            Cumulative Score
+                            {KPI_DEFINITIONS.cumulative_score.shortName}
+                          </div>
+                          <div className={`text-xs performance-badge ${getPerformanceLevel(employee.cumulative_score).class}`}>
+                            {getPerformanceLevel(employee.cumulative_score).text}
                           </div>
                         </div>
                       </div>
