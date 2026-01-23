@@ -521,6 +521,11 @@ class BubbaGumpAPITester:
                 
                 self.test_get_reviews()
                 
+                # REGRESSION TESTS - New Analytics PDF endpoint and Q4 2025 review generation
+                print("\n🔍 Running Regression Tests...")
+                self.test_analytics_pdf_endpoint()
+                self.test_generate_review_q4_2025_regression()
+                
                 # Test deletion
                 self.test_delete_employee()
         
