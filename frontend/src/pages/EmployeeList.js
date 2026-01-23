@@ -210,11 +210,11 @@ export default function EmployeeList() {
                   </CardHeader>
                   
                   <CardContent>
-                    {/* KPI Grid */}
-                    <div className="grid grid-cols-2 gap-4 mb-6">
+                    {/* All 6 KPI Grid */}
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
                       <div className="text-center">
                         <div className="text-2xl font-serif font-bold text-primary" data-testid={`employee-cumulative-score-${employee.id}`}>
-                          {employee.cumulative_score?.toFixed(1) || 'N/A'}
+                          {formatNumber(employee.cumulative_score)}
                         </div>
                         <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
                           Cumulative Score
@@ -222,29 +222,62 @@ export default function EmployeeList() {
                       </div>
                       
                       <div className="text-center">
-                        <div className="text-2xl font-serif font-bold text-secondary" data-testid={`employee-ppa-${employee.id}`}>
-                          {employee.ppa?.toFixed(1) || 'N/A'}
+                        <div className="text-lg font-serif font-bold text-secondary" data-testid={`employee-ppa-${employee.id}`}>
+                          {formatCurrency(employee.ppa)}
                         </div>
                         <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
                           PPA
                         </div>
+                        <div className={`text-xs ${getBenchmarkStatus('ppa', employee.ppa).class}`}>
+                          {getBenchmarkStatus('ppa', employee.ppa).text}
+                        </div>
                       </div>
                       
                       <div className="text-center">
-                        <div className="text-xl font-serif font-bold text-accent-foreground" data-testid={`employee-gpg-${employee.id}`}>
-                          {employee.gpg?.toFixed(1) || 'N/A'}
+                        <div className="text-lg font-serif font-bold text-accent-foreground" data-testid={`employee-gpg-${employee.id}`}>
+                          {formatCurrency(employee.gpg)}
                         </div>
                         <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
                           GPG
                         </div>
+                        <div className={`text-xs ${getBenchmarkStatus('gpg', employee.gpg).class}`}>
+                          {getBenchmarkStatus('gpg', employee.gpg).text}
+                        </div>
                       </div>
                       
                       <div className="text-center">
-                        <div className="text-xl font-serif font-bold text-muted-foreground" data-testid={`employee-lsc-${employee.id}`}>
-                          {employee.lsc_ratio?.toFixed(2) || 'N/A'}
+                        <div className="text-lg font-serif font-bold text-wood-texture" data-testid={`employee-pplbw-${employee.id}`}>
+                          {formatCurrency(employee.pplbw)}
+                        </div>
+                        <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
+                          PPLBW
+                        </div>
+                        <div className={`text-xs ${getBenchmarkStatus('pplbw', employee.pplbw).class}`}>
+                          {getBenchmarkStatus('pplbw', employee.pplbw).text}
+                        </div>
+                      </div>
+                      
+                      <div className="text-center">
+                        <div className="text-lg font-serif font-bold text-muted-foreground" data-testid={`employee-lsc-${employee.id}`}>
+                          {formatLSCRatio(employee.lsc_ratio)}
                         </div>
                         <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
                           LSC Ratio
+                        </div>
+                        <div className={`text-xs ${getBenchmarkStatus('lsc_ratio', employee.lsc_ratio).class}`}>
+                          {getBenchmarkStatus('lsc_ratio', employee.lsc_ratio).text}
+                        </div>
+                      </div>
+                      
+                      <div className="text-center">
+                        <div className="text-lg font-serif font-bold text-brand-yellow" data-testid={`employee-bonus-${employee.id}`}>
+                          {formatNumber(employee.metric_bonus_points)}
+                        </div>
+                        <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
+                          Metric Bonus
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Exceeds Benchmark
                         </div>
                       </div>
                     </div>
