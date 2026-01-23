@@ -25,6 +25,7 @@ export default function TopPerformers() {
     if (employees.length > 0) {
       calculateTopPerformers();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employees]);
 
   const fetchEmployees = async () => {
