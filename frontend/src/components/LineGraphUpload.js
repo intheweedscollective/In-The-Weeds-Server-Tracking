@@ -1,1 +1,117 @@
-import { useState } from \"react\";\nimport { Upload, Image as ImageIcon, CheckCircle } from \"lucide-react\";\nimport { useDropzone } from \"react-dropzone\";\nimport { toast } from \"sonner\";\nimport axios from \"axios\";\nimport { Button } from \"../components/ui/button\";\n\nconst BACKEND_URL = process.env.REACT_APP_BACKEND_URL;\nconst API = `${BACKEND_URL}/api`;\n\nexport default function LineGraphUpload({ quarter, year, onUploadSuccess }) {\n  const [uploading, setUploading] = useState(false);\n  const [currentGraph, setCurrentGraph] = useState(null);\n  const [uploadedFile, setUploadedFile] = useState(null);\n\n  const onDrop = async (acceptedFiles) => {\n    const file = acceptedFiles[0];\n    if (!file) return;\n\n    if (!file.name.match(/\\.(png|jpg|jpeg|pdf)$/i)) {\n      toast.error(\"Please upload an image file (PNG, JPG) or PDF\");\n      return;\n    }\n\n    setUploading(true);\n    const formData = new FormData();\n    formData.append(\"file\", file);\n    formData.append(\"quarter\", quarter);\n    formData.append(\"year\", year.toString());\n\n    try {\n      const response = await axios.post(`${API}/upload-line-graph`, formData, {\n        headers: {\n          \"Content-Type\": \"multipart/form-data\",\n        },\n      });\n\n      if (response.data.success) {\n        toast.success(response.data.message);\n        setUploadedFile(file);\n        onUploadSuccess && onUploadSuccess();\n      } else {\n        toast.error(\"Failed to upload line graph\");\n      }\n    } catch (error) {\n      console.error(\"Upload error:\", error);\n      toast.error(\"Error uploading line graph: \" + (error.response?.data?.detail || error.message));\n    } finally {\n      setUploading(false);\n    }\n  };\n\n  const { getRootProps, getInputProps, isDragActive } = useDropzone({\n    onDrop,\n    accept: {\n      \"image/png\": [\".png\"],\n      \"image/jpeg\": [\".jpg\", \".jpeg\"],\n      \"application/pdf\": [\".pdf\"]\n    },\n    multiple: false,\n  });\n\n  return (\n    <div className=\"space-y-4\">\n      <div\n        {...getRootProps()}\n        className={`upload-zone p-6 text-center cursor-pointer transition-all duration-300 ${\n          isDragActive ? 'drag-over' : ''\n        }`}\n        data-testid=\"line-graph-upload-zone\"\n      >\n        <input {...getInputProps()} />\n        {uploading ? (\n          <div className=\"flex flex-col items-center\" data-testid=\"uploading-state\">\n            <div className=\"loading-spinner mb-4\"></div>\n            <p className=\"text-primary font-medium\">Uploading line graph...</p>\n          </div>\n        ) : uploadedFile ? (\n          <div className=\"flex flex-col items-center\" data-testid=\"uploaded-state\">\n            <CheckCircle className=\"w-12 h-12 text-green-500 mx-auto mb-4\" />\n            <p className=\"text-lg font-medium text-green-600 mb-2\">\n              Graph uploaded successfully!\n            </p>\n            <p className=\"text-muted-foreground mb-2\">\n              File: {uploadedFile.name}\n            </p>\n            <p className=\"text-sm text-muted-foreground\">\n              This graph will be included as a second page in all {quarter} {year} reviews\n            </p>\n          </div>\n        ) : (\n          <div data-testid=\"upload-ready-state\">\n            <ImageIcon className=\"w-12 h-12 text-primary mx-auto mb-4\" />\n            <p className=\"text-lg font-medium text-primary mb-2\">\n              {isDragActive ? 'Drop the graph file here' : 'Upload Quarterly Line Graph'}\n            </p>\n            <p className=\"text-muted-foreground mb-4\">\n              Drag & drop or click to select the line graph for {quarter} {year}\n            </p>\n            <p className=\"text-sm text-muted-foreground\">\n              Supported formats: PNG, JPG, PDF • Max size: 10MB\n            </p>\n          </div>\n        )}\n      </div>\n      \n      {uploadedFile && (\n        <div className=\"text-center pt-4 border-t border-border\">\n          <Button \n            onClick={() => {\n              setUploadedFile(null);\n              // Allow re-upload\n            }}\n            variant=\"outline\" \n            size=\"sm\"\n          >\n            <Upload className=\"w-4 h-4 mr-2\" />\n            Upload Different Graph\n          </Button>\n        </div>\n      )}\n    </div>\n  );\n}
+import { useState } from "react";
+import { CheckCircle2, FileText, Upload } from "lucide-react";
+import { useDropzone } from "react-dropzone";
+import { toast } from "sonner";
+import axios from "axios";
+import { Button } from "./ui/button";
+
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
+export default function LineGraphUpload({ quarter, year, onUploadSuccess }) {
+  const [uploading, setUploading] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState(null);
+
+  const onDrop = async (acceptedFiles) => {
+    const file = acceptedFiles?.[0];
+    if (!file) return;
+
+    if (!file.name.match(/\.(png|jpg|jpeg|pdf)$/i)) {
+      toast.error("Please upload a PNG, JPG, or PDF file");
+      return;
+    }
+
+    setUploading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      await axios.post(`${API}/line-graphs`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+        params: { quarter, year },
+      });
+
+      setUploadedFile(file);
+      toast.success("Graph uploaded successfully");
+      onUploadSuccess?.();
+    } catch (error) {
+      console.error("Upload error:", error);
+      toast.error(
+        "Error uploading line graph: " +
+          (error.response?.data?.detail || error.message)
+      );
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      "image/png": [".png"],
+      "image/jpeg": [".jpg", ".jpeg"],
+      "application/pdf": [".pdf"],
+    },
+    multiple: false,
+  });
+
+  return (
+    <div className="space-y-4">
+      <div
+        {...getRootProps()}
+        className={`upload-zone p-6 text-center cursor-pointer transition-all duration-300 ${
+          isDragActive ? "drag-over" : ""
+        }`}
+        data-testid="line-graph-upload-zone"
+      >
+        <input {...getInputProps()} />
+
+        {uploading ? (
+          <div className="flex flex-col items-center" data-testid="uploading-state">
+            <div className="loading-spinner mb-4"></div>
+            <p className="text-primary font-medium">Uploading line graph...</p>
+          </div>
+        ) : uploadedFile ? (
+          <div className="flex flex-col items-center" data-testid="uploaded-state">
+            <CheckCircle2 className="w-12 h-12 text-green-600 mx-auto mb-4" />
+            <p className="text-lg font-medium text-green-700 mb-2">
+              Graph uploaded successfully!
+            </p>
+            <p className="text-muted-foreground mb-2">File: {uploadedFile.name}</p>
+            <p className="text-sm text-muted-foreground">
+              This graph will be included as page 2 in {quarter} {year} reviews
+            </p>
+          </div>
+        ) : (
+          <div data-testid="upload-ready-state">
+            <FileText className="w-12 h-12 text-primary mx-auto mb-4" />
+            <p className="text-lg font-medium text-primary mb-2">
+              {isDragActive
+                ? "Drop the graph file here"
+                : "Upload Quarterly Line Graph"}
+            </p>
+            <p className="text-muted-foreground mb-4">
+              Drag & drop or click to select the line graph for {quarter} {year}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Supported formats: PNG, JPG, PDF  Max size: 10MB
+            </p>
+          </div>
+        )}
+      </div>
+
+      {uploadedFile && (
+        <div className="text-center pt-4 border-t border-border">
+          <Button
+            onClick={() => setUploadedFile(null)}
+            variant="outline"
+            size="sm"
+          >
+            <Upload className="w-4 h-4 mr-2" />
+            Upload Different Graph
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
