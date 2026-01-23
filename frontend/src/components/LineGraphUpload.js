@@ -7,7 +7,7 @@ import { Button } from "./ui/button";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
-export default function LineGraphUpload({ quarter, year, onUploadSuccess }) {
+export default function LineGraphUpload({ employeeId, quarter, year, graphKind = "quarter", onUploadSuccess }) {
   const [uploading, setUploading] = useState(false);
   const [uploadedFile, setUploadedFile] = useState(null);
 
