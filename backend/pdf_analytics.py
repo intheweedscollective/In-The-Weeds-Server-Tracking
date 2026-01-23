@@ -2,14 +2,14 @@ import io
 from datetime import datetime
 from typing import Any, Dict
 
+import requests
+from io import BytesIO
+
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-import requests
-from io import BytesIO
-
 
 
 def _pct(count: int, total: int) -> str:
@@ -19,7 +19,7 @@ def _pct(count: int, total: int) -> str:
 
 
 def build_analytics_pdf(analytics: Dict[str, Dict[str, Any]], kpi_defs: Dict[str, Dict[str, Any]]) -> bytes:
-    """Generate a printable Analytics PDF report (high/medium/low + benchmark + average)."""
+    """Generate a printable Analytics PDF report (branded, can span multiple pages)."""
 
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -32,6 +32,7 @@ def build_analytics_pdf(analytics: Dict[str, Dict[str, Any]], kpi_defs: Dict[str
     )
 
     styles = getSampleStyleSheet()
+
     title_style = ParagraphStyle(
         "title",
         parent=styles["Title"],
@@ -48,7 +49,7 @@ def build_analytics_pdf(analytics: Dict[str, Dict[str, Any]], kpi_defs: Dict[str
         fontSize=10,
         textColor=colors.HexColor("#374151"),
         alignment=1,
-        spaceAfter=14,
+        spaceAfter=10,
     )
     section_style = ParagraphStyle(
         "section",
@@ -58,15 +59,32 @@ def build_analytics_pdf(analytics: Dict[str, Dict[str, Any]], kpi_defs: Dict[str
         textColor=colors.HexColor("#005B96"),
         spaceBefore=6,
         spaceAfter=6,
+        backColor=colors.HexColor("#EFF6FF"),
     )
 
     story = []
 
-    # Add logo (same as review sheets)
+    # Logo
     try:
         logo_url = "https://customer-assets.emergentagent.com/job_beaba37a-d1bc-43b6-b0ee-0f4c332229d2/artifacts/shpi6789_IMG_0599.png"
+        response = requests.get(logo_url, timeout=10)
+        logo_buffer = BytesIO(response.content)
+        logo_img = Image(logo_buffer, width=0.78 * inch, height=0.78 * inch)
+        logo_img.hAlign = "CENTER"
+        story.append(logo_img)
+        story.append(Spacer(1, 6))
+    except Exception:
+        pass
 
-    # Overview tiles (as a simple table)
+    story.append(Paragraph("Performance Analytics Report", title_style))
+    story.append(
+        Paragraph(
+            f"Generated {datetime.now().strftime('%m/%d/%Y')} - Bubba Gump Shrimp Co. (Las Vegas)",
+            subtitle_style,
+        )
+    )
+
+    # Overview tiles
     total_all = sum(int((analytics.get(k, {}) or {}).get("total") or 0) for k in kpi_defs.keys())
     high_all = sum(int((analytics.get(k, {}) or {}).get("high") or 0) for k in kpi_defs.keys())
     med_all = sum(int((analytics.get(k, {}) or {}).get("medium") or 0) for k in kpi_defs.keys())
@@ -104,37 +122,9 @@ def build_analytics_pdf(analytics: Dict[str, Dict[str, Any]], kpi_defs: Dict[str
     story.append(overview)
     story.append(Spacer(1, 12))
 
-        response = requests.get(logo_url, timeout=10)
-        logo_buffer = BytesIO(response.content)
-        logo_img = Image(logo_buffer, width=0.78 * inch, height=0.78 * inch)
-        logo_img.hAlign = "CENTER"
-        story.append(logo_img)
-        story.append(Spacer(1, 6))
-    except Exception:
-        pass
-
-    story.append(Paragraph("Performance Analytics Report", title_style))
-    story.append(
-        Paragraph(
-            f"Generated {datetime.now().strftime('%m/%d/%Y')} - Bubba Gump Shrimp Co. (Las Vegas)",
-            subtitle_style,
-        )
-    )
-
     story.append(Paragraph("Metric Distributions", section_style))
 
-    rows = [
-        [
-            "Metric",
-            "High",
-            "Medium",
-            "Low",
-            "Benchmark",
-            "Above Bench",
-            "Avg",
-            "N",
-        ]
-    ]
+    rows = [["Metric", "High", "Medium", "Low", "Benchmark", "Above Bench", "Avg", "N"]]
 
     def format_value(metric: str, val: Any) -> str:
         if val is None:
@@ -145,10 +135,6 @@ def build_analytics_pdf(analytics: Dict[str, Dict[str, Any]], kpi_defs: Dict[str
             return str(val)
 
         fmt = kpi_defs.get(metric, {}).get("format")
-        if metric == "lsc_ratio":
-            # lsc_ratio benchmark is 0.01 (1 in 100), but analytics stores denominators for employee values.
-            # For report, show benchmark as 1 in 100.
-            return f"1 in {round(v)}"
         if fmt == "currency":
             return f"${v:.2f}"
         if fmt == "number":
@@ -164,11 +150,12 @@ def build_analytics_pdf(analytics: Dict[str, Dict[str, Any]], kpi_defs: Dict[str
         avg = data.get("average")
         bench_val = data.get("benchmarkValue")
 
-        bench_display = ""
         if metric_key == "lsc_ratio":
             bench_display = "1 in 100"
         else:
             bench_display = format_value(metric_key, bench_val)
+
+        above_count = int(data.get("benchmark") or 0)
 
         rows.append(
             [
@@ -177,7 +164,7 @@ def build_analytics_pdf(analytics: Dict[str, Dict[str, Any]], kpi_defs: Dict[str
                 f"{med} ({_pct(med, n)})",
                 f"{low} ({_pct(low, n)})",
                 bench_display,
-                f"{int(data.get('benchmark') or 0)} ({_pct(int(data.get('benchmark') or 0), n)})",
+                f"{above_count} ({_pct(above_count, n)})",
                 format_value(metric_key, avg),
                 str(n),
             ]
@@ -203,7 +190,6 @@ def build_analytics_pdf(analytics: Dict[str, Dict[str, Any]], kpi_defs: Dict[str
     )
 
     story.append(table)
-    story.append(Spacer(1, 10))
 
     doc.build(story)
     buffer.seek(0)
