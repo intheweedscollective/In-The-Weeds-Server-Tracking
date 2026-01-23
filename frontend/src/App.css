@@ -1,34 +1,192 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+/* Bubba Gump Branding Styles */
+.bubba-header {
+  background: linear-gradient(135deg, #D12E2E 0%, #B91C1C 100%);
+  color: white;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
+.bubba-card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  border-left: 4px solid #D12E2E;
+  transition: all 0.3s ease;
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+.bubba-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px -5px rgba(0, 0, 0, 0.1);
 }
 
-.App-link {
-    color: #61dafb;
+.bubba-btn-primary {
+  background: #D12E2E;
+  color: white;
+  border-radius: 25px;
+  padding: 12px 32px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  border: none;
+  cursor: pointer;
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+.bubba-btn-primary:hover {
+  background: #B91C1C;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 15px rgba(209, 46, 46, 0.3);
+}
+
+.bubba-btn-secondary {
+  background: white;
+  color: #005B96;
+  border: 2px solid #005B96;
+  border-radius: 25px;
+  padding: 10px 30px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.bubba-btn-secondary:hover {
+  background: #005B96;
+  color: white;
+  transform: translateY(-1px);
+}
+
+.upload-zone {
+  border: 2px dashed #D12E2E;
+  border-radius: 12px;
+  background: rgba(209, 46, 46, 0.05);
+  transition: all 0.3s ease;
+}
+
+.upload-zone:hover {
+  border-color: #B91C1C;
+  background: rgba(209, 46, 46, 0.1);
+}
+
+.upload-zone.drag-over {
+  border-color: #B91C1C;
+  background: rgba(209, 46, 46, 0.15);
+  transform: scale(1.02);
+}
+
+.kpi-card {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.kpi-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+}
+
+.kpi-value {
+  font-size: 2rem;
+  font-weight: 900;
+  color: #D12E2E;
+  font-family: 'Merriweather', serif;
+}
+
+.kpi-label {
+  font-size: 0.875rem;
+  color: #6B7280;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  margin-top: 8px;
+}
+
+.performance-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.performance-excellent {
+  background: #D1FAE5;
+  color: #065F46;
+}
+
+.performance-above-average {
+  background: #DBEAFE;
+  color: #1E40AF;
+}
+
+.performance-satisfactory {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+.performance-needs-improvement {
+  background: #FED7AA;
+  color: #C2410C;
+}
+
+.performance-below {
+  background: #FECACA;
+  color: #B91C1C;
+}
+
+/* Navigation Styles */
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  color: #374151;
+  text-decoration: none;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+
+.nav-link:hover {
+  background: rgba(209, 46, 46, 0.1);
+  color: #D12E2E;
+}
+
+.nav-link.active {
+  background: #D12E2E;
+  color: white;
+}
+
+/* Loading Animation */
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #D12E2E;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #D12E2E;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #B91C1C;
 }
