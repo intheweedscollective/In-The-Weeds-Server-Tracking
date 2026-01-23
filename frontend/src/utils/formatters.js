@@ -69,7 +69,16 @@ export const getBenchmarkStatus = (kpi, value) => {
   if (!value || !KPI_DEFINITIONS[kpi]) return { status: "neutral", text: "" };
   
   const benchmark = KPI_DEFINITIONS[kpi].benchmark;
-  const isAbove = value >= benchmark;
+  let isAbove = false;
+  
+  // Special handling for LSC Ratio - lower numbers are better (1 in 34 is better than 1 in 100)
+  if (kpi === 'lsc_ratio') {
+    // Convert benchmark to denominator format (0.01 = 1 in 100)
+    const benchmarkDenominator = Math.round(1 / benchmark); // 100
+    isAbove = value <= benchmarkDenominator; // 34 <= 100 = Above benchmark
+  } else {
+    isAbove = value >= benchmark;
+  }
   
   return {
     status: isAbove ? "above" : "below",
