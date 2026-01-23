@@ -70,7 +70,7 @@ export default function EmployeeList() {
     const matchesPosition = positionFilter === "all" || 
                            employee.position.toLowerCase().includes(positionFilter.toLowerCase());
     
-    const performance = getPerformanceLevel(employee.total_score);
+    const performance = getPerformanceLevel(employee.cumulative_score);
     const matchesPerformance = performanceFilter === "all" || 
                               performance.text.toLowerCase().includes(performanceFilter.toLowerCase());
     
@@ -188,7 +188,7 @@ export default function EmployeeList() {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6" data-testid="employee-grid">
             {filteredEmployees.map((employee) => {
-              const performance = getPerformanceLevel(employee.total_score);
+              const performance = getPerformanceLevel(employee.cumulative_score);
               
               return (
                 <Card key={employee.id} className="bubba-card" data-testid={`employee-card-${employee.id}`}>
