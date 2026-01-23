@@ -668,6 +668,17 @@ async def upload_line_graph(
             quarter=quarter,
             year=year,
             graph_kind=graph_kind,
+
+@api_router.get("/top-performers/pdf")
+async def top_performers_pdf():
+    employees = await db.employees.find({}, {"_id": 0}).to_list(5000)
+    pdf_bytes = build_top_performers_pdf(employees, KPI_DEFINITIONS)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=top_performers_report.pdf"},
+    )
+
             filename=file.filename,
             content_type=file.content_type or "application/octet-stream",
             file_data=file_base64,
