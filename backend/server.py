@@ -102,21 +102,29 @@ async def generate_review_content(employee: Employee, quarter: str, year: int) -
         prompt = f"""
 Create a comprehensive quarterly review for {employee.name}, a {employee.position} at Bubba Gump Shrimp Co.
 
-PERFORMANCE METRICS (Focus on these 6 key KPIs):
-- PPA (Per Person Average): {employee.ppa or 'N/A'}
-- GPG (Gross Profit Generated): {employee.gpg or 'N/A'}
-- PPLBW (People Per Labor Budget Week): {employee.pplbw or 'N/A'}
-- LSC Ratio (Labor Sales Cost): {employee.lsc_ratio or 'N/A'}
-- Metric Bonus Points: {employee.metric_bonus_points or 'N/A'}
-- Cumulative Score: {employee.cumulative_score or 'N/A'}
+PERFORMANCE METRICS (Focus on these 6 key KPIs with benchmarks):
+- PPA (Per Person Average): {employee.ppa or 'N/A'} (Benchmark: $55.00)
+- GPG (Glassware $ Per Guest): {employee.gpg or 'N/A'} (Benchmark: $1.00)
+- PPLBW (Per Person Liquor Beer and Wine): {employee.pplbw or 'N/A'} (Benchmark: $8.00)
+- LSC Ratio (Landry's Select Card Memberships Sold): {format_lsc_ratio(employee.lsc_ratio)} (Benchmark: 1 in 100)
+- Metric Bonus Points: {employee.metric_bonus_points or 'N/A'} (Special incentives for exceeding benchmarks)
+- Cumulative Score: {employee.cumulative_score or 'N/A'} (Final grade)
 
 ADDITIONAL DATA: {employee.additional_data}
+
+KPI CONTEXT:
+- PPA measures the average dollar amount per guest
+- GPG tracks glassware sales performance per guest
+- PPLBW measures alcohol sales per guest (liquor, beer, wine)
+- LSC Ratio shows success in selling Landry's Select Card memberships
+- Metric Bonus Points are earned when exceeding store benchmarks
+- Cumulative Score is the overall performance grade
 
 REVIEW REQUIREMENTS:
 1. Write in a human, conversational tone - avoid robotic language
 2. Be HR-defensible with specific examples and constructive feedback
 3. Structure with clear sections: Performance Highlights, Areas for Growth, Goals for Next Quarter
-4. Include specific recognition for strong KPIs and constructive guidance for improvement areas
+4. Reference specific KPIs and benchmark performance where applicable
 5. Maintain Bubba Gump's friendly, southern hospitality culture
 6. Keep it professional but warm and engaging
 7. Length should be 400-600 words
