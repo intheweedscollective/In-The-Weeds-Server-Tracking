@@ -554,6 +554,68 @@ async def get_reviews():
     
     return reviews
 
+@api_router.post("/upload-line-graph")
+async def upload_line_graph(quarter: str, year: int, file: UploadFile = File(...)):
+    if not file.filename.endswith(('.png', '.jpg', '.jpeg', '.pdf')):
+        raise HTTPException(status_code=400, detail="Only image files (PNG, JPG) or PDF files are allowed")
+    
+    try:
+        # Read file content
+        contents = await file.read()
+        
+        # Convert to base64 for storage
+        file_base64 = base64.b64encode(contents).decode('utf-8')
+        
+        # Create line graph record
+        line_graph = LineGraph(
+            quarter=quarter,
+            year=year,
+            filename=file.filename,
+            file_data=file_base64
+        )
+        
+        # Save to database
+        graph_doc = line_graph.model_dump()
+        graph_doc['created_at'] = graph_doc['created_at'].isoformat()
+        
+        # Remove any existing graph for this quarter/year
+        await db.line_graphs.delete_many({"quarter": quarter, "year": year})
+        
+        # Insert new graph
+        await db.line_graphs.insert_one(graph_doc)
+        
+        return {
+            "success": True,
+            "message": f"Line graph uploaded for {quarter} {year}",
+            "graph_id": line_graph.id
+        }
+        
+    except Exception as e:
+        logging.error(f"Error uploading line graph: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error uploading graph: {str(e)}")
+
+@api_router.get("/line-graphs")
+async def get_line_graphs():
+    graphs = await db.line_graphs.find({}, {"_id": 0}).to_list(100)
+    
+    # Convert ISO string timestamps back to datetime objects
+    for graph in graphs:
+        if isinstance(graph['created_at'], str):
+            graph['created_at'] = datetime.fromisoformat(graph['created_at'])
+    
+    return graphs
+
+@api_router.get("/line-graphs/{quarter}/{year}")
+async def get_line_graph(quarter: str, year: int):
+    graph = await db.line_graphs.find_one({"quarter": quarter, "year": year}, {"_id": 0})
+    if not graph:
+        raise HTTPException(status_code=404, detail="Line graph not found for this period")
+    
+    if isinstance(graph['created_at'], str):
+        graph['created_at'] = datetime.fromisoformat(graph['created_at'])
+    
+    return graph
+
 @api_router.delete("/employees/{employee_id}")
 async def delete_employee(employee_id: str):
     result = await db.employees.delete_one({"id": employee_id})
