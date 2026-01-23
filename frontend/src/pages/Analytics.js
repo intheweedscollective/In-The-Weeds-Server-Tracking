@@ -24,6 +24,7 @@ export default function Analytics() {
     if (employees.length > 0) {
       calculateAnalytics();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employees]);
 
   const fetchEmployees = async () => {
