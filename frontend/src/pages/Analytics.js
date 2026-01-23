@@ -445,7 +445,7 @@ export default function Analytics() {
                       
                       <div className="text-center">
                         <div className="text-2xl font-serif font-bold text-primary">
-                          {formatMetricValue(metricKey, data.average)}
+                          {formatMetricValueOld(metricKey, data.average)}
                         </div>
                         <div className="text-xs text-muted-foreground uppercase tracking-wider">
                           Team Average
