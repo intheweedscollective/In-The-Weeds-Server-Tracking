@@ -372,6 +372,109 @@ class BubbaGumpAPITester:
             self.log_test("Clear All Employees", False, str(e))
             return False
 
+    def test_analytics_pdf_endpoint(self):
+        """Test Analytics PDF export endpoint - regression test for new functionality"""
+        try:
+            response = requests.get(f"{self.api_url}/analytics/pdf", timeout=30)
+            success = response.status_code == 200
+            
+            if success:
+                # Check content type
+                content_type = response.headers.get('content-type', '')
+                is_pdf = content_type == 'application/pdf'
+                
+                # Check file is non-empty
+                pdf_content = response.content
+                is_non_empty = len(pdf_content) > 0
+                
+                # Parse with pypdf and check page count
+                page_count = 0
+                has_expected_text = False
+                has_above_bench_column = False
+                
+                try:
+                    pdf_reader = PdfReader(io.BytesIO(pdf_content))
+                    page_count = len(pdf_reader.pages)
+                    
+                    # Extract text from all pages
+                    full_text = ""
+                    for page in pdf_reader.pages:
+                        full_text += page.extract_text()
+                    
+                    # Check for required text content
+                    has_expected_text = 'Performance Analytics Report' in full_text
+                    has_above_bench_column = 'Above Bench' in full_text
+                    
+                except Exception as pdf_error:
+                    details = f"PDF parsing failed: {str(pdf_error)}"
+                    success = False
+                
+                if success:
+                    success = (is_pdf and is_non_empty and page_count >= 1 and 
+                              has_expected_text and has_above_bench_column)
+                    details = (f"Status: {response.status_code}, Content-Type: {content_type}, "
+                              f"Size: {len(pdf_content)} bytes, Pages: {page_count}, "
+                              f"Has 'Performance Analytics Report': {has_expected_text}, "
+                              f"Has 'Above Bench': {has_above_bench_column}")
+            else:
+                details = f"Status: {response.status_code}, Response: {response.text[:200]}"
+            
+            self.log_test("Analytics PDF Export", success, details)
+            return success
+        except Exception as e:
+            self.log_test("Analytics PDF Export", False, str(e))
+            return False
+
+    def test_generate_review_q4_2025_regression(self):
+        """Test generate-review regression for Q4 2025 - ensure it still works and returns pdf_base64"""
+        if not hasattr(self, 'test_employee_id'):
+            self.log_test("Generate Review Q4 2025 Regression", False, "No employee ID available")
+            return False
+        
+        try:
+            payload = {
+                "quarter": "Q4",
+                "year": 2025
+            }
+            
+            response = requests.post(
+                f"{self.api_url}/employees/{self.test_employee_id}/generate-review", 
+                json=payload, 
+                timeout=60  # AI generation can take time
+            )
+            
+            success = response.status_code == 200
+            
+            if success:
+                data = response.json()
+                has_success = data.get('success', False)
+                has_pdf_base64 = 'pdf_base64' in data and data['pdf_base64'] is not None
+                
+                # Validate PDF if present
+                pdf_valid = False
+                page_count = 0
+                if has_pdf_base64:
+                    try:
+                        pdf_bytes = base64.b64decode(data['pdf_base64'])
+                        pdf_reader = PdfReader(io.BytesIO(pdf_bytes))
+                        page_count = len(pdf_reader.pages)
+                        pdf_valid = page_count >= 1
+                    except Exception as pdf_error:
+                        pdf_valid = False
+                
+                success = has_success and has_pdf_base64 and pdf_valid
+                details = (f"Status: {response.status_code}, Success: {has_success}, "
+                          f"Has pdf_base64: {has_pdf_base64}, PDF Valid: {pdf_valid}, "
+                          f"Pages: {page_count}")
+            else:
+                details = f"Status: {response.status_code}, Response: {response.text[:200]}"
+            
+            self.log_test("Generate Review Q4 2025 Regression", success, details)
+            return success
+        except Exception as e:
+            self.log_test("Generate Review Q4 2025 Regression", False, str(e))
+            return False
+
     def test_invalid_excel_upload(self):
         """Test uploading invalid file type"""
         try:
