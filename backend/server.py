@@ -34,6 +34,16 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
+KPI_DEFINITIONS = {
+    "ppa": {"name": "Per Person Average (PPA)", "format": "currency"},
+    "gpg": {"name": "Glassware $ Per Guest (GPG)", "format": "currency"},
+    "pplbw": {"name": "Per Person Liquor Beer Wine (PPLBW)", "format": "currency"},
+    "lsc_ratio": {"name": "Landry's Select Card Ratio (LSC)", "format": "ratio"},
+    "metric_bonus_points": {"name": "Metric Bonus Points", "format": "number"},
+    "cumulative_score": {"name": "Cumulative Score", "format": "number"},
+}
+
+
 # Create the main app without a prefix
 app = FastAPI()
 
