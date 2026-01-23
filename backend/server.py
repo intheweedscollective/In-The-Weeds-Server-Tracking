@@ -23,7 +23,7 @@ import base64
 import asyncio
 import requests
 from pypdf import PdfReader, PdfWriter
-from backend.pdf_top_performers import build_top_performers_pdf
+from pdf_top_performers import build_top_performers_pdf
 
 
 from io import BytesIO
