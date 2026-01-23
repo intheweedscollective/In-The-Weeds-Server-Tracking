@@ -158,7 +158,7 @@ class BubbaGumpAPITester:
                 'file': ('test_graph.png', test_png_data, 'image/png')
             }
             
-            data = {
+            params = {
                 'quarter': 'Q4',
                 'year': 2024,
                 'employee_id': self.test_employee_id,
@@ -168,7 +168,7 @@ class BubbaGumpAPITester:
             response = requests.post(
                 f"{self.api_url}/line-graphs", 
                 files=files,
-                data=data,
+                params=params,
                 timeout=30
             )
             
