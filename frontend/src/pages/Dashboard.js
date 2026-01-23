@@ -298,7 +298,7 @@ export default function Dashboard() {
                   </thead>
                   <tbody>
                     {employees.slice(0, 5).map((employee) => {
-                      const score = employee.total_score || 0;
+                      const score = employee.cumulative_score || 0;
                       let performanceClass = 'performance-below';
                       let performanceText = 'Below Expectations';
                       
