@@ -22,6 +22,8 @@ from reportlab.pdfgen import canvas
 import base64
 import asyncio
 import requests
+from pypdf import PdfReader, PdfWriter
+
 from io import BytesIO
 
 ROOT_DIR = Path(__file__).parent
@@ -455,6 +457,57 @@ def generate_pdf(employee: Employee, review_content: str, quarter: str, year: in
     
     # Build PDF
     doc.build(story)
+
+
+def _create_graph_pdf_from_image_bytes(image_bytes: bytes) -> bytes:
+    """Create a 1-page PDF that contains the given image (png/jpg) scaled to fit."""
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        topMargin=0.4 * inch,
+        bottomMargin=0.4 * inch,
+        leftMargin=0.6 * inch,
+        rightMargin=0.6 * inch,
+    )
+
+    story: List[Any] = []
+    story.append(Spacer(1, 12))
+    story.append(Image(BytesIO(image_bytes), width=6.8 * inch, height=9.2 * inch))
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def _merge_review_with_graph(review_pdf: bytes, graph_doc: Dict[str, Any]) -> bytes:
+    """Append the uploaded graph (PDF or image) as page 2+ without distorting its native page size."""
+    if not graph_doc or not graph_doc.get("file_data"):
+        return review_pdf
+
+    graph_bytes = base64.b64decode(graph_doc["file_data"])
+    is_pdf = (
+        graph_doc.get("content_type") == "application/pdf"
+        or (graph_doc.get("filename") or "").lower().endswith(".pdf")
+    )
+
+    if not is_pdf:
+        graph_bytes = _create_graph_pdf_from_image_bytes(graph_bytes)
+
+    writer = PdfWriter()
+
+    review_reader = PdfReader(BytesIO(review_pdf))
+    for page in review_reader.pages:
+        writer.add_page(page)
+
+    graph_reader = PdfReader(BytesIO(graph_bytes))
+    for page in graph_reader.pages:
+        writer.add_page(page)
+
+    out = BytesIO()
+    writer.write(out)
+    out.seek(0)
+    return out.getvalue()
+
     buffer.seek(0)
     return buffer.getvalue()
 
@@ -605,9 +658,10 @@ async def generate_employee_review(employee_id: str, review_data: ReviewCreate):
         review_doc['created_at'] = review_doc['created_at'].isoformat()
         await db.reviews.insert_one(review_doc)
         
-        # Generate PDF with optional line graph
-        pdf_bytes = generate_pdf(employee, review_content, review_data.quarter, review_data.year, line_graph)
-        pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+        # Generate base (single-page) review PDF, then append graph PDF (page 2) if present
+        base_pdf = generate_pdf(employee, review_content, review_data.quarter, review_data.year, None)
+        merged_pdf = _merge_review_with_graph(base_pdf, line_graph) if line_graph else base_pdf
+        pdf_base64 = base64.b64encode(merged_pdf).decode('utf-8')
         
         return ReviewResponse(
             success=True,
