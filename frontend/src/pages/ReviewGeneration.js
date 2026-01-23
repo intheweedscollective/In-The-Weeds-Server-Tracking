@@ -173,7 +173,7 @@ export default function ReviewGeneration() {
               <ul className="text-sm text-muted-foreground space-y-1">
                 <li>• AI-powered content generation using GPT-5.2</li>
                 <li>• Human-like, HR-defensible review language</li>
-                <li>• Focus on 6 key KPIs: PPA, GPG, PPLBW, LSC Ratio, Bonus Points, Total Score</li>
+                <li>• Focus on 6 key KPIs: Per Person Average, Glassware $ Per Guest, Per Person Liquor Beer Wine, Landry's Select Card Ratio, Metric Bonus Points, Cumulative Score</li>
                 <li>• Professional PDF with Bubba Gump branding</li>
                 <li>• Marketing-style document formatting</li>
               </ul>
