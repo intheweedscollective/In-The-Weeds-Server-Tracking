@@ -159,6 +159,7 @@ export default function Dashboard() {
             value={stats.avgTotalScore}
             color="bg-green-500"
             testId="avg-score-card"
+            linkTo="/analytics"
           />
           <StatsCard 
             icon={Award}
@@ -166,6 +167,7 @@ export default function Dashboard() {
             value={stats.topPerformers}
             color="bg-yellow-500"
             testId="top-performers-card"
+            linkTo="/top-performers"
           />
           <StatsCard 
             icon={Target}
