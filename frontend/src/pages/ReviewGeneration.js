@@ -21,6 +21,9 @@ export default function ReviewGeneration() {
   const [selectedQuarter, setSelectedQuarter] = useState("Q4");
   const [selectedYear, setSelectedYear] = useState("2024");
 
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
+  const [selectedGraphKind, setSelectedGraphKind] = useState("quarter");
+
   useEffect(() => {
     fetchEmployees();
     fetchReviews();
