@@ -676,9 +676,12 @@ async def get_line_graphs(employee_id: Optional[str] = None):
     
     return graphs
 
-@api_router.get("/line-graphs/{quarter}/{year}")
-async def get_line_graph(quarter: str, year: int):
-    graph = await db.line_graphs.find_one({"quarter": quarter, "year": year}, {"_id": 0})
+@api_router.get("/line-graphs/{employee_id}/{quarter}/{year}")
+async def get_line_graph(employee_id: str, quarter: str, year: int, graph_kind: str = "quarter"):
+    graph = await db.line_graphs.find_one(
+        {"employee_id": employee_id, "quarter": quarter, "year": year, "graph_kind": graph_kind},
+        {"_id": 0},
+    )
     if not graph:
         raise HTTPException(status_code=404, detail="Line graph not found for this period")
     
