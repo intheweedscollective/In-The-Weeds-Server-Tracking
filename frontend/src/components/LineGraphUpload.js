@@ -84,7 +84,7 @@ export default function LineGraphUpload({ employeeId, quarter, year, graphKind =
             </p>
             <p className="text-muted-foreground mb-2">File: {uploadedFile.name}</p>
             <p className="text-sm text-muted-foreground">
-              This graph will be included as page 2 in {quarter} {year} reviews
+              This graph will be included as page 2 in {quarter} {year} review for this employee
             </p>
           </div>
         ) : (
