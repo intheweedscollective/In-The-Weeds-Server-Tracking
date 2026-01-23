@@ -134,6 +134,17 @@
 ##       - working: true
 ##         agent: "testing"
 ##         comment: "Tested review generation - Generate Review button clickable, PDF download triggered successfully with success toast notifications"
+##   - task: "Analytics PDF export endpoint"
+##     implemented: true
+##     working: true
+##     file: "backend/server.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: false
+##     status_history:
+##       - working: true
+##         agent: "testing"
+##         comment: "Regression tested new Analytics PDF export endpoint - GET /api/analytics/pdf returns valid PDF (309,903 bytes) with 'Performance Analytics Report' title and 'Above Bench' column. PDF parsed successfully with pypdf (1 page). All requirements satisfied."
 ## frontend:
 ##   - task: "Fix build-breaking LineGraphUpload syntax error"
 ##     implemented: true
