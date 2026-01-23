@@ -15,7 +15,11 @@ export default function LineGraphUpload({ employeeId, quarter, year, graphKind =
     const file = acceptedFiles?.[0];
     if (!file) return;
 
-    if (!file.name.match(/\.(png|jpg|jpeg|pdf)$/i)) {
+    const nameOk = file.name.match(/\.(png|jpg|jpeg|pdf)$/i);
+    const typeOk = ["image/png", "image/jpeg", "application/pdf"].includes(file.type);
+
+    // Some mobile browsers may provide a filename without an extension; accept by MIME type.
+    if (!nameOk && !typeOk) {
       toast.error("Please upload a PNG, JPG, or PDF file");
       return;
     }
