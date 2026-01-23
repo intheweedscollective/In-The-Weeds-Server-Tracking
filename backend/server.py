@@ -268,28 +268,31 @@ def generate_pdf(employee: Employee, review_content: str, quarter: str, year: in
     story.append(Paragraph(f"QUARTERLY PERFORMANCE REVIEW - {quarter} {year}", header_style))
     story.append(Spacer(1, 8))
     
-    # Employee info section
+    # Compact employee info section
     emp_info_data = [
-        ["Employee Name:", employee.name],
-        ["Position:", employee.position],
-        ["Review Period:", f"{quarter} {year}"],
-        ["Date Generated:", datetime.now().strftime("%B %d, %Y")]
+        ["Employee:", employee.name, "Position:", employee.position],
+        ["Review Period:", f"{quarter} {year}", "Overall Rank:", employee.overall_rank or 'N/A'],
+        ["Ranking Level:", employee.ranking or 'N/A', "Date Generated:", datetime.now().strftime("%m/%d/%Y")]
     ]
     
-    emp_table = Table(emp_info_data, colWidths=[2*inch, 4*inch])
+    emp_table = Table(emp_info_data, colWidths=[1.2*inch, 2*inch, 1.2*inch, 2*inch])
     emp_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#F9F7F2')),
+        ('BACKGROUND', (2, 0), (2, -1), colors.HexColor('#F9F7F2')),
         ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#005B96')),
+        ('TEXTCOLOR', (2, 0), (2, -1), colors.HexColor('#005B96')),
         ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
         ('FONTNAME', (1, 0), (1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 11),
+        ('FONTNAME', (3, 0), (3, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E5E7EB'))
     ]))
     
     story.append(emp_table)
-    story.append(Spacer(1, 20))
+    story.append(Spacer(1, 10))
     
     # KPI Performance Metrics with Peer Rankings
     story.append(Paragraph("KEY PERFORMANCE INDICATORS & PEER RANKINGS", header_style))
