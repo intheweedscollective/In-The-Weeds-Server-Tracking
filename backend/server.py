@@ -329,7 +329,7 @@ def generate_pdf(employee: Employee, review_content: str, quarter: str, year: in
     ]))
     
     story.append(emp_table)
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 8))
     
     # KPI Performance Metrics with Peer Rankings
     story.append(Paragraph("KEY PERFORMANCE INDICATORS & PEER RANKINGS", header_style))
