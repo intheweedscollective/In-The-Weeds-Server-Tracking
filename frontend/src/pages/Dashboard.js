@@ -292,7 +292,7 @@ export default function Dashboard() {
                     <tr className="border-b border-border">
                       <th className="text-left py-3 px-4 font-semibold text-primary">Name</th>
                       <th className="text-left py-3 px-4 font-semibold text-primary">Position</th>
-                      <th className="text-center py-3 px-4 font-semibold text-primary">Total Score</th>
+                      <th className="text-center py-3 px-4 font-semibold text-primary">Cumulative Score</th>
                       <th className="text-center py-3 px-4 font-semibold text-primary">Performance</th>
                     </tr>
                   </thead>
