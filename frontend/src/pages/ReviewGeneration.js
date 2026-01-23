@@ -259,19 +259,51 @@ export default function ReviewGeneration() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FileText className="w-5 h-5" />
-              Quarterly Performance Graph
+              Employee Line Graph (Optional)
             </CardTitle>
             <CardDescription>
-              Upload quarterly line graph to include as second page in all reviews
+              Upload a quarterly PDF/image that will be appended as page 2 to the selected employees review.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <LineGraphUpload 
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Employee</label>
+                <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
+                  <SelectTrigger data-testid="line-graph-employee-select">
+                    <SelectValue placeholder="Select an employee" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employees.map((e) => (
+                      <SelectItem key={e.id} value={e.id}>
+                        {e.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Graph Type</label>
+                <Select value={selectedGraphKind} onValueChange={setSelectedGraphKind}>
+                  <SelectTrigger data-testid="line-graph-kind-select">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="quarter">Quarterly</SelectItem>
+                    <SelectItem value="ytd">Year-to-date</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <LineGraphUpload
+              employeeId={selectedEmployeeId}
               quarter={selectedQuarter}
               year={parseInt(selectedYear)}
+              graphKind={selectedGraphKind}
               onUploadSuccess={() => {
                 toast.success("Line graph uploaded successfully!");
-                // Refresh any necessary data
               }}
             />
           </CardContent>
