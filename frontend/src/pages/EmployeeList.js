@@ -346,19 +346,19 @@ export default function EmployeeList() {
                   
                   <div className="text-center p-4 bg-muted/30 rounded-lg">
                     <div className="text-3xl font-serif font-bold text-brand-yellow mb-2">
-                      {selectedEmployee.bonus_points?.toFixed(1) || 'N/A'}
+                      {selectedEmployee.metric_bonus_points?.toFixed(1) || 'N/A'}
                     </div>
                     <div className="text-sm font-semibold text-muted-foreground uppercase">
-                      Bonus Points
+                      Metric Bonus Points
                     </div>
                   </div>
                   
                   <div className="text-center p-4 bg-primary/10 rounded-lg">
                     <div className="text-4xl font-serif font-bold text-primary mb-2">
-                      {selectedEmployee.total_score?.toFixed(1) || 'N/A'}
+                      {selectedEmployee.cumulative_score?.toFixed(1) || 'N/A'}
                     </div>
                     <div className="text-sm font-semibold text-muted-foreground uppercase">
-                      Total Score
+                      Cumulative Score
                     </div>
                   </div>
                 </div>
