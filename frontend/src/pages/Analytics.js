@@ -33,6 +33,7 @@ export default function Analytics() {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
+      toast.success("Analytics PDF downloaded");
     } catch (error) {
       console.error(error);
       toast.error("Could not download Analytics PDF");
