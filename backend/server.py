@@ -90,7 +90,8 @@ def format_lsc_ratio(value):
     if value is None or value == 0:
         return 'N/A'
     try:
-        ratio = round(1 / float(value))
+        # The value is already the denominator (e.g., 34 means "1 in 34")
+        ratio = round(float(value))
         return f"1 in {ratio}"
     except (ValueError, ZeroDivisionError):
         return 'N/A'
