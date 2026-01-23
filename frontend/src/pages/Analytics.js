@@ -38,6 +38,32 @@ export default function Analytics() {
       console.error(error);
       toast.error("Could not download Analytics PDF");
     }
+
+  const getTopEmployees = (metric, limit = 10) => {
+    const valid = employees.filter((e) => e[metric] != null);
+
+    const sorted = [...valid].sort((a, b) => {
+      if (metric === "lsc_ratio") return (a[metric] || 0) - (b[metric] || 0);
+      return (b[metric] || 0) - (a[metric] || 0);
+    });
+
+    return sorted.slice(0, limit);
+  };
+
+  const formatMetricValue = (metric, value) => {
+    if (value == null) return "N/A";
+    switch (metric) {
+      case "ppa":
+      case "gpg":
+      case "pplbw":
+        return formatCurrency(value);
+      case "lsc_ratio":
+        return formatLSCRatio(value);
+      default:
+        return formatNumber(value);
+    }
+  };
+
   };
 
   useEffect(() => {
