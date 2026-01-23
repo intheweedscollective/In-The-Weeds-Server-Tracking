@@ -44,24 +44,30 @@ export default function TopPerformers() {
 
     metrics.forEach(metric => {
       let sortedEmployees;
-      
+
       if (metric === 'lsc_ratio') {
-        // For LSC ratio, lower is better (closer to benchmark of 1 in 100)
+        // For LSC ratio, lower is better
         sortedEmployees = [...employees]
           .filter(emp => emp[metric] != null)
           .sort((a, b) => a[metric] - b[metric])
           .slice(0, 10);
       } else {
-        // For other metrics, higher is better
         sortedEmployees = [...employees]
           .filter(emp => emp[metric] != null)
           .sort((a, b) => b[metric] - a[metric])
           .slice(0, 10);
       }
-      
+
       topPerformersData[metric] = sortedEmployees;
     });
 
+    // Top 10 overall = top by cumulative_score
+    const overall = [...employees]
+      .filter(emp => emp.cumulative_score != null)
+      .sort((a, b) => (b.cumulative_score || 0) - (a.cumulative_score || 0))
+      .slice(0, 10);
+
+    setTopOverall(overall);
     setTopPerformers(topPerformersData);
   };
 
