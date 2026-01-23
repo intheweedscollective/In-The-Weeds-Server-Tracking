@@ -85,6 +85,16 @@ class ReviewResponse(BaseModel):
     pdf_base64: Optional[str] = None
 
 # Helper function to generate review content
+def format_lsc_ratio(value):
+    """Format LSC ratio as '1 in xxx'"""
+    if value is None or value == 0:
+        return 'N/A'
+    try:
+        ratio = round(1 / float(value))
+        return f"1 in {ratio}"
+    except (ValueError, ZeroDivisionError):
+        return 'N/A'
+
 async def generate_review_content(employee: Employee, quarter: str, year: int) -> str:
     try:
         # Initialize LLM Chat
