@@ -224,8 +224,8 @@ def generate_pdf(employee: Employee, review_content: str, quarter: str, year: in
         ["GPG (Gross Profit Generated)", str(employee.gpg or 'N/A'), get_performance_level(employee.gpg)],
         ["PPLBW (People Per Labor Budget Week)", str(employee.pplbw or 'N/A'), get_performance_level(employee.pplbw)],
         ["LSC Ratio (Labor Sales Cost)", str(employee.lsc_ratio or 'N/A'), get_performance_level(employee.lsc_ratio)],
-        ["Bonus Points", str(employee.bonus_points or 'N/A'), get_performance_level(employee.bonus_points)],
-        ["Total Score", str(employee.total_score or 'N/A'), get_performance_level(employee.total_score)]
+        ["Bonus Points", str(employee.metric_bonus_points or 'N/A'), get_performance_level(employee.metric_bonus_points)],
+        ["Total Score", str(employee.cumulative_score or 'N/A'), get_performance_level(employee.cumulative_score)]
     ]
     
     kpi_table = Table(kpi_data, colWidths=[3*inch, 1.5*inch, 2*inch])
