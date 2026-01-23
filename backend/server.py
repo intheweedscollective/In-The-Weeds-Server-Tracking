@@ -303,7 +303,7 @@ def generate_pdf(employee: Employee, review_content: str, quarter: str, year: in
     
     # Review title
     story.append(Paragraph(f"QUARTERLY PERFORMANCE REVIEW - {quarter} {year}", header_style))
-    story.append(Spacer(1, 8))
+    story.append(Spacer(1, 6))
     
     # Compact employee info section
     emp_info_data = [
