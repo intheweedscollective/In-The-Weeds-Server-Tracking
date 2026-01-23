@@ -407,9 +407,16 @@ class BubbaGumpAPITester:
             if success and employees:
                 self.test_get_single_employee()
                 
-                # Test AI review generation (this is the critical feature)
-                if self.test_generate_review():
-                    self.test_get_reviews()
+                # Test line graph functionality
+                if self.test_line_graph_upload():
+                    self.test_get_line_graphs()
+                    # Test review generation with graph (should produce 2-page PDF)
+                    self.test_generate_review_with_graph()
+                else:
+                    # Test review generation without graph (should produce 1-page PDF)
+                    self.test_generate_review()
+                
+                self.test_get_reviews()
                 
                 # Test deletion
                 self.test_delete_employee()
