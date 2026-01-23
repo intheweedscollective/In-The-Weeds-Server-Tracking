@@ -46,8 +46,8 @@ export const formatCurrency = (value) => {
 
 export const formatLSCRatio = (value) => {
   if (value === null || value === undefined || value === 0) return 'N/A';
-  const ratio = Math.round(1 / parseFloat(value));
-  return `1 in ${ratio}`;
+  // The value from the spreadsheet is already the denominator (e.g., 34 means "1 in 34")
+  return `1 in ${Math.round(parseFloat(value))}`;
 };
 
 export const formatNumber = (value, decimals = 2) => {
