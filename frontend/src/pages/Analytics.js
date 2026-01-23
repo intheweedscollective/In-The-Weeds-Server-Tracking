@@ -234,40 +234,6 @@ export default function Analytics() {
                     )}%
                   </p>
                   <p className="text-sm text-muted-foreground">Above Benchmark</p>
-
-            {/* Top 10 Overall */}
-            <div className="pt-8 border-t border-border" data-testid="analytics-top-overall">
-              <h2 className="text-xl font-serif font-bold text-primary mb-4">Top 10 Overall (Cumulative Score)</h2>
-              <div className="space-y-2">
-                {getTopEmployees("cumulative_score", 10).map((emp, idx) => (
-                  <div
-                    key={emp.id}
-                    className="flex items-center justify-between p-3 border border-border rounded-lg bg-background"
-                  >
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-primary">#{idx + 1}</span>
-                        <span className="font-semibold text-primary truncate">{emp.name}</span>
-                        {emp.ranking && (
-                          <Badge variant="secondary" className="text-xs">
-                            {emp.ranking}
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="text-sm text-muted-foreground truncate">{emp.position}</div>
-                      <div className="text-xs text-muted-foreground">Overall Rank: {emp.overall_rank || "N/A"}</div>
-                    </div>
-
-                    <div className="text-right shrink-0">
-                      <div className="font-bold text-primary">
-                        {formatMetricValue("cumulative_score", emp.cumulative_score)}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
                 </div>
               </div>
             </CardContent>
