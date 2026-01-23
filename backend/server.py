@@ -369,7 +369,7 @@ def generate_pdf(employee: Employee, review_content: str, quarter: str, year: in
     ]))
     
     story.append(kpi_table)
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 8))
     
     # Compact review content section
     story.append(Paragraph("PERFORMANCE REVIEW", header_style))
