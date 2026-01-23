@@ -86,6 +86,13 @@ class ReviewCreate(BaseModel):
     quarter: str = "Q4"
     year: int = 2024
 
+
+class ReviewResponse(BaseModel):
+    success: bool
+    review_id: Optional[str] = None
+    message: str
+    pdf_base64: Optional[str] = None
+
 class LineGraph(BaseModel):
     model_config = ConfigDict(extra="ignore")
     
