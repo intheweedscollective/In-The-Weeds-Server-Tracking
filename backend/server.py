@@ -274,7 +274,7 @@ def generate_pdf(employee: Employee, review_content: str, quarter: str, year: in
         logo_img.hAlign = 'CENTER'
         story.append(logo_img)
         story.append(Spacer(1, 4))
-    except:
+    except Exception:
         # If logo fails to load, continue without it
         pass
     
