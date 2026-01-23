@@ -404,7 +404,7 @@ def generate_pdf(employee: Employee, review_content: str, quarter: str, year: in
     story.append(sig_table)
     
     # Compact footer
-    story.append(Spacer(1, 8))
+    story.append(Spacer(1, 10))
     footer_style = ParagraphStyle(
         'Footer',
         parent=styles['Normal'],
