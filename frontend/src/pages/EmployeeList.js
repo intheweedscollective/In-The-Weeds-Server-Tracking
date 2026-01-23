@@ -344,55 +344,73 @@ export default function EmployeeList() {
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-6 mb-8">
                   <div className="text-center p-4 bg-muted/30 rounded-lg">
                     <div className="text-3xl font-serif font-bold text-primary mb-2">
-                      {selectedEmployee.ppa?.toFixed(2) || 'N/A'}
+                      {formatCurrency(selectedEmployee.ppa)}
                     </div>
                     <div className="text-sm font-semibold text-muted-foreground uppercase">
                       PPA (Per Person Average)
+                    </div>
+                    <div className={`text-sm mt-1 ${getBenchmarkStatus('ppa', selectedEmployee.ppa).class}`}>
+                      {getBenchmarkStatus('ppa', selectedEmployee.ppa).text}
                     </div>
                   </div>
                   
                   <div className="text-center p-4 bg-muted/30 rounded-lg">
                     <div className="text-3xl font-serif font-bold text-secondary mb-2">
-                      {selectedEmployee.gpg?.toFixed(2) || 'N/A'}
+                      {formatCurrency(selectedEmployee.gpg)}
                     </div>
                     <div className="text-sm font-semibold text-muted-foreground uppercase">
-                      GPG (Gross Profit Generated)
+                      GPG (Glassware $ Per Guest)
+                    </div>
+                    <div className={`text-sm mt-1 ${getBenchmarkStatus('gpg', selectedEmployee.gpg).class}`}>
+                      {getBenchmarkStatus('gpg', selectedEmployee.gpg).text}
                     </div>
                   </div>
                   
                   <div className="text-center p-4 bg-muted/30 rounded-lg">
                     <div className="text-3xl font-serif font-bold text-accent-foreground mb-2">
-                      {selectedEmployee.pplbw?.toFixed(2) || 'N/A'}
+                      {formatCurrency(selectedEmployee.pplbw)}
                     </div>
                     <div className="text-sm font-semibold text-muted-foreground uppercase">
-                      PPLBW (People Per Labor Budget Week)
+                      PPLBW (Per Person Liquor Beer Wine)
+                    </div>
+                    <div className={`text-sm mt-1 ${getBenchmarkStatus('pplbw', selectedEmployee.pplbw).class}`}>
+                      {getBenchmarkStatus('pplbw', selectedEmployee.pplbw).text}
                     </div>
                   </div>
                   
                   <div className="text-center p-4 bg-muted/30 rounded-lg">
                     <div className="text-3xl font-serif font-bold text-wood-texture mb-2">
-                      {selectedEmployee.lsc_ratio?.toFixed(2) || 'N/A'}
+                      {formatLSCRatio(selectedEmployee.lsc_ratio)}
                     </div>
                     <div className="text-sm font-semibold text-muted-foreground uppercase">
-                      LSC Ratio (Labor Sales Cost)
+                      LSC Ratio (Landry's Select Card)
+                    </div>
+                    <div className={`text-sm mt-1 ${getBenchmarkStatus('lsc_ratio', selectedEmployee.lsc_ratio).class}`}>
+                      {getBenchmarkStatus('lsc_ratio', selectedEmployee.lsc_ratio).text}
                     </div>
                   </div>
                   
                   <div className="text-center p-4 bg-muted/30 rounded-lg">
                     <div className="text-3xl font-serif font-bold text-brand-yellow mb-2">
-                      {selectedEmployee.metric_bonus_points?.toFixed(1) || 'N/A'}
+                      {formatNumber(selectedEmployee.metric_bonus_points)}
                     </div>
                     <div className="text-sm font-semibold text-muted-foreground uppercase">
                       Metric Bonus Points
+                    </div>
+                    <div className="text-sm mt-1 text-muted-foreground">
+                      Exceeds Benchmark
                     </div>
                   </div>
                   
                   <div className="text-center p-4 bg-primary/10 rounded-lg">
                     <div className="text-4xl font-serif font-bold text-primary mb-2">
-                      {selectedEmployee.cumulative_score?.toFixed(1) || 'N/A'}
+                      {formatNumber(selectedEmployee.cumulative_score)}
                     </div>
                     <div className="text-sm font-semibold text-muted-foreground uppercase">
                       Cumulative Score
+                    </div>
+                    <div className={`text-sm mt-1 performance-badge ${getPerformanceLevel(selectedEmployee.cumulative_score).class}`}>
+                      {getPerformanceLevel(selectedEmployee.cumulative_score).text}
                     </div>
                   </div>
                 </div>
