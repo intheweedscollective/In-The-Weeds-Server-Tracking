@@ -86,7 +86,19 @@ class ReviewCreate(BaseModel):
     quarter: str = "Q4"
     year: int = 2024
 
-class ReviewResponse(BaseModel):
+class LineGraph(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    quarter: str
+    year: int
+    filename: str
+    file_data: str  # base64 encoded image data
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class LineGraphUpload(BaseModel):
+    quarter: str = "Q4"
+    year: int = 2024
     success: bool
     review_id: Optional[str] = None
     message: str
