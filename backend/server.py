@@ -262,10 +262,10 @@ def generate_pdf(employee: Employee, review_content: str, quarter: str, year: in
         parent=styles['Heading1'],
         fontName='Helvetica-Bold',
         fontSize=13,
-        textColor=colors.HexColor('#D12E2E'),
-        spaceAfter=6,
-        spaceBefore=8,
-        backColor=colors.HexColor('#FFF5F5')
+        textColor=colors.HexColor('#005B96'),
+        spaceAfter=5,
+        spaceBefore=6,
+        backColor=colors.HexColor('#EFF6FF')
     )
     
     body_style = ParagraphStyle(
@@ -287,11 +287,11 @@ def generate_pdf(employee: Employee, review_content: str, quarter: str, year: in
         response = requests.get(logo_url)
         logo_buffer = BytesIO(response.content)
         
-        # Create logo image - smaller size for single page
-        logo_img = Image(logo_buffer, width=0.6*inch, height=0.6*inch)
+        # Create logo image - increased size (~30%) but still fits single page
+        logo_img = Image(logo_buffer, width=0.78*inch, height=0.78*inch)
         logo_img.hAlign = 'CENTER'
         story.append(logo_img)
-        story.append(Spacer(1, 4))
+        story.append(Spacer(1, 3))
     except Exception:
         # If logo fails to load, continue without it
         pass
@@ -299,7 +299,7 @@ def generate_pdf(employee: Employee, review_content: str, quarter: str, year: in
     # Header section with compact branding
     story.append(Paragraph("🦐 BUBBA GUMP SHRIMP CO. 🦐", title_style))
     story.append(Paragraph("Restaurant & Market • Las Vegas", subtitle_style))
-    story.append(Spacer(1, 6))
+    story.append(Spacer(1, 5))
     
     # Review title
     story.append(Paragraph(f"QUARTERLY PERFORMANCE REVIEW - {quarter} {year}", header_style))
@@ -356,7 +356,7 @@ def generate_pdf(employee: Employee, review_content: str, quarter: str, year: in
     
     kpi_table = Table(kpi_data, colWidths=[2.2*inch, 1.0*inch, 0.9*inch, 1.4*inch])
     kpi_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#D12E2E')),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#005B96')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
