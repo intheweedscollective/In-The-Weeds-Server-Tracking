@@ -738,6 +738,17 @@ async def delete_employee(employee_id: str):
 async def clear_all_employees():
     result = await db.employees.delete_many({})
     return {
+
+@api_router.get("/top-performers/pdf")
+async def top_performers_pdf():
+    employees = await db.employees.find({}, {"_id": 0}).to_list(5000)
+    pdf_bytes = build_top_performers_pdf(employees, KPI_DEFINITIONS)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=top_performers_report.pdf"},
+    )
+
         "success": True,
         "message": f"Cleared {result.deleted_count} employees",
         "deleted_count": result.deleted_count
