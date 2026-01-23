@@ -186,14 +186,10 @@
 ##   test_sequence: 1
 ##   run_ui: true
 ## test_plan:
-##   current_focus:
-##     - "Line graph upload + append graph as page 2 via PDF merge"
-##     - "Review Generation page loads and can generate/download PDF"
-##     - "Top Performers page renders and print works"
-##     - "Analytics page renders and LSC inverse logic looks correct"
+##   current_focus: []
 ##   stuck_tasks: []
-##   test_all: true
-##   test_priority: "high_first"
+##   test_all: false
+##   test_priority: "completed"
 ## agent_communication:
 ##   - agent: "main"
 ##     message: "Please run end-to-end tests: /reviews loads, upload line graph, generate review returns PDF (2 pages), check TopPerformers and Analytics pages. Verify no console errors and main API endpoints respond."
