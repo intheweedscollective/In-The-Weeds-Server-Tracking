@@ -1,0 +1,104 @@
+{
+  "identity": {
+    "name": "Bubba Gump Employee Review System",
+    "tone": "Professional, Rustic, Human-Centric, Engaging",
+    "keywords": ["Seafood", "Rustic", "Warm", "Corporate", "Defensible"]
+  },
+  "typography": {
+    "primary_font": "Merriweather",
+    "secondary_font": "Inter",
+    "scale": {
+      "h1": "text-4xl md:text-5xl font-serif font-bold tracking-tight",
+      "h2": "text-3xl md:text-4xl font-serif font-semibold",
+      "h3": "text-2xl font-serif font-medium text-primary",
+      "body": "text-base font-sans leading-relaxed text-foreground/80",
+      "caption": "text-sm font-sans text-muted-foreground uppercase tracking-wider"
+    }
+  },
+  "colors": {
+    "palette": {
+      "primary": "#D12E2E",
+      "secondary": "#005B96",
+      "accent": "#F4D03F",
+      "background": "#F9F7F2",
+      "foreground": "#2C3E50",
+      "muted": "#E5E7EB",
+      "card": "#FFFFFF",
+      "border": "#D1D5DB"
+    },
+    "semantic": {
+      "brand_red": "#D12E2E",
+      "brand_blue": "#005B96",
+      "brand_yellow": "#F4D03F",
+      "wood_texture": "#8B5A2B",
+      "paper_bg": "#F9F7F2"
+    }
+  },
+  "layout": {
+    "spacing": "Generous (2x standard)",
+    "container": "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
+    "grid_system": "Bento Grid (Mode A for PDF, Mode B for Dashboard)",
+    "radius": "rounded-lg"
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-[#D12E2E] hover:bg-[#B91C1C] text-white rounded-full px-8 py-3 font-medium transition-all shadow-md hover:shadow-lg",
+      "secondary": "bg-white border-2 border-[#005B96] text-[#005B96] hover:bg-[#005B96] hover:text-white rounded-full px-8 py-3 font-medium transition-all"
+    },
+    "cards": {
+      "base": "bg-white rounded-xl border border-border shadow-sm hover:shadow-md transition-all p-6",
+      "highlight": "bg-[#F9F7F2] border-l-4 border-[#D12E2E] rounded-r-xl p-6"
+    },
+    "inputs": {
+      "base": "bg-white border-gray-300 focus:border-[#005B96] focus:ring-[#005B96] rounded-md"
+    }
+  },
+  "visual_enhancers": {
+    "textures": "Subtle paper grain overlay on PDF backgrounds",
+    "shadows": "Soft, diffuse shadows (shadow-lg for floating elements)",
+    "gradients": "No gradients. Solid, bold colors.",
+    "icons": "Lucide React (default), use 'Fish', 'Anchor', 'Ship' for thematic elements"
+  },
+  "pdf_generation_rules": {
+    "style": "Marketing Magazine Layout",
+    "header": "Full width #D12E2E background, White text, Bubba Gump Branding",
+    "body": "Two-column layout. Left: Employee Details. Right: KPI Bento Grid.",
+    "footer": "Rustic wood color bar #8B5A2B with page numbers",
+    "typography": "Use varied font weights. Bold Serif for KPI numbers. Light Sans for labels."
+  },
+  "image_urls": {
+    "logo_placeholder": "https://images.pexels.com/photos/9663149/pexels-photo-9663149.jpeg",
+    "rustic_bg": "https://images.unsplash.com/photo-1767879721834-ce159173e3fa?crop=entropy&cs=srgb&fm=jpg&q=85",
+    "restaurant_interior": "https://images.unsplash.com/photo-1758414335367-22163f4f310c?crop=entropy&cs=srgb&fm=jpg&q=85"
+  },
+  "instructions_to_main_agent": [
+    "Implement the 'Bubba Gump' theme by overriding Tailwind colors in tailwind.config.js.",
+    "Use 'Merriweather' for all Headings (h1-h3) and 'Inter' for body text. Import these fonts in index.css.",
+    "For the Dashboard: Use a dense 'Bento Grid' layout for employee stats.",
+    "For the PDF: This is the critical 'Marketing' piece. It must NOT look like a standard table. Use a designed layout with a colored header, sidebar for stats, and main content area for the narrative.",
+    "Use the provided image URLs for background textures where appropriate (e.g., login screen, PDF cover).",
+    "Ensure all interactive elements have data-testid attributes.",
+    "Do not use gradients. Stick to the solid Brand Red (#D12E2E) and Brand Blue (#005B96).",
+    "The PDF output should feel like a 'Certificate of Excellence' or a 'Magazine Feature', not a spreadsheet dump."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy",
+    "Use glass-morphism effects with backdrop filters (12-24px blur)",
+    "You MUST NOT apply universal transition. Eg: transition: all. This results in breaking transforms. Always add transitions for specific interactive elements like button, input excluding transforms",
+    "You MUST NOT center align the app container, ie do not add .App { text-align: center; } in the css file. This disrupts the human natural reading flow of text",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style",
+    "NEVER: use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯📚🎭🎬🎪🎉🎊🎁🎀🎂🍰🎈🎨🎰💰💵💳🏦💎🪙💸🤑📊📈📉💹🔢🏆🥇 etc for icons.",
+    "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations. Static = dead.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations: separates good from extraordinary.",
+    "Main agent relies on these image URLs. Missing categories (especially sponsor logos) = main agent will use placeholder text which is FORBIDDEN",
+    "Prioritize using pre-existing components from src/components/ui when applicable",
+    "Create new components that match the style and conventions of existing components when needed",
+    "Examine existing components to understand the project's component patterns before creating new ones",
+    "Components MUST use named exports (export const ComponentName = ...)",
+    "Pages MUST use default exports (export default function PageName() {...})",
+    "Use sonner for toasts. Sonner component are located in /app/src/components/ui/sonner.tsx"
+  ]
+}
