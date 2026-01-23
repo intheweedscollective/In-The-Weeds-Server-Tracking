@@ -49,6 +49,9 @@ class Employee(BaseModel):
     lsc_ratio: Optional[float] = None
     metric_bonus_points: Optional[float] = None
     cumulative_score: Optional[float] = None
+    overall_rank: Optional[str] = None
+    ranking: Optional[str] = None
+    performance_tier: Optional[str] = None
     additional_data: Dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
