@@ -15,6 +15,7 @@ export default function TopPerformers() {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [topPerformers, setTopPerformers] = useState({});
+  const [topOverall, setTopOverall] = useState([]);
 
   useEffect(() => {
     fetchEmployees();
