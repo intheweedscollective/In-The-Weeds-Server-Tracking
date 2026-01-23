@@ -138,38 +138,39 @@ async def generate_review_content(employee: Employee, quarter: str, year: int) -
             system_message="You are an expert HR professional specializing in creating comprehensive quarterly employee reviews for restaurant staff. Your reviews should be professional, human-like, and HR-defensible while maintaining a positive and constructive tone."
         ).with_model("openai", "gpt-5.2")
         
+        # Extract peer rankings from additional data
+        peer_rankings = {
+            'ppa': employee.additional_data.get('ppa rank vs peers', 'N/A'),
+            'gpg': employee.additional_data.get('gpg vs peers', 'N/A'),
+            'pplbw': employee.additional_data.get('pplbw vs peers', 'N/A'),
+            'lsc_ratio': employee.additional_data.get('lsc ratio vs peers', 'N/A'),
+            'metric_bonus': employee.additional_data.get('metric bonus points vs peers', 'N/A'),
+            'cumulative': employee.additional_data.get('cummulative score vs peers', 'N/A')
+        }
+        
         # Create detailed prompt
         prompt = f"""
-Create a comprehensive quarterly review for {employee.name}, a {employee.position} at Bubba Gump Shrimp Co.
+Create a concise quarterly review for {employee.name}, a {employee.position} at Bubba Gump Shrimp Co.
 
-PERFORMANCE METRICS (Focus on these 6 key KPIs with benchmarks):
-- PPA (Per Person Average): {employee.ppa or 'N/A'} (Benchmark: $55.00)
-- GPG (Glassware $ Per Guest): {employee.gpg or 'N/A'} (Benchmark: $1.00)
-- PPLBW (Per Person Liquor Beer and Wine): {employee.pplbw or 'N/A'} (Benchmark: $8.00)
-- LSC Ratio (Landry's Select Card Memberships Sold): {format_lsc_ratio(employee.lsc_ratio)} (Benchmark: 1 in 100)
-- Metric Bonus Points: {employee.metric_bonus_points or 'N/A'} (Special incentives for exceeding benchmarks)
-- Cumulative Score: {employee.cumulative_score or 'N/A'} (Final grade)
+PERFORMANCE METRICS WITH PEER RANKINGS:
+- PPA (Per Person Average): {format_currency_for_prompt(employee.ppa)} - Ranked {peer_rankings['ppa']} (Benchmark: $55.00)
+- GPG (Glassware $ Per Guest): {format_currency_for_prompt(employee.gpg)} - Ranked {peer_rankings['gpg']} (Benchmark: $1.00)
+- PPLBW (Per Person Liquor Beer Wine): {format_currency_for_prompt(employee.pplbw)} - Ranked {peer_rankings['pplbw']} (Benchmark: $8.00)
+- LSC Ratio (Landry's Select Card): {format_lsc_ratio(employee.lsc_ratio)} - Ranked {peer_rankings['lsc_ratio']} (Benchmark: 1 in 100)
+- Metric Bonus Points: {employee.metric_bonus_points or 'N/A'} - Ranked {peer_rankings['metric_bonus']} (Exceeds benchmarks)
+- Cumulative Score: {employee.cumulative_score or 'N/A'} - Ranked {peer_rankings['cumulative']} (Final grade)
 
-ADDITIONAL DATA: {employee.additional_data}
-
-KPI CONTEXT:
-- PPA measures the average dollar amount per guest
-- GPG tracks glassware sales performance per guest
-- PPLBW measures alcohol sales per guest (liquor, beer, wine)
-- LSC Ratio shows success in selling Landry's Select Card memberships
-- Metric Bonus Points are earned when exceeding store benchmarks
-- Cumulative Score is the overall performance grade
+OVERALL RANKING: {employee.overall_rank or 'N/A'} | POSITION LEVEL: {employee.ranking or 'N/A'}
 
 REVIEW REQUIREMENTS:
-1. Write in a human, conversational tone - avoid robotic language
-2. Be HR-defensible with specific examples and constructive feedback
-3. Structure with clear sections: Performance Highlights, Areas for Growth, Goals for Next Quarter
-4. Reference specific KPIs and benchmark performance where applicable
-5. Maintain Bubba Gump's friendly, southern hospitality culture
-6. Keep it professional but warm and engaging
-7. Length should be 400-600 words
+1. Write EXACTLY 2 paragraphs - no more, no less
+2. First paragraph: Performance highlights and peer ranking context
+3. Second paragraph: Areas for growth and next quarter goals
+4. Be conversational, HR-defensible, and maintain Bubba Gump's friendly culture
+5. Reference specific KPIs and peer rankings to provide context
+6. Total length: 150-250 words maximum
 
-PLEASE DO NOT include any headers, titles, or formatting markers. Just provide the review content as flowing paragraphs.
+PLEASE DO NOT include any headers, titles, or formatting markers. Just provide exactly 2 paragraphs of review content.
 """
         
         user_message = UserMessage(text=prompt)
