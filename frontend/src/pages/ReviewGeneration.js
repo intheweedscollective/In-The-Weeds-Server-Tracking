@@ -232,7 +232,7 @@ export default function ReviewGeneration() {
                               {employee.cumulative_score?.toFixed(1) || 'N/A'}
                             </div>
                             <div className="text-xs text-muted-foreground uppercase">
-                              Total Score
+                              Cumulative Score
                             </div>
                           </div>
                           <div className="text-center">
