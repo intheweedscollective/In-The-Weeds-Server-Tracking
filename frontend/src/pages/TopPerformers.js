@@ -182,6 +182,64 @@ export default function TopPerformers() {
           </Card>
         </div>
 
+        {/* Top 10 Overall */}
+        <Card className="bubba-card mb-12 print:mb-6" data-testid="top-overall-card">
+          <CardHeader>
+            <CardTitle className="text-2xl font-serif text-primary flex items-center gap-3">
+              <Trophy className="w-6 h-6 text-yellow-500" />
+              Top 10 Overall (Cumulative Score)
+            </CardTitle>
+            <CardDescription className="text-base">
+              Highest overall performers based on Cumulative Score
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {topOverall.map((employee, index) => {
+                const ranking = getRankingHierarchy(employee.ranking);
+                return (
+                  <div
+                    key={employee.id}
+                    className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-muted/30 transition-colors"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center justify-center w-10 h-10 bg-muted rounded-full">
+                        {getMetricIcon(index + 1)}
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-primary">{employee.name}</h4>
+                        <p className="text-sm text-muted-foreground">{employee.position}</p>
+                        {employee.ranking && (
+                          <Badge className={`text-xs mt-1 ${ranking.bgColor} ${ranking.color}`}>
+                            {employee.ranking} - {ranking.level}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <div className="text-2xl font-serif font-bold text-primary">
+                        {formatNumber(employee.cumulative_score)}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Overall Rank: {formatOverallRank(employee.overall_rank)}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {topOverall.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <p>No cumulative score data available</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+
         {/* Top Performers by Metric */}
         <div className="space-y-12 print:space-y-8">
           {Object.entries(KPI_DEFINITIONS).map(([metricKey, metricInfo]) => {
