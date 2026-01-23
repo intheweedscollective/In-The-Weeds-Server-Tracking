@@ -75,7 +75,6 @@ class Review(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class ReviewCreate(BaseModel):
-    employee_id: str
     quarter: str = "Q4"
     year: int = 2024
 
