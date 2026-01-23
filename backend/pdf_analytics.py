@@ -6,7 +6,10 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+import requests
+from io import BytesIO
+
 
 
 def _pct(count: int, total: int) -> str:
@@ -58,6 +61,58 @@ def build_analytics_pdf(analytics: Dict[str, Dict[str, Any]], kpi_defs: Dict[str
     )
 
     story = []
+
+    # Add logo (same as review sheets)
+    try:
+        logo_url = "https://customer-assets.emergentagent.com/job_beaba37a-d1bc-43b6-b0ee-0f4c332229d2/artifacts/shpi6789_IMG_0599.png"
+
+    # Overview tiles (as a simple table)
+    total_all = sum(int((analytics.get(k, {}) or {}).get("total") or 0) for k in kpi_defs.keys())
+    high_all = sum(int((analytics.get(k, {}) or {}).get("high") or 0) for k in kpi_defs.keys())
+    med_all = sum(int((analytics.get(k, {}) or {}).get("medium") or 0) for k in kpi_defs.keys())
+    low_all = sum(int((analytics.get(k, {}) or {}).get("low") or 0) for k in kpi_defs.keys())
+    above_all = sum(int((analytics.get(k, {}) or {}).get("benchmark") or 0) for k in kpi_defs.keys())
+
+    overview_rows = [
+        [
+            f"Above Benchmark\n{_pct(above_all, total_all)}",
+            f"High\n{_pct(high_all, total_all)}",
+            f"Medium\n{_pct(med_all, total_all)}",
+            f"Low\n{_pct(low_all, total_all)}",
+        ]
+    ]
+
+    overview = Table(overview_rows, colWidths=[1.7 * inch, 1.7 * inch, 1.7 * inch, 1.7 * inch])
+    overview.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (0, 0), colors.HexColor("#ECFDF3")),
+                ("BACKGROUND", (1, 0), (1, 0), colors.HexColor("#EFF6FF")),
+                ("BACKGROUND", (2, 0), (2, 0), colors.HexColor("#FEF9C3")),
+                ("BACKGROUND", (3, 0), (3, 0), colors.HexColor("#FFEDD5")),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E5E7EB")),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 10),
+                ("TOPPADDING", (0, 0), (-1, -1), 10),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+            ]
+        )
+    )
+
+    story.append(overview)
+    story.append(Spacer(1, 12))
+
+        response = requests.get(logo_url, timeout=10)
+        logo_buffer = BytesIO(response.content)
+        logo_img = Image(logo_buffer, width=0.78 * inch, height=0.78 * inch)
+        logo_img.hAlign = "CENTER"
+        story.append(logo_img)
+        story.append(Spacer(1, 6))
+    except Exception:
+        pass
+
     story.append(Paragraph("Performance Analytics Report", title_style))
     story.append(
         Paragraph(
@@ -75,6 +130,7 @@ def build_analytics_pdf(analytics: Dict[str, Dict[str, Any]], kpi_defs: Dict[str
             "Medium",
             "Low",
             "Benchmark",
+            "Above Bench",
             "Avg",
             "N",
         ]
@@ -121,6 +177,7 @@ def build_analytics_pdf(analytics: Dict[str, Dict[str, Any]], kpi_defs: Dict[str
                 f"{med} ({_pct(med, n)})",
                 f"{low} ({_pct(low, n)})",
                 bench_display,
+                f"{int(data.get('benchmark') or 0)} ({_pct(int(data.get('benchmark') or 0), n)})",
                 format_value(metric_key, avg),
                 str(n),
             ]
@@ -128,7 +185,7 @@ def build_analytics_pdf(analytics: Dict[str, Dict[str, Any]], kpi_defs: Dict[str
 
     table = Table(
         rows,
-        colWidths=[2.2 * inch, 0.8 * inch, 0.9 * inch, 0.8 * inch, 1.0 * inch, 0.8 * inch, 0.45 * inch],
+        colWidths=[2.0 * inch, 0.75 * inch, 0.85 * inch, 0.75 * inch, 0.9 * inch, 1.05 * inch, 0.75 * inch, 0.45 * inch],
     )
     table.setStyle(
         TableStyle(
