@@ -343,7 +343,7 @@ async def upload_excel(file: UploadFile = File(...)):
             # Add any additional columns to additional_data
             additional_data = {}
             for col in df.columns:
-                if col not in ['name', 'employee_name', 'position', 'job_title', 'title', 'ppa', 'gpg', 'pplbw', 'lsc_ratio', 'lsc ratio', 'bonus_points', 'bonus points', 'total_score', 'total score']:
+                if col not in ['name', 'employee_name', 'position', 'job_title', 'title', 'ppa', 'gpg', 'pplbw', 'lsc_ratio', 'lsc ratio', 'bonus_points', 'bonus points', 'metric_bonus_points', 'metric bonus points', 'total_score', 'total score', 'cumulative_score', 'cumulative score']:
                     additional_data[col] = str(row[col]) if pd.notna(row[col]) else None
             
             employee_data['additional_data'] = additional_data
