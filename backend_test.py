@@ -146,6 +146,7 @@ class BubbaGumpAPITester:
         
         try:
             payload = {
+                "employee_id": self.test_employee_id,
                 "quarter": "Q4",
                 "year": 2024
             }
