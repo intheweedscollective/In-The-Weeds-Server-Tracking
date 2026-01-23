@@ -40,12 +40,13 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 KPI_DEFINITIONS = {
-    "ppa": {"name": "Per Person Average (PPA)", "format": "currency"},
-    "gpg": {"name": "Glassware $ Per Guest (GPG)", "format": "currency"},
-    "pplbw": {"name": "Per Person Liquor Beer Wine (PPLBW)", "format": "currency"},
-    "lsc_ratio": {"name": "Landry's Select Card Ratio (LSC)", "format": "ratio"},
-    "metric_bonus_points": {"name": "Metric Bonus Points", "format": "number"},
-    "cumulative_score": {"name": "Cumulative Score", "format": "number"},
+    "ppa": {"name": "Per Person Average (PPA)", "format": "currency", "benchmark": 55.0},
+    "gpg": {"name": "Glassware $ Per Guest (GPG)", "format": "currency", "benchmark": 1.0},
+    "pplbw": {"name": "Per Person Liquor Beer Wine (PPLBW)", "format": "currency", "benchmark": 8.0},
+    "lsc_ratio": {"name": "Landry's Select Card Ratio (LSC)", "format": "ratio", "benchmark": 0.01},
+    # No fixed benchmark provided in the source UI for these:
+    "metric_bonus_points": {"name": "Metric Bonus Points", "format": "number", "benchmark": 0},
+    "cumulative_score": {"name": "Cumulative Score", "format": "number", "benchmark": 0},
 }
 
 
@@ -301,11 +302,11 @@ def generate_pdf(employee: Employee, review_content: str, quarter: str, year: in
     # Header section with compact branding
     story.append(Paragraph("🦐 BUBBA GUMP SHRIMP CO. 🦐", title_style))
     story.append(Paragraph("Restaurant & Market • Las Vegas", subtitle_style))
-    story.append(Spacer(1, 5))
+    story.append(Spacer(1, 7))
     
     # Review title
     story.append(Paragraph(f"QUARTERLY PERFORMANCE REVIEW - {quarter} {year}", header_style))
-    story.append(Spacer(1, 6))
+    story.append(Spacer(1, 8))
     
     # Compact employee info section
     emp_info_data = [
@@ -331,7 +332,7 @@ def generate_pdf(employee: Employee, review_content: str, quarter: str, year: in
     ]))
     
     story.append(emp_table)
-    story.append(Spacer(1, 8))
+    story.append(Spacer(1, 10))
     
     # KPI Performance Metrics with Peer Rankings
     story.append(Paragraph("KEY PERFORMANCE INDICATORS & PEER RANKINGS", header_style))
@@ -373,7 +374,7 @@ def generate_pdf(employee: Employee, review_content: str, quarter: str, year: in
     ]))
     
     story.append(kpi_table)
-    story.append(Spacer(1, 8))
+    story.append(Spacer(1, 10))
     
     # Compact review content section
     story.append(Paragraph("PERFORMANCE REVIEW", header_style))
