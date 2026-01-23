@@ -140,6 +140,140 @@ class BubbaGumpAPITester:
             self.log_test("Get Single Employee", False, str(e))
             return False
 
+    def test_line_graph_upload(self):
+        """Test line graph upload functionality"""
+        if not hasattr(self, 'test_employee_id'):
+            self.log_test("Line Graph Upload", False, "No employee ID available")
+            return False
+        
+        try:
+            # Create a simple test image (1x1 pixel PNG)
+            import base64
+            # This is a minimal 1x1 pixel PNG image in base64
+            test_png_data = base64.b64decode(
+                'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChAI9jU77zgAAAABJRU5ErkJggg=='
+            )
+            
+            files = {
+                'file': ('test_graph.png', test_png_data, 'image/png')
+            }
+            
+            data = {
+                'quarter': 'Q4',
+                'year': 2024,
+                'employee_id': self.test_employee_id,
+                'graph_kind': 'quarter'
+            }
+            
+            response = requests.post(
+                f"{self.api_url}/line-graphs", 
+                files=files,
+                data=data,
+                timeout=30
+            )
+            
+            success = response.status_code == 200
+            
+            if success:
+                result = response.json()
+                success = result.get('success', False)
+                details = f"Status: {response.status_code}, Success: {result.get('success')}, Graph ID: {result.get('graph_id', 'N/A')}"
+                
+                # Store graph info for later tests
+                if result.get('graph_id'):
+                    self.test_graph_id = result['graph_id']
+            else:
+                details = f"Status: {response.status_code}, Response: {response.text[:200]}"
+            
+            self.log_test("Line Graph Upload", success, details)
+            return success
+        except Exception as e:
+            self.log_test("Line Graph Upload", False, str(e))
+            return False
+
+    def test_get_line_graphs(self):
+        """Test getting line graphs by employee_id"""
+        if not hasattr(self, 'test_employee_id'):
+            self.log_test("Get Line Graphs", False, "No employee ID available")
+            return False
+        
+        try:
+            response = requests.get(
+                f"{self.api_url}/line-graphs?employee_id={self.test_employee_id}", 
+                timeout=10
+            )
+            
+            success = response.status_code == 200
+            
+            if success:
+                data = response.json()
+                success = len(data) >= 1  # Should have at least 1 graph from upload
+                details = f"Status: {response.status_code}, Count: {len(data)}"
+            else:
+                details = f"Status: {response.status_code}, Response: {response.text[:200]}"
+            
+            self.log_test("Get Line Graphs", success, details)
+            return success
+        except Exception as e:
+            self.log_test("Get Line Graphs", False, str(e))
+            return False
+
+    def test_generate_review_with_graph(self):
+        """Test AI review generation with line graph (should produce 2-page PDF)"""
+        if not hasattr(self, 'test_employee_id'):
+            self.log_test("Generate Review with Graph", False, "No employee ID available")
+            return False
+        
+        try:
+            payload = {
+                "quarter": "Q4",
+                "year": 2024
+            }
+            
+            response = requests.post(
+                f"{self.api_url}/employees/{self.test_employee_id}/generate-review", 
+                json=payload, 
+                timeout=60  # AI generation can take time
+            )
+            
+            success = response.status_code == 200
+            
+            if success:
+                data = response.json()
+                success = data.get('success', False) and 'pdf_base64' in data
+                
+                # Validate PDF page count
+                if success and data.get('pdf_base64'):
+                    try:
+                        pdf_bytes = base64.b64decode(data['pdf_base64'])
+                        pdf_reader = PdfReader(io.BytesIO(pdf_bytes))
+                        page_count = len(pdf_reader.pages)
+                        
+                        # Should have 2 pages when graph exists (review + graph)
+                        expected_pages = 2
+                        page_validation = page_count == expected_pages
+                        
+                        details = f"Status: {response.status_code}, Success: {data.get('success')}, Pages: {page_count} (Expected: {expected_pages})"
+                        success = success and page_validation
+                        
+                        # Store review ID for later tests
+                        if data.get('review_id'):
+                            self.test_review_id = data['review_id']
+                            
+                    except Exception as pdf_error:
+                        details = f"Status: {response.status_code}, PDF validation failed: {str(pdf_error)}"
+                        success = False
+                else:
+                    details = f"Status: {response.status_code}, Success: {data.get('success')}, Has PDF: {'pdf_base64' in data}"
+            else:
+                details = f"Status: {response.status_code}, Response: {response.text[:200]}"
+            
+            self.log_test("Generate Review with Graph", success, details)
+            return success
+        except Exception as e:
+            self.log_test("Generate Review with Graph", False, str(e))
+            return False
+
     def test_generate_review(self):
         """Test AI review generation"""
         if not hasattr(self, 'test_employee_id'):
