@@ -450,9 +450,6 @@ def _merge_review_with_graph(review_pdf: bytes, graph_doc: Dict[str, Any]) -> by
     out.seek(0)
     return out.getvalue()
 
-    buffer.seek(0)
-    return buffer.getvalue()
-
 def get_performance_level(score):
     """Helper function to determine performance level based on score"""
     if score is None:
