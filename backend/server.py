@@ -193,19 +193,19 @@ PLEASE DO NOT include any headers, titles, or formatting markers. Just provide e
 # Helper function to generate PDF
 def generate_pdf(employee: Employee, review_content: str, quarter: str, year: int) -> bytes:
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5*inch, bottomMargin=0.5*inch,
-                          leftMargin=0.75*inch, rightMargin=0.75*inch)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.4*inch, bottomMargin=0.4*inch,
+                          leftMargin=0.6*inch, rightMargin=0.6*inch)
     
-    # Create custom styles with enhanced branding
+    # Create custom styles optimized for single page
     styles = getSampleStyleSheet()
     
-    # Enhanced Bubba Gump branding styles
+    # Compact styles for single page layout
     title_style = ParagraphStyle(
         'BubbaTitle',
         parent=styles['Title'],
         fontName='Helvetica-Bold',
-        fontSize=26,
-        spaceAfter=8,
+        fontSize=20,
+        spaceAfter=4,
         textColor=colors.HexColor('#D12E2E'),
         alignment=TA_CENTER
     )
@@ -214,23 +214,20 @@ def generate_pdf(employee: Employee, review_content: str, quarter: str, year: in
         'BubbaSubtitle', 
         parent=styles['Normal'],
         fontName='Helvetica-Bold',
-        fontSize=14,
+        fontSize=12,
         textColor=colors.HexColor('#005B96'),
         alignment=TA_CENTER,
-        spaceAfter=20
+        spaceAfter=8
     )
     
     header_style = ParagraphStyle(
         'BubbaHeader',
         parent=styles['Heading1'],
         fontName='Helvetica-Bold',
-        fontSize=16,
+        fontSize=13,
         textColor=colors.HexColor('#D12E2E'),
-        spaceAfter=12,
-        spaceBefore=20,
-        borderWidth=0,
-        borderColor=colors.HexColor('#D12E2E'),
-        borderPadding=8,
+        spaceAfter=6,
+        spaceBefore=8,
         backColor=colors.HexColor('#FFF5F5')
     )
     
@@ -238,30 +235,38 @@ def generate_pdf(employee: Employee, review_content: str, quarter: str, year: in
         'BubbaBody',
         parent=styles['Normal'],
         fontName='Helvetica',
-        fontSize=11,
-        spaceAfter=12,
-        leading=16,
+        fontSize=10,
+        spaceAfter=6,
+        leading=12,
         textColor=colors.HexColor('#2C3E50')
     )
     
-    # Build PDF content with enhanced branding
+    # Build PDF content optimized for single page
     story = []
     
-    # Header section with branding
+    try:
+        # Download and add logo
+        logo_url = "https://customer-assets.emergentagent.com/job_beaba37a-d1bc-43b6-b0ee-0f4c332229d2/artifacts/shpi6789_IMG_0599.png"
+        response = requests.get(logo_url)
+        logo_buffer = BytesIO(response.content)
+        
+        # Create logo image - smaller size for single page
+        logo_img = Image(logo_buffer, width=0.6*inch, height=0.6*inch)
+        logo_img.hAlign = 'CENTER'
+        story.append(logo_img)
+        story.append(Spacer(1, 4))
+    except:
+        # If logo fails to load, continue without it
+        pass
+    
+    # Header section with compact branding
     story.append(Paragraph("🦐 BUBBA GUMP SHRIMP CO. 🦐", title_style))
     story.append(Paragraph("Restaurant & Market • Las Vegas", subtitle_style))
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 6))
     
-    # Decorative line
-    story.append(Paragraph('<para align="center">~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~</para>',
-                          ParagraphStyle('decorative', fontSize=8, textColor=colors.HexColor('#8B5A2B'), alignment=TA_CENTER)))
-    story.append(Spacer(1, 15))
-    
-    # Review title with styling
-    story.append(Paragraph(f"QUARTERLY PERFORMANCE REVIEW", header_style))
-    story.append(Paragraph(f"{quarter} {year} Performance Assessment", 
-                          ParagraphStyle('quarter', fontSize=12, textColor=colors.HexColor('#005B96'), alignment=TA_CENTER)))
-    story.append(Spacer(1, 20))
+    # Review title
+    story.append(Paragraph(f"QUARTERLY PERFORMANCE REVIEW - {quarter} {year}", header_style))
+    story.append(Spacer(1, 8))
     
     # Employee info section
     emp_info_data = [
