@@ -662,8 +662,12 @@ async def upload_line_graph(
         raise HTTPException(status_code=500, detail=f"Error uploading graph: {str(e)}")
 
 @api_router.get("/line-graphs")
-async def get_line_graphs():
-    graphs = await db.line_graphs.find({}, {"_id": 0}).to_list(100)
+async def get_line_graphs(employee_id: Optional[str] = None):
+    query: Dict[str, Any] = {}
+    if employee_id:
+        query["employee_id"] = employee_id
+
+    graphs = await db.line_graphs.find(query, {"_id": 0}).to_list(200)
     
     # Convert ISO string timestamps back to datetime objects
     for graph in graphs:
