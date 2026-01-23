@@ -272,31 +272,32 @@ export default function ReviewGeneration() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Employee</label>
-                <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
-                  <SelectTrigger data-testid="line-graph-employee-select">
-                    <SelectValue placeholder="Select an employee" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {employees.map((e) => (
-                      <SelectItem key={e.id} value={e.id}>
-                        {e.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <select
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  value={selectedEmployeeId}
+                  onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                  data-testid="line-graph-employee-select"
+                >
+                  <option value="">Select an employee</option>
+                  {employees.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">Graph Type</label>
-                <Select value={selectedGraphKind} onValueChange={setSelectedGraphKind}>
-                  <SelectTrigger data-testid="line-graph-kind-select">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="quarter">Quarterly</SelectItem>
-                    <SelectItem value="ytd">Year-to-date</SelectItem>
-                  </SelectContent>
-                </Select>
+                <select
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  value={selectedGraphKind}
+                  onChange={(e) => setSelectedGraphKind(e.target.value)}
+                  data-testid="line-graph-kind-select"
+                >
+                  <option value="quarter">Quarterly</option>
+                  <option value="ytd">Year-to-date</option>
+                </select>
               </div>
             </div>
 

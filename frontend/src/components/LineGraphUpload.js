@@ -20,16 +20,16 @@ export default function LineGraphUpload({ employeeId, quarter, year, graphKind =
       return;
     }
 
+    if (!employeeId) {
+      toast.error("Select an employee first to upload their graph");
+      return;
+    }
+
     setUploading(true);
 
     try {
       const formData = new FormData();
       formData.append("file", file);
-
-      if (!employeeId) {
-        toast.error("Select an employee first to upload their graph");
-        return;
-      }
 
       await axios.post(`${API}/line-graphs`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
