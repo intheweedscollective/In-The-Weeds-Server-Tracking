@@ -283,60 +283,92 @@ export default function Dashboard() {
           <Card className="bubba-card" data-testid="recent-employees-card">
             <CardHeader>
               <CardTitle className="text-xl font-serif text-primary">
-                Recently Added Employees
+                Employee Performance Overview
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full" data-testid="recent-employees-table">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="text-left py-3 px-4 font-semibold text-primary">Name</th>
-                      <th className="text-left py-3 px-4 font-semibold text-primary">Position</th>
-                      <th className="text-center py-3 px-4 font-semibold text-primary">Cumulative Score</th>
-                      <th className="text-center py-3 px-4 font-semibold text-primary">Performance</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {employees.slice(0, 5).map((employee) => {
-                      const score = employee.cumulative_score || 0;
-                      let performanceClass = 'performance-below';
-                      let performanceText = 'Below Expectations';
-                      
-                      if (score >= 90) {
-                        performanceClass = 'performance-excellent';
-                        performanceText = 'Excellent';
-                      } else if (score >= 80) {
-                        performanceClass = 'performance-above-average';
-                        performanceText = 'Above Average';
-                      } else if (score >= 70) {
-                        performanceClass = 'performance-satisfactory';
-                        performanceText = 'Satisfactory';
-                      } else if (score >= 60) {
-                        performanceClass = 'performance-needs-improvement';
-                        performanceText = 'Needs Improvement';
-                      }
+              <div className="space-y-4">
+                {employees.slice(0, 3).map((employee) => {
+                  const performance = getPerformanceLevel(employee.cumulative_score);
 
-                      return (
-                        <tr key={employee.id} className="border-b border-border hover:bg-muted/50" data-testid={`employee-row-${employee.id}`}>
-                          <td className="py-3 px-4 font-medium" data-testid={`employee-name-${employee.id}`}>{employee.name}</td>
-                          <td className="py-3 px-4 text-muted-foreground" data-testid={`employee-position-${employee.id}`}>{employee.position}</td>
-                          <td className="py-3 px-4 text-center font-bold text-primary" data-testid={`employee-score-${employee.id}`}>
-                            {score.toFixed(1)}
-                          </td>
-                          <td className="py-3 px-4 text-center" data-testid={`employee-performance-${employee.id}`}>
-                            <span className={`performance-badge ${performanceClass}`}>
-                              {performanceText}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                  return (
+                    <Card key={employee.id} className="border border-border p-4" data-testid={`employee-overview-${employee.id}`}>
+                      <div className="flex items-start justify-between mb-4">
+                        <div>
+                          <h3 className="text-lg font-serif font-semibold text-primary" data-testid={`employee-name-${employee.id}`}>
+                            {employee.name}
+                          </h3>
+                          <p className="text-muted-foreground" data-testid={`employee-position-${employee.id}`}>
+                            {employee.position}
+                          </p>
+                        </div>
+                        <span className={`performance-badge ${performance.class}`} data-testid={`employee-performance-${employee.id}`}>
+                          {performance.text}
+                        </span>
+                      </div>
+                      
+                      {/* All 6 Metrics Quick View */}
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                        <div className="text-center">
+                          <div className="text-lg font-serif font-bold text-primary">
+                            {formatCurrency(employee.ppa)}
+                          </div>
+                          <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
+                            PPA
+                          </div>
+                        </div>
+                        
+                        <div className="text-center">
+                          <div className="text-lg font-serif font-bold text-secondary">
+                            {formatCurrency(employee.gpg)}
+                          </div>
+                          <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
+                            GPG
+                          </div>
+                        </div>
+                        
+                        <div className="text-center">
+                          <div className="text-lg font-serif font-bold text-accent-foreground">
+                            {formatCurrency(employee.pplbw)}
+                          </div>
+                          <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
+                            PPLBW
+                          </div>
+                        </div>
+                        
+                        <div className="text-center">
+                          <div className="text-lg font-serif font-bold text-wood-texture">
+                            {formatLSCRatio(employee.lsc_ratio)}
+                          </div>
+                          <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
+                            LSC Ratio
+                          </div>
+                        </div>
+                        
+                        <div className="text-center">
+                          <div className="text-lg font-serif font-bold text-brand-yellow">
+                            {formatNumber(employee.metric_bonus_points)}
+                          </div>
+                          <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
+                            Metric Bonus
+                          </div>
+                        </div>
+                        
+                        <div className="text-center">
+                          <div className="text-2xl font-serif font-bold text-primary">
+                            {formatNumber(employee.cumulative_score)}
+                          </div>
+                          <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
+                            Cumulative Score
+                          </div>
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })}
               </div>
               
-              {employees.length > 5 && (
+              {employees.length > 3 && (
                 <div className="mt-6 text-center">
                   <Link to="/employees">
                     <Button variant="outline" className="bubba-btn-secondary" data-testid="view-all-employees-btn">
