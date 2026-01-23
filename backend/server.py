@@ -511,6 +511,9 @@ async def generate_employee_review(employee_id: str, review_data: ReviewCreate):
         # Generate review content
         review_content = await generate_review_content(employee, review_data.quarter, review_data.year)
         
+        # Get line graph for this quarter/year if available
+        line_graph = await db.line_graphs.find_one({"quarter": review_data.quarter, "year": review_data.year}, {"_id": 0})
+        
         # Create review record
         review = Review(
             employee_id=employee_id,
@@ -525,8 +528,8 @@ async def generate_employee_review(employee_id: str, review_data: ReviewCreate):
         review_doc['created_at'] = review_doc['created_at'].isoformat()
         await db.reviews.insert_one(review_doc)
         
-        # Generate PDF
-        pdf_bytes = generate_pdf(employee, review_content, review_data.quarter, review_data.year)
+        # Generate PDF with optional line graph
+        pdf_bytes = generate_pdf(employee, review_content, review_data.quarter, review_data.year, line_graph)
         pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
         
         return ReviewResponse(
