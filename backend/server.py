@@ -203,7 +203,7 @@ PLEASE DO NOT include any headers, titles, or formatting markers. Just provide e
         return f"Unable to generate personalized review at this time. Please contact HR for manual review processing. Employee: {employee.name}, Position: {employee.position}"
 
 # Helper function to generate PDF
-def generate_pdf(employee: Employee, review_content: str, quarter: str, year: int) -> bytes:
+def generate_pdf(employee: Employee, review_content: str, quarter: str, year: int, line_graph=None) -> bytes:
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.4*inch, bottomMargin=0.4*inch,
                           leftMargin=0.6*inch, rightMargin=0.6*inch)
