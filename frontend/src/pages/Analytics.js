@@ -20,6 +20,16 @@ export default function Analytics() {
 
   const handlePrint = async () => {
     try {
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+      // iOS often “downloads” without opening; users then print the webpage instead.
+      // Opening the PDF in a new tab ensures the print/share action targets the PDF.
+      if (isIOS) {
+        window.open(`${API}/analytics/pdf`, "_blank", "noopener,noreferrer");
+        toast.success("Opened Analytics PDF");
+        return;
+      }
+
       const response = await axios.get(`${API}/analytics/pdf`, {
         responseType: "blob",
       });
@@ -216,7 +226,7 @@ export default function Analytics() {
             className="bubba-btn-primary w-full sm:w-auto print:hidden"
             data-testid="download-analytics-pdf"
           >
-            Download PDF Report
+            Download / Open PDF Report
           </Button>
         </div>
 
