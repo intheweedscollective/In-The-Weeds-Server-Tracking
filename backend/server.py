@@ -207,6 +207,9 @@ async def generate_review_content(employee: Employee, quarter: str, year: int) -
             f"- Cumulative Score Tier: {metric_tiers.get('cumulative_score', 'N/A')}\n"
         )
 
+        # IMPORTANT: Use these tiers as the source of truth. Do NOT invent tiers.
+        # If a tier is N/A, omit that metric tier from narrative rather than guessing.
+
         
         # Create detailed prompt
         prompt = f"""
