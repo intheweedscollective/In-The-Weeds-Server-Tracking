@@ -314,7 +314,10 @@ export default function EmployeeList() {
                       </Button>
                       
                       <Button 
-                        onClick={() => deleteEmployee(employee.id)}
+                        onClick={() => {
+                          setEmployeeToDelete(employee.id);
+                          setConfirmDeleteOpen(true);
+                        }}
                         variant="destructive" 
                         size="sm"
                         data-testid={`delete-employee-btn-${employee.id}`}
