@@ -401,7 +401,7 @@ export default function EmployeeList() {
                       {formatLSCRatio(selectedEmployee.lsc_ratio)}
                     </div>
                     <div className="text-sm font-semibold text-muted-foreground uppercase">
-                      LSC Ratio (Landry's Select Card)
+                      LSC Ratio (Landry&apos;s Select Card)
                     </div>
                     <div className={`text-sm mt-1 ${getBenchmarkStatus('lsc_ratio', selectedEmployee.lsc_ratio).class}`}>
                       {getBenchmarkStatus('lsc_ratio', selectedEmployee.lsc_ratio).text}
