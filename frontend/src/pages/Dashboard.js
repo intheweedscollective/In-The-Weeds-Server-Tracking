@@ -106,10 +106,6 @@ export default function Dashboard() {
   });
 
   const clearAllEmployees = async () => {
-    if (!window.confirm("Are you sure you want to clear all employee data? This cannot be undone.")) {
-      return;
-    }
-
     try {
       const response = await axios.delete(`${API}/employees`);
       if (response.data.success) {
@@ -119,6 +115,8 @@ export default function Dashboard() {
     } catch (error) {
       console.error("Error clearing employees:", error);
       toast.error("Error clearing employees");
+    } finally {
+      setConfirmClearOpen(false);
     }
   };
 
