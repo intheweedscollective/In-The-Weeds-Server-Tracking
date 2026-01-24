@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Badge } from "../components/ui/badge";
 import { formatCurrency, formatLSCRatio, formatNumber, getPerformanceLevel, getBenchmarkStatus, KPI_DEFINITIONS } from "../utils/formatters";
 
+import ConfirmDialog from "../components/ConfirmDialog";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
