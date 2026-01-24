@@ -360,14 +360,21 @@ def generate_pdf(employee: Employee, review_content: str, quarter: str, year: in
         'cumulative': employee.additional_data.get('cummulative score vs peers', 'N/A')
     }
     
+    # Performance tier labels from spreadsheet (preferred, per user). Fallback to computed level if missing.
+    metric_tiers = employee.additional_data.get("metric_tiers", {}) or {}
+
+    def tier_or_fallback(metric_key: str, fallback_value):
+        tier = metric_tiers.get(metric_key)
+        return tier if tier else get_performance_level(fallback_value)
+
     kpi_data = [
-        ["Metric", "Score", "Peer Rank", "Performance Level"],
-        ["PPA (Per Person Average)", format_currency_for_prompt(employee.ppa), peer_rankings['ppa'], get_performance_level(employee.ppa)],
-        ["GPG (Glassware $ Per Guest)", format_currency_for_prompt(employee.gpg), peer_rankings['gpg'], get_performance_level(employee.gpg)],
-        ["PPLBW (Per Person Liquor Beer Wine)", format_currency_for_prompt(employee.pplbw), peer_rankings['pplbw'], get_performance_level(employee.pplbw)],
-        ["LSC Ratio (Landry's Select Card)", format_lsc_ratio(employee.lsc_ratio), peer_rankings['lsc_ratio'], get_performance_level(employee.lsc_ratio)],
-        ["Metric Bonus Points", str(employee.metric_bonus_points or 'N/A'), peer_rankings['metric_bonus'], get_performance_level(employee.metric_bonus_points)],
-        ["Cumulative Score", str(employee.cumulative_score or 'N/A'), peer_rankings['cumulative'], get_performance_level(employee.cumulative_score)]
+        ["Metric", "Score", "Peer Rank", "Tier"],
+        ["PPA (Per Person Average)", format_currency_for_prompt(employee.ppa), peer_rankings['ppa'], tier_or_fallback('ppa', employee.ppa)],
+        ["GPG (Glassware $ Per Guest)", format_currency_for_prompt(employee.gpg), peer_rankings['gpg'], tier_or_fallback('gpg', employee.gpg)],
+        ["PPLBW (Per Person Liquor Beer Wine)", format_currency_for_prompt(employee.pplbw), peer_rankings['pplbw'], tier_or_fallback('pplbw', employee.pplbw)],
+        ["LSC Ratio (Landry's Select Card)", format_lsc_ratio(employee.lsc_ratio), peer_rankings['lsc_ratio'], tier_or_fallback('lsc_ratio', employee.lsc_ratio)],
+        ["Metric Bonus Points", str(employee.metric_bonus_points or 'N/A'), peer_rankings['metric_bonus'], tier_or_fallback('metric_bonus_points', employee.metric_bonus_points)],
+        ["Cumulative Score", str(employee.cumulative_score or 'N/A'), peer_rankings['cumulative'], tier_or_fallback('cumulative_score', employee.cumulative_score)]
     ]
     
     # Match the full content width (A4: 595.27pt; margins: 0.6"+0.6" => 86.4pt)
