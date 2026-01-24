@@ -22,6 +22,9 @@ export default function EmployeeList() {
   const [performanceFilter, setPerformanceFilter] = useState("all");
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [employeeToDelete, setEmployeeToDelete] = useState(null);
+
 
   useEffect(() => {
     fetchEmployees();
