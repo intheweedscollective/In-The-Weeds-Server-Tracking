@@ -438,12 +438,14 @@ export default function EmployeeList() {
                   <div>
                     <h4 className="font-semibold text-primary mb-4">Additional Information</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {Object.entries(selectedEmployee.additional_data || {}).map(([key, value]) => (
-                        <div key={key} className="flex justify-between py-2 border-b border-border">
-                          <span className="capitalize font-medium">{key.replace(/[_-]/g, ' ')}</span>
-                          <span className="text-muted-foreground">{value || 'N/A'}</span>
-                        </div>
-                      ))}
+                      {Object.entries(selectedEmployee.additional_data || {})
+                        .filter(([key]) => key !== "metric_tiers")
+                        .map(([key, value]) => (
+                          <div key={key} className="flex justify-between py-2 border-b border-border">
+                            <span className="capitalize font-medium">{key.replace(/[_-]/g, ' ')}</span>
+                            <span className="text-muted-foreground">{value || 'N/A'}</span>
+                          </div>
+                        ))}
                     </div>
                   </div>
                 )}
