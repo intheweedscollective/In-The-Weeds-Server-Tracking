@@ -547,8 +547,16 @@ async def upload_excel(file: UploadFile = File(...)):
             
             # Add any additional columns to additional_data
             additional_data = {}
+
+            # Per-metric tiers
+            metric_tiers = {}
+            for metric_key, candidates in TIER_COLUMN_MAP.items():
+                metric_tiers[metric_key] = _first_non_empty(row, candidates)
+            additional_data["metric_tiers"] = metric_tiers
+
             for col in df.columns:
-                if col not in ['name', 'employee_name', 'employee', 'position', 'job_title', 'title', 'ppa', 'gpg', 'pplbw', 'lsc_ratio', 'lsc ratio', 'bonus_points', 'bonus points', 'metric_bonus_points', 'metric bonus points', 'total_score', 'total score', 'cumulative_score', 'cumulative score', 'cummulative_score', 'cummulative score', 'overall_rank', 'overall rank', 'ranking', 'rank', 'performance_tier', 'performance tier']:
+                if col not in ['name', 'employee_name', 'employee', 'position', 'job_title', 'title', 'ppa', 'gpg', 'pplbw', 'lsc_ratio', 'lsc ratio', 'bonus_points', 'bonus points', 'metric_bonus_points', 'metric bonus points', 'total_score', 'total score', 'cumulative_score', 'cumulative score', 'cummulative_score', 'cummulative score', 'overall_rank', 'overall rank', 'ranking', 'rank', 'performance_tier', 'performance tier',
+                               'ppa tier', 'pplbw tier', 'lsc ratio tier', 'lsc_ratio tier', 'gpg tier', 'metirc bonus tier', 'metric bonus tier', 'metric bonus points tier', 'cummulative score tier', 'cumulative score tier']:
                     additional_data[col] = str(row[col]) if pd.notna(row[col]) else None
             
             employee_data['additional_data'] = additional_data
