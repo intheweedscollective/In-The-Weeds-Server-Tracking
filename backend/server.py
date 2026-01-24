@@ -489,6 +489,27 @@ def get_performance_level(score):
     except (ValueError, TypeError):
         return "Not Assessed"
 
+
+# Map per-metric Tier columns (exact headers provided by user). Stored under additional_data.metric_tiers
+TIER_COLUMN_MAP = {
+    "ppa": ["ppa tier"],
+    "pplbw": ["pplbw tier"],
+    "lsc_ratio": ["lsc ratio tier", "lsc_ratio tier"],
+    "gpg": ["gpg tier"],
+    # handle typo in source header: "Metirc Bonus Tier"
+    "metric_bonus_points": ["metirc bonus tier", "metric bonus tier", "metric bonus points tier"],
+    # handle typo in source header: "Cummulative Score Tier"
+    "cumulative_score": ["cummulative score tier", "cumulative score tier"],
+}
+
+
+def _first_non_empty(row, keys: List[str]):
+    for k in keys:
+        v = row.get(k)
+        if v is not None and pd.notna(v) and str(v).strip() != "":
+            return str(v).strip()
+    return None
+
 # Routes
 @api_router.get("/")
 async def root():
