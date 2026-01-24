@@ -194,6 +194,19 @@ async def generate_review_content(employee: Employee, quarter: str, year: int) -
             'metric_bonus': employee.additional_data.get('metric bonus points vs peers', 'N/A'),
             'cumulative': employee.additional_data.get('cummulative score vs peers', 'N/A')
         }
+
+        # Per-metric tiers (Top Performer / Meets Expectations / Below Expectations / Needs Immediate Improvement)
+        metric_tiers = employee.additional_data.get("metric_tiers", {}) or {}
+        tiers_text = (
+            f"TIERS BY METRIC (from spreadsheet):\n"
+            f"- PPA Tier: {metric_tiers.get('ppa', 'N/A')}\n"
+            f"- GPG Tier: {metric_tiers.get('gpg', 'N/A')}\n"
+            f"- PPLBW Tier: {metric_tiers.get('pplbw', 'N/A')}\n"
+            f"- LSC Ratio Tier: {metric_tiers.get('lsc_ratio', 'N/A')}\n"
+            f"- Metric Bonus Tier: {metric_tiers.get('metric_bonus_points', 'N/A')}\n"
+            f"- Cumulative Score Tier: {metric_tiers.get('cumulative_score', 'N/A')}\n"
+        )
+
         
         # Create detailed prompt
         prompt = f"""
