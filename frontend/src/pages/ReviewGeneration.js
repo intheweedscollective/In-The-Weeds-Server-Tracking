@@ -19,7 +19,7 @@ export default function ReviewGeneration() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState({});
   const [selectedQuarter, setSelectedQuarter] = useState("Q4");
-  const [selectedYear, setSelectedYear] = useState("2024");
+  const [selectedYear, setSelectedYear] = useState("2025");
 
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [selectedGraphKind, setSelectedGraphKind] = useState("quarter");
@@ -237,8 +237,8 @@ export default function ReviewGeneration() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="2024">2024</SelectItem>
                     <SelectItem value="2025">2025</SelectItem>
+                    <SelectItem value="2026">2026</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
