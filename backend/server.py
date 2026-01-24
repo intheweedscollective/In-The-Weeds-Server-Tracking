@@ -222,6 +222,7 @@ PERFORMANCE METRICS WITH PEER RANKINGS:
 
 OVERALL RANKING: {employee.overall_rank or 'N/A'} | POSITION LEVEL: {employee.ranking or 'N/A'}
 
+{tiers_text}
 REVIEW REQUIREMENTS:
 1. Write EXACTLY 2 paragraphs - no more, no less
 2. First paragraph: Performance highlights and peer ranking context
