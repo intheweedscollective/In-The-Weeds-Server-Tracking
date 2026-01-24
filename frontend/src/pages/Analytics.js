@@ -111,43 +111,75 @@ export default function Analytics() {
         return;
       }
 
-      // For high/medium/low: top/middle/bottom thirds. Note LSC is inverse (lower is better).
-      const sortedValues = [...validValues].sort((a, b) => {
-        if (metric === 'lsc_ratio') return a - b;
-        return b - a;
-      });
-
+      // Benchmark-relative buckets (more meaningful than splitting into thirds)
       const benchmark = KPI_DEFINITIONS[metric]?.benchmark || 0;
       const average = validValues.reduce((sum, val) => sum + val, 0) / validValues.length;
 
-      const topThirdIndex = Math.floor(sortedValues.length * (1 / 3));
-      const bottomThirdIndex = Math.floor(sortedValues.length * (2 / 3));
+      let highThreshold = 0;
+      let lowThreshold = 0;
 
-      // Thresholds to classify *raw values* into buckets
-      // For normal metrics: high if >= highThreshold, low if < lowThreshold
-      // For LSC (inverse): high if <= highThreshold, low if > lowThreshold
-      const highThreshold = sortedValues[topThirdIndex] ?? sortedValues[sortedValues.length - 1] ?? 0;
-      const lowThreshold = sortedValues[bottomThirdIndex] ?? sortedValues[sortedValues.length - 1] ?? 0;
-      
-      let high = 0, medium = 0, low = 0, aboveBenchmark = 0;
-      
-      validValues.forEach(val => {
-        if (metric === 'lsc_ratio') {
-          // Inverse: smaller denominator is better (e.g., 1 in 34 better than 1 in 100)
+      if (metric === 'lsc_ratio') {
+        // Inverse metric. Values are denominators ("1 in X"). Lower is better.
+        // Benchmark is 0.01 => "1 in 100".
+        const benchmarkDenominator = Math.round(1 / benchmark);
+        highThreshold = Math.round(benchmarkDenominator * 0.9); // 10% better
+        lowThreshold = Math.round(benchmarkDenominator * 1.1); // 10% worse
+
+        let high = 0, medium = 0, low = 0, aboveBenchmark = 0;
+
+        validValues.forEach(val => {
           if (val <= highThreshold) high++;
-          else if (val <= lowThreshold) medium++;
-          else low++;
+          else if (val >= lowThreshold) low++;
+          else medium++;
 
-          const benchmarkDenominator = Math.round(1 / benchmark); // e.g. 0.01 -> 100
           if (val <= benchmarkDenominator) aboveBenchmark++;
-        } else {
+        });
+
+        analyticsData[metric] = {
+          high,
+          medium,
+          low,
+          benchmark: aboveBenchmark,
+          average,
+          total: validValues.length,
+          highThreshold,
+          lowThreshold,
+          benchmarkValue: benchmark,
+        };
+
+        return;
+      }
+
+      // Normal metrics where higher is better
+      highThreshold = benchmark ? benchmark * 1.1 : 0; // 10% above
+      lowThreshold = benchmark ? benchmark * 0.9 : 0; // 10% below
+
+      let high = 0, medium = 0, low = 0, aboveBenchmark = 0;
+
+      validValues.forEach(val => {
+        if (benchmark) {
           if (val >= highThreshold) high++;
-          else if (val >= lowThreshold) medium++;
-          else low++;
+          else if (val < lowThreshold) low++;
+          else medium++;
 
           if (val >= benchmark) aboveBenchmark++;
+        } else {
+          // No benchmark defined; keep everything as medium but still compute average.
+          medium++;
         }
       });
+
+      analyticsData[metric] = {
+        high,
+        medium,
+        low,
+        benchmark: aboveBenchmark,
+        average,
+        total: validValues.length,
+        highThreshold,
+        lowThreshold,
+        benchmarkValue: benchmark,
+      };
       
       analyticsData[metric] = {
         high,

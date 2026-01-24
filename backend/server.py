@@ -818,13 +818,15 @@ async def clear_all_employees():
 async def analytics_pdf():
     employees = await db.employees.find({}, {"_id": 0}).to_list(5000)
 
-    # replicate frontend analytics calculation (thirds, LSC inverse)
+    # Benchmark-relative buckets (10% above = High, 10% below = Low, otherwise Medium)
     metrics = ["ppa", "gpg", "pplbw", "lsc_ratio", "metric_bonus_points", "cumulative_score"]
     analytics: Dict[str, Dict[str, Any]] = {}
 
     for metric in metrics:
         values = [e.get(metric) for e in employees]
         valid_values = [v for v in values if v is not None and isinstance(v, (int, float))]
+
+        benchmark_val = KPI_DEFINITIONS.get(metric, {}).get("benchmark", 0)
 
         if not valid_values:
             analytics[metric] = {
@@ -836,44 +838,63 @@ async def analytics_pdf():
                 "total": 0,
                 "highThreshold": 0,
                 "lowThreshold": 0,
-                "benchmarkValue": KPI_DEFINITIONS.get(metric, {}).get("benchmark", 0),
+                "benchmarkValue": benchmark_val,
             }
             continue
 
-        sorted_vals = sorted(valid_values, reverse=(metric != "lsc_ratio"))
-        top_third_index = int(len(sorted_vals) * (1 / 3))
-        bottom_third_index = int(len(sorted_vals) * (2 / 3))
-
-        high_threshold = sorted_vals[top_third_index] if top_third_index < len(sorted_vals) else sorted_vals[-1]
-        low_threshold = sorted_vals[bottom_third_index] if bottom_third_index < len(sorted_vals) else sorted_vals[-1]
-
-        high = medium = low = above_benchmark = 0
-        benchmark_val = KPI_DEFINITIONS.get(metric, {}).get("benchmark", 0)
         avg = sum(valid_values) / len(valid_values)
 
-        for v in valid_values:
-            if metric == "lsc_ratio":
-                # inverse (lower is better)
+        high = medium = low = above_benchmark = 0
+
+        if metric == "lsc_ratio":
+            benchmark_denominator = round(1 / benchmark_val) if benchmark_val else 0
+            high_threshold = round(benchmark_denominator * 0.9) if benchmark_denominator else 0
+            low_threshold = round(benchmark_denominator * 1.1) if benchmark_denominator else 0
+
+            for v in valid_values:
                 if v <= high_threshold:
                     high += 1
-                elif v <= low_threshold:
-                    medium += 1
-                else:
+                elif v >= low_threshold:
                     low += 1
+                else:
+                    medium += 1
 
-                benchmark_denominator = round(1 / benchmark_val) if benchmark_val else 0
                 if benchmark_denominator and v <= benchmark_denominator:
                     above_benchmark += 1
-            else:
+
+            analytics[metric] = {
+                "high": high,
+                "medium": medium,
+                "low": low,
+                "benchmark": above_benchmark,
+                "average": avg,
+                "total": len(valid_values),
+                "highThreshold": high_threshold,
+                "lowThreshold": low_threshold,
+                "benchmarkValue": benchmark_val,
+            }
+            continue
+
+        # Normal metrics
+        if benchmark_val:
+            high_threshold = benchmark_val * 1.1
+            low_threshold = benchmark_val * 0.9
+
+            for v in valid_values:
                 if v >= high_threshold:
                     high += 1
-                elif v >= low_threshold:
-                    medium += 1
-                else:
+                elif v < low_threshold:
                     low += 1
+                else:
+                    medium += 1
 
-                if benchmark_val and v >= benchmark_val:
+                if v >= benchmark_val:
                     above_benchmark += 1
+        else:
+            # No benchmark defined
+            medium = len(valid_values)
+            high_threshold = 0
+            low_threshold = 0
 
         analytics[metric] = {
             "high": high,
