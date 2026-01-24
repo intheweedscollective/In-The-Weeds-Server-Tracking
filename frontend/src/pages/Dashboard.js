@@ -17,6 +17,8 @@ const API = `${BACKEND_URL}/api`;
 export default function Dashboard() {
   const [employees, setEmployees] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
+
   const [stats, setStats] = useState({
     totalEmployees: 0,
     avgTotalScore: 0,
