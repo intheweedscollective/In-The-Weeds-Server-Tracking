@@ -475,6 +475,138 @@ class BubbaGumpAPITester:
             self.log_test("Generate Review Q4 2025 Regression", False, str(e))
             return False
 
+    def test_per_metric_tier_mapping(self):
+        """Test per-metric Tier mapping behavior with exact tier headers from user request"""
+        try:
+            # Clear existing employees first
+            requests.delete(f"{self.api_url}/employees", timeout=10)
+            
+            # Create Excel with exact tier headers as specified in review request
+            sample_data = {
+                'name': ['Alice Johnson'],
+                'position': ['Server'],
+                'ppa': [65.5],
+                'gpg': [1.25],
+                'pplbw': [8.5],
+                'lsc_ratio': [25],  # LSC ratio as denominator (1 in 25)
+                'metric_bonus_points': [7],
+                'cumulative_score': [85],
+                # Exact tier headers from review request (including typos)
+                'PPA Tier': ['Top Performer'],
+                'PPLBW Tier': ['Meets Expectations'],
+                'LSC Ratio Tier': ['Above Average'],
+                'GPG Tier': ['Excellent'],
+                'Metirc Bonus Tier': ['Outstanding'],  # Note: typo in "Metirc"
+                'Cummulative Score Tier': ['High Achiever']  # Note: typo in "Cummulative"
+            }
+            
+            df = pd.DataFrame(sample_data)
+            excel_buffer = io.BytesIO()
+            df.to_excel(excel_buffer, index=False)
+            excel_buffer.seek(0)
+            
+            # 1) POST /api/upload-excel with the file
+            files = {'file': ('tier_test_employees.xlsx', excel_buffer.getvalue(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')}
+            
+            upload_response = requests.post(f"{self.api_url}/upload-excel", files=files, timeout=30)
+            upload_success = upload_response.status_code == 200
+            
+            if not upload_success:
+                self.log_test("Per-Metric Tier Mapping", False, f"Upload failed: {upload_response.status_code}")
+                return False
+            
+            upload_data = upload_response.json()
+            if not upload_data.get('success', False):
+                self.log_test("Per-Metric Tier Mapping", False, f"Upload not successful: {upload_data}")
+                return False
+            
+            # 2) GET /api/employees and verify metric_tiers populated correctly
+            employees_response = requests.get(f"{self.api_url}/employees", timeout=10)
+            if employees_response.status_code != 200:
+                self.log_test("Per-Metric Tier Mapping", False, f"Get employees failed: {employees_response.status_code}")
+                return False
+            
+            employees = employees_response.json()
+            if not employees:
+                self.log_test("Per-Metric Tier Mapping", False, "No employees found after upload")
+                return False
+            
+            employee = employees[0]  # Get the first (and only) employee
+            additional_data = employee.get('additional_data', {})
+            metric_tiers = additional_data.get('metric_tiers', {})
+            
+            # Verify all 6 metrics have tier mappings
+            expected_tiers = {
+                'ppa': 'Top Performer',
+                'pplbw': 'Meets Expectations', 
+                'lsc_ratio': 'Above Average',
+                'gpg': 'Excellent',
+                'metric_bonus_points': 'Outstanding',
+                'cumulative_score': 'High Achiever'
+            }
+            
+            tier_mapping_success = True
+            missing_tiers = []
+            incorrect_tiers = []
+            
+            for metric, expected_tier in expected_tiers.items():
+                actual_tier = metric_tiers.get(metric)
+                if actual_tier is None:
+                    missing_tiers.append(metric)
+                    tier_mapping_success = False
+                elif actual_tier != expected_tier:
+                    incorrect_tiers.append(f"{metric}: expected '{expected_tier}', got '{actual_tier}'")
+                    tier_mapping_success = False
+            
+            if not tier_mapping_success:
+                error_details = []
+                if missing_tiers:
+                    error_details.append(f"Missing tiers: {missing_tiers}")
+                if incorrect_tiers:
+                    error_details.append(f"Incorrect tiers: {incorrect_tiers}")
+                
+                self.log_test("Per-Metric Tier Mapping", False, f"Tier mapping failed - {'; '.join(error_details)}")
+                return False
+            
+            # Store employee ID for review generation test
+            self.tier_test_employee_id = employee['id']
+            
+            # 3) POST /api/employees/{id}/generate-review and confirm success + pdf_base64
+            review_payload = {
+                "quarter": "Q4",
+                "year": 2024
+            }
+            
+            review_response = requests.post(
+                f"{self.api_url}/employees/{self.tier_test_employee_id}/generate-review", 
+                json=review_payload, 
+                timeout=60
+            )
+            
+            review_success = review_response.status_code == 200
+            if not review_success:
+                self.log_test("Per-Metric Tier Mapping", False, f"Review generation failed: {review_response.status_code}")
+                return False
+            
+            review_data = review_response.json()
+            has_success = review_data.get('success', False)
+            has_pdf_base64 = 'pdf_base64' in review_data and review_data['pdf_base64'] is not None
+            
+            if not (has_success and has_pdf_base64):
+                self.log_test("Per-Metric Tier Mapping", False, f"Review generation incomplete - success: {has_success}, has_pdf: {has_pdf_base64}")
+                return False
+            
+            # All tests passed
+            details = (f"Upload: ✅, Employees: 1, Metric tiers: {metric_tiers}, "
+                      f"Review generation: ✅, PDF present: ✅")
+            
+            self.log_test("Per-Metric Tier Mapping", True, details)
+            return True, metric_tiers
+            
+        except Exception as e:
+            self.log_test("Per-Metric Tier Mapping", False, str(e))
+            return False
+
     def test_invalid_excel_upload(self):
         """Test uploading invalid file type"""
         try:
