@@ -42,18 +42,19 @@ export default function EmployeeList() {
     }
   };
 
-  const deleteEmployee = async (employeeId) => {
-    if (!window.confirm("Are you sure you want to delete this employee?")) {
-      return;
-    }
+  const deleteEmployee = async () => {
+    if (!employeeToDelete) return;
 
     try {
-      await axios.delete(`${API}/employees/${employeeId}`);
+      await axios.delete(`${API}/employees/${employeeToDelete}`);
       toast.success("Employee deleted successfully");
       fetchEmployees();
     } catch (error) {
       console.error("Error deleting employee:", error);
       toast.error("Error deleting employee");
+    } finally {
+      setConfirmDeleteOpen(false);
+      setEmployeeToDelete(null);
     }
   };
 
