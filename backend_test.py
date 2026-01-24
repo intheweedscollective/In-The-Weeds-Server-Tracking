@@ -661,6 +661,10 @@ class BubbaGumpAPITester:
                 # Test deletion
                 self.test_delete_employee()
         
+        # SPECIFIC TEST FOR REVIEW REQUEST - Per-metric Tier mapping behavior
+        print("\n🎯 Running Per-Metric Tier Mapping Test (Review Request)...")
+        tier_test_result = self.test_per_metric_tier_mapping()
+        
         # Clean up
         self.test_clear_all_employees()
         
