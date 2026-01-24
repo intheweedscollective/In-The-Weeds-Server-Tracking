@@ -181,6 +181,16 @@ export default function Dashboard() {
 
         {/* Main Actions */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+          <ConfirmDialog
+            open={confirmClearOpen}
+            onOpenChange={setConfirmClearOpen}
+            title="Clear all employee data?"
+            description="This will permanently delete all employee records currently loaded in the system. This cannot be undone."
+            confirmText="Clear All"
+            cancelText="Cancel"
+            onConfirm={clearAllEmployees}
+            variant="destructive"
+          />
           {/* File Upload */}
           <Card className="bubba-card" data-testid="upload-card">
             <CardHeader>
