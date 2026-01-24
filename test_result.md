@@ -146,6 +146,23 @@
 ##         agent: "testing"
 ##         comment: "Regression tested new Analytics PDF export endpoint - GET /api/analytics/pdf returns valid PDF (309,903 bytes) with 'Performance Analytics Report' title and 'Above Bench' column. PDF parsed successfully with pypdf (1 page). All requirements satisfied."
 ## frontend:
+##   - task: "Dashboard Clear All Employee Data functionality"
+##     implemented: true
+##     working: true
+##     file: "frontend/src/pages/Dashboard.js"
+##     stuck_count: 1
+##     priority: "high"
+##     needs_retesting: false
+##     status_history:
+##       - working: false
+##         agent: "testing"
+##         comment: "CRITICAL ISSUE: Clear All confirmation dialog appears but Clear All button click does not actually clear employees, count remains at 26 instead of going to 0"
+##       - working: true
+##         agent: "main"
+##         comment: "Fixed ConfirmDialog component - the issue was in the onClick handler calling onOpenChange(false) before onConfirm, preventing proper execution"
+##       - working: true
+##         agent: "testing"
+##         comment: "Re-tested after ConfirmDialog fix - Clear All functionality now working correctly. Upload test Excel (0→1 employees), click Clear All, confirm dialog works, operation executes successfully (1→0 employees), both Dashboard stats and Employee Management page show 0 employees correctly"
 ##   - task: "Fix build-breaking LineGraphUpload syntax error"
 ##     implemented: true
 ##     working: true
