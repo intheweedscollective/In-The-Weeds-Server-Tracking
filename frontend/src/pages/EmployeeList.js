@@ -99,6 +99,16 @@ export default function EmployeeList() {
 
   return (
     <div className="min-h-screen bg-paper-bg">
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        onOpenChange={setConfirmDeleteOpen}
+        title="Delete employee?"
+        description="This will permanently delete this employee record."
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={deleteEmployee}
+        variant="destructive"
+      />
       <Navigation />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
