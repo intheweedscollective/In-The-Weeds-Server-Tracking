@@ -193,6 +193,17 @@ export default function Dashboard() {
           />
           {/* File Upload */}
           <Card className="bubba-card" data-testid="upload-card">
+            <div className="px-6 pt-6 print:hidden">
+              <Button
+                variant="destructive"
+                size="sm"
+                className="w-full"
+                onClick={() => setConfirmClearOpen(true)}
+                data-testid="clear-all-employees-btn"
+              >
+                Clear All Employee Data
+              </Button>
+            </div>
             <CardHeader>
               <CardTitle className="flex items-center gap-3 text-2xl font-serif text-primary">
                 <Upload className="w-7 h-7" />
