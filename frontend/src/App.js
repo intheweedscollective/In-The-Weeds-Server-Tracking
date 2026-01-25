@@ -5,6 +5,7 @@ import EmployeeList from "./pages/EmployeeList";
 import ReviewGeneration from "./pages/ReviewGeneration";
 import TopPerformers from "./pages/TopPerformers";
 import Analytics from "./pages/Analytics";
+import QuarterSettings from "./pages/QuarterSettings";
 import "./App.css";
 
 function App() {
@@ -17,6 +18,7 @@ function App() {
           <Route path="/reviews" element={<ReviewGeneration />} />
           <Route path="/top-performers" element={<TopPerformers />} />
           <Route path="/analytics" element={<Analytics />} />
+          <Route path="/settings" element={<QuarterSettings />} />
         </Routes>
       </BrowserRouter>
       <Toaster position="top-right" richColors />
