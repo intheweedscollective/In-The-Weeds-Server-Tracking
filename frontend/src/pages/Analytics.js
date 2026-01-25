@@ -377,7 +377,7 @@ export default function Analytics() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex justify-between text-xs text-muted-foreground">
+                      <div className="flex justify-between text-xs text-gray-500">
                         <span>High ({data.high})</span>
                         <span>Medium ({data.medium})</span>
                         <span>Low ({data.low})</span>
@@ -385,12 +385,12 @@ export default function Analytics() {
                     </div>
                     
                     {/* Key Metrics */}
-                    <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+                    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-200">
                       <div className="text-center">
                         <div className="text-2xl font-serif font-bold text-green-600">
                           {data.benchmark || 0}
                         </div>
-                        <div className="text-xs text-muted-foreground uppercase tracking-wider">
+                        <div className="text-xs text-gray-500 uppercase tracking-wider">
                           Above Benchmark
                         </div>
                       </div>
@@ -399,7 +399,7 @@ export default function Analytics() {
                         <div className="text-2xl font-serif font-bold text-primary">
                           {formatMetricValueOld(metricKey, data.average)}
                         </div>
-                        <div className="text-xs text-muted-foreground uppercase tracking-wider">
+                        <div className="text-xs text-gray-500 uppercase tracking-wider">
                           Team Average
                         </div>
                       </div>
@@ -407,8 +407,8 @@ export default function Analytics() {
                     
                     {/* Benchmark Status */}
                     <div className="pt-2">
-                      <Badge 
-                        className={`w-full justify-center ${
+                      <span 
+                        className={`block w-full text-center py-2 rounded-full text-sm font-semibold ${
                           getPercentage(data.benchmark, total) >= 60 
                             ? 'bg-green-100 text-green-800' 
                             : getPercentage(data.benchmark, total) >= 40
@@ -417,35 +417,35 @@ export default function Analytics() {
                         }`}
                       >
                         {getPercentage(data.benchmark, total)}% Meeting Benchmark
-                      </Badge>
+                      </span>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             );
           })}
         </div>
 
         {/* Top 10 Overall + Top 10 per Metric */}
-        <div className="mt-12 space-y-10">
+        <div className="mt-10 space-y-8">
           <div className="space-y-4" data-testid="analytics-top-overall">
-            <h2 className="text-2xl font-serif font-bold text-primary">Top 10 Overall (Cumulative Score)</h2>
-            <Card className="bubba-card">
-              <CardContent className="pt-6">
+            <h2 className="text-2xl font-serif font-bold text-foreground">Top 10 Overall (Cumulative Score)</h2>
+            <div className="bubba-card">
+              <div className="p-5">
                 <div className="space-y-2">
                   {getTopEmployees("cumulative_score", 10).map((emp, idx) => (
                     <div
                       key={emp.id}
-                      className="flex items-center justify-between p-3 border border-border rounded-lg bg-background"
+                      className="flex items-center justify-between p-3 border border-gray-200 rounded-lg bg-gray-50"
                     >
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold text-primary">#{idx + 1}</span>
-                          <span className="font-semibold text-primary truncate">{emp.name}</span>
+                          <span className="font-bold text-primary">#{idx + 1}</span>
+                          <span className="font-semibold text-foreground truncate">{emp.name}</span>
                           {emp.ranking && (
-                            <Badge variant="secondary" className="text-xs">
+                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-semibold">
                               {emp.ranking}
-                            </Badge>
+                            </span>
                           )}
                         </div>
                         <div className="text-sm text-muted-foreground truncate">{emp.position}</div>
