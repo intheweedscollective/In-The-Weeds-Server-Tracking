@@ -189,31 +189,39 @@ export default function ReviewGeneration() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Paper texture overlay */}
+      <div className="fixed inset-0 pointer-events-none paper-texture" />
+      
       <Navigation />
       
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-serif font-bold text-primary mb-2" data-testid="page-title">
-            Review Generation
-          </h1>
-          <p className="text-muted-foreground" data-testid="page-subtitle">
-            Generate AI-powered quarterly performance reviews
+          <div className="flex items-center gap-3 mb-2">
+            <Ship className="w-8 h-8 text-primary" />
+            <h1 className="text-3xl font-serif font-black text-foreground" data-testid="page-title">
+              Review Generation
+            </h1>
+          </div>
+          <p className="text-muted-foreground italic" data-testid="page-subtitle">
+            "Run Forrest, run!" ...to generate those quarterly reviews
           </p>
         </div>
 
         {/* Review Settings */}
-        <Card className="bubba-card mb-8" data-testid="review-settings-card">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="w-5 h-5" />
-              Review Settings
-            </CardTitle>
-            <CardDescription>
-              Configure the review period and generate branded PDF reports
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+        <div className="bubba-card mb-8 overflow-hidden" data-testid="review-settings-card">
+          <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-16 h-6 bg-accent/80 rotate-[-2deg] shadow-sm z-10" />
+          <div className="p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-full bg-primary/10">
+                <FileText className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <h2 className="text-xl font-serif font-bold text-foreground">Review Settings</h2>
+                <p className="text-sm text-muted-foreground">Configure the review period</p>
+              </div>
+            </div>
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Quarter</label>
@@ -244,30 +252,31 @@ export default function ReviewGeneration() {
               </div>
             </div>
             
-            <div className="mt-6 p-4 bg-muted/30 rounded-lg">
-              <h4 className="font-semibold text-primary mb-2">Review Features</h4>
+            <div className="mt-6 p-4 bg-muted/30 rounded-xl border border-border">
+              <h4 className="font-serif font-semibold text-foreground mb-2">Review Features</h4>
               <ul className="text-sm text-muted-foreground space-y-1">
                 <li>• AI-powered content generation using GPT-5.2</li>
                 <li>• Human-like, HR-defensible review language</li>
-                <li>• Focus on 6 key KPIs: Per Person Average, Glassware $ Per Guest, Per Person Liquor Beer Wine, Landry&apos;s Select Card Ratio, Metric Bonus Points, Cumulative Score</li>
+                <li>• Focus on 6 key KPIs: PPA, GPG, PPLBW, LSC Ratio, Bonus Points, Score</li>
                 <li>• Professional PDF with Bubba Gump branding</li>
-                <li>• Marketing-style document formatting</li>
               </ul>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Line Graph Upload Section */}
-        <Card className="bubba-card mb-8" data-testid="line-graph-upload-card">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="w-5 h-5" />
-              Employee Line Graph (Optional)
-            </CardTitle>
-            <CardDescription>
-              Upload a quarterly PDF/image that will be appended as page 2 to the selected employee&apos;s review.
-            </CardDescription>
-          </CardHeader>
+        <div className="bubba-card mb-8 overflow-hidden" data-testid="line-graph-upload-card">
+          <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-16 h-6 bg-secondary/80 rotate-[1deg] shadow-sm z-10" />
+          <div className="p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-full bg-secondary/10">
+                <Anchor className="w-5 h-5 text-secondary" />
+              </div>
+              <div>
+                <h2 className="text-xl font-serif font-bold text-foreground">Crew Line Graph</h2>
+                <p className="text-sm text-muted-foreground">Upload quarterly chart for page 2</p>
+              </div>
+            </div>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div className="space-y-2">
