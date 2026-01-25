@@ -9,14 +9,23 @@
   background: hsl(var(--card));
   color: hsl(var(--card-foreground));
   border-radius: 12px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
   border-left: 4px solid hsl(var(--primary));
   transition: all 0.3s ease;
 }
 
+.dark .bubba-card {
+  background: hsl(222 35% 18%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
 .bubba-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 25px -5px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+}
+
+.dark .bubba-card:hover {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
 }
 
 .bubba-btn-primary {
