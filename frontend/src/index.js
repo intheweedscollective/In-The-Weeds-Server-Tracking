@@ -19,9 +19,11 @@ if (typeof window !== "undefined") {
 }
 
 
-// Default to dark theme (user preference) and allow future toggle
+// Theme init (default: dark). Stored in localStorage as: theme = 'dark' | 'light'
 if (typeof document !== "undefined") {
-  document.documentElement.classList.add("dark");
+  const saved = window.localStorage.getItem("theme");
+  const theme = saved === "light" ? "light" : "dark";
+  document.documentElement.classList.toggle("dark", theme === "dark");
 }
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
