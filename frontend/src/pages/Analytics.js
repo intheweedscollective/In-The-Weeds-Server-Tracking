@@ -217,7 +217,7 @@ export default function Analytics() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-paper-bg">
+      <div className="min-h-screen bg-background">
         <Navigation />
         <div className="flex items-center justify-center h-96">
           <div className="loading-spinner"></div>
@@ -227,27 +227,27 @@ export default function Analytics() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background relative overflow-hidden">
+      {/* Decorative splashes */}
+      <div className="splash-blue" style={{ top: '10%', right: '5%' }} />
+      <div className="splash-red" style={{ bottom: '20%', left: '3%', opacity: 0.5 }} />
+      
       <Navigation />
       
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-            <Link to="/" className="print:hidden">
-              <Button variant="outline" size="sm" className="w-full sm:w-auto">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Dashboard
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-3xl font-serif font-bold text-primary mb-2" data-testid="page-title">
-                📊 Performance Analytics
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <BarChart3 className="w-8 h-8 text-secondary" />
+              <h1 className="text-3xl font-serif font-black text-foreground" data-testid="page-title">
+                Performance Analytics
               </h1>
-              <p className="text-muted-foreground" data-testid="page-subtitle">
-                Performance distribution and benchmark analysis for all metrics
-              </p>
             </div>
+            <p className="text-gray-500" data-testid="page-subtitle">
+              Performance distribution and benchmark analysis for all metrics
+            </p>
+          </div>
           </div>
 
           <Button
