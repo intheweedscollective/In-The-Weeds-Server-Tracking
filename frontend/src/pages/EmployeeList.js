@@ -220,19 +220,31 @@ export default function EmployeeList() {
                       </span>
                     </div>
                     
-                    {/* KPI Grid */}
+                    {/* All 6 Metrics Grid */}
                     <div className="grid grid-cols-3 gap-2 mb-4">
-                      <div className="text-center p-2 bg-gray-50 rounded-lg">
+                      <div className="text-center p-2 bg-red-50 rounded-lg border border-red-100">
                         <div className="text-lg font-serif font-bold text-primary">{formatNumber(employee.cumulative_score)}</div>
                         <div className="text-[10px] text-gray-500 font-semibold uppercase">Score</div>
                       </div>
-                      <div className="text-center p-2 bg-gray-50 rounded-lg">
+                      <div className="text-center p-2 bg-blue-50 rounded-lg border border-blue-100">
                         <div className="text-sm font-serif font-bold text-secondary">{formatCurrency(employee.ppa)}</div>
                         <div className="text-[10px] text-gray-500 font-semibold uppercase">PPA</div>
                       </div>
-                      <div className="text-center p-2 bg-gray-50 rounded-lg">
+                      <div className="text-center p-2 bg-gray-50 rounded-lg border border-gray-200">
                         <div className="text-sm font-serif font-bold text-gray-700">{formatCurrency(employee.gpg)}</div>
                         <div className="text-[10px] text-gray-500 font-semibold uppercase">GPG</div>
+                      </div>
+                      <div className="text-center p-2 bg-purple-50 rounded-lg border border-purple-100">
+                        <div className="text-sm font-serif font-bold text-purple-700">{formatCurrency(employee.pplbw)}</div>
+                        <div className="text-[10px] text-gray-500 font-semibold uppercase">PPLBW</div>
+                      </div>
+                      <div className="text-center p-2 bg-green-50 rounded-lg border border-green-100">
+                        <div className="text-sm font-serif font-bold text-green-700">{formatLSCRatio(employee.lsc_ratio)}</div>
+                        <div className="text-[10px] text-gray-500 font-semibold uppercase">LSC</div>
+                      </div>
+                      <div className="text-center p-2 bg-yellow-50 rounded-lg border border-yellow-100">
+                        <div className="text-sm font-serif font-bold text-yellow-700">{formatNumber(employee.metric_bonus_points)}</div>
+                        <div className="text-[10px] text-gray-500 font-semibold uppercase">Bonus</div>
                       </div>
                     </div>
                     
