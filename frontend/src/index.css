@@ -19,20 +19,20 @@ code {
 
 @layer base {
     :root {
-        /* Bubba Gump Light Theme - Inspired by the cocktail menu */
-        --background: 0 0% 98%; /* Bright white/cream */
-        --foreground: 215 25% 20%; /* Dark slate for text */
-        --card: 0 0% 100%; /* Pure white cards */
+        /* Bubba Gump Bright Theme - Cocktail Menu Inspired */
+        --background: 0 0% 98%;
+        --foreground: 215 25% 20%;
+        --card: 0 0% 100%;
         --card-foreground: 215 25% 20%;
         --popover: 0 0% 100%;
         --popover-foreground: 215 25% 20%;
-        --primary: 0 72% 50%; /* Bubba Red #D12E2E */
+        --primary: 0 72% 50%;
         --primary-foreground: 0 0% 100%;
-        --secondary: 209 100% 30%; /* Ocean Blue #005B96 */
+        --secondary: 209 100% 30%;
         --secondary-foreground: 0 0% 100%;
-        --muted: 210 20% 96%; /* Light gray-blue */
+        --muted: 210 20% 96%;
         --muted-foreground: 215 16% 47%;
-        --accent: 47 95% 55%; /* Sunshine Yellow */
+        --accent: 47 95% 55%;
         --accent-foreground: 215 25% 20%;
         --destructive: 0 84% 60%;
         --destructive-foreground: 0 0% 98%;
@@ -46,29 +46,6 @@ code {
         --chart-5: 27 87% 52%;
         --radius: 0.75rem;
     }
-    
-    /* Keep dark mode minimal - just invert basics */
-    .dark {
-        --background: 220 20% 14%;
-        --foreground: 210 40% 98%;
-        --card: 220 20% 18%;
-        --card-foreground: 210 40% 98%;
-        --popover: 220 20% 18%;
-        --popover-foreground: 210 40% 98%;
-        --primary: 0 72% 55%;
-        --primary-foreground: 0 0% 100%;
-        --secondary: 209 100% 45%;
-        --secondary-foreground: 0 0% 100%;
-        --muted: 220 15% 25%;
-        --muted-foreground: 215 20% 65%;
-        --accent: 47 95% 55%;
-        --accent-foreground: 220 20% 14%;
-        --destructive: 0 62% 55%;
-        --destructive-foreground: 0 0% 100%;
-        --border: 220 15% 30%;
-        --input: 220 15% 30%;
-        --ring: 209 100% 45%;
-    }
 }
 
 @layer base {
@@ -77,11 +54,5 @@ code {
     }
     body {
         @apply bg-background text-foreground;
-    }
-}
-
-@layer base {
-    [data-debug-wrapper="true"] {
-        display: contents !important;
     }
 }
