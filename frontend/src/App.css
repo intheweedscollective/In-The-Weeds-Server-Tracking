@@ -37,9 +37,9 @@
 }
 
 .bubba-btn-secondary {
-  background: white;
-  color: #005B96;
-  border: 2px solid #005B96;
+  background: hsl(var(--card));
+  color: hsl(var(--secondary));
+  border: 2px solid hsl(var(--secondary));
   border-radius: 25px;
   padding: 10px 30px;
   font-weight: 500;
@@ -48,8 +48,8 @@
 }
 
 .bubba-btn-secondary:hover {
-  background: #005B96;
-  color: white;
+  background: hsl(var(--secondary));
+  color: hsl(var(--secondary-foreground));
   transform: translateY(-1px);
 }
 
