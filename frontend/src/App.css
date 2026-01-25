@@ -6,10 +6,11 @@
 }
 
 .bubba-card {
-  background: white;
+  background: hsl(var(--card));
+  color: hsl(var(--card-foreground));
   border-radius: 12px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  border-left: 4px solid #D12E2E;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.25);
+  border-left: 4px solid hsl(var(--primary));
   transition: all 0.3s ease;
 }
 
