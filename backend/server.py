@@ -27,7 +27,16 @@ from pypdf import PdfReader, PdfWriter
 from pdf_top_performers import build_top_performers_pdf
 from pdf_analytics import build_analytics_pdf
 
-
+# Import new scoring engine
+from scoring_engine import (
+    EmployeeV2, QuarterSettings, 
+    validate_upload_columns, validate_upload_data, validate_employee_row,
+    calculate_derived_metrics, calculate_normalized_scores, 
+    calculate_bonus_points, calculate_total_score,
+    calculate_rankings, calculate_performance_tiers, run_full_scoring,
+    suggest_benchmarks_from_previous, calculate_previous_quarter_averages,
+    CANONICAL_COLUMN_MAPPING
+)
 
 from io import BytesIO
 
