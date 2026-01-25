@@ -7,8 +7,7 @@ import axios from "axios";
 import Navigation from "../components/Navigation";
 import StatsCard from "../components/StatsCard";
 import { Button } from "../components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
-import { formatCurrency, formatLSCRatio, formatNumber, getPerformanceLevel, getBenchmarkStatus, KPI_DEFINITIONS, formatOverallRank, formatRanking, getRankingHierarchy } from "../utils/formatters";
+import { formatCurrency, formatLSCRatio, formatNumber, getPerformanceLevel, KPI_DEFINITIONS, formatOverallRank, formatRanking, getRankingHierarchy } from "../utils/formatters";
 
 import ConfirmDialog from "../components/ConfirmDialog";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -77,9 +76,7 @@ export default function Dashboard() {
 
     try {
       const response = await axios.post(`${API}/upload-excel`, formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
+        headers: { "Content-Type": "multipart/form-data" },
       });
 
       if (response.data.success) {
@@ -121,35 +118,38 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Paper texture overlay */}
-      <div className="fixed inset-0 pointer-events-none paper-texture" />
+    <div className="min-h-screen bg-background relative overflow-hidden">
+      {/* Decorative splashes like the cocktail menu */}
+      <div className="splash-red" style={{ top: '10%', right: '5%', transform: 'rotate(-15deg)' }} />
+      <div className="splash-blue" style={{ top: '25%', left: '3%', transform: 'rotate(20deg)' }} />
+      <div className="splash-red" style={{ bottom: '20%', left: '8%', transform: 'rotate(-30deg)', opacity: 0.5 }} />
+      <div className="splash-blue" style={{ bottom: '10%', right: '10%', transform: 'rotate(15deg)', opacity: 0.6 }} />
       
       <Navigation />
       
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header with Bubba Gump styling */}
-        <div className="text-center mb-12">
-          <div className="flex items-center justify-center gap-5 mb-6">
+        {/* Header */}
+        <div className="text-center mb-10">
+          <div className="flex items-center justify-center gap-5 mb-4">
             <img 
               src="https://customer-assets.emergentagent.com/job_beaba37a-d1bc-43b6-b0ee-0f4c332229d2/artifacts/shpi6789_IMG_0599.png" 
               alt="Bubba Gump Logo" 
-              className="w-24 h-24 rounded-full shadow-xl ring-4 ring-primary/20"
+              className="w-24 h-24 rounded-full shadow-xl border-4 border-white"
               data-testid="bubba-gump-logo"
             />
             <div className="text-left">
               <h1 className="text-4xl md:text-5xl font-serif font-black text-primary tracking-tight" data-testid="main-title">
                 Performance Hub
               </h1>
-              <p className="text-lg text-muted-foreground mt-1 font-medium italic" data-testid="main-subtitle">
-                "Life is like a box of reviews..."
+              <p className="text-lg text-secondary font-medium italic" data-testid="main-subtitle">
+                Quarterly Crew Reviews
               </p>
             </div>
           </div>
         </div>
 
-        {/* Stats Dashboard - Captain's Scoreboard */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-12" data-testid="stats-dashboard">
+        {/* Stats Dashboard */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-10" data-testid="stats-dashboard">
           <StatsCard 
             icon={Users}
             title="Crew Members"
@@ -182,28 +182,27 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* Main Actions - Bento Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* Main Actions */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
           <ConfirmDialog
             open={confirmClearOpen}
             onOpenChange={setConfirmClearOpen}
             title="Clear all crew data?"
-            description="This will permanently delete all employee records. This action cannot be undone - even Forrest couldn't run from this!"
+            description="This will permanently delete all employee records. This action cannot be undone!"
             confirmText="Clear All"
             cancelText="Cancel"
             onConfirm={clearAllEmployees}
             variant="destructive"
           />
           
-          {/* File Upload - The Fishing Net */}
-          <div className="bubba-card overflow-hidden" data-testid="upload-card">
-            {/* Tape decoration */}
-            <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-16 h-6 bg-accent/80 rotate-[-2deg] shadow-sm z-10" />
+          {/* File Upload */}
+          <div className="bubba-card" data-testid="upload-card">
+            <div className="tape tape-blue" style={{ top: '-8px', left: '50%', transform: 'translateX(-50%) rotate(-2deg)' }} />
             
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
+            <div className="p-6 pt-8">
+              <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-full bg-secondary/10">
+                  <div className="w-12 h-12 rounded-full bg-secondary/10 flex items-center justify-center">
                     <Anchor className="w-6 h-6 text-secondary" />
                   </div>
                   <div>
@@ -211,7 +210,7 @@ export default function Dashboard() {
                       Cast Your Net
                     </h2>
                     <p className="text-sm text-muted-foreground">
-                      Upload employee performance data
+                      Upload employee data
                     </p>
                   </div>
                 </div>
@@ -219,7 +218,7 @@ export default function Dashboard() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="text-destructive hover:bg-destructive/10"
+                    className="text-destructive hover:bg-destructive/10 font-semibold"
                     onClick={() => setConfirmClearOpen(true)}
                     data-testid="clear-all-employees-btn"
                   >
@@ -235,22 +234,22 @@ export default function Dashboard() {
               >
                 <input {...getInputProps()} />
                 {uploading ? (
-                  <div className="flex flex-col items-center py-8" data-testid="uploading-state">
+                  <div className="flex flex-col items-center py-6" data-testid="uploading-state">
                     <div className="loading-spinner mb-4"></div>
-                    <p className="text-primary font-serif font-semibold">Hauling in your catch...</p>
+                    <p className="text-primary font-serif font-bold">Hauling in your catch...</p>
                   </div>
                 ) : (
-                  <div className="py-8" data-testid="upload-ready-state">
+                  <div className="py-6 text-center" data-testid="upload-ready-state">
                     <div className="relative mx-auto w-16 h-16 mb-4">
-                      <Fish className="w-16 h-16 text-secondary/30 absolute animate-pulse" />
-                      <Upload className="w-8 h-8 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                      <Fish className="w-16 h-16 text-secondary/20" />
+                      <Upload className="w-7 h-7 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
                     </div>
-                    <p className="text-lg font-serif font-semibold text-foreground mb-2">
-                      {isDragActive ? 'Drop it like it\'s hot!' : 'Drag & drop your Excel file'}
+                    <p className="text-lg font-serif font-bold text-foreground mb-1">
+                      {isDragActive ? 'Drop it like it\'s hot!' : 'Drag & drop Excel file'}
                     </p>
-                    <p className="text-muted-foreground mb-3">or click to browse</p>
-                    <span className="inline-block px-3 py-1 bg-muted rounded-full text-xs font-medium text-muted-foreground">
-                      .xlsx, .xls supported
+                    <p className="text-muted-foreground text-sm mb-3">or click to browse</p>
+                    <span className="inline-block px-4 py-1.5 bg-muted rounded-full text-xs font-semibold text-muted-foreground">
+                      .xlsx, .xls
                     </span>
                   </div>
                 )}
@@ -259,13 +258,12 @@ export default function Dashboard() {
           </div>
 
           {/* Quick Actions */}
-          <div className="bubba-card overflow-hidden" data-testid="quick-actions-card">
-            {/* Tape decoration */}
-            <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-16 h-6 bg-primary/80 rotate-[2deg] shadow-sm z-10" />
+          <div className="bubba-card" data-testid="quick-actions-card">
+            <div className="tape tape-red" style={{ top: '-8px', left: '50%', transform: 'translateX(-50%) rotate(2deg)' }} />
             
-            <div className="p-6">
+            <div className="p-6 pt-8">
               <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 rounded-full bg-primary/10">
+                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
                   <FileText className="w-6 h-6 text-primary" />
                 </div>
                 <div>
@@ -273,7 +271,7 @@ export default function Dashboard() {
                     Quick Actions
                   </h2>
                   <p className="text-sm text-muted-foreground">
-                    Manage your crew and reviews
+                    Manage your crew
                   </p>
                 </div>
               </div>
@@ -282,7 +280,7 @@ export default function Dashboard() {
                 <Link to="/employees" className="block" data-testid="view-employees-link">
                   <button className="bubba-btn-primary w-full flex items-center justify-center gap-2">
                     <Users className="w-5 h-5" />
-                    View All Crew Members
+                    View All Crew
                   </button>
                 </Link>
                 
@@ -294,32 +292,23 @@ export default function Dashboard() {
                 </Link>
               </div>
 
-              <div className="mt-6 pt-6 border-t border-border" data-testid="system-info">
-                <h4 className="font-serif font-semibold text-foreground mb-3 flex items-center gap-2">
-                  <Anchor className="w-4 h-4 text-secondary" />
-                  Ship Status
+              <div className="mt-6 pt-5 border-t-2 border-dashed border-border" data-testid="system-info">
+                <h4 className="font-serif font-bold text-foreground mb-3 flex items-center gap-2 text-sm">
+                  <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                  System Status
                 </h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Database:</span>
-                    <span className="text-green-600 dark:text-green-400 font-semibold flex items-center gap-1">
-                      <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                      Connected
-                    </span>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div className="text-center p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                    <div className="font-bold text-green-600">Online</div>
+                    <div className="text-muted-foreground">Database</div>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">AI Service:</span>
-                    <span className="text-green-600 dark:text-green-400 font-semibold flex items-center gap-1">
-                      <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                      Ready
-                    </span>
+                  <div className="text-center p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                    <div className="font-bold text-green-600">Ready</div>
+                    <div className="text-muted-foreground">AI</div>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">PDF Generation:</span>
-                    <span className="text-green-600 dark:text-green-400 font-semibold flex items-center gap-1">
-                      <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                      Available
-                    </span>
+                  <div className="text-center p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                    <div className="font-bold text-green-600">Active</div>
+                    <div className="text-muted-foreground">PDF</div>
                   </div>
                 </div>
               </div>
@@ -329,17 +318,16 @@ export default function Dashboard() {
 
         {/* Recent Employees Preview */}
         {employees.length > 0 && (
-          <div className="bubba-card overflow-hidden" data-testid="recent-employees-card">
-            {/* Tape decoration */}
-            <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-20 h-6 bg-accent/80 rotate-[-1deg] shadow-sm z-10" />
+          <div className="bubba-card" data-testid="recent-employees-card">
+            <div className="tape" style={{ top: '-8px', left: '50%', transform: 'translateX(-50%) rotate(-1deg)' }} />
             
-            <div className="p-6">
+            <div className="p-6 pt-8">
               <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 rounded-full bg-accent/20">
-                  <Award className="w-6 h-6 text-accent-foreground" />
+                <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center">
+                  <Award className="w-6 h-6 text-yellow-600" />
                 </div>
                 <h2 className="text-xl font-serif font-bold text-foreground">
-                  Crew Performance Overview
+                  Crew Performance
                 </h2>
               </div>
               
@@ -350,27 +338,27 @@ export default function Dashboard() {
                   return (
                     <div 
                       key={employee.id} 
-                      className="p-4 rounded-xl border border-border bg-muted/30 hover:bg-muted/50 transition-colors"
+                      className="p-4 rounded-xl border-2 border-border bg-muted/20 hover:bg-muted/40 transition-colors"
                       data-testid={`employee-overview-${employee.id}`}
                     >
                       <div className="flex items-start justify-between mb-4">
                         <div>
-                          <h3 className="text-lg font-serif font-semibold text-foreground" data-testid={`employee-name-${employee.id}`}>
+                          <h3 className="text-lg font-serif font-bold text-foreground" data-testid={`employee-name-${employee.id}`}>
                             {employee.name}
                           </h3>
                           <p className="text-muted-foreground text-sm" data-testid={`employee-position-${employee.id}`}>
                             {employee.position}
                           </p>
                           {(employee.overall_rank || employee.ranking) && (
-                            <div className="flex gap-2 mt-1">
+                            <div className="flex gap-2 mt-1.5">
                               {employee.overall_rank && (
-                                <span className="text-xs bg-secondary/10 text-secondary px-2 py-1 rounded-full font-medium">
+                                <span className="text-xs bg-secondary/10 text-secondary px-2.5 py-1 rounded-full font-bold">
                                   Rank: {formatOverallRank(employee.overall_rank)}
                                 </span>
                               )}
                               {employee.ranking && (
-                                <span className={`text-xs px-2 py-1 rounded-full font-medium ${getRankingHierarchy(employee.ranking).bgColor} ${getRankingHierarchy(employee.ranking).color}`}>
-                                  {formatRanking(employee.ranking)} - {getRankingHierarchy(employee.ranking).level}
+                                <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${getRankingHierarchy(employee.ranking).bgColor} ${getRankingHierarchy(employee.ranking).color}`}>
+                                  {formatRanking(employee.ranking)}
                                 </span>
                               )}
                             </div>
@@ -381,61 +369,21 @@ export default function Dashboard() {
                         </span>
                       </div>
                       
-                      {/* All 6 Metrics Quick View */}
-                      <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
-                        <div className="text-center p-2 rounded-lg bg-background/50">
-                          <div className="text-base font-serif font-bold text-primary">
-                            {formatCurrency(employee.ppa)}
+                      {/* Metrics */}
+                      <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+                        {[
+                          { val: formatCurrency(employee.ppa), label: KPI_DEFINITIONS.ppa.shortName, color: 'text-primary' },
+                          { val: formatCurrency(employee.gpg), label: KPI_DEFINITIONS.gpg.shortName, color: 'text-secondary' },
+                          { val: formatCurrency(employee.pplbw), label: KPI_DEFINITIONS.pplbw.shortName, color: 'text-foreground' },
+                          { val: formatLSCRatio(employee.lsc_ratio), label: KPI_DEFINITIONS.lsc_ratio.shortName, color: 'text-foreground' },
+                          { val: formatNumber(employee.metric_bonus_points), label: KPI_DEFINITIONS.metric_bonus_points.shortName, color: 'text-yellow-600' },
+                          { val: formatNumber(employee.cumulative_score), label: 'Score', color: 'text-primary font-black' },
+                        ].map((m, i) => (
+                          <div key={i} className="text-center p-2 rounded-lg bg-background border border-border">
+                            <div className={`text-sm font-serif font-bold ${m.color}`}>{m.val}</div>
+                            <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">{m.label}</div>
                           </div>
-                          <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                            {KPI_DEFINITIONS.ppa.shortName}
-                          </div>
-                        </div>
-                        
-                        <div className="text-center p-2 rounded-lg bg-background/50">
-                          <div className="text-base font-serif font-bold text-secondary">
-                            {formatCurrency(employee.gpg)}
-                          </div>
-                          <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                            {KPI_DEFINITIONS.gpg.shortName}
-                          </div>
-                        </div>
-                        
-                        <div className="text-center p-2 rounded-lg bg-background/50">
-                          <div className="text-base font-serif font-bold text-foreground">
-                            {formatCurrency(employee.pplbw)}
-                          </div>
-                          <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                            {KPI_DEFINITIONS.pplbw.shortName}
-                          </div>
-                        </div>
-                        
-                        <div className="text-center p-2 rounded-lg bg-background/50">
-                          <div className="text-base font-serif font-bold text-foreground">
-                            {formatLSCRatio(employee.lsc_ratio)}
-                          </div>
-                          <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                            {KPI_DEFINITIONS.lsc_ratio.shortName}
-                          </div>
-                        </div>
-                        
-                        <div className="text-center p-2 rounded-lg bg-background/50">
-                          <div className="text-base font-serif font-bold text-accent-foreground">
-                            {formatNumber(employee.metric_bonus_points)}
-                          </div>
-                          <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                            {KPI_DEFINITIONS.metric_bonus_points.shortName}
-                          </div>
-                        </div>
-                        
-                        <div className="text-center p-2 rounded-lg bg-primary/10">
-                          <div className="text-lg font-serif font-black text-primary">
-                            {formatNumber(employee.cumulative_score)}
-                          </div>
-                          <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                            {KPI_DEFINITIONS.cumulative_score.shortName}
-                          </div>
-                        </div>
+                        ))}
                       </div>
                     </div>
                   );
@@ -457,10 +405,13 @@ export default function Dashboard() {
 
         {/* Empty State */}
         {employees.length === 0 && (
-          <div className="bubba-card p-12 text-center">
-            <Fish className="w-16 h-16 text-muted-foreground/30 mx-auto mb-4" />
+          <div className="bubba-card p-10 text-center">
+            <Fish className="w-20 h-20 text-secondary/20 mx-auto mb-4" />
             <p className="empty-state-quote">
               Mama always said, you gotta upload some data before you can see results.
+            </p>
+            <p className="text-sm text-muted-foreground mt-4">
+              Drop an Excel file above to get started
             </p>
           </div>
         )}
