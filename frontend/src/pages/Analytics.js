@@ -255,45 +255,46 @@ export default function Analytics() {
             className="bubba-btn-primary w-full sm:w-auto print:hidden"
             data-testid="download-analytics-pdf"
           >
-            Download / Open PDF Report
+            <Download className="w-4 h-4 mr-2" />
+            Download PDF
           </Button>
         </div>
 
         {/* Overview Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
-          <Card className="bubba-card">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <TrendingUp className="w-8 h-8 text-green-500" />
-                <div>
-                  <p className="text-2xl font-bold text-primary">
-                    {getPercentage(
-                      Object.values(analytics).reduce((sum, metric) => sum + (metric.benchmark || 0), 0),
-                      Object.values(analytics).reduce((sum, metric) => sum + (metric.total || 0), 0)
-                    )}%
-                  </p>
-                  <p className="text-sm text-muted-foreground">Above Benchmark</p>
-                </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+          <div className="bubba-card p-5">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                <TrendingUp className="w-6 h-6 text-green-600" />
               </div>
-            </CardContent>
-          </Card>
+              <div>
+                <p className="text-2xl font-serif font-bold text-primary">
+                  {getPercentage(
+                    Object.values(analytics).reduce((sum, metric) => sum + (metric.benchmark || 0), 0),
+                    Object.values(analytics).reduce((sum, metric) => sum + (metric.total || 0), 0)
+                  )}%
+                </p>
+                <p className="text-xs text-gray-500 font-semibold uppercase">Above Benchmark</p>
+              </div>
+            </div>
+          </div>
           
-          <Card className="bubba-card">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <BarChart3 className="w-8 h-8 text-blue-500" />
-                <div>
-                  <p className="text-2xl font-bold text-primary">
-                    {getPercentage(
-                      Object.values(analytics).reduce((sum, metric) => sum + (metric.high || 0), 0),
-                      Object.values(analytics).reduce((sum, metric) => sum + (metric.total || 0), 0)
-                    )}%
-                  </p>
-                  <p className="text-sm text-muted-foreground">High Performers</p>
-                </div>
+          <div className="bubba-card p-5">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                <BarChart3 className="w-6 h-6 text-blue-600" />
               </div>
-            </CardContent>
-          </Card>
+              <div>
+                <p className="text-2xl font-serif font-bold text-secondary">
+                  {getPercentage(
+                    Object.values(analytics).reduce((sum, metric) => sum + (metric.high || 0), 0),
+                    Object.values(analytics).reduce((sum, metric) => sum + (metric.total || 0), 0)
+                  )}%
+                </p>
+                <p className="text-xs text-gray-500 font-semibold uppercase">High Performers</p>
+              </div>
+            </div>
+          </div>
           
           <Card className="bubba-card">
             <CardContent className="pt-6">
