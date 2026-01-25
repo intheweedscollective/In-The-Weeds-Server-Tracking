@@ -7,7 +7,7 @@ import axios from "axios";
 import Navigation from "../components/Navigation";
 import StatsCard from "../components/StatsCard";
 import { Button } from "../components/ui/button";
-import { formatCurrency, formatNumber } from "../utils/formatters";
+import { formatNumber } from "../utils/formatters";
 import ConfirmDialog from "../components/ConfirmDialog";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -52,46 +52,7 @@ export default function Dashboard() {
     });
   }, [employees]);
 
-  useEffect(() => {
-    fetchEmployees();
-    fetchQuarterSettings();
-  }, []);
-
-  useEffect(() => {
-    fetchQuarterSettings();
-    fetchEmployeesForQuarter();
-  }, [selectedYear, selectedQuarter]);
-
-  useEffect(() => {
-    calculateStats();
-  }, [employees, calculateStats]);
-
-  const fetchEmployees = async () => {
-    try {
-      // Try V2 first
-      const v2Response = await axios.get(`${API}/v2/employees`);
-      if (v2Response.data.length > 0) {
-        setEmployees(v2Response.data);
-        return;
-      }
-      // Fall back to V1
-      const response = await axios.get(`${API}/employees`);
-      setEmployees(response.data);
-    } catch (error) {
-      console.error("Error fetching employees:", error);
-    }
-  };
-
-  const fetchEmployeesForQuarter = async () => {
-    try {
-      const response = await axios.get(`${API}/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`);
-      setEmployees(response.data);
-    } catch (error) {
-      console.error("Error fetching employees:", error);
-    }
-  };
-
-  const fetchQuarterSettings = async () => {
+  const fetchQuarterSettings = useCallback(async () => {
     try {
       const response = await axios.get(`${API}/v2/quarter-settings/${selectedYear}/${selectedQuarter}`);
       setQuarterSettings(response.data);
@@ -100,7 +61,26 @@ export default function Dashboard() {
         setQuarterSettings(null);
       }
     }
-  };
+  }, [selectedYear, selectedQuarter]);
+
+  const fetchEmployeesForQuarter = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API}/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`);
+      setEmployees(response.data);
+    } catch (error) {
+      console.error("Error fetching employees:", error);
+    }
+  }, [selectedYear, selectedQuarter]);
+
+  useEffect(() => {
+    // Initial load - fetch for current quarter
+    fetchQuarterSettings();
+    fetchEmployeesForQuarter();
+  }, [fetchQuarterSettings, fetchEmployeesForQuarter]);
+
+  useEffect(() => {
+    calculateStats();
+  }, [employees, calculateStats]);
 
   const validateFile = async (file) => {
     const formData = new FormData();
