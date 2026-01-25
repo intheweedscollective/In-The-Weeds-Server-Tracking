@@ -1,7 +1,8 @@
 /* Bubba Gump Branding Styles */
 .bubba-header {
-  background: linear-gradient(135deg, #D12E2E 0%, #B91C1C 100%);
-  color: white;
+  /* Use CSS variables so it adapts to dark/light */
+  background: linear-gradient(135deg, hsl(var(--secondary)) 0%, hsl(var(--primary)) 100%);
+  color: hsl(var(--primary-foreground));
 }
 
 .bubba-card {
