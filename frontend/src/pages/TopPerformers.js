@@ -118,7 +118,7 @@ export default function TopPerformers() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-paper-bg">
+      <div className="min-h-screen bg-background">
         <Navigation />
         <div className="flex items-center justify-center h-96">
           <div className="loading-spinner"></div>
@@ -128,27 +128,26 @@ export default function TopPerformers() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background relative overflow-hidden">
+      {/* Decorative splashes */}
+      <div className="splash-red" style={{ top: '8%', right: '5%' }} />
+      <div className="splash-blue" style={{ bottom: '15%', left: '3%', opacity: 0.5 }} />
+      
       <Navigation />
       
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-            <Link to="/" className="print:hidden">
-              <Button variant="outline" size="sm" className="w-full sm:w-auto">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Dashboard
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-3xl font-serif font-bold text-primary mb-2" data-testid="page-title">
-                🏆 Top Performers Report
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <Trophy className="w-8 h-8 text-yellow-500" />
+              <h1 className="text-3xl font-serif font-black text-foreground" data-testid="page-title">
+                Top Performers
               </h1>
-              <p className="text-muted-foreground" data-testid="page-subtitle">
-                Top 10 employees in each performance metric • Management Review
-              </p>
             </div>
+            <p className="text-gray-500" data-testid="page-subtitle">
+              Top 10 crew members in each performance metric
+            </p>
           </div>
 
           <Button
@@ -156,24 +155,24 @@ export default function TopPerformers() {
             className="bubba-btn-primary w-full sm:w-auto print:hidden"
             data-testid="print-btn"
           >
-            <Printer className="w-4 h-4 mr-2" />
-            Download PDF Report
+            <Download className="w-4 h-4 mr-2" />
+            Download PDF
           </Button>
         </div>
 
         {/* Summary Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12 print:mb-6">
-          <Card className="bubba-card">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <Users className="w-8 h-8 text-primary" />
-                <div>
-                  <p className="text-2xl font-bold text-primary">{employees.length}</p>
-                  <p className="text-sm text-muted-foreground">Total Employees</p>
-                </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10 print:mb-6">
+          <div className="bubba-card p-5">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                <Users className="w-6 h-6 text-blue-600" />
               </div>
-            </CardContent>
-          </Card>
+              <div>
+                <p className="text-2xl font-serif font-bold text-primary">{employees.length}</p>
+                <p className="text-xs text-gray-500 font-semibold uppercase">Total Crew</p>
+              </div>
+            </div>
+          </div>
           
           <Card className="bubba-card">
             <CardContent className="pt-6">
