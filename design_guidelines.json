@@ -1,18 +1,22 @@
 {
   "identity": {
-    "name": "Bubba Gump Employee Review System",
-    "tone": "Professional, Rustic, Human-Centric, Engaging",
-    "keywords": ["Seafood", "Rustic", "Warm", "Corporate", "Defensible"]
+    "name": "Bubba Gump Performance Hub",
+    "tone": "Professional, Trustworthy, Warm, Efficient",
+    "aesthetic": "Corporate Coastal - Clean lines, ample whitespace, warm accents",
+    "design_philosophy": "Clarity first. Data should be breathable. Dark mode should be 'dim' not 'black'."
   },
   "typography": {
-    "primary_font": "Merriweather",
-    "secondary_font": "Inter",
-    "scale": {
-      "h1": "text-4xl md:text-5xl font-serif font-bold tracking-tight",
-      "h2": "text-3xl md:text-4xl font-serif font-semibold",
-      "h3": "text-2xl font-serif font-medium text-primary",
-      "body": "text-base font-sans leading-relaxed text-foreground/80",
-      "caption": "text-sm font-sans text-muted-foreground uppercase tracking-wider"
+    "font_family": {
+      "headings": "Merriweather, serif",
+      "body": "Inter, sans-serif",
+      "mono": "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+    },
+    "usage": {
+      "h1": "text-3xl md:text-4xl font-bold tracking-tight text-foreground font-serif",
+      "h2": "text-2xl font-semibold tracking-tight text-foreground font-serif",
+      "h3": "text-xl font-semibold tracking-tight text-foreground font-serif",
+      "body": "text-base font-normal leading-relaxed text-muted-foreground font-sans",
+      "small": "text-sm font-medium leading-none text-muted-foreground font-sans"
     }
   },
   "colors": {
@@ -20,85 +24,103 @@
       "primary": "#D12E2E",
       "secondary": "#005B96",
       "accent": "#F4D03F",
-      "background": "#F9F7F2",
-      "foreground": "#2C3E50",
-      "muted": "#E5E7EB",
-      "card": "#FFFFFF",
-      "border": "#D1D5DB"
+      "success": "#10B981",
+      "warning": "#F59E0B",
+      "error": "#EF4444",
+      "info": "#3B82F6"
     },
-    "semantic": {
-      "brand_red": "#D12E2E",
-      "brand_blue": "#005B96",
-      "brand_yellow": "#F4D03F",
-      "wood_texture": "#8B5A2B",
-      "paper_bg": "#F9F7F2"
+    "theme_light": {
+      "background": "#F9FAFB",
+      "foreground": "#0F172A",
+      "card": "#FFFFFF",
+      "card_foreground": "#1E293B",
+      "border": "#E2E8F0",
+      "input": "#E2E8F0",
+      "muted": "#F1F5F9",
+      "muted_foreground": "#64748B"
+    },
+    "theme_dark": {
+      "background": "#0F172A",
+      "foreground": "#F8FAFC",
+      "card": "#1E293B",
+      "card_foreground": "#F8FAFC",
+      "border": "#334155",
+      "input": "#334155",
+      "muted": "#1E293B",
+      "muted_foreground": "#94A3B8"
+    },
+    "gradients": {
+      "brand_subtle": "bg-gradient-to-br from-blue-50 to-red-50 dark:from-slate-900 dark:to-slate-800",
+      "card_hover": "hover:bg-accent/5 transition-colors duration-300"
     }
   },
   "layout": {
-    "spacing": "Generous (2x standard)",
-    "container": "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
-    "grid_system": "Bento Grid (Mode A for PDF, Mode B for Dashboard)",
-    "radius": "rounded-lg"
+    "spacing": {
+      "container_padding": "p-6 md:p-8 lg:p-12",
+      "section_gap": "gap-8",
+      "card_padding": "p-6"
+    },
+    "grid": {
+      "dashboard": "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6",
+      "form": "grid grid-cols-1 md:grid-cols-2 gap-6"
+    },
+    "radius": {
+      "default": "rounded-xl",
+      "button": "rounded-full",
+      "card": "rounded-xl"
+    }
   },
   "components": {
+    "stats_card": {
+      "structure": "flex items-center justify-between p-6 bg-card rounded-xl border border-border shadow-sm hover:shadow-md transition-all duration-200",
+      "icon_wrapper": "p-3 rounded-full bg-primary/10 text-primary",
+      "value_text": "text-3xl font-bold text-foreground font-serif",
+      "label_text": "text-sm font-medium text-muted-foreground uppercase tracking-wider"
+    },
+    "upload_zone": {
+      "container": "relative flex flex-col items-center justify-center w-full h-64 rounded-xl border-2 border-dashed border-muted-foreground/25 bg-muted/30 hover:bg-muted/50 hover:border-primary/50 transition-all duration-300 cursor-pointer",
+      "active_state": "border-primary bg-primary/5",
+      "text_primary": "mt-4 text-lg font-semibold text-foreground",
+      "text_secondary": "mt-2 text-sm text-muted-foreground"
+    },
     "buttons": {
-      "primary": "bg-[#D12E2E] hover:bg-[#B91C1C] text-white rounded-full px-8 py-3 font-medium transition-all shadow-md hover:shadow-lg",
-      "secondary": "bg-white border-2 border-[#005B96] text-[#005B96] hover:bg-[#005B96] hover:text-white rounded-full px-8 py-3 font-medium transition-all"
+      "primary": "bg-primary text-primary-foreground hover:bg-primary/90 h-11 px-8 rounded-full font-medium transition-all shadow-sm hover:shadow-md",
+      "secondary": "bg-secondary text-secondary-foreground hover:bg-secondary/90 h-11 px-8 rounded-full font-medium transition-all shadow-sm",
+      "outline": "border-2 border-input bg-background hover:bg-accent hover:text-accent-foreground h-11 px-8 rounded-full font-medium transition-all",
+      "ghost": "hover:bg-accent hover:text-accent-foreground h-10 px-4 rounded-full font-medium"
     },
-    "cards": {
-      "base": "bg-white rounded-xl border border-border shadow-sm hover:shadow-md transition-all p-6",
-      "highlight": "bg-[#F9F7F2] border-l-4 border-[#D12E2E] rounded-r-xl p-6"
-    },
-    "inputs": {
-      "base": "bg-white border-gray-300 focus:border-[#005B96] focus:ring-[#005B96] rounded-md"
+    "tables": {
+      "container": "w-full overflow-hidden rounded-xl border border-border bg-card shadow-sm",
+      "header": "bg-muted/50 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider",
+      "row": "border-b border-border hover:bg-muted/50 transition-colors",
+      "cell": "p-4 text-sm text-foreground"
     }
   },
   "visual_enhancers": {
-    "textures": "Subtle paper grain overlay on PDF backgrounds",
-    "shadows": "Soft, diffuse shadows (shadow-lg for floating elements)",
-    "gradients": "No gradients. Solid, bold colors.",
-    "icons": "Lucide React (default), use 'Fish', 'Anchor', 'Ship' for thematic elements"
-  },
-  "pdf_generation_rules": {
-    "style": "Marketing Magazine Layout",
-    "header": "Full width #D12E2E background, White text, Bubba Gump Branding",
-    "body": "Two-column layout. Left: Employee Details. Right: KPI Bento Grid.",
-    "footer": "Rustic wood color bar #8B5A2B with page numbers",
-    "typography": "Use varied font weights. Bold Serif for KPI numbers. Light Sans for labels."
-  },
-  "image_urls": {
-    "logo_placeholder": "https://images.pexels.com/photos/9663149/pexels-photo-9663149.jpeg",
-    "rustic_bg": "https://images.unsplash.com/photo-1767879721834-ce159173e3fa?crop=entropy&cs=srgb&fm=jpg&q=85",
-    "restaurant_interior": "https://images.unsplash.com/photo-1758414335367-22163f4f310c?crop=entropy&cs=srgb&fm=jpg&q=85"
+    "shadows": {
+      "soft": "shadow-[0_2px_8px_rgba(0,0,0,0.04)]",
+      "medium": "shadow-[0_8px_24px_rgba(0,0,0,0.08)]",
+      "glow": "shadow-[0_0_15px_rgba(209,46,46,0.15)]"
+    },
+    "glassmorphism": {
+      "light": "bg-white/80 backdrop-blur-md border border-white/20",
+      "dark": "bg-slate-900/80 backdrop-blur-md border border-white/10"
+    }
   },
   "instructions_to_main_agent": [
-    "Implement the 'Bubba Gump' theme by overriding Tailwind colors in tailwind.config.js.",
-    "Use 'Merriweather' for all Headings (h1-h3) and 'Inter' for body text. Import these fonts in index.css.",
-    "For the Dashboard: Use a dense 'Bento Grid' layout for employee stats.",
-    "For the PDF: This is the critical 'Marketing' piece. It must NOT look like a standard table. Use a designed layout with a colored header, sidebar for stats, and main content area for the narrative.",
-    "Use the provided image URLs for background textures where appropriate (e.g., login screen, PDF cover).",
-    "Ensure all interactive elements have data-testid attributes.",
-    "Do not use gradients. Stick to the solid Brand Red (#D12E2E) and Brand Blue (#005B96).",
-    "The PDF output should feel like a 'Certificate of Excellence' or a 'Magazine Feature', not a spreadsheet dump."
+    "UPDATE tailwind.config.js to use the new color palette defined in 'colors.theme_light' and 'colors.theme_dark'. Specifically, lighten the dark mode background from #0B1220 to #0F172A (Slate 900) and cards to #1E293B (Slate 800).",
+    "REFACTOR src/components/StatsCard.js to match the 'stats_card' component definition. Remove the old centered layout and use the new flex layout with icon on the left.",
+    "REFACTOR the upload zone in src/pages/Dashboard.js (or wherever it resides) to use the 'upload_zone' styles. Make it cleaner and less 'heavy'.",
+    "UPDATE src/index.css to apply the new global font settings and base styles.",
+    "ENSURE all buttons use the 'rounded-full' class to match the friendly Bubba Gump brand.",
+    "USE 'Merriweather' for all headings (h1-h3) and 'Inter' for body text.",
+    "ADD 'data-testid' attributes to all interactive elements as per the universal guidelines."
   ],
-  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
-    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients",
-    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
-    "Create depth through layered design elements with z-index hierarchy",
-    "Use glass-morphism effects with backdrop filters (12-24px blur)",
-    "You MUST NOT apply universal transition. Eg: transition: all. This results in breaking transforms. Always add transitions for specific interactive elements like button, input excluding transforms",
-    "You MUST NOT center align the app container, ie do not add .App { text-align: center; } in the css file. This disrupts the human natural reading flow of text",
-    "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style",
-    "NEVER: use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯📚🎭🎬🎪🎉🎊🎁🎀🎂🍰🎈🎨🎰💰💵💳🏦💎🪙💸🤑📊📈📉💹🔢🏆🥇 etc for icons.",
-    "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations. Static = dead.",
-    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
-    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations: separates good from extraordinary.",
-    "Main agent relies on these image URLs. Missing categories (especially sponsor logos) = main agent will use placeholder text which is FORBIDDEN",
-    "Prioritize using pre-existing components from src/components/ui when applicable",
-    "Create new components that match the style and conventions of existing components when needed",
-    "Examine existing components to understand the project's component patterns before creating new ones",
-    "Components MUST use named exports (export const ComponentName = ...)",
-    "Pages MUST use default exports (export default function PageName() {...})",
-    "Use sonner for toasts. Sonner component are located in /app/src/components/ui/sonner.tsx"
+  "universal_guidelines": [
+    "Do not use gradients for main backgrounds, use solid colors or very subtle noise textures.",
+    "Ensure text contrast ratios meet WCAG AA standards (4.5:1 for normal text).",
+    "Use 'lucide-react' for icons if available, otherwise stick to the existing library but ensure consistent sizing.",
+    "Avoid 'pure black' (#000000) in dark mode; use Slate-900 or Slate-950.",
+    "Avoid 'pure white' (#FFFFFF) text on dark backgrounds; use Slate-50 or Slate-100 to reduce eye strain."
   ]
 }
