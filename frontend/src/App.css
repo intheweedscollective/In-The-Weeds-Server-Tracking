@@ -1,168 +1,175 @@
-/* Bubba Gump Branding Styles */
-.bubba-header {
-  /* Use CSS variables so it adapts to dark/light */
-  background: linear-gradient(135deg, hsl(var(--secondary)) 0%, hsl(var(--primary)) 100%);
-  color: hsl(var(--primary-foreground));
+/* Bubba Gump Performance Hub - Corporate Coastal Design */
+
+/* Stats/KPI Cards - Clean horizontal layout */
+.kpi-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 1rem;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
+.kpi-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+.dark .kpi-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.kpi-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: hsl(var(--foreground));
+  font-family: 'Merriweather', serif;
+  line-height: 1;
+}
+
+.kpi-label {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  margin-top: 4px;
+}
+
+/* Main Cards - Clean with subtle left accent */
 .bubba-card {
   background: hsl(var(--card));
   color: hsl(var(--card-foreground));
-  border-radius: 12px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-  border-left: 4px solid hsl(var(--primary));
-  transition: all 0.3s ease;
-}
-
-.dark .bubba-card {
-  background: hsl(222 35% 18%);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  border-radius: 1rem;
+  border: 1px solid hsl(var(--border));
+  border-left: 3px solid hsl(var(--primary));
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .bubba-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
 }
 
 .dark .bubba-card:hover {
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
+/* Upload Zone - Minimalist dashed border */
+.upload-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 12rem;
+  border: 2px dashed hsl(var(--muted-foreground) / 0.25);
+  border-radius: 1rem;
+  background: hsl(var(--muted) / 0.3);
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.upload-zone:hover {
+  border-color: hsl(var(--primary) / 0.5);
+  background: hsl(var(--muted) / 0.5);
+}
+
+.upload-zone.drag-over {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.05);
+}
+
+/* Buttons - Rounded pill style */
 .bubba-btn-primary {
   background: hsl(var(--primary));
   color: hsl(var(--primary-foreground));
-  border-radius: 25px;
-  padding: 12px 32px;
-  font-weight: 600;
-  transition: all 0.3s ease;
+  border-radius: 9999px;
+  padding: 0.75rem 2rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
   border: none;
   cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .bubba-btn-primary:hover {
   filter: brightness(0.95);
-  transform: translateY(-1px);
-  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 4px 12px rgba(209, 46, 46, 0.25);
 }
 
 .bubba-btn-secondary {
-  background: hsl(var(--card));
+  background: transparent;
   color: hsl(var(--secondary));
   border: 2px solid hsl(var(--secondary));
-  border-radius: 25px;
-  padding: 10px 30px;
+  border-radius: 9999px;
+  padding: 0.625rem 1.75rem;
   font-weight: 500;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   cursor: pointer;
 }
 
 .bubba-btn-secondary:hover {
   background: hsl(var(--secondary));
   color: hsl(var(--secondary-foreground));
-  transform: translateY(-1px);
 }
 
-.upload-zone {
-  border: 2px dashed hsl(var(--primary));
-  border-radius: 12px;
-  background: color-mix(in srgb, hsl(var(--primary)) 5%, transparent);
-  transition: all 0.3s ease;
-}
-
-.dark .upload-zone {
-  border-color: hsl(var(--primary) / 0.6);
-  background: hsl(222 30% 20% / 0.5);
-}
-
-.upload-zone:hover {
-  border-color: hsl(var(--secondary));
-  background: color-mix(in srgb, hsl(var(--secondary)) 6%, transparent);
-}
-
-.dark .upload-zone:hover {
-  border-color: hsl(var(--secondary) / 0.8);
-  background: hsl(210 40% 22% / 0.5);
-}
-
-.upload-zone.drag-over {
-  border-color: #B91C1C;
-  background: rgba(209, 46, 46, 0.15);
-  transform: scale(1.02);
-}
-
-.kpi-card {
-  background: hsl(var(--card));
-  color: hsl(var(--card-foreground));
-  border-radius: 8px;
-  padding: 20px;
-  text-align: center;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
-  transition: all 0.3s ease;
-}
-
-.dark .kpi-card {
-  background: hsl(222 30% 20%);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-}
-
-.kpi-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.1);
-}
-
-.dark .kpi-card:hover {
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
-}
-
-.kpi-value {
-  font-size: 2rem;
-  font-weight: 900;
-  color: hsl(var(--primary));
-  font-family: 'Merriweather', serif;
-}
-
-.kpi-label {
-  font-size: 0.875rem;
-  color: hsl(var(--muted-foreground));
-  text-transform: uppercase;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  margin-top: 8px;
-}
-
+/* Performance Badges */
 .performance-badge {
   display: inline-block;
   padding: 4px 12px;
-  border-radius: 20px;
+  border-radius: 9999px;
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.03em;
 }
 
 .performance-excellent {
-  background: #D1FAE5;
-  color: #065F46;
+  background: hsl(152 76% 94%);
+  color: hsl(158 64% 25%);
+}
+.dark .performance-excellent {
+  background: hsl(158 64% 25% / 0.2);
+  color: hsl(152 76% 70%);
 }
 
 .performance-above-average {
-  background: #DBEAFE;
-  color: #1E40AF;
+  background: hsl(213 94% 94%);
+  color: hsl(221 83% 40%);
+}
+.dark .performance-above-average {
+  background: hsl(221 83% 40% / 0.2);
+  color: hsl(213 94% 70%);
 }
 
 .performance-satisfactory {
-  background: #FEF3C7;
-  color: #92400E;
+  background: hsl(45 96% 92%);
+  color: hsl(32 95% 35%);
+}
+.dark .performance-satisfactory {
+  background: hsl(32 95% 35% / 0.2);
+  color: hsl(45 96% 70%);
 }
 
 .performance-needs-improvement {
-  background: #FED7AA;
-  color: #C2410C;
+  background: hsl(25 95% 90%);
+  color: hsl(21 90% 40%);
+}
+.dark .performance-needs-improvement {
+  background: hsl(21 90% 40% / 0.2);
+  color: hsl(25 95% 70%);
 }
 
 .performance-below {
-  background: #FECACA;
-  color: #B91C1C;
+  background: hsl(0 86% 94%);
+  color: hsl(0 72% 45%);
+}
+.dark .performance-below {
+  background: hsl(0 72% 45% / 0.2);
+  color: hsl(0 86% 70%);
 }
 
 /* Navigation Styles */
@@ -170,54 +177,61 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 20px;
-  color: #374151;
+  padding: 0.625rem 1rem;
+  color: hsl(var(--muted-foreground));
   text-decoration: none;
-  border-radius: 8px;
+  border-radius: 9999px;
   transition: all 0.2s ease;
   font-weight: 500;
+  font-size: 0.875rem;
 }
 
 .nav-link:hover {
-  background: rgba(209, 46, 46, 0.1);
-  color: #D12E2E;
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
 }
 
 .nav-link.active {
-  background: #D12E2E;
-  color: white;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
 }
 
 /* Loading Animation */
 .loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #D12E2E;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 3px solid hsl(var(--muted));
+  border-top-color: hsl(var(--primary));
   border-radius: 50%;
-  animation: spin 1s linear infinite;
+  animation: spin 0.8s linear infinite;
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  to { transform: rotate(360deg); }
 }
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: hsl(var(--muted));
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #D12E2E;
+  background: hsl(var(--muted-foreground) / 0.3);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #B91C1C;
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Header gradient - subtle brand */
+.bubba-header {
+  background: linear-gradient(135deg, hsl(var(--secondary)) 0%, hsl(var(--primary)) 100%);
+  color: hsl(var(--primary-foreground));
 }
