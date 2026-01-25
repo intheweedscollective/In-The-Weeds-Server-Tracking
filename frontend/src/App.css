@@ -1,19 +1,46 @@
 /* ============================================
    BUBBA GUMP PERFORMANCE HUB
-   "The Friendly Captain" Design System
+   Cocktail Menu Inspired Design
    ============================================ */
 
 /* ===========================================
-   CARDS - Like Menu Items Pinned to the Wall
+   SPLASH DECORATION - Red/Blue paint splashes
+   =========================================== */
+.splash-red {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  background: radial-gradient(ellipse at center, 
+    rgba(209, 46, 46, 0.15) 0%, 
+    rgba(209, 46, 46, 0.08) 40%, 
+    transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.splash-blue {
+  position: absolute;
+  width: 100px;
+  height: 100px;
+  background: radial-gradient(ellipse at center, 
+    rgba(0, 91, 150, 0.12) 0%, 
+    rgba(0, 91, 150, 0.06) 40%, 
+    transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+/* ===========================================
+   CARDS - Clean white with colored accents
    =========================================== */
 .bubba-card {
   position: relative;
   background: hsl(var(--card));
   color: hsl(var(--card-foreground));
-  border-radius: 1rem;
-  border: 1px solid hsl(var(--border));
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease;
+  border-radius: 1.25rem;
+  border: 2px solid hsl(var(--border));
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   overflow: hidden;
 }
 
@@ -23,17 +50,21 @@
   top: 0;
   left: 0;
   right: 0;
-  height: 4px;
-  background: linear-gradient(90deg, hsl(var(--primary)), hsl(var(--secondary)));
+  height: 5px;
+  background: linear-gradient(90deg, 
+    hsl(var(--primary)) 0%, 
+    hsl(var(--primary)) 50%, 
+    hsl(var(--secondary)) 50%, 
+    hsl(var(--secondary)) 100%);
 }
 
 .bubba-card:hover {
-  transform: rotate(-0.5deg) translateY(-4px);
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
 }
 
 /* ===========================================
-   KPI/STATS CARDS - Captain's Scoreboard
+   KPI/STATS CARDS - Fun colorful boxes
    =========================================== */
 .kpi-card {
   position: relative;
@@ -41,32 +72,32 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 1.5rem;
+  padding: 1.75rem 1.5rem;
   background: hsl(var(--card));
   border: 2px solid hsl(var(--border));
-  border-radius: 1rem;
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border-radius: 1.25rem;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
   overflow: hidden;
 }
 
-.kpi-card::after {
+.kpi-card::before {
   content: '';
   position: absolute;
-  bottom: 0;
+  top: 0;
   left: 0;
   right: 0;
-  height: 3px;
+  height: 4px;
   background: var(--kpi-accent, hsl(var(--primary)));
 }
 
 .kpi-card:hover {
   transform: translateY(-6px) rotate(1deg);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.1);
 }
 
 .kpi-value {
-  font-size: 2.5rem;
+  font-size: 3rem;
   font-weight: 900;
   color: hsl(var(--foreground));
   font-family: 'Merriweather', serif;
@@ -74,16 +105,16 @@
 }
 
 .kpi-label {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: hsl(var(--muted-foreground));
   text-transform: uppercase;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  margin-top: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  margin-top: 0.75rem;
 }
 
 /* ===========================================
-   UPLOAD ZONE - The Fishing Net
+   UPLOAD ZONE - Fun dashed border
    =========================================== */
 .upload-zone {
   position: relative;
@@ -91,70 +122,53 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 14rem;
-  border: 3px dashed hsl(var(--secondary) / 0.4);
-  border-radius: 1rem;
-  background: 
-    repeating-linear-gradient(
-      45deg,
-      transparent,
-      transparent 10px,
-      hsl(var(--secondary) / 0.02) 10px,
-      hsl(var(--secondary) / 0.02) 20px
-    ),
-    hsl(var(--muted) / 0.3);
-  transition: border-color 0.3s ease, background 0.3s ease, transform 0.3s ease;
+  min-height: 13rem;
+  border: 3px dashed hsl(var(--secondary) / 0.35);
+  border-radius: 1.25rem;
+  background: linear-gradient(135deg, 
+    hsl(var(--secondary) / 0.03) 0%, 
+    hsl(var(--primary) / 0.03) 100%);
+  transition: border-color 0.3s ease, background 0.3s ease, transform 0.2s ease;
   cursor: pointer;
 }
 
 .upload-zone:hover {
-  border-color: hsl(var(--primary) / 0.6);
-  background: 
-    repeating-linear-gradient(
-      45deg,
-      transparent,
-      transparent 10px,
-      hsl(var(--primary) / 0.03) 10px,
-      hsl(var(--primary) / 0.03) 20px
-    ),
-    hsl(var(--primary) / 0.05);
+  border-color: hsl(var(--primary) / 0.5);
+  background: linear-gradient(135deg, 
+    hsl(var(--primary) / 0.05) 0%, 
+    hsl(var(--secondary) / 0.05) 100%);
   transform: scale(1.01);
 }
 
 .upload-zone.drag-over {
   border-color: hsl(var(--primary));
-  background: hsl(var(--primary) / 0.1);
+  background: hsl(var(--primary) / 0.08);
   transform: scale(1.02);
-  animation: netPulse 0.5s ease infinite alternate;
-}
-
-@keyframes netPulse {
-  from { border-width: 3px; }
-  to { border-width: 4px; }
+  border-style: solid;
 }
 
 /* ===========================================
-   BUTTONS - Wooden Sign Style
+   BUTTONS - Bold and fun
    =========================================== */
 .bubba-btn-primary {
   position: relative;
   background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
+  color: white;
   border-radius: 9999px;
-  padding: 0.75rem 2rem;
+  padding: 0.875rem 2.25rem;
   font-family: 'Merriweather', serif;
   font-weight: 700;
+  font-size: 0.95rem;
   letter-spacing: 0.02em;
   border: none;
   cursor: pointer;
-  box-shadow: 0 4px 6px rgba(209, 46, 46, 0.3);
-  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  box-shadow: 0 4px 14px rgba(209, 46, 46, 0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .bubba-btn-primary:hover {
   transform: translateY(-2px) scale(1.02);
-  box-shadow: 0 8px 15px rgba(209, 46, 46, 0.35);
-  filter: brightness(1.05);
+  box-shadow: 0 8px 20px rgba(209, 46, 46, 0.4);
 }
 
 .bubba-btn-primary:active {
@@ -162,71 +176,67 @@
 }
 
 .bubba-btn-secondary {
-  background: transparent;
+  background: white;
   color: hsl(var(--secondary));
-  border: 2px solid hsl(var(--secondary));
+  border: 3px solid hsl(var(--secondary));
   border-radius: 9999px;
-  padding: 0.625rem 1.75rem;
+  padding: 0.75rem 2rem;
   font-family: 'Merriweather', serif;
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 0.95rem;
   cursor: pointer;
   transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
 }
 
 .bubba-btn-secondary:hover {
   background: hsl(var(--secondary));
-  color: hsl(var(--secondary-foreground));
-  transform: translateY(-1px);
+  color: white;
+  transform: translateY(-2px);
 }
 
 /* ===========================================
-   PERFORMANCE BADGES - Captain's Ranks
+   PERFORMANCE BADGES - Colorful pills
    =========================================== */
 .performance-badge {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  padding: 0.375rem 0.875rem;
+  padding: 0.4rem 1rem;
   border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: 0.7rem;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   font-family: 'Inter', sans-serif;
 }
 
 .performance-excellent {
-  background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+  background: #10B981;
   color: white;
-  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
 }
 
 .performance-above-average {
-  background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+  background: #3B82F6;
   color: white;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
 }
 
 .performance-satisfactory {
-  background: linear-gradient(135deg, #F4D03F 0%, #D4A500 100%);
+  background: #F4D03F;
   color: #1a1a1a;
-  box-shadow: 0 2px 8px rgba(244, 208, 63, 0.3);
 }
 
 .performance-needs-improvement {
-  background: linear-gradient(135deg, #F97316 0%, #EA580C 100%);
+  background: #F97316;
   color: white;
-  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.3);
 }
 
 .performance-below {
-  background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+  background: #EF4444;
   color: white;
-  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
 }
 
 /* ===========================================
-   NAVIGATION - The Pier Walkway
+   NAVIGATION
    =========================================== */
 .nav-link {
   display: flex;
@@ -236,24 +246,23 @@
   color: hsl(var(--muted-foreground));
   text-decoration: none;
   border-radius: 9999px;
-  font-weight: 500;
+  font-weight: 600;
   font-size: 0.875rem;
   transition: color 0.2s ease, background 0.2s ease;
 }
 
 .nav-link:hover {
   color: hsl(var(--foreground));
-  background: hsl(var(--muted) / 0.5);
+  background: hsl(var(--muted));
 }
 
 .nav-link.active {
   background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
-  font-weight: 600;
+  color: white;
 }
 
 /* ===========================================
-   LOADING - Ship Wheel Spinner
+   LOADING SPINNER
    =========================================== */
 .loading-spinner {
   width: 3rem;
@@ -269,7 +278,7 @@
 }
 
 /* ===========================================
-   SCROLLBAR - Rope Style
+   SCROLLBAR
    =========================================== */
 ::-webkit-scrollbar {
   width: 10px;
@@ -277,33 +286,21 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: hsl(var(--muted) / 0.5);
+  background: hsl(var(--muted));
   border-radius: 5px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--secondary) / 0.5);
+  background: hsl(var(--primary) / 0.3);
   border-radius: 5px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--secondary) / 0.7);
-  border: 2px solid transparent;
-  background-clip: padding-box;
+  background: hsl(var(--primary) / 0.5);
 }
 
 /* ===========================================
-   HEADER GRADIENT - Sunset at the Pier
-   =========================================== */
-.bubba-header {
-  background: linear-gradient(135deg, hsl(var(--secondary)) 0%, hsl(var(--primary)) 100%);
-  color: white;
-}
-
-/* ===========================================
-   EMPTY STATE - Forrest Gump Quote Style
+   EMPTY STATE QUOTE
    =========================================== */
 .empty-state-quote {
   font-family: 'Merriweather', serif;
@@ -314,20 +311,40 @@
   padding: 2rem;
 }
 
-.empty-state-quote::before {
+.empty-state-quote::before,
+.empty-state-quote::after {
   content: '"';
-  font-size: 3rem;
+  font-size: 2.5rem;
   line-height: 0;
-  vertical-align: -0.5em;
-  color: hsl(var(--primary) / 0.3);
+  vertical-align: -0.4em;
+  color: hsl(var(--primary) / 0.25);
+}
+
+.empty-state-quote::before {
   margin-right: 0.25rem;
 }
 
 .empty-state-quote::after {
-  content: '"';
-  font-size: 3rem;
-  line-height: 0;
-  vertical-align: -0.5em;
-  color: hsl(var(--primary) / 0.3);
   margin-left: 0.25rem;
+}
+
+/* ===========================================
+   TAPE DECORATION - Playful accent
+   =========================================== */
+.tape {
+  position: absolute;
+  width: 80px;
+  height: 28px;
+  background: hsl(var(--accent));
+  opacity: 0.9;
+  z-index: 10;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.tape-red {
+  background: hsl(var(--primary) / 0.85);
+}
+
+.tape-blue {
+  background: hsl(var(--secondary) / 0.85);
 }
