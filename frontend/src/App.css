@@ -65,13 +65,23 @@
 .upload-zone {
   border: 2px dashed hsl(var(--primary));
   border-radius: 12px;
-  background: color-mix(in srgb, hsl(var(--primary)) 8%, transparent);
+  background: color-mix(in srgb, hsl(var(--primary)) 5%, transparent);
   transition: all 0.3s ease;
+}
+
+.dark .upload-zone {
+  border-color: hsl(var(--primary) / 0.6);
+  background: hsl(222 30% 20% / 0.5);
 }
 
 .upload-zone:hover {
   border-color: hsl(var(--secondary));
-  background: color-mix(in srgb, hsl(var(--secondary)) 10%, transparent);
+  background: color-mix(in srgb, hsl(var(--secondary)) 6%, transparent);
+}
+
+.dark .upload-zone:hover {
+  border-color: hsl(var(--secondary) / 0.8);
+  background: hsl(210 40% 22% / 0.5);
 }
 
 .upload-zone.drag-over {
