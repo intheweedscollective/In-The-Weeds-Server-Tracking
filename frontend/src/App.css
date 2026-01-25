@@ -20,8 +20,8 @@
 }
 
 .bubba-btn-primary {
-  background: #D12E2E;
-  color: white;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
   border-radius: 25px;
   padding: 12px 32px;
   font-weight: 600;
@@ -31,9 +31,9 @@
 }
 
 .bubba-btn-primary:hover {
-  background: #B91C1C;
+  filter: brightness(0.95);
   transform: translateY(-1px);
-  box-shadow: 0 8px 15px rgba(209, 46, 46, 0.3);
+  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.25);
 }
 
 .bubba-btn-secondary {
