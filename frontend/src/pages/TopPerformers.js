@@ -174,66 +174,67 @@ export default function TopPerformers() {
             </div>
           </div>
           
-          <Card className="bubba-card">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <Trophy className="w-8 h-8 text-yellow-500" />
-                <div>
-                  <p className="text-2xl font-bold text-primary">
-                    {employees.filter(emp => (emp.cumulative_score || 0) >= 90).length}
-                  </p>
-                  <p className="text-sm text-muted-foreground">Excellent Performers</p>
-                </div>
+          <div className="bubba-card p-5">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center">
+                <Trophy className="w-6 h-6 text-yellow-600" />
               </div>
-            </CardContent>
-          </Card>
+              <div>
+                <p className="text-2xl font-serif font-bold text-yellow-600">
+                  {employees.filter(emp => (emp.cumulative_score || 0) >= 90).length}
+                </p>
+                <p className="text-xs text-gray-500 font-semibold uppercase">Excellent</p>
+              </div>
+            </div>
+          </div>
           
-          <Card className="bubba-card">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <Award className="w-8 h-8 text-green-500" />
-                <div>
-                  <p className="text-2xl font-bold text-primary">
-                    {employees.filter(emp => (emp.cumulative_score || 0) >= 80).length}
-                  </p>
-                  <p className="text-sm text-muted-foreground">Above Average+</p>
-                </div>
+          <div className="bubba-card p-5">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                <Award className="w-6 h-6 text-green-600" />
               </div>
-            </CardContent>
-          </Card>
+              <div>
+                <p className="text-2xl font-serif font-bold text-green-600">
+                  {employees.filter(emp => (emp.cumulative_score || 0) >= 80).length}
+                </p>
+                <p className="text-xs text-gray-500 font-semibold uppercase">Above Average+</p>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Top 10 Overall */}
-        <Card className="bubba-card mb-12 print:mb-6" data-testid="top-overall-card">
-          <CardHeader>
-            <CardTitle className="text-2xl font-serif text-primary flex items-center gap-3">
-              <Trophy className="w-6 h-6 text-yellow-500" />
-              Top 10 Overall (Cumulative Score)
-            </CardTitle>
-            <CardDescription className="text-base">
-              Highest overall performers based on Cumulative Score
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+        <div className="bubba-card mb-10 print:mb-6" data-testid="top-overall-card">
+          <div className="p-5">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
+                <Trophy className="w-5 h-5 text-yellow-600" />
+              </div>
+              <div>
+                <h2 className="text-xl font-serif font-bold text-foreground">Top 10 Overall</h2>
+                <p className="text-sm text-gray-500">Highest performers by Cumulative Score</p>
+              </div>
+            </div>
+            
             <div className="space-y-3">
               {topOverall.map((employee, index) => {
                 const ranking = getRankingHierarchy(employee.ranking);
                 return (
                   <div
                     key={employee.id}
-                    className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-muted/30 transition-colors"
+                    className="flex items-center justify-between p-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
                   >
                     <div className="flex items-center gap-4">
-                      <div className="flex items-center justify-center w-10 h-10 bg-muted rounded-full">
+                      <div className="flex items-center justify-center w-10 h-10 bg-gray-100 rounded-full">
                         {getMetricIcon(index + 1)}
                       </div>
                       <div>
-                        <h4 className="font-semibold text-primary">{employee.name}</h4>
-                        <p className="text-sm text-muted-foreground">{employee.position}</p>
+                        <h4 className="font-semibold text-foreground">{employee.name}</h4>
+                        <p className="text-sm text-gray-500">{employee.position}</p>
                         {employee.ranking && (
-                          <Badge className={`text-xs mt-1 ${ranking.bgColor} ${ranking.color}`}>
+                          <span className={`inline-block text-xs mt-1 px-2 py-0.5 rounded-full font-semibold ${ranking.bgColor} ${ranking.color}`}>
                             {employee.ranking} - {ranking.level}
-                          </Badge>
+                          </span>
                         )}
                       </div>
                     </div>
@@ -242,8 +243,8 @@ export default function TopPerformers() {
                       <div className="text-2xl font-serif font-bold text-primary">
                         {formatNumber(employee.cumulative_score)}
                       </div>
-                      <div className="text-sm text-muted-foreground">
-                        Overall Rank: {formatOverallRank(employee.overall_rank)}
+                      <div className="text-sm text-gray-500">
+                        Rank: {formatOverallRank(employee.overall_rank)}
                       </div>
                     </div>
                   </div>
