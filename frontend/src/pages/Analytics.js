@@ -248,7 +248,6 @@ export default function Analytics() {
               Performance distribution and benchmark analysis for all metrics
             </p>
           </div>
-          </div>
 
           <Button
             onClick={handlePrint}
