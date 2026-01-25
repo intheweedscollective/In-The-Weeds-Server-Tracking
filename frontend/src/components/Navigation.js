@@ -53,6 +53,10 @@ export default function Navigation() {
               );
             })}
           </div>
+
+          <div className="ml-2 hidden sm:block">
+            <ThemeToggle />
+          </div>
         </div>
       </div>
     </nav>
