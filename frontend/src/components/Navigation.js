@@ -1,7 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
 import { Home, Users, FileText, BarChart3, Trophy } from "lucide-react";
-import ThemeToggle from "./ThemeToggle";
-
 
 export default function Navigation() {
   const location = useLocation();
@@ -52,10 +50,6 @@ export default function Navigation() {
                 </Link>
               );
             })}
-          </div>
-
-          <div className="ml-3">
-            <ThemeToggle />
           </div>
         </div>
       </div>
