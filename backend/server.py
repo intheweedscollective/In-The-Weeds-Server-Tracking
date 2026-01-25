@@ -933,6 +933,580 @@ async def top_performers_pdf():
         headers={"Content-Disposition": "attachment; filename=top_performers_report.pdf"},
     )
 
+
+# ============================================================================
+# V2 ENDPOINTS - NEW SCORING ENGINE
+# ============================================================================
+
+# === QUARTER SETTINGS ===
+
+class QuarterSettingsCreate(BaseModel):
+    year: int
+    quarter: str
+    benchmark_ppa: float = 55.0
+    benchmark_lbw: float = 8.0
+    benchmark_glass: float = 1.0
+    benchmark_lsc: float = 100.0
+    weight_ppa: float = 0.30
+    weight_lbw: float = 0.25
+    weight_glass: float = 0.20
+    weight_lsc: float = 0.25
+    bonus_rate: float = 0.2
+    bonus_cap: float = 5.0
+
+
+class QuarterSettingsUpdate(BaseModel):
+    benchmark_ppa: Optional[float] = None
+    benchmark_lbw: Optional[float] = None
+    benchmark_glass: Optional[float] = None
+    benchmark_lsc: Optional[float] = None
+    weight_ppa: Optional[float] = None
+    weight_lbw: Optional[float] = None
+    weight_glass: Optional[float] = None
+    weight_lsc: Optional[float] = None
+    bonus_rate: Optional[float] = None
+    bonus_cap: Optional[float] = None
+
+
+@api_router.get("/v2/quarter-settings")
+async def get_all_quarter_settings():
+    """Get all quarter settings"""
+    settings = await db.quarter_settings.find({}, {"_id": 0}).to_list(100)
+    for s in settings:
+        if isinstance(s.get('created_at'), str):
+            s['created_at'] = datetime.fromisoformat(s['created_at'])
+        if isinstance(s.get('updated_at'), str):
+            s['updated_at'] = datetime.fromisoformat(s['updated_at'])
+        if s.get('locked_at') and isinstance(s.get('locked_at'), str):
+            s['locked_at'] = datetime.fromisoformat(s['locked_at'])
+    return settings
+
+
+@api_router.get("/v2/quarter-settings/{year}/{quarter}")
+async def get_quarter_settings(year: int, quarter: str):
+    """Get settings for a specific quarter"""
+    settings = await db.quarter_settings.find_one(
+        {"year": year, "quarter": quarter.upper()}, 
+        {"_id": 0}
+    )
+    if not settings:
+        raise HTTPException(status_code=404, detail=f"Settings not found for {quarter} {year}")
+    return settings
+
+
+@api_router.post("/v2/quarter-settings")
+async def create_quarter_settings(data: QuarterSettingsCreate):
+    """Create new quarter settings"""
+    # Check if settings already exist
+    existing = await db.quarter_settings.find_one({
+        "year": data.year, 
+        "quarter": data.quarter.upper()
+    })
+    if existing:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Settings already exist for {data.quarter} {data.year}. Use PUT to update."
+        )
+    
+    # Validate weights sum to 1.0
+    weight_sum = data.weight_ppa + data.weight_lbw + data.weight_glass + data.weight_lsc
+    if abs(weight_sum - 1.0) > 0.01:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Metric weights must sum to 1.0 (currently {weight_sum})"
+        )
+    
+    settings = QuarterSettings(
+        year=data.year,
+        quarter=data.quarter.upper(),
+        benchmark_ppa=data.benchmark_ppa,
+        benchmark_lbw=data.benchmark_lbw,
+        benchmark_glass=data.benchmark_glass,
+        benchmark_lsc=data.benchmark_lsc,
+        weight_ppa=data.weight_ppa,
+        weight_lbw=data.weight_lbw,
+        weight_glass=data.weight_glass,
+        weight_lsc=data.weight_lsc,
+        bonus_rate=data.bonus_rate,
+        bonus_cap=data.bonus_cap
+    )
+    
+    doc = settings.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['updated_at'] = doc['updated_at'].isoformat()
+    
+    await db.quarter_settings.insert_one(doc)
+    
+    return {"success": True, "settings_id": settings.id, "message": f"Created settings for {data.quarter} {data.year}"}
+
+
+@api_router.put("/v2/quarter-settings/{year}/{quarter}")
+async def update_quarter_settings(year: int, quarter: str, data: QuarterSettingsUpdate):
+    """Update quarter settings (only if not locked)"""
+    settings = await db.quarter_settings.find_one(
+        {"year": year, "quarter": quarter.upper()}, 
+        {"_id": 0}
+    )
+    if not settings:
+        raise HTTPException(status_code=404, detail=f"Settings not found for {quarter} {year}")
+    
+    if settings.get("is_locked"):
+        raise HTTPException(
+            status_code=403, 
+            detail=f"Settings for {quarter} {year} are locked. Scores have already been generated."
+        )
+    
+    # Build update dict
+    update_data = {}
+    if data.benchmark_ppa is not None:
+        update_data["benchmark_ppa"] = data.benchmark_ppa
+    if data.benchmark_lbw is not None:
+        update_data["benchmark_lbw"] = data.benchmark_lbw
+    if data.benchmark_glass is not None:
+        update_data["benchmark_glass"] = data.benchmark_glass
+    if data.benchmark_lsc is not None:
+        update_data["benchmark_lsc"] = data.benchmark_lsc
+    if data.weight_ppa is not None:
+        update_data["weight_ppa"] = data.weight_ppa
+    if data.weight_lbw is not None:
+        update_data["weight_lbw"] = data.weight_lbw
+    if data.weight_glass is not None:
+        update_data["weight_glass"] = data.weight_glass
+    if data.weight_lsc is not None:
+        update_data["weight_lsc"] = data.weight_lsc
+    if data.bonus_rate is not None:
+        update_data["bonus_rate"] = data.bonus_rate
+    if data.bonus_cap is not None:
+        update_data["bonus_cap"] = data.bonus_cap
+    
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    await db.quarter_settings.update_one(
+        {"year": year, "quarter": quarter.upper()},
+        {"$set": update_data}
+    )
+    
+    return {"success": True, "message": f"Updated settings for {quarter} {year}"}
+
+
+@api_router.post("/v2/quarter-settings/{year}/{quarter}/lock")
+async def lock_quarter_settings(year: int, quarter: str):
+    """Lock quarter settings (called when scores are generated)"""
+    result = await db.quarter_settings.update_one(
+        {"year": year, "quarter": quarter.upper()},
+        {"$set": {
+            "is_locked": True,
+            "locked_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail=f"Settings not found for {quarter} {year}")
+    
+    return {"success": True, "message": f"Settings locked for {quarter} {year}"}
+
+
+@api_router.get("/v2/quarter-settings/{year}/{quarter}/benchmark-suggestions")
+async def get_benchmark_suggestions(year: int, quarter: str):
+    """
+    Get benchmark suggestions based on previous quarter averages.
+    """
+    # Determine previous quarter
+    quarters = ["Q1", "Q2", "Q3", "Q4"]
+    current_idx = quarters.index(quarter.upper())
+    
+    if current_idx == 0:
+        prev_quarter = "Q4"
+        prev_year = year - 1
+    else:
+        prev_quarter = quarters[current_idx - 1]
+        prev_year = year
+    
+    # Get employees from previous quarter
+    prev_employees = await db.employees_v2.find({
+        "quarter": prev_quarter,
+        "year": prev_year
+    }, {"_id": 0}).to_list(5000)
+    
+    if not prev_employees:
+        return {
+            "has_previous_data": False,
+            "message": f"No data found for {prev_quarter} {prev_year}",
+            "suggestions": None
+        }
+    
+    # Calculate averages
+    emp_objects = [EmployeeV2(**e) for e in prev_employees]
+    avgs = calculate_previous_quarter_averages(emp_objects)
+    
+    suggestions = {}
+    if avgs.get("avg_ppa"):
+        suggestions["ppa"] = suggest_benchmarks_from_previous(avgs["avg_ppa"], "higher_better")
+    if avgs.get("avg_lbw"):
+        suggestions["lbw"] = suggest_benchmarks_from_previous(avgs["avg_lbw"], "higher_better")
+    if avgs.get("avg_glass"):
+        suggestions["glass"] = suggest_benchmarks_from_previous(avgs["avg_glass"], "higher_better")
+    if avgs.get("avg_lsc"):
+        suggestions["lsc"] = suggest_benchmarks_from_previous(avgs["avg_lsc"], "inverse")
+    
+    return {
+        "has_previous_data": True,
+        "previous_quarter": prev_quarter,
+        "previous_year": prev_year,
+        "previous_averages": avgs,
+        "suggestions": suggestions
+    }
+
+
+# === V2 EMPLOYEE UPLOAD ===
+
+@api_router.post("/v2/upload/validate")
+async def validate_upload_file(file: UploadFile = File(...)):
+    """
+    Validate an upload file without importing.
+    Returns column mapping and validation results.
+    """
+    if not file.filename.endswith(('.xlsx', '.xls', '.csv')):
+        raise HTTPException(status_code=400, detail="Only Excel (.xlsx, .xls) or CSV files allowed")
+    
+    try:
+        contents = await file.read()
+        
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(io.BytesIO(contents))
+        else:
+            df = pd.read_excel(io.BytesIO(contents))
+        
+        # Clean column names
+        df.columns = df.columns.str.strip()
+        
+        # Validate columns
+        column_validation = validate_upload_columns(list(df.columns))
+        
+        if not column_validation["valid"]:
+            return {
+                "valid": False,
+                "column_validation": column_validation,
+                "row_count": len(df),
+                "preview": df.head(5).to_dict('records')
+            }
+        
+        # Parse rows using mapping
+        mapping = column_validation["mapping"]
+        rows = []
+        for _, row in df.iterrows():
+            row_data = {
+                "name": row.get(mapping.get("name", "")) if mapping.get("name") else None,
+                "guests": row.get(mapping.get("guests", "")) if mapping.get("guests") else None,
+                "net_sales": row.get(mapping.get("net_sales", "")) if mapping.get("net_sales") else None,
+                "lbw": row.get(mapping.get("lbw", "")) if mapping.get("lbw") else None,
+                "glassware_sales": row.get(mapping.get("glassware_sales", "")) if mapping.get("glassware_sales") else None,
+                "lsc_count": row.get(mapping.get("lsc_count", "")) if mapping.get("lsc_count") else None,
+            }
+            
+            # Clean values
+            for key in row_data:
+                if pd.isna(row_data[key]):
+                    row_data[key] = None
+                elif key == "guests" or key == "lsc_count":
+                    try:
+                        row_data[key] = int(row_data[key])
+                    except (ValueError, TypeError):
+                        row_data[key] = None
+                elif key in ["net_sales", "lbw", "glassware_sales"]:
+                    try:
+                        row_data[key] = float(row_data[key])
+                    except (ValueError, TypeError):
+                        row_data[key] = None
+            
+            rows.append(row_data)
+        
+        # Validate rows
+        row_validation = validate_upload_data(rows)
+        
+        return {
+            "valid": row_validation["valid"],
+            "column_validation": column_validation,
+            "row_validation": {
+                "total_rows": row_validation["total_rows"],
+                "valid_rows": row_validation["valid_rows"],
+                "invalid_rows": row_validation["invalid_rows"],
+                "duplicate_names": row_validation["duplicate_names"],
+                "errors": [
+                    {"row": idx + 2, "name": r.employee_name, "errors": r.errors}
+                    for idx, r in enumerate(row_validation["validation_results"])
+                    if not r.valid
+                ][:20]  # Limit to first 20 errors
+            },
+            "preview": rows[:5]
+        }
+        
+    except Exception as e:
+        logging.error(f"Error validating file: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error validating file: {str(e)}")
+
+
+@api_router.post("/v2/upload")
+async def upload_employees_v2(
+    file: UploadFile = File(...),
+    year: int = 2026,
+    quarter: str = "Q1"
+):
+    """
+    Upload employees using new scoring engine.
+    Requires quarter settings to exist.
+    """
+    quarter = quarter.upper()
+    
+    # Check quarter settings exist
+    settings_doc = await db.quarter_settings.find_one(
+        {"year": year, "quarter": quarter},
+        {"_id": 0}
+    )
+    if not settings_doc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Quarter settings must be created for {quarter} {year} before uploading employees. "
+                   f"Go to Settings to create them."
+        )
+    
+    if settings_doc.get("is_locked"):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Quarter {quarter} {year} is locked. Cannot upload new data."
+        )
+    
+    settings = QuarterSettings(**settings_doc)
+    
+    if not file.filename.endswith(('.xlsx', '.xls', '.csv')):
+        raise HTTPException(status_code=400, detail="Only Excel (.xlsx, .xls) or CSV files allowed")
+    
+    try:
+        contents = await file.read()
+        
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(io.BytesIO(contents))
+        else:
+            df = pd.read_excel(io.BytesIO(contents))
+        
+        # Clean column names
+        df.columns = df.columns.str.strip()
+        
+        # Validate columns
+        column_validation = validate_upload_columns(list(df.columns))
+        
+        if not column_validation["valid"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Missing required columns: {', '.join(column_validation['missing'])}"
+            )
+        
+        mapping = column_validation["mapping"]
+        employees = []
+        
+        for idx, row in df.iterrows():
+            try:
+                # Extract values
+                name = str(row.get(mapping["name"], "")).strip()
+                guests = int(row.get(mapping["guests"], 0))
+                net_sales = float(row.get(mapping["net_sales"], 0))
+                lbw = float(row.get(mapping["lbw"], 0))
+                glassware_sales = float(row.get(mapping["glassware_sales"], 0))
+                lsc_count = int(row.get(mapping["lsc_count"], 0))
+                
+                if guests <= 0:
+                    logging.warning(f"Row {idx + 2}: Skipping {name} - guests must be > 0")
+                    continue
+                
+                # Optional fields
+                review_tracker = None
+                cv_positive = None
+                cv_negative = None
+                
+                if mapping.get("review_tracker"):
+                    val = row.get(mapping["review_tracker"])
+                    if not pd.isna(val):
+                        review_tracker = str(val)
+                
+                if mapping.get("cv_positive"):
+                    val = row.get(mapping["cv_positive"])
+                    if not pd.isna(val):
+                        cv_positive = str(val)
+                
+                if mapping.get("cv_negative"):
+                    val = row.get(mapping["cv_negative"])
+                    if not pd.isna(val):
+                        cv_negative = str(val)
+                
+                emp = EmployeeV2(
+                    name=name,
+                    guests=guests,
+                    net_sales=net_sales,
+                    lbw=lbw,
+                    glassware_sales=glassware_sales,
+                    lsc_count=lsc_count,
+                    review_tracker=review_tracker,
+                    cv_positive=cv_positive,
+                    cv_negative=cv_negative
+                )
+                
+                employees.append(emp)
+                
+            except Exception as row_error:
+                logging.error(f"Error processing row {idx + 2}: {str(row_error)}")
+                continue
+        
+        if not employees:
+            raise HTTPException(status_code=400, detail="No valid employees found in file")
+        
+        # Run full scoring
+        scored_employees = run_full_scoring(employees, settings)
+        
+        # Clear existing employees for this quarter
+        await db.employees_v2.delete_many({"year": year, "quarter": quarter})
+        
+        # Insert scored employees
+        for emp in scored_employees:
+            doc = emp.model_dump()
+            doc['created_at'] = doc['created_at'].isoformat()
+            await db.employees_v2.insert_one(doc)
+        
+        # Lock the quarter settings
+        await db.quarter_settings.update_one(
+            {"year": year, "quarter": quarter},
+            {"$set": {
+                "is_locked": True,
+                "locked_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        
+        return {
+            "success": True,
+            "message": f"Imported and scored {len(scored_employees)} employees for {quarter} {year}",
+            "employees_count": len(scored_employees),
+            "quarter": quarter,
+            "year": year,
+            "settings_locked": True
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error processing upload: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
+
+
+@api_router.get("/v2/employees")
+async def get_employees_v2(year: Optional[int] = None, quarter: Optional[str] = None):
+    """Get employees (V2 scoring engine)"""
+    query = {}
+    if year:
+        query["year"] = year
+    if quarter:
+        query["quarter"] = quarter.upper()
+    
+    employees = await db.employees_v2.find(query, {"_id": 0}).to_list(5000)
+    
+    for emp in employees:
+        if isinstance(emp.get('created_at'), str):
+            emp['created_at'] = datetime.fromisoformat(emp['created_at'])
+    
+    return employees
+
+
+@api_router.get("/v2/employees/{employee_id}")
+async def get_employee_v2(employee_id: str):
+    """Get single employee (V2)"""
+    employee = await db.employees_v2.find_one({"id": employee_id}, {"_id": 0})
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    if isinstance(employee.get('created_at'), str):
+        employee['created_at'] = datetime.fromisoformat(employee['created_at'])
+    
+    return employee
+
+
+@api_router.get("/v2/rankings/{year}/{quarter}")
+async def get_rankings_v2(year: int, quarter: str):
+    """Get ranked employee list for a quarter"""
+    employees = await db.employees_v2.find(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    ).sort("peer_rank", 1).to_list(5000)
+    
+    return {
+        "quarter": quarter.upper(),
+        "year": year,
+        "total_employees": len(employees),
+        "rankings": employees
+    }
+
+
+@api_router.get("/v2/top-performers/{year}/{quarter}")
+async def get_top_performers_v2(year: int, quarter: str, limit: int = 10):
+    """Get top performers for a quarter"""
+    employees = await db.employees_v2.find(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    ).sort("total_score", -1).limit(limit).to_list(limit)
+    
+    # Also get top 10 per metric
+    metrics = {
+        "ppa": "ppa",
+        "lbw_per_guest": "lbw_per_guest",
+        "glassware_per_guest": "glassware_per_guest",
+        "guests_per_lsc": "guests_per_lsc"  # Note: lower is better for this one
+    }
+    
+    top_by_metric = {}
+    for metric_name, field in metrics.items():
+        if metric_name == "guests_per_lsc":
+            # Lower is better - sort ascending, exclude nulls
+            top = await db.employees_v2.find(
+                {"year": year, "quarter": quarter.upper(), field: {"$ne": None}},
+                {"_id": 0}
+            ).sort(field, 1).limit(limit).to_list(limit)
+        else:
+            top = await db.employees_v2.find(
+                {"year": year, "quarter": quarter.upper()},
+                {"_id": 0}
+            ).sort(field, -1).limit(limit).to_list(limit)
+        top_by_metric[metric_name] = top
+    
+    return {
+        "quarter": quarter.upper(),
+        "year": year,
+        "top_overall": employees,
+        "top_by_metric": top_by_metric
+    }
+
+
+@api_router.delete("/v2/employees")
+async def clear_employees_v2(year: Optional[int] = None, quarter: Optional[str] = None):
+    """Clear V2 employees (optionally for specific quarter)"""
+    query = {}
+    if year:
+        query["year"] = year
+    if quarter:
+        query["quarter"] = quarter.upper()
+    
+    result = await db.employees_v2.delete_many(query)
+    
+    # If clearing a specific quarter, unlock the settings
+    if year and quarter:
+        await db.quarter_settings.update_one(
+            {"year": year, "quarter": quarter.upper()},
+            {"$set": {"is_locked": False, "locked_at": None}}
+        )
+    
+    return {
+        "success": True,
+        "deleted_count": result.deleted_count,
+        "message": f"Cleared {result.deleted_count} employees"
+    }
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
