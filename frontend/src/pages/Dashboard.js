@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { Upload, Users, FileText, TrendingUp, Award, Target } from "lucide-react";
+import { Upload, Users, FileText, TrendingUp, Award, Target, Anchor, Fish } from "lucide-react";
 import { useDropzone } from "react-dropzone";
 import { toast } from "sonner";
 import axios from "axios";
@@ -26,26 +26,9 @@ export default function Dashboard() {
     recentUploads: 0
   });
 
-  useEffect(() => {
-    fetchEmployees();
-  }, []);
-
-  useEffect(() => {
-    calculateStats();
-  }, [employees]);
-
-  const fetchEmployees = async () => {
-    try {
-      const response = await axios.get(`${API}/employees`);
-      setEmployees(response.data);
-    } catch (error) {
-      console.error("Error fetching employees:", error);
-    }
-  };
-
-  const calculateStats = () => {
+  const calculateStats = useCallback(() => {
     const total = employees.length;
-    const avgScore = employees.reduce((sum, emp) => sum + (emp.cumulative_score || 0), 0) / total;
+    const avgScore = total > 0 ? employees.reduce((sum, emp) => sum + (emp.cumulative_score || 0), 0) / total : 0;
     const topPerformers = employees.filter(emp => (emp.cumulative_score || 0) >= 85).length;
     const recentUploads = employees.filter(emp => {
       const uploadDate = new Date(emp.created_at);
@@ -60,6 +43,23 @@ export default function Dashboard() {
       topPerformers,
       recentUploads
     });
+  }, [employees]);
+
+  useEffect(() => {
+    fetchEmployees();
+  }, []);
+
+  useEffect(() => {
+    calculateStats();
+  }, [employees, calculateStats]);
+
+  const fetchEmployees = async () => {
+    try {
+      const response = await axios.get(`${API}/employees`);
+      setEmployees(response.data);
+    } catch (error) {
+      console.error("Error fetching employees:", error);
+    }
   };
 
   const onDrop = async (acceptedFiles) => {
@@ -122,34 +122,37 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Paper texture overlay */}
+      <div className="fixed inset-0 pointer-events-none paper-texture" />
+      
       <Navigation />
       
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header with Bubba Gump styling */}
         <div className="text-center mb-12">
-          <div className="flex items-center justify-center gap-4 mb-6">
+          <div className="flex items-center justify-center gap-5 mb-6">
             <img 
               src="https://customer-assets.emergentagent.com/job_beaba37a-d1bc-43b6-b0ee-0f4c332229d2/artifacts/shpi6789_IMG_0599.png" 
               alt="Bubba Gump Logo" 
-              className="w-20 h-20 rounded-full shadow-lg"
+              className="w-24 h-24 rounded-full shadow-xl ring-4 ring-primary/20"
               data-testid="bubba-gump-logo"
             />
-            <div>
-              <h1 className="text-4xl md:text-5xl font-serif font-bold text-primary tracking-tight" data-testid="main-title">
-                Employee Review System
+            <div className="text-left">
+              <h1 className="text-4xl md:text-5xl font-serif font-black text-primary tracking-tight" data-testid="main-title">
+                Performance Hub
               </h1>
-              <p className="text-lg text-muted-foreground mt-2" data-testid="main-subtitle">
-                Quarterly Performance Management Dashboard
+              <p className="text-lg text-muted-foreground mt-1 font-medium italic" data-testid="main-subtitle">
+                "Life is like a box of reviews..."
               </p>
             </div>
           </div>
         </div>
 
-        {/* Stats Dashboard */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12" data-testid="stats-dashboard">
+        {/* Stats Dashboard - Captain's Scoreboard */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-12" data-testid="stats-dashboard">
           <StatsCard 
             icon={Users}
-            title="Total Employees"
+            title="Crew Members"
             value={stats.totalEmployees}
             color="bg-blue-500"
             testId="total-employees-card"
@@ -164,7 +167,7 @@ export default function Dashboard() {
           />
           <StatsCard 
             icon={Award}
-            title="Top Performers"
+            title="Top Shrimpers"
             value={stats.topPerformers}
             color="bg-yellow-500"
             testId="top-performers-card"
@@ -172,168 +175,201 @@ export default function Dashboard() {
           />
           <StatsCard 
             icon={Target}
-            title="Recent Uploads"
+            title="New Catches"
             value={stats.recentUploads}
             color="bg-purple-500"
             testId="recent-uploads-card"
           />
         </div>
 
-        {/* Main Actions */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        {/* Main Actions - Bento Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <ConfirmDialog
             open={confirmClearOpen}
             onOpenChange={setConfirmClearOpen}
-            title="Clear all employee data?"
-            description="This will permanently delete all employee records currently loaded in the system. This cannot be undone."
+            title="Clear all crew data?"
+            description="This will permanently delete all employee records. This action cannot be undone - even Forrest couldn't run from this!"
             confirmText="Clear All"
             cancelText="Cancel"
             onConfirm={clearAllEmployees}
             variant="destructive"
           />
-          {/* File Upload */}
-          <Card className="bubba-card" data-testid="upload-card">
-            <div className="px-6 pt-6 print:hidden">
-              <Button
-                variant="destructive"
-                size="sm"
-                className="w-full"
-                onClick={() => setConfirmClearOpen(true)}
-                data-testid="clear-all-employees-btn"
-              >
-                Clear All Employee Data
-              </Button>
-            </div>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-3 text-2xl font-serif text-primary">
-                <Upload className="w-7 h-7" />
-                Upload Employee Data
-              </CardTitle>
-              <CardDescription className="text-base">
-                Upload an Excel spreadsheet with employee performance data
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+          
+          {/* File Upload - The Fishing Net */}
+          <div className="bubba-card overflow-hidden" data-testid="upload-card">
+            {/* Tape decoration */}
+            <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-16 h-6 bg-accent/80 rotate-[-2deg] shadow-sm z-10" />
+            
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-full bg-secondary/10">
+                    <Anchor className="w-6 h-6 text-secondary" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-serif font-bold text-foreground">
+                      Cast Your Net
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      Upload employee performance data
+                    </p>
+                  </div>
+                </div>
+                {employees.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:bg-destructive/10"
+                    onClick={() => setConfirmClearOpen(true)}
+                    data-testid="clear-all-employees-btn"
+                  >
+                    Clear All
+                  </Button>
+                )}
+              </div>
+              
               <div
                 {...getRootProps()}
-                className={`upload-zone p-8 text-center cursor-pointer transition-all duration-300 ${
-                  isDragActive ? 'drag-over' : ''
-                }`}
+                className={`upload-zone ${isDragActive ? 'drag-over' : ''}`}
                 data-testid="file-upload-zone"
               >
                 <input {...getInputProps()} />
                 {uploading ? (
-                  <div className="flex flex-col items-center" data-testid="uploading-state">
+                  <div className="flex flex-col items-center py-8" data-testid="uploading-state">
                     <div className="loading-spinner mb-4"></div>
-                    <p className="text-primary font-medium">Processing your file...</p>
+                    <p className="text-primary font-serif font-semibold">Hauling in your catch...</p>
                   </div>
                 ) : (
-                  <div data-testid="upload-ready-state">
-                    <Upload className="w-12 h-12 text-primary mx-auto mb-4" />
-                    <p className="text-lg font-medium text-primary mb-2">
-                      {isDragActive ? 'Drop the Excel file here' : 'Drag & drop an Excel file here'}
+                  <div className="py-8" data-testid="upload-ready-state">
+                    <div className="relative mx-auto w-16 h-16 mb-4">
+                      <Fish className="w-16 h-16 text-secondary/30 absolute animate-pulse" />
+                      <Upload className="w-8 h-8 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                    </div>
+                    <p className="text-lg font-serif font-semibold text-foreground mb-2">
+                      {isDragActive ? 'Drop it like it\'s hot!' : 'Drag & drop your Excel file'}
                     </p>
-                    <p className="text-muted-foreground mb-4">or click to select a file</p>
-                    <p className="text-sm text-muted-foreground">
-                      Supported formats: .xlsx, .xls
-                    </p>
+                    <p className="text-muted-foreground mb-3">or click to browse</p>
+                    <span className="inline-block px-3 py-1 bg-muted rounded-full text-xs font-medium text-muted-foreground">
+                      .xlsx, .xls supported
+                    </span>
                   </div>
                 )}
               </div>
-              
-              {employees.length > 0 && (
-                <div className="mt-6 pt-6 border-t border-border">
-                  <Button 
-                    onClick={clearAllEmployees}
-                    variant="outline" 
-                    className="w-full text-destructive hover:bg-destructive hover:text-white"
-                    data-testid="clear-all-employees-btn"
-                  >
-                    Clear All Employee Data
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* Quick Actions */}
-          <Card className="bubba-card" data-testid="quick-actions-card">
-            <CardHeader>
-              <CardTitle className="text-2xl font-serif text-primary">
-                Quick Actions
-              </CardTitle>
-              <CardDescription className="text-base">
-                Manage employees and generate reviews
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Link to="/employees" data-testid="view-employees-link">
-                <Button className="bubba-btn-primary w-full h-12 text-base" size="lg">
-                  <Users className="w-5 h-5 mr-3" />
-                  View All Employees
-                </Button>
-              </Link>
+          <div className="bubba-card overflow-hidden" data-testid="quick-actions-card">
+            {/* Tape decoration */}
+            <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-16 h-6 bg-primary/80 rotate-[2deg] shadow-sm z-10" />
+            
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 rounded-full bg-primary/10">
+                  <FileText className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-serif font-bold text-foreground">
+                    Quick Actions
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    Manage your crew and reviews
+                  </p>
+                </div>
+              </div>
               
-              <Link to="/reviews" data-testid="generate-reviews-link">
-                <Button className="bubba-btn-secondary w-full h-12 text-base" size="lg">
-                  <FileText className="w-5 h-5 mr-3" />
-                  Generate Reviews
-                </Button>
-              </Link>
+              <div className="space-y-3">
+                <Link to="/employees" className="block" data-testid="view-employees-link">
+                  <button className="bubba-btn-primary w-full flex items-center justify-center gap-2">
+                    <Users className="w-5 h-5" />
+                    View All Crew Members
+                  </button>
+                </Link>
+                
+                <Link to="/reviews" className="block" data-testid="generate-reviews-link">
+                  <button className="bubba-btn-secondary w-full flex items-center justify-center gap-2">
+                    <FileText className="w-5 h-5" />
+                    Generate Reviews
+                  </button>
+                </Link>
+              </div>
 
-              <div className="pt-4 border-t border-border" data-testid="system-info">
-                <h4 className="font-semibold text-primary mb-2">System Status</h4>
-                <div className="space-y-2 text-sm text-muted-foreground">
-                  <div className="flex justify-between">
-                    <span>Database:</span>
-                    <span className="text-green-600 font-medium">Connected</span>
+              <div className="mt-6 pt-6 border-t border-border" data-testid="system-info">
+                <h4 className="font-serif font-semibold text-foreground mb-3 flex items-center gap-2">
+                  <Anchor className="w-4 h-4 text-secondary" />
+                  Ship Status
+                </h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Database:</span>
+                    <span className="text-green-600 dark:text-green-400 font-semibold flex items-center gap-1">
+                      <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                      Connected
+                    </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span>AI Service:</span>
-                    <span className="text-green-600 font-medium">Ready</span>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">AI Service:</span>
+                    <span className="text-green-600 dark:text-green-400 font-semibold flex items-center gap-1">
+                      <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                      Ready
+                    </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span>PDF Generation:</span>
-                    <span className="text-green-600 font-medium">Available</span>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">PDF Generation:</span>
+                    <span className="text-green-600 dark:text-green-400 font-semibold flex items-center gap-1">
+                      <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                      Available
+                    </span>
                   </div>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
 
         {/* Recent Employees Preview */}
         {employees.length > 0 && (
-          <Card className="bubba-card" data-testid="recent-employees-card">
-            <CardHeader>
-              <CardTitle className="text-xl font-serif text-primary">
-                Employee Performance Overview
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+          <div className="bubba-card overflow-hidden" data-testid="recent-employees-card">
+            {/* Tape decoration */}
+            <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-20 h-6 bg-accent/80 rotate-[-1deg] shadow-sm z-10" />
+            
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 rounded-full bg-accent/20">
+                  <Award className="w-6 h-6 text-accent-foreground" />
+                </div>
+                <h2 className="text-xl font-serif font-bold text-foreground">
+                  Crew Performance Overview
+                </h2>
+              </div>
+              
               <div className="space-y-4">
                 {employees.slice(0, 3).map((employee) => {
                   const performance = getPerformanceLevel(employee.cumulative_score);
 
                   return (
-                    <Card key={employee.id} className="border border-border p-4" data-testid={`employee-overview-${employee.id}`}>
+                    <div 
+                      key={employee.id} 
+                      className="p-4 rounded-xl border border-border bg-muted/30 hover:bg-muted/50 transition-colors"
+                      data-testid={`employee-overview-${employee.id}`}
+                    >
                       <div className="flex items-start justify-between mb-4">
                         <div>
-                          <h3 className="text-lg font-serif font-semibold text-primary" data-testid={`employee-name-${employee.id}`}>
+                          <h3 className="text-lg font-serif font-semibold text-foreground" data-testid={`employee-name-${employee.id}`}>
                             {employee.name}
                           </h3>
-                          <p className="text-muted-foreground" data-testid={`employee-position-${employee.id}`}>
+                          <p className="text-muted-foreground text-sm" data-testid={`employee-position-${employee.id}`}>
                             {employee.position}
                           </p>
                           {(employee.overall_rank || employee.ranking) && (
                             <div className="flex gap-2 mt-1">
                               {employee.overall_rank && (
-                                <span className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded">
+                                <span className="text-xs bg-secondary/10 text-secondary px-2 py-1 rounded-full font-medium">
                                   Rank: {formatOverallRank(employee.overall_rank)}
                                 </span>
                               )}
                               {employee.ranking && (
-                                <span className={`text-xs px-2 py-1 rounded ${getRankingHierarchy(employee.ranking).bgColor} ${getRankingHierarchy(employee.ranking).color}`}>
+                                <span className={`text-xs px-2 py-1 rounded-full font-medium ${getRankingHierarchy(employee.ranking).bgColor} ${getRankingHierarchy(employee.ranking).color}`}>
                                   {formatRanking(employee.ranking)} - {getRankingHierarchy(employee.ranking).level}
                                 </span>
                               )}
@@ -346,80 +382,62 @@ export default function Dashboard() {
                       </div>
                       
                       {/* All 6 Metrics Quick View */}
-                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                        <div className="text-center">
-                          <div className="text-lg font-serif font-bold text-primary">
+                      <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+                        <div className="text-center p-2 rounded-lg bg-background/50">
+                          <div className="text-base font-serif font-bold text-primary">
                             {formatCurrency(employee.ppa)}
                           </div>
                           <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
                             {KPI_DEFINITIONS.ppa.shortName}
                           </div>
-                          <div className={`text-xs ${getBenchmarkStatus('ppa', employee.ppa).class}`}>
-                            {getBenchmarkStatus('ppa', employee.ppa).text}
-                          </div>
                         </div>
                         
-                        <div className="text-center">
-                          <div className="text-lg font-serif font-bold text-secondary">
+                        <div className="text-center p-2 rounded-lg bg-background/50">
+                          <div className="text-base font-serif font-bold text-secondary">
                             {formatCurrency(employee.gpg)}
                           </div>
                           <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
                             {KPI_DEFINITIONS.gpg.shortName}
                           </div>
-                          <div className={`text-xs ${getBenchmarkStatus('gpg', employee.gpg).class}`}>
-                            {getBenchmarkStatus('gpg', employee.gpg).text}
-                          </div>
                         </div>
                         
-                        <div className="text-center">
-                          <div className="text-lg font-serif font-bold text-accent-foreground">
+                        <div className="text-center p-2 rounded-lg bg-background/50">
+                          <div className="text-base font-serif font-bold text-foreground">
                             {formatCurrency(employee.pplbw)}
                           </div>
                           <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
                             {KPI_DEFINITIONS.pplbw.shortName}
                           </div>
-                          <div className={`text-xs ${getBenchmarkStatus('pplbw', employee.pplbw).class}`}>
-                            {getBenchmarkStatus('pplbw', employee.pplbw).text}
-                          </div>
                         </div>
                         
-                        <div className="text-center">
-                          <div className="text-lg font-serif font-bold text-wood-texture">
+                        <div className="text-center p-2 rounded-lg bg-background/50">
+                          <div className="text-base font-serif font-bold text-foreground">
                             {formatLSCRatio(employee.lsc_ratio)}
                           </div>
                           <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
                             {KPI_DEFINITIONS.lsc_ratio.shortName}
                           </div>
-                          <div className={`text-xs ${getBenchmarkStatus('lsc_ratio', employee.lsc_ratio).class}`}>
-                            {getBenchmarkStatus('lsc_ratio', employee.lsc_ratio).text}
-                          </div>
                         </div>
                         
-                        <div className="text-center">
-                          <div className="text-lg font-serif font-bold text-brand-yellow">
+                        <div className="text-center p-2 rounded-lg bg-background/50">
+                          <div className="text-base font-serif font-bold text-accent-foreground">
                             {formatNumber(employee.metric_bonus_points)}
                           </div>
                           <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
                             {KPI_DEFINITIONS.metric_bonus_points.shortName}
                           </div>
-                          <div className="text-xs text-muted-foreground">
-                            Exceeds Benchmark
-                          </div>
                         </div>
                         
-                        <div className="text-center">
-                          <div className="text-2xl font-serif font-bold text-primary">
+                        <div className="text-center p-2 rounded-lg bg-primary/10">
+                          <div className="text-lg font-serif font-black text-primary">
                             {formatNumber(employee.cumulative_score)}
                           </div>
                           <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
                             {KPI_DEFINITIONS.cumulative_score.shortName}
                           </div>
-                          <div className={`text-xs performance-badge ${getPerformanceLevel(employee.cumulative_score).class}`}>
-                            {getPerformanceLevel(employee.cumulative_score).text}
-                          </div>
                         </div>
                       </div>
-                    </Card>
+                    </div>
                   );
                 })}
               </div>
@@ -427,14 +445,24 @@ export default function Dashboard() {
               {employees.length > 3 && (
                 <div className="mt-6 text-center">
                   <Link to="/employees">
-                    <Button variant="outline" className="bubba-btn-secondary" data-testid="view-all-employees-btn">
-                      View All {employees.length} Employees
-                    </Button>
+                    <button className="bubba-btn-secondary" data-testid="view-all-employees-btn">
+                      View All {employees.length} Crew Members
+                    </button>
                   </Link>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {employees.length === 0 && (
+          <div className="bubba-card p-12 text-center">
+            <Fish className="w-16 h-16 text-muted-foreground/30 mx-auto mb-4" />
+            <p className="empty-state-quote">
+              Mama always said, you gotta upload some data before you can see results.
+            </p>
+          </div>
         )}
       </div>
     </div>
