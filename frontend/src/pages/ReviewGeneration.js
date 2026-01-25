@@ -277,17 +277,16 @@ export default function ReviewGeneration() {
                 <p className="text-sm text-muted-foreground">Upload quarterly chart for page 2</p>
               </div>
             </div>
-          <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Employee</label>
+                <label className="text-sm font-medium">Crew Member</label>
                 <select
-                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  className="w-full h-10 rounded-lg border-2 border-input bg-background px-3 text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors"
                   value={selectedEmployeeId}
                   onChange={(e) => setSelectedEmployeeId(e.target.value)}
                   data-testid="line-graph-employee-select"
                 >
-                  <option value="">Select an employee</option>
+                  <option value="">Select a crew member</option>
                   {employees.map((e) => (
                     <option key={e.id} value={e.id}>
                       {e.name}
@@ -299,7 +298,7 @@ export default function ReviewGeneration() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Graph Type</label>
                 <select
-                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  className="w-full h-10 rounded-lg border-2 border-input bg-background px-3 text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors"
                   value={selectedGraphKind}
                   onChange={(e) => setSelectedGraphKind(e.target.value)}
                   data-testid="line-graph-kind-select"
@@ -319,8 +318,8 @@ export default function ReviewGeneration() {
                 toast.success("Line graph uploaded successfully!");
               }}
             />
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Employee List */}
         {employees.length === 0 ? (
