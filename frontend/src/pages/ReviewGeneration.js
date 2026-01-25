@@ -5,10 +5,8 @@ import axios from "axios";
 import Navigation from "../components/Navigation";
 import LineGraphUpload from "../components/LineGraphUpload";
 import { Button } from "../components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { Badge } from "../components/ui/badge";
-import { formatCurrency, formatLSCRatio, formatNumber, getPerformanceLevel, getBenchmarkStatus, KPI_DEFINITIONS } from "../utils/formatters";
+import { formatCurrency, formatLSCRatio, formatNumber } from "../utils/formatters";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -20,7 +18,6 @@ export default function ReviewGeneration() {
   const [generating, setGenerating] = useState({});
   const [selectedQuarter, setSelectedQuarter] = useState("Q4");
   const [selectedYear, setSelectedYear] = useState("2025");
-
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [selectedGraphKind, setSelectedGraphKind] = useState("quarter");
 
@@ -52,111 +49,32 @@ export default function ReviewGeneration() {
 
   const generateReview = async (employeeId) => {
     setGenerating(prev => ({ ...prev, [employeeId]: true }));
-    
     try {
-      toast.loading("Generating review with AI...", {
-        id: `review-${employeeId}`,
-        duration: 30000
-      });
+      const employee = employees.find(e => e.id === employeeId);
+      const response = await axios.post(
+        `${API}/employees/${employeeId}/generate-review`,
+        { quarter: selectedQuarter, year: parseInt(selectedYear) },
+        { responseType: 'blob' }
+      );
       
-      const response = await axios.post(`${API}/employees/${employeeId}/generate-review`, {
-        quarter: selectedQuarter,
-        year: parseInt(selectedYear)
-      }, {
-        timeout: 60000 // 60 second timeout
-      });
-
-      toast.dismiss(`review-${employeeId}`);
-
-      if (response.data.success) {
-        toast.success("Review generated successfully!", {
-          description: "Processing PDF download...",
-          duration: 2000
-        });
-        
-        // Download PDF
-        if (response.data.pdf_base64) {
-          const employee = employees.find(emp => emp.id === employeeId);
-          const filename = `${employee?.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'Employee'}_${selectedQuarter}_${selectedYear}_Review.pdf`;
-          downloadPDF(response.data.pdf_base64, filename);
-        } else {
-          toast.warning("Review generated but PDF creation failed");
-        }
-        
-        fetchReviews();
-      } else {
-        toast.error(response.data.message || "Failed to generate review");
-      }
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const filename = `${employee?.name.replace(/[^a-zA-Z0-9]/g, '_') || 'Employee'}_${selectedQuarter}_${selectedYear}_Review.pdf`;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success(`Review generated for ${employee?.name || 'employee'}`);
+      fetchReviews();
     } catch (error) {
-      toast.dismiss(`review-${employeeId}`);
       console.error("Error generating review:", error);
-      
-      if (error.code === 'ECONNABORTED') {
-        toast.error("Review generation timed out. Please try again.");
-      } else if (error.response?.status === 500) {
-        toast.error("Server error. Please check your API key and try again.");
-      } else {
-        toast.error("Error generating review: " + (error.response?.data?.detail || error.message));
-      }
+      toast.error("Error generating review: " + (error.response?.data?.detail || error.message));
     } finally {
       setGenerating(prev => ({ ...prev, [employeeId]: false }));
-    }
-  };
-
-  const downloadPDF = (base64Data, filename) => {
-    try {
-      // Create blob from base64 data
-      const binaryString = atob(base64Data);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      const blob = new Blob([bytes], { type: 'application/pdf' });
-      
-      // Check if we're on mobile
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      
-      if (isMobile) {
-        // For mobile devices, open PDF in new window/tab
-        const url = URL.createObjectURL(blob);
-        const newWindow = window.open(url, '_blank');
-        if (!newWindow) {
-          // If popup blocked, show message with URL
-          toast.success("Review generated! PDF will download shortly.", {
-            description: "If download doesn't start, check your downloads folder.",
-            duration: 5000
-          });
-          // Fallback: still try the download link method
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = filename;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-        }
-        
-        // Clean up URL after a delay
-        setTimeout(() => URL.revokeObjectURL(url), 10000);
-      } else {
-        // Desktop: use standard download method
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-      }
-      
-      toast.success("Review PDF generated successfully!", {
-        description: `${filename} ready for download`,
-        duration: 3000
-      });
-      
-    } catch (error) {
-      console.error('PDF download error:', error);
-      toast.error("PDF generated but download failed. Please try again.");
     }
   };
 
@@ -178,7 +96,7 @@ export default function ReviewGeneration() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-paper-bg">
+      <div className="min-h-screen bg-background">
         <Navigation />
         <div className="flex items-center justify-center h-96">
           <div className="loading-spinner"></div>
@@ -188,9 +106,10 @@ export default function ReviewGeneration() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Paper texture overlay */}
-      <div className="fixed inset-0 pointer-events-none paper-texture" />
+    <div className="min-h-screen bg-background relative overflow-hidden">
+      {/* Decorative splashes */}
+      <div className="splash-red" style={{ top: '10%', right: '5%' }} />
+      <div className="splash-blue" style={{ bottom: '15%', left: '3%', opacity: 0.5 }} />
       
       <Navigation />
       
@@ -203,22 +122,22 @@ export default function ReviewGeneration() {
               Review Generation
             </h1>
           </div>
-          <p className="text-muted-foreground italic" data-testid="page-subtitle">
-            "Run Forrest, run!" ...to generate those quarterly reviews
+          <p className="text-gray-500 italic" data-testid="page-subtitle">
+            Generate quarterly performance reviews for your crew
           </p>
         </div>
 
         {/* Review Settings */}
-        <div className="bubba-card mb-8 overflow-hidden" data-testid="review-settings-card">
-          <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-16 h-6 bg-accent/80 rotate-[-2deg] shadow-sm z-10" />
-          <div className="p-6">
+        <div className="bubba-card mb-8" data-testid="review-settings-card">
+          <div className="tape" style={{ top: '-8px', left: '50%', transform: 'translateX(-50%) rotate(-2deg)' }} />
+          <div className="p-6 pt-8">
             <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 rounded-full bg-primary/10">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
                 <FileText className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h2 className="text-xl font-serif font-bold text-foreground">Review Settings</h2>
-                <p className="text-sm text-muted-foreground">Configure the review period</p>
+                <h2 className="text-lg font-serif font-bold text-foreground">Review Settings</h2>
+                <p className="text-sm text-gray-500">Configure the review period</p>
               </div>
             </div>
             
@@ -226,7 +145,7 @@ export default function ReviewGeneration() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Quarter</label>
                 <Select value={selectedQuarter} onValueChange={setSelectedQuarter}>
-                  <SelectTrigger data-testid="quarter-select">
+                  <SelectTrigger data-testid="quarter-select" className="border-2 border-gray-200">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -241,7 +160,7 @@ export default function ReviewGeneration() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Year</label>
                 <Select value={selectedYear} onValueChange={setSelectedYear}>
-                  <SelectTrigger data-testid="year-select">
+                  <SelectTrigger data-testid="year-select" className="border-2 border-gray-200">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -252,12 +171,11 @@ export default function ReviewGeneration() {
               </div>
             </div>
             
-            <div className="mt-6 p-4 bg-muted/30 rounded-xl border border-border">
-              <h4 className="font-serif font-semibold text-foreground mb-2">Review Features</h4>
-              <ul className="text-sm text-muted-foreground space-y-1">
+            <div className="mt-6 p-4 bg-gray-50 rounded-xl border border-gray-200">
+              <h4 className="font-serif font-bold text-foreground mb-2">Review Features</h4>
+              <ul className="text-sm text-gray-500 space-y-1">
                 <li>• AI-powered content generation using GPT-5.2</li>
                 <li>• Human-like, HR-defensible review language</li>
-                <li>• Focus on 6 key KPIs: PPA, GPG, PPLBW, LSC Ratio, Bonus Points, Score</li>
                 <li>• Professional PDF with Bubba Gump branding</li>
               </ul>
             </div>
@@ -265,32 +183,31 @@ export default function ReviewGeneration() {
         </div>
 
         {/* Line Graph Upload Section */}
-        <div className="bubba-card mb-8 overflow-hidden" data-testid="line-graph-upload-card">
-          <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-16 h-6 bg-secondary/80 rotate-[1deg] shadow-sm z-10" />
-          <div className="p-6">
+        <div className="bubba-card mb-8" data-testid="line-graph-upload-card">
+          <div className="tape tape-blue" style={{ top: '-8px', left: '50%', transform: 'translateX(-50%) rotate(1deg)' }} />
+          <div className="p-6 pt-8">
             <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 rounded-full bg-secondary/10">
+              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
                 <Anchor className="w-5 h-5 text-secondary" />
               </div>
               <div>
-                <h2 className="text-xl font-serif font-bold text-foreground">Crew Line Graph</h2>
-                <p className="text-sm text-muted-foreground">Upload quarterly chart for page 2</p>
+                <h2 className="text-lg font-serif font-bold text-foreground">Crew Line Graph</h2>
+                <p className="text-sm text-gray-500">Upload quarterly chart for page 2</p>
               </div>
             </div>
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Crew Member</label>
                 <select
-                  className="w-full h-10 rounded-lg border-2 border-input bg-background px-3 text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors"
+                  className="w-full h-10 rounded-lg border-2 border-gray-200 bg-white px-3 text-sm focus:border-primary transition-colors"
                   value={selectedEmployeeId}
                   onChange={(e) => setSelectedEmployeeId(e.target.value)}
                   data-testid="line-graph-employee-select"
                 >
                   <option value="">Select a crew member</option>
                   {employees.map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {e.name}
-                    </option>
+                    <option key={e.id} value={e.id}>{e.name}</option>
                   ))}
                 </select>
               </div>
@@ -298,7 +215,7 @@ export default function ReviewGeneration() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Graph Type</label>
                 <select
-                  className="w-full h-10 rounded-lg border-2 border-input bg-background px-3 text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors"
+                  className="w-full h-10 rounded-lg border-2 border-gray-200 bg-white px-3 text-sm focus:border-primary transition-colors"
                   value={selectedGraphKind}
                   onChange={(e) => setSelectedGraphKind(e.target.value)}
                   data-testid="line-graph-kind-select"
@@ -314,36 +231,32 @@ export default function ReviewGeneration() {
               quarter={selectedQuarter}
               year={parseInt(selectedYear)}
               graphKind={selectedGraphKind}
-              onUploadSuccess={() => {
-                toast.success("Line graph uploaded successfully!");
-              }}
+              onUploadSuccess={() => toast.success("Line graph uploaded successfully!")}
             />
           </div>
         </div>
 
         {/* Employee List */}
         {employees.length === 0 ? (
-          <Card className="bubba-card" data-testid="no-employees">
-            <CardContent className="text-center py-12">
-              <User className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No employees available</h3>
-              <p className="text-muted-foreground mb-6">
-                Upload employee data from the dashboard to start generating reviews
-              </p>
-              <Button asChild className="bubba-btn-primary">
-                <a href="/" data-testid="go-to-dashboard-btn">Go to Dashboard</a>
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="bubba-card p-12 text-center" data-testid="no-employees">
+            <User className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-serif font-bold mb-2">No crew members available</h3>
+            <p className="text-gray-500 mb-6">
+              Upload employee data from the dashboard to start generating reviews
+            </p>
+            <a href="/" className="bubba-btn-primary inline-block" data-testid="go-to-dashboard-btn">
+              Go to Dashboard
+            </a>
+          </div>
         ) : (
           <div className="space-y-4" data-testid="employee-review-list">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-serif font-semibold text-primary">
-                Employee Reviews for {selectedQuarter} {selectedYear}
+              <h2 className="text-xl font-serif font-bold text-foreground">
+                Reviews for {selectedQuarter} {selectedYear}
               </h2>
-              <Badge variant="outline" className="text-sm">
-                {employees.length} employees
-              </Badge>
+              <span className="px-3 py-1 bg-gray-100 rounded-full text-sm font-semibold text-gray-600">
+                {employees.length} crew members
+              </span>
             </div>
             
             {employees.map((employee) => {
@@ -352,69 +265,31 @@ export default function ReviewGeneration() {
               const isGenerating = generating[employee.id];
               
               return (
-                <Card key={employee.id} className="bubba-card" data-testid={`employee-review-card-${employee.id}`}>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
+                <div key={employee.id} className="bubba-card" data-testid={`employee-review-card-${employee.id}`}>
+                  <div className="p-5">
+                    <div className="flex items-center justify-between flex-wrap gap-4">
                       <div className="flex items-center gap-4">
                         <div>
-                          <h3 className="text-lg font-serif font-semibold text-primary" data-testid={`employee-name-${employee.id}`}>
+                          <h3 className="text-lg font-serif font-bold text-foreground" data-testid={`employee-name-${employee.id}`}>
                             {employee.name}
                           </h3>
-                          <p className="text-muted-foreground" data-testid={`employee-position-${employee.id}`}>
+                          <p className="text-gray-500 text-sm" data-testid={`employee-position-${employee.id}`}>
                             {employee.position}
                           </p>
                         </div>
                         
-                        {/* KPI Summary - All 6 Metrics */}
-                        <div className="hidden md:flex gap-4 ml-8">
-                          <div className="text-center">
-                            <div className="text-sm font-serif font-bold text-primary">
-                              {formatNumber(employee.cumulative_score)}
+                        {/* KPI Summary */}
+                        <div className="hidden md:flex gap-3 ml-4">
+                          {[
+                            { label: 'Score', value: formatNumber(employee.cumulative_score), color: 'text-primary' },
+                            { label: 'PPA', value: formatCurrency(employee.ppa), color: 'text-secondary' },
+                            { label: 'GPG', value: formatCurrency(employee.gpg), color: 'text-gray-600' },
+                          ].map((kpi, i) => (
+                            <div key={i} className="text-center px-3 py-1 bg-gray-50 rounded-lg">
+                              <div className={`text-sm font-serif font-bold ${kpi.color}`}>{kpi.value}</div>
+                              <div className="text-[10px] text-gray-500 uppercase font-semibold">{kpi.label}</div>
                             </div>
-                            <div className="text-xs text-muted-foreground uppercase">
-                              Final Grade
-                            </div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-sm font-serif font-bold text-secondary">
-                              {formatCurrency(employee.ppa)}
-                            </div>
-                            <div className="text-xs text-muted-foreground uppercase">
-                              PPA
-                            </div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-sm font-serif font-bold text-accent-foreground">
-                              {formatCurrency(employee.gpg)}
-                            </div>
-                            <div className="text-xs text-muted-foreground uppercase">
-                              GPG
-                            </div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-sm font-serif font-bold text-wood-texture">
-                              {formatCurrency(employee.pplbw)}
-                            </div>
-                            <div className="text-xs text-muted-foreground uppercase">
-                              PPLBW
-                            </div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-sm font-serif font-bold text-muted-foreground">
-                              {formatLSCRatio(employee.lsc_ratio)}
-                            </div>
-                            <div className="text-xs text-muted-foreground uppercase">
-                              LSC
-                            </div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-sm font-serif font-bold text-brand-yellow">
-                              {formatNumber(employee.metric_bonus_points)}
-                            </div>
-                            <div className="text-xs text-muted-foreground uppercase">
-                              Bonus
-                            </div>
-                          </div>
+                          ))}
                         </div>
                       </div>
                       
@@ -423,7 +298,7 @@ export default function ReviewGeneration() {
                           <div className="flex items-center gap-2 text-green-600">
                             <Clock className="w-4 h-4" />
                             <span className="text-sm font-medium">
-                              Generated {new Date(review.created_at).toLocaleDateString()}
+                              {new Date(review.created_at).toLocaleDateString()}
                             </span>
                           </div>
                         )}
@@ -436,58 +311,23 @@ export default function ReviewGeneration() {
                         >
                           {isGenerating ? (
                             <div className="flex items-center gap-2">
-                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
                               Generating...
                             </div>
                           ) : (
                             <div className="flex items-center gap-2">
                               <Download className="w-4 h-4" />
-                              {hasReview ? "Regenerate Review" : "Generate Review"}
+                              {hasReview ? "Regenerate" : "Generate"}
                             </div>
                           )}
                         </Button>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               );
             })}
           </div>
-        )}
-
-        {/* Recent Reviews */}
-        {reviews.length > 0 && (
-          <Card className="bubba-card mt-12" data-testid="recent-reviews-card">
-            <CardHeader>
-              <CardTitle className="text-xl font-serif text-primary">
-                Recent Reviews
-              </CardTitle>
-              <CardDescription>
-                Latest generated performance reviews
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {reviews.slice(0, 10).map((review) => (
-                  <div 
-                    key={review.id} 
-                    className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-muted/30 transition-colors"
-                    data-testid={`recent-review-${review.id}`}
-                  >
-                    <div>
-                      <h4 className="font-medium text-primary">{review.employee_name}</h4>
-                      <p className="text-sm text-muted-foreground">
-                        {review.quarter} {review.year} • Generated {new Date(review.created_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <Badge variant="outline">
-                      {review.quarter} {review.year}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
         )}
       </div>
     </div>
