@@ -54,15 +54,15 @@
 }
 
 .upload-zone {
-  border: 2px dashed #D12E2E;
+  border: 2px dashed hsl(var(--primary));
   border-radius: 12px;
-  background: rgba(209, 46, 46, 0.05);
+  background: color-mix(in srgb, hsl(var(--primary)) 8%, transparent);
   transition: all 0.3s ease;
 }
 
 .upload-zone:hover {
-  border-color: #B91C1C;
-  background: rgba(209, 46, 46, 0.1);
+  border-color: hsl(var(--secondary));
+  background: color-mix(in srgb, hsl(var(--secondary)) 10%, transparent);
 }
 
 .upload-zone.drag-over {
