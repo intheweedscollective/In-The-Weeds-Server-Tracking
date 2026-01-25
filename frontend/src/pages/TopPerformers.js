@@ -253,64 +253,53 @@ export default function TopPerformers() {
             </div>
 
             {topOverall.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground">
+              <div className="text-center py-8 text-gray-400">
                 <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
                 <p>No cumulative score data available</p>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
 
         {/* Top Performers by Metric */}
-        <div className="space-y-12 print:space-y-8">
+        <div className="space-y-8 print:space-y-6">
           {Object.entries(KPI_DEFINITIONS).map(([metricKey, metricInfo]) => {
             const performers = topPerformers[metricKey] || [];
             
             return (
-              <Card key={metricKey} className="bubba-card">
-                <CardHeader>
-                  <CardTitle className="text-2xl font-serif text-primary flex items-center gap-3">
-                    <Trophy className="w-6 h-6 text-yellow-500" />
+              <div key={metricKey} className="bubba-card">
+                <div className="p-5">
+                  <h3 className="text-lg font-serif font-bold text-foreground mb-1">
                     Top 10 - {metricInfo.name}
-                  </CardTitle>
-                  <CardDescription className="text-base">
+                  </h3>
+                  <p className="text-sm text-gray-500 mb-4">
                     {metricKey === 'lsc_ratio' 
                       ? `Best LSC conversion rates (lower is better) • Benchmark: 1 in 100`
                       : `Highest ${metricInfo.name} performers • Benchmark: ${metricInfo.format === 'currency' ? '$' + metricInfo.benchmark : metricInfo.benchmark}`
                     }
-                  </CardDescription>
-                </CardHeader>
+                  </p>
                 
-                <CardContent>
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     {performers.map((employee, index) => {
                       const ranking = getRankingHierarchy(employee.ranking);
                       
                       return (
-                        <div key={employee.id} className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-muted/30 transition-colors">
-                          <div className="flex items-center gap-4">
-                            <div className="flex items-center justify-center w-10 h-10 bg-muted rounded-full">
-                              {getMetricIcon(index + 1)}
+                        <div key={employee.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center justify-center w-8 h-8 bg-gray-100 rounded-full text-sm font-bold text-primary">
+                              {index + 1}
                             </div>
                             
                             <div>
-                              <h4 className="font-semibold text-primary">{employee.name}</h4>
-                              <p className="text-sm text-muted-foreground">{employee.position}</p>
-                              {employee.ranking && (
-                                <Badge className={`text-xs mt-1 ${ranking.bgColor} ${ranking.color}`}>
-                                  {employee.ranking} - {ranking.level}
-                                </Badge>
-                              )}
+                              <h4 className="font-semibold text-foreground text-sm">{employee.name}</h4>
+                              <p className="text-xs text-gray-500">{employee.position}</p>
                             </div>
                           </div>
                           
                           <div className="text-right">
-                            <div className="text-2xl font-serif font-bold text-primary">
+                            <div className="text-lg font-serif font-bold text-primary">
                               {formatMetricValue(metricKey, employee[metricKey])}
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              Overall Rank: {formatOverallRank(employee.overall_rank)}
                             </div>
                           </div>
                         </div>
@@ -319,20 +308,20 @@ export default function TopPerformers() {
                   </div>
                   
                   {performers.length === 0 && (
-                    <div className="text-center py-8 text-muted-foreground">
+                    <div className="text-center py-8 text-gray-400">
                       <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
                       <p>No performance data available for this metric</p>
                     </div>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             );
           })}
         </div>
         
         {/* Footer for print */}
-        <div className="hidden print:block mt-12 pt-6 border-t text-center text-sm text-muted-foreground">
-          <p>🦐 Bubba Gump Shrimp Co. Las Vegas • Top Performers Report • Generated {new Date().toLocaleDateString()} 🦐</p>
+        <div className="hidden print:block mt-12 pt-6 border-t text-center text-sm text-gray-400">
+          <p>Bubba Gump Shrimp Co. Las Vegas • Top Performers Report • Generated {new Date().toLocaleDateString()}</p>
         </div>
       </div>
     </div>
