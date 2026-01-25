@@ -205,31 +205,30 @@ export default function EmployeeList() {
               {employees.length === 0 
                 ? "Upload an Excel file to get started" 
                 : "Try adjusting your search or filters"}
-              </p>
-            </CardContent>
-          </Card>
+            </p>
+          </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6" data-testid="employee-grid">
             {filteredEmployees.map((employee) => {
               const performance = getPerformanceLevel(employee.cumulative_score);
               
               return (
-                <Card key={employee.id} className="bubba-card" data-testid={`employee-card-${employee.id}`}>
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
+                <div key={employee.id} className="bubba-card" data-testid={`employee-card-${employee.id}`}>
+                  <div className="tape" style={{ top: '-8px', left: '50%', transform: 'translateX(-50%) rotate(1deg)' }} />
+                  <div className="p-5 pt-7">
+                    <div className="flex items-start justify-between mb-4">
                       <div>
-                        <CardTitle className="text-lg font-serif text-primary" data-testid={`employee-name-${employee.id}`}>
+                        <h3 className="text-lg font-serif font-bold text-foreground" data-testid={`employee-name-${employee.id}`}>
                           {employee.name}
-                        </CardTitle>
-                        <CardDescription data-testid={`employee-position-${employee.id}`}>
+                        </h3>
+                        <p className="text-gray-500 text-sm" data-testid={`employee-position-${employee.id}`}>
                           {employee.position}
-                        </CardDescription>
+                        </p>
                       </div>
-                      <Badge className={`performance-badge ${performance.class}`} data-testid={`employee-performance-${employee.id}`}>
+                      <span className={`performance-badge ${performance.class}`} data-testid={`employee-performance-${employee.id}`}>
                         {performance.text}
-                      </Badge>
+                      </span>
                     </div>
-                  </CardHeader>
                   
                   <CardContent>
                     {/* All 6 KPI Grid */}
