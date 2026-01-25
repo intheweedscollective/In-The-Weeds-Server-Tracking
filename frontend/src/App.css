@@ -89,7 +89,7 @@
 .kpi-value {
   font-size: 2rem;
   font-weight: 900;
-  color: #D12E2E;
+  color: hsl(var(--primary));
   font-family: 'Merriweather', serif;
 }
 
