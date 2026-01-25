@@ -15,35 +15,35 @@ export default function Navigation() {
   ];
 
   return (
-    <nav className="bubba-header shadow-lg" data-testid="main-navigation">
+    <nav className="bg-gradient-to-r from-secondary via-secondary to-primary shadow-lg" data-testid="main-navigation">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-auto py-3 md:h-16 md:py-0">
           <div className="flex items-center gap-2 md:gap-3" data-testid="nav-brand">
             <img 
               src="https://customer-assets.emergentagent.com/job_beaba37a-d1bc-43b6-b0ee-0f4c332229d2/artifacts/shpi6789_IMG_0599.png" 
               alt="Bubba Gump" 
-              className="w-8 h-8 md:w-10 md:h-10 rounded-full flex-shrink-0"
+              className="w-8 h-8 md:w-10 md:h-10 rounded-full flex-shrink-0 border-2 border-white/30"
               data-testid="nav-logo"
             />
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 text-white">
               <h1 className="text-sm md:text-xl font-serif font-bold truncate" data-testid="nav-title">
                 Bubba Gump Shrimp Co.
               </h1>
-              <p className="text-xs md:text-sm opacity-90 truncate" data-testid="nav-subtitle">Las Vegas • Performance Management</p>
+              <p className="text-xs md:text-sm opacity-80 truncate" data-testid="nav-subtitle">Las Vegas • Performance Management</p>
             </div>
           </div>
 
-          <div className="flex space-x-0.5 md:space-x-1" data-testid="nav-links">
+          <div className="flex space-x-1 md:space-x-2" data-testid="nav-links">
             {navItems.map(({ path, label, icon: Icon }) => {
               const isActive = location.pathname === path;
               return (
                 <Link
                   key={path}
                   to={path}
-                  className={`flex flex-col md:flex-row items-center gap-0.5 md:gap-2 px-2 py-1.5 md:px-4 md:py-2 rounded-md text-xs md:text-sm font-medium transition-colors ${
+                  className={`flex flex-col md:flex-row items-center gap-0.5 md:gap-2 px-2 py-1.5 md:px-4 md:py-2 rounded-full text-xs md:text-sm font-semibold transition-all ${
                     isActive
-                      ? "bg-white/20 text-white"
-                      : "text-white/80 hover:bg-white/10 hover:text-white"
+                      ? "bg-white text-primary shadow-md"
+                      : "text-white/90 hover:bg-white/20 hover:text-white"
                   }`}
                   data-testid={`nav-link-${path.replace("/", "") || "dashboard"}`}
                 >
@@ -54,7 +54,7 @@ export default function Navigation() {
             })}
           </div>
 
-          <div className="ml-2 hidden sm:block">
+          <div className="ml-3">
             <ThemeToggle />
           </div>
         </div>
