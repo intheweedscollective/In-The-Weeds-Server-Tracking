@@ -119,11 +119,11 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
-      {/* Decorative splashes like the cocktail menu */}
-      <div className="splash-red" style={{ top: '10%', right: '5%', transform: 'rotate(-15deg)' }} />
-      <div className="splash-blue" style={{ top: '25%', left: '3%', transform: 'rotate(20deg)' }} />
-      <div className="splash-red" style={{ bottom: '20%', left: '8%', transform: 'rotate(-30deg)', opacity: 0.5 }} />
-      <div className="splash-blue" style={{ bottom: '10%', right: '10%', transform: 'rotate(15deg)', opacity: 0.6 }} />
+      {/* Decorative splashes - cocktail menu style */}
+      <div className="splash-red" style={{ top: '8%', right: '3%' }} />
+      <div className="splash-blue" style={{ top: '20%', left: '2%' }} />
+      <div className="splash-red" style={{ bottom: '15%', left: '5%', opacity: 0.4 }} />
+      <div className="splash-blue" style={{ bottom: '8%', right: '8%', opacity: 0.5 }} />
       
       <Navigation />
       
@@ -202,7 +202,7 @@ export default function Dashboard() {
             <div className="p-6 pt-8">
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-secondary/10 flex items-center justify-center">
+                  <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
                     <Anchor className="w-6 h-6 text-secondary" />
                   </div>
                   <div>
@@ -218,7 +218,7 @@ export default function Dashboard() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="text-destructive hover:bg-destructive/10 font-semibold"
+                    className="text-destructive hover:bg-red-50 font-semibold"
                     onClick={() => setConfirmClearOpen(true)}
                     data-testid="clear-all-employees-btn"
                   >
@@ -241,14 +241,14 @@ export default function Dashboard() {
                 ) : (
                   <div className="py-6 text-center" data-testid="upload-ready-state">
                     <div className="relative mx-auto w-16 h-16 mb-4">
-                      <Fish className="w-16 h-16 text-secondary/20" />
+                      <Fish className="w-16 h-16 text-blue-200" />
                       <Upload className="w-7 h-7 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
                     </div>
                     <p className="text-lg font-serif font-bold text-foreground mb-1">
                       {isDragActive ? 'Drop it like it\'s hot!' : 'Drag & drop Excel file'}
                     </p>
                     <p className="text-muted-foreground text-sm mb-3">or click to browse</p>
-                    <span className="inline-block px-4 py-1.5 bg-muted rounded-full text-xs font-semibold text-muted-foreground">
+                    <span className="inline-block px-4 py-1.5 bg-gray-100 rounded-full text-xs font-semibold text-gray-600">
                       .xlsx, .xls
                     </span>
                   </div>
@@ -263,7 +263,7 @@ export default function Dashboard() {
             
             <div className="p-6 pt-8">
               <div className="flex items-center gap-3 mb-6">
-                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
                   <FileText className="w-6 h-6 text-primary" />
                 </div>
                 <div>
@@ -292,23 +292,23 @@ export default function Dashboard() {
                 </Link>
               </div>
 
-              <div className="mt-6 pt-5 border-t-2 border-dashed border-border" data-testid="system-info">
+              <div className="mt-6 pt-5 border-t-2 border-dashed border-gray-200" data-testid="system-info">
                 <h4 className="font-serif font-bold text-foreground mb-3 flex items-center gap-2 text-sm">
                   <span className="w-2 h-2 bg-green-500 rounded-full"></span>
                   System Status
                 </h4>
                 <div className="grid grid-cols-3 gap-2 text-xs">
-                  <div className="text-center p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                  <div className="text-center p-2 bg-green-50 rounded-lg">
                     <div className="font-bold text-green-600">Online</div>
-                    <div className="text-muted-foreground">Database</div>
+                    <div className="text-gray-500">Database</div>
                   </div>
-                  <div className="text-center p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                  <div className="text-center p-2 bg-green-50 rounded-lg">
                     <div className="font-bold text-green-600">Ready</div>
-                    <div className="text-muted-foreground">AI</div>
+                    <div className="text-gray-500">AI</div>
                   </div>
-                  <div className="text-center p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                  <div className="text-center p-2 bg-green-50 rounded-lg">
                     <div className="font-bold text-green-600">Active</div>
-                    <div className="text-muted-foreground">PDF</div>
+                    <div className="text-gray-500">PDF</div>
                   </div>
                 </div>
               </div>
@@ -323,7 +323,7 @@ export default function Dashboard() {
             
             <div className="p-6 pt-8">
               <div className="flex items-center gap-3 mb-6">
-                <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center">
+                <div className="w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center">
                   <Award className="w-6 h-6 text-yellow-600" />
                 </div>
                 <h2 className="text-xl font-serif font-bold text-foreground">
@@ -338,7 +338,7 @@ export default function Dashboard() {
                   return (
                     <div 
                       key={employee.id} 
-                      className="p-4 rounded-xl border-2 border-border bg-muted/20 hover:bg-muted/40 transition-colors"
+                      className="p-4 rounded-xl border-2 border-gray-200 bg-gray-50 hover:bg-gray-100 transition-colors"
                       data-testid={`employee-overview-${employee.id}`}
                     >
                       <div className="flex items-start justify-between mb-4">
@@ -346,13 +346,13 @@ export default function Dashboard() {
                           <h3 className="text-lg font-serif font-bold text-foreground" data-testid={`employee-name-${employee.id}`}>
                             {employee.name}
                           </h3>
-                          <p className="text-muted-foreground text-sm" data-testid={`employee-position-${employee.id}`}>
+                          <p className="text-gray-500 text-sm" data-testid={`employee-position-${employee.id}`}>
                             {employee.position}
                           </p>
                           {(employee.overall_rank || employee.ranking) && (
                             <div className="flex gap-2 mt-1.5">
                               {employee.overall_rank && (
-                                <span className="text-xs bg-secondary/10 text-secondary px-2.5 py-1 rounded-full font-bold">
+                                <span className="text-xs bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-bold">
                                   Rank: {formatOverallRank(employee.overall_rank)}
                                 </span>
                               )}
@@ -374,14 +374,14 @@ export default function Dashboard() {
                         {[
                           { val: formatCurrency(employee.ppa), label: KPI_DEFINITIONS.ppa.shortName, color: 'text-primary' },
                           { val: formatCurrency(employee.gpg), label: KPI_DEFINITIONS.gpg.shortName, color: 'text-secondary' },
-                          { val: formatCurrency(employee.pplbw), label: KPI_DEFINITIONS.pplbw.shortName, color: 'text-foreground' },
-                          { val: formatLSCRatio(employee.lsc_ratio), label: KPI_DEFINITIONS.lsc_ratio.shortName, color: 'text-foreground' },
+                          { val: formatCurrency(employee.pplbw), label: KPI_DEFINITIONS.pplbw.shortName, color: 'text-gray-700' },
+                          { val: formatLSCRatio(employee.lsc_ratio), label: KPI_DEFINITIONS.lsc_ratio.shortName, color: 'text-gray-700' },
                           { val: formatNumber(employee.metric_bonus_points), label: KPI_DEFINITIONS.metric_bonus_points.shortName, color: 'text-yellow-600' },
                           { val: formatNumber(employee.cumulative_score), label: 'Score', color: 'text-primary font-black' },
                         ].map((m, i) => (
-                          <div key={i} className="text-center p-2 rounded-lg bg-background border border-border">
+                          <div key={i} className="text-center p-2 rounded-lg bg-white border border-gray-200">
                             <div className={`text-sm font-serif font-bold ${m.color}`}>{m.val}</div>
-                            <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">{m.label}</div>
+                            <div className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider">{m.label}</div>
                           </div>
                         ))}
                       </div>
@@ -406,11 +406,11 @@ export default function Dashboard() {
         {/* Empty State */}
         {employees.length === 0 && (
           <div className="bubba-card p-10 text-center">
-            <Fish className="w-20 h-20 text-secondary/20 mx-auto mb-4" />
+            <Fish className="w-20 h-20 text-blue-200 mx-auto mb-4" />
             <p className="empty-state-quote">
               Mama always said, you gotta upload some data before you can see results.
             </p>
-            <p className="text-sm text-muted-foreground mt-4">
+            <p className="text-sm text-gray-500 mt-4">
               Drop an Excel file above to get started
             </p>
           </div>
