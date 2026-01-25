@@ -9,7 +9,7 @@ import "./App.css";
 
 function App() {
   return (
-    <div className="min-h-screen bg-paper-bg">
+    <div className="min-h-screen bg-background">
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Dashboard />} />
