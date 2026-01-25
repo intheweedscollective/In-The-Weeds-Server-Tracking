@@ -1,126 +1,172 @@
 {
-  "identity": {
-    "name": "Bubba Gump Performance Hub",
-    "tone": "Professional, Trustworthy, Warm, Efficient",
-    "aesthetic": "Corporate Coastal - Clean lines, ample whitespace, warm accents",
-    "design_philosophy": "Clarity first. Data should be breathable. Dark mode should be 'dim' not 'black'."
-  },
-  "typography": {
-    "font_family": {
-      "headings": "Merriweather, serif",
-      "body": "Inter, sans-serif",
-      "mono": "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+  "design_system": {
+    "identity": {
+      "name": "Bubba Gump Performance Hub",
+      "persona": "The Friendly Captain",
+      "vibe": "Coastal, Rustic, Warm, Fun, Nostalgic",
+      "principles": [
+        "No Boring Corporate UI: If it looks like Excel, burn it.",
+        "Texture is King: Use wood, paper, and net textures to kill the digital flatness.",
+        "Storytelling: Every review is a story, not just a stat.",
+        "Warmth over Coolness: Use warm lights, wood tones, and friendly colors."
+      ]
     },
-    "usage": {
-      "h1": "text-3xl md:text-4xl font-bold tracking-tight text-foreground font-serif",
-      "h2": "text-2xl font-semibold tracking-tight text-foreground font-serif",
-      "h3": "text-xl font-semibold tracking-tight text-foreground font-serif",
-      "body": "text-base font-normal leading-relaxed text-muted-foreground font-sans",
-      "small": "text-sm font-medium leading-none text-muted-foreground font-sans"
-    }
-  },
-  "colors": {
-    "palette": {
-      "primary": "#D12E2E",
-      "secondary": "#005B96",
-      "accent": "#F4D03F",
-      "success": "#10B981",
-      "warning": "#F59E0B",
-      "error": "#EF4444",
-      "info": "#3B82F6"
+    "typography": {
+      "headings": {
+        "family": "Merriweather, serif",
+        "weights": ["700", "900"],
+        "usage": "All section titles, card headers, and big stats. Gives that 'Storybook' or 'Old Sign' feel.",
+        "letterSpacing": "tracking-tight"
+      },
+      "body": {
+        "family": "Inter, sans-serif",
+        "weights": ["400", "500", "600"],
+        "usage": "Data tables, long text, inputs. Keep it legible but friendly."
+      },
+      "accents": {
+        "family": "Merriweather, serif",
+        "style": "italic",
+        "usage": "Quotes, 'Run Forrest Run' references, empty states."
+      }
     },
-    "theme_light": {
-      "background": "#F9FAFB",
-      "foreground": "#0F172A",
-      "card": "#FFFFFF",
-      "card_foreground": "#1E293B",
-      "border": "#E2E8F0",
-      "input": "#E2E8F0",
-      "muted": "#F1F5F9",
-      "muted_foreground": "#64748B"
+    "colors": {
+      "palette": {
+        "primary": {
+          "name": "Shrimp Red",
+          "hex": "#D12E2E",
+          "usage": "CTAs, High Priority Alerts, Branding"
+        },
+        "secondary": {
+          "name": "Ocean Blue",
+          "hex": "#005B96",
+          "usage": "Headers, Secondary Buttons, Links"
+        },
+        "accent": {
+          "name": "Sunshine Yellow",
+          "hex": "#F4D03F",
+          "usage": "Highlights, Stars, 'New' badges"
+        },
+        "neutral": {
+          "paper": "#F9F7F2",
+          "sand": "#E8DCCA",
+          "wood": "#8B5A2B",
+          "slate": "#2C3E50"
+        }
+      },
+      "themes": {
+        "light": {
+          "background": "#F9F7F2",
+          "card_bg": "#FFFFFF",
+          "text_primary": "#2C3E50",
+          "border": "#E8DCCA"
+        },
+        "dark": {
+          "background": "#0F172A",
+          "card_bg": "#1E293B",
+          "text_primary": "#F8FAFC",
+          "border": "#334155"
+        }
+      }
     },
-    "theme_dark": {
-      "background": "#0F172A",
-      "foreground": "#F8FAFC",
-      "card": "#1E293B",
-      "card_foreground": "#F8FAFC",
-      "border": "#334155",
-      "input": "#334155",
-      "muted": "#1E293B",
-      "muted_foreground": "#94A3B8"
+    "visual_enhancers": {
+      "textures": {
+        "wood_grain": "Use subtle wood grain patterns for sidebars or headers.",
+        "paper_texture": "Use a noise/grain overlay on cards to make them feel like physical menu items.",
+        "fishing_net": "Use net patterns for drag-and-drop zones."
+      },
+      "shadows": {
+        "card": "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+        "floating": "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)"
+      },
+      "borders": {
+        "radius": "rounded-xl",
+        "style": "border-2 border-dashed border-secondary/20 (for playful elements)"
+      }
     },
-    "gradients": {
-      "brand_subtle": "bg-gradient-to-br from-blue-50 to-red-50 dark:from-slate-900 dark:to-slate-800",
-      "card_hover": "hover:bg-accent/5 transition-colors duration-300"
-    }
-  },
-  "layout": {
-    "spacing": {
-      "container_padding": "p-6 md:p-8 lg:p-12",
-      "section_gap": "gap-8",
-      "card_padding": "p-6"
+    "layout": {
+      "grid_system": "Bento Grid (The Captain's Table)",
+      "spacing": "Generous (p-6 to p-12). Don't cram the shrimp.",
+      "container": "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"
     },
-    "grid": {
-      "dashboard": "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6",
-      "form": "grid grid-cols-1 md:grid-cols-2 gap-6"
-    },
-    "radius": {
-      "default": "rounded-xl",
-      "button": "rounded-full",
-      "card": "rounded-xl"
+    "motion": {
+      "hover": "transform: rotate(1deg) scale(1.02) (The 'Wobbly Sign' effect)",
+      "loading": "Spinning ship wheel or jumping shrimp",
+      "transition": "all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) (Bouncy)"
     }
   },
   "components": {
-    "stats_card": {
-      "structure": "flex items-center justify-between p-6 bg-card rounded-xl border border-border shadow-sm hover:shadow-md transition-all duration-200",
-      "icon_wrapper": "p-3 rounded-full bg-primary/10 text-primary",
-      "value_text": "text-3xl font-bold text-foreground font-serif",
-      "label_text": "text-sm font-medium text-muted-foreground uppercase tracking-wider"
-    },
-    "upload_zone": {
-      "container": "relative flex flex-col items-center justify-center w-full h-64 rounded-xl border-2 border-dashed border-muted-foreground/25 bg-muted/30 hover:bg-muted/50 hover:border-primary/50 transition-all duration-300 cursor-pointer",
-      "active_state": "border-primary bg-primary/5",
-      "text_primary": "mt-4 text-lg font-semibold text-foreground",
-      "text_secondary": "mt-2 text-sm text-muted-foreground"
-    },
     "buttons": {
-      "primary": "bg-primary text-primary-foreground hover:bg-primary/90 h-11 px-8 rounded-full font-medium transition-all shadow-sm hover:shadow-md",
-      "secondary": "bg-secondary text-secondary-foreground hover:bg-secondary/90 h-11 px-8 rounded-full font-medium transition-all shadow-sm",
-      "outline": "border-2 border-input bg-background hover:bg-accent hover:text-accent-foreground h-11 px-8 rounded-full font-medium transition-all",
-      "ghost": "hover:bg-accent hover:text-accent-foreground h-10 px-4 rounded-full font-medium"
+      "primary": "bg-primary text-white rounded-full shadow-lg hover:bg-primary/90 hover:scale-105 transition-all font-serif font-bold tracking-wide",
+      "secondary": "bg-transparent border-2 border-secondary text-secondary rounded-full hover:bg-secondary hover:text-white transition-all font-medium"
     },
-    "tables": {
-      "container": "w-full overflow-hidden rounded-xl border border-border bg-card shadow-sm",
-      "header": "bg-muted/50 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider",
-      "row": "border-b border-border hover:bg-muted/50 transition-colors",
-      "cell": "p-4 text-sm text-foreground"
+    "cards": {
+      "style": "bg-card text-card-foreground rounded-xl border border-border shadow-sm relative overflow-hidden",
+      "variant_menu": "Rotate slightly (-1deg or 1deg) on hover. Add a 'tape' visual at the top center."
+    },
+    "inputs": {
+      "style": "bg-background border-2 border-input rounded-lg focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+    },
+    "charts": {
+      "library": "Recharts (via Shadcn)",
+      "palette": ["#D12E2E", "#005B96", "#F4D03F", "#27AE60", "#E67E22"]
     }
   },
-  "visual_enhancers": {
-    "shadows": {
-      "soft": "shadow-[0_2px_8px_rgba(0,0,0,0.04)]",
-      "medium": "shadow-[0_8px_24px_rgba(0,0,0,0.08)]",
-      "glow": "shadow-[0_0_15px_rgba(209,46,46,0.15)]"
+  "assets": {
+    "images": {
+      "backgrounds": [
+        {
+          "url": "https://images.unsplash.com/photo-1755147661347-b4d5998eec83?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDN8MHwxfHNlYXJjaHwzfHxydXN0aWMlMjB3b29kJTIwdGV4dHVyZSUyMGNsb3NlJTIwdXB8ZW58MHx8fHwxNzY5MzM3MDM3fDA&ixlib=rb-4.1.0&q=85",
+          "description": "Dark rustic wood texture for sidebars or dark mode backgrounds"
+        },
+        {
+          "url": "https://images.unsplash.com/photo-1665477405518-a2999e1a32e1?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxOTB8MHwxfHNlYXJjaHwxfHxmaXNoaW5nJTIwbmV0JTIwdGV4dHVyZSUyMGJhY2tncm91bmR8ZW58MHx8fHwxNzY5MzM3MDQwfDA&ixlib=rb-4.1.0&q=85",
+          "description": "Fishing net texture for upload zones or subtle overlays"
+        },
+        {
+          "url": "https://images.unsplash.com/photo-1683481920223-20f4813683a4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODh8MHwxfHNlYXJjaHwxfHx0cm9waWNhbCUyMGJlYWNoJTIwcGllciUyMHN1bnNldHxlbnwwfHx8fDE3NjkzMzcwNDR8MA&ixlib=rb-4.1.0&q=85",
+          "description": "Tropical pier sunset for login screens or hero headers"
+        }
+      ],
+      "decorative": [
+        {
+          "url": "https://images.unsplash.com/photo-1741933795170-d94014320ff9?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjh8MHwxfHNlYXJjaHwxfHxzaHJpbXAlMjBkaXNoJTIwcmVzdGF1cmFudHxlbnwwfHx8fDE3NjkzMzcwNDJ8MA&ixlib=rb-4.1.0&q=85",
+          "description": "Shrimp dish for 'Top Performer' rewards or food references"
+        }
+      ]
     },
-    "glassmorphism": {
-      "light": "bg-white/80 backdrop-blur-md border border-white/20",
-      "dark": "bg-slate-900/80 backdrop-blur-md border border-white/10"
+    "icons": {
+      "library": "Lucide React",
+      "style": "Stroke width 2px, rounded corners. Use nautical icons where possible (Anchor, Ship, Fish, Waves)."
     }
   },
-  "instructions_to_main_agent": [
-    "UPDATE tailwind.config.js to use the new color palette defined in 'colors.theme_light' and 'colors.theme_dark'. Specifically, lighten the dark mode background from #0B1220 to #0F172A (Slate 900) and cards to #1E293B (Slate 800).",
-    "REFACTOR src/components/StatsCard.js to match the 'stats_card' component definition. Remove the old centered layout and use the new flex layout with icon on the left.",
-    "REFACTOR the upload zone in src/pages/Dashboard.js (or wherever it resides) to use the 'upload_zone' styles. Make it cleaner and less 'heavy'.",
-    "UPDATE src/index.css to apply the new global font settings and base styles.",
-    "ENSURE all buttons use the 'rounded-full' class to match the friendly Bubba Gump brand.",
-    "USE 'Merriweather' for all headings (h1-h3) and 'Inter' for body text.",
-    "ADD 'data-testid' attributes to all interactive elements as per the universal guidelines."
-  ],
-  "universal_guidelines": [
-    "Do not use gradients for main backgrounds, use solid colors or very subtle noise textures.",
-    "Ensure text contrast ratios meet WCAG AA standards (4.5:1 for normal text).",
-    "Use 'lucide-react' for icons if available, otherwise stick to the existing library but ensure consistent sizing.",
-    "Avoid 'pure black' (#000000) in dark mode; use Slate-900 or Slate-950.",
-    "Avoid 'pure white' (#FFFFFF) text on dark backgrounds; use Slate-50 or Slate-100 to reduce eye strain."
-  ]
+  "instructions_to_main_agent": {
+    "general": "You are building the 'Bubba Gump Performance Hub'. It must feel like a fun, well-loved tool used by restaurant managers at the pier. Avoid sterile corporate aesthetics. Use the provided textures and colors to create warmth.",
+    "specific_tasks": [
+      "Implement the 'Bento Grid' layout for the Dashboard.",
+      "Create a 'File Upload' component that looks like a fishing net catching the file.",
+      "Design the 'Employee Review' PDF generation flow to look like printing a special menu.",
+      "Use the 'Merriweather' font for all headings to maintain the brand voice.",
+      "Ensure the 'Dark/Light' toggle switches between 'Day at the Pier' and 'Night at the Shack'."
+    ],
+    "universal_guidelines": [
+      "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients",
+      "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+      "Create depth through layered design elements with z-index hierarchy",
+      "Use glass-morphism effects with backdrop filters (12-24px blur)",
+      "You MUST NOT apply universal transition. Eg: transition: all. This results in breaking transforms. Always add transitions for specific interactive elements like button, input excluding transforms",
+      "You MUST NOT center align the app container, ie do not add .App { text-align: center; } in the css file. This disrupts the human natural reading flow of text",
+      "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style",
+      "NEVER: use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯📚🎭🎬🎪🎉🎊🎁🎀🎂🍰🎈🎨🎰💰💵💳🏦💎🪙💸🤑📊📈📉💹🔢🏆🥇 etc for icons.",
+      "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations. Static = dead.",
+      "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+      "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations: separates good from extraordinary.",
+      "Main agent relies on these image URLs. Missing categories (especially sponsor logos) = main agent will use placeholder text which is FORBIDDEN",
+      "Prioritize using pre-existing components from src/components/ui when applicable",
+      "Create new components that match the style and conventions of existing components when needed",
+      "Examine existing components to understand the project's component patterns before creating new ones",
+      "Components MUST use named exports (export const ComponentName = ...)",
+      "Pages MUST use default exports (export default function PageName() {...})",
+      "Use sonner for toasts. Sonner component are located in /app/src/components/ui/sonner.tsx"
+    ]
+  }
 }
