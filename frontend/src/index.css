@@ -49,9 +49,9 @@ code {
         /* Rich dark navy theme */
         --background: 220 49% 8%; /* #0B1220 */
         --foreground: 210 40% 96%;
-        --card: 222 47% 11%; /* slightly lighter surface */
+        --card: 222 40% 16%; /* lighter surface for better contrast */
         --card-foreground: 210 40% 96%;
-        --popover: 222 47% 11%;
+        --popover: 222 40% 16%;
         --popover-foreground: 210 40% 96%;
 
         /* Keep brand accents */
@@ -62,12 +62,12 @@ code {
         --accent: 45 93% 58%;
         --accent-foreground: 220 49% 8%;
 
-        --muted: 221 30% 18%;
+        --muted: 221 25% 22%;
         --muted-foreground: 215 20% 75%;
         --destructive: 0 72% 45%;
         --destructive-foreground: 0 0% 100%;
-        --border: 220 25% 22%;
-        --input: 220 25% 22%;
+        --border: 220 20% 28%;
+        --input: 220 20% 28%;
         --ring: 209 100% 29%;
 
         --chart-1: 209 100% 55%;
