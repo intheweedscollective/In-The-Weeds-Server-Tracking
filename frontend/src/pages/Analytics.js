@@ -448,8 +448,8 @@ export default function Analytics() {
                             </span>
                           )}
                         </div>
-                        <div className="text-sm text-muted-foreground truncate">{emp.position}</div>
-                        <div className="text-xs text-muted-foreground">Overall Rank: {emp.overall_rank || "N/A"}</div>
+                        <div className="text-sm text-gray-500 truncate">{emp.position}</div>
+                        <div className="text-xs text-gray-400">Overall Rank: {emp.overall_rank || "N/A"}</div>
                       </div>
 
                       <div className="text-right shrink-0">
@@ -460,45 +460,44 @@ export default function Analytics() {
                     </div>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
 
           <div className="space-y-4" data-testid="analytics-top-10-metrics">
-            <h2 className="text-2xl font-serif font-bold text-primary">Top 10 by Metric</h2>
+            <h2 className="text-2xl font-serif font-bold text-foreground">Top 10 by Metric</h2>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {Object.keys(KPI_DEFINITIONS).map((metric) => {
                 const metricInfo = KPI_DEFINITIONS[metric];
                 const top = getTopEmployees(metric, 10);
 
                 return (
-                  <Card key={metric} className="bubba-card">
-                    <CardHeader>
-                      <CardTitle className="text-xl font-serif text-primary">
+                  <div key={metric} className="bubba-card">
+                    <div className="p-5">
+                      <h3 className="text-lg font-serif font-bold text-foreground">
                         {metricInfo.shortName} — {metricInfo.name}
-                      </CardTitle>
-                      <CardDescription>Top 10 employees for this metric</CardDescription>
-                    </CardHeader>
-                    <CardContent>
+                      </h3>
+                      <p className="text-sm text-gray-500 mb-4">Top 10 employees for this metric</p>
+                      
                       <div className="space-y-2">
                         {top.map((emp, idx) => (
                           <div
                             key={emp.id}
-                            className="flex items-center justify-between p-3 border border-border rounded-lg bg-background"
+                            className="flex items-center justify-between p-3 border border-gray-200 rounded-lg bg-gray-50"
                           >
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
-                                <span className="font-semibold text-primary">#{idx + 1}</span>
-                                <span className="font-semibold text-primary truncate">{emp.name}</span>
+                                <span className="font-bold text-primary">#{idx + 1}</span>
+                                <span className="font-semibold text-foreground truncate">{emp.name}</span>
                                 {emp.ranking && (
-                                  <Badge variant="secondary" className="text-xs">
+                                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-semibold">
                                     {emp.ranking}
-                                  </Badge>
+                                  </span>
                                 )}
                               </div>
-                              <div className="text-sm text-muted-foreground truncate">{emp.position}</div>
-                              <div className="text-xs text-muted-foreground">Overall Rank: {emp.overall_rank || "N/A"}</div>
+                              <div className="text-sm text-gray-500 truncate">{emp.position}</div>
+                              <div className="text-xs text-gray-400">Overall Rank: {emp.overall_rank || "N/A"}</div>
                             </div>
 
                             <div className="text-right shrink-0">
@@ -509,8 +508,8 @@ export default function Analytics() {
                           </div>
                         ))}
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 );
               })}
             </div>
