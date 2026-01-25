@@ -1,15 +1,14 @@
 import { useState, useEffect } from "react";
-import { Trash2, Eye, FileText, Search, Filter, Users, Anchor } from "lucide-react";
+import { Trash2, Eye, FileText, Search, Filter, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import Navigation from "../components/Navigation";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { Badge } from "../components/ui/badge";
-import { formatCurrency, formatLSCRatio, formatNumber, getPerformanceLevel, getBenchmarkStatus, KPI_DEFINITIONS } from "../utils/formatters";
-
+import { formatCurrency, formatLSCRatio, formatNumber, getPerformanceLevel, getBenchmarkStatus } from "../utils/formatters";
 import ConfirmDialog from "../components/ConfirmDialog";
+
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
@@ -23,7 +22,6 @@ export default function EmployeeList() {
   const [showDetails, setShowDetails] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [employeeToDelete, setEmployeeToDelete] = useState(null);
-
 
   useEffect(() => {
     fetchEmployees();
@@ -43,7 +41,6 @@ export default function EmployeeList() {
 
   const deleteEmployee = async () => {
     if (!employeeToDelete) return;
-
     try {
       await axios.delete(`${API}/employees/${employeeToDelete}`);
       toast.success("Employee deleted successfully");
@@ -57,9 +54,8 @@ export default function EmployeeList() {
     }
   };
 
-  const getPerformanceLevel = (score) => {
+  const getPerformanceLevelLocal = (score) => {
     if (!score) return { text: "Not Assessed", class: "performance-below" };
-    
     if (score >= 90) return { text: "Excellent", class: "performance-excellent" };
     if (score >= 80) return { text: "Above Average", class: "performance-above-average" };
     if (score >= 70) return { text: "Satisfactory", class: "performance-satisfactory" };
@@ -67,22 +63,17 @@ export default function EmployeeList() {
     return { text: "Below Expectations", class: "performance-below" };
   };
 
-  // Filter employees
   const filteredEmployees = employees.filter(employee => {
     const matchesSearch = employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          employee.position.toLowerCase().includes(searchTerm.toLowerCase());
-    
     const matchesPosition = positionFilter === "all" || 
                            employee.position.toLowerCase().includes(positionFilter.toLowerCase());
-    
-    const performance = getPerformanceLevel(employee.cumulative_score);
+    const performance = getPerformanceLevelLocal(employee.cumulative_score);
     const matchesPerformance = performanceFilter === "all" || 
                               performance.text.toLowerCase().includes(performanceFilter.toLowerCase());
-    
     return matchesSearch && matchesPosition && matchesPerformance;
   });
 
-  // Get unique positions for filter
   const positions = [...new Set(employees.map(emp => emp.position))];
 
   if (loading) {
@@ -98,7 +89,6 @@ export default function EmployeeList() {
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
-      {/* Decorative splashes */}
       <div className="splash-blue" style={{ top: '15%', right: '5%' }} />
       <div className="splash-red" style={{ bottom: '20%', left: '3%', opacity: 0.5 }} />
       
@@ -210,7 +200,7 @@ export default function EmployeeList() {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6" data-testid="employee-grid">
             {filteredEmployees.map((employee) => {
-              const performance = getPerformanceLevel(employee.cumulative_score);
+              const performance = getPerformanceLevelLocal(employee.cumulative_score);
               
               return (
                 <div key={employee.id} className="bubba-card" data-testid={`employee-card-${employee.id}`}>
@@ -229,77 +219,20 @@ export default function EmployeeList() {
                         {performance.text}
                       </span>
                     </div>
-                  
-                  <CardContent>
-                    {/* All 6 KPI Grid */}
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-                      <div className="text-center">
-                        <div className="text-2xl font-serif font-bold text-primary" data-testid={`employee-cumulative-score-${employee.id}`}>
-                          {formatNumber(employee.cumulative_score)}
-                        </div>
-                        <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                          Cumulative Score
-                        </div>
+                    
+                    {/* KPI Grid */}
+                    <div className="grid grid-cols-3 gap-2 mb-4">
+                      <div className="text-center p-2 bg-gray-50 rounded-lg">
+                        <div className="text-lg font-serif font-bold text-primary">{formatNumber(employee.cumulative_score)}</div>
+                        <div className="text-[10px] text-gray-500 font-semibold uppercase">Score</div>
                       </div>
-                      
-                      <div className="text-center">
-                        <div className="text-lg font-serif font-bold text-secondary" data-testid={`employee-ppa-${employee.id}`}>
-                          {formatCurrency(employee.ppa)}
-                        </div>
-                        <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                          PPA
-                        </div>
-                        <div className={`text-xs ${getBenchmarkStatus('ppa', employee.ppa).class}`}>
-                          {getBenchmarkStatus('ppa', employee.ppa).text}
-                        </div>
+                      <div className="text-center p-2 bg-gray-50 rounded-lg">
+                        <div className="text-sm font-serif font-bold text-secondary">{formatCurrency(employee.ppa)}</div>
+                        <div className="text-[10px] text-gray-500 font-semibold uppercase">PPA</div>
                       </div>
-                      
-                      <div className="text-center">
-                        <div className="text-lg font-serif font-bold text-accent-foreground" data-testid={`employee-gpg-${employee.id}`}>
-                          {formatCurrency(employee.gpg)}
-                        </div>
-                        <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                          GPG
-                        </div>
-                        <div className={`text-xs ${getBenchmarkStatus('gpg', employee.gpg).class}`}>
-                          {getBenchmarkStatus('gpg', employee.gpg).text}
-                        </div>
-                      </div>
-                      
-                      <div className="text-center">
-                        <div className="text-lg font-serif font-bold text-wood-texture" data-testid={`employee-pplbw-${employee.id}`}>
-                          {formatCurrency(employee.pplbw)}
-                        </div>
-                        <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                          PPLBW
-                        </div>
-                        <div className={`text-xs ${getBenchmarkStatus('pplbw', employee.pplbw).class}`}>
-                          {getBenchmarkStatus('pplbw', employee.pplbw).text}
-                        </div>
-                      </div>
-                      
-                      <div className="text-center">
-                        <div className="text-lg font-serif font-bold text-muted-foreground" data-testid={`employee-lsc-${employee.id}`}>
-                          {formatLSCRatio(employee.lsc_ratio)}
-                        </div>
-                        <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                          LSC Ratio
-                        </div>
-                        <div className={`text-xs ${getBenchmarkStatus('lsc_ratio', employee.lsc_ratio).class}`}>
-                          {getBenchmarkStatus('lsc_ratio', employee.lsc_ratio).text}
-                        </div>
-                      </div>
-                      
-                      <div className="text-center">
-                        <div className="text-lg font-serif font-bold text-brand-yellow" data-testid={`employee-bonus-${employee.id}`}>
-                          {formatNumber(employee.metric_bonus_points)}
-                        </div>
-                        <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                          Metric Bonus
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          Exceeds Benchmark
-                        </div>
+                      <div className="text-center p-2 bg-gray-50 rounded-lg">
+                        <div className="text-sm font-serif font-bold text-gray-700">{formatCurrency(employee.gpg)}</div>
+                        <div className="text-[10px] text-gray-500 font-semibold uppercase">GPG</div>
                       </div>
                     </div>
                     
@@ -312,7 +245,7 @@ export default function EmployeeList() {
                         }}
                         variant="outline" 
                         size="sm" 
-                        className="flex-1"
+                        className="flex-1 border-2"
                         data-testid={`view-details-btn-${employee.id}`}
                       >
                         <Eye className="w-4 h-4 mr-2" />
@@ -331,8 +264,8 @@ export default function EmployeeList() {
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               );
             })}
           </div>
@@ -341,122 +274,61 @@ export default function EmployeeList() {
         {/* Employee Details Modal */}
         {showDetails && selectedEmployee && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" data-testid="employee-details-modal">
-            <Card className="w-full max-w-2xl max-h-[80vh] overflow-auto">
-              <CardHeader>
+            <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-auto shadow-2xl">
+              <div className="p-6 border-b border-gray-200">
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle className="text-2xl font-serif text-primary">
-                      {selectedEmployee.name}
-                    </CardTitle>
-                    <CardDescription className="text-base">
-                      {selectedEmployee.position}
-                    </CardDescription>
+                    <h2 className="text-2xl font-serif font-black text-primary">{selectedEmployee.name}</h2>
+                    <p className="text-gray-500">{selectedEmployee.position}</p>
                   </div>
                   <Button 
                     onClick={() => setShowDetails(false)}
                     variant="outline"
                     size="sm"
+                    className="border-2"
                     data-testid="close-modal-btn"
                   >
-                    Close
+                    <X className="w-4 h-4" />
                   </Button>
                 </div>
-              </CardHeader>
+              </div>
               
-              <CardContent>
+              <div className="p-6">
                 {/* Detailed KPIs */}
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-6 mb-8">
-                  <div className="text-center p-4 bg-muted/30 rounded-lg">
-                    <div className="text-3xl font-serif font-bold text-primary mb-2">
-                      {formatCurrency(selectedEmployee.ppa)}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+                  {[
+                    { label: 'Cumulative Score', value: formatNumber(selectedEmployee.cumulative_score), color: 'text-primary', bg: 'bg-red-50' },
+                    { label: 'PPA', value: formatCurrency(selectedEmployee.ppa), color: 'text-secondary', bg: 'bg-blue-50' },
+                    { label: 'GPG', value: formatCurrency(selectedEmployee.gpg), color: 'text-gray-700', bg: 'bg-gray-50' },
+                    { label: 'PPLBW', value: formatCurrency(selectedEmployee.pplbw), color: 'text-gray-700', bg: 'bg-gray-50' },
+                    { label: 'LSC Ratio', value: formatLSCRatio(selectedEmployee.lsc_ratio), color: 'text-gray-700', bg: 'bg-gray-50' },
+                    { label: 'Bonus Points', value: formatNumber(selectedEmployee.metric_bonus_points), color: 'text-yellow-600', bg: 'bg-yellow-50' },
+                  ].map((kpi, i) => (
+                    <div key={i} className={`text-center p-4 ${kpi.bg} rounded-xl`}>
+                      <div className={`text-2xl font-serif font-bold ${kpi.color} mb-1`}>{kpi.value}</div>
+                      <div className="text-xs text-gray-500 font-semibold uppercase">{kpi.label}</div>
                     </div>
-                    <div className="text-sm font-semibold text-muted-foreground uppercase">
-                      PPA (Per Person Average)
-                    </div>
-                    <div className={`text-sm mt-1 ${getBenchmarkStatus('ppa', selectedEmployee.ppa).class}`}>
-                      {getBenchmarkStatus('ppa', selectedEmployee.ppa).text}
-                    </div>
-                  </div>
-                  
-                  <div className="text-center p-4 bg-muted/30 rounded-lg">
-                    <div className="text-3xl font-serif font-bold text-secondary mb-2">
-                      {formatCurrency(selectedEmployee.gpg)}
-                    </div>
-                    <div className="text-sm font-semibold text-muted-foreground uppercase">
-                      GPG (Glassware $ Per Guest)
-                    </div>
-                    <div className={`text-sm mt-1 ${getBenchmarkStatus('gpg', selectedEmployee.gpg).class}`}>
-                      {getBenchmarkStatus('gpg', selectedEmployee.gpg).text}
-                    </div>
-                  </div>
-                  
-                  <div className="text-center p-4 bg-muted/30 rounded-lg">
-                    <div className="text-3xl font-serif font-bold text-accent-foreground mb-2">
-                      {formatCurrency(selectedEmployee.pplbw)}
-                    </div>
-                    <div className="text-sm font-semibold text-muted-foreground uppercase">
-                      PPLBW (Per Person Liquor Beer Wine)
-                    </div>
-                    <div className={`text-sm mt-1 ${getBenchmarkStatus('pplbw', selectedEmployee.pplbw).class}`}>
-                      {getBenchmarkStatus('pplbw', selectedEmployee.pplbw).text}
-                    </div>
-                  </div>
-                  
-                  <div className="text-center p-4 bg-muted/30 rounded-lg">
-                    <div className="text-3xl font-serif font-bold text-wood-texture mb-2">
-                      {formatLSCRatio(selectedEmployee.lsc_ratio)}
-                    </div>
-                    <div className="text-sm font-semibold text-muted-foreground uppercase">
-                      LSC Ratio (Landry&apos;s Select Card)
-                    </div>
-                    <div className={`text-sm mt-1 ${getBenchmarkStatus('lsc_ratio', selectedEmployee.lsc_ratio).class}`}>
-                      {getBenchmarkStatus('lsc_ratio', selectedEmployee.lsc_ratio).text}
-                    </div>
-                  </div>
-                  
-                  <div className="text-center p-4 bg-muted/30 rounded-lg">
-                    <div className="text-3xl font-serif font-bold text-brand-yellow mb-2">
-                      {formatNumber(selectedEmployee.metric_bonus_points)}
-                    </div>
-                    <div className="text-sm font-semibold text-muted-foreground uppercase">
-                      Metric Bonus Points
-                    </div>
-                    <div className="text-sm mt-1 text-muted-foreground">
-                      Exceeds Benchmark
-                    </div>
-                  </div>
-                  
-                  <div className="text-center p-4 bg-primary/10 rounded-lg">
-                    <div className="text-4xl font-serif font-bold text-primary mb-2">
-                      {formatNumber(selectedEmployee.cumulative_score)}
-                    </div>
-                    <div className="text-sm font-semibold text-muted-foreground uppercase">
-                      Cumulative Score
-                    </div>
-                    <div className={`text-sm mt-1 performance-badge ${getPerformanceLevel(selectedEmployee.cumulative_score).class}`}>
-                      {getPerformanceLevel(selectedEmployee.cumulative_score).text}
-                    </div>
-                  </div>
+                  ))}
                 </div>
                 
                 {/* Additional Data */}
                 {Object.keys(selectedEmployee.additional_data || {}).length > 0 && (
                   <div>
-                    <h4 className="font-semibold text-primary mb-4">Additional Information</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <h4 className="font-serif font-bold text-foreground mb-3">Additional Information</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       {Object.entries(selectedEmployee.additional_data || {})
                         .filter(([key]) => key !== "metric_tiers")
                         .map(([key, value]) => (
-                          <div key={key} className="flex justify-between py-2 border-b border-border">
-                            <span className="capitalize font-medium">{key.replace(/[_-]/g, ' ')}</span>
-                            <span className="text-muted-foreground">{value || 'N/A'}</span>
+                          <div key={key} className="flex justify-between py-2 px-3 bg-gray-50 rounded-lg text-sm">
+                            <span className="text-gray-500 capitalize">{key.replace(/_/g, ' ')}</span>
+                            <span className="font-medium">{String(value)}</span>
                           </div>
                         ))}
                     </div>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
         )}
       </div>
