@@ -98,7 +98,7 @@ export default function EmployeeList() {
   }
 
   return (
-    <div className="min-h-screen bg-paper-bg">
+    <div className="min-h-screen bg-background">
       <ConfirmDialog
         open={confirmDeleteOpen}
         onOpenChange={setConfirmDeleteOpen}
