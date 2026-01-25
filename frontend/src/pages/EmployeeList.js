@@ -87,7 +87,7 @@ export default function EmployeeList() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-paper-bg">
+      <div className="min-h-screen bg-background">
         <Navigation />
         <div className="flex items-center justify-center h-96">
           <div className="loading-spinner"></div>
@@ -97,11 +97,15 @@ export default function EmployeeList() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background relative overflow-hidden">
+      {/* Decorative splashes */}
+      <div className="splash-blue" style={{ top: '15%', right: '5%' }} />
+      <div className="splash-red" style={{ bottom: '20%', left: '3%', opacity: 0.5 }} />
+      
       <ConfirmDialog
         open={confirmDeleteOpen}
         onOpenChange={setConfirmDeleteOpen}
-        title="Delete employee?"
+        title="Delete crew member?"
         description="This will permanently delete this employee record."
         confirmText="Delete"
         cancelText="Cancel"
@@ -110,36 +114,41 @@ export default function EmployeeList() {
       />
       <Navigation />
       
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-serif font-bold text-primary mb-2" data-testid="page-title">
-            Employee Management
-          </h1>
-          <p className="text-muted-foreground" data-testid="page-subtitle">
-            View and manage all employee performance data
+          <div className="flex items-center gap-3 mb-2">
+            <Users className="w-8 h-8 text-secondary" />
+            <h1 className="text-3xl font-serif font-black text-foreground" data-testid="page-title">
+              Crew Management
+            </h1>
+          </div>
+          <p className="text-gray-500" data-testid="page-subtitle">
+            View and manage all crew performance data
           </p>
         </div>
 
         {/* Filters */}
-        <Card className="bubba-card mb-8" data-testid="filters-card">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Filter className="w-5 h-5" />
-              Filters & Search
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+        <div className="bubba-card mb-8" data-testid="filters-card">
+          <div className="tape tape-blue" style={{ top: '-8px', left: '50%', transform: 'translateX(-50%) rotate(-1deg)' }} />
+          <div className="p-6 pt-8">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                <Filter className="w-5 h-5 text-secondary" />
+              </div>
+              <h2 className="text-lg font-serif font-bold text-foreground">Filters & Search</h2>
+            </div>
+            
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Search</label>
                 <div className="relative">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                   <Input
                     placeholder="Search by name or position..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-9"
+                    className="pl-9 border-2 border-gray-200 rounded-lg focus:border-secondary"
                     data-testid="search-input"
                   />
                 </div>
@@ -148,7 +157,7 @@ export default function EmployeeList() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Position</label>
                 <Select value={positionFilter} onValueChange={setPositionFilter}>
-                  <SelectTrigger data-testid="position-filter">
+                  <SelectTrigger data-testid="position-filter" className="border-2 border-gray-200">
                     <SelectValue placeholder="All Positions" />
                   </SelectTrigger>
                   <SelectContent>
@@ -163,7 +172,7 @@ export default function EmployeeList() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Performance</label>
                 <Select value={performanceFilter} onValueChange={setPerformanceFilter}>
-                  <SelectTrigger data-testid="performance-filter">
+                  <SelectTrigger data-testid="performance-filter" className="border-2 border-gray-200">
                     <SelectValue placeholder="All Performance Levels" />
                   </SelectTrigger>
                   <SelectContent>
@@ -177,26 +186,25 @@ export default function EmployeeList() {
                 </Select>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Results Summary */}
         <div className="mb-6" data-testid="results-summary">
-          <p className="text-muted-foreground">
-            Showing {filteredEmployees.length} of {employees.length} employees
+          <p className="text-gray-500 font-medium">
+            Showing <span className="text-primary font-bold">{filteredEmployees.length}</span> of {employees.length} crew members
           </p>
         </div>
 
         {/* Employee Grid */}
         {filteredEmployees.length === 0 ? (
-          <Card className="bubba-card" data-testid="no-results">
-            <CardContent className="text-center py-12">
-              <FileText className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No employees found</h3>
-              <p className="text-muted-foreground">
-                {employees.length === 0 
-                  ? "Upload an Excel file to get started" 
-                  : "Try adjusting your search or filters"}
+          <div className="bubba-card p-12 text-center" data-testid="no-results">
+            <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-serif font-bold mb-2">No crew members found</h3>
+            <p className="text-gray-500">
+              {employees.length === 0 
+                ? "Upload an Excel file to get started" 
+                : "Try adjusting your search or filters"}
               </p>
             </CardContent>
           </Card>
