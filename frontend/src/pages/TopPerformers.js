@@ -1,11 +1,8 @@
 import { useState, useEffect } from "react";
-import { ArrowLeft, Trophy, Medal, Award, Printer, Users } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Trophy, Medal, Award, Download, Users } from "lucide-react";
 import axios from "axios";
 import Navigation from "../components/Navigation";
 import { Button } from "../components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
-import { Badge } from "../components/ui/badge";
 import { formatCurrency, formatLSCRatio, formatNumber, formatOverallRank, formatRanking, getRankingHierarchy, KPI_DEFINITIONS } from "../utils/formatters";
 import { toast } from "sonner";
 
