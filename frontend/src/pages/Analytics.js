@@ -296,66 +296,64 @@ export default function Analytics() {
             </div>
           </div>
           
-          <Card className="bubba-card">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <Target className="w-8 h-8 text-yellow-500" />
-                <div>
-                  <p className="text-2xl font-bold text-primary">
-                    {getPercentage(
-                      Object.values(analytics).reduce((sum, metric) => sum + (metric.medium || 0), 0),
-                      Object.values(analytics).reduce((sum, metric) => sum + (metric.total || 0), 0)
-                    )}%
-                  </p>
-                  <p className="text-sm text-muted-foreground">Medium Performers</p>
-                </div>
+          <div className="bubba-card p-5">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center">
+                <Target className="w-6 h-6 text-yellow-600" />
               </div>
-            </CardContent>
-          </Card>
+              <div>
+                <p className="text-2xl font-serif font-bold text-yellow-600">
+                  {getPercentage(
+                    Object.values(analytics).reduce((sum, metric) => sum + (metric.medium || 0), 0),
+                    Object.values(analytics).reduce((sum, metric) => sum + (metric.total || 0), 0)
+                  )}%
+                </p>
+                <p className="text-xs text-gray-500 font-semibold uppercase">Medium Performers</p>
+              </div>
+            </div>
+          </div>
           
-          <Card className="bubba-card">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <BarChart3 className="w-8 h-8 text-orange-500" />
-                <div>
-                  <p className="text-2xl font-bold text-primary">
-                    {getPercentage(
-                      Object.values(analytics).reduce((sum, metric) => sum + (metric.low || 0), 0),
-                      Object.values(analytics).reduce((sum, metric) => sum + (metric.total || 0), 0)
-                    )}%
-                  </p>
-                  <p className="text-sm text-muted-foreground">Needs Improvement</p>
-                </div>
+          <div className="bubba-card p-5">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center">
+                <BarChart3 className="w-6 h-6 text-orange-600" />
               </div>
-            </CardContent>
-          </Card>
+              <div>
+                <p className="text-2xl font-serif font-bold text-orange-600">
+                  {getPercentage(
+                    Object.values(analytics).reduce((sum, metric) => sum + (metric.low || 0), 0),
+                    Object.values(analytics).reduce((sum, metric) => sum + (metric.total || 0), 0)
+                  )}%
+                </p>
+                <p className="text-xs text-gray-500 font-semibold uppercase">Needs Improvement</p>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Analytics by Metric */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {Object.entries(KPI_DEFINITIONS).map(([metricKey, metricInfo]) => {
             const data = analytics[metricKey] || {};
             const total = data.total || 1;
             
             return (
-              <Card key={metricKey} className="bubba-card">
-                <CardHeader>
-                  <CardTitle className="text-xl font-serif text-primary">
+              <div key={metricKey} className="bubba-card">
+                <div className="p-5">
+                  <h3 className="text-lg font-serif font-bold text-foreground mb-1">
                     {metricInfo.name}
-                  </CardTitle>
-                  <CardDescription>
+                  </h3>
+                  <p className="text-sm text-gray-500 mb-4">
                     Benchmark: {metricInfo.format === 'currency' ? '$' + metricInfo.benchmark : 
                               metricKey === 'lsc_ratio' ? '1 in 100' : metricInfo.benchmark}
-                  </CardDescription>
-                </CardHeader>
+                  </p>
                 
-                <CardContent>
                   <div className="space-y-4">
                     {/* Performance Distribution Bar */}
                     <div className="space-y-2">
                       <div className="flex justify-between text-sm font-medium">
                         <span>Performance Distribution</span>
-                        <span>{total} employees</span>
+                        <span className="text-gray-500">{total} employees</span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-6 overflow-hidden">
                         <div className="h-full flex">
