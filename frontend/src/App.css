@@ -95,7 +95,7 @@
 
 .kpi-label {
   font-size: 0.875rem;
-  color: #6B7280;
+  color: hsl(var(--muted-foreground));
   text-transform: uppercase;
   font-weight: 600;
   letter-spacing: 0.05em;
