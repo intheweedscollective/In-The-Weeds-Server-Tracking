@@ -96,13 +96,22 @@
   border-radius: 8px;
   padding: 20px;
   text-align: center;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
   transition: all 0.3s ease;
+}
+
+.dark .kpi-card {
+  background: hsl(222 30% 20%);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
 .kpi-card:hover {
   transform: translateY(-3px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.1);
+}
+
+.dark .kpi-card:hover {
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
 }
 
 .kpi-value {
