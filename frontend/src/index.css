@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,400;1,700&family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,400;0,700;0,900;1,400;1,700&family=Inter:wght@400;500;600;700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -19,59 +19,55 @@ code {
 
 @layer base {
     :root {
-        /* Day at the Pier - Light Theme */
-        --background: 40 33% 96%; /* #F9F7F2 Paper */
-        --foreground: 210 29% 24%; /* #2C3E50 Slate */
-        --card: 0 0% 100%; /* White */
-        --card-foreground: 210 29% 24%;
+        /* Bubba Gump Light Theme - Inspired by the cocktail menu */
+        --background: 0 0% 98%; /* Bright white/cream */
+        --foreground: 215 25% 20%; /* Dark slate for text */
+        --card: 0 0% 100%; /* Pure white cards */
+        --card-foreground: 215 25% 20%;
         --popover: 0 0% 100%;
-        --popover-foreground: 210 29% 24%;
-        --primary: 0 65% 50%; /* #D12E2E Shrimp Red */
+        --popover-foreground: 215 25% 20%;
+        --primary: 0 72% 50%; /* Bubba Red #D12E2E */
         --primary-foreground: 0 0% 100%;
-        --secondary: 206 100% 29%; /* #005B96 Ocean Blue */
+        --secondary: 209 100% 30%; /* Ocean Blue #005B96 */
         --secondary-foreground: 0 0% 100%;
-        --muted: 34 32% 85%; /* #E8DCCA Sand */
-        --muted-foreground: 210 29% 40%;
-        --accent: 47 90% 60%; /* #F4D03F Sunshine Yellow */
-        --accent-foreground: 210 29% 24%;
+        --muted: 210 20% 96%; /* Light gray-blue */
+        --muted-foreground: 215 16% 47%;
+        --accent: 47 95% 55%; /* Sunshine Yellow */
+        --accent-foreground: 215 25% 20%;
         --destructive: 0 84% 60%;
         --destructive-foreground: 0 0% 98%;
-        --border: 34 32% 85%; /* Sand */
-        --input: 34 32% 85%;
-        --ring: 206 100% 29%;
-        --chart-1: 0 65% 50%;
-        --chart-2: 206 100% 29%;
-        --chart-3: 47 90% 60%;
+        --border: 214 20% 88%;
+        --input: 214 20% 88%;
+        --ring: 209 100% 30%;
+        --chart-1: 0 72% 50%;
+        --chart-2: 209 100% 30%;
+        --chart-3: 47 95% 55%;
         --chart-4: 145 63% 42%;
         --chart-5: 27 87% 52%;
         --radius: 0.75rem;
     }
+    
+    /* Keep dark mode minimal - just invert basics */
     .dark {
-        /* Night at the Shack - Dark Theme */
-        --background: 222 47% 11%; /* #0F172A Deep Night */
-        --foreground: 210 40% 98%; /* #F8FAFC */
-        --card: 215 25% 20%; /* Weathered wood dark */
+        --background: 220 20% 14%;
+        --foreground: 210 40% 98%;
+        --card: 220 20% 18%;
         --card-foreground: 210 40% 98%;
-        --popover: 215 25% 20%;
+        --popover: 220 20% 18%;
         --popover-foreground: 210 40% 98%;
-        --primary: 0 65% 55%; /* Brighter red for dark */
+        --primary: 0 72% 55%;
         --primary-foreground: 0 0% 100%;
-        --secondary: 206 100% 45%; /* Brighter ocean blue */
+        --secondary: 209 100% 45%;
         --secondary-foreground: 0 0% 100%;
-        --muted: 217 19% 27%;
+        --muted: 220 15% 25%;
         --muted-foreground: 215 20% 65%;
-        --accent: 47 90% 55%;
-        --accent-foreground: 222 47% 11%;
+        --accent: 47 95% 55%;
+        --accent-foreground: 220 20% 14%;
         --destructive: 0 62% 55%;
         --destructive-foreground: 0 0% 100%;
-        --border: 217 19% 30%;
-        --input: 217 19% 30%;
-        --ring: 206 100% 45%;
-        --chart-1: 0 65% 60%;
-        --chart-2: 206 100% 55%;
-        --chart-3: 47 90% 60%;
-        --chart-4: 145 63% 50%;
-        --chart-5: 27 87% 60%;
+        --border: 220 15% 30%;
+        --input: 220 15% 30%;
+        --ring: 209 100% 45%;
     }
 }
 
@@ -88,15 +84,4 @@ code {
     [data-debug-wrapper="true"] {
         display: contents !important;
     }
-}
-
-/* Bubba Gump Paper Texture */
-.paper-texture {
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-    opacity: 0.035;
-    z-index: 0;
-}
-
-.dark .paper-texture {
-    opacity: 0.02;
 }
