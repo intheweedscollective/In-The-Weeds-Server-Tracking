@@ -284,6 +284,203 @@ def get_seasonal_emoji(seasonal_theme: str = None) -> str:
     return "🦐"  # Default Bubba Gump shrimp
 
 
+def draw_heart(draw: ImageDraw, x: int, y: int, size: int, color: tuple, alpha: int = 100):
+    """Draw a heart shape at the given position."""
+    # Heart is made of two circles and a triangle
+    r = size // 3
+    # Left circle
+    draw.ellipse([x - r, y - r, x + r, y + r], fill=color + (alpha,))
+    # Right circle
+    draw.ellipse([x + r - 2, y - r, x + 3*r - 2, y + r], fill=color + (alpha,))
+    # Bottom triangle
+    draw.polygon([
+        (x - r, y),
+        (x + 3*r - 2, y),
+        (x + r - 1, y + int(size * 0.9))
+    ], fill=color + (alpha,))
+
+
+def draw_snowflake(draw: ImageDraw, x: int, y: int, size: int, color: tuple, alpha: int = 80):
+    """Draw a simple snowflake at the given position."""
+    # 6 lines radiating from center
+    for angle in range(0, 360, 60):
+        rad = math.radians(angle)
+        x2 = x + int(size * math.cos(rad))
+        y2 = y + int(size * math.sin(rad))
+        draw.line([(x, y), (x2, y2)], fill=color + (alpha,), width=2)
+
+
+def draw_star(draw: ImageDraw, x: int, y: int, size: int, color: tuple, alpha: int = 100):
+    """Draw a 5-pointed star at the given position."""
+    points = []
+    for i in range(10):
+        angle = math.radians(i * 36 - 90)
+        r = size if i % 2 == 0 else size // 2
+        points.append((
+            x + int(r * math.cos(angle)),
+            y + int(r * math.sin(angle))
+        ))
+    draw.polygon(points, fill=color + (alpha,))
+
+
+def draw_shamrock(draw: ImageDraw, x: int, y: int, size: int, color: tuple, alpha: int = 100):
+    """Draw a shamrock (3 leaves) at the given position."""
+    r = size // 3
+    # Three circles for leaves
+    offsets = [(-r, -r//2), (r, -r//2), (0, -r)]
+    for ox, oy in offsets:
+        draw.ellipse([x + ox - r//2, y + oy - r//2, x + ox + r//2, y + oy + r//2], fill=color + (alpha,))
+    # Stem
+    draw.rectangle([x - 2, y, x + 2, y + size//2], fill=color + (alpha,))
+
+
+def draw_pumpkin(draw: ImageDraw, x: int, y: int, size: int, color: tuple, alpha: int = 100):
+    """Draw a simple pumpkin at the given position."""
+    # Main body (orange ellipse)
+    draw.ellipse([x - size//2, y - size//3, x + size//2, y + size//3], fill=color + (alpha,))
+    # Stem (brown/green)
+    stem_color = (34, 139, 34)  # Forest green
+    draw.rectangle([x - 3, y - size//3 - 8, x + 3, y - size//3], fill=stem_color + (alpha,))
+
+
+def add_seasonal_decorations(img: Image.Image, seasonal_theme: str, colors: Dict) -> Image.Image:
+    """
+    Add seasonal decorations to the slide image.
+    Creates a new RGBA layer for decorations and composites it.
+    """
+    if not seasonal_theme or seasonal_theme not in SEASONAL_THEMES:
+        return img
+    
+    theme_info = SEASONAL_THEMES[seasonal_theme]
+    decorations = theme_info.get("decorations", [])
+    
+    if not decorations:
+        return img
+    
+    # Create an overlay for decorations
+    overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    
+    # Get primary color for decorations
+    primary_rgb = hex_to_rgb(colors.get("primary", "#FF6B9D"))
+    secondary_rgb = hex_to_rgb(colors.get("secondary", "#FF1493"))
+    
+    import random
+    random.seed(42)  # Consistent decoration placement
+    
+    # Add decorations based on theme
+    if "heart" in decorations:
+        # Scatter hearts in corners and edges
+        positions = [
+            (80, 80, 40), (150, 150, 25), (1840, 80, 35), (1770, 140, 20),
+            (80, 1000, 30), (1840, 1000, 35), (960, 50, 20), (500, 80, 15),
+            (1400, 80, 18), (200, 900, 22), (1720, 950, 28)
+        ]
+        for px, py, size in positions:
+            alpha = random.randint(40, 80)
+            c = primary_rgb if random.random() > 0.5 else secondary_rgb
+            draw_heart(draw, px, py, size, c, alpha)
+    
+    if "snowflake" in decorations:
+        positions = [
+            (100, 100, 30), (200, 200, 20), (1800, 100, 25), (1700, 180, 18),
+            (150, 900, 22), (1750, 950, 28), (960, 60, 15), (400, 120, 12),
+            (1500, 100, 16), (300, 980, 20)
+        ]
+        for px, py, size in positions:
+            alpha = random.randint(50, 90)
+            draw_snowflake(draw, px, py, size, (255, 255, 255), alpha)
+    
+    if "star" in decorations:
+        positions = [
+            (100, 80, 25), (180, 150, 15), (1820, 80, 20), (1750, 130, 12),
+            (100, 980, 18), (1820, 980, 22), (500, 60, 10), (1400, 60, 14)
+        ]
+        for px, py, size in positions:
+            alpha = random.randint(60, 100)
+            c = (255, 215, 0) if random.random() > 0.3 else (255, 255, 255)  # Gold or white
+            draw_star(draw, px, py, size, c, alpha)
+    
+    if "shamrock" in decorations:
+        positions = [
+            (100, 100, 35), (180, 180, 25), (1820, 100, 30), (1740, 170, 20),
+            (100, 950, 28), (1820, 960, 32), (500, 80, 18), (1400, 80, 22)
+        ]
+        for px, py, size in positions:
+            alpha = random.randint(50, 90)
+            draw_shamrock(draw, px, py, size, primary_rgb, alpha)
+    
+    if "pumpkin" in decorations:
+        positions = [
+            (100, 100, 40), (1820, 100, 35), (100, 980, 30), (1820, 980, 38)
+        ]
+        for px, py, size in positions:
+            alpha = random.randint(60, 100)
+            draw_pumpkin(draw, px, py, size, primary_rgb, alpha)
+    
+    if "bat" in decorations:
+        # Simple bat silhouettes (small triangles)
+        positions = [(300, 150, 20), (600, 100, 15), (1300, 120, 18), (1600, 90, 22)]
+        for px, py, size in positions:
+            alpha = random.randint(30, 60)
+            # Simple bat shape
+            draw.polygon([
+                (px, py), (px - size, py + size//2), (px - size//2, py),
+                (px, py - size//3), (px + size//2, py), (px + size, py + size//2)
+            ], fill=(0, 0, 0) + (alpha,))
+    
+    if "leaf" in decorations:
+        # Fall leaves (simple ellipses in fall colors)
+        fall_colors = [(255, 140, 0), (255, 69, 0), (178, 34, 34), (218, 165, 32)]
+        positions = [
+            (120, 100, 25), (200, 180, 18), (1800, 110, 22), (1720, 170, 15),
+            (130, 950, 20), (1810, 960, 24)
+        ]
+        for i, (px, py, size) in enumerate(positions):
+            alpha = random.randint(50, 90)
+            c = fall_colors[i % len(fall_colors)]
+            draw.ellipse([px - size, py - size//2, px + size, py + size//2], fill=c + (alpha,))
+    
+    if "egg" in decorations:
+        # Easter eggs (colorful ellipses)
+        egg_colors = [(255, 182, 193), (152, 251, 152), (173, 216, 230), (255, 218, 185), (221, 160, 221)]
+        positions = [
+            (100, 100, 20), (180, 170, 15), (1820, 100, 18), (1740, 160, 12),
+            (100, 960, 16), (1820, 970, 20)
+        ]
+        for i, (px, py, size) in enumerate(positions):
+            alpha = random.randint(60, 100)
+            c = egg_colors[i % len(egg_colors)]
+            draw.ellipse([px - size//2, py - size, px + size//2, py + size], fill=c + (alpha,))
+    
+    if "tree" in decorations:
+        # Simple Christmas trees (triangles)
+        positions = [(100, 120, 40), (1820, 120, 35)]
+        for px, py, size in positions:
+            alpha = random.randint(50, 80)
+            # Tree shape
+            draw.polygon([
+                (px, py - size), (px - size//2, py + size//2), (px + size//2, py + size//2)
+            ], fill=(34, 139, 34) + (alpha,))
+            # Trunk
+            draw.rectangle([px - 4, py + size//2, px + 4, py + size//2 + 10], fill=(139, 69, 19) + (alpha,))
+    
+    if "firework" in decorations or "confetti" in decorations:
+        # Sparkle dots
+        for _ in range(30):
+            px = random.randint(50, 1870)
+            py = random.randint(50, 200) if random.random() > 0.5 else random.randint(880, 1030)
+            size = random.randint(2, 6)
+            alpha = random.randint(40, 100)
+            c = random.choice([primary_rgb, secondary_rgb, (255, 215, 0), (255, 255, 255)])
+            draw.ellipse([px - size, py - size, px + size, py + size], fill=c + (alpha,))
+    
+    # Composite the overlay onto the original image
+    img = img.convert('RGBA')
+    img = Image.alpha_composite(img, overlay)
+    return img.convert('RGB')
+
+
 def hex_to_rgb(hex_color: str) -> Tuple[int, int, int]:
     """Convert hex color to RGB tuple."""
     hex_color = hex_color.lstrip('#')
