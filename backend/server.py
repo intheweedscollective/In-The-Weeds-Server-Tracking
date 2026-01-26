@@ -27,7 +27,11 @@ from pypdf import PdfReader, PdfWriter
 from pdf_top_performers import build_top_performers_pdf
 from pdf_analytics import build_analytics_pdf
 from pdf_full_rankings import build_full_rankings_pdf
-from yodeck_slides import generate_all_slides, generate_top_10_slide, generate_tier_slide
+from yodeck_slides import (
+    generate_top_10_slide, generate_tier_slide,
+    generate_most_improved_slide, generate_promotion_watchlist_slide, generate_at_risk_slide,
+    THEMES
+)
 
 # Import new scoring engine
 from scoring_engine import (
