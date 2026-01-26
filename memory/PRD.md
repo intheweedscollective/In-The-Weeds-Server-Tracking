@@ -190,10 +190,11 @@ Position | Employee Name | Tier | Total Score | Bonus | PPA (earned/possible) | 
   - Graceful fallback to open in new tab if download fails
 
 ## Upcoming Tasks (P1)
-- Analytics enhancements (benchmark thresholds display on metric cards)
+- None! All major features complete.
 
 ## Future/Backlog (P2)
 - Legacy V1 code cleanup (remove old endpoints)
 - Batch line graph PDF uploads
 - Time-series graph auto-generation
 - Automated daily/weekly slide pack generation for Yodeck playlists
+- Download all slides as ZIP archive
