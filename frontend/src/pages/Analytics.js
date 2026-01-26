@@ -343,18 +343,124 @@ export default function Analytics() {
           {Object.entries(V2_METRICS).map(([metricKey, metricInfo]) => {
             const data = analytics[metricKey] || {};
             const total = data.total || 1;
+            const benchmark = data.benchmarkValue || metricInfo.defaultBenchmark;
+            const isInverse = !metricInfo.higherBetter;
+            
+            // Calculate the position of benchmark, average, and thresholds on a visual scale
+            const rangeMin = data.min || 0;
+            const rangeMax = data.max || benchmark * 2;
+            const range = Math.max(rangeMax - rangeMin, 1);
+            
+            // For visual positioning (0-100%)
+            const getPosition = (value) => {
+              if (isInverse) {
+                // For inverse metrics, flip the scale so lower values appear on the right
+                return Math.max(0, Math.min(100, ((rangeMax - value) / range) * 100));
+              }
+              return Math.max(0, Math.min(100, ((value - rangeMin) / range) * 100));
+            };
+            
+            const benchmarkPosition = getPosition(benchmark);
+            const averagePosition = getPosition(data.average || 0);
+            const highThresholdPos = getPosition(data.highThreshold || benchmark * 1.1);
+            const lowThresholdPos = getPosition(data.lowThreshold || benchmark * 0.9);
             
             return (
-              <div key={metricKey} className="bubba-card">
+              <div key={metricKey} className="bubba-card" data-testid={`metric-card-${metricKey}`}>
                 <div className="p-5">
-                  <h3 className="text-lg font-serif font-bold text-foreground mb-1">
-                    {metricInfo.label}
-                  </h3>
-                  <p className="text-sm text-gray-500 mb-4">
-                    Benchmark: {metricInfo.format === 'currency' ? '$' + metricInfo.benchmark : metricInfo.benchmark}
-                  </p>
+                  {/* Header with benchmark info */}
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <h3 className="text-lg font-serif font-bold text-foreground">
+                        {metricInfo.label}
+                      </h3>
+                      <p className="text-sm text-gray-500">
+                        Weight: {metricInfo.weight ? `${metricInfo.weight * 100}%` : '—'}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <div className="flex items-center gap-2">
+                        <Target className="w-4 h-4 text-primary" />
+                        <span className="text-sm font-semibold text-primary">
+                          Benchmark: {metricInfo.format === 'currency' ? '$' : ''}{benchmark}{metricInfo.unit ? ` ${metricInfo.unit}` : ''}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {isInverse ? 'Lower is better' : 'Higher is better'}
+                      </p>
+                    </div>
+                  </div>
                 
                   <div className="space-y-4">
+                    {/* Visual Range Chart with Benchmark Line */}
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-xs font-medium text-gray-500">
+                        <span>{isInverse ? 'Best' : 'Low'}: {formatMetricValue(metricKey, isInverse ? rangeMin : rangeMin)}</span>
+                        <span>{isInverse ? 'Worst' : 'High'}: {formatMetricValue(metricKey, isInverse ? rangeMax : rangeMax)}</span>
+                      </div>
+                      
+                      {/* Visual scale with zones and benchmark line */}
+                      <div className="relative h-12 bg-gradient-to-r from-red-100 via-yellow-100 to-green-100 rounded-lg overflow-hidden">
+                        {/* Zone indicators */}
+                        <div 
+                          className="absolute top-0 h-full bg-green-200/50"
+                          style={{ 
+                            left: isInverse ? '0%' : `${highThresholdPos}%`,
+                            width: isInverse ? `${100 - highThresholdPos}%` : `${100 - highThresholdPos}%`
+                          }}
+                        />
+                        <div 
+                          className="absolute top-0 h-full bg-red-200/50"
+                          style={{ 
+                            left: isInverse ? `${100 - lowThresholdPos}%` : '0%',
+                            width: isInverse ? `${lowThresholdPos}%` : `${lowThresholdPos}%`
+                          }}
+                        />
+                        
+                        {/* Benchmark line - prominent red dashed line */}
+                        <div 
+                          className="absolute top-0 h-full w-1 bg-primary z-20"
+                          style={{ left: `${benchmarkPosition}%`, transform: 'translateX(-50%)' }}
+                        >
+                          <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-primary" />
+                        </div>
+                        
+                        {/* Average indicator - blue diamond */}
+                        <div 
+                          className="absolute top-1/2 transform -translate-y-1/2 -translate-x-1/2 w-4 h-4 bg-secondary rotate-45 z-10 shadow-md"
+                          style={{ left: `${averagePosition}%` }}
+                        />
+                        
+                        {/* Labels */}
+                        <div 
+                          className="absolute bottom-0 text-xs font-bold text-primary whitespace-nowrap"
+                          style={{ left: `${benchmarkPosition}%`, transform: 'translateX(-50%)' }}
+                        >
+                          Target
+                        </div>
+                      </div>
+                      
+                      {/* Legend */}
+                      <div className="flex items-center justify-center gap-4 text-xs">
+                        <div className="flex items-center gap-1">
+                          <div className="w-3 h-3 bg-primary rounded-sm" />
+                          <span>Benchmark</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <div className="w-3 h-3 bg-secondary rotate-45" />
+                          <span>Team Avg</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <div className="w-3 h-3 bg-green-200 rounded-sm" />
+                          <span>High Zone</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <div className="w-3 h-3 bg-red-200 rounded-sm" />
+                          <span>Low Zone</span>
+                        </div>
+                      </div>
+                    </div>
+                    
                     {/* Performance Distribution Bar */}
                     <div className="space-y-2">
                       <div className="flex justify-between text-sm font-medium">
@@ -384,29 +490,54 @@ export default function Analytics() {
                         </div>
                       </div>
                       <div className="flex justify-between text-xs text-gray-500">
-                        <span>High ({data.high})</span>
-                        <span>Medium ({data.medium})</span>
-                        <span>Low ({data.low})</span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                          High ({data.high})
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-2 h-2 bg-yellow-500 rounded-full"></span>
+                          Medium ({data.medium})
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
+                          Low ({data.low})
+                        </span>
                       </div>
                     </div>
                     
                     {/* Key Metrics */}
-                    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-200">
-                      <div className="text-center">
-                        <div className="text-2xl font-serif font-bold text-green-600">
+                    <div className="grid grid-cols-3 gap-3 pt-4 border-t border-gray-200">
+                      <div className="text-center p-2 bg-gray-50 rounded-lg">
+                        <div className="text-xl font-serif font-bold text-green-600">
                           {data.benchmark || 0}
                         </div>
                         <div className="text-xs text-gray-500 uppercase tracking-wider">
-                          Above Benchmark
+                          ≥ Benchmark
                         </div>
                       </div>
                       
-                      <div className="text-center">
-                        <div className="text-2xl font-serif font-bold text-primary">
+                      <div className="text-center p-2 bg-gray-50 rounded-lg">
+                        <div className="text-xl font-serif font-bold text-secondary">
                           {formatMetricValue(metricKey, data.average)}
                         </div>
                         <div className="text-xs text-gray-500 uppercase tracking-wider">
-                          Team Average
+                          Team Avg
+                        </div>
+                      </div>
+                      
+                      <div className="text-center p-2 bg-gray-50 rounded-lg">
+                        <div className={`text-xl font-serif font-bold ${
+                          (isInverse ? data.average < benchmark : data.average > benchmark)
+                            ? 'text-green-600' : 'text-orange-600'
+                        }`}>
+                          {isInverse 
+                            ? (data.average < benchmark ? '↓' : '↑')
+                            : (data.average > benchmark ? '↑' : '↓')
+                          }
+                          {Math.abs(((data.average - benchmark) / benchmark) * 100).toFixed(0)}%
+                        </div>
+                        <div className="text-xs text-gray-500 uppercase tracking-wider">
+                          vs Target
                         </div>
                       </div>
                     </div>
