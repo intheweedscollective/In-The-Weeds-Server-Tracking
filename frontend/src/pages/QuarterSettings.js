@@ -812,7 +812,7 @@ export default function QuarterSettings() {
                     className="text-lg font-bold mb-1"
                     style={{ color: formData.slide_text_color }}
                   >
-                    🦐 TOP 10 PERFORMERS 🦐
+                    {SEASONAL_THEMES[formData.slide_seasonal_theme]?.emoji || '🦐'} TOP 10 PERFORMERS {SEASONAL_THEMES[formData.slide_seasonal_theme]?.emoji || '🦐'}
                   </div>
                   <div 
                     className="text-sm"
@@ -820,6 +820,62 @@ export default function QuarterSettings() {
                   >
                     {selectedQuarter} {selectedYear} • Bubba Gump Shrimp Co.
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Seasonal Theme Settings */}
+        <div className="bubba-card mb-8" data-testid="seasonal-theme-settings">
+          <div className="tape tape-pink" style={{ top: '-8px', left: '50%', transform: 'translateX(-50%) rotate(1deg)' }} />
+          <div className="p-6 pt-8">
+            <div className="flex items-center gap-3 mb-4">
+              <Sparkles className="w-6 h-6 text-pink-500" />
+              <h2 className="text-lg font-serif font-bold text-foreground">Seasonal Decorations</h2>
+              <span className="text-sm text-gray-500">(Holiday Themes)</span>
+            </div>
+            <p className="text-sm text-gray-500 mb-6">
+              Add festive decorations to your Yodeck slides based on the time of year.
+            </p>
+            
+            {/* Seasonal Theme Selector */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              {Object.entries(SEASONAL_THEMES).map(([key, theme]) => (
+                <button
+                  key={key}
+                  onClick={() => setFormData(prev => ({ ...prev, slide_seasonal_theme: key }))}
+                  disabled={settings?.is_locked}
+                  className={`p-3 rounded-lg border-2 transition-all ${
+                    formData.slide_seasonal_theme === key 
+                      ? 'border-pink-500 ring-2 ring-pink-500/20 bg-pink-50' 
+                      : 'border-gray-200 hover:border-gray-300 bg-white'
+                  } ${settings?.is_locked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  data-testid={`seasonal-theme-${key}`}
+                >
+                  <div className="text-center">
+                    <div className="text-2xl mb-1">{theme.emoji}</div>
+                    <span className="text-xs font-medium text-gray-700">{theme.name}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+            
+            {/* Current Selection Info */}
+            <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">{SEASONAL_THEMES[formData.slide_seasonal_theme]?.emoji}</span>
+                <div>
+                  <span className="font-medium text-gray-800">{SEASONAL_THEMES[formData.slide_seasonal_theme]?.name}</span>
+                  {formData.slide_seasonal_theme === 'auto' && (
+                    <p className="text-xs text-gray-500">Slides will automatically show decorations for Valentine&apos;s Day, St. Patrick&apos;s Day, Easter, 4th of July, Halloween, Thanksgiving, Christmas, and New Year based on the current date.</p>
+                  )}
+                  {formData.slide_seasonal_theme === 'none' && (
+                    <p className="text-xs text-gray-500">No seasonal decorations will be added to slides.</p>
+                  )}
+                  {formData.slide_seasonal_theme !== 'auto' && formData.slide_seasonal_theme !== 'none' && (
+                    <p className="text-xs text-gray-500">Slides will always show {SEASONAL_THEMES[formData.slide_seasonal_theme]?.name} decorations regardless of the current date.</p>
+                  )}
                 </div>
               </div>
             </div>
