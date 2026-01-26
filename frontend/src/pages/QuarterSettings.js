@@ -40,8 +40,65 @@ export default function QuarterSettings() {
   }, []);
 
   useEffect(() => {
-    fetchQuarterSettings();
-    fetchBenchmarkSuggestions();
+    const loadSettings = async () => {
+      setLoading(true);
+      try {
+        const response = await axios.get(`${API}/v2/quarter-settings/${selectedYear}/${selectedQuarter}`);
+        setSettings(response.data);
+        setFormData({
+          benchmark_ppa: response.data.benchmark_ppa,
+          benchmark_lbw: response.data.benchmark_lbw,
+          benchmark_glass: response.data.benchmark_glass,
+          benchmark_lsc: response.data.benchmark_lsc,
+          benchmark_cv: response.data.benchmark_cv || 5.0,
+          weight_ppa: response.data.weight_ppa,
+          weight_lbw: response.data.weight_lbw,
+          weight_glass: response.data.weight_glass,
+          weight_lsc: response.data.weight_lsc,
+          weight_cv: response.data.weight_cv || 0.15,
+          bonus_rate: response.data.bonus_rate,
+          bonus_cap: response.data.bonus_cap
+        });
+        setIsNew(false);
+      } catch (error) {
+        if (error.response?.status === 404) {
+          setSettings(null);
+          setIsNew(true);
+          setFormData({
+            benchmark_ppa: 55.0,
+            benchmark_lbw: 8.0,
+            benchmark_glass: 1.0,
+            benchmark_lsc: 100.0,
+            benchmark_cv: 5.0,
+            weight_ppa: 0.25,
+            weight_lbw: 0.20,
+            weight_glass: 0.15,
+            weight_lsc: 0.25,
+            weight_cv: 0.15,
+            bonus_rate: 0.2,
+            bonus_cap: 5.0
+          });
+        } else {
+          console.error("Error fetching settings:", error);
+          toast.error("Error loading settings");
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const loadSuggestions = async () => {
+      try {
+        const response = await axios.get(`${API}/v2/quarter-settings/${selectedYear}/${selectedQuarter}/benchmark-suggestions`);
+        setSuggestions(response.data);
+      } catch (error) {
+        console.error("Error fetching suggestions:", error);
+        setSuggestions(null);
+      }
+    };
+
+    loadSettings();
+    loadSuggestions();
   }, [selectedYear, selectedQuarter]);
 
   const fetchAllSettings = async () => {
@@ -53,7 +110,7 @@ export default function QuarterSettings() {
     }
   };
 
-  const fetchQuarterSettings = async () => {
+  const refetchSettings = async () => {
     setLoading(true);
     try {
       const response = await axios.get(`${API}/v2/quarter-settings/${selectedYear}/${selectedQuarter}`);
@@ -74,40 +131,9 @@ export default function QuarterSettings() {
       });
       setIsNew(false);
     } catch (error) {
-      if (error.response?.status === 404) {
-        // Settings don't exist yet
-        setSettings(null);
-        setIsNew(true);
-        setFormData({
-          benchmark_ppa: 55.0,
-          benchmark_lbw: 8.0,
-          benchmark_glass: 1.0,
-          benchmark_lsc: 100.0,
-          benchmark_cv: 5.0,
-          weight_ppa: 0.25,
-          weight_lbw: 0.20,
-          weight_glass: 0.15,
-          weight_lsc: 0.25,
-          weight_cv: 0.15,
-          bonus_rate: 0.2,
-          bonus_cap: 5.0
-        });
-      } else {
-        console.error("Error fetching settings:", error);
-        toast.error("Error loading settings");
-      }
+      console.error("Error fetching settings:", error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchBenchmarkSuggestions = async () => {
-    try {
-      const response = await axios.get(`${API}/v2/quarter-settings/${selectedYear}/${selectedQuarter}/benchmark-suggestions`);
-      setSuggestions(response.data);
-    } catch (error) {
-      console.error("Error fetching suggestions:", error);
-      setSuggestions(null);
     }
   };
 
