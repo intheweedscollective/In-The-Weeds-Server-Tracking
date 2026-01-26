@@ -82,6 +82,11 @@ export default function Dashboard() {
     calculateStats();
   }, [employees, calculateStats]);
 
+  const downloadTemplate = () => {
+    window.open(`${API}/v2/template`, '_blank');
+    toast.success("Template downloaded!");
+  };
+
   const validateFile = async (file) => {
     const formData = new FormData();
     formData.append("file", file);
