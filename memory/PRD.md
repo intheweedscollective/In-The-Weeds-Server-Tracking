@@ -160,10 +160,15 @@ Position | Employee Name | Tier | Total Score | Bonus | PPA (earned/possible) | 
   - Isolated columns for each point type (Base + Bonus per metric)
   - Landscape A4 format with all 28 employees
   - Scoring formula legend included
+- ✅ **PDF Review Generation (V2 Migration)**
+  - Reviews page now uses V2 API (`/api/v2/employees`)
+  - AI content generation uses V2 metrics (PPA, LBW, Glass, LSC, CV)
+  - PDF includes Q1 2026 scoring breakdown table
+  - Employee cards show tier badges and V2 metrics
+  - Quarter/Year filtering for employee list
 
 ## Upcoming Tasks (P1)
-1. **PDF Review Generation Migration** - Use V2 data model for reviews
-2. **Yodeck Slide Generation** - 16:9 leaderboard slides
+1. **Yodeck Slide Generation** - 16:9 leaderboard slides
 
 ## Future/Backlog (P2)
 - Legacy V1 code cleanup
