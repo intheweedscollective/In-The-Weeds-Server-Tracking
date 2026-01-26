@@ -335,7 +335,7 @@ export default function Analytics() {
 
         {/* Analytics by Metric */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {Object.entries(KPI_DEFINITIONS).map(([metricKey, metricInfo]) => {
+          {Object.entries(V2_METRICS).map(([metricKey, metricInfo]) => {
             const data = analytics[metricKey] || {};
             const total = data.total || 1;
             
