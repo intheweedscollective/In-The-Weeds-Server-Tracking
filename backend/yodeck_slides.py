@@ -591,16 +591,26 @@ def generate_top_10_slide(
     year: int,
     theme: str = "dark_navy",
     custom_colors: Dict = None,
-    custom_bg_image: str = None
+    custom_bg_image: str = None,
+    seasonal_theme: str = None
 ) -> bytes:
     """
     Generate Top 10 Performers slide.
     Simple: Rank, Name, Tier Badge, Total Score
     Readable from 15 feet away.
     """
-    colors = get_theme_colors(theme, custom_colors)
+    colors = get_theme_colors(theme, custom_colors, seasonal_theme)
     img = create_gradient_background(SLIDE_WIDTH, SLIDE_HEIGHT, colors, custom_bg_image)
+    
+    # Add seasonal decorations if applicable
+    active_seasonal = seasonal_theme if seasonal_theme and seasonal_theme != "none" else (get_current_seasonal_theme() if seasonal_theme == "auto" else None)
+    if active_seasonal:
+        img = add_seasonal_decorations(img, active_seasonal, colors)
+    
     draw = ImageDraw.Draw(img)
+    
+    # Get seasonal emoji
+    emoji = get_seasonal_emoji(active_seasonal)
     
     # Fonts
     font_title = get_font(64, bold=True)
@@ -611,8 +621,8 @@ def generate_top_10_slide(
     font_tier = get_font(22, bold=True)
     font_footer = get_font(20)
     
-    # Header - Bubba Gump branding
-    title_text = "🦐 TOP 10 PERFORMERS 🦐"
+    # Header - with seasonal emoji
+    title_text = f"{emoji} TOP 10 PERFORMERS {emoji}"
     title_bbox = draw.textbbox((0, 0), title_text, font=font_title)
     title_width = title_bbox[2] - title_bbox[0]
     draw.text(
