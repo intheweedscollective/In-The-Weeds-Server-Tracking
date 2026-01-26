@@ -35,7 +35,7 @@ from scoring_engine import (
     calculate_bonus_points, calculate_total_score,
     calculate_rankings, calculate_performance_tiers, run_full_scoring,
     suggest_benchmarks_from_previous, calculate_previous_quarter_averages,
-    CANONICAL_COLUMN_MAPPING
+    CANONICAL_COLUMN_MAPPING, generate_hierarchy_rankings
 )
 
 from io import BytesIO
