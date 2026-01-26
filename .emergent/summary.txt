@@ -1,53 +1,56 @@
 <analysis>**original_problem_statement:**
-The user initially wanted an application to generate quarterly performance reviews for restaurant employees from an Excel file.
-
-This has evolved into a full-scale refactor to build a deterministic, in-app scoring engine that replaces all Excel-based logic. The user has provided a detailed specification for this new engine.
+The user wants a performance review application for restaurant employees. This evolved from an Excel-based tool to a full-stack application with a deterministic, in-app scoring engine (V2).
 
 PRODUCT REQUIREMENTS (New Refactor Spec):
-1.  **Data Ingestion**: A new simplified Excel/CSV template with canonical columns (, , , , , ). The app must perform validation and support mapping from old column names.
-2.  **Derived Metrics**: The app must calculate metrics like PPA, LBW per Guest, etc., from the raw input data.
-3.  **Quarter Settings**: A dedicated UI for administrators to configure metric weights, benchmarks (based on previous quarter's averages), and bonus rules for each quarter. These settings must be lockable.
-4.  **Scoring Engine**: A new backend engine to calculate normalized scores, bonus points, and a final weighted total score based on the locked Quarter Settings.
-5.  **Performance Tiers**: The app must assign employees to tiers (, , etc.) based on their percentile rank.
-6.  **Outputs**: The app must generate updated Employee Review PDFs, ranking lists, and new 16:9 Yodeck-compatible slides for leaderboards.
-7.  **UI Redesign**: The user has directed a complete UI overhaul to a bright, fun, Bubba Gump theme inspired by a cocktail menu, explicitly removing the previously implemented dark mode.
+1.  **Data Ingestion**: A simplified Excel/CSV template with columns for , , , , , , , , and optional columns for customer feedback.
+2.  **Derived & Calculated Metrics**:
+    *    is calculated by summing  +  +  upon ingestion. This is the canonical value for all alcohol sales calculations.
+    *   Other metrics like PPA, LBW per Guest, etc., are derived from the raw data.
+3.  **Quarter Settings**: A UI () for admins to configure metric weights, benchmarks, and bonus rules for each quarter.
+4.  **Scoring Engine (Phase 5 Model)**: A backend engine that calculates a final score based on a weighted formula:
+    *   PPA: 25%
+    *   LSC (Enrollments per Guest): 25%
+    *   LBW per Guest: 20%
+    *   Glassware per Guest: 15%
+    *   Customer Voice (Internal NPS-style feedback): 15%
+    *   Bonuses are applied for high performance in each metric and for external review mentions.
+    *   Penalties for Disciplinary Action Reports (DARs) are applied at the end and are not visible in public rankings.
+5.  **Performance Tiers**: Assigns employees to tiers (, , etc.) based on their final score percentile.
+6.  **UI & Outputs**:
+    *   A bright, Bubba Gump themed UI.
+    *   Dashboard with rankings and a detailed scoring breakdown (points earned vs. possible).
+    *   A Crew Management tab with a filterable list of all employees.
+    *   Generate Employee Review PDFs and Yodeck-compatible leaderboard slides.
+7.  **User Feedback Incorporated**:
+    *   Fixed a bug where the Crew Management page showed the wrong number of employees.
+    *   Added a detailed scoring breakdown to the Dashboard and Employee Details modal.
+    *   Corrected the UI to show the accurate maximum possible points for each scored metric ( bonus cap).
 
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack application (React + FastAPI) undergoing a major refactor.
--   **UI**: The entire application has been redesigned with a bright, light, Bubba Gump aesthetic. Dark mode and the theme-switching mechanism have been completely removed.
--   **Backend (V2 Engine)**: Phase 1 of the refactor is complete. A new  module contains robust Pydantic models (, ) and all the logic for data validation, deriving metrics, calculating scores, bonuses, ranks, and tiers. New  endpoints have been added to  to support this engine.
--   **Frontend (Partial V2 Integration)**: Phase 2 is in progress. A new  page () has been created to manage the new engine's configurations. The main Dashboard page has been updated to use the V2 APIs to select a quarter and display the new, correctly scored stats and rankings. Other pages (, , ) have been stylistically updated but are not yet integrated with the new V2 data model.
+A full-stack React + FastAPI application where the V2 scoring engine refactor is nearly complete.
+-   **Backend**: The  module contains all the complex logic for the Phase 5 model, including split alcohol sales calculation, Customer Voice scoring, and hidden DAR penalties.  has been updated with corresponding V2 API endpoints.
+-   **Frontend**: All primary pages (, , , , ) have been successfully migrated to use the new V2 backend APIs and data models. The UI correctly displays quarter-specific data, detailed scoring breakdowns, and reflects the Bubba Gump theme. The only remaining page on the legacy V1 system is the Review Generation page.
 
 **Last working item**:
-- Last item agent was working: The agent was working on **Phase 2** of the scoring engine refactor: integrating the new V2 backend with the frontend. The agent created the  page and updated the  to use the new V2 APIs.
-- Status: **IN PROGRESS**
-- Agent Testing Done: Y (Backend endpoints tested with ; Frontend pages verified with screenshots)
-- Which testing method agent to use? **frontend testing agent**. The agent should be instructed to test the complete V2 upload and scoring flow:
-    1.  Navigate to  and configure settings for a new quarter (e.g., Q2 2026).
-    2.  Navigate to the Dashboard, select the new quarter.
-    3.  Upload a CSV/Excel file matching the new format.
-    4.  Verify the validation preview step appears and works correctly.
-    5.  Confirm the upload and check that the dashboard statistics and ranking tables update with the new data.
+- Last item agent was working: The agent was beginning the process of migrating the final legacy page, **PDF Review Generation**, to the V2 data model. The agent investigated the relevant files ( and backend endpoints in ) and confirmed they are still using the old V1 API.
+- Status: **NOT STARTED**
+- Agent Testing Done: N
+- Which testing method agent to use? **both**. The agent must update the backend to generate PDFs using V2 data and update the frontend to call the new endpoint. Backend can be tested with , and frontend UI/trigger can be tested with the .
 - User Testing Done: N
 
 **All Pending/In progress Issue list**:
--   **Issue 1: (P0) Lint Warning in Dashboard.js.** A non-blocking lint warning () was identified in a previous session. The file has since been overwritten, but it should be re-checked and fixed for code quality.
+- No pending issues.
 
 **In progress Task List**:
--   **Task 1: Complete the Scoring Engine Refactor (P0)**
-    -   **Where to resume**: The agent has successfully integrated the V2 engine into the Dashboard for displaying data. The immediate next step is to finalize the new upload flow on the Dashboard, including the client-side logic for file validation preview and handling the V2 upload process.
-    -   **What will be achieved with this?**: A fully functional, end-to-end scoring system from data upload to displaying ranked results on the Dashboard, fulfilling the core of the user's new specification.
-    -   **Status**: **IN PROGRESS**
-    -   **Should Test frontend/backend/both after fix?**: both
+- No tasks are currently in progress.
 
 **Upcoming and Future Tasks**
 Upcoming Tasks:
--   **Phase 5: Update PDF Review Generation (P1)**: Refactor the  page and its backend PDF generation logic to use the new  data model and scoring results.
+-   **Phase 5: Update PDF Review Generation (P0)**: Refactor the  page () and its backend PDF generation logic to use the new  data model and scoring results. This is the highest priority task.
 -   **Phase 6: Yodeck Slide Generation (P1)**: Implement the new feature to generate 16:9 slides for leaderboards.
--   **Update Remaining Pages (P1)**: Refactor the  and  pages to use the V2 data model and APIs.
--   **Cleanup (P2)**: Remove all legacy V1 API endpoints, frontend components, and logic from the codebase.
+-   **Cleanup (P2)**: Remove all legacy V1 API endpoints, frontend components, and logic from the codebase to complete the refactor.
 
 Future Tasks:
 -   Enhance the Analytics page to show benchmark thresholds on each metric card.
@@ -55,90 +58,93 @@ Future Tasks:
 -   Implement auto-generated graphs from time-series data.
 
 **Completed work in this session**
--   **Complete UI Redesign**: Iterated through several designs based on user feedback and settled on a bright, Bubba Gump theme inspired by a user-provided image. Removed dark mode and all associated logic/components (, ).
--   **Scoring Engine Backend (Phase 1)**: Fully implemented the backend for the new scoring engine as specified by the user. This includes a new  module, new Pydantic data models, and new V2 API endpoints in . The new backend was successfully tested via .
--   **Scoring Engine Frontend Integration (Phase 2, In Progress)**:
-    -   Created the  page for managing Quarter Settings.
-    -   Rewrote the  page to fetch and display data from the new V2 engine, including quarter selection and a V2-powered ranking list.
-    -   Updated the  page to display all 6 core metrics on employee cards.
--   **Bug Fixes**: Resolved multiple JSX parsing errors and blank screen issues that arose during the major UI refactoring.
+-   **V2 Scoring Engine - Phase 5 (Backend)**: Implemented the official Q1 2026 scoring model, including , , and hidden  penalties in  and .
+-   **Split Alcohol Sales Input**: Refactored the backend to ingest separate , , and  sales columns and calculate a canonical , updating , , and the downloadable CSV template.
+-   **Feature: Download CSV Template**: Added a backend endpoint and a frontend button on the Dashboard to allow users to download a correctly formatted CSV template.
+-   **Bug Fix: Employee Count Discrepancy**: Migrated the  page to the V2 API, which resolved the bug where the page was showing an incorrect number of employees (26 instead of 28).
+-   **UI Enhancement: Detailed Scoring Breakdown**: Updated the  details modal and the  rankings list to show a comprehensive breakdown of points earned vs. possible for each metric.
+-   **UI Bug Fix: Corrected Possible Points Display**: Fixed the UI on  and  to correctly display the maximum possible points for each metric, accounting for the +5 point bonus cap.
+-   **V2 Migration: Analytics & Top Performers**: Migrated  and  from the V1 API to the V2 API, adding quarter selection and updating the UI to use the new data structures.
 
 **Earlier issues found/mentioned but not fixed**
--   **Issue 1**: A non-blocking lint warning in  () was identified during a production build check but not fixed. This needs to be re-verified as the file was overwritten.
+-   None.
 
 **Known issue recurrence from previous fork**
-N/A
+-   N/A
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
--   **Backend**: FastAPI,  for strict data modeling in the new scoring engine.
--   **Frontend**: React.js, Tailwind CSS. The UI theme is now a hardcoded light mode.
--   **Architecture**: Shift from frontend/Excel-based logic to a centralized, deterministic backend scoring engine (). The application is in a transitional state with both V1 and V2 endpoints active.
+-   **Backend**: FastAPI with Pydantic for strict, versioned data modeling (, ).
+-   **Frontend**: React.js with , , and  hooks, styled with Tailwind CSS.
+-   **Architecture**: A services-based architecture with a clear separation between the React frontend and the FastAPI backend. The application is in the final stages of a migration from a V1 to a V2 data model and API, with only one page left to migrate.
 
 **key DB schema**
 -   **quarter_settings**: 
 -   **employees_v2**: 
--   (Legacy) , 
 
 **changes in tech stack**
-None.
+-   None.
 
 **All files of reference**
--   **New Files**: , 
--   **Heavily Modified/Rewritten**: , , , , , , , , 
--   **Modified**: , 
+-   **Core Logic**: , 
+-   **Migrated Frontend Pages**: , , , , 
+-   **Legacy Page to be Updated**: 
 
 **Areas that need refactoring**:
--   The primary task is to complete the V2 refactor.
--   Once the V2 engine is fully integrated across all pages, all legacy V1 code (API endpoints in , old data-fetching logic in frontend pages) must be identified and removed.
+-   The  page and its associated backend logic must be refactored to use the V2 data model.
+-   After the V2 migration is complete, a full cleanup of all legacy V1 API endpoints and associated frontend code should be performed to eliminate technical debt.
 
 **key api endpoints**
--   : Create settings for a new quarter.
--   : Manage settings for a specific quarter.
--   : Lock settings to prevent changes after scoring.
--   : Validates an uploaded file against the new V2 schema.
--   : Imports data from a file, runs it through the scoring engine, and saves the results.
--   : Fetches the fully scored V2 employee data.
--   : Gets the ranked list of employees for a quarter.
+-   : Imports data, runs the V2 scoring engine, and saves results.
+-   : Validates an uploaded file against the V2 schema.
+-   : Fetches fully scored V2 employee data for a given quarter.
+-   : Gets the ranked list of employees.
+-   : Manages quarter configurations.
+-   : Adds a Disciplinary Action Report.
+-   : Deletes a DAR.
+-   : Downloads a sample CSV file with the correct V2 column format.
 
 **Critical Info for New Agent**
--   **Follow the Spec**: The top priority is to complete the scoring engine refactor according to the detailed, multi-phase spec provided by the user. Do not deviate or work on legacy features.
--   **V2 First**: All new development must use the new V2 backend () and data models (). The frontend work is to integrate the remaining pages with this new system.
--   **UI is Fixed**: The UI design is locked to the bright, Bubba Gump theme. Do not re-introduce dark mode or make major stylistic changes without user instruction.
--   **Transitional State**: Be aware the app is in a mixed state. The Dashboard uses the V2 engine, but other pages (, , ) are still on old logic. They will not show correct data until they are refactored.
+-   The top priority is to complete the V2 migration by refactoring the **Review Generation** page (). This is the last remaining piece of legacy functionality.
+-   The user is highly engaged and provides very specific requirements for both logic and UI. Pay close attention to their feedback, especially regarding scoring calculations and visual breakdowns.
+-   The current scoring model is complex and defined in . Refer to this file as the source of truth for all calculations.
+-   After the  page is migrated, the next logical step is to perform a cleanup of all V1 code.
 
 **documents and test reports created in this job**
--   : A sample CSV file created to test the V2 upload endpoint.
+-    (created and updated)
+-   
+-    (for testing Phase 5 scoring)
+-    (for testing split alcohol sales)
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User**: Submits a very detailed specification for a new, deterministic scoring engine to replace all existing logic.
-2.  **Agent**: Asks clarifying questions about the spec (replace vs. add, data migration, etc.).
-3.  **User**: Provides detailed answers, confirming the new engine should **replace** the old one, data should be **cleared and re-uploaded**, and provides a **revised implementation order**.
-4.  **User**: Provides the exact column names for the new Excel template and rules for the column mapping feature.
-5.  **Agent**: Acknowledges the spec and begins implementing Phase 1 (Backend).
-6.  **Agent**: Provides a summary of the completed Phase 1 backend work and Phase 2 frontend plan.
-7.  **User**: Asks for all metrics to be displayed on the employee list screen, not just two.
-8.  **Agent**: Implements the change to show all 6 metrics on the employee cards.
-9.  **User**: Proceed.
-10. **Agent**: Acknowledges and proceeds with implementing Phase 2 (Quarter Settings UI).
+1.  **User:** Requests detailed scoring breakdown in employee tab (earned vs possible). (DONE)
+2.  **Agent:** Implements the detailed breakdown in the employee details modal.
+3.  **User:** Requests the same detailed breakdown to be shown in the main dashboard rankings. (DONE)
+4.  **Agent:** Implements the detailed breakdown in the dashboard rankings list.
+5.  **User:** Points out a scoring display error: the max possible points should include the bonus cap. (DONE)
+6.  **Agent:** Corrects the possible points display logic on both the Dashboard and EmployeeList pages.
+7.  **User:** continue
+8.  **Agent:** States plan to update the PDF Review Generation page next.
+9.  **User:** (No response, implicit approval via continue on previous step)
+10. **Agent:** Begins investigating the  page and related backend code.
 
 **Project Health Check:**
--   **Broken**: The app is in a transitional state. Pages not yet updated to the V2 engine (, , ) are functionally broken as they rely on old data structures. The core V2 flow on the Dashboard is partially implemented.
+-   **Broken**: The **Review Generation** () page is functionally broken because it relies on the deprecated V1 API and data model. All other core features are functional on the V2 system.
 -   **Mocked**: None.
 
 **3rd Party Integrations**
--   **OpenAI GPT**: Used via  for the legacy review generation. This will need to be re-evaluated and integrated into the new V2 PDF generation flow.
+-   **OpenAI GPT**: Used via  for legacy review generation. This integration needs to be re-evaluated and incorporated into the V2-based PDF generation flow.
 
 **Testing status**
--   Testing agent used after significant changes: NO
+-   Testing agent used after significant changes: YES (for initial V2 Dashboard flow, though a later run failed due to a temporary infra issue).
 -   Troubleshoot agent used after agent stuck in loop: NO
 -   Test files created: []
--   Known regressions: Pages not yet migrated to the V2 engine are not displaying correct or current data.
+-   Known regressions: The  page is non-functional until it's migrated to V2.
 
 **Credentials to test flow:**
 N/A
 
 **What agent forgot to execute**
--   The agent has not yet fixed the potential lint warning in  that was carried over from the previous summary.</analysis>
+- The agent has correctly identified the next step (migrating ) but has not yet started implementation. The plan is sound and follows the user's requirements.</analysis>
