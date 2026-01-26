@@ -179,6 +179,11 @@ class QuarterSettings(BaseModel):
     slide_secondary_color: str = "#005B96"  # Secondary accent
     slide_custom_bg_image: Optional[str] = None  # Base64 or URL for custom background
     
+    # === SEASONAL THEME (Holiday Decorations) ===
+    # Options: "auto" (detect by date), "none" (no seasonal), or specific:
+    # "valentines", "st_patricks", "easter", "july_4th", "halloween", "thanksgiving", "christmas", "new_year"
+    slide_seasonal_theme: str = "auto"  # Default to auto-detect
+    
     # === LOCK STATUS ===
     is_locked: bool = False
     locked_at: Optional[datetime] = None
