@@ -23,6 +23,7 @@ export default function Analytics() {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [analytics, setAnalytics] = useState({});
+  const [quarterSettings, setQuarterSettings] = useState(null);
   
   // V2 Quarter Selection
   const [selectedYear, setSelectedYear] = useState(2026);
@@ -31,8 +32,15 @@ export default function Analytics() {
   const fetchEmployees = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await axios.get(`${API}/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`);
-      setEmployees(response.data);
+      const [empResponse, settingsResponse] = await Promise.all([
+        axios.get(`${API}/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`),
+        axios.get(`${API}/v2/quarter-settings/${selectedYear}/${selectedQuarter}`).catch(() => null)
+      ]);
+      
+      setEmployees(empResponse.data);
+      if (settingsResponse?.data) {
+        setQuarterSettings(settingsResponse.data);
+      }
     } catch (error) {
       console.error("Error fetching employees:", error);
       toast.error("Error loading employees");
