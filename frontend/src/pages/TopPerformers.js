@@ -262,7 +262,6 @@ export default function TopPerformers() {
             
             <div className="space-y-3">
               {topOverall.map((employee, index) => {
-                const ranking = getRankingHierarchy(employee.ranking);
                 return (
                   <div
                     key={employee.id}
@@ -275,20 +274,15 @@ export default function TopPerformers() {
                       <div>
                         <h4 className="font-semibold text-foreground">{employee.name}</h4>
                         <p className="text-sm text-gray-500">{employee.position}</p>
-                        {employee.ranking && (
-                          <span className={`inline-block text-xs mt-1 px-2 py-0.5 rounded-full font-semibold ${ranking.bgColor} ${ranking.color}`}>
-                            {employee.ranking} - {ranking.level}
-                          </span>
-                        )}
                       </div>
                     </div>
 
                     <div className="text-right">
                       <div className="text-2xl font-serif font-bold text-primary">
-                        {formatNumber(employee.cumulative_score)}
+                        {formatNumber(employee.pre_dar_score)}
                       </div>
                       <div className="text-sm text-gray-500">
-                        Rank: {formatOverallRank(employee.overall_rank)}
+                        Total Score
                       </div>
                     </div>
                   </div>
