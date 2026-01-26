@@ -2055,6 +2055,199 @@ async def download_full_rankings_pdf(year: int, quarter: str):
     )
 
 
+# ============================================================================
+# YODECK SLIDE GENERATION (16:9 PNG slides for digital signage)
+# ============================================================================
+
+@api_router.get("/v2/yodeck/{year}/{quarter}/top10")
+async def get_yodeck_top10_slide(year: int, quarter: str):
+    """
+    Generate Top 10 Performers slide (1920x1080 PNG).
+    Vegas Strip professional - dark navy, high-contrast, readable from 15 feet.
+    """
+    # Get settings and rankings
+    settings_doc = await db.quarter_settings.find_one(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    )
+    if not settings_doc:
+        raise HTTPException(status_code=404, detail=f"Settings not found for {quarter} {year}")
+    
+    settings = QuarterSettings(**settings_doc)
+    
+    employees_docs = await db.employees_v2.find(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    ).to_list(5000)
+    
+    if not employees_docs:
+        raise HTTPException(status_code=404, detail=f"No employee data for {quarter} {year}")
+    
+    employees = [EmployeeV2(**doc) for doc in employees_docs]
+    rankings = generate_hierarchy_rankings(employees, settings)
+    
+    # Generate slide
+    slide_bytes = generate_top_10_slide(rankings, quarter.upper(), year)
+    
+    filename = f"yodeck_top10_{quarter}_{year}.png"
+    return Response(
+        content=slide_bytes,
+        media_type="image/png",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+@api_router.get("/v2/yodeck/{year}/{quarter}/tier/{tier_name}")
+async def get_yodeck_tier_slide(year: int, quarter: str, tier_name: str, page: int = 1):
+    """
+    Generate tier-specific slide (1920x1080 PNG).
+    
+    tier_name: "trainers", "bartenders", "a-servers", "b-servers", "c-servers"
+    page: Page number for tiers with >10 employees (default: 1)
+    """
+    # Map URL tier name to internal tier label
+    tier_map = {
+        "trainers": "Trainer",
+        "bartenders": "Bartender",
+        "a-servers": "A-Server",
+        "b-servers": "B-Server",
+        "c-servers": "C-Server",
+    }
+    
+    tier_label = tier_map.get(tier_name.lower())
+    if not tier_label:
+        raise HTTPException(status_code=400, detail=f"Invalid tier: {tier_name}. Use: trainers, bartenders, a-servers, b-servers, c-servers")
+    
+    # Get settings and rankings
+    settings_doc = await db.quarter_settings.find_one(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    )
+    if not settings_doc:
+        raise HTTPException(status_code=404, detail=f"Settings not found for {quarter} {year}")
+    
+    settings = QuarterSettings(**settings_doc)
+    
+    employees_docs = await db.employees_v2.find(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    ).to_list(5000)
+    
+    if not employees_docs:
+        raise HTTPException(status_code=404, detail=f"No employee data for {quarter} {year}")
+    
+    employees = [EmployeeV2(**doc) for doc in employees_docs]
+    rankings = generate_hierarchy_rankings(employees, settings)
+    
+    # Filter by tier
+    tier_employees = [r for r in rankings if r.get("tier_label") == tier_label]
+    
+    if not tier_employees:
+        raise HTTPException(status_code=404, detail=f"No employees in {tier_label} tier")
+    
+    # Paginate (10 per slide)
+    max_per_page = 10
+    total_pages = (len(tier_employees) + max_per_page - 1) // max_per_page
+    
+    if page < 1 or page > total_pages:
+        raise HTTPException(status_code=400, detail=f"Invalid page. Valid range: 1-{total_pages}")
+    
+    start_idx = (page - 1) * max_per_page
+    end_idx = start_idx + max_per_page
+    page_employees = tier_employees[start_idx:end_idx]
+    
+    # Generate slide
+    slide_bytes = generate_tier_slide(
+        tier_label,
+        page_employees,
+        quarter.upper(),
+        year,
+        page=page,
+        total_pages=total_pages
+    )
+    
+    filename = f"yodeck_{tier_name}_{quarter}_{year}_p{page}.png"
+    return Response(
+        content=slide_bytes,
+        media_type="image/png",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+@api_router.get("/v2/yodeck/{year}/{quarter}/all")
+async def get_all_yodeck_slides(year: int, quarter: str):
+    """
+    Get metadata about all available Yodeck slides for a quarter.
+    Returns download URLs for each slide.
+    """
+    # Get settings and rankings
+    settings_doc = await db.quarter_settings.find_one(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    )
+    if not settings_doc:
+        raise HTTPException(status_code=404, detail=f"Settings not found for {quarter} {year}")
+    
+    settings = QuarterSettings(**settings_doc)
+    
+    employees_docs = await db.employees_v2.find(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    ).to_list(5000)
+    
+    if not employees_docs:
+        raise HTTPException(status_code=404, detail=f"No employee data for {quarter} {year}")
+    
+    employees = [EmployeeV2(**doc) for doc in employees_docs]
+    rankings = generate_hierarchy_rankings(employees, settings)
+    
+    # Count employees per tier
+    tier_counts = {"Trainer": 0, "Bartender": 0, "A-Server": 0, "B-Server": 0, "C-Server": 0}
+    for r in rankings:
+        tier = r.get("tier_label", "A-Server")
+        if tier in tier_counts:
+            tier_counts[tier] += 1
+    
+    # Build slide manifest
+    max_per_page = 10
+    slides = []
+    
+    # Top 10
+    slides.append({
+        "id": "top10",
+        "name": "Top 10 Performers",
+        "endpoint": f"/api/v2/yodeck/{year}/{quarter}/top10",
+        "pages": 1
+    })
+    
+    # Tier slides
+    for tier_key, tier_label in [
+        ("trainers", "Trainer"),
+        ("bartenders", "Bartender"),
+        ("a-servers", "A-Server"),
+        ("b-servers", "B-Server"),
+        ("c-servers", "C-Server"),
+    ]:
+        count = tier_counts[tier_label]
+        if count > 0:
+            total_pages = (count + max_per_page - 1) // max_per_page
+            slides.append({
+                "id": tier_key,
+                "name": f"{tier_label} Rankings",
+                "endpoint": f"/api/v2/yodeck/{year}/{quarter}/tier/{tier_key}",
+                "employee_count": count,
+                "pages": total_pages
+            })
+    
+    return {
+        "quarter": quarter.upper(),
+        "year": year,
+        "total_employees": len(employees),
+        "tier_counts": tier_counts,
+        "slides": slides
+    }
+
+
 @api_router.get("/v2/top-performers/{year}/{quarter}")
 async def get_top_performers_v2(year: int, quarter: str, limit: int = 10):
     """Get top performers for a quarter"""
