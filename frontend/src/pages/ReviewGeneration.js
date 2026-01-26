@@ -254,9 +254,9 @@ export default function ReviewGeneration() {
         {employees.length === 0 ? (
           <div className="bubba-card p-12 text-center" data-testid="no-employees">
             <User className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-serif font-bold mb-2">No crew members available</h3>
+            <h3 className="text-lg font-serif font-bold mb-2">No crew members for {selectedQuarter} {selectedYear}</h3>
             <p className="text-gray-500 mb-6">
-              Upload employee data from the dashboard to start generating reviews
+              Upload employee data from the dashboard for this quarter to start generating reviews
             </p>
             <a href="/" className="bubba-btn-primary inline-block" data-testid="go-to-dashboard-btn">
               Go to Dashboard
@@ -277,6 +277,7 @@ export default function ReviewGeneration() {
               const hasReview = hasRecentReview(employee.id);
               const review = getEmployeeReview(employee.id);
               const isGenerating = generating[employee.id];
+              const tier = getTierLabel(employee);
               
               return (
                 <div key={employee.id} className="bubba-card" data-testid={`employee-review-card-${employee.id}`}>
@@ -284,20 +285,25 @@ export default function ReviewGeneration() {
                     <div className="flex items-center justify-between flex-wrap gap-4">
                       <div className="flex items-center gap-4">
                         <div>
-                          <h3 className="text-lg font-serif font-bold text-foreground" data-testid={`employee-name-${employee.id}`}>
-                            {employee.name}
-                          </h3>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-lg font-serif font-bold text-foreground" data-testid={`employee-name-${employee.id}`}>
+                              {employee.name}
+                            </h3>
+                            <span className={`px-2 py-0.5 rounded text-xs font-bold ${tier.color}`}>
+                              {tier.label}
+                            </span>
+                          </div>
                           <p className="text-gray-500 text-sm" data-testid={`employee-position-${employee.id}`}>
-                            {employee.position}
+                            {employee.job_title || "Server"} • Rank #{employee.peer_rank || 'N/A'}
                           </p>
                         </div>
                         
-                        {/* KPI Summary */}
+                        {/* KPI Summary - V2 Metrics */}
                         <div className="hidden md:flex gap-3 ml-4">
                           {[
-                            { label: 'Score', value: formatNumber(employee.cumulative_score), color: 'text-primary' },
-                            { label: 'PPA', value: formatCurrency(employee.ppa), color: 'text-secondary' },
-                            { label: 'GPG', value: formatCurrency(employee.gpg), color: 'text-gray-600' },
+                            { label: 'Score', value: formatNumber(employee.pre_dar_score || employee.total_score), color: 'text-primary' },
+                            { label: 'PPA', value: `$${(employee.ppa || 0).toFixed(0)}`, color: 'text-secondary' },
+                            { label: 'LBW/G', value: `$${(employee.lbw_per_guest || 0).toFixed(2)}`, color: 'text-gray-600' },
                           ].map((kpi, i) => (
                             <div key={i} className="text-center px-3 py-1 bg-gray-50 rounded-lg">
                               <div className={`text-sm font-serif font-bold ${kpi.color}`}>{kpi.value}</div>
