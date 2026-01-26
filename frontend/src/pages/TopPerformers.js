@@ -302,26 +302,24 @@ export default function TopPerformers() {
 
         {/* Top Performers by Metric */}
         <div className="space-y-8 print:space-y-6">
-          {Object.entries(KPI_DEFINITIONS).map(([metricKey, metricInfo]) => {
+          {Object.entries(V2_METRICS).map(([metricKey, metricInfo]) => {
             const performers = topPerformers[metricKey] || [];
             
             return (
               <div key={metricKey} className="bubba-card">
                 <div className="p-5">
                   <h3 className="text-lg font-serif font-bold text-foreground mb-1">
-                    Top 10 - {metricInfo.name}
+                    Top 10 - {metricInfo.label}
                   </h3>
                   <p className="text-sm text-gray-500 mb-4">
-                    {metricKey === 'lsc_ratio' 
-                      ? `Best LSC conversion rates (lower is better) • Benchmark: 1 in 100`
-                      : `Highest ${metricInfo.name} performers • Benchmark: ${metricInfo.format === 'currency' ? '$' + metricInfo.benchmark : metricInfo.benchmark}`
+                    {!metricInfo.higherBetter 
+                      ? `Best ${metricInfo.label} performers (lower is better)`
+                      : `Highest ${metricInfo.label} performers`
                     }
                   </p>
                 
                   <div className="space-y-2">
                     {performers.map((employee, index) => {
-                      const ranking = getRankingHierarchy(employee.ranking);
-                      
                       return (
                         <div key={employee.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                           <div className="flex items-center gap-3">
