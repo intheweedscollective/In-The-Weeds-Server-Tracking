@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Monitor, Download, Image, Calendar, ChevronRight, FileImage } from "lucide-react";
+import { Monitor, Download, Calendar, FileImage } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import Navigation from "../components/Navigation";
