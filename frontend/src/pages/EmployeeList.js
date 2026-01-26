@@ -375,7 +375,7 @@ export default function EmployeeList() {
                   </h4>
                   
                   <div className="space-y-3">
-                    {/* PPA - 25% */}
+                    {/* PPA - 25% weight, max 30 pts */}
                     <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
                       <div className="flex items-center justify-between mb-2">
                         <div>
@@ -383,8 +383,8 @@ export default function EmployeeList() {
                           <span className="ml-2 text-xs bg-blue-200 text-blue-800 px-2 py-0.5 rounded-full">25% weight</span>
                         </div>
                         <div className="text-right">
-                          <span className="font-bold text-secondary">{formatNumber(((selectedEmployee.score_ppa || 0) * 0.25))}</span>
-                          <span className="text-gray-500 text-sm"> / 25 pts</span>
+                          <span className="font-bold text-secondary">{formatNumber(Math.min((selectedEmployee.score_ppa || 0), 100) * 0.25 + (selectedEmployee.bonus_ppa || 0))}</span>
+                          <span className="text-gray-500 text-sm"> / 30 pts</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-4 text-sm">
@@ -401,12 +401,12 @@ export default function EmployeeList() {
                       <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
                         <div 
                           className="h-full bg-secondary rounded-full transition-all" 
-                          style={{ width: `${Math.min(100, (selectedEmployee.score_ppa || 0))}%` }}
+                          style={{ width: `${Math.min(100, ((Math.min((selectedEmployee.score_ppa || 0), 100) * 0.25 + (selectedEmployee.bonus_ppa || 0)) / 30) * 100)}%` }}
                         />
                       </div>
                     </div>
 
-                    {/* LSC - 25% */}
+                    {/* LSC - 25% weight, max 30 pts */}
                     <div className="p-4 bg-green-50 rounded-lg border border-green-100">
                       <div className="flex items-center justify-between mb-2">
                         <div>
@@ -414,8 +414,8 @@ export default function EmployeeList() {
                           <span className="ml-2 text-xs bg-green-200 text-green-800 px-2 py-0.5 rounded-full">25% weight</span>
                         </div>
                         <div className="text-right">
-                          <span className="font-bold text-green-700">{formatNumber(((selectedEmployee.score_lsc || 0) * 0.25))}</span>
-                          <span className="text-gray-500 text-sm"> / 25 pts</span>
+                          <span className="font-bold text-green-700">{formatNumber(Math.min((selectedEmployee.score_lsc || 0), 100) * 0.25 + (selectedEmployee.bonus_lsc || 0))}</span>
+                          <span className="text-gray-500 text-sm"> / 30 pts</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-4 text-sm">
