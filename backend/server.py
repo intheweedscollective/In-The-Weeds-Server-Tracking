@@ -2217,6 +2217,9 @@ async def get_yodeck_tier_slide(year: int, quarter: str, tier_name: str, page: i
             "text_white": settings.slide_text_color,
         }
     
+    # Get seasonal theme setting
+    seasonal_theme = getattr(settings, 'slide_seasonal_theme', 'auto')
+    
     # Generate slide with theme
     slide_bytes = generate_tier_slide(
         tier_label,
@@ -2227,7 +2230,8 @@ async def get_yodeck_tier_slide(year: int, quarter: str, tier_name: str, page: i
         total_pages=total_pages,
         theme=theme,
         custom_colors=custom_colors,
-        custom_bg_image=settings.slide_custom_bg_image
+        custom_bg_image=settings.slide_custom_bg_image,
+        seasonal_theme=seasonal_theme
     )
     
     filename = f"yodeck_{tier_name}_{quarter}_{year}_p{page}.png"
