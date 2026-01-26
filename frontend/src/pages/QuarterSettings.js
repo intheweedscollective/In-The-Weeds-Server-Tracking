@@ -870,37 +870,35 @@ export default function QuarterSettings() {
           </div>
         </div>
 
-        {/* Save Button */}
-        {!settings?.is_locked && (
-          <div className="flex justify-end">
-            <Button
-              onClick={handleSave}
-              disabled={saving || !weightsValid}
-              className="bubba-btn-primary"
-            >
-              {saving ? (
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
-                  Saving...
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <Save className="w-4 h-4" />
-                  {isNew ? 'Create Settings' : 'Save Changes'}
-                </div>
-              )}
-            </Button>
-          </div>
-        )}
+        {/* Save Button - Always show (theme settings can be saved even when locked) */}
+        <div className="flex justify-end">
+          <Button
+            onClick={handleSave}
+            disabled={saving || (!settings?.is_locked && !weightsValid)}
+            className="bubba-btn-primary"
+          >
+            {saving ? (
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                Saving...
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Save className="w-4 h-4" />
+                {isNew ? 'Create Settings' : settings?.is_locked ? 'Save Theme Settings' : 'Save Changes'}
+              </div>
+            )}
+          </Button>
+        </div>
 
         {settings?.is_locked && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-yellow-800">
             <div className="flex items-center gap-2">
               <Lock className="w-5 h-5" />
-              <span className="font-semibold">Settings are locked</span>
+              <span className="font-semibold">Scoring settings are locked</span>
             </div>
             <p className="text-sm mt-1">
-              Scores have been generated for this quarter. To make changes, clear the employee data first.
+              Scores have been generated for this quarter. Benchmarks, weights, and tier thresholds cannot be changed, but you can still customize theme and seasonal decoration settings.
             </p>
           </div>
         )}
