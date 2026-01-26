@@ -1103,6 +1103,10 @@ async def update_quarter_settings(year: int, quarter: str, data: QuarterSettings
         update_data["bonus_rate"] = data.bonus_rate
     if data.bonus_cap is not None:
         update_data["bonus_cap"] = data.bonus_cap
+    if data.a_server_min_score is not None:
+        update_data["a_server_min_score"] = data.a_server_min_score
+    if data.b_server_min_score is not None:
+        update_data["b_server_min_score"] = data.b_server_min_score
     
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
     
