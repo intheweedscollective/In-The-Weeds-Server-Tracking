@@ -2181,6 +2181,221 @@ async def get_analytics_pdf_v2(year: int, quarter: str):
     )
 
 
+# ============================================================================
+# TREND CHART ENDPOINTS
+# ============================================================================
+
+from trend_charts import (
+    generate_employee_comparison_chart, generate_employee_change_chart,
+    generate_team_comparison_chart, generate_tier_distribution_chart,
+    get_previous_quarter, chart_to_base64
+)
+
+
+@api_router.get("/v2/trends/{year}/{quarter}/employee/{employee_id}")
+async def get_employee_trend_chart(year: int, quarter: str, employee_id: str, chart_type: str = "comparison"):
+    """
+    Generate trend chart for an individual employee comparing current vs previous quarter.
+    
+    chart_type: "comparison" (bar chart) or "change" (% change chart)
+    """
+    # Get current quarter data
+    current_doc = await db.employees_v2.find_one(
+        {"year": year, "quarter": quarter.upper(), "id": employee_id},
+        {"_id": 0}
+    )
+    if not current_doc:
+        raise HTTPException(status_code=404, detail="Employee not found for current quarter")
+    
+    # Get previous quarter data
+    prev_quarter, prev_year = get_previous_quarter(quarter, year)
+    previous_doc = await db.employees_v2.find_one(
+        {"year": prev_year, "quarter": prev_quarter, "name": current_doc.get("name")},
+        {"_id": 0}
+    )
+    
+    # Generate chart
+    if chart_type == "change":
+        chart_bytes = generate_employee_change_chart(
+            current_doc.get("name", "Employee"),
+            current_doc, previous_doc,
+            quarter.upper(), year
+        )
+    else:
+        chart_bytes = generate_employee_comparison_chart(
+            current_doc.get("name", "Employee"),
+            current_doc, previous_doc,
+            quarter.upper(), year
+        )
+    
+    return Response(
+        content=chart_bytes,
+        media_type="image/png",
+        headers={"Content-Disposition": f"inline; filename=trend_{employee_id}_{quarter}_{year}.png"}
+    )
+
+
+@api_router.get("/v2/trends/{year}/{quarter}/employee/{employee_id}/data")
+async def get_employee_trend_data(year: int, quarter: str, employee_id: str):
+    """
+    Get raw trend data for an employee (current vs previous quarter).
+    Returns JSON for frontend chart rendering.
+    """
+    # Get current quarter data
+    current_doc = await db.employees_v2.find_one(
+        {"year": year, "quarter": quarter.upper(), "id": employee_id},
+        {"_id": 0}
+    )
+    if not current_doc:
+        raise HTTPException(status_code=404, detail="Employee not found for current quarter")
+    
+    # Get previous quarter data
+    prev_quarter, prev_year = get_previous_quarter(quarter, year)
+    previous_doc = await db.employees_v2.find_one(
+        {"year": prev_year, "quarter": prev_quarter, "name": current_doc.get("name")},
+        {"_id": 0}
+    )
+    
+    metrics = ['ppa', 'lbw_per_guest', 'glassware_per_guest', 'guests_per_lsc', 'cv_score', 'pre_dar_score']
+    
+    current_values = {}
+    previous_values = {}
+    changes = {}
+    
+    for metric in metrics:
+        curr_val = current_doc.get(metric, 0) or 0
+        prev_val = previous_doc.get(metric, 0) if previous_doc else 0
+        
+        current_values[metric] = curr_val
+        previous_values[metric] = prev_val
+        
+        if prev_val and prev_val != 0:
+            pct_change = ((curr_val - prev_val) / abs(prev_val)) * 100
+        else:
+            pct_change = 0 if curr_val == 0 else 100
+        
+        changes[metric] = round(pct_change, 1)
+    
+    return {
+        "employee_name": current_doc.get("name"),
+        "employee_id": employee_id,
+        "current_quarter": quarter.upper(),
+        "current_year": year,
+        "previous_quarter": prev_quarter,
+        "previous_year": prev_year,
+        "has_previous_data": previous_doc is not None,
+        "current": current_values,
+        "previous": previous_values,
+        "changes": changes
+    }
+
+
+@api_router.get("/v2/trends/{year}/{quarter}/team")
+async def get_team_trend_chart(year: int, quarter: str, chart_type: str = "comparison"):
+    """
+    Generate team-wide trend chart comparing current vs previous quarter.
+    
+    chart_type: "comparison" (bar chart) or "distribution" (tier pie charts)
+    """
+    # Get current quarter employees
+    current_docs = await db.employees_v2.find(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    ).to_list(5000)
+    
+    if not current_docs:
+        raise HTTPException(status_code=404, detail="No employees found for current quarter")
+    
+    # Get previous quarter employees
+    prev_quarter, prev_year = get_previous_quarter(quarter, year)
+    previous_docs = await db.employees_v2.find(
+        {"year": prev_year, "quarter": prev_quarter},
+        {"_id": 0}
+    ).to_list(5000)
+    
+    # Generate chart
+    if chart_type == "distribution":
+        chart_bytes = generate_tier_distribution_chart(
+            current_docs, previous_docs,
+            quarter.upper(), year
+        )
+    else:
+        chart_bytes = generate_team_comparison_chart(
+            current_docs, previous_docs,
+            quarter.upper(), year
+        )
+    
+    return Response(
+        content=chart_bytes,
+        media_type="image/png",
+        headers={"Content-Disposition": f"inline; filename=team_trend_{quarter}_{year}.png"}
+    )
+
+
+@api_router.get("/v2/trends/{year}/{quarter}/team/data")
+async def get_team_trend_data(year: int, quarter: str):
+    """
+    Get raw team trend data (current vs previous quarter averages).
+    Returns JSON for frontend chart rendering.
+    """
+    # Get current quarter employees
+    current_docs = await db.employees_v2.find(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    ).to_list(5000)
+    
+    if not current_docs:
+        raise HTTPException(status_code=404, detail="No employees found for current quarter")
+    
+    # Get previous quarter employees
+    prev_quarter, prev_year = get_previous_quarter(quarter, year)
+    previous_docs = await db.employees_v2.find(
+        {"year": prev_year, "quarter": prev_quarter},
+        {"_id": 0}
+    ).to_list(5000)
+    
+    metrics = ['ppa', 'lbw_per_guest', 'glassware_per_guest', 'guests_per_lsc', 'cv_score', 'pre_dar_score']
+    
+    def calc_avg(employees, metric):
+        values = [e.get(metric, 0) for e in employees if e.get(metric) is not None]
+        return round(sum(values) / len(values), 2) if values else 0
+    
+    def count_tiers(employees):
+        tiers = {'Trainer': 0, 'Bartender': 0, 'A-Server': 0, 'B-Server': 0, 'C-Server': 0}
+        for emp in employees:
+            tier = emp.get('tier_label', 'C-Server')
+            if tier in tiers:
+                tiers[tier] += 1
+        return tiers
+    
+    current_avgs = {m: calc_avg(current_docs, m) for m in metrics}
+    previous_avgs = {m: calc_avg(previous_docs, m) for m in metrics} if previous_docs else {m: 0 for m in metrics}
+    
+    changes = {}
+    for m in metrics:
+        curr = current_avgs[m]
+        prev = previous_avgs[m]
+        if prev and prev != 0:
+            changes[m] = round(((curr - prev) / abs(prev)) * 100, 1)
+        else:
+            changes[m] = 0
+    
+    return {
+        "current_quarter": quarter.upper(),
+        "current_year": year,
+        "previous_quarter": prev_quarter,
+        "previous_year": prev_year,
+        "has_previous_data": len(previous_docs) > 0,
+        "current_count": len(current_docs),
+        "previous_count": len(previous_docs),
+        "current_averages": current_avgs,
+        "previous_averages": previous_avgs,
+        "changes": changes,
+        "current_tier_distribution": count_tiers(current_docs),
+        "previous_tier_distribution": count_tiers(previous_docs) if previous_docs else {}
+    }
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
