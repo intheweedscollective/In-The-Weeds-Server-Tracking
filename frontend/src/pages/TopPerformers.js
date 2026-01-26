@@ -293,7 +293,7 @@ export default function TopPerformers() {
                       </div>
                       <div>
                         <h4 className="font-semibold text-foreground">{employee.name}</h4>
-                        <p className="text-sm text-gray-500">{employee.position}</p>
+                        <p className="text-sm text-gray-500">{employee.performance_tier || 'Not Assessed'}</p>
                       </div>
                     </div>
 
@@ -349,7 +349,7 @@ export default function TopPerformers() {
                             
                             <div>
                               <h4 className="font-semibold text-foreground text-sm">{employee.name}</h4>
-                              <p className="text-xs text-gray-500">{employee.position}</p>
+                              <p className="text-xs text-gray-500">{employee.performance_tier || 'Not Assessed'}</p>
                             </div>
                           </div>
                           
