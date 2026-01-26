@@ -1,12 +1,12 @@
-import { useState, useEffect } from "react";
-import { FileText, Download, Clock, User, Anchor, Ship } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { FileText, Download, Clock, User, Anchor, Ship, Calendar } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import Navigation from "../components/Navigation";
 import LineGraphUpload from "../components/LineGraphUpload";
 import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { formatCurrency, formatLSCRatio, formatNumber } from "../utils/formatters";
+import { formatNumber } from "../utils/formatters";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -16,27 +16,27 @@ export default function ReviewGeneration() {
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState({});
-  const [selectedQuarter, setSelectedQuarter] = useState("Q4");
-  const [selectedYear, setSelectedYear] = useState("2025");
+  const [selectedQuarter, setSelectedQuarter] = useState("Q1");
+  const [selectedYear, setSelectedYear] = useState("2026");
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [selectedGraphKind, setSelectedGraphKind] = useState("quarter");
 
-  useEffect(() => {
-    fetchEmployees();
-    fetchReviews();
-  }, []);
-
-  const fetchEmployees = async () => {
+  const fetchEmployees = useCallback(async () => {
     try {
-      const response = await axios.get(`${API}/employees`);
-      setEmployees(response.data);
+      // Use V2 API with quarter filter
+      const response = await axios.get(`${API}/v2/employees`, {
+        params: { year: parseInt(selectedYear), quarter: selectedQuarter }
+      });
+      // Sort by peer_rank
+      const sorted = (response.data || []).sort((a, b) => (a.peer_rank || 999) - (b.peer_rank || 999));
+      setEmployees(sorted);
     } catch (error) {
       console.error("Error fetching employees:", error);
       toast.error("Error loading employees");
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedYear, selectedQuarter]);
 
   const fetchReviews = async () => {
     try {
@@ -47,12 +47,18 @@ export default function ReviewGeneration() {
     }
   };
 
+  useEffect(() => {
+    fetchEmployees();
+    fetchReviews();
+  }, [fetchEmployees]);
+
   const generateReview = async (employeeId) => {
     setGenerating(prev => ({ ...prev, [employeeId]: true }));
     try {
       const employee = employees.find(e => e.id === employeeId);
+      // Use V2 API endpoint
       const response = await axios.post(
-        `${API}/employees/${employeeId}/generate-review`,
+        `${API}/v2/employees/${employeeId}/generate-review`,
         { quarter: selectedQuarter, year: parseInt(selectedYear) },
         { responseType: 'blob' }
       );
@@ -92,6 +98,14 @@ export default function ReviewGeneration() {
       review.quarter === selectedQuarter && 
       review.year === parseInt(selectedYear)
     );
+  };
+
+  // Get tier classification based on score
+  const getTierLabel = (employee) => {
+    const score = employee.pre_dar_score || employee.total_score || 0;
+    if (score >= 85.1) return { label: "A-Server", color: "bg-green-100 text-green-800" };
+    if (score >= 70.1) return { label: "B-Server", color: "bg-yellow-100 text-yellow-800" };
+    return { label: "C-Server", color: "bg-red-100 text-red-800" };
   };
 
   if (loading) {
