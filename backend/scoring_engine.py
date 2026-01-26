@@ -170,6 +170,15 @@ class QuarterSettings(BaseModel):
     prev_avg_glass: Optional[float] = None
     prev_avg_lsc: Optional[float] = None
     
+    # === SLIDE THEME SETTINGS (Per-Quarter Customization) ===
+    slide_theme: str = "dark_navy"  # Pre-built themes: dark_navy, light_corporate, bubba_red, ocean_blue, custom
+    slide_bg_color: str = "#0A1628"  # Background color (for custom theme)
+    slide_bg_gradient: str = "#132238"  # Gradient end color
+    slide_text_color: str = "#FFFFFF"  # Primary text color
+    slide_accent_color: str = "#D12E2E"  # Accent color (Bubba Gump red)
+    slide_secondary_color: str = "#005B96"  # Secondary accent
+    slide_custom_bg_image: Optional[str] = None  # Base64 or URL for custom background
+    
     # === LOCK STATUS ===
     is_locked: bool = False
     locked_at: Optional[datetime] = None
