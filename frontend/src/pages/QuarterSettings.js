@@ -19,16 +19,18 @@ export default function QuarterSettings() {
   const [suggestions, setSuggestions] = useState(null);
   const [isNew, setIsNew] = useState(false);
 
-  // Form state
+  // Form state - Q1 2026 Official Model
   const [formData, setFormData] = useState({
     benchmark_ppa: 55.0,
     benchmark_lbw: 8.0,
     benchmark_glass: 1.0,
     benchmark_lsc: 100.0,
-    weight_ppa: 0.30,
-    weight_lbw: 0.25,
-    weight_glass: 0.20,
+    benchmark_cv: 5.0,
+    weight_ppa: 0.25,
+    weight_lbw: 0.20,
+    weight_glass: 0.15,
     weight_lsc: 0.25,
+    weight_cv: 0.15,
     bonus_rate: 0.2,
     bonus_cap: 5.0
   });
