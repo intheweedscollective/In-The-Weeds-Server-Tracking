@@ -103,6 +103,26 @@ export default function TopPerformers() {
     }
   };
 
+  // Computed values
+  const topOverall = useMemo(() => {
+    return getTopEmployees('pre_dar_score', 10);
+  }, [employees]);
+
+  const topPerformers = useMemo(() => {
+    const result = {};
+    Object.keys(V2_METRICS).forEach(metric => {
+      result[metric] = getTopEmployees(metric, 10);
+    });
+    return result;
+  }, [employees]);
+
+  const getMetricIcon = (rank) => {
+    if (rank === 1) return <Trophy className="w-5 h-5 text-yellow-500" />;
+    if (rank === 2) return <Medal className="w-5 h-5 text-gray-400" />;
+    if (rank === 3) return <Award className="w-5 h-5 text-amber-600" />;
+    return <span className="text-sm font-bold text-gray-500">#{rank}</span>;
+  };
+
   const handlePrint = async () => {
     try {
       const response = await axios.get(`${API}/top-performers/pdf`, {
