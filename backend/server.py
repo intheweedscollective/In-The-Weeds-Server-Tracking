@@ -86,6 +86,64 @@ class ReviewResponseV2(BaseModel):
 
 
 # ============================================================================
+# PDF HELPER FUNCTIONS
+# ============================================================================
+
+def _create_graph_pdf_from_image_bytes(image_bytes: bytes) -> bytes:
+    """Convert image bytes to a single-page PDF."""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+    from PIL import Image as PILImage
+    
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    
+    # Load image
+    img = PILImage.open(io.BytesIO(image_bytes))
+    img_width, img_height = img.size
+    
+    # Scale to fit A4
+    page_width, page_height = A4
+    scale = min(page_width / img_width, page_height / img_height) * 0.9
+    
+    new_width = img_width * scale
+    new_height = img_height * scale
+    x = (page_width - new_width) / 2
+    y = (page_height - new_height) / 2
+    
+    # Save temp image
+    temp_buffer = io.BytesIO()
+    img.save(temp_buffer, format='PNG')
+    temp_buffer.seek(0)
+    
+    from reportlab.lib.utils import ImageReader
+    c.drawImage(ImageReader(temp_buffer), x, y, new_width, new_height)
+    c.showPage()
+    c.save()
+    
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def _merge_pdfs(pdf1_bytes: bytes, pdf2_bytes: bytes) -> bytes:
+    """Merge two PDF byte streams into one."""
+    writer = PdfWriter()
+    
+    reader1 = PdfReader(io.BytesIO(pdf1_bytes))
+    for page in reader1.pages:
+        writer.add_page(page)
+    
+    reader2 = PdfReader(io.BytesIO(pdf2_bytes))
+    for page in reader2.pages:
+        writer.add_page(page)
+    
+    buffer = io.BytesIO()
+    writer.write(buffer)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+# ============================================================================
 # V2 REVIEW GENERATION (Uses EmployeeV2 with Q1 2026 scoring model)
 # ============================================================================
 
