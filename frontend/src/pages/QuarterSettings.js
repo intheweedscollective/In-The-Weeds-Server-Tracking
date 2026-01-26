@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Settings, Lock, Unlock, Save, RefreshCw, AlertTriangle, Palette } from "lucide-react";
+import { Settings, Lock, Unlock, Save, RefreshCw, AlertTriangle, Palette, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import Navigation from "../components/Navigation";
@@ -13,6 +13,20 @@ const SLIDE_THEMES = {
   bubba_red: { name: "Bubba Red", bg: "#7F1D1D", gradient: "#450A0A", text: "#FFFFFF", accent: "#FEF2F2", secondary: "#FCA5A5" },
   ocean_blue: { name: "Ocean Blue", bg: "#0C4A6E", gradient: "#082F49", text: "#FFFFFF", accent: "#F0F9FF", secondary: "#38BDF8" },
   custom: { name: "Custom", bg: "#0A1628", gradient: "#132238", text: "#FFFFFF", accent: "#D12E2E", secondary: "#005B96" }
+};
+
+// Seasonal theme options for holiday decorations
+const SEASONAL_THEMES = {
+  auto: { name: "Auto Detect", emoji: "🔄", description: "Automatically show seasonal theme based on current date" },
+  none: { name: "None", emoji: "➖", description: "No seasonal decorations" },
+  valentines: { name: "Valentine's Day", emoji: "💕", bg: "#4A0D2A", text: "#FFFFFF" },
+  st_patricks: { name: "St. Patrick's Day", emoji: "🍀", bg: "#0D3B0D", text: "#FFFFFF" },
+  easter: { name: "Easter", emoji: "🐣", bg: "#E8E4F0", text: "#4A148C" },
+  july_4th: { name: "4th of July", emoji: "🇺🇸", bg: "#0A1628", text: "#FFFFFF" },
+  halloween: { name: "Halloween", emoji: "🎃", bg: "#1A0A00", text: "#FFFFFF" },
+  thanksgiving: { name: "Thanksgiving", emoji: "🦃", bg: "#3E2723", text: "#FFFFFF" },
+  christmas: { name: "Christmas", emoji: "🎄", bg: "#0D2818", text: "#FFFFFF" },
+  new_year: { name: "New Year", emoji: "🎆", bg: "#0A0A1A", text: "#FFFFFF" }
 };
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
