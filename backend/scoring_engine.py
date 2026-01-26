@@ -184,20 +184,12 @@ CANONICAL_COLUMN_MAPPING = {
     "cv_detractors": ["cv detractors", "detractors", "cv 0-6", "nps detractors"],
     
     # Review Tracker
-    "review_mentions": ["review mentions", "mentions", "positive mentions", "named mentions", "review tracker"],
+    "review_mentions": ["review mentions", "mentions", "positive mentions", "named mentions", "review tracker count"],
     
-    # Legacy optional
+    # Legacy optional (text fields)
     "review_tracker": ["review tracker text", "reviews text"],
-    "cv_positive": ["cv positive", "cv+", "positive"],
-    "cv_negative": ["cv negative", "cv-", "negative"],
-}
-    "lbw": ["lbw", "lbw sales", "alcohol", "alcohol sales", "liquor beer wine", "liquor+beer+wine"],
-    "glassware_sales": ["glassware sales", "glassware", "souvenir glass", "glass sales"],
-    "lsc_count": ["lsc count", "lsc", "loyalty", "loyalty sign ups", "enrollments", "memberships"],
-    # Optional
-    "review_tracker": ["review tracker", "reviews"],
-    "cv_positive": ["cv positive", "cv+", "positive"],
-    "cv_negative": ["cv negative", "cv-", "negative"],
+    "cv_positive": ["cv positive", "cv+", "positive feedback"],
+    "cv_negative": ["cv negative", "cv-", "negative feedback"],
 }
 
 # Columns that should NOT be accepted (they are derived, not raw)
