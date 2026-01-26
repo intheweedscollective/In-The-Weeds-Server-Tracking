@@ -273,6 +273,7 @@ def validate_upload_columns(df_columns: List[str]) -> Dict[str, Any]:
         "glassware_sales", "lsc_count"
     ]
     optional_fields = [
+        "job_title",  # NEW: Job Title for hierarchy-based rankings
         "cv_promoters", "cv_passives", "cv_detractors",  # Customer Voice
         "review_mentions",  # Review Tracker
         "review_tracker", "cv_positive", "cv_negative"   # Legacy text fields
