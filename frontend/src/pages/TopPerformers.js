@@ -239,7 +239,7 @@ export default function TopPerformers() {
               </div>
               <div>
                 <p className="text-2xl font-serif font-bold text-green-600">
-                  {employees.filter(emp => (emp.cumulative_score || 0) >= 80).length}
+                  {employees.filter(emp => (emp.pre_dar_score || 0) >= 80).length}
                 </p>
                 <p className="text-xs text-gray-500 font-semibold uppercase">Above Average+</p>
               </div>
