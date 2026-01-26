@@ -221,6 +221,26 @@ export default function QuarterSettings() {
     }));
   };
 
+  const applyThemePreset = (themeName) => {
+    const preset = SLIDE_THEMES[themeName];
+    if (preset && themeName !== "custom") {
+      setFormData(prev => ({
+        ...prev,
+        slide_theme: themeName,
+        slide_bg_color: preset.bg,
+        slide_bg_gradient: preset.gradient,
+        slide_text_color: preset.text,
+        slide_accent_color: preset.accent,
+        slide_secondary_color: preset.secondary
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        slide_theme: "custom"
+      }));
+    }
+  };
+
   const weightSum = formData.weight_ppa + formData.weight_lbw + formData.weight_glass + formData.weight_lsc + formData.weight_cv;
   const weightsValid = Math.abs(weightSum - 1.0) <= 0.01;
 
