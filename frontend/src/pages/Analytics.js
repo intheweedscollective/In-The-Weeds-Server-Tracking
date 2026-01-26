@@ -34,6 +34,8 @@ export default function Analytics() {
   const [loading, setLoading] = useState(true);
   const [analytics, setAnalytics] = useState({});
   const [quarterSettings, setQuarterSettings] = useState(null);
+  const [trendData, setTrendData] = useState(null);
+  const [activeTab, setActiveTab] = useState('metrics'); // 'metrics' or 'trends'
   
   // V2 Quarter Selection
   const [selectedYear, setSelectedYear] = useState(2026);
@@ -42,14 +44,18 @@ export default function Analytics() {
   const fetchEmployees = useCallback(async () => {
     setLoading(true);
     try {
-      const [empResponse, settingsResponse] = await Promise.all([
+      const [empResponse, settingsResponse, trendResponse] = await Promise.all([
         axios.get(`${API}/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`),
-        axios.get(`${API}/v2/quarter-settings/${selectedYear}/${selectedQuarter}`).catch(() => null)
+        axios.get(`${API}/v2/quarter-settings/${selectedYear}/${selectedQuarter}`).catch(() => null),
+        axios.get(`${API}/v2/trends/${selectedYear}/${selectedQuarter}/team/data`).catch(() => null)
       ]);
       
       setEmployees(empResponse.data);
       if (settingsResponse?.data) {
         setQuarterSettings(settingsResponse.data);
+      }
+      if (trendResponse?.data) {
+        setTrendData(trendResponse.data);
       }
     } catch (error) {
       console.error("Error fetching employees:", error);
