@@ -149,7 +149,7 @@ export default function QuarterSettings() {
     }));
   };
 
-  const weightSum = formData.weight_ppa + formData.weight_lbw + formData.weight_glass + formData.weight_lsc;
+  const weightSum = formData.weight_ppa + formData.weight_lbw + formData.weight_glass + formData.weight_lsc + formData.weight_cv;
   const weightsValid = Math.abs(weightSum - 1.0) <= 0.01;
 
   if (loading) {
