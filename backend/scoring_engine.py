@@ -123,7 +123,7 @@ class EmployeeV2(BaseModel):
 class QuarterSettings(BaseModel):
     """
     Quarter-specific settings including benchmarks.
-    Once scores are generated, settings become locked.
+    Q1 2026 Official Model: PPA(25%), LSC(25%), LBW(20%), Glass(15%), CV(15%)
     """
     model_config = ConfigDict(extra="ignore")
     
@@ -136,16 +136,18 @@ class QuarterSettings(BaseModel):
     benchmark_lbw: float = 8.0
     benchmark_glass: float = 1.0
     benchmark_lsc: float = 100.0  # Guests per LSC (lower is better)
+    benchmark_cv: float = 5.0     # Expected CV score (baseline for normalization)
     
-    # === METRIC WEIGHTS (must sum to 1.0) ===
-    weight_ppa: float = 0.30
-    weight_lbw: float = 0.25
-    weight_glass: float = 0.20
-    weight_lsc: float = 0.25
+    # === METRIC WEIGHTS (must sum to 1.0) - Q1 2026 Official ===
+    weight_ppa: float = 0.25      # Was 0.30
+    weight_lbw: float = 0.20      # Was 0.25
+    weight_glass: float = 0.15    # Was 0.20
+    weight_lsc: float = 0.25      # Same
+    weight_cv: float = 0.15       # NEW - Customer Voice & Review Tracker
     
     # === BONUS SETTINGS ===
     bonus_rate: float = 0.2  # 0.2 per 1% over benchmark
-    bonus_cap: float = 5.0  # Max bonus per metric
+    bonus_cap: float = 5.0   # Max bonus per metric
     
     # === PREVIOUS QUARTER AVERAGES (for benchmark suggestions) ===
     prev_avg_ppa: Optional[float] = None
