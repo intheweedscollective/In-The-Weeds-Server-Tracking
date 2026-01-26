@@ -6,6 +6,7 @@ import ReviewGeneration from "./pages/ReviewGeneration";
 import TopPerformers from "./pages/TopPerformers";
 import Analytics from "./pages/Analytics";
 import QuarterSettings from "./pages/QuarterSettings";
+import FullRankings from "./pages/FullRankings";
 import "./App.css";
 
 function App() {
@@ -14,6 +15,7 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Dashboard />} />
+          <Route path="/rankings" element={<FullRankings />} />
           <Route path="/employees" element={<EmployeeList />} />
           <Route path="/reviews" element={<ReviewGeneration />} />
           <Route path="/top-performers" element={<TopPerformers />} />
