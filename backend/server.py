@@ -2122,6 +2122,7 @@ async def get_yodeck_top10_slide(year: int, quarter: str):
 async def get_yodeck_tier_slide(year: int, quarter: str, tier_name: str, page: int = 1):
     """
     Generate tier-specific slide (1920x1080 PNG).
+    Uses per-quarter theme settings.
     
     tier_name: "trainers", "bartenders", "a-servers", "b-servers", "c-servers"
     page: Page number for tiers with >10 employees (default: 1)
@@ -2177,14 +2178,29 @@ async def get_yodeck_tier_slide(year: int, quarter: str, tier_name: str, page: i
     end_idx = start_idx + max_per_page
     page_employees = tier_employees[start_idx:end_idx]
     
-    # Generate slide
+    # Get theme settings
+    theme = settings.slide_theme or "dark_navy"
+    custom_colors = None
+    if theme == "custom":
+        custom_colors = {
+            "background": settings.slide_bg_color,
+            "background_gradient": settings.slide_bg_gradient,
+            "primary": settings.slide_accent_color,
+            "secondary": settings.slide_secondary_color,
+            "text_white": settings.slide_text_color,
+        }
+    
+    # Generate slide with theme
     slide_bytes = generate_tier_slide(
         tier_label,
         page_employees,
         quarter.upper(),
         year,
         page=page,
-        total_pages=total_pages
+        total_pages=total_pages,
+        theme=theme,
+        custom_colors=custom_colors,
+        custom_bg_image=settings.slide_custom_bg_image
     )
     
     filename = f"yodeck_{tier_name}_{quarter}_{year}_p{page}.png"
