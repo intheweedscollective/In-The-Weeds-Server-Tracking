@@ -63,10 +63,12 @@ export default function QuarterSettings() {
         benchmark_lbw: response.data.benchmark_lbw,
         benchmark_glass: response.data.benchmark_glass,
         benchmark_lsc: response.data.benchmark_lsc,
+        benchmark_cv: response.data.benchmark_cv || 5.0,
         weight_ppa: response.data.weight_ppa,
         weight_lbw: response.data.weight_lbw,
         weight_glass: response.data.weight_glass,
         weight_lsc: response.data.weight_lsc,
+        weight_cv: response.data.weight_cv || 0.15,
         bonus_rate: response.data.bonus_rate,
         bonus_cap: response.data.bonus_cap
       });
