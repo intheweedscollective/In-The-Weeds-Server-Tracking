@@ -170,9 +170,27 @@ class QuarterSettings(BaseModel):
 # ============================================================================
 
 CANONICAL_COLUMN_MAPPING = {
+    # Core metrics
     "name": ["employee name", "name", "server", "employee", "team member"],
     "guests": ["guests", "guest count", "covers", "total guests"],
     "net_sales": ["net sales", "sales", "total sales", "net", "netsales"],
+    "lbw": ["lbw", "lbw sales", "alcohol", "alcohol sales", "liquor beer wine", "liquor+beer+wine"],
+    "glassware_sales": ["glassware sales", "glassware", "souvenir glass", "glass sales"],
+    "lsc_count": ["lsc count", "lsc", "loyalty", "loyalty sign ups", "enrollments", "memberships"],
+    
+    # Customer Voice (NPS-style)
+    "cv_promoters": ["cv promoters", "promoters", "cv 9-10", "nps promoters"],
+    "cv_passives": ["cv passives", "passives", "cv 7-8", "nps passives"],
+    "cv_detractors": ["cv detractors", "detractors", "cv 0-6", "nps detractors"],
+    
+    # Review Tracker
+    "review_mentions": ["review mentions", "mentions", "positive mentions", "named mentions", "review tracker"],
+    
+    # Legacy optional
+    "review_tracker": ["review tracker text", "reviews text"],
+    "cv_positive": ["cv positive", "cv+", "positive"],
+    "cv_negative": ["cv negative", "cv-", "negative"],
+}
     "lbw": ["lbw", "lbw sales", "alcohol", "alcohol sales", "liquor beer wine", "liquor+beer+wine"],
     "glassware_sales": ["glassware sales", "glassware", "souvenir glass", "glass sales"],
     "lsc_count": ["lsc count", "lsc", "loyalty", "loyalty sign ups", "enrollments", "memberships"],
