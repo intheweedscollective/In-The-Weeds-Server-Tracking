@@ -237,6 +237,12 @@ def find_column_match(df_columns: List[str], canonical_field: str) -> Optional[s
 def validate_upload_columns(df_columns: List[str]) -> Dict[str, Any]:
     """
     Validate that required columns exist and return mapping.
+    
+    Required: name, guests, net_sales, liquor_sales, beer_sales, wine_sales, 
+              glassware_sales, lsc_count
+    
+    REJECTED: Any form of "LBW" total column - must use individual alcohol fields
+    
     Returns: {
         "valid": bool,
         "mapping": {canonical_field: actual_column},
@@ -253,7 +259,12 @@ def validate_upload_columns(df_columns: List[str]) -> Dict[str, Any]:
         "warnings": []
     }
     
-    required_fields = ["name", "guests", "net_sales", "lbw", "glassware_sales", "lsc_count"]
+    # Required fields - note: lbw is now calculated from liquor+beer+wine
+    required_fields = [
+        "name", "guests", "net_sales", 
+        "liquor_sales", "beer_sales", "wine_sales",  # Individual alcohol inputs
+        "glassware_sales", "lsc_count"
+    ]
     optional_fields = [
         "cv_promoters", "cv_passives", "cv_detractors",  # Customer Voice
         "review_mentions",  # Review Tracker
@@ -262,16 +273,25 @@ def validate_upload_columns(df_columns: List[str]) -> Dict[str, Any]:
     
     df_columns_lower = [col.lower().strip() for col in df_columns]
     
-    # Check for rejected (derived) columns
+    # Check for rejected (derived) columns - especially LBW totals
     for rejected in REJECTED_COLUMNS:
         if rejected in df_columns_lower:
             result["rejected"].append(rejected)
     
     if result["rejected"]:
-        result["warnings"].append(
-            f"Found derived metric columns that should not be uploaded: {', '.join(result['rejected'])}. "
-            "These will be calculated by the app from raw data."
-        )
+        # Check if it's specifically an LBW total column
+        lbw_rejected = [r for r in result["rejected"] if 'lbw' in r or 'alcohol' in r]
+        if lbw_rejected:
+            result["warnings"].append(
+                f"Found LBW/alcohol total column(s): {', '.join(lbw_rejected)}. "
+                "LBW must be calculated from individual Liquor, Beer, and Wine columns. "
+                "Please use columns: 'Liquor Sales', 'Beer Sales', 'Wine Sales' instead."
+            )
+        else:
+            result["warnings"].append(
+                f"Found derived metric columns that should not be uploaded: {', '.join(result['rejected'])}. "
+                "These will be calculated by the app from raw data."
+            )
     
     # Find mappings for required fields
     for field in required_fields:
