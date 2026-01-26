@@ -44,7 +44,14 @@ export default function QuarterSettings() {
     bonus_cap: 5.0,
     // Server tier thresholds
     a_server_min_score: 85.1,
-    b_server_min_score: 70.1
+    b_server_min_score: 70.1,
+    // Slide theme settings
+    slide_theme: "dark_navy",
+    slide_bg_color: "#0A1628",
+    slide_bg_gradient: "#132238",
+    slide_text_color: "#FFFFFF",
+    slide_accent_color: "#D12E2E",
+    slide_secondary_color: "#005B96"
   });
 
   useEffect(() => {
