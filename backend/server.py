@@ -524,6 +524,291 @@ def get_performance_level(score):
         return "Not Assessed"
 
 
+# ============================================================================
+# V2 REVIEW GENERATION (Uses EmployeeV2 with Q1 2026 scoring model)
+# ============================================================================
+
+async def generate_review_content_v2(employee: EmployeeV2, settings: QuarterSettings, quarter: str, year: int) -> str:
+    """
+    Generate AI-powered review content using V2 employee data and scoring.
+    Uses the Q1 2026 official scoring model with PPA, LBW, LSC, Glass, CV metrics.
+    """
+    try:
+        api_key = os.environ.get('EMERGENT_LLM_KEY')
+        if not api_key:
+            raise ValueError("EMERGENT_LLM_KEY not found in environment variables")
+        
+        chat = LlmChat(
+            api_key=api_key,
+            session_id=f"review_v2_{employee.id}_{quarter}_{year}",
+            system_message="You are an expert HR professional specializing in creating comprehensive quarterly employee reviews for restaurant staff. Your reviews should be professional, human-like, and HR-defensible while maintaining a positive and constructive tone."
+        ).with_model("openai", "gpt-5.2")
+        
+        # Get tier label from hierarchy ranking
+        tier_label = employee.job_title or "Server"
+        if employee.pre_dar_score and settings:
+            if employee.pre_dar_score >= settings.a_server_min_score:
+                tier_label = "A-Server"
+            elif employee.pre_dar_score >= settings.b_server_min_score:
+                tier_label = "B-Server"
+            else:
+                tier_label = "C-Server"
+        
+        # Build metrics summary
+        prompt = f"""
+Create a concise quarterly review for {employee.name}, a {employee.job_title or 'Server'} at Bubba Gump Shrimp Co.
+
+PERFORMANCE METRICS (Q1 2026 SCORING MODEL):
+- PPA (Per Person Average): ${employee.ppa or 0:.2f} | Score: {employee.score_ppa or 0:.1f}/100 | Bonus: +{employee.bonus_ppa or 0:.1f}
+- LBW (Liquor Beer Wine per Guest): ${employee.lbw_per_guest or 0:.2f} | Score: {employee.score_lbw or 0:.1f}/100 | Bonus: +{employee.bonus_lbw or 0:.1f}
+- Glassware ($ Per Guest): ${employee.glassware_per_guest or 0:.2f} | Score: {employee.score_glass or 0:.1f}/100 | Bonus: +{employee.bonus_glass or 0:.1f}
+- LSC Ratio (Guests per LSC): {employee.guests_per_lsc or 'N/A'} | Score: {employee.score_lsc or 0:.1f}/100 | Bonus: +{employee.bonus_lsc or 0:.1f}
+- Customer Voice Score: {employee.cv_score or 0:.1f}
+
+TOTAL SCORE: {employee.pre_dar_score or employee.total_score or 0:.1f} points
+RANKING: #{employee.peer_rank or 'N/A'} out of team
+TIER CLASSIFICATION: {tier_label}
+PERFORMANCE TIER: {employee.performance_tier or 'Not Assessed'}
+
+REVIEW REQUIREMENTS:
+1. Write EXACTLY 2 paragraphs - no more, no less
+2. First paragraph: Performance highlights based on the metrics above. Mention specific strong areas.
+3. Second paragraph: Areas for growth and specific goals for next quarter based on lower-scoring metrics.
+4. Be conversational, HR-defensible, and maintain Bubba Gump's friendly culture
+5. Reference specific KPIs to provide context
+6. Total length: 150-250 words maximum
+
+PLEASE DO NOT include any headers, titles, or formatting markers. Just provide exactly 2 paragraphs of review content.
+"""
+        
+        user_message = UserMessage(text=prompt)
+        response = await chat.send_message(user_message)
+        
+        return response
+        
+    except Exception as e:
+        logging.error(f"Error generating V2 review content: {str(e)}")
+        return f"Unable to generate personalized review at this time. Please contact HR for manual review processing. Employee: {employee.name}"
+
+
+def generate_pdf_v2(employee: EmployeeV2, settings: QuarterSettings, review_content: str, quarter: str, year: int) -> bytes:
+    """
+    Generate PDF for V2 employee data with Q1 2026 scoring breakdown.
+    """
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.4*inch, bottomMargin=0.4*inch,
+                          leftMargin=0.6*inch, rightMargin=0.6*inch)
+    
+    styles = getSampleStyleSheet()
+    
+    # Styles
+    title_style = ParagraphStyle(
+        'BubbaTitle',
+        parent=styles['Title'],
+        fontName='Helvetica-Bold',
+        fontSize=20,
+        spaceAfter=4,
+        textColor=colors.HexColor('#D12E2E'),
+        alignment=TA_CENTER
+    )
+    
+    subtitle_style = ParagraphStyle(
+        'BubbaSubtitle', 
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=12,
+        textColor=colors.HexColor('#005B96'),
+        alignment=TA_CENTER,
+        spaceAfter=8
+    )
+    
+    header_style = ParagraphStyle(
+        'BubbaHeader',
+        parent=styles['Heading1'],
+        fontName='Helvetica-Bold',
+        fontSize=13,
+        textColor=colors.HexColor('#005B96'),
+        spaceAfter=5,
+        spaceBefore=6,
+        backColor=colors.HexColor('#EFF6FF')
+    )
+    
+    body_style = ParagraphStyle(
+        'BubbaBody',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=10,
+        spaceAfter=6,
+        leading=12,
+        textColor=colors.HexColor('#2C3E50')
+    )
+    
+    story = []
+    
+    # Logo
+    try:
+        logo_url = "https://customer-assets.emergentagent.com/job_beaba37a-d1bc-43b6-b0ee-0f4c332229d2/artifacts/shpi6789_IMG_0599.png"
+        response = requests.get(logo_url)
+        logo_buffer = BytesIO(response.content)
+        logo_img = Image(logo_buffer, width=0.78*inch, height=0.78*inch)
+        logo_img.hAlign = 'CENTER'
+        story.append(logo_img)
+        story.append(Spacer(1, 3))
+    except Exception:
+        pass
+    
+    # Header
+    story.append(Paragraph("🦐 BUBBA GUMP SHRIMP CO. 🦐", title_style))
+    story.append(Paragraph("Restaurant & Market • Las Vegas", subtitle_style))
+    story.append(Spacer(1, 7))
+    
+    # Review title
+    story.append(Paragraph(f"QUARTERLY PERFORMANCE REVIEW - {quarter} {year}", header_style))
+    story.append(Spacer(1, 8))
+    
+    # Get tier classification
+    tier_label = employee.job_title or "Server"
+    if employee.pre_dar_score and settings:
+        if employee.pre_dar_score >= settings.a_server_min_score:
+            tier_label = "A-Server"
+        elif employee.pre_dar_score >= settings.b_server_min_score:
+            tier_label = "B-Server"
+        else:
+            tier_label = "C-Server"
+    
+    # Employee info
+    emp_info_data = [
+        ["Employee:", employee.name, "Job Title:", employee.job_title or "Server"],
+        ["Review Period:", f"{quarter} {year}", "Tier:", tier_label],
+        ["Overall Rank:", f"#{employee.peer_rank or 'N/A'}", "Date Generated:", datetime.now().strftime("%m/%d/%Y")]
+    ]
+    
+    emp_table = Table(emp_info_data, colWidths=[1.2*inch, 2*inch, 1.2*inch, 2*inch])
+    emp_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#F9F7F2')),
+        ('BACKGROUND', (2, 0), (2, -1), colors.HexColor('#F9F7F2')),
+        ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#005B96')),
+        ('TEXTCOLOR', (2, 0), (2, -1), colors.HexColor('#005B96')),
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (1, 0), (1, -1), 'Helvetica'),
+        ('FONTNAME', (3, 0), (3, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E5E7EB'))
+    ]))
+    
+    story.append(emp_table)
+    story.append(Spacer(1, 10))
+    
+    # KPI Performance Metrics (V2 Model)
+    story.append(Paragraph("KEY PERFORMANCE INDICATORS - Q1 2026 SCORING MODEL", header_style))
+    
+    # Helper function to get score status
+    def score_status(score):
+        if score is None:
+            return "N/A"
+        score = float(score)
+        if score >= 100:
+            return "Exceeds"
+        elif score >= 80:
+            return "Meets"
+        elif score >= 60:
+            return "Below"
+        else:
+            return "Critical"
+    
+    kpi_data = [
+        ["Metric", "Value", "Score", "Bonus", "Weight", "Status"],
+        ["PPA (Per Person Average)", f"${employee.ppa or 0:.2f}", f"{employee.score_ppa or 0:.1f}", f"+{employee.bonus_ppa or 0:.1f}", "25%", score_status(employee.score_ppa)],
+        ["LBW (Liquor Beer Wine/Guest)", f"${employee.lbw_per_guest or 0:.2f}", f"{employee.score_lbw or 0:.1f}", f"+{employee.bonus_lbw or 0:.1f}", "20%", score_status(employee.score_lbw)],
+        ["Glassware ($/Guest)", f"${employee.glassware_per_guest or 0:.2f}", f"{employee.score_glass or 0:.1f}", f"+{employee.bonus_glass or 0:.1f}", "15%", score_status(employee.score_glass)],
+        ["LSC (Guests per Enrollment)", f"{employee.guests_per_lsc or 'N/A'}", f"{employee.score_lsc or 0:.1f}", f"+{employee.bonus_lsc or 0:.1f}", "25%", score_status(employee.score_lsc)],
+        ["Customer Voice", f"{employee.cv_score or 0:.1f} pts", f"{employee.score_cv or 0:.1f}", "-", "15%", score_status(employee.score_cv)],
+    ]
+    
+    kpi_table = Table(kpi_data, colWidths=[2.3*inch, 1.1*inch, 0.8*inch, 0.7*inch, 0.7*inch, 0.9*inch])
+    kpi_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#005B96')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E5E7EB')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#F9F9F9'), colors.white])
+    ]))
+    
+    story.append(kpi_table)
+    story.append(Spacer(1, 8))
+    
+    # Total Score Summary
+    total_score = employee.pre_dar_score or employee.total_score or 0
+    total_bonus = employee.total_metric_bonus or 0
+    
+    summary_data = [
+        ["TOTAL SCORE", f"{total_score:.1f}", "Total Bonus:", f"+{total_bonus:.1f}", "Performance Tier:", employee.performance_tier or "Not Assessed"]
+    ]
+    
+    summary_table = Table(summary_data, colWidths=[1.2*inch, 0.8*inch, 1.0*inch, 0.7*inch, 1.2*inch, 1.6*inch])
+    summary_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (1, 0), colors.HexColor('#D12E2E')),
+        ('TEXTCOLOR', (0, 0), (1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 9),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E5E7EB')),
+        ('BACKGROUND', (2, 0), (-1, 0), colors.HexColor('#F9F7F2')),
+    ]))
+    
+    story.append(summary_table)
+    story.append(Spacer(1, 10))
+    
+    # Review content
+    story.append(Paragraph("PERFORMANCE REVIEW", header_style))
+    
+    paragraphs = [p.strip() for p in review_content.split('\n\n') if p.strip()]
+    for paragraph in paragraphs:
+        story.append(Paragraph(paragraph, body_style))
+    
+    story.append(Spacer(1, 14))
+    
+    # Signature section
+    signature_data = [
+        ["Manager Signature: _________________________", "Date: _______________"],
+        ["Employee Signature: _______________________", "Date: _______________"]
+    ]
+    
+    sig_table = Table(signature_data, colWidths=[3.5*inch, 2*inch])
+    sig_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
+        ('TOPPADDING', (0, 0), (-1, -1), 10)
+    ]))
+    
+    story.append(sig_table)
+    
+    # Footer
+    story.append(Spacer(1, 10))
+    footer_style = ParagraphStyle(
+        'Footer',
+        parent=styles['Normal'],
+        fontSize=7,
+        textColor=colors.HexColor('#005B96'),
+        alignment=TA_CENTER
+    )
+    story.append(Paragraph("🦐 Bubba Gump Shrimp Co. • Confidential Employee Review • Q1 2026 Scoring Model 🦐", footer_style))
+    
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
 # Map per-metric Tier columns (exact headers provided by user). Stored under additional_data.metric_tiers
 TIER_COLUMN_MAP = {
     "ppa": ["ppa tier"],
