@@ -136,28 +136,6 @@ export default function Analytics() {
     }
   };
 
-  useEffect(() => {
-    fetchEmployees();
-  }, []);
-
-  useEffect(() => {
-    if (employees.length > 0) {
-      calculateAnalytics();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [employees]);
-
-  const fetchEmployees = async () => {
-    try {
-      const response = await axios.get(`${API}/employees`);
-      setEmployees(response.data);
-    } catch (error) {
-      console.error("Error fetching employees:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const calculateAnalytics = () => {
     const metrics = ['ppa', 'gpg', 'pplbw', 'lsc_ratio', 'metric_bonus_points', 'cumulative_score'];
     const analyticsData = {};
