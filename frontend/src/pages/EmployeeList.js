@@ -432,12 +432,12 @@ export default function EmployeeList() {
                       <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
                         <div 
                           className="h-full bg-green-600 rounded-full transition-all" 
-                          style={{ width: `${Math.min(100, (selectedEmployee.score_lsc || 0))}%` }}
+                          style={{ width: `${Math.min(100, ((Math.min((selectedEmployee.score_lsc || 0), 100) * 0.25 + (selectedEmployee.bonus_lsc || 0)) / 30) * 100)}%` }}
                         />
                       </div>
                     </div>
 
-                    {/* LBW - 20% */}
+                    {/* LBW - 20% weight, max 25 pts */}
                     <div className="p-4 bg-purple-50 rounded-lg border border-purple-100">
                       <div className="flex items-center justify-between mb-2">
                         <div>
@@ -445,8 +445,8 @@ export default function EmployeeList() {
                           <span className="ml-2 text-xs bg-purple-200 text-purple-800 px-2 py-0.5 rounded-full">20% weight</span>
                         </div>
                         <div className="text-right">
-                          <span className="font-bold text-purple-700">{formatNumber(((selectedEmployee.score_lbw || 0) * 0.20))}</span>
-                          <span className="text-gray-500 text-sm"> / 20 pts</span>
+                          <span className="font-bold text-purple-700">{formatNumber(Math.min((selectedEmployee.score_lbw || 0), 100) * 0.20 + (selectedEmployee.bonus_lbw || 0))}</span>
+                          <span className="text-gray-500 text-sm"> / 25 pts</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-4 text-sm">
@@ -463,12 +463,12 @@ export default function EmployeeList() {
                       <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
                         <div 
                           className="h-full bg-purple-600 rounded-full transition-all" 
-                          style={{ width: `${Math.min(100, (selectedEmployee.score_lbw || 0))}%` }}
+                          style={{ width: `${Math.min(100, ((Math.min((selectedEmployee.score_lbw || 0), 100) * 0.20 + (selectedEmployee.bonus_lbw || 0)) / 25) * 100)}%` }}
                         />
                       </div>
                     </div>
 
-                    {/* Glassware - 15% */}
+                    {/* Glassware - 15% weight, max 20 pts */}
                     <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                       <div className="flex items-center justify-between mb-2">
                         <div>
@@ -476,8 +476,8 @@ export default function EmployeeList() {
                           <span className="ml-2 text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">15% weight</span>
                         </div>
                         <div className="text-right">
-                          <span className="font-bold text-gray-700">{formatNumber(((selectedEmployee.score_glass || 0) * 0.15))}</span>
-                          <span className="text-gray-500 text-sm"> / 15 pts</span>
+                          <span className="font-bold text-gray-700">{formatNumber(Math.min((selectedEmployee.score_glass || 0), 100) * 0.15 + (selectedEmployee.bonus_glass || 0))}</span>
+                          <span className="text-gray-500 text-sm"> / 20 pts</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-4 text-sm">
@@ -494,12 +494,12 @@ export default function EmployeeList() {
                       <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
                         <div 
                           className="h-full bg-gray-600 rounded-full transition-all" 
-                          style={{ width: `${Math.min(100, (selectedEmployee.score_glass || 0))}%` }}
+                          style={{ width: `${Math.min(100, ((Math.min((selectedEmployee.score_glass || 0), 100) * 0.15 + (selectedEmployee.bonus_glass || 0)) / 20) * 100)}%` }}
                         />
                       </div>
                     </div>
 
-                    {/* Customer Voice - 15% */}
+                    {/* Customer Voice - 15% weight, max 20 pts */}
                     <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-100">
                       <div className="flex items-center justify-between mb-2">
                         <div>
@@ -507,8 +507,8 @@ export default function EmployeeList() {
                           <span className="ml-2 text-xs bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded-full">15% weight</span>
                         </div>
                         <div className="text-right">
-                          <span className="font-bold text-yellow-700">{formatNumber(((selectedEmployee.score_cv || 0) * 0.15))}</span>
-                          <span className="text-gray-500 text-sm"> / 15 pts</span>
+                          <span className="font-bold text-yellow-700">{formatNumber(Math.min((selectedEmployee.score_cv || 0), 100) * 0.15)}</span>
+                          <span className="text-gray-500 text-sm"> / 20 pts</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-4 text-sm flex-wrap">
