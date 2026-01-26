@@ -148,7 +148,8 @@ export default function YodeckSlides() {
     for (const slide of slideManifest.slides) {
       for (let page = 1; page <= slide.pages; page++) {
         try {
-          const url = page > 1 ? `${API}${slide.endpoint}?page=${page}` : `${API}${slide.endpoint}`;
+          // endpoint already includes /api prefix, so use BACKEND_URL directly
+          const url = page > 1 ? `${BACKEND_URL}${slide.endpoint}?page=${page}` : `${BACKEND_URL}${slide.endpoint}`;
           const response = await fetch(url, {
             method: 'GET',
             headers: { 'Accept': 'image/png' }
@@ -174,7 +175,7 @@ export default function YodeckSlides() {
         } catch {
           failCount++;
           // Fallback: open in new tab
-          const url = page > 1 ? `${API}${slide.endpoint}?page=${page}` : `${API}${slide.endpoint}`;
+          const url = page > 1 ? `${BACKEND_URL}${slide.endpoint}?page=${page}` : `${BACKEND_URL}${slide.endpoint}`;
           window.open(url, '_blank');
         }
       }
