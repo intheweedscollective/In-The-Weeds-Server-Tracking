@@ -47,44 +47,15 @@ export default function Analytics() {
 
   useEffect(() => {
     if (employees.length > 0) {
-  const handlePrint = async () => {
-    try {
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-
-      if (isIOS) {
-        window.open(`${API}/analytics/pdf`, "_blank", "noopener,noreferrer");
-        toast.success("Opened Analytics PDF");
-        return;
-      }
-
-      const response = await axios.get(`${API}/analytics/pdf`, {
-        responseType: "blob",
-      });
-
-      const blob = new Blob([response.data], { type: "application/pdf" });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "analytics_report.pdf";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-      toast.success("Analytics PDF downloaded");
-    } catch (error) {
-      console.error(error);
-      toast.error("Could not download Analytics PDF");
-    }
-  };
       calculateAnalytics();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employees]);
+
+  const handlePrint = async () => {
     try {
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
-      // iOS often “downloads” without opening; users then print the webpage instead.
-      // Opening the PDF in a new tab ensures the print/share action targets the PDF.
       if (isIOS) {
         window.open(`${API}/analytics/pdf`, "_blank", "noopener,noreferrer");
         toast.success("Opened Analytics PDF");
@@ -205,13 +176,12 @@ export default function Analytics() {
   const formatMetricValueOld = (metric, value) => {
     switch (metric) {
       case 'ppa':
-      case 'gpg':
-      case 'pplbw':
+      case 'lbw_per_guest':
+      case 'glassware_per_guest':
         return formatCurrency(value);
-      case 'lsc_ratio':
-        return formatLSCRatio(value);
-      case 'metric_bonus_points':
-      case 'cumulative_score':
+      case 'guests_per_lsc':
+      case 'cv_score':
+      case 'pre_dar_score':
         return formatNumber(value);
       default:
         return value?.toString() || 'N/A';
