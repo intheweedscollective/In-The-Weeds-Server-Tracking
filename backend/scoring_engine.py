@@ -187,6 +187,7 @@ class QuarterSettings(BaseModel):
 CANONICAL_COLUMN_MAPPING = {
     # Core metrics
     "name": ["employee name", "name", "server", "employee", "team member"],
+    "job_title": ["job title", "title", "position", "role"],  # NEW: Job Title for hierarchy
     "guests": ["guests", "guest count", "covers", "total guests"],
     "net_sales": ["net sales", "sales", "total sales", "net", "netsales"],
     
