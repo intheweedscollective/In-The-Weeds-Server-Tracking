@@ -270,7 +270,7 @@ def generate_top_10_slide(
         
         # Name
         name = emp.get("name", "Unknown")[:25]  # Truncate long names
-        draw.text((220, y + 18), name, font=font_name, fill=COLORS["text_white"])
+        draw.text((220, y + 18), name, font=font_name, fill=colors["text_white"])
         
         # Tier badge
         tier = emp.get("tier_label", "A-Server")
@@ -285,14 +285,14 @@ def generate_top_10_slide(
             (SLIDE_WIDTH - 150 - score_width, y + 12),
             score_text,
             font=font_score,
-            fill=COLORS["gold"] if rank <= 3 else COLORS["text_white"]
+            fill=colors["gold"] if rank <= 3 else colors["text_white"]
         )
         
         # Subtle row divider
         if idx < 9:
             draw.line(
                 [(100, y + row_height - 5), (SLIDE_WIDTH - 100, y + row_height - 5)],
-                fill=hex_to_rgb(COLORS["background_gradient"]),
+                fill=hex_to_rgb(colors["background_gradient"]),
                 width=1
             )
     
@@ -304,7 +304,7 @@ def generate_top_10_slide(
         ((SLIDE_WIDTH - footer_width) // 2, SLIDE_HEIGHT - 50),
         footer_text,
         font=font_footer,
-        fill=COLORS["text_muted"]
+        fill=colors["text_muted"]
     )
     
     # Save to bytes
@@ -318,6 +318,13 @@ def generate_tier_slide(
     tier_name: str,
     employees: List[Dict[str, Any]], 
     quarter: str, 
+    year: int,
+    page: int = 1,
+    total_pages: int = 1,
+    theme: str = "dark_navy",
+    custom_colors: Dict = None,
+    custom_bg_image: str = None
+) -> bytes: 
     year: int,
     page: int = 1,
     total_pages: int = 1
