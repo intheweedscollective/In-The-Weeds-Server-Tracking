@@ -112,8 +112,8 @@ export default function QuarterSettings() {
   };
 
   const handleSave = async () => {
-    // Validate weights sum to 1.0
-    const weightSum = formData.weight_ppa + formData.weight_lbw + formData.weight_glass + formData.weight_lsc;
+    // Validate weights sum to 1.0 (including CV weight)
+    const weightSum = formData.weight_ppa + formData.weight_lbw + formData.weight_glass + formData.weight_lsc + formData.weight_cv;
     if (Math.abs(weightSum - 1.0) > 0.01) {
       toast.error(`Weights must sum to 1.0 (currently ${weightSum.toFixed(2)})`);
       return;
