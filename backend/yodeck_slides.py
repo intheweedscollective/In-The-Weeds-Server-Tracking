@@ -246,13 +246,42 @@ TIER_CONFIG = {
 }
 
 
-def get_theme_colors(theme_name: str = "dark_navy", custom_colors: Dict = None) -> Dict:
-    """Get colors for a theme, with optional custom overrides."""
+def get_theme_colors(theme_name: str = "dark_navy", custom_colors: Dict = None, seasonal_override: str = None) -> Dict:
+    """
+    Get colors for a theme, with optional custom overrides and seasonal themes.
+    Priority: seasonal_override > custom > theme_name
+    """
+    # Check for seasonal override first
+    if seasonal_override and seasonal_override != "auto" and seasonal_override != "none":
+        if seasonal_override in SEASONAL_THEMES:
+            return SEASONAL_THEMES[seasonal_override].copy()
+    
+    # Auto-detect seasonal theme
+    if seasonal_override == "auto":
+        auto_theme = get_current_seasonal_theme()
+        if auto_theme:
+            return SEASONAL_THEMES[auto_theme].copy()
+    
+    # Custom theme
     if theme_name == "custom" and custom_colors:
         base = THEMES["dark_navy"].copy()
         base.update(custom_colors)
         return base
-    return THEMES.get(theme_name, THEMES["dark_navy"])
+    
+    return THEMES.get(theme_name, THEMES["dark_navy"]).copy()
+
+
+def get_seasonal_emoji(seasonal_theme: str = None) -> str:
+    """Get the emoji for the current seasonal theme."""
+    if seasonal_theme and seasonal_theme in SEASONAL_THEMES:
+        return SEASONAL_THEMES[seasonal_theme].get("emoji", "🦐")
+    
+    # Auto-detect
+    auto_theme = get_current_seasonal_theme()
+    if auto_theme:
+        return SEASONAL_THEMES[auto_theme].get("emoji", "🦐")
+    
+    return "🦐"  # Default Bubba Gump shrimp
 
 
 def hex_to_rgb(hex_color: str) -> Tuple[int, int, int]:
