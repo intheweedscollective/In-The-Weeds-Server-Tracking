@@ -1,13 +1,23 @@
-import { useState, useEffect } from "react";
-import { BarChart3, TrendingUp, Target, Download } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { BarChart3, TrendingUp, Target, Download, Calendar } from "lucide-react";
 import axios from "axios";
 import Navigation from "../components/Navigation";
 import { Button } from "../components/ui/button";
-import { formatCurrency, formatLSCRatio, formatNumber, KPI_DEFINITIONS } from "../utils/formatters";
+import { formatCurrency, formatNumber } from "../utils/formatters";
 import { toast } from "sonner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
+
+// V2 Metric Definitions with benchmarks
+const V2_METRICS = {
+  ppa: { label: 'PPA', benchmark: 55.0, format: 'currency', higherBetter: true },
+  lbw_per_guest: { label: 'LBW/Guest', benchmark: 8.0, format: 'currency', higherBetter: true },
+  glassware_per_guest: { label: 'Glass/Guest', benchmark: 1.0, format: 'currency', higherBetter: true },
+  guests_per_lsc: { label: 'Guests/LSC', benchmark: 100.0, format: 'number', higherBetter: false },
+  cv_score: { label: 'CV Score', benchmark: 5.0, format: 'number', higherBetter: true },
+  pre_dar_score: { label: 'Total Score', benchmark: 100.0, format: 'number', higherBetter: true },
+};
 
 export default function Analytics() {
   const [employees, setEmployees] = useState([]);
