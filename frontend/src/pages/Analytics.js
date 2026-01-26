@@ -68,7 +68,7 @@ export default function Analytics() {
       calculateAnalytics();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [employees]);
+  }, [employees, quarterSettings]);
 
   const handlePrint = async () => {
     try {
