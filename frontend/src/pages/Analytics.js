@@ -470,8 +470,8 @@ export default function Analytics() {
             <h2 className="text-2xl font-serif font-bold text-foreground">Top 10 by Metric</h2>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {Object.keys(KPI_DEFINITIONS).map((metric) => {
-                const metricInfo = KPI_DEFINITIONS[metric];
+              {Object.keys(V2_METRICS).map((metric) => {
+                const metricInfo = V2_METRICS[metric];
                 const top = getTopEmployees(metric, 10);
 
                 return (
