@@ -54,32 +54,29 @@ export default function TopPerformers() {
   }, [employees]);
 
   const calculateTopPerformers = () => {
-    const metrics = ['ppa', 'gpg', 'pplbw', 'lsc_ratio', 'metric_bonus_points', 'cumulative_score'];
+    const metrics = Object.keys(V2_METRICS);
     const topPerformersData = {};
 
     metrics.forEach(metric => {
+      const config = V2_METRICS[metric];
+      const valid = employees.filter(emp => emp[metric] != null);
+      
       let sortedEmployees;
-
-      if (metric === 'lsc_ratio') {
-        // For LSC ratio, lower is better
-        sortedEmployees = [...employees]
-          .filter(emp => emp[metric] != null)
-          .sort((a, b) => a[metric] - b[metric])
-          .slice(0, 10);
+      if (!config.higherBetter) {
+        // For metrics where lower is better (like guests_per_lsc)
+        sortedEmployees = [...valid].sort((a, b) => (a[metric] || 0) - (b[metric] || 0));
       } else {
-        sortedEmployees = [...employees]
-          .filter(emp => emp[metric] != null)
-          .sort((a, b) => b[metric] - a[metric])
-          .slice(0, 10);
+        // For metrics where higher is better
+        sortedEmployees = [...valid].sort((a, b) => (b[metric] || 0) - (a[metric] || 0));
       }
 
-      topPerformersData[metric] = sortedEmployees;
+      topPerformersData[metric] = sortedEmployees.slice(0, 10);
     });
 
-    // Top 10 overall = top by cumulative_score
+    // Top 10 overall = top by pre_dar_score (Total Score)
     const overall = [...employees]
-      .filter(emp => emp.cumulative_score != null)
-      .sort((a, b) => (b.cumulative_score || 0) - (a.cumulative_score || 0))
+      .filter(emp => emp.pre_dar_score != null)
+      .sort((a, b) => (b.pre_dar_score || 0) - (a.pre_dar_score || 0))
       .slice(0, 10);
 
     setTopOverall(overall);
