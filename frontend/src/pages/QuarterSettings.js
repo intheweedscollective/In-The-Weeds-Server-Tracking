@@ -60,7 +60,9 @@ export default function QuarterSettings() {
           weight_lsc: response.data.weight_lsc,
           weight_cv: response.data.weight_cv || 0.15,
           bonus_rate: response.data.bonus_rate,
-          bonus_cap: response.data.bonus_cap
+          bonus_cap: response.data.bonus_cap,
+          a_server_min_score: response.data.a_server_min_score || 85.1,
+          b_server_min_score: response.data.b_server_min_score || 70.1
         });
         setIsNew(false);
       } catch (error) {
@@ -79,7 +81,9 @@ export default function QuarterSettings() {
             weight_lsc: 0.25,
             weight_cv: 0.15,
             bonus_rate: 0.2,
-            bonus_cap: 5.0
+            bonus_cap: 5.0,
+            a_server_min_score: 85.1,
+            b_server_min_score: 70.1
           });
         } else {
           console.error("Error fetching settings:", error);
