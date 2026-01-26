@@ -1381,6 +1381,13 @@ async def upload_employees_v2(
                 guests = int(row.get(mapping["guests"], 0))
                 net_sales = float(row.get(mapping["net_sales"], 0))
                 
+                # Job Title (optional) - for hierarchy-based rankings
+                job_title = "Server"  # Default
+                if mapping.get("job_title"):
+                    val = row.get(mapping["job_title"])
+                    if not pd.isna(val) and str(val).strip():
+                        job_title = str(val).strip()
+                
                 # Individual alcohol sales (required) - LBW calculated automatically
                 liquor_val = row.get(mapping["liquor_sales"])
                 beer_val = row.get(mapping["beer_sales"])
