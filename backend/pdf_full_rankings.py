@@ -80,16 +80,6 @@ def build_full_rankings_pdf(
         spaceAfter=8,
     )
 
-    section_style = ParagraphStyle(
-        "section",
-        parent=styles["Heading2"],
-        fontName="Helvetica-Bold",
-        fontSize=11,
-        textColor=colors.HexColor("#005B96"),
-        spaceBefore=8,
-        spaceAfter=4,
-    )
-
     footer_style = ParagraphStyle(
         "footer",
         parent=styles["Normal"],
