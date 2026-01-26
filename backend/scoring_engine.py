@@ -793,3 +793,150 @@ def validate_upload_data(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         "duplicate_names": duplicate_names,
         "validation_results": results
     }
+
+
+# ============================================================================
+# HIERARCHY-BASED RANKINGS (Settings-Driven Server Tiering)
+# ============================================================================
+
+def classify_employee_role(employee: EmployeeV2, settings: QuarterSettings) -> Dict[str, Any]:
+    """
+    Classify employee into hierarchy tier based on job title and score.
+    
+    FIXED HIERARCHY ORDER (overrides raw score):
+    1. Trainer (Job Title contains "Trainer")
+    2. Bartender (Job Title contains "Bartender" or "Bar")
+    3. A-Server (Score >= A-Server min threshold)
+    4. B-Server (Score >= B-Server min AND < A-Server min)
+    5. C-Server (Score < B-Server min)
+    
+    Returns: {
+        "hierarchy_rank": 1-5 (1=highest priority),
+        "tier_label": "Trainer" | "Bartender" | "A-Server" | "B-Server" | "C-Server",
+        "tier_sort_order": int for sorting within hierarchy
+    }
+    """
+    job_title = (employee.job_title or "Server").strip().lower()
+    score = employee.pre_dar_score or employee.total_score or 0
+    
+    # Check for Trainer (highest priority)
+    if "trainer" in job_title:
+        return {
+            "hierarchy_rank": 1,
+            "tier_label": "Trainer",
+            "tier_sort_order": 1
+        }
+    
+    # Check for Bartender
+    if "bartender" in job_title or "bar" in job_title:
+        return {
+            "hierarchy_rank": 2,
+            "tier_label": "Bartender",
+            "tier_sort_order": 2
+        }
+    
+    # Server tiers based on score thresholds from settings
+    if score >= settings.a_server_min_score:
+        return {
+            "hierarchy_rank": 3,
+            "tier_label": "A-Server",
+            "tier_sort_order": 3
+        }
+    elif score >= settings.b_server_min_score:
+        return {
+            "hierarchy_rank": 4,
+            "tier_label": "B-Server",
+            "tier_sort_order": 4
+        }
+    else:
+        return {
+            "hierarchy_rank": 5,
+            "tier_label": "C-Server",
+            "tier_sort_order": 5
+        }
+
+
+def generate_hierarchy_rankings(employees: List[EmployeeV2], settings: QuarterSettings) -> List[Dict[str, Any]]:
+    """
+    Generate hierarchy-based rankings with position labels (Bar1, A1, B1, etc.)
+    
+    SORTING RULES:
+    1. Sort by hierarchy tier (Trainers first, then Bartenders, then A/B/C Servers)
+    2. Within each tier, sort by Total Score descending
+    
+    Position Labels:
+    - Trainers: T1, T2, T3...
+    - Bartenders: Bar1, Bar2, Bar3...
+    - A-Servers: A1, A2, A3...
+    - B-Servers: B1, B2, B3...
+    - C-Servers: C1, C2, C3...
+    """
+    # Classify each employee
+    classified = []
+    for emp in employees:
+        classification = classify_employee_role(emp, settings)
+        classified.append({
+            "employee": emp,
+            "hierarchy_rank": classification["hierarchy_rank"],
+            "tier_label": classification["tier_label"],
+            "tier_sort_order": classification["tier_sort_order"],
+            "score": emp.pre_dar_score or emp.total_score or 0
+        })
+    
+    # Sort: first by hierarchy_rank (ascending), then by score (descending)
+    classified.sort(key=lambda x: (x["hierarchy_rank"], -x["score"]))
+    
+    # Assign position labels within each tier
+    tier_counters = {
+        "Trainer": 0,
+        "Bartender": 0,
+        "A-Server": 0,
+        "B-Server": 0,
+        "C-Server": 0
+    }
+    
+    tier_prefixes = {
+        "Trainer": "T",
+        "Bartender": "Bar",
+        "A-Server": "A",
+        "B-Server": "B",
+        "C-Server": "C"
+    }
+    
+    results = []
+    for idx, item in enumerate(classified, 1):
+        tier = item["tier_label"]
+        tier_counters[tier] += 1
+        position_label = f"{tier_prefixes[tier]}{tier_counters[tier]}"
+        
+        emp = item["employee"]
+        results.append({
+            "position": idx,  # Overall position (1 to N)
+            "position_label": position_label,  # Bar1, A1, etc.
+            "tier_label": tier,
+            "employee_id": emp.id,
+            "name": emp.name,
+            "job_title": emp.job_title or "Server",
+            "total_score": round(item["score"], 2),
+            "bonus_points": round((emp.total_metric_bonus or 0) + (emp.review_tracker_bonus or 0), 2),
+            "ppa_points": {
+                "earned": round(min((emp.score_ppa or 0), 100) * 0.25 + (emp.bonus_ppa or 0), 2),
+                "possible": 30
+            },
+            "lbw_points": {
+                "earned": round(min((emp.score_lbw or 0), 100) * 0.20 + (emp.bonus_lbw or 0), 2),
+                "possible": 25
+            },
+            "lsc_points": {
+                "earned": round(min((emp.score_lsc or 0), 100) * 0.25 + (emp.bonus_lsc or 0), 2),
+                "possible": 30
+            },
+            "glassware_points": {
+                "earned": round(min((emp.score_glass or 0), 100) * 0.15 + (emp.bonus_glass or 0), 2),
+                "possible": 20
+            },
+            "performance_tier": emp.performance_tier
+        })
+    
+    return results
+
