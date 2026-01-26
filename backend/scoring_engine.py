@@ -297,12 +297,72 @@ def calculate_derived_metrics(employee: EmployeeV2) -> EmployeeV2:
     return employee
 
 
+def calculate_customer_voice_score(employee: EmployeeV2) -> EmployeeV2:
+    """
+    Calculate Customer Voice score using NPS-style logic.
+    
+    - Promoters (9-10): +1 point each
+    - Passives (7-8): 0 points
+    - Detractors (0-6): -2 points each
+    
+    Quarterly caps: +10 max, -6 min
+    """
+    # Calculate raw CV points
+    promoter_points = employee.cv_promoters * CV_PROMOTER_POINTS
+    passive_points = employee.cv_passives * CV_PASSIVE_POINTS
+    detractor_points = employee.cv_detractors * CV_DETRACTOR_POINTS
+    
+    raw_points = promoter_points + passive_points + detractor_points
+    employee.cv_raw_points = round(raw_points, 2)
+    
+    # Apply quarterly caps
+    capped_score = max(CV_MIN_POINTS, min(CV_MAX_POINTS, raw_points))
+    employee.cv_score = round(capped_score, 2)
+    
+    return employee
+
+
+def calculate_review_tracker_bonus(employee: EmployeeV2) -> EmployeeV2:
+    """
+    Calculate Review Tracker bonus from external platform mentions.
+    
+    - Every 5 positive named mentions = +1 bonus point
+    - Quarterly cap: +10 bonus points
+    - No negative penalties from external platforms
+    """
+    if employee.review_mentions > 0:
+        bonus = employee.review_mentions // RT_MENTIONS_PER_POINT
+        employee.review_tracker_bonus = round(min(bonus, RT_MAX_BONUS), 2)
+    else:
+        employee.review_tracker_bonus = 0
+    
+    return employee
+
+
+def calculate_dar_penalty(employee: EmployeeV2) -> EmployeeV2:
+    """
+    Calculate DAR (Disciplinary Action Report) penalty.
+    
+    - Written Warning: -3 points
+    - Suspension: -5 points
+    
+    Applied AFTER all other scoring, not visible in rankings.
+    """
+    warning_penalty = employee.dar_written_warnings * DAR_WRITTEN_WARNING
+    suspension_penalty = employee.dar_suspensions * DAR_SUSPENSION
+    
+    employee.dar_penalty = round(warning_penalty + suspension_penalty, 2)
+    
+    return employee
+
+
 def calculate_normalized_scores(employee: EmployeeV2, settings: QuarterSettings) -> EmployeeV2:
     """
     Calculate normalized scores (Q-T logic).
     Score = (Employee Metric / Benchmark) * 100
     
     For LSC (inverse): Score = (Benchmark / Employee Metric) * 100
+    For CV: Normalize to 0-100 scale based on benchmark
     """
     # PPA Score
     if employee.ppa and settings.benchmark_ppa > 0:
@@ -328,6 +388,14 @@ def calculate_normalized_scores(employee: EmployeeV2, settings: QuarterSettings)
     else:
         employee.score_lsc = 0
     
+    # Customer Voice Score (normalize CV + Review Tracker to 0-100 scale)
+    # CV ranges from -6 to +10, Review Tracker from 0 to +10
+    # Combined max: 20, min: -6
+    # Normalize: ((actual - min) / (max - min)) * 100
+    cv_combined = (employee.cv_score or 0) + (employee.review_tracker_bonus or 0)
+    cv_min, cv_max = -6, 20
+    employee.score_cv = round(((cv_combined - cv_min) / (cv_max - cv_min)) * 100, 2)
+    
     return employee
 
 
@@ -347,7 +415,7 @@ def calculate_bonus_points(employee: EmployeeV2, settings: QuarterSettings) -> E
     employee.bonus_glass = round(calc_bonus(employee.score_glass), 2)
     employee.bonus_lsc = round(calc_bonus(employee.score_lsc), 2)
     
-    employee.total_bonus = round(
+    employee.total_metric_bonus = round(
         employee.bonus_ppa + employee.bonus_lbw + 
         employee.bonus_glass + employee.bonus_lsc, 2
     )
@@ -358,17 +426,34 @@ def calculate_bonus_points(employee: EmployeeV2, settings: QuarterSettings) -> E
 def calculate_total_score(employee: EmployeeV2, settings: QuarterSettings) -> EmployeeV2:
     """
     Calculate weighted score + total score.
+    
+    Q1 2026 Official Formula:
+    Final Score = Weighted(PPA + LSC + LBW + Glass + CV) 
+                  + Review Tracker Bonus 
+                  + Metric Bonuses
+                  - DAR Penalties
     """
+    # Calculate weighted score from all 5 metrics
     employee.weighted_score = round(
         (employee.score_ppa or 0) * settings.weight_ppa +
         (employee.score_lbw or 0) * settings.weight_lbw +
         (employee.score_glass or 0) * settings.weight_glass +
-        (employee.score_lsc or 0) * settings.weight_lsc,
+        (employee.score_lsc or 0) * settings.weight_lsc +
+        (employee.score_cv or 0) * settings.weight_cv,
         2
     )
     
+    # Pre-DAR score (shown in rankings)
+    employee.pre_dar_score = round(
+        employee.weighted_score + 
+        (employee.total_metric_bonus or 0) +
+        (employee.review_tracker_bonus or 0),
+        2
+    )
+    
+    # Final total score (includes DAR, admin-only)
     employee.total_score = round(
-        employee.weighted_score + (employee.total_bonus or 0),
+        employee.pre_dar_score + (employee.dar_penalty or 0),
         2
     )
     
@@ -377,13 +462,13 @@ def calculate_total_score(employee: EmployeeV2, settings: QuarterSettings) -> Em
 
 def calculate_rankings(employees: List[EmployeeV2]) -> List[EmployeeV2]:
     """
-    Rank employees by total score (descending).
-    Assign peer_rank and peer_rank_display.
+    Rank employees by pre_dar_score (descending).
+    DAR penalties are NOT visible in rankings per spec.
     """
-    # Sort by total_score descending
+    # Sort by pre_dar_score (before DAR penalties)
     sorted_employees = sorted(
         employees, 
-        key=lambda e: e.total_score or 0, 
+        key=lambda e: e.pre_dar_score or 0, 
         reverse=True
     )
     
