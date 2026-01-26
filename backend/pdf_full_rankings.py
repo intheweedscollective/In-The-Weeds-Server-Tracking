@@ -123,21 +123,27 @@ def build_full_rankings_pdf(
     data_rows = [header_row]
     
     for emp in rankings:
-        # Calculate base points (weight * min(score, 100))
-        ppa_base = min((emp.get("ppa_points", {}).get("earned", 0) - (emp.get("bonus_ppa", 0) or 0)), 25)
+        # Get bonus values
         ppa_bonus = emp.get("bonus_ppa", 0) or 0
-        
-        lbw_base = min((emp.get("lbw_points", {}).get("earned", 0) - (emp.get("bonus_lbw", 0) or 0)), 20)
         lbw_bonus = emp.get("bonus_lbw", 0) or 0
-        
-        lsc_base = min((emp.get("lsc_points", {}).get("earned", 0) - (emp.get("bonus_lsc", 0) or 0)), 25)
         lsc_bonus = emp.get("bonus_lsc", 0) or 0
-        
-        glass_base = min((emp.get("glassware_points", {}).get("earned", 0) - (emp.get("bonus_glass", 0) or 0)), 15)
         glass_bonus = emp.get("bonus_glass", 0) or 0
         
         # CV score (15% weight, no bonus)
         cv_score = emp.get("cv_score", 0) or 0
+        
+        # Get base earned (subtract bonus from total earned)
+        ppa_earned = emp.get("ppa_points", {}).get("earned", 0)
+        ppa_base = round(ppa_earned - ppa_bonus, 1)
+        
+        lbw_earned = emp.get("lbw_points", {}).get("earned", 0)
+        lbw_base = round(lbw_earned - lbw_bonus, 1)
+        
+        lsc_earned = emp.get("lsc_points", {}).get("earned", 0)
+        lsc_base = round(lsc_earned - lsc_bonus, 1)
+        
+        glass_earned = emp.get("glassware_points", {}).get("earned", 0)
+        glass_base = round(glass_earned - glass_bonus, 1)
         
         row = [
             str(emp.get("position", "")),
@@ -146,13 +152,13 @@ def build_full_rankings_pdf(
             emp.get("tier_label", ""),
             f"{emp.get('total_score', 0):.1f}",
             f"+{emp.get('bonus_points', 0):.1f}",
-            f"{emp.get('ppa_points', {}).get('earned', 0):.1f}",
+            f"{ppa_base:.1f}",
             f"+{ppa_bonus:.1f}" if ppa_bonus > 0 else "-",
-            f"{emp.get('lbw_points', {}).get('earned', 0):.1f}",
+            f"{lbw_base:.1f}",
             f"+{lbw_bonus:.1f}" if lbw_bonus > 0 else "-",
-            f"{emp.get('lsc_points', {}).get('earned', 0):.1f}",
+            f"{lsc_base:.1f}",
             f"+{lsc_bonus:.1f}" if lsc_bonus > 0 else "-",
-            f"{emp.get('glassware_points', {}).get('earned', 0):.1f}",
+            f"{glass_base:.1f}",
             f"+{glass_bonus:.1f}" if glass_bonus > 0 else "-",
             f"{cv_score:.1f}",
         ]
