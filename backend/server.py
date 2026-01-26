@@ -1079,6 +1079,8 @@ async def update_quarter_settings(year: int, quarter: str, data: QuarterSettings
         update_data["benchmark_glass"] = data.benchmark_glass
     if data.benchmark_lsc is not None:
         update_data["benchmark_lsc"] = data.benchmark_lsc
+    if data.benchmark_cv is not None:
+        update_data["benchmark_cv"] = data.benchmark_cv
     if data.weight_ppa is not None:
         update_data["weight_ppa"] = data.weight_ppa
     if data.weight_lbw is not None:
@@ -1087,6 +1089,8 @@ async def update_quarter_settings(year: int, quarter: str, data: QuarterSettings
         update_data["weight_glass"] = data.weight_glass
     if data.weight_lsc is not None:
         update_data["weight_lsc"] = data.weight_lsc
+    if data.weight_cv is not None:
+        update_data["weight_cv"] = data.weight_cv
     if data.bonus_rate is not None:
         update_data["bonus_rate"] = data.bonus_rate
     if data.bonus_cap is not None:
