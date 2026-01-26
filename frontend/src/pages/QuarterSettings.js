@@ -638,6 +638,172 @@ export default function QuarterSettings() {
           </div>
         </div>
 
+        {/* Slide Theme Settings */}
+        <div className="bubba-card mb-8" data-testid="slide-theme-settings">
+          <div className="tape tape-blue" style={{ top: '-8px', left: '50%', transform: 'translateX(-50%) rotate(-1deg)' }} />
+          <div className="p-6 pt-8">
+            <div className="flex items-center gap-3 mb-4">
+              <Palette className="w-6 h-6 text-purple-500" />
+              <h2 className="text-lg font-serif font-bold text-foreground">Yodeck Slide Theme</h2>
+              <span className="text-sm text-gray-500">(Per-Quarter)</span>
+            </div>
+            <p className="text-sm text-gray-500 mb-6">
+              Customize the visual theme for all Yodeck slides generated for this quarter.
+            </p>
+            
+            {/* Theme Presets */}
+            <div className="mb-6">
+              <label className="text-sm font-medium mb-3 block">Choose a Theme Preset</label>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                {Object.entries(SLIDE_THEMES).map(([key, theme]) => (
+                  <button
+                    key={key}
+                    onClick={() => applyThemePreset(key)}
+                    disabled={settings?.is_locked}
+                    className={`p-4 rounded-lg border-2 transition-all ${
+                      formData.slide_theme === key 
+                        ? 'border-primary ring-2 ring-primary/20' 
+                        : 'border-gray-200 hover:border-gray-300'
+                    } ${settings?.is_locked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    style={{ backgroundColor: theme.bg }}
+                    data-testid={`theme-preset-${key}`}
+                  >
+                    <div className="text-center">
+                      <div className="w-6 h-6 rounded-full mx-auto mb-2" style={{ backgroundColor: theme.accent }}></div>
+                      <span className="text-xs font-medium" style={{ color: theme.text }}>{theme.name}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            {/* Custom Colors (only shown when custom theme selected) */}
+            {formData.slide_theme === "custom" && (
+              <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <label className="text-sm font-medium mb-4 block">Custom Color Settings</label>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-xs text-gray-500 block">Background</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={formData.slide_bg_color}
+                        onChange={(e) => setFormData(prev => ({ ...prev, slide_bg_color: e.target.value }))}
+                        disabled={settings?.is_locked}
+                        className="w-10 h-10 rounded cursor-pointer border-0"
+                      />
+                      <Input
+                        value={formData.slide_bg_color}
+                        onChange={(e) => setFormData(prev => ({ ...prev, slide_bg_color: e.target.value }))}
+                        disabled={settings?.is_locked}
+                        className="text-xs h-8 border-2"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs text-gray-500 block">Gradient End</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={formData.slide_bg_gradient}
+                        onChange={(e) => setFormData(prev => ({ ...prev, slide_bg_gradient: e.target.value }))}
+                        disabled={settings?.is_locked}
+                        className="w-10 h-10 rounded cursor-pointer border-0"
+                      />
+                      <Input
+                        value={formData.slide_bg_gradient}
+                        onChange={(e) => setFormData(prev => ({ ...prev, slide_bg_gradient: e.target.value }))}
+                        disabled={settings?.is_locked}
+                        className="text-xs h-8 border-2"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs text-gray-500 block">Text Color</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={formData.slide_text_color}
+                        onChange={(e) => setFormData(prev => ({ ...prev, slide_text_color: e.target.value }))}
+                        disabled={settings?.is_locked}
+                        className="w-10 h-10 rounded cursor-pointer border-0"
+                      />
+                      <Input
+                        value={formData.slide_text_color}
+                        onChange={(e) => setFormData(prev => ({ ...prev, slide_text_color: e.target.value }))}
+                        disabled={settings?.is_locked}
+                        className="text-xs h-8 border-2"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs text-gray-500 block">Accent (Primary)</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={formData.slide_accent_color}
+                        onChange={(e) => setFormData(prev => ({ ...prev, slide_accent_color: e.target.value }))}
+                        disabled={settings?.is_locked}
+                        className="w-10 h-10 rounded cursor-pointer border-0"
+                      />
+                      <Input
+                        value={formData.slide_accent_color}
+                        onChange={(e) => setFormData(prev => ({ ...prev, slide_accent_color: e.target.value }))}
+                        disabled={settings?.is_locked}
+                        className="text-xs h-8 border-2"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs text-gray-500 block">Secondary</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={formData.slide_secondary_color}
+                        onChange={(e) => setFormData(prev => ({ ...prev, slide_secondary_color: e.target.value }))}
+                        disabled={settings?.is_locked}
+                        className="w-10 h-10 rounded cursor-pointer border-0"
+                      />
+                      <Input
+                        value={formData.slide_secondary_color}
+                        onChange={(e) => setFormData(prev => ({ ...prev, slide_secondary_color: e.target.value }))}
+                        disabled={settings?.is_locked}
+                        className="text-xs h-8 border-2"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* Theme Preview */}
+            <div className="mt-4">
+              <label className="text-sm font-medium mb-2 block">Preview</label>
+              <div 
+                className="h-24 rounded-lg flex items-center justify-center relative overflow-hidden"
+                style={{ 
+                  background: `linear-gradient(180deg, ${formData.slide_bg_color} 0%, ${formData.slide_bg_gradient} 100%)`
+                }}
+              >
+                <div className="text-center">
+                  <div 
+                    className="text-lg font-bold mb-1"
+                    style={{ color: formData.slide_text_color }}
+                  >
+                    🦐 TOP 10 PERFORMERS 🦐
+                  </div>
+                  <div 
+                    className="text-sm"
+                    style={{ color: formData.slide_accent_color }}
+                  >
+                    {selectedQuarter} {selectedYear} • Bubba Gump Shrimp Co.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Save Button */}
         {!settings?.is_locked && (
           <div className="flex justify-end">
