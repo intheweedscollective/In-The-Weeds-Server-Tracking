@@ -334,7 +334,7 @@ export default function EmployeeList() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-2xl font-serif font-black text-primary">{selectedEmployee.name}</h2>
-                    <p className="text-gray-500">{selectedEmployee.position}</p>
+                    <p className="text-gray-500">Rank #{selectedEmployee.peer_rank || '-'} • {selectedEmployee.performance_tier || 'Not Assessed'}</p>
                   </div>
                   <Button 
                     onClick={() => setShowDetails(false)}
@@ -349,15 +349,15 @@ export default function EmployeeList() {
               </div>
               
               <div className="p-6">
-                {/* Detailed KPIs */}
+                {/* Detailed KPIs - V2 Fields */}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
                   {[
-                    { label: 'Cumulative Score', value: formatNumber(selectedEmployee.cumulative_score), color: 'text-primary', bg: 'bg-red-50' },
-                    { label: 'PPA', value: formatCurrency(selectedEmployee.ppa), color: 'text-secondary', bg: 'bg-blue-50' },
-                    { label: 'GPG', value: formatCurrency(selectedEmployee.gpg), color: 'text-gray-700', bg: 'bg-gray-50' },
-                    { label: 'PPLBW', value: formatCurrency(selectedEmployee.pplbw), color: 'text-gray-700', bg: 'bg-gray-50' },
-                    { label: 'LSC Ratio', value: formatLSCRatio(selectedEmployee.lsc_ratio), color: 'text-gray-700', bg: 'bg-gray-50' },
-                    { label: 'Bonus Points', value: formatNumber(selectedEmployee.metric_bonus_points), color: 'text-yellow-600', bg: 'bg-yellow-50' },
+                    { label: 'Total Score', value: formatNumber(selectedEmployee.pre_dar_score || selectedEmployee.total_score || 0), color: 'text-primary', bg: 'bg-red-50' },
+                    { label: 'PPA', value: formatCurrency(selectedEmployee.ppa || 0), color: 'text-secondary', bg: 'bg-blue-50' },
+                    { label: 'LBW/Guest', value: formatCurrency(selectedEmployee.lbw_per_guest || 0), color: 'text-purple-700', bg: 'bg-purple-50' },
+                    { label: 'Glass/Guest', value: formatCurrency(selectedEmployee.glassware_per_guest || 0), color: 'text-gray-700', bg: 'bg-gray-50' },
+                    { label: 'Guests/LSC', value: selectedEmployee.guests_per_lsc ? formatNumber(selectedEmployee.guests_per_lsc) : 'N/A', color: 'text-green-700', bg: 'bg-green-50' },
+                    { label: 'CV Score', value: (selectedEmployee.cv_score > 0 ? '+' : '') + formatNumber(selectedEmployee.cv_score || 0), color: 'text-yellow-600', bg: 'bg-yellow-50' },
                   ].map((kpi, i) => (
                     <div key={i} className={`text-center p-4 ${kpi.bg} rounded-xl`}>
                       <div className={`text-2xl font-serif font-bold ${kpi.color} mb-1`}>{kpi.value}</div>
@@ -365,6 +365,58 @@ export default function EmployeeList() {
                     </div>
                   ))}
                 </div>
+                
+                {/* Raw Data Section */}
+                <div className="mb-6">
+                  <h4 className="font-serif font-bold text-foreground mb-3">Raw Data</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    <div className="flex justify-between py-2 px-3 bg-gray-50 rounded-lg text-sm">
+                      <span className="text-gray-500">Guests</span>
+                      <span className="font-medium">{formatNumber(selectedEmployee.guests || 0)}</span>
+                    </div>
+                    <div className="flex justify-between py-2 px-3 bg-gray-50 rounded-lg text-sm">
+                      <span className="text-gray-500">Net Sales</span>
+                      <span className="font-medium">{formatCurrency(selectedEmployee.net_sales || 0)}</span>
+                    </div>
+                    <div className="flex justify-between py-2 px-3 bg-gray-50 rounded-lg text-sm">
+                      <span className="text-gray-500">LBW Total</span>
+                      <span className="font-medium">{formatCurrency(selectedEmployee.lbw || 0)}</span>
+                    </div>
+                    <div className="flex justify-between py-2 px-3 bg-gray-50 rounded-lg text-sm">
+                      <span className="text-gray-500">Glassware</span>
+                      <span className="font-medium">{formatCurrency(selectedEmployee.glassware_sales || 0)}</span>
+                    </div>
+                    <div className="flex justify-between py-2 px-3 bg-gray-50 rounded-lg text-sm">
+                      <span className="text-gray-500">LSC Count</span>
+                      <span className="font-medium">{formatNumber(selectedEmployee.lsc_count || 0)}</span>
+                    </div>
+                    <div className="flex justify-between py-2 px-3 bg-gray-50 rounded-lg text-sm">
+                      <span className="text-gray-500">Review Mentions</span>
+                      <span className="font-medium">{formatNumber(selectedEmployee.review_mentions || 0)}</span>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Customer Voice Section */}
+                {(selectedEmployee.cv_promoters > 0 || selectedEmployee.cv_passives > 0 || selectedEmployee.cv_detractors > 0) && (
+                  <div className="mb-6">
+                    <h4 className="font-serif font-bold text-foreground mb-3">Customer Voice (NPS)</h4>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="text-center p-3 bg-green-50 rounded-lg">
+                        <div className="text-xl font-bold text-green-700">{selectedEmployee.cv_promoters || 0}</div>
+                        <div className="text-xs text-gray-500">Promoters (+1)</div>
+                      </div>
+                      <div className="text-center p-3 bg-gray-50 rounded-lg">
+                        <div className="text-xl font-bold text-gray-600">{selectedEmployee.cv_passives || 0}</div>
+                        <div className="text-xs text-gray-500">Passives (0)</div>
+                      </div>
+                      <div className="text-center p-3 bg-red-50 rounded-lg">
+                        <div className="text-xl font-bold text-red-700">{selectedEmployee.cv_detractors || 0}</div>
+                        <div className="text-xs text-gray-500">Detractors (-2)</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 
                 {/* Additional Data */}
                 {Object.keys(selectedEmployee.additional_data || {}).length > 0 && (
