@@ -455,7 +455,7 @@ export default function Analytics() {
 
                       <div className="text-right shrink-0">
                         <div className="font-bold text-primary">
-                          {formatMetricValue("cumulative_score", emp.cumulative_score)}
+                          {formatMetricValue("pre_dar_score", emp.pre_dar_score)}
                         </div>
                       </div>
                     </div>
