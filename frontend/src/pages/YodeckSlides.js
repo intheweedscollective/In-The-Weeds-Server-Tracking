@@ -79,17 +79,18 @@ export default function YodeckSlides() {
   const downloadAllSlides = async () => {
     if (!slideManifest) return;
     
-    toast.info("Downloading all slides...");
+    toast.info("Opening all slides for download...");
     
     for (const slide of slideManifest.slides) {
       for (let page = 1; page <= slide.pages; page++) {
-        await downloadSlide(slide.id, slide.endpoint, page);
-        // Small delay to prevent overwhelming the server
-        await new Promise(resolve => setTimeout(resolve, 500));
+        const url = page > 1 ? `${API}${slide.endpoint}?page=${page}` : `${API}${slide.endpoint}`;
+        window.open(url, '_blank');
+        // Small delay between opens to prevent popup blocking
+        await new Promise(resolve => setTimeout(resolve, 800));
       }
     }
     
-    toast.success("All slides downloaded!");
+    toast.success("All slides opened - save each from browser!");
   };
 
   if (loading) {
