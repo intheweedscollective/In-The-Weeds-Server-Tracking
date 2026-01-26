@@ -1456,6 +1456,7 @@ async def upload_employees_v2(
                 # LBW is calculated automatically in run_full_scoring
                 emp = EmployeeV2(
                     name=name,
+                    job_title=job_title,  # NEW: Job Title for hierarchy rankings
                     guests=guests,
                     net_sales=net_sales,
                     liquor_sales=liquor_sales,  # Individual input
