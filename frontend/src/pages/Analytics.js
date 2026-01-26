@@ -125,13 +125,12 @@ export default function Analytics() {
 
   const formatMetricValue = (metric, value) => {
     if (value == null) return "N/A";
-    switch (metric) {
-      case "ppa":
-      case "gpg":
-      case "pplbw":
+    const config = V2_METRICS[metric];
+    if (!config) return formatNumber(value);
+    
+    switch (config.format) {
+      case 'currency':
         return formatCurrency(value);
-      case "lsc_ratio":
-        return formatLSCRatio(value);
       default:
         return formatNumber(value);
     }
