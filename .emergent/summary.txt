@@ -2,72 +2,82 @@
 The user wants a performance review application for restaurant employees. This evolved from an Excel-based tool to a full-stack application with a deterministic, in-app scoring engine (V2).
 
 PRODUCT REQUIREMENTS (New Refactor Spec):
-1.  **Data Ingestion**: A simplified Excel/CSV template with columns for , , , , , , , , and optional columns for customer feedback.
-2.  **Derived & Calculated Metrics**:
-    *    is calculated by summing  +  +  upon ingestion. This is the canonical value for all alcohol sales calculations.
-    *   Other metrics like PPA, LBW per Guest, etc., are derived from the raw data.
-3.  **Quarter Settings**: A UI () for admins to configure metric weights, benchmarks, and bonus rules for each quarter.
-4.  **Scoring Engine (Phase 5 Model)**: A backend engine that calculates a final score based on a weighted formula:
-    *   PPA: 25%
-    *   LSC (Enrollments per Guest): 25%
-    *   LBW per Guest: 20%
-    *   Glassware per Guest: 15%
-    *   Customer Voice (Internal NPS-style feedback): 15%
-    *   Bonuses are applied for high performance in each metric and for external review mentions.
-    *   Penalties for Disciplinary Action Reports (DARs) are applied at the end and are not visible in public rankings.
-5.  **Performance Tiers**: Assigns employees to tiers (, , etc.) based on their final score percentile.
-6.  **UI & Outputs**:
-    *   A bright, Bubba Gump themed UI.
-    *   Dashboard with rankings and a detailed scoring breakdown (points earned vs. possible).
-    *   A Crew Management tab with a filterable list of all employees.
-    *   Generate Employee Review PDFs and Yodeck-compatible leaderboard slides.
-7.  **User Feedback Incorporated**:
-    *   Fixed a bug where the Crew Management page showed the wrong number of employees.
-    *   Added a detailed scoring breakdown to the Dashboard and Employee Details modal.
-    *   Corrected the UI to show the accurate maximum possible points for each scored metric ( bonus cap).
+1.  **Data Ingestion**: A simplified Excel/CSV template with columns for , , , , etc.
+2.  **Quarter Settings**: A UI () for admins to configure metric weights, benchmarks, bonus rules, and server tier score thresholds (, ). Also includes settings for customizing the theme of generated Yodeck slides.
+3.  **Scoring Engine (Phase 5 Model)**: A backend engine that calculates a final score based on a weighted formula and applies bonuses/penalties.
+4.  **Full Rankings Tab**: A new tab displaying all employees in a fixed, hierarchy-driven order: Trainers, Bartenders, A-Servers, B-Servers, and C-Servers. The server tiers (A, B, C) are determined dynamically based on the configurable score thresholds from the settings. The table must be filterable by tier but not sortable by individual metrics.
+5.  **PDF & Slide Generation**:
+    *   Generate individual Employee Review PDFs using the V2 data model.
+    *   Generate a PDF of the full rankings table.
+    *   Generate 1920x1080 PNG slides (Yodeck compatible) for various leaderboards: Top 10, per-tier rankings, and special categories like Most Improved and Promotion Watchlist.
+    *   The visual theme of the generated slides should be customizable on a per-quarter basis via the Settings page.
 
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack React + FastAPI application where the V2 scoring engine refactor is nearly complete.
--   **Backend**: The  module contains all the complex logic for the Phase 5 model, including split alcohol sales calculation, Customer Voice scoring, and hidden DAR penalties.  has been updated with corresponding V2 API endpoints.
--   **Frontend**: All primary pages (, , , , ) have been successfully migrated to use the new V2 backend APIs and data models. The UI correctly displays quarter-specific data, detailed scoring breakdowns, and reflects the Bubba Gump theme. The only remaining page on the legacy V1 system is the Review Generation page.
+A full-stack React + FastAPI application. The V2 refactor is complete, with all pages now using the V2 API and data models.
+
+-   **Backend**: The  contains the V2 scoring logic and data models, including server tiering and slide theme settings.  provides all V2 API endpoints.  and  handle the generation of their respective outputs.
+-   **Frontend**: All major pages (, , , , ) are migrated to V2. A new  page has been added, which displays employees according to the specified hierarchy and provides a PDF download. A  page has been created for generating and downloading various leaderboard slides. The frontend implementation for theme customization is in progress.
 
 **Last working item**:
-- Last item agent was working: The agent was beginning the process of migrating the final legacy page, **PDF Review Generation**, to the V2 data model. The agent investigated the relevant files ( and backend endpoints in ) and confirmed they are still using the old V1 API.
-- Status: **NOT STARTED**
-- Agent Testing Done: N
-- Which testing method agent to use? **both**. The agent must update the backend to generate PDFs using V2 data and update the frontend to call the new endpoint. Backend can be tested with , and frontend UI/trigger can be tested with the .
+- Last item agent was working: Implementing user-configurable themes for Yodeck slides and adding new special slide types (Most Improved, Promotion Watchlist, Coaching Focus). The agent updated the backend models and API endpoints to support themes and created the logic for the new slide types. The frontend file  was updated to display the new slide options, but the UI for theme customization on the  page was not yet implemented. A linting error was found in .
+- Status: **IN PROGRESS**
+- Agent Testing Done: N (Backend partially tested with curl, but frontend has a linting error and is untested).
+- Which testing method agent to use? **both**. Backend testing via  for the new theme-aware endpoints. Frontend testing via  to verify the UI on both  and  pages after the feature is complete.
 - User Testing Done: N
 
 **All Pending/In progress Issue list**:
-- No pending issues.
+-   **Issue 1: Frontend Linting Error (P0)**
+    -   Description: A linting error () exists in , preventing a clean build.
+    -   Attempted fixes: None. The agent identified the issue but did not fix it.
+    -   Next debug checklist:
+        1.  View .
+        2.  Locate the line with the unescaped character (likely a double quote inside JSX text).
+        3.  Replace it with the correct HTML entity (e.g., ) or refactor the JSX.
+        4.  Run  to confirm the fix.
+    -   Why fix this issue: This error must be fixed to ensure the application builds correctly and to complete the Yodeck slide feature.
+    -   Status: **NOT STARTED**
+    -   Is recurring issue? N
+    -   Should Test frontend/backend/both after fix? frontend
 
 **In progress Task List**:
-- No tasks are currently in progress.
+-   **Task 1: Complete Yodeck Slide Theme Customization (P0)**
+    -   Description: The user wants to be able to customize the background and text colors of the generated Yodeck slides from the Settings page.
+    -   Where to resume: After fixing the linting error (Issue 1), the next step is to implement the UI on the  page.
+    -   What will be achieved with this? Users will have control over the branding and appearance of their digital signage leaderboards on a per-quarter basis.
+    -   Status: **IN PROGRESS**
+    -   Should Test frontend/backend/both after fix? both
+    -   Blocked on something: **Issue 1: Frontend Linting Error**
 
 **Upcoming and Future Tasks**
 Upcoming Tasks:
--   **Phase 5: Update PDF Review Generation (P0)**: Refactor the  page () and its backend PDF generation logic to use the new  data model and scoring results. This is the highest priority task.
--   **Phase 6: Yodeck Slide Generation (P1)**: Implement the new feature to generate 16:9 slides for leaderboards.
--   **Cleanup (P2)**: Remove all legacy V1 API endpoints, frontend components, and logic from the codebase to complete the refactor.
+-   **Analytics Enhancements (P1)**: Enhance the Analytics page to show benchmark thresholds as visual lines on each metric card for clearer performance comparison.
+-   **Cleanup (P2)**: Remove all legacy V1 API endpoints, frontend components, and logic from the codebase to complete the refactor and reduce technical debt.
 
 Future Tasks:
--   Enhance the Analytics page to show benchmark thresholds on each metric card.
--   Implement UI for batch uploads of line graph PDFs.
--   Implement auto-generated graphs from time-series data.
+-   Automated daily/weekly slide pack generation for Yodeck playlists.
+-   Batch uploads of line graph PDFs.
+-   Auto-generated graphs from time-series data.
 
 **Completed work in this session**
--   **V2 Scoring Engine - Phase 5 (Backend)**: Implemented the official Q1 2026 scoring model, including , , and hidden  penalties in  and .
--   **Split Alcohol Sales Input**: Refactored the backend to ingest separate , , and  sales columns and calculate a canonical , updating , , and the downloadable CSV template.
--   **Feature: Download CSV Template**: Added a backend endpoint and a frontend button on the Dashboard to allow users to download a correctly formatted CSV template.
--   **Bug Fix: Employee Count Discrepancy**: Migrated the  page to the V2 API, which resolved the bug where the page was showing an incorrect number of employees (26 instead of 28).
--   **UI Enhancement: Detailed Scoring Breakdown**: Updated the  details modal and the  rankings list to show a comprehensive breakdown of points earned vs. possible for each metric.
--   **UI Bug Fix: Corrected Possible Points Display**: Fixed the UI on  and  to correctly display the maximum possible points for each metric, accounting for the +5 point bonus cap.
--   **V2 Migration: Analytics & Top Performers**: Migrated  and  from the V1 API to the V2 API, adding quarter selection and updating the UI to use the new data structures.
+-   **Full Rankings Tab**: Implemented a new  page with a table view showing all employees, sorted by a fixed hierarchy (Trainers > Bartenders > A/B/C Servers).
+-   **Server Tiering Logic**: Implemented dynamic server tiering (A/B/C) based on configurable score thresholds in the Quarter Settings.
+-   **Rankings PDF Download**: Added a Download PDF button to the Rankings page to export the full, formatted table.
+-   **V2 Review Generation Migration**: Successfully migrated the  page and its backend PDF generation logic to use the  data model, completing the V1-to-V2 migration.
+-   **Yodeck Slide Generation (Initial)**: Created a  page to generate 1920x1080 PNG slides for Top 10 and per-tier leaderboards.
+-   **Bug Fix (Slide Download)**: Resolved a CORS-related issue that prevented slides from downloading in the preview environment by having the file open in a new tab.
 
 **Earlier issues found/mentioned but not fixed**
--   None.
+-   **Issue 1: Intermittent Failed to load Error in Preview**
+    -   Description: The user has repeatedly reported a Failed to load error and runtime script errors when using the application in the preview environment, particularly when trying to download generated slides. The agent was unable to reproduce it reliably locally, attributing it to the preview environment's CORS or WebSocket configuration.
+    -   Debug checklist:
+        1.  Attempt to reproduce the download failure on the  page in the preview environment.
+        2.  Inspect the browser's developer console and network tab at the moment of failure for specific error messages or failed requests.
+        3.  Review  to see if there are any race conditions or unhandled states in the  function.
+    -   Why to solve this issue: This blocks the user from using a key feature of the application.
+    -   Should Test frontend/backend/both after fix: frontend
+    -   Is recurring issue? Y
 
 **Known issue recurrence from previous fork**
 -   N/A
@@ -76,75 +86,71 @@ Future Tasks:
 
 
 **Key Technical Concepts**
--   **Backend**: FastAPI with Pydantic for strict, versioned data modeling (, ).
--   **Frontend**: React.js with , , and  hooks, styled with Tailwind CSS.
--   **Architecture**: A services-based architecture with a clear separation between the React frontend and the FastAPI backend. The application is in the final stages of a migration from a V1 to a V2 data model and API, with only one page left to migrate.
+-   **Backend**: FastAPI, Pydantic, ReportLab (for PDFs), Pillow (for PNG image generation).
+-   **Frontend**: React.js, Tailwind CSS.
+-   **Architecture**: Service-oriented architecture with a React frontend and FastAPI backend. All features are now on the V2 API.
 
 **key DB schema**
 -   **quarter_settings**: 
 -   **employees_v2**: 
 
 **changes in tech stack**
--   None.
+-    was added as a dependency for image generation.
 
 **All files of reference**
--   **Core Logic**: , 
--   **Migrated Frontend Pages**: , , , , 
--   **Legacy Page to be Updated**: 
+-   **New/Updated Backend**: , , , 
+-   **New/Updated Frontend**: , , , , , 
 
 **Areas that need refactoring**:
--   The  page and its associated backend logic must be refactored to use the V2 data model.
--   After the V2 migration is complete, a full cleanup of all legacy V1 API endpoints and associated frontend code should be performed to eliminate technical debt.
+-   After the current tasks are complete, all legacy V1 code (e.g., , , old V1 endpoints in ) should be removed.
 
 **key api endpoints**
--   : Imports data, runs the V2 scoring engine, and saves results.
--   : Validates an uploaded file against the V2 schema.
--   : Fetches fully scored V2 employee data for a given quarter.
--   : Gets the ranked list of employees.
--   : Manages quarter configurations.
--   : Adds a Disciplinary Action Report.
--   : Deletes a DAR.
--   : Downloads a sample CSV file with the correct V2 column format.
+-   : Gets the new hierarchy-sorted employee list.
+-   : Generates a PDF of the full rankings.
+-   : Gets a list of available Yodeck slides.
+-   : Generates the Top 10 PNG slide.
+-   : Generates a PNG slide for a specific server tier.
+-   : Generates special PNG slides (e.g., 'most_improved').
+-   : Generates a V2 employee review PDF.
+-   : Updates quarter settings, including tier thresholds and slide themes.
 
 **Critical Info for New Agent**
--   The top priority is to complete the V2 migration by refactoring the **Review Generation** page (). This is the last remaining piece of legacy functionality.
--   The user is highly engaged and provides very specific requirements for both logic and UI. Pay close attention to their feedback, especially regarding scoring calculations and visual breakdowns.
--   The current scoring model is complex and defined in . Refer to this file as the source of truth for all calculations.
--   After the  page is migrated, the next logical step is to perform a cleanup of all V1 code.
+-   The immediate priority is to fix the linting error in  and then implement the theme customization UI in  to complete the user's latest request.
+-   The user is highly engaged and provides detailed, specific requirements. Adhere closely to them.
+-   Be aware of the recurring Failed to load issue in the preview environment reported by the user. While local tests may pass, the problem persists for the user and may require more robust error handling or a different approach for file downloads in the frontend.
 
 **documents and test reports created in this job**
--    (created and updated)
 -   
--    (for testing Phase 5 scoring)
--    (for testing split alcohol sales)
+-    (updated multiple times)
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User:** Requests detailed scoring breakdown in employee tab (earned vs possible). (DONE)
-2.  **Agent:** Implements the detailed breakdown in the employee details modal.
-3.  **User:** Requests the same detailed breakdown to be shown in the main dashboard rankings. (DONE)
-4.  **Agent:** Implements the detailed breakdown in the dashboard rankings list.
-5.  **User:** Points out a scoring display error: the max possible points should include the bonus cap. (DONE)
-6.  **Agent:** Corrects the possible points display logic on both the Dashboard and EmployeeList pages.
-7.  **User:** continue
-8.  **Agent:** States plan to update the PDF Review Generation page next.
-9.  **User:** (No response, implicit approval via continue on previous step)
-10. **Agent:** Begins investigating the  page and related backend code.
+1.  **User**: (Provides detailed spec for Yodeck slides: content, style, format).
+2.  **Agent**: Acknowledges spec and starts building.
+3.  **User**: Reports Uncaught runtime errors via screenshot.
+4.  **Agent**: Investigates, attributes it to preview environment CORS/WebSocket issues.
+5.  **User**: Continue.
+6.  **User**: Reports slide generation fails with an image showing a Failed to generate toast.
+7.  **Agent**: Investigates, finds the backend works but the frontend download fails. Implements a fix to open the slide in a new tab.
+8.  **User**: Failed to load.
+9.  **Agent**: Investigates again, confirms local build and services are fine, asks user to retry.
+10. **User**: Specifies next priorities: 1. Analytics enhancements, 2. Additional Yodeck slides, and a new feature for custom slide backgrounds/themes.
 
 **Project Health Check:**
--   **Broken**: The **Review Generation** () page is functionally broken because it relies on the deprecated V1 API and data model. All other core features are functional on the V2 system.
+-   **Broken**: The Yodeck slide download functionality is unreliable for the user in the preview environment, despite working in the agent's local tests.
 -   **Mocked**: None.
 
 **3rd Party Integrations**
--   **OpenAI GPT**: Used via  for legacy review generation. This integration needs to be re-evaluated and incorporated into the V2-based PDF generation flow.
+-   **OpenAI GPT**: Used via  for review content generation. This is fully functional in the V2 review flow.
 
 **Testing status**
--   Testing agent used after significant changes: YES (for initial V2 Dashboard flow, though a later run failed due to a temporary infra issue).
+-   Testing agent used after significant changes: YES, for the Full Rankings Tab feature.
 -   Troubleshoot agent used after agent stuck in loop: NO
--   Test files created: []
--   Known regressions: The  page is non-functional until it's migrated to V2.
+-   Test files created: None in this session.
+-   Known regressions: The Yodeck slide download is intermittently failing for the user.
 
 **Credentials to test flow:**
 N/A
 
 **What agent forgot to execute**
-- The agent has correctly identified the next step (migrating ) but has not yet started implementation. The plan is sound and follows the user's requirements.</analysis>
+-   The agent did not fix the linting error found in  before the session ended.
+-   While the agent updated the backend to support slide theme settings, they did not implement the corresponding user interface (e.g., color pickers, theme selectors) on the  page. This is a critical missing part of the user's request.</analysis>
