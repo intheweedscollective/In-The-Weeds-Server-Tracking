@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Trophy, Calendar, Filter, ChevronDown, ChevronUp } from "lucide-react";
+import { Trophy, Calendar, Filter, ChevronDown, ChevronUp, Download, FileText } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import Navigation from "../components/Navigation";
@@ -22,6 +22,7 @@ const TIER_STYLES = {
 export default function FullRankings() {
   const [rankings, setRankings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [selectedYear, setSelectedYear] = useState(2026);
   const [selectedQuarter, setSelectedQuarter] = useState("Q1");
   const [tierFilter, setTierFilter] = useState("all");
