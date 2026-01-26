@@ -173,15 +173,27 @@ Position | Employee Name | Tier | Total Score | Bonus | PPA (earned/possible) | 
   - Visual metric indicators (green/yellow/red dots)
   - Download All Slides button
   - Yodeck-ready format (<5MB per slide)
+- ✅ **Yodeck Theme Customization (Jan 26, 2026)**
+  - Per-quarter theme settings stored in QuarterSettings
+  - 4 pre-built themes: Dark Navy, Light Corporate, Bubba Red, Ocean Blue
+  - Custom theme with 5 color pickers (Background, Gradient, Text, Accent, Secondary)
+  - Theme selection UI on both Settings page and Yodeck page
+  - Live preview of theme in Settings page
+  - All slides use the selected theme
+- ✅ **Special Yodeck Slides (Jan 26, 2026)**
+  - "Most Improved" slide - shows top 8 employees with biggest score increase
+  - "Promotion Watchlist" slide - B-Servers within 10 points of A-Server threshold
+  - "At Risk/Coaching Focus" slide (Manager Only) - C-Servers needing attention
+- ✅ **Fixed Slide Download Issue (Jan 26, 2026)**
+  - Fixed double `/api/api/` URL issue in download functions
+  - Improved download using fetch blob method for reliability
+  - Graceful fallback to open in new tab if download fails
 
 ## Upcoming Tasks (P1)
-- None! All major features complete.
+- Analytics enhancements (benchmark thresholds display on metric cards)
 
 ## Future/Backlog (P2)
 - Legacy V1 code cleanup (remove old endpoints)
-- Analytics enhancements (benchmark thresholds display)
 - Batch line graph PDF uploads
 - Time-series graph auto-generation
-- "Most Improved" Yodeck slide
-- "Promotion Watchlist" slide
-- Manager-only "At Risk Coaching Group" slide
+- Automated daily/weekly slide pack generation for Yodeck playlists
