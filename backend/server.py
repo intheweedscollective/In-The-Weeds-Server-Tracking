@@ -1635,6 +1635,68 @@ async def get_full_hierarchy_rankings(year: int, quarter: str, tier_filter: Opti
     }
 
 
+@api_router.get("/v2/full-rankings/{year}/{quarter}/pdf")
+async def download_full_rankings_pdf(year: int, quarter: str):
+    """
+    Download Full Rankings as a PDF document.
+    
+    Includes all employees with hierarchy-based ranking and complete scoring breakdown:
+    - Position, Position Label (T1, Bar1, A1, B1, C1...)
+    - Employee Name, Tier
+    - Total Score, Total Bonus
+    - PPA (Base + Bonus), LBW (Base + Bonus), LSC (Base + Bonus), Glass (Base + Bonus)
+    - Customer Voice Score
+    """
+    # Get settings for tier thresholds
+    settings_doc = await db.quarter_settings.find_one(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    )
+    if not settings_doc:
+        raise HTTPException(status_code=404, detail=f"Settings not found for {quarter} {year}")
+    
+    settings = QuarterSettings(**settings_doc)
+    
+    # Get all employees
+    employees_docs = await db.employees_v2.find(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    ).to_list(5000)
+    
+    if not employees_docs:
+        raise HTTPException(status_code=404, detail=f"No employee data found for {quarter} {year}")
+    
+    # Convert to EmployeeV2 objects and generate rankings
+    employees = [EmployeeV2(**doc) for doc in employees_docs]
+    rankings = generate_hierarchy_rankings(employees, settings)
+    
+    # Add bonus details to rankings for PDF
+    emp_lookup = {emp.id: emp for emp in employees}
+    for r in rankings:
+        emp = emp_lookup.get(r["employee_id"])
+        if emp:
+            r["bonus_ppa"] = emp.bonus_ppa or 0
+            r["bonus_lbw"] = emp.bonus_lbw or 0
+            r["bonus_lsc"] = emp.bonus_lsc or 0
+            r["bonus_glass"] = emp.bonus_glass or 0
+            r["cv_score"] = emp.customer_voice_score or 0
+    
+    # Generate PDF
+    thresholds = {
+        "a_server_min": settings.a_server_min_score,
+        "b_server_min": settings.b_server_min_score
+    }
+    
+    pdf_bytes = build_full_rankings_pdf(rankings, quarter.upper(), year, thresholds)
+    
+    filename = f"full_rankings_{quarter}_{year}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
 @api_router.get("/v2/top-performers/{year}/{quarter}")
 async def get_top_performers_v2(year: int, quarter: str, limit: int = 10):
     """Get top performers for a quarter"""
