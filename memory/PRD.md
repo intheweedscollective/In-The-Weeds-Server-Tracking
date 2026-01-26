@@ -105,6 +105,16 @@ A deterministic, in-app scoring engine that replaces Excel-based logic:
 - ✅ Lint warnings fixed
 - ✅ Comprehensive test suite (21 backend tests, all passing)
 - ✅ Download CSV Template feature (helps users get correct column format)
+- ✅ **Phase 5: Q1 2026 Official Scoring Model**
+  - Customer Voice (NPS-style): Promoters +1, Passives 0, Detractors -2 (caps: +10/-6)
+  - Review Tracker: 5 mentions = +1 bonus (cap: +10)
+  - DAR penalties: Written Warning -3, Suspension -5 (hidden from rankings)
+  - New weights: PPA(25%), LSC(25%), LBW(20%), Glass(15%), CV(15%)
+- ✅ **Split Alcohol Sales Input**
+  - Template requires: Liquor Sales, Beer Sales, Wine Sales (separate columns)
+  - LBW Total auto-calculated: Liquor + Beer + Wine
+  - Old "LBW" column REJECTED with clear error message
+  - Missing alcohol values treated as zero
 
 ## Upcoming Tasks (P1)
 1. **Phase 5: Update PDF Review Generation** - Use V2 data model for reviews
