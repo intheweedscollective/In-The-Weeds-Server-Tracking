@@ -256,7 +256,7 @@ export default function TopPerformers() {
               </div>
               <div>
                 <h2 className="text-xl font-serif font-bold text-foreground">Top 10 Overall</h2>
-                <p className="text-sm text-gray-500">Highest performers by Cumulative Score</p>
+                <p className="text-sm text-gray-500">Highest performers by Total Score</p>
               </div>
             </div>
             
