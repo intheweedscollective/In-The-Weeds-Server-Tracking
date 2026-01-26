@@ -54,23 +54,23 @@ export default function YodeckSlides() {
     
     try {
       const url = page > 1 ? `${API}${endpoint}?page=${page}` : `${API}${endpoint}`;
-      const response = await axios.get(url, { responseType: 'blob' });
       
-      // Create download link
-      const blob = new Blob([response.data], { type: 'image/png' });
-      const downloadUrl = window.URL.createObjectURL(blob);
+      // Try direct download via window.open for better browser compatibility
       const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.setAttribute('download', `${slideId}_${selectedQuarter}_${selectedYear}${page > 1 ? `_p${page}` : ''}.png`);
+      link.href = url;
+      link.target = '_blank';
+      link.download = `${slideId}_${selectedQuarter}_${selectedYear}${page > 1 ? `_p${page}` : ''}.png`;
       document.body.appendChild(link);
       link.click();
-      link.remove();
-      window.URL.revokeObjectURL(downloadUrl);
+      document.body.removeChild(link);
       
-      toast.success("Slide downloaded!");
+      toast.success("Slide download started!");
     } catch (error) {
       console.error("Error downloading slide:", error);
-      toast.error("Failed to download slide");
+      // Fallback: open in new tab
+      const url = page > 1 ? `${API}${endpoint}?page=${page}` : `${API}${endpoint}`;
+      window.open(url, '_blank');
+      toast.info("Opening slide in new tab - right-click to save");
     } finally {
       setDownloading(prev => ({ ...prev, [key]: false }));
     }
