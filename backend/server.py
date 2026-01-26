@@ -1346,7 +1346,17 @@ async def upload_employees_v2(
                 name = str(row.get(mapping["name"], "")).strip()
                 guests = int(row.get(mapping["guests"], 0))
                 net_sales = float(row.get(mapping["net_sales"], 0))
-                lbw = float(row.get(mapping["lbw"], 0))
+                
+                # Individual alcohol sales (required) - LBW calculated automatically
+                liquor_val = row.get(mapping["liquor_sales"])
+                beer_val = row.get(mapping["beer_sales"])
+                wine_val = row.get(mapping["wine_sales"])
+                
+                # Treat missing/blank as zero
+                liquor_sales = float(liquor_val) if not pd.isna(liquor_val) else 0.0
+                beer_sales = float(beer_val) if not pd.isna(beer_val) else 0.0
+                wine_sales = float(wine_val) if not pd.isna(wine_val) else 0.0
+                
                 glassware_sales = float(row.get(mapping["glassware_sales"], 0))
                 lsc_count = int(row.get(mapping["lsc_count"], 0))
                 
