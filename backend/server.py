@@ -1160,6 +1160,23 @@ async def get_benchmark_suggestions(year: int, quarter: str):
 
 # === V2 EMPLOYEE UPLOAD ===
 
+@api_router.get("/v2/template")
+async def download_template():
+    """
+    Download a sample CSV template with correct column format for V2 upload.
+    """
+    template_content = """Employee Name,Guests,Net Sales,LBW,Glassware Sales,LSC Count
+John Smith,450,24750,4050,540,5
+Jane Doe,520,28600,4680,624,9
+Sample Employee,400,22000,3600,480,4"""
+    
+    return Response(
+        content=template_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=employee_template.csv"}
+    )
+
+
 @api_router.post("/v2/upload/validate")
 async def validate_upload_file(file: UploadFile = File(...)):
     """
