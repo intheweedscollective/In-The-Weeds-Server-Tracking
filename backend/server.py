@@ -1567,6 +1567,73 @@ async def get_rankings_v2(year: int, quarter: str):
     }
 
 
+@api_router.get("/v2/full-rankings/{year}/{quarter}")
+async def get_full_hierarchy_rankings(year: int, quarter: str, tier_filter: Optional[str] = None):
+    """
+    Get hierarchy-based rankings with settings-driven server tiering.
+    
+    HIERARCHY ORDER (fixed, not by raw score):
+    1. Trainers (sorted by score within tier)
+    2. Bartenders (sorted by score within tier)
+    3. A-Servers (score >= A-Server min threshold)
+    4. B-Servers (score >= B-Server min AND < A-Server min)
+    5. C-Servers (score < B-Server min)
+    
+    Position labels: T1, T2..., Bar1, Bar2..., A1, A2..., B1, B2..., C1, C2...
+    
+    Optional tier_filter: "Trainer", "Bartender", "A-Server", "B-Server", "C-Server"
+    """
+    # Get settings for tier thresholds
+    settings_doc = await db.quarter_settings.find_one(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    )
+    if not settings_doc:
+        raise HTTPException(status_code=404, detail=f"Settings not found for {quarter} {year}")
+    
+    settings = QuarterSettings(**settings_doc)
+    
+    # Get all employees
+    employees_docs = await db.employees_v2.find(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    ).to_list(5000)
+    
+    if not employees_docs:
+        return {
+            "quarter": quarter.upper(),
+            "year": year,
+            "total_employees": 0,
+            "tier_thresholds": {
+                "a_server_min": settings.a_server_min_score,
+                "b_server_min": settings.b_server_min_score
+            },
+            "rankings": []
+        }
+    
+    # Convert to EmployeeV2 objects
+    employees = [EmployeeV2(**doc) for doc in employees_docs]
+    
+    # Generate hierarchy-based rankings
+    rankings = generate_hierarchy_rankings(employees, settings)
+    
+    # Apply tier filter if provided
+    if tier_filter:
+        rankings = [r for r in rankings if r["tier_label"].lower() == tier_filter.lower()]
+    
+    return {
+        "quarter": quarter.upper(),
+        "year": year,
+        "total_employees": len(employees),
+        "filtered_count": len(rankings),
+        "tier_thresholds": {
+            "a_server_min": settings.a_server_min_score,
+            "b_server_min": settings.b_server_min_score
+        },
+        "rankings": rankings
+    }
+
+
 @api_router.get("/v2/top-performers/{year}/{quarter}")
 async def get_top_performers_v2(year: int, quarter: str, limit: int = 10):
     """Get top performers for a quarter"""
