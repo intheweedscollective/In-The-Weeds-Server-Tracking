@@ -324,16 +324,13 @@ def generate_tier_slide(
     theme: str = "dark_navy",
     custom_colors: Dict = None,
     custom_bg_image: str = None
-) -> bytes: 
-    year: int,
-    page: int = 1,
-    total_pages: int = 1
 ) -> bytes:
     """
     Generate a tier-specific slide (Trainers, Bartenders, A/B/C-Servers).
     Shows: Name, Total Score, optional metric indicators.
     """
-    img = create_gradient_background(SLIDE_WIDTH, SLIDE_HEIGHT)
+    colors = get_theme_colors(theme, custom_colors)
+    img = create_gradient_background(SLIDE_WIDTH, SLIDE_HEIGHT, colors, custom_bg_image)
     draw = ImageDraw.Draw(img)
     
     # Fonts
@@ -369,7 +366,7 @@ def generate_tier_slide(
         ((SLIDE_WIDTH - subtitle_width) // 2, 100),
         subtitle,
         font=font_subtitle,
-        fill=COLORS["text_muted"]
+        fill=colors["text_muted"]
     )
     
     # Divider
@@ -377,10 +374,10 @@ def generate_tier_slide(
     
     # Column headers
     header_y = 160
-    draw.text((100, header_y), "RANK", font=font_indicator, fill=COLORS["text_muted"])
-    draw.text((200, header_y), "NAME", font=font_indicator, fill=COLORS["text_muted"])
-    draw.text((SLIDE_WIDTH - 450, header_y), "PPA  LBW  LSC  GLS", font=font_indicator, fill=COLORS["text_muted"])
-    draw.text((SLIDE_WIDTH - 180, header_y), "SCORE", font=font_indicator, fill=COLORS["text_muted"])
+    draw.text((100, header_y), "RANK", font=font_indicator, fill=colors["text_muted"])
+    draw.text((200, header_y), "NAME", font=font_indicator, fill=colors["text_muted"])
+    draw.text((SLIDE_WIDTH - 450, header_y), "PPA  LBW  LSC  GLS", font=font_indicator, fill=colors["text_muted"])
+    draw.text((SLIDE_WIDTH - 180, header_y), "SCORE", font=font_indicator, fill=colors["text_muted"])
     
     # Employee rows
     start_y = 200
@@ -396,7 +393,7 @@ def generate_tier_slide(
         
         # Name
         name = emp.get("name", "Unknown")[:22]
-        draw.text((200, y + 14), name, font=font_name, fill=COLORS["text_white"])
+        draw.text((200, y + 14), name, font=font_name, fill=colors["text_white"])
         
         # Metric indicators (visual dots/bars, not numbers)
         indicator_x = SLIDE_WIDTH - 450
