@@ -1,12 +1,12 @@
-import { useState, useEffect } from "react";
-import { Trash2, Eye, FileText, Search, Filter, Users, X } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Trash2, Eye, FileText, Search, Filter, Users, X, Calendar } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import Navigation from "../components/Navigation";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { formatCurrency, formatLSCRatio, formatNumber, getPerformanceLevel, getBenchmarkStatus } from "../utils/formatters";
+import { formatCurrency, formatLSCRatio, formatNumber } from "../utils/formatters";
 import ConfirmDialog from "../components/ConfirmDialog";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -16,20 +16,21 @@ export default function EmployeeList() {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [positionFilter, setPositionFilter] = useState("all");
   const [performanceFilter, setPerformanceFilter] = useState("all");
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [employeeToDelete, setEmployeeToDelete] = useState(null);
+  
+  // V2 Quarter Selection
+  const [selectedYear, setSelectedYear] = useState(2026);
+  const [selectedQuarter, setSelectedQuarter] = useState("Q1");
 
-  useEffect(() => {
-    fetchEmployees();
-  }, []);
-
-  const fetchEmployees = async () => {
+  const fetchEmployees = useCallback(async () => {
+    setLoading(true);
     try {
-      const response = await axios.get(`${API}/employees`);
+      // Use V2 API with quarter selection
+      const response = await axios.get(`${API}/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`);
       setEmployees(response.data);
     } catch (error) {
       console.error("Error fetching employees:", error);
@@ -37,12 +38,16 @@ export default function EmployeeList() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedYear, selectedQuarter]);
+
+  useEffect(() => {
+    fetchEmployees();
+  }, [fetchEmployees]);
 
   const deleteEmployee = async () => {
     if (!employeeToDelete) return;
     try {
-      await axios.delete(`${API}/employees/${employeeToDelete}`);
+      await axios.delete(`${API}/v2/employees/${employeeToDelete}`);
       toast.success("Employee deleted successfully");
       fetchEmployees();
     } catch (error) {
@@ -54,7 +59,18 @@ export default function EmployeeList() {
     }
   };
 
-  const getPerformanceLevelLocal = (score) => {
+  // V2 Performance tier mapping
+  const getPerformanceLevelLocal = (tier, score) => {
+    if (tier) {
+      const tierMap = {
+        "Top Performer": { text: "Top Performer", class: "performance-excellent" },
+        "Above Average": { text: "Above Average", class: "performance-above-average" },
+        "Below Average": { text: "Below Average", class: "performance-satisfactory" },
+        "Needs Immediate Improvement": { text: "Needs Improvement", class: "performance-below" }
+      };
+      return tierMap[tier] || { text: tier, class: "performance-satisfactory" };
+    }
+    // Fallback for legacy data
     if (!score) return { text: "Not Assessed", class: "performance-below" };
     if (score >= 90) return { text: "Excellent", class: "performance-excellent" };
     if (score >= 80) return { text: "Above Average", class: "performance-above-average" };
@@ -64,17 +80,12 @@ export default function EmployeeList() {
   };
 
   const filteredEmployees = employees.filter(employee => {
-    const matchesSearch = employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         employee.position.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesPosition = positionFilter === "all" || 
-                           employee.position.toLowerCase().includes(positionFilter.toLowerCase());
-    const performance = getPerformanceLevelLocal(employee.cumulative_score);
+    const matchesSearch = employee.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const performance = getPerformanceLevelLocal(employee.performance_tier, employee.total_score || employee.cumulative_score);
     const matchesPerformance = performanceFilter === "all" || 
                               performance.text.toLowerCase().includes(performanceFilter.toLowerCase());
-    return matchesSearch && matchesPosition && matchesPerformance;
+    return matchesSearch && matchesPerformance;
   });
-
-  const positions = [...new Set(employees.map(emp => emp.position))];
 
   if (loading) {
     return (
