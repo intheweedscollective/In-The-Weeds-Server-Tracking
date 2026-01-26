@@ -136,12 +136,15 @@ export default function Analytics() {
         .filter(val => val != null && !isNaN(val));
       
       if (validValues.length === 0) {
-        analyticsData[metric] = { high: 0, medium: 0, low: 0, benchmark: 0, average: 0, total: 0 };
+        analyticsData[metric] = { high: 0, medium: 0, low: 0, benchmark: 0, average: 0, total: 0, min: 0, max: 0 };
         return;
       }
 
-      const benchmark = config.benchmark;
+      // Get benchmark from quarter settings or use default
+      const benchmark = getBenchmark(metric, quarterSettings);
       const average = validValues.reduce((sum, val) => sum + val, 0) / validValues.length;
+      const min = Math.min(...validValues);
+      const max = Math.max(...validValues);
 
       let highThreshold, lowThreshold;
       let high = 0, medium = 0, low = 0, aboveBenchmark = 0;
@@ -180,6 +183,9 @@ export default function Analytics() {
         highThreshold,
         lowThreshold,
         benchmarkValue: benchmark,
+        min,
+        max,
+        values: validValues,
       };
     });
 
