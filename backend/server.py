@@ -955,6 +955,9 @@ class QuarterSettingsCreate(BaseModel):
     weight_cv: float = 0.15         # Q1 2026: 15% (Customer Voice & Review Tracker)
     bonus_rate: float = 0.2
     bonus_cap: float = 5.0
+    # Server tier thresholds (Settings-driven)
+    a_server_min_score: float = 85.1
+    b_server_min_score: float = 70.1
 
 
 class QuarterSettingsUpdate(BaseModel):
@@ -970,6 +973,9 @@ class QuarterSettingsUpdate(BaseModel):
     weight_cv: Optional[float] = None
     bonus_rate: Optional[float] = None
     bonus_cap: Optional[float] = None
+    # Server tier thresholds
+    a_server_min_score: Optional[float] = None
+    b_server_min_score: Optional[float] = None
 
 
 # === DAR (Disciplinary Action Reports) Management ===
