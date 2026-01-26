@@ -229,14 +229,21 @@ export default function EmployeeList() {
             <h3 className="text-lg font-serif font-bold mb-2">No crew members found</h3>
             <p className="text-gray-500">
               {employees.length === 0 
-                ? "Upload an Excel file to get started" 
+                ? `No data for ${selectedQuarter} ${selectedYear}. Upload a file on the Dashboard.` 
                 : "Try adjusting your search or filters"}
             </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6" data-testid="employee-grid">
             {filteredEmployees.map((employee) => {
-              const performance = getPerformanceLevelLocal(employee.cumulative_score);
+              const performance = getPerformanceLevelLocal(employee.performance_tier, employee.total_score || employee.pre_dar_score);
+              // Use V2 fields with fallbacks to V1
+              const score = employee.pre_dar_score || employee.total_score || employee.cumulative_score || 0;
+              const ppa = employee.ppa || 0;
+              const lbwPerGuest = employee.lbw_per_guest || employee.pplbw || 0;
+              const glassPerGuest = employee.glassware_per_guest || employee.gpg || 0;
+              const guestsPerLsc = employee.guests_per_lsc;
+              const cvScore = employee.cv_score || 0;
               
               return (
                 <div key={employee.id} className="bubba-card" data-testid={`employee-card-${employee.id}`}>
@@ -247,8 +254,8 @@ export default function EmployeeList() {
                         <h3 className="text-lg font-serif font-bold text-foreground" data-testid={`employee-name-${employee.id}`}>
                           {employee.name}
                         </h3>
-                        <p className="text-gray-500 text-sm" data-testid={`employee-position-${employee.id}`}>
-                          {employee.position}
+                        <p className="text-gray-500 text-sm" data-testid={`employee-rank-${employee.id}`}>
+                          Rank: #{employee.peer_rank || '-'} of {employees.length}
                         </p>
                       </div>
                       <span className={`performance-badge ${performance.class}`} data-testid={`employee-performance-${employee.id}`}>
@@ -256,31 +263,31 @@ export default function EmployeeList() {
                       </span>
                     </div>
                     
-                    {/* All 6 Metrics Grid */}
+                    {/* All 6 Metrics Grid - V2 Fields */}
                     <div className="grid grid-cols-3 gap-2 mb-4">
                       <div className="text-center p-2 bg-red-50 rounded-lg border border-red-100">
-                        <div className="text-lg font-serif font-bold text-primary">{formatNumber(employee.cumulative_score)}</div>
+                        <div className="text-lg font-serif font-bold text-primary">{formatNumber(score)}</div>
                         <div className="text-[10px] text-gray-500 font-semibold uppercase">Score</div>
                       </div>
                       <div className="text-center p-2 bg-blue-50 rounded-lg border border-blue-100">
-                        <div className="text-sm font-serif font-bold text-secondary">{formatCurrency(employee.ppa)}</div>
+                        <div className="text-sm font-serif font-bold text-secondary">{formatCurrency(ppa)}</div>
                         <div className="text-[10px] text-gray-500 font-semibold uppercase">PPA</div>
                       </div>
-                      <div className="text-center p-2 bg-gray-50 rounded-lg border border-gray-200">
-                        <div className="text-sm font-serif font-bold text-gray-700">{formatCurrency(employee.gpg)}</div>
-                        <div className="text-[10px] text-gray-500 font-semibold uppercase">GPG</div>
-                      </div>
                       <div className="text-center p-2 bg-purple-50 rounded-lg border border-purple-100">
-                        <div className="text-sm font-serif font-bold text-purple-700">{formatCurrency(employee.pplbw)}</div>
-                        <div className="text-[10px] text-gray-500 font-semibold uppercase">PPLBW</div>
+                        <div className="text-sm font-serif font-bold text-purple-700">{formatCurrency(lbwPerGuest)}</div>
+                        <div className="text-[10px] text-gray-500 font-semibold uppercase">LBW/G</div>
+                      </div>
+                      <div className="text-center p-2 bg-gray-50 rounded-lg border border-gray-200">
+                        <div className="text-sm font-serif font-bold text-gray-700">{formatCurrency(glassPerGuest)}</div>
+                        <div className="text-[10px] text-gray-500 font-semibold uppercase">Glass/G</div>
                       </div>
                       <div className="text-center p-2 bg-green-50 rounded-lg border border-green-100">
-                        <div className="text-sm font-serif font-bold text-green-700">{formatLSCRatio(employee.lsc_ratio)}</div>
-                        <div className="text-[10px] text-gray-500 font-semibold uppercase">LSC</div>
+                        <div className="text-sm font-serif font-bold text-green-700">{guestsPerLsc ? formatNumber(guestsPerLsc) : 'N/A'}</div>
+                        <div className="text-[10px] text-gray-500 font-semibold uppercase">G/LSC</div>
                       </div>
                       <div className="text-center p-2 bg-yellow-50 rounded-lg border border-yellow-100">
-                        <div className="text-sm font-serif font-bold text-yellow-700">{formatNumber(employee.metric_bonus_points)}</div>
-                        <div className="text-[10px] text-gray-500 font-semibold uppercase">Bonus</div>
+                        <div className="text-sm font-serif font-bold text-yellow-700">{cvScore > 0 ? '+' : ''}{formatNumber(cvScore)}</div>
+                        <div className="text-[10px] text-gray-500 font-semibold uppercase">CV</div>
                       </div>
                     </div>
                     
