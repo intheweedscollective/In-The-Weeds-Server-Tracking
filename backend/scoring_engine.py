@@ -174,7 +174,13 @@ CANONICAL_COLUMN_MAPPING = {
     "name": ["employee name", "name", "server", "employee", "team member"],
     "guests": ["guests", "guest count", "covers", "total guests"],
     "net_sales": ["net sales", "sales", "total sales", "net", "netsales"],
-    "lbw": ["lbw", "lbw sales", "alcohol", "alcohol sales", "liquor beer wine", "liquor+beer+wine"],
+    
+    # Alcohol Sales (individual inputs - LBW calculated from these)
+    "liquor_sales": ["liquor sales", "liquor", "spirits", "spirits sales"],
+    "beer_sales": ["beer sales", "beer"],
+    "wine_sales": ["wine sales", "wine"],
+    
+    # Other core metrics
     "glassware_sales": ["glassware sales", "glassware", "souvenir glass", "glass sales"],
     "lsc_count": ["lsc count", "lsc", "loyalty", "loyalty sign ups", "enrollments", "memberships"],
     
@@ -198,6 +204,9 @@ REJECTED_COLUMNS = [
     "pplbw", "lbw per guest", "alcohol per guest",
     "gpg", "glass per guest", "glassware per guest",
     "guests per lsc",
+    # LBW total is now REJECTED - must be calculated from Liquor + Beer + Wine
+    "lbw", "lbw sales", "lbw total", "total lbw", "alcohol", "alcohol sales", 
+    "liquor beer wine", "liquor+beer+wine", "total alcohol",
 ]
 
 
