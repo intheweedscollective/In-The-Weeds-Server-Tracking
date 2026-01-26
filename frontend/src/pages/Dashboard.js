@@ -368,6 +368,18 @@ export default function Dashboard() {
                   </div>
                 )}
               </div>
+
+              {/* Download Template Button */}
+              <div className="mt-4 text-center">
+                <button
+                  onClick={downloadTemplate}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-secondary hover:text-primary transition-colors"
+                  data-testid="download-template-btn"
+                >
+                  <Download className="w-4 h-4" />
+                  Download CSV Template
+                </button>
+              </div>
             </div>
           </div>
 
