@@ -2,13 +2,14 @@
 Yodeck Slide Generator
 Generates 16:9 (1920x1080) PNG slides for digital signage.
 Vegas Strip professional - clean, branded, high-contrast.
-Supports per-quarter theme customization.
+Supports per-quarter theme customization and seasonal themes.
 """
 import io
 from typing import List, Dict, Any, Tuple, Optional
 from PIL import Image, ImageDraw, ImageFont
-from datetime import datetime
+from datetime import datetime, date
 import base64
+import math
 
 # ============================================================================
 # DESIGN CONSTANTS (Vegas Strip Professional)
@@ -68,6 +69,169 @@ THEMES = {
         "bronze": "#FB923C",
     },
 }
+
+# ============================================================================
+# SEASONAL/HOLIDAY THEMES
+# ============================================================================
+
+SEASONAL_THEMES = {
+    "valentines": {
+        "name": "Valentine's Day",
+        "background": "#4A0D2A",
+        "background_gradient": "#2D0519",
+        "primary": "#FF6B9D",
+        "secondary": "#FF1493",
+        "text_white": "#FFFFFF",
+        "text_light": "#FFE4EC",
+        "text_muted": "#FFB6C1",
+        "gold": "#FFD700",
+        "silver": "#FFC0CB",
+        "bronze": "#FF69B4",
+        "emoji": "💕",
+        "decorations": ["heart"],
+    },
+    "st_patricks": {
+        "name": "St. Patrick's Day",
+        "background": "#0D3B0D",
+        "background_gradient": "#051F05",
+        "primary": "#00FF7F",
+        "secondary": "#32CD32",
+        "text_white": "#FFFFFF",
+        "text_light": "#E8F5E9",
+        "text_muted": "#A5D6A7",
+        "gold": "#FFD700",
+        "silver": "#98FB98",
+        "bronze": "#228B22",
+        "emoji": "🍀",
+        "decorations": ["shamrock"],
+    },
+    "easter": {
+        "name": "Easter",
+        "background": "#E8E4F0",
+        "background_gradient": "#D4C8E8",
+        "primary": "#9C27B0",
+        "secondary": "#FF9800",
+        "text_white": "#4A148C",
+        "text_light": "#6A1B9A",
+        "text_muted": "#7B1FA2",
+        "gold": "#FFD54F",
+        "silver": "#CE93D8",
+        "bronze": "#FF7043",
+        "emoji": "🐣",
+        "decorations": ["egg"],
+    },
+    "july_4th": {
+        "name": "4th of July",
+        "background": "#0A1628",
+        "background_gradient": "#1A237E",
+        "primary": "#F44336",
+        "secondary": "#2196F3",
+        "text_white": "#FFFFFF",
+        "text_light": "#E3F2FD",
+        "text_muted": "#BBDEFB",
+        "gold": "#FFD700",
+        "silver": "#E0E0E0",
+        "bronze": "#FF5722",
+        "emoji": "🇺🇸",
+        "decorations": ["star", "firework"],
+    },
+    "halloween": {
+        "name": "Halloween",
+        "background": "#1A0A00",
+        "background_gradient": "#0D0500",
+        "primary": "#FF6600",
+        "secondary": "#9C27B0",
+        "text_white": "#FFFFFF",
+        "text_light": "#FFE0B2",
+        "text_muted": "#FFCC80",
+        "gold": "#FFD700",
+        "silver": "#E0E0E0",
+        "bronze": "#FF9800",
+        "emoji": "🎃",
+        "decorations": ["pumpkin", "bat"],
+    },
+    "thanksgiving": {
+        "name": "Thanksgiving",
+        "background": "#3E2723",
+        "background_gradient": "#1B0F0A",
+        "primary": "#FF8F00",
+        "secondary": "#8D6E63",
+        "text_white": "#FFFFFF",
+        "text_light": "#FFF3E0",
+        "text_muted": "#FFE0B2",
+        "gold": "#FFD700",
+        "silver": "#BCAAA4",
+        "bronze": "#A1887F",
+        "emoji": "🦃",
+        "decorations": ["leaf"],
+    },
+    "christmas": {
+        "name": "Christmas",
+        "background": "#0D2818",
+        "background_gradient": "#051208",
+        "primary": "#FF0000",
+        "secondary": "#228B22",
+        "text_white": "#FFFFFF",
+        "text_light": "#E8F5E9",
+        "text_muted": "#C8E6C9",
+        "gold": "#FFD700",
+        "silver": "#C0C0C0",
+        "bronze": "#CD7F32",
+        "emoji": "🎄",
+        "decorations": ["snowflake", "tree"],
+    },
+    "new_year": {
+        "name": "New Year",
+        "background": "#0A0A1A",
+        "background_gradient": "#000005",
+        "primary": "#FFD700",
+        "secondary": "#C0C0C0",
+        "text_white": "#FFFFFF",
+        "text_light": "#FFF9C4",
+        "text_muted": "#FFF59D",
+        "gold": "#FFD700",
+        "silver": "#E0E0E0",
+        "bronze": "#FF8F00",
+        "emoji": "🎆",
+        "decorations": ["firework", "confetti"],
+    },
+}
+
+# Holiday date ranges (month, start_day, end_day)
+HOLIDAY_DATES = {
+    "new_year": [(1, 1, 7)],  # Jan 1-7
+    "valentines": [(2, 7, 14)],  # Feb 7-14
+    "st_patricks": [(3, 10, 17)],  # Mar 10-17
+    "easter": [(3, 25, 31), (4, 1, 21)],  # Late March to mid-April (approximate)
+    "july_4th": [(6, 28, 30), (7, 1, 7)],  # Jun 28 - Jul 7
+    "halloween": [(10, 24, 31)],  # Oct 24-31
+    "thanksgiving": [(11, 18, 28)],  # Nov 18-28 (4th Thursday varies)
+    "christmas": [(12, 15, 31)],  # Dec 15-31
+}
+
+
+def get_current_seasonal_theme() -> Optional[str]:
+    """
+    Auto-detect current seasonal theme based on today's date.
+    Returns the theme key or None if no holiday is active.
+    """
+    today = date.today()
+    month = today.month
+    day = today.day
+    
+    for theme_key, date_ranges in HOLIDAY_DATES.items():
+        for (m, start_day, end_day) in date_ranges:
+            if month == m and start_day <= day <= end_day:
+                return theme_key
+    
+    return None
+
+
+def get_seasonal_theme_colors(theme_key: str) -> Optional[Dict]:
+    """Get colors for a seasonal theme."""
+    if theme_key in SEASONAL_THEMES:
+        return SEASONAL_THEMES[theme_key]
+    return None
 
 # Default colors (dark_navy)
 COLORS = THEMES["dark_navy"]
