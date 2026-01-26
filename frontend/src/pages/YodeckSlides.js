@@ -140,17 +140,50 @@ export default function YodeckSlides() {
   const downloadAllSlides = async () => {
     if (!slideManifest) return;
     
-    toast.info("Opening all slides for download...");
+    toast.info("Downloading all slides...");
+    let successCount = 0;
+    let failCount = 0;
     
     for (const slide of slideManifest.slides) {
       for (let page = 1; page <= slide.pages; page++) {
-        const url = page > 1 ? `${API}${slide.endpoint}?page=${page}` : `${API}${slide.endpoint}`;
-        window.open(url, '_blank');
-        await new Promise(resolve => setTimeout(resolve, 800));
+        try {
+          const url = page > 1 ? `${API}${slide.endpoint}?page=${page}` : `${API}${slide.endpoint}`;
+          const response = await fetch(url, {
+            method: 'GET',
+            headers: { 'Accept': 'image/png' }
+          });
+          
+          if (!response.ok) throw new Error('Failed to fetch');
+          
+          const blob = await response.blob();
+          const objectUrl = URL.createObjectURL(blob);
+          
+          const link = document.createElement('a');
+          link.href = objectUrl;
+          link.download = `${slide.id}_${selectedQuarter}_${selectedYear}${page > 1 ? `_p${page}` : ''}.png`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          setTimeout(() => URL.revokeObjectURL(objectUrl), 500);
+          successCount++;
+          
+          // Small delay between downloads to prevent browser issues
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch {
+          failCount++;
+          // Fallback: open in new tab
+          const url = page > 1 ? `${API}${slide.endpoint}?page=${page}` : `${API}${slide.endpoint}`;
+          window.open(url, '_blank');
+        }
       }
     }
     
-    toast.success("All slides opened - save each from browser!");
+    if (failCount === 0) {
+      toast.success(`Downloaded all ${successCount} slides!`);
+    } else {
+      toast.info(`Downloaded ${successCount} slides. ${failCount} opened in new tabs - save manually.`);
+    }
   };
 
   const saveThemeSettings = async () => {
