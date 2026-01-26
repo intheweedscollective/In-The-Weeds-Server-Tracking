@@ -1275,6 +1275,8 @@ class QuarterSettingsUpdate(BaseModel):
     slide_accent_color: Optional[str] = None
     slide_secondary_color: Optional[str] = None
     slide_custom_bg_image: Optional[str] = None
+    # Seasonal theme setting
+    slide_seasonal_theme: Optional[str] = None
 
 
 # === DAR (Disciplinary Action Reports) Management ===
