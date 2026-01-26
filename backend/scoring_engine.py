@@ -517,32 +517,55 @@ def calculate_performance_tiers(employees: List[EmployeeV2]) -> List[EmployeeV2]
 
 def run_full_scoring(employees: List[EmployeeV2], settings: QuarterSettings) -> List[EmployeeV2]:
     """
-    Run the complete scoring pipeline on a list of employees.
+    Run the complete Q1 2026 scoring pipeline on a list of employees.
     Returns employees with all scores, bonuses, ranks, and tiers calculated.
+    
+    Pipeline:
+    1. Derived metrics (PPA, LBW/G, Glass/G, G/LSC)
+    2. Customer Voice score (NPS-style)
+    3. Review Tracker bonus
+    4. Normalized scores (benchmark-relative)
+    5. Metric bonus points (exceeding benchmarks)
+    6. DAR penalties (applied last, hidden from rankings)
+    7. Total scores
+    8. Rankings (based on pre-DAR score)
+    9. Performance tiers
     """
     # Step 1: Calculate derived metrics
     for emp in employees:
         calculate_derived_metrics(emp)
     
-    # Step 2: Calculate normalized scores
+    # Step 2: Calculate Customer Voice score
+    for emp in employees:
+        calculate_customer_voice_score(emp)
+    
+    # Step 3: Calculate Review Tracker bonus
+    for emp in employees:
+        calculate_review_tracker_bonus(emp)
+    
+    # Step 4: Calculate normalized scores (including CV)
     for emp in employees:
         calculate_normalized_scores(emp, settings)
     
-    # Step 3: Calculate bonus points
+    # Step 5: Calculate metric bonus points
     for emp in employees:
         calculate_bonus_points(emp, settings)
     
-    # Step 4: Calculate total scores
+    # Step 6: Calculate DAR penalties
+    for emp in employees:
+        calculate_dar_penalty(emp)
+    
+    # Step 7: Calculate total scores
     for emp in employees:
         calculate_total_score(emp, settings)
     
-    # Step 5: Calculate rankings
+    # Step 8: Calculate rankings (based on pre_dar_score)
     employees = calculate_rankings(employees)
     
-    # Step 6: Assign performance tiers
+    # Step 9: Assign performance tiers
     employees = calculate_performance_tiers(employees)
     
-    # Step 7: Attach quarter/year and settings reference
+    # Step 10: Attach quarter/year and settings reference
     for emp in employees:
         emp.quarter = settings.quarter
         emp.year = settings.year
