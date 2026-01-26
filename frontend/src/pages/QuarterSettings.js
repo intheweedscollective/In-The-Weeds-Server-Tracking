@@ -1,10 +1,19 @@
 import { useState, useEffect } from "react";
-import { Settings, Lock, Unlock, Save, RefreshCw, AlertTriangle } from "lucide-react";
+import { Settings, Lock, Unlock, Save, RefreshCw, AlertTriangle, Palette } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import Navigation from "../components/Navigation";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
+
+// Pre-built theme options for Yodeck slides
+const SLIDE_THEMES = {
+  dark_navy: { name: "Dark Navy", bg: "#0A1628", gradient: "#132238", text: "#FFFFFF", accent: "#D12E2E", secondary: "#005B96" },
+  light_corporate: { name: "Light Corporate", bg: "#F8FAFC", gradient: "#E2E8F0", text: "#1E293B", accent: "#D12E2E", secondary: "#005B96" },
+  bubba_red: { name: "Bubba Red", bg: "#7F1D1D", gradient: "#450A0A", text: "#FFFFFF", accent: "#FEF2F2", secondary: "#FCA5A5" },
+  ocean_blue: { name: "Ocean Blue", bg: "#0C4A6E", gradient: "#082F49", text: "#FFFFFF", accent: "#F0F9FF", secondary: "#38BDF8" },
+  custom: { name: "Custom", bg: "#0A1628", gradient: "#132238", text: "#FFFFFF", accent: "#D12E2E", secondary: "#005B96" }
+};
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
