@@ -1202,6 +1202,8 @@ async def validate_upload_file(file: UploadFile = File(...)):
     """
     Validate an upload file without importing.
     Returns column mapping and validation results.
+    
+    NOTE: LBW is calculated from Liquor + Beer + Wine columns.
     """
     if not file.filename.endswith(('.xlsx', '.xls', '.csv')):
         raise HTTPException(status_code=400, detail="Only Excel (.xlsx, .xls) or CSV files allowed")
@@ -1232,17 +1234,33 @@ async def validate_upload_file(file: UploadFile = File(...)):
         mapping = column_validation["mapping"]
         rows = []
         for _, row in df.iterrows():
+            # Get individual alcohol values (treat missing as 0)
+            liquor_val = row.get(mapping.get("liquor_sales", "")) if mapping.get("liquor_sales") else 0
+            beer_val = row.get(mapping.get("beer_sales", "")) if mapping.get("beer_sales") else 0
+            wine_val = row.get(mapping.get("wine_sales", "")) if mapping.get("wine_sales") else 0
+            
+            # Calculate LBW from individual columns
+            try:
+                liquor = float(liquor_val) if not pd.isna(liquor_val) else 0.0
+                beer = float(beer_val) if not pd.isna(beer_val) else 0.0
+                wine = float(wine_val) if not pd.isna(wine_val) else 0.0
+                calculated_lbw = liquor + beer + wine
+            except (ValueError, TypeError):
+                calculated_lbw = 0.0
+            
             row_data = {
                 "name": row.get(mapping.get("name", "")) if mapping.get("name") else None,
                 "guests": row.get(mapping.get("guests", "")) if mapping.get("guests") else None,
                 "net_sales": row.get(mapping.get("net_sales", "")) if mapping.get("net_sales") else None,
-                "lbw": row.get(mapping.get("lbw", "")) if mapping.get("lbw") else None,
+                "lbw": calculated_lbw,  # Auto-calculated from Liquor + Beer + Wine
                 "glassware_sales": row.get(mapping.get("glassware_sales", "")) if mapping.get("glassware_sales") else None,
                 "lsc_count": row.get(mapping.get("lsc_count", "")) if mapping.get("lsc_count") else None,
             }
             
             # Clean values
             for key in row_data:
+                if key == "lbw":
+                    continue  # Already calculated
                 if pd.isna(row_data[key]):
                     row_data[key] = None
                 elif key == "guests" or key == "lsc_count":
@@ -1250,7 +1268,7 @@ async def validate_upload_file(file: UploadFile = File(...)):
                         row_data[key] = int(row_data[key])
                     except (ValueError, TypeError):
                         row_data[key] = None
-                elif key in ["net_sales", "lbw", "glassware_sales"]:
+                elif key in ["net_sales", "glassware_sales"]:
                     try:
                         row_data[key] = float(row_data[key])
                     except (ValueError, TypeError):
