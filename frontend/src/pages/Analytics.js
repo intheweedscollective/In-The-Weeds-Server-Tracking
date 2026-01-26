@@ -343,11 +343,10 @@ export default function Analytics() {
               <div key={metricKey} className="bubba-card">
                 <div className="p-5">
                   <h3 className="text-lg font-serif font-bold text-foreground mb-1">
-                    {metricInfo.name}
+                    {metricInfo.label}
                   </h3>
                   <p className="text-sm text-gray-500 mb-4">
-                    Benchmark: {metricInfo.format === 'currency' ? '$' + metricInfo.benchmark : 
-                              metricKey === 'lsc_ratio' ? '1 in 100' : metricInfo.benchmark}
+                    Benchmark: {metricInfo.format === 'currency' ? '$' + metricInfo.benchmark : metricInfo.benchmark}
                   </p>
                 
                   <div className="space-y-4">
