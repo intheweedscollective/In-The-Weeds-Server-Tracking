@@ -2,11 +2,13 @@
 Yodeck Slide Generator
 Generates 16:9 (1920x1080) PNG slides for digital signage.
 Vegas Strip professional - clean, branded, high-contrast.
+Supports per-quarter theme customization.
 """
 import io
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 from PIL import Image, ImageDraw, ImageFont
 from datetime import datetime
+import base64
 
 # ============================================================================
 # DESIGN CONSTANTS (Vegas Strip Professional)
@@ -15,34 +17,78 @@ from datetime import datetime
 SLIDE_WIDTH = 1920
 SLIDE_HEIGHT = 1080
 
-# Colors - Dark navy corporate theme
-COLORS = {
-    "background": "#0A1628",        # Dark navy
-    "background_gradient": "#132238",  # Slightly lighter navy
-    "primary": "#D12E2E",           # Bubba Gump red
-    "secondary": "#005B96",         # Blue accent
-    "text_white": "#FFFFFF",
-    "text_light": "#E5E7EB",
-    "text_muted": "#9CA3AF",
-    "gold": "#FFD700",              # For top performers
-    "silver": "#C0C0C0",
-    "bronze": "#CD7F32",
-    # Tier colors
-    "tier_trainer": "#9333EA",      # Purple
-    "tier_bartender": "#2563EB",    # Blue
-    "tier_a": "#16A34A",            # Green
-    "tier_b": "#CA8A04",            # Yellow/Gold
-    "tier_c": "#DC2626",            # Red
+# Pre-built themes
+THEMES = {
+    "dark_navy": {
+        "background": "#0A1628",
+        "background_gradient": "#132238",
+        "primary": "#D12E2E",
+        "secondary": "#005B96",
+        "text_white": "#FFFFFF",
+        "text_light": "#E5E7EB",
+        "text_muted": "#9CA3AF",
+        "gold": "#FFD700",
+        "silver": "#C0C0C0",
+        "bronze": "#CD7F32",
+    },
+    "light_corporate": {
+        "background": "#F8FAFC",
+        "background_gradient": "#E2E8F0",
+        "primary": "#D12E2E",
+        "secondary": "#005B96",
+        "text_white": "#1E293B",
+        "text_light": "#334155",
+        "text_muted": "#64748B",
+        "gold": "#D97706",
+        "silver": "#6B7280",
+        "bronze": "#92400E",
+    },
+    "bubba_red": {
+        "background": "#7F1D1D",
+        "background_gradient": "#450A0A",
+        "primary": "#FEF2F2",
+        "secondary": "#FCA5A5",
+        "text_white": "#FFFFFF",
+        "text_light": "#FEE2E2",
+        "text_muted": "#FECACA",
+        "gold": "#FFD700",
+        "silver": "#E5E7EB",
+        "bronze": "#F59E0B",
+    },
+    "ocean_blue": {
+        "background": "#0C4A6E",
+        "background_gradient": "#082F49",
+        "primary": "#F0F9FF",
+        "secondary": "#38BDF8",
+        "text_white": "#FFFFFF",
+        "text_light": "#E0F2FE",
+        "text_muted": "#BAE6FD",
+        "gold": "#FCD34D",
+        "silver": "#E5E7EB",
+        "bronze": "#FB923C",
+    },
 }
+
+# Default colors (dark_navy)
+COLORS = THEMES["dark_navy"]
 
 # Tier configuration
 TIER_CONFIG = {
-    "Trainer": {"color": COLORS["tier_trainer"], "short": "T"},
-    "Bartender": {"color": COLORS["tier_bartender"], "short": "BAR"},
-    "A-Server": {"color": COLORS["tier_a"], "short": "A"},
-    "B-Server": {"color": COLORS["tier_b"], "short": "B"},
-    "C-Server": {"color": COLORS["tier_c"], "short": "C"},
+    "Trainer": {"color": "#9333EA", "short": "T"},
+    "Bartender": {"color": "#2563EB", "short": "BAR"},
+    "A-Server": {"color": "#16A34A", "short": "A"},
+    "B-Server": {"color": "#CA8A04", "short": "B"},
+    "C-Server": {"color": "#DC2626", "short": "C"},
 }
+
+
+def get_theme_colors(theme_name: str = "dark_navy", custom_colors: Dict = None) -> Dict:
+    """Get colors for a theme, with optional custom overrides."""
+    if theme_name == "custom" and custom_colors:
+        base = THEMES["dark_navy"].copy()
+        base.update(custom_colors)
+        return base
+    return THEMES.get(theme_name, THEMES["dark_navy"])
 
 
 def hex_to_rgb(hex_color: str) -> Tuple[int, int, int]:
