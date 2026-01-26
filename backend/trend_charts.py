@@ -93,8 +93,8 @@ def generate_employee_comparison_chart(
         previous_values.append(prev_val)
     
     # Create bars
-    bars1 = ax.bar(x - width/2, previous_values, width, label=f'{prev_quarter} {prev_year}', 
-                   color=COLORS['previous'], edgecolor='white', linewidth=1)
+    ax.bar(x - width/2, previous_values, width, label=f'{prev_quarter} {prev_year}', 
+           color=COLORS['previous'], edgecolor='white', linewidth=1)
     bars2 = ax.bar(x + width/2, current_values, width, label=f'{current_quarter} {current_year}', 
                    color=COLORS['current'], edgecolor='white', linewidth=1)
     
