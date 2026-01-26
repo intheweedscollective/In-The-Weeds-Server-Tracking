@@ -402,22 +402,22 @@ def generate_tier_slide(
         
         # PPA indicator
         ppa_earned = emp.get("ppa_points", {}).get("earned", 0)
-        ppa_color = COLORS["tier_a"] if ppa_earned >= 22 else COLORS["tier_b"] if ppa_earned >= 18 else COLORS["tier_c"]
+        ppa_color = TIER_CONFIG["A-Server"]["color"] if ppa_earned >= 22 else TIER_CONFIG["B-Server"]["color"] if ppa_earned >= 18 else TIER_CONFIG["C-Server"]["color"]
         draw.ellipse((indicator_x, indicator_y, indicator_x + 20, indicator_y + 20), fill=ppa_color)
         
         # LBW indicator
         lbw_earned = emp.get("lbw_points", {}).get("earned", 0)
-        lbw_color = COLORS["tier_a"] if lbw_earned >= 18 else COLORS["tier_b"] if lbw_earned >= 14 else COLORS["tier_c"]
+        lbw_color = TIER_CONFIG["A-Server"]["color"] if lbw_earned >= 18 else TIER_CONFIG["B-Server"]["color"] if lbw_earned >= 14 else TIER_CONFIG["C-Server"]["color"]
         draw.ellipse((indicator_x + indicator_spacing, indicator_y, indicator_x + indicator_spacing + 20, indicator_y + 20), fill=lbw_color)
         
         # LSC indicator
         lsc_earned = emp.get("lsc_points", {}).get("earned", 0)
-        lsc_color = COLORS["tier_a"] if lsc_earned >= 20 else COLORS["tier_b"] if lsc_earned >= 15 else COLORS["tier_c"]
+        lsc_color = TIER_CONFIG["A-Server"]["color"] if lsc_earned >= 20 else TIER_CONFIG["B-Server"]["color"] if lsc_earned >= 15 else TIER_CONFIG["C-Server"]["color"]
         draw.ellipse((indicator_x + indicator_spacing * 2, indicator_y, indicator_x + indicator_spacing * 2 + 20, indicator_y + 20), fill=lsc_color)
         
         # Glass indicator
         glass_earned = emp.get("glassware_points", {}).get("earned", 0)
-        glass_color = COLORS["tier_a"] if glass_earned >= 14 else COLORS["tier_b"] if glass_earned >= 10 else COLORS["tier_c"]
+        glass_color = TIER_CONFIG["A-Server"]["color"] if glass_earned >= 14 else TIER_CONFIG["B-Server"]["color"] if glass_earned >= 10 else TIER_CONFIG["C-Server"]["color"]
         draw.ellipse((indicator_x + indicator_spacing * 3, indicator_y, indicator_x + indicator_spacing * 3 + 20, indicator_y + 20), fill=glass_color)
         
         # Total Score
@@ -429,14 +429,14 @@ def generate_tier_slide(
             (SLIDE_WIDTH - 120 - score_width, y + 10),
             score_text,
             font=font_score,
-            fill=COLORS["text_white"]
+            fill=colors["text_white"]
         )
         
         # Row divider
         if idx < len(employees) - 1 and idx < max_per_page - 1:
             draw.line(
                 [(100, y + row_height - 5), (SLIDE_WIDTH - 100, y + row_height - 5)],
-                fill=hex_to_rgb(COLORS["background_gradient"]),
+                fill=hex_to_rgb(colors["background_gradient"]),
                 width=1
             )
     
@@ -448,10 +448,304 @@ def generate_tier_slide(
         ((SLIDE_WIDTH - footer_width) // 2, SLIDE_HEIGHT - 45),
         footer_text,
         font=font_footer,
-        fill=COLORS["text_muted"]
+        fill=colors["text_muted"]
     )
     
     # Save to bytes
+    buffer = io.BytesIO()
+    img.save(buffer, format='PNG', optimize=True)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+# ============================================================================
+# SPECIAL SLIDES (Most Improved, Promotion Watchlist, At Risk)
+# ============================================================================
+
+def generate_most_improved_slide(
+    current_rankings: List[Dict[str, Any]],
+    previous_rankings: List[Dict[str, Any]],
+    quarter: str,
+    year: int,
+    theme: str = "dark_navy",
+    custom_colors: Dict = None,
+    custom_bg_image: str = None
+) -> bytes:
+    """
+    Generate "Most Improved" slide showing employees with biggest score increase.
+    """
+    colors = get_theme_colors(theme, custom_colors)
+    img = create_gradient_background(SLIDE_WIDTH, SLIDE_HEIGHT, colors, custom_bg_image)
+    draw = ImageDraw.Draw(img)
+    
+    font_title = get_font(56, bold=True)
+    font_subtitle = get_font(24)
+    font_rank = get_font(42, bold=True)
+    font_name = get_font(36, bold=True)
+    font_score = get_font(32, bold=True)
+    font_change = get_font(28, bold=True)
+    font_footer = get_font(18)
+    
+    # Header
+    title_text = "🚀 MOST IMPROVED 🚀"
+    title_bbox = draw.textbbox((0, 0), title_text, font=font_title)
+    title_width = title_bbox[2] - title_bbox[0]
+    draw.text(((SLIDE_WIDTH - title_width) // 2, 40), title_text, font=font_title, fill=colors["gold"])
+    
+    subtitle = f"{quarter} {year} • Rising Stars"
+    subtitle_bbox = draw.textbbox((0, 0), subtitle, font=font_subtitle)
+    subtitle_width = subtitle_bbox[2] - subtitle_bbox[0]
+    draw.text(((SLIDE_WIDTH - subtitle_width) // 2, 105), subtitle, font=font_subtitle, fill=colors["text_muted"])
+    
+    draw.line([(100, 150), (SLIDE_WIDTH - 100, 150)], fill=colors["gold"], width=3)
+    
+    # Calculate improvements
+    prev_scores = {r.get("name"): r.get("total_score", 0) for r in previous_rankings}
+    improvements = []
+    
+    for emp in current_rankings:
+        name = emp.get("name")
+        current_score = emp.get("total_score", 0)
+        prev_score = prev_scores.get(name, current_score)
+        change = current_score - prev_score
+        if change > 0:
+            improvements.append({
+                "name": name,
+                "current_score": current_score,
+                "prev_score": prev_score,
+                "change": change,
+                "tier_label": emp.get("tier_label", "Server")
+            })
+    
+    # Sort by biggest improvement
+    improvements.sort(key=lambda x: x["change"], reverse=True)
+    
+    # Show top 8 most improved
+    start_y = 180
+    row_height = 95
+    
+    for idx, emp in enumerate(improvements[:8]):
+        y = start_y + idx * row_height
+        
+        # Rank
+        draw.text((100, y + 20), f"#{idx + 1}", font=font_rank, fill=colors["gold"])
+        
+        # Name
+        draw.text((200, y + 22), emp["name"][:20], font=font_name, fill=colors["text_white"])
+        
+        # Score change (green arrow up)
+        change_text = f"+{emp['change']:.1f}"
+        draw.text((750, y + 25), change_text, font=font_change, fill="#22C55E")
+        
+        # Current score
+        score_text = f"{emp['current_score']:.1f}"
+        score_bbox = draw.textbbox((0, 0), score_text, font=font_score)
+        score_width = score_bbox[2] - score_bbox[0]
+        draw.text((SLIDE_WIDTH - 150 - score_width, y + 25), score_text, font=font_score, fill=colors["text_white"])
+    
+    if not improvements:
+        no_data_text = "No improvement data available (requires previous quarter data)"
+        no_data_bbox = draw.textbbox((0, 0), no_data_text, font=font_subtitle)
+        no_data_width = no_data_bbox[2] - no_data_bbox[0]
+        draw.text(((SLIDE_WIDTH - no_data_width) // 2, 400), no_data_text, font=font_subtitle, fill=colors["text_muted"])
+    
+    # Footer
+    footer_text = f"Generated {datetime.now().strftime('%m/%d/%Y')} • Keep Up The Great Work!"
+    footer_bbox = draw.textbbox((0, 0), footer_text, font=font_footer)
+    footer_width = footer_bbox[2] - footer_bbox[0]
+    draw.text(((SLIDE_WIDTH - footer_width) // 2, SLIDE_HEIGHT - 45), footer_text, font=font_footer, fill=colors["text_muted"])
+    
+    buffer = io.BytesIO()
+    img.save(buffer, format='PNG', optimize=True)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def generate_promotion_watchlist_slide(
+    rankings: List[Dict[str, Any]],
+    a_server_threshold: float,
+    quarter: str,
+    year: int,
+    theme: str = "dark_navy",
+    custom_colors: Dict = None,
+    custom_bg_image: str = None
+) -> bytes:
+    """
+    Generate "Promotion Watchlist" slide - B-Servers close to A-Server threshold.
+    """
+    colors = get_theme_colors(theme, custom_colors)
+    img = create_gradient_background(SLIDE_WIDTH, SLIDE_HEIGHT, colors, custom_bg_image)
+    draw = ImageDraw.Draw(img)
+    
+    font_title = get_font(56, bold=True)
+    font_subtitle = get_font(24)
+    font_rank = get_font(40, bold=True)
+    font_name = get_font(36, bold=True)
+    font_score = get_font(32, bold=True)
+    font_gap = get_font(26)
+    font_footer = get_font(18)
+    
+    # Header
+    title_text = "⭐ PROMOTION WATCHLIST ⭐"
+    title_bbox = draw.textbbox((0, 0), title_text, font=font_title)
+    title_width = title_bbox[2] - title_bbox[0]
+    draw.text(((SLIDE_WIDTH - title_width) // 2, 40), title_text, font=font_title, fill=TIER_CONFIG["A-Server"]["color"])
+    
+    subtitle = f"{quarter} {year} • Almost A-Server (threshold: {a_server_threshold})"
+    subtitle_bbox = draw.textbbox((0, 0), subtitle, font=font_subtitle)
+    subtitle_width = subtitle_bbox[2] - subtitle_bbox[0]
+    draw.text(((SLIDE_WIDTH - subtitle_width) // 2, 105), subtitle, font=font_subtitle, fill=colors["text_muted"])
+    
+    draw.line([(100, 150), (SLIDE_WIDTH - 100, 150)], fill=TIER_CONFIG["A-Server"]["color"], width=3)
+    
+    # Find B-Servers close to A threshold (within 10 points)
+    watchlist = []
+    for emp in rankings:
+        if emp.get("tier_label") == "B-Server":
+            score = emp.get("total_score", 0)
+            gap = a_server_threshold - score
+            if gap <= 10 and gap > 0:
+                watchlist.append({
+                    "name": emp.get("name"),
+                    "score": score,
+                    "gap": gap,
+                    "position_label": emp.get("position_label")
+                })
+    
+    watchlist.sort(key=lambda x: x["gap"])  # Closest first
+    
+    start_y = 180
+    row_height = 95
+    
+    for idx, emp in enumerate(watchlist[:8]):
+        y = start_y + idx * row_height
+        
+        # Position label
+        draw.text((100, y + 20), emp["position_label"], font=font_rank, fill=TIER_CONFIG["B-Server"]["color"])
+        
+        # Name
+        draw.text((220, y + 22), emp["name"][:20], font=font_name, fill=colors["text_white"])
+        
+        # Gap to A-Server
+        gap_text = f"{emp['gap']:.1f} pts to go"
+        draw.text((700, y + 26), gap_text, font=font_gap, fill=colors["gold"])
+        
+        # Current score
+        score_text = f"{emp['score']:.1f}"
+        score_bbox = draw.textbbox((0, 0), score_text, font=font_score)
+        score_width = score_bbox[2] - score_bbox[0]
+        draw.text((SLIDE_WIDTH - 150 - score_width, y + 25), score_text, font=font_score, fill=colors["text_white"])
+    
+    if not watchlist:
+        no_data_text = "No B-Servers within 10 points of A-Server threshold"
+        no_data_bbox = draw.textbbox((0, 0), no_data_text, font=font_subtitle)
+        no_data_width = no_data_bbox[2] - no_data_bbox[0]
+        draw.text(((SLIDE_WIDTH - no_data_width) // 2, 400), no_data_text, font=font_subtitle, fill=colors["text_muted"])
+    
+    footer_text = f"Generated {datetime.now().strftime('%m/%d/%Y')} • Keep Pushing!"
+    footer_bbox = draw.textbbox((0, 0), footer_text, font=font_footer)
+    footer_width = footer_bbox[2] - footer_bbox[0]
+    draw.text(((SLIDE_WIDTH - footer_width) // 2, SLIDE_HEIGHT - 45), footer_text, font=font_footer, fill=colors["text_muted"])
+    
+    buffer = io.BytesIO()
+    img.save(buffer, format='PNG', optimize=True)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def generate_at_risk_slide(
+    rankings: List[Dict[str, Any]],
+    b_server_threshold: float,
+    quarter: str,
+    year: int,
+    theme: str = "dark_navy",
+    custom_colors: Dict = None,
+    custom_bg_image: str = None
+) -> bytes:
+    """
+    Generate "At Risk / Coaching Group" slide - C-Servers needing attention.
+    Manager-only slide.
+    """
+    colors = get_theme_colors(theme, custom_colors)
+    img = create_gradient_background(SLIDE_WIDTH, SLIDE_HEIGHT, colors, custom_bg_image)
+    draw = ImageDraw.Draw(img)
+    
+    font_title = get_font(56, bold=True)
+    font_subtitle = get_font(24)
+    font_rank = get_font(40, bold=True)
+    font_name = get_font(36, bold=True)
+    font_score = get_font(32, bold=True)
+    font_gap = get_font(26)
+    font_footer = get_font(18)
+    font_warning = get_font(20, bold=True)
+    
+    # Header
+    title_text = "📋 COACHING FOCUS GROUP 📋"
+    title_bbox = draw.textbbox((0, 0), title_text, font=font_title)
+    title_width = title_bbox[2] - title_bbox[0]
+    draw.text(((SLIDE_WIDTH - title_width) // 2, 40), title_text, font=font_title, fill=TIER_CONFIG["C-Server"]["color"])
+    
+    subtitle = f"{quarter} {year} • Development Priority (B-Server threshold: {b_server_threshold})"
+    subtitle_bbox = draw.textbbox((0, 0), subtitle, font=font_subtitle)
+    subtitle_width = subtitle_bbox[2] - subtitle_bbox[0]
+    draw.text(((SLIDE_WIDTH - subtitle_width) // 2, 105), subtitle, font=font_subtitle, fill=colors["text_muted"])
+    
+    # Manager only warning
+    warning_text = "⚠️ MANAGER ONLY - NOT FOR PUBLIC DISPLAY ⚠️"
+    warning_bbox = draw.textbbox((0, 0), warning_text, font=font_warning)
+    warning_width = warning_bbox[2] - warning_bbox[0]
+    draw.text(((SLIDE_WIDTH - warning_width) // 2, 135), warning_text, font=font_warning, fill=TIER_CONFIG["C-Server"]["color"])
+    
+    draw.line([(100, 170), (SLIDE_WIDTH - 100, 170)], fill=TIER_CONFIG["C-Server"]["color"], width=3)
+    
+    # Find C-Servers
+    at_risk = []
+    for emp in rankings:
+        if emp.get("tier_label") == "C-Server":
+            score = emp.get("total_score", 0)
+            gap = b_server_threshold - score
+            at_risk.append({
+                "name": emp.get("name"),
+                "score": score,
+                "gap": gap,
+                "position_label": emp.get("position_label")
+            })
+    
+    at_risk.sort(key=lambda x: x["score"], reverse=True)  # Highest C-Server first
+    
+    start_y = 200
+    row_height = 85
+    
+    for idx, emp in enumerate(at_risk[:8]):
+        y = start_y + idx * row_height
+        
+        # Position label
+        draw.text((100, y + 18), emp["position_label"], font=font_rank, fill=TIER_CONFIG["C-Server"]["color"])
+        
+        # Name
+        draw.text((220, y + 20), emp["name"][:20], font=font_name, fill=colors["text_white"])
+        
+        # Gap to B-Server
+        gap_text = f"{emp['gap']:.1f} pts needed"
+        draw.text((700, y + 24), gap_text, font=font_gap, fill=TIER_CONFIG["B-Server"]["color"])
+        
+        # Current score
+        score_text = f"{emp['score']:.1f}"
+        score_bbox = draw.textbbox((0, 0), score_text, font=font_score)
+        score_width = score_bbox[2] - score_bbox[0]
+        draw.text((SLIDE_WIDTH - 150 - score_width, y + 22), score_text, font=font_score, fill=colors["text_white"])
+    
+    if not at_risk:
+        no_data_text = "No C-Servers - Great job team!"
+        no_data_bbox = draw.textbbox((0, 0), no_data_text, font=font_subtitle)
+        no_data_width = no_data_bbox[2] - no_data_bbox[0]
+        draw.text(((SLIDE_WIDTH - no_data_width) // 2, 400), no_data_text, font=font_subtitle, fill=colors["text_muted"])
+    
+    footer_text = f"Generated {datetime.now().strftime('%m/%d/%Y')} • Confidential Management Document"
+    footer_bbox = draw.textbbox((0, 0), footer_text, font=font_footer)
+    footer_width = footer_bbox[2] - footer_bbox[0]
+    draw.text(((SLIDE_WIDTH - footer_width) // 2, SLIDE_HEIGHT - 45), footer_text, font=font_footer, fill=colors["text_muted"])
+    
     buffer = io.BytesIO()
     img.save(buffer, format='PNG', optimize=True)
     buffer.seek(0)
