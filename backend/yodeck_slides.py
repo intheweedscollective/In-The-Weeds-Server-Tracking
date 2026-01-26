@@ -880,13 +880,20 @@ def generate_most_improved_slide(
     year: int,
     theme: str = "dark_navy",
     custom_colors: Dict = None,
-    custom_bg_image: str = None
+    custom_bg_image: str = None,
+    seasonal_theme: str = None
 ) -> bytes:
     """
     Generate "Most Improved" slide showing employees with biggest score increase.
     """
-    colors = get_theme_colors(theme, custom_colors)
+    colors = get_theme_colors(theme, custom_colors, seasonal_theme)
     img = create_gradient_background(SLIDE_WIDTH, SLIDE_HEIGHT, colors, custom_bg_image)
+    
+    # Add seasonal decorations if applicable
+    active_seasonal = seasonal_theme if seasonal_theme and seasonal_theme != "none" else (get_current_seasonal_theme() if seasonal_theme == "auto" else None)
+    if active_seasonal:
+        img = add_seasonal_decorations(img, active_seasonal, colors)
+    
     draw = ImageDraw.Draw(img)
     
     font_title = get_font(56, bold=True)
