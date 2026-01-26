@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { BarChart3, TrendingUp, Target, Download, Calendar, Info } from "lucide-react";
+import { BarChart3, TrendingUp, Target, Download, Calendar, Info, ArrowUp, ArrowDown, Minus } from "lucide-react";
 import axios from "axios";
 import Navigation from "../components/Navigation";
 import { Button } from "../components/ui/button";
