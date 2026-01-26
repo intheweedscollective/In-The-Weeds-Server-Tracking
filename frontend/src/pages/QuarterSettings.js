@@ -710,13 +710,11 @@ export default function QuarterSettings() {
                         type="color"
                         value={formData.slide_bg_color}
                         onChange={(e) => setFormData(prev => ({ ...prev, slide_bg_color: e.target.value }))}
-                        disabled={settings?.is_locked}
                         className="w-10 h-10 rounded cursor-pointer border-0"
                       />
                       <Input
                         value={formData.slide_bg_color}
                         onChange={(e) => setFormData(prev => ({ ...prev, slide_bg_color: e.target.value }))}
-                        disabled={settings?.is_locked}
                         className="text-xs h-8 border-2"
                       />
                     </div>
@@ -728,13 +726,11 @@ export default function QuarterSettings() {
                         type="color"
                         value={formData.slide_bg_gradient}
                         onChange={(e) => setFormData(prev => ({ ...prev, slide_bg_gradient: e.target.value }))}
-                        disabled={settings?.is_locked}
                         className="w-10 h-10 rounded cursor-pointer border-0"
                       />
                       <Input
                         value={formData.slide_bg_gradient}
                         onChange={(e) => setFormData(prev => ({ ...prev, slide_bg_gradient: e.target.value }))}
-                        disabled={settings?.is_locked}
                         className="text-xs h-8 border-2"
                       />
                     </div>
@@ -746,7 +742,6 @@ export default function QuarterSettings() {
                         type="color"
                         value={formData.slide_text_color}
                         onChange={(e) => setFormData(prev => ({ ...prev, slide_text_color: e.target.value }))}
-                        disabled={settings?.is_locked}
                         className="w-10 h-10 rounded cursor-pointer border-0"
                       />
                       <Input
