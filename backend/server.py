@@ -1440,6 +1440,8 @@ async def update_quarter_settings(year: int, quarter: str, data: QuarterSettings
         update_data["slide_secondary_color"] = data.slide_secondary_color
     if data.slide_custom_bg_image is not None:
         update_data["slide_custom_bg_image"] = data.slide_custom_bg_image
+    if data.slide_seasonal_theme is not None:
+        update_data["slide_seasonal_theme"] = data.slide_seasonal_theme
     
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
     
