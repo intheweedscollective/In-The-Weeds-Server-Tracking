@@ -2067,7 +2067,7 @@ async def download_full_rankings_pdf(year: int, quarter: str):
 async def get_yodeck_top10_slide(year: int, quarter: str):
     """
     Generate Top 10 Performers slide (1920x1080 PNG).
-    Vegas Strip professional - dark navy, high-contrast, readable from 15 feet.
+    Uses per-quarter theme settings.
     """
     # Get settings and rankings
     settings_doc = await db.quarter_settings.find_one(
@@ -2090,8 +2090,25 @@ async def get_yodeck_top10_slide(year: int, quarter: str):
     employees = [EmployeeV2(**doc) for doc in employees_docs]
     rankings = generate_hierarchy_rankings(employees, settings)
     
-    # Generate slide
-    slide_bytes = generate_top_10_slide(rankings, quarter.upper(), year)
+    # Get theme settings
+    theme = settings.slide_theme or "dark_navy"
+    custom_colors = None
+    if theme == "custom":
+        custom_colors = {
+            "background": settings.slide_bg_color,
+            "background_gradient": settings.slide_bg_gradient,
+            "primary": settings.slide_accent_color,
+            "secondary": settings.slide_secondary_color,
+            "text_white": settings.slide_text_color,
+        }
+    
+    # Generate slide with theme
+    slide_bytes = generate_top_10_slide(
+        rankings, quarter.upper(), year,
+        theme=theme,
+        custom_colors=custom_colors,
+        custom_bg_image=settings.slide_custom_bg_image
+    )
     
     filename = f"yodeck_top10_{quarter}_{year}.png"
     return Response(
