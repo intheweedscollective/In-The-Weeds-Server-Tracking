@@ -445,8 +445,8 @@ export default function Analytics() {
                             </span>
                           )}
                         </div>
-                        <div className="text-sm text-gray-500 truncate">{emp.position}</div>
-                        <div className="text-xs text-gray-400">Overall Rank: {emp.overall_rank || "N/A"}</div>
+                        <div className="text-sm text-gray-500 truncate">{emp.performance_tier || 'Not Assessed'}</div>
+                        <div className="text-xs text-gray-400">Rank: #{emp.peer_rank || "N/A"}</div>
                       </div>
 
                       <div className="text-right shrink-0">
@@ -487,14 +487,9 @@ export default function Analytics() {
                               <div className="flex items-center gap-2">
                                 <span className="font-bold text-primary">#{idx + 1}</span>
                                 <span className="font-semibold text-foreground truncate">{emp.name}</span>
-                                {emp.ranking && (
-                                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-semibold">
-                                    {emp.ranking}
-                                  </span>
-                                )}
                               </div>
-                              <div className="text-sm text-gray-500 truncate">{emp.position}</div>
-                              <div className="text-xs text-gray-400">Overall Rank: {emp.overall_rank || "N/A"}</div>
+                              <div className="text-sm text-gray-500 truncate">{emp.performance_tier || 'Not Assessed'}</div>
+                              <div className="text-xs text-gray-400">Overall Rank: #{emp.peer_rank || "N/A"}</div>
                             </div>
 
                             <div className="text-right shrink-0">
