@@ -23,9 +23,34 @@ export default function Analytics() {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [analytics, setAnalytics] = useState({});
+  
+  // V2 Quarter Selection
+  const [selectedYear, setSelectedYear] = useState(2026);
+  const [selectedQuarter, setSelectedQuarter] = useState("Q1");
 
+  const fetchEmployees = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await axios.get(`${API}/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`);
+      setEmployees(response.data);
+    } catch (error) {
+      console.error("Error fetching employees:", error);
+      toast.error("Error loading employees");
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedYear, selectedQuarter]);
 
-  const handlePrint = async () => {
+  useEffect(() => {
+    fetchEmployees();
+  }, [fetchEmployees]);
+
+  useEffect(() => {
+    if (employees.length > 0) {
+      calculateAnalytics();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employees]);
     try {
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
