@@ -1287,7 +1287,8 @@ async def upload_employees_v2(
     quarter: str = "Q1"
 ):
     """
-    Upload employees using new scoring engine.
+    Upload employees using Q1 2026 scoring engine.
+    Includes Customer Voice (NPS) and Review Tracker fields.
     Requires quarter settings to exist.
     """
     quarter = quarter.upper()
@@ -1340,7 +1341,7 @@ async def upload_employees_v2(
         
         for idx, row in df.iterrows():
             try:
-                # Extract values
+                # Extract core values
                 name = str(row.get(mapping["name"], "")).strip()
                 guests = int(row.get(mapping["guests"], 0))
                 net_sales = float(row.get(mapping["net_sales"], 0))
@@ -1352,7 +1353,34 @@ async def upload_employees_v2(
                     logging.warning(f"Row {idx + 2}: Skipping {name} - guests must be > 0")
                     continue
                 
-                # Optional fields
+                # Customer Voice fields (optional)
+                cv_promoters = 0
+                cv_passives = 0
+                cv_detractors = 0
+                
+                if mapping.get("cv_promoters"):
+                    val = row.get(mapping["cv_promoters"])
+                    if not pd.isna(val):
+                        cv_promoters = int(val)
+                
+                if mapping.get("cv_passives"):
+                    val = row.get(mapping["cv_passives"])
+                    if not pd.isna(val):
+                        cv_passives = int(val)
+                
+                if mapping.get("cv_detractors"):
+                    val = row.get(mapping["cv_detractors"])
+                    if not pd.isna(val):
+                        cv_detractors = int(val)
+                
+                # Review Tracker field (optional)
+                review_mentions = 0
+                if mapping.get("review_mentions"):
+                    val = row.get(mapping["review_mentions"])
+                    if not pd.isna(val):
+                        review_mentions = int(val)
+                
+                # Legacy optional text fields
                 review_tracker = None
                 cv_positive = None
                 cv_negative = None
@@ -1379,6 +1407,10 @@ async def upload_employees_v2(
                     lbw=lbw,
                     glassware_sales=glassware_sales,
                     lsc_count=lsc_count,
+                    cv_promoters=cv_promoters,
+                    cv_passives=cv_passives,
+                    cv_detractors=cv_detractors,
+                    review_mentions=review_mentions,
                     review_tracker=review_tracker,
                     cv_positive=cv_positive,
                     cv_negative=cv_negative
@@ -1393,7 +1425,7 @@ async def upload_employees_v2(
         if not employees:
             raise HTTPException(status_code=400, detail="No valid employees found in file")
         
-        # Run full scoring
+        # Run full scoring (Q1 2026 model)
         scored_employees = run_full_scoring(employees, settings)
         
         # Clear existing employees for this quarter
