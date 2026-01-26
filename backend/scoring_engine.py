@@ -53,7 +53,16 @@ class EmployeeV2(BaseModel):
     name: str
     guests: int  # Must be > 0
     net_sales: float
-    lbw: float  # Total LBW dollars
+    
+    # === ALCOHOL SALES (individual inputs - convenience fields) ===
+    liquor_sales: float = 0.0  # Input only
+    beer_sales: float = 0.0    # Input only
+    wine_sales: float = 0.0    # Input only
+    
+    # === CALCULATED LBW (canonical - used for all scoring) ===
+    lbw: float = 0.0  # AUTO-CALCULATED: liquor_sales + beer_sales + wine_sales
+    
+    # === OTHER CORE METRICS ===
     glassware_sales: float  # Total glassware dollars
     lsc_count: int  # LSC signups count, >= 0
     
