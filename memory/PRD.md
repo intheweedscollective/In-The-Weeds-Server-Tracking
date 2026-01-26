@@ -115,6 +115,11 @@ A deterministic, in-app scoring engine that replaces Excel-based logic:
   - LBW Total auto-calculated: Liquor + Beer + Wine
   - Old "LBW" column REJECTED with clear error message
   - Missing alcohol values treated as zero
+- ✅ **All Pages Updated to V2 API**
+  - Dashboard: V2 upload flow with quarter selection
+  - Crew Management (EmployeeList): V2 API with all 28 employees showing
+  - Analytics: V2 metrics (PPA, LBW/G, Glass/G, G/LSC, CV, Total Score)
+  - Top Performers: V2 rankings with quarter selection
 
 ## Upcoming Tasks (P1)
 1. **Phase 5: Update PDF Review Generation** - Use V2 data model for reviews
