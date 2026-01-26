@@ -514,48 +514,48 @@ export default function Dashboard() {
                     <div className="px-4 pb-4 pt-2 border-t border-gray-200 bg-white">
                       <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Points Breakdown</div>
                       <div className="grid grid-cols-5 gap-2">
-                        {/* PPA - 25% */}
+                        {/* PPA - 25% weight, max 30 pts */}
                         <div className="text-center p-2 bg-blue-50 rounded-lg border border-blue-100">
                           <div className="text-sm font-bold text-secondary">
-                            {formatNumber((employee.score_ppa || 0) * 0.25)}
+                            {formatNumber(Math.min((employee.score_ppa || 0), 100) * 0.25 + (employee.bonus_ppa || 0))}
                           </div>
-                          <div className="text-[10px] text-gray-500">/ 25</div>
+                          <div className="text-[10px] text-gray-500">/ 30</div>
                           <div className="text-[10px] font-semibold text-blue-600 mt-1">PPA</div>
                         </div>
                         
-                        {/* LSC - 25% */}
+                        {/* LSC - 25% weight, max 30 pts */}
                         <div className="text-center p-2 bg-green-50 rounded-lg border border-green-100">
                           <div className="text-sm font-bold text-green-700">
-                            {formatNumber((employee.score_lsc || 0) * 0.25)}
+                            {formatNumber(Math.min((employee.score_lsc || 0), 100) * 0.25 + (employee.bonus_lsc || 0))}
                           </div>
-                          <div className="text-[10px] text-gray-500">/ 25</div>
+                          <div className="text-[10px] text-gray-500">/ 30</div>
                           <div className="text-[10px] font-semibold text-green-600 mt-1">LSC</div>
                         </div>
                         
-                        {/* LBW - 20% */}
+                        {/* LBW - 20% weight, max 25 pts */}
                         <div className="text-center p-2 bg-purple-50 rounded-lg border border-purple-100">
                           <div className="text-sm font-bold text-purple-700">
-                            {formatNumber((employee.score_lbw || 0) * 0.20)}
+                            {formatNumber(Math.min((employee.score_lbw || 0), 100) * 0.20 + (employee.bonus_lbw || 0))}
                           </div>
-                          <div className="text-[10px] text-gray-500">/ 20</div>
+                          <div className="text-[10px] text-gray-500">/ 25</div>
                           <div className="text-[10px] font-semibold text-purple-600 mt-1">LBW</div>
                         </div>
                         
-                        {/* Glass - 15% */}
+                        {/* Glass - 15% weight, max 20 pts */}
                         <div className="text-center p-2 bg-gray-100 rounded-lg border border-gray-200">
                           <div className="text-sm font-bold text-gray-700">
-                            {formatNumber((employee.score_glass || 0) * 0.15)}
+                            {formatNumber(Math.min((employee.score_glass || 0), 100) * 0.15 + (employee.bonus_glass || 0))}
                           </div>
-                          <div className="text-[10px] text-gray-500">/ 15</div>
+                          <div className="text-[10px] text-gray-500">/ 20</div>
                           <div className="text-[10px] font-semibold text-gray-600 mt-1">Glass</div>
                         </div>
                         
-                        {/* CV - 15% */}
+                        {/* CV - 15% weight, max 20 pts */}
                         <div className="text-center p-2 bg-yellow-50 rounded-lg border border-yellow-100">
                           <div className="text-sm font-bold text-yellow-700">
-                            {formatNumber((employee.score_cv || 0) * 0.15)}
+                            {formatNumber(Math.min((employee.score_cv || 0), 100) * 0.15)}
                           </div>
-                          <div className="text-[10px] text-gray-500">/ 15</div>
+                          <div className="text-[10px] text-gray-500">/ 20</div>
                           <div className="text-[10px] font-semibold text-yellow-600 mt-1">CV</div>
                         </div>
                       </div>
