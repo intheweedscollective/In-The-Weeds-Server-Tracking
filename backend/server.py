@@ -92,11 +92,11 @@ class ReviewResponseV2(BaseModel):
 def _create_graph_pdf_from_image_bytes(image_bytes: bytes) -> bytes:
     """Convert image bytes to a single-page PDF."""
     from reportlab.lib.pagesizes import A4
-    from reportlab.pdfgen import canvas
+    from reportlab.pdfgen import canvas as pdf_canvas
     from PIL import Image as PILImage
     
     buffer = io.BytesIO()
-    c = canvas.Canvas(buffer, pagesize=A4)
+    c = pdf_canvas.Canvas(buffer, pagesize=A4)
     
     # Load image
     img = PILImage.open(io.BytesIO(image_bytes))
