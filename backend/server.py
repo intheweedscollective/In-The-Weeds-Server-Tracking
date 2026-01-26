@@ -1573,6 +1573,75 @@ async def clear_employees_v2(year: Optional[int] = None, quarter: Optional[str] 
     }
 
 
+# === DAR (Disciplinary Action Reports) - Admin Only ===
+
+@api_router.put("/v2/employees/{employee_id}/dar")
+async def update_employee_dar(employee_id: str, data: DARUpdate):
+    """
+    Update DAR (Disciplinary Action Reports) for an employee.
+    Admin-only endpoint. DAR penalties are applied but hidden from rankings.
+    
+    - Written Warning: -3 points
+    - Suspension: -5 points
+    """
+    # Find employee
+    employee = await db.employees_v2.find_one({"id": employee_id}, {"_id": 0})
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    # Calculate new DAR penalty
+    from scoring_engine import DAR_WRITTEN_WARNING, DAR_SUSPENSION
+    warning_penalty = data.written_warnings * DAR_WRITTEN_WARNING
+    suspension_penalty = data.suspensions * DAR_SUSPENSION
+    dar_penalty = warning_penalty + suspension_penalty
+    
+    # Recalculate total score with new DAR
+    pre_dar_score = employee.get("pre_dar_score", employee.get("total_score", 0))
+    new_total_score = round(pre_dar_score + dar_penalty, 2)
+    
+    # Update employee record
+    await db.employees_v2.update_one(
+        {"id": employee_id},
+        {"$set": {
+            "dar_written_warnings": data.written_warnings,
+            "dar_suspensions": data.suspensions,
+            "dar_penalty": dar_penalty,
+            "total_score": new_total_score
+        }}
+    )
+    
+    return {
+        "success": True,
+        "employee_id": employee_id,
+        "dar_written_warnings": data.written_warnings,
+        "dar_suspensions": data.suspensions,
+        "dar_penalty": dar_penalty,
+        "pre_dar_score": pre_dar_score,
+        "total_score": new_total_score,
+        "message": "DAR updated successfully. Note: Rankings are based on pre-DAR scores."
+    }
+
+
+@api_router.get("/v2/employees/{employee_id}/dar")
+async def get_employee_dar(employee_id: str):
+    """
+    Get DAR details for an employee (admin-only view).
+    """
+    employee = await db.employees_v2.find_one({"id": employee_id}, {"_id": 0})
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    return {
+        "employee_id": employee_id,
+        "employee_name": employee.get("name"),
+        "dar_written_warnings": employee.get("dar_written_warnings", 0),
+        "dar_suspensions": employee.get("dar_suspensions", 0),
+        "dar_penalty": employee.get("dar_penalty", 0),
+        "pre_dar_score": employee.get("pre_dar_score"),
+        "total_score": employee.get("total_score")
+    }
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
