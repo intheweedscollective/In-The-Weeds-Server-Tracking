@@ -273,6 +273,37 @@ export default function Analytics() {
           </select>
         </div>
 
+        {/* Tab Navigation */}
+        <div className="flex gap-2 mb-6">
+          <button
+            onClick={() => setActiveTab('metrics')}
+            className={`px-6 py-3 rounded-lg font-medium transition-all ${
+              activeTab === 'metrics'
+                ? 'bg-primary text-white shadow-md'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+            data-testid="metrics-tab"
+          >
+            <BarChart3 className="w-4 h-4 inline mr-2" />
+            Metrics Analysis
+          </button>
+          <button
+            onClick={() => setActiveTab('trends')}
+            className={`px-6 py-3 rounded-lg font-medium transition-all ${
+              activeTab === 'trends'
+                ? 'bg-primary text-white shadow-md'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+            data-testid="trends-tab"
+          >
+            <TrendingUp className="w-4 h-4 inline mr-2" />
+            Quarter Trends
+          </button>
+        </div>
+
+        {/* Conditional Content Based on Tab */}
+        {activeTab === 'metrics' ? (
+          <>
         {/* Overview Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
           <div className="bubba-card p-5">
