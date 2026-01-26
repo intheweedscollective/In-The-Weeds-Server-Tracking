@@ -91,18 +91,15 @@ export default function TopPerformers() {
   };
 
   const formatMetricValue = (metric, value) => {
-    switch (metric) {
-      case 'ppa':
-      case 'gpg':
-      case 'pplbw':
+    if (value == null) return "N/A";
+    const config = V2_METRICS[metric];
+    if (!config) return formatNumber(value);
+    
+    switch (config.format) {
+      case 'currency':
         return formatCurrency(value);
-      case 'lsc_ratio':
-        return formatLSCRatio(value);
-      case 'metric_bonus_points':
-      case 'cumulative_score':
-        return formatNumber(value);
       default:
-        return value?.toString() || 'N/A';
+        return formatNumber(value);
     }
   };
 
