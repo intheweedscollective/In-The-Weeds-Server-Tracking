@@ -128,16 +128,38 @@ export default function FullRankings() {
       
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <Trophy className="w-8 h-8 text-secondary" />
-            <h1 className="text-3xl font-serif font-black text-foreground" data-testid="page-title">
-              Full Rankings
-            </h1>
+        <div className="mb-8 flex items-start justify-between">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <Trophy className="w-8 h-8 text-secondary" />
+              <h1 className="text-3xl font-serif font-black text-foreground" data-testid="page-title">
+                Full Rankings
+              </h1>
+            </div>
+            <p className="text-gray-500" data-testid="page-subtitle">
+              Complete team standings with hierarchy-based tiering
+            </p>
           </div>
-          <p className="text-gray-500" data-testid="page-subtitle">
-            Complete team standings with hierarchy-based tiering
-          </p>
+          
+          {/* Download PDF Button */}
+          <Button
+            onClick={handleDownloadPdf}
+            disabled={downloadingPdf || rankings.length === 0}
+            className="bg-primary hover:bg-primary/90 text-white flex items-center gap-2"
+            data-testid="download-pdf-btn"
+          >
+            {downloadingPdf ? (
+              <>
+                <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                Generating...
+              </>
+            ) : (
+              <>
+                <Download className="w-4 h-4" />
+                Download PDF
+              </>
+            )}
+          </Button>
         </div>
 
         {/* Filters Card */}
