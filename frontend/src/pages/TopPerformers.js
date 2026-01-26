@@ -100,7 +100,7 @@ export default function TopPerformers() {
 
   const handlePrint = async () => {
     try {
-      const response = await axios.get(`${API}/top-performers/pdf`, {
+      const response = await axios.get(`${API}/v2/top-performers/${selectedYear}/${selectedQuarter}/pdf`, {
         responseType: "blob",
       });
 
@@ -108,7 +108,7 @@ export default function TopPerformers() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "top_performers_report.pdf";
+      a.download = `top_performers_${selectedQuarter}_${selectedYear}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
