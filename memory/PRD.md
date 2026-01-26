@@ -210,8 +210,20 @@ Position | Employee Name | Tier | Total Score | Bonus | PPA (earned/possible) | 
 - None! All major features complete.
 
 ## Future/Backlog (P2)
-- Legacy V1 code cleanup (remove old endpoints)
+- Download all slides as ZIP archive
 - Batch line graph PDF uploads
 - Time-series graph auto-generation
 - Automated daily/weekly slide pack generation for Yodeck playlists
-- Download all slides as ZIP archive
+
+## Completed Cleanup (Jan 26, 2026)
+- ✅ **V1 Legacy Code Removal**
+  - Removed V1 PDF endpoints (`/top-performers/pdf`, `/analytics/pdf`)
+  - Removed V1 upload endpoint (`/upload-excel`)
+  - Removed V1 employee CRUD endpoints
+  - Removed V1 models (Employee, EmployeeCreate, Review, etc.)
+  - Removed legacy KPI_DEFINITIONS
+  - Removed V1 PDF generation functions
+  - Deleted `pdf_analytics.py` and `pdf_top_performers.py` files
+  - Created V2 PDF endpoints (`/v2/top-performers/{year}/{quarter}/pdf`, `/v2/analytics/{year}/{quarter}/pdf`)
+  - Updated frontend to use V2 PDF endpoints
+  - Codebase reduced by ~500 lines, now exclusively uses V2 scoring engine
