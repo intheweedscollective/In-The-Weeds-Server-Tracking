@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Home, Users, FileText, BarChart3, Trophy, Settings, ListOrdered } from "lucide-react";
+import { Home, Users, FileText, BarChart3, Trophy, Settings, ListOrdered, Monitor } from "lucide-react";
 
 export default function Navigation() {
   const location = useLocation();
@@ -9,6 +9,7 @@ export default function Navigation() {
     { path: "/rankings", label: "Rankings", icon: ListOrdered },
     { path: "/employees", label: "Employees", icon: Users },
     { path: "/reviews", label: "Reviews", icon: FileText },
+    { path: "/yodeck", label: "Yodeck", icon: Monitor },
     { path: "/analytics", label: "Analytics", icon: BarChart3 },
     { path: "/top-performers", label: "Top", icon: Trophy },
     { path: "/settings", label: "Settings", icon: Settings },
