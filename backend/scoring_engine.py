@@ -317,6 +317,20 @@ def validate_upload_columns(df_columns: List[str]) -> Dict[str, Any]:
 # SCORING ENGINE
 # ============================================================================
 
+def calculate_lbw_total(employee: EmployeeV2) -> EmployeeV2:
+    """
+    Calculate LBW Total from individual Liquor, Beer, and Wine sales.
+    This is the ONLY way LBW can be set - no manual override allowed.
+    Missing/blank values are treated as zero.
+    """
+    liquor = employee.liquor_sales or 0.0
+    beer = employee.beer_sales or 0.0
+    wine = employee.wine_sales or 0.0
+    
+    employee.lbw = round(liquor + beer + wine, 2)
+    return employee
+
+
 def calculate_derived_metrics(employee: EmployeeV2) -> EmployeeV2:
     """
     Calculate derived metrics from raw data.
