@@ -1,11 +1,12 @@
 import { Link, useLocation } from "react-router-dom";
-import { Home, Users, FileText, BarChart3, Trophy, Settings } from "lucide-react";
+import { Home, Users, FileText, BarChart3, Trophy, Settings, ListOrdered } from "lucide-react";
 
 export default function Navigation() {
   const location = useLocation();
 
   const navItems = [
     { path: "/", label: "Dashboard", icon: Home },
+    { path: "/rankings", label: "Rankings", icon: ListOrdered },
     { path: "/employees", label: "Employees", icon: Users },
     { path: "/reviews", label: "Reviews", icon: FileText },
     { path: "/analytics", label: "Analytics", icon: BarChart3 },
