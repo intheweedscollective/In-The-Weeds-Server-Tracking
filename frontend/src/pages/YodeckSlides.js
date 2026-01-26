@@ -99,18 +99,36 @@ export default function YodeckSlides() {
     try {
       const url = page > 1 ? `${API}${endpoint}?page=${page}` : `${API}${endpoint}`;
       
-      // Direct download via link
+      // Use fetch to get the blob directly - more reliable than anchor download
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'image/png'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch slide: ${response.status}`);
+      }
+      
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      
+      // Create download link
       const link = document.createElement('a');
-      link.href = url;
-      link.target = '_blank';
+      link.href = objectUrl;
       link.download = `${slideId}_${selectedQuarter}_${selectedYear}${page > 1 ? `_p${page}` : ''}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       
-      toast.success("Slide download started!");
+      // Clean up object URL after a short delay
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      
+      toast.success("Slide downloaded!");
     } catch (error) {
       console.error("Error downloading slide:", error);
+      // Fallback: open in new tab
       const url = page > 1 ? `${API}${endpoint}?page=${page}` : `${API}${endpoint}`;
       window.open(url, '_blank');
       toast.info("Opening slide in new tab - right-click to save");
