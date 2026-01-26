@@ -51,6 +51,7 @@ class EmployeeV2(BaseModel):
     
     # === CANONICAL FIELDS (from upload) ===
     name: str
+    job_title: str = "Server"  # NEW: Job Title for hierarchy-based rankings
     guests: int  # Must be > 0
     net_sales: float
     
@@ -157,6 +158,11 @@ class QuarterSettings(BaseModel):
     # === BONUS SETTINGS ===
     bonus_rate: float = 0.2  # 0.2 per 1% over benchmark
     bonus_cap: float = 5.0   # Max bonus per metric
+    
+    # === SERVER TIER THRESHOLDS (Settings-driven) ===
+    a_server_min_score: float = 85.1   # Total Score >= this = A-Server
+    b_server_min_score: float = 70.1   # Total Score >= this AND < A-Server = B-Server
+    # C-Server: Total Score < B-Server min
     
     # === PREVIOUS QUARTER AVERAGES (for benchmark suggestions) ===
     prev_avg_ppa: Optional[float] = None
