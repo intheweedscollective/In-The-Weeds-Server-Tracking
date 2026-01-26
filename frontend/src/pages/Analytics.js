@@ -112,10 +112,11 @@ export default function Analytics() {
   };
 
   const getTopEmployees = (metric, limit = 10) => {
+    const config = V2_METRICS[metric];
     const valid = employees.filter((e) => e[metric] != null);
 
     const sorted = [...valid].sort((a, b) => {
-      if (metric === "lsc_ratio") return (a[metric] || 0) - (b[metric] || 0);
+      if (!config.higherBetter) return (a[metric] || 0) - (b[metric] || 0);
       return (b[metric] || 0) - (a[metric] || 0);
     });
 
