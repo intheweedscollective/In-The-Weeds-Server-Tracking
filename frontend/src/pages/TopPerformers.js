@@ -22,8 +22,6 @@ const V2_METRICS = {
 export default function TopPerformers() {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [topPerformers, setTopPerformers] = useState({});
-  const [topOverall, setTopOverall] = useState([]);
   
   // V2 Quarter Selection
   const [selectedYear, setSelectedYear] = useState(2026);
