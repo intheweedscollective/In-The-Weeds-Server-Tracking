@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Trophy, Medal, Award, Download, Users, Calendar } from "lucide-react";
 import axios from "axios";
 import Navigation from "../components/Navigation";
