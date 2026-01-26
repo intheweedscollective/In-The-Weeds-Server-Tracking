@@ -11,12 +11,22 @@ const API = `${BACKEND_URL}/api`;
 
 // V2 Metric Definitions with benchmarks
 const V2_METRICS = {
-  ppa: { label: 'PPA', benchmark: 55.0, format: 'currency', higherBetter: true },
-  lbw_per_guest: { label: 'LBW/Guest', benchmark: 8.0, format: 'currency', higherBetter: true },
-  glassware_per_guest: { label: 'Glass/Guest', benchmark: 1.0, format: 'currency', higherBetter: true },
-  guests_per_lsc: { label: 'Guests/LSC', benchmark: 100.0, format: 'number', higherBetter: false },
-  cv_score: { label: 'CV Score', benchmark: 5.0, format: 'number', higherBetter: true },
-  pre_dar_score: { label: 'Total Score', benchmark: 100.0, format: 'number', higherBetter: true },
+  ppa: { label: 'PPA', defaultBenchmark: 55.0, format: 'currency', higherBetter: true, settingsKey: 'benchmark_ppa', unit: '$/guest', weight: 0.25 },
+  lbw_per_guest: { label: 'LBW/Guest', defaultBenchmark: 8.0, format: 'currency', higherBetter: true, settingsKey: 'benchmark_lbw', unit: '$/guest', weight: 0.20 },
+  glassware_per_guest: { label: 'Glass/Guest', defaultBenchmark: 1.0, format: 'currency', higherBetter: true, settingsKey: 'benchmark_glass', unit: '$/guest', weight: 0.15 },
+  guests_per_lsc: { label: 'Guests/LSC', defaultBenchmark: 100.0, format: 'number', higherBetter: false, settingsKey: 'benchmark_lsc', unit: 'guests', weight: 0.25 },
+  cv_score: { label: 'CV Score', defaultBenchmark: 5.0, format: 'number', higherBetter: true, settingsKey: 'benchmark_cv', unit: 'pts', weight: 0.15 },
+  pre_dar_score: { label: 'Total Score', defaultBenchmark: 100.0, format: 'number', higherBetter: true, settingsKey: null, unit: 'pts', weight: null },
+};
+
+// Helper to get actual benchmark from settings or default
+const getBenchmark = (metricKey, quarterSettings) => {
+  const metric = V2_METRICS[metricKey];
+  if (!metric) return 0;
+  if (metric.settingsKey && quarterSettings?.[metric.settingsKey]) {
+    return quarterSettings[metric.settingsKey];
+  }
+  return metric.defaultBenchmark;
 };
 
 export default function Analytics() {
