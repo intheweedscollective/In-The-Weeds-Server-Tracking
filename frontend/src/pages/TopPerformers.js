@@ -1,23 +1,50 @@
-import { useState, useEffect } from "react";
-import { Trophy, Medal, Award, Download, Users } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Trophy, Medal, Award, Download, Users, Calendar } from "lucide-react";
 import axios from "axios";
 import Navigation from "../components/Navigation";
 import { Button } from "../components/ui/button";
-import { formatCurrency, formatLSCRatio, formatNumber, formatOverallRank, formatRanking, getRankingHierarchy, KPI_DEFINITIONS } from "../utils/formatters";
+import { formatCurrency, formatNumber } from "../utils/formatters";
 import { toast } from "sonner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
+
+// V2 Metrics Configuration
+const V2_METRICS = {
+  ppa: { label: 'PPA', format: 'currency', higherBetter: true },
+  lbw_per_guest: { label: 'LBW/Guest', format: 'currency', higherBetter: true },
+  glassware_per_guest: { label: 'Glass/Guest', format: 'currency', higherBetter: true },
+  guests_per_lsc: { label: 'Guests/LSC', format: 'number', higherBetter: false },
+  cv_score: { label: 'CV Score', format: 'number', higherBetter: true },
+  pre_dar_score: { label: 'Total Score', format: 'number', higherBetter: true },
+};
 
 export default function TopPerformers() {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [topPerformers, setTopPerformers] = useState({});
   const [topOverall, setTopOverall] = useState([]);
+  
+  // V2 Quarter Selection
+  const [selectedYear, setSelectedYear] = useState(2026);
+  const [selectedQuarter, setSelectedQuarter] = useState("Q1");
+
+  const fetchEmployees = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await axios.get(`${API}/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`);
+      setEmployees(response.data);
+    } catch (error) {
+      console.error("Error fetching employees:", error);
+      toast.error("Error loading employees");
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedYear, selectedQuarter]);
 
   useEffect(() => {
     fetchEmployees();
-  }, []);
+  }, [fetchEmployees]);
 
   useEffect(() => {
     if (employees.length > 0) {
@@ -25,17 +52,6 @@ export default function TopPerformers() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employees]);
-
-  const fetchEmployees = async () => {
-    try {
-      const response = await axios.get(`${API}/employees`);
-      setEmployees(response.data);
-    } catch (error) {
-      console.error("Error fetching employees:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const calculateTopPerformers = () => {
     const metrics = ['ppa', 'gpg', 'pplbw', 'lsc_ratio', 'metric_bonus_points', 'cumulative_score'];
