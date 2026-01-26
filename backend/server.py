@@ -26,6 +26,7 @@ import requests
 from pypdf import PdfReader, PdfWriter
 from pdf_top_performers import build_top_performers_pdf
 from pdf_analytics import build_analytics_pdf
+from pdf_full_rankings import build_full_rankings_pdf
 
 # Import new scoring engine
 from scoring_engine import (
