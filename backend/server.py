@@ -1047,7 +1047,9 @@ async def create_quarter_settings(data: QuarterSettingsCreate):
         weight_lsc=data.weight_lsc,
         weight_cv=data.weight_cv,
         bonus_rate=data.bonus_rate,
-        bonus_cap=data.bonus_cap
+        bonus_cap=data.bonus_cap,
+        a_server_min_score=data.a_server_min_score,
+        b_server_min_score=data.b_server_min_score
     )
     
     doc = settings.model_dump()
