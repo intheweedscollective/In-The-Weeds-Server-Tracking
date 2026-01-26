@@ -158,7 +158,7 @@ export default function QuarterSettings() {
         await axios.put(`${API}/v2/quarter-settings/${selectedYear}/${selectedQuarter}`, formData);
         toast.success(`Updated settings for ${selectedQuarter} ${selectedYear}`);
       }
-      fetchQuarterSettings();
+      refetchSettings();
       fetchAllSettings();
     } catch (error) {
       console.error("Error saving settings:", error);
