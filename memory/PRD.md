@@ -161,17 +161,27 @@ Position | Employee Name | Tier | Total Score | Bonus | PPA (earned/possible) | 
   - Landscape A4 format with all 28 employees
   - Scoring formula legend included
 - ✅ **PDF Review Generation (V2 Migration)**
-  - Reviews page now uses V2 API (`/api/v2/employees`)
-  - AI content generation uses V2 metrics (PPA, LBW, Glass, LSC, CV)
+  - Reviews page now uses V2 API
+  - AI content generation uses V2 metrics
   - PDF includes Q1 2026 scoring breakdown table
-  - Employee cards show tier badges and V2 metrics
-  - Quarter/Year filtering for employee list
+- ✅ **Yodeck Slide Generation**
+  - 16:9 PNG slides (1920x1080) for digital signage
+  - Dark navy professional design, high-contrast, TV-legible
+  - Top 10 Performers slide (leaderboard)
+  - Tier-specific slides (Trainers, Bartenders, A/B/C-Servers)
+  - Paginated for tiers with >10 employees
+  - Visual metric indicators (green/yellow/red dots)
+  - Download All Slides button
+  - Yodeck-ready format (<5MB per slide)
 
 ## Upcoming Tasks (P1)
-1. **Yodeck Slide Generation** - 16:9 leaderboard slides
+- None! All major features complete.
 
 ## Future/Backlog (P2)
-- Legacy V1 code cleanup
+- Legacy V1 code cleanup (remove old endpoints)
 - Analytics enhancements (benchmark thresholds display)
 - Batch line graph PDF uploads
 - Time-series graph auto-generation
+- "Most Improved" Yodeck slide
+- "Promotion Watchlist" slide
+- Manager-only "At Risk Coaching Group" slide
