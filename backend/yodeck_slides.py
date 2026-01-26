@@ -97,13 +97,34 @@ def hex_to_rgb(hex_color: str) -> Tuple[int, int, int]:
     return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
 
-def create_gradient_background(width: int, height: int) -> Image.Image:
-    """Create a subtle gradient background."""
+def create_gradient_background(width: int, height: int, colors: Dict = None, custom_bg_image: str = None) -> Image.Image:
+    """Create a gradient background or use custom image."""
+    if colors is None:
+        colors = COLORS
+    
+    # If custom background image provided
+    if custom_bg_image:
+        try:
+            if custom_bg_image.startswith('data:'):
+                # Base64 encoded image
+                img_data = base64.b64decode(custom_bg_image.split(',')[1])
+                img = Image.open(io.BytesIO(img_data))
+            else:
+                # URL - would need to fetch, for now skip
+                img = None
+            
+            if img:
+                img = img.convert('RGB')
+                img = img.resize((width, height), Image.Resampling.LANCZOS)
+                return img
+        except Exception:
+            pass  # Fall back to gradient
+    
     img = Image.new('RGB', (width, height))
     draw = ImageDraw.Draw(img)
     
-    top_color = hex_to_rgb(COLORS["background"])
-    bottom_color = hex_to_rgb(COLORS["background_gradient"])
+    top_color = hex_to_rgb(colors.get("background", "#0A1628"))
+    bottom_color = hex_to_rgb(colors.get("background_gradient", "#132238"))
     
     for y in range(height):
         ratio = y / height
