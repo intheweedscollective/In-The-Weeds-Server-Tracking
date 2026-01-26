@@ -1362,7 +1362,7 @@ async def create_quarter_settings(data: QuarterSettingsCreate):
 
 @api_router.put("/v2/quarter-settings/{year}/{quarter}")
 async def update_quarter_settings(year: int, quarter: str, data: QuarterSettingsUpdate):
-    """Update quarter settings (only if not locked)"""
+    """Update quarter settings (only if not locked, except for theme settings)"""
     settings = await db.quarter_settings.find_one(
         {"year": year, "quarter": quarter.upper()}, 
         {"_id": 0}
@@ -1370,10 +1370,29 @@ async def update_quarter_settings(year: int, quarter: str, data: QuarterSettings
     if not settings:
         raise HTTPException(status_code=404, detail=f"Settings not found for {quarter} {year}")
     
-    if settings.get("is_locked"):
+    # Check if this is a theme-only update (allowed even when locked)
+    theme_only_fields = {'slide_theme', 'slide_bg_color', 'slide_bg_gradient', 'slide_text_color', 
+                        'slide_accent_color', 'slide_secondary_color', 'slide_seasonal_theme', 'slide_custom_bg_image'}
+    
+    non_theme_fields_provided = False
+    for field in data.model_fields_set if hasattr(data, 'model_fields_set') else []:
+        if field not in theme_only_fields and getattr(data, field, None) is not None:
+            non_theme_fields_provided = True
+            break
+    
+    # Also check each field manually for older pydantic versions
+    score_affecting_fields = [
+        data.benchmark_ppa, data.benchmark_lbw, data.benchmark_glass, data.benchmark_lsc, data.benchmark_cv,
+        data.weight_ppa, data.weight_lbw, data.weight_glass, data.weight_lsc, data.weight_cv,
+        data.bonus_rate, data.bonus_cap, data.a_server_min_score, data.b_server_min_score
+    ]
+    if any(f is not None for f in score_affecting_fields):
+        non_theme_fields_provided = True
+    
+    if settings.get("is_locked") and non_theme_fields_provided:
         raise HTTPException(
             status_code=403, 
-            detail=f"Settings for {quarter} {year} are locked. Scores have already been generated."
+            detail=f"Settings for {quarter} {year} are locked. Only theme settings can be modified."
         )
     
     # Build update dict
