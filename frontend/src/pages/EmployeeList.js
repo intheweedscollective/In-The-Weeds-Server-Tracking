@@ -140,13 +140,45 @@ export default function EmployeeList() {
               <h2 className="text-lg font-serif font-bold text-foreground">Filters & Search</h2>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {/* Quarter Selection */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium flex items-center gap-2">
+                  <Calendar className="w-4 h-4" />
+                  Quarter
+                </label>
+                <div className="flex gap-2">
+                  <select 
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                    className="flex-1 h-10 px-3 border-2 border-gray-200 rounded-lg focus:border-secondary"
+                    data-testid="year-select"
+                  >
+                    <option value={2024}>2024</option>
+                    <option value={2025}>2025</option>
+                    <option value={2026}>2026</option>
+                    <option value={2027}>2027</option>
+                  </select>
+                  <select
+                    value={selectedQuarter}
+                    onChange={(e) => setSelectedQuarter(e.target.value)}
+                    className="flex-1 h-10 px-3 border-2 border-gray-200 rounded-lg focus:border-secondary"
+                    data-testid="quarter-select"
+                  >
+                    <option value="Q1">Q1</option>
+                    <option value="Q2">Q2</option>
+                    <option value="Q3">Q3</option>
+                    <option value="Q4">Q4</option>
+                  </select>
+                </div>
+              </div>
+              
               <div className="space-y-2">
                 <label className="text-sm font-medium">Search</label>
                 <div className="relative">
                   <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                   <Input
-                    placeholder="Search by name or position..."
+                    placeholder="Search by name..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-9 border-2 border-gray-200 rounded-lg focus:border-secondary"
@@ -156,35 +188,28 @@ export default function EmployeeList() {
               </div>
               
               <div className="space-y-2">
-                <label className="text-sm font-medium">Position</label>
-                <Select value={positionFilter} onValueChange={setPositionFilter}>
-                  <SelectTrigger data-testid="position-filter" className="border-2 border-gray-200">
-                    <SelectValue placeholder="All Positions" />
+                <label className="text-sm font-medium">Performance Tier</label>
+                <Select value={performanceFilter} onValueChange={setPerformanceFilter}>
+                  <SelectTrigger data-testid="performance-filter" className="border-2 border-gray-200">
+                    <SelectValue placeholder="All Tiers" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Positions</SelectItem>
-                    {positions.map(position => (
-                      <SelectItem key={position} value={position}>{position}</SelectItem>
-                    ))}
+                    <SelectItem value="all">All Tiers</SelectItem>
+                    <SelectItem value="top performer">Top Performer</SelectItem>
+                    <SelectItem value="above average">Above Average</SelectItem>
+                    <SelectItem value="below average">Below Average</SelectItem>
+                    <SelectItem value="needs improvement">Needs Improvement</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               
               <div className="space-y-2">
-                <label className="text-sm font-medium">Performance</label>
-                <Select value={performanceFilter} onValueChange={setPerformanceFilter}>
-                  <SelectTrigger data-testid="performance-filter" className="border-2 border-gray-200">
-                    <SelectValue placeholder="All Performance Levels" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Performance Levels</SelectItem>
-                    <SelectItem value="excellent">Excellent</SelectItem>
-                    <SelectItem value="above average">Above Average</SelectItem>
-                    <SelectItem value="satisfactory">Satisfactory</SelectItem>
-                    <SelectItem value="needs improvement">Needs Improvement</SelectItem>
-                    <SelectItem value="below expectations">Below Expectations</SelectItem>
-                  </SelectContent>
-                </Select>
+                <label className="text-sm font-medium">&nbsp;</label>
+                <div className="h-10 flex items-center">
+                  <span className="text-sm text-gray-500">
+                    {selectedQuarter} {selectedYear}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
