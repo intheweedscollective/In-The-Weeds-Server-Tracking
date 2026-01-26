@@ -35,7 +35,7 @@ A deterministic, in-app scoring engine that replaces Excel-based logic:
 3. **Weighted Total**: `Total = Σ(Score × Weight) + Total Bonus`
 4. **Performance Tiers**: Based on percentile rank
 
-### Full Rankings Tab (NEW - Completed Jan 26, 2026)
+### Full Rankings Tab (Completed Jan 26, 2026)
 Hierarchy-based rankings with settings-driven server tiering:
 
 #### Hierarchy Order (Fixed)
@@ -59,6 +59,14 @@ Position | Employee Name | Tier | Total Score | Bonus | PPA (earned/possible) | 
 - Filter by Tier (no sorting allowed - rank is final)
 - Thresholds displayed from Settings
 - Auto-update when Settings change
+- **PDF Download** with isolated columns for each point type (Base + Bonus for each metric)
+
+### PDF Download Feature (Completed Jan 26, 2026)
+- Download button on Rankings page
+- Landscape A4 format
+- Columns: Position, Label, Name, Tier, Total Score, Total Bonus, PPA (Base/Bonus), LBW (Base/Bonus), LSC (Base/Bonus), Glass (Base/Bonus), CV Score
+- Includes scoring formula legend
+- Tier thresholds displayed in header
 
 ### Other Features
 - Employee list with metrics display
@@ -79,7 +87,8 @@ Position | Employee Name | Tier | Total Score | Bonus | PPA (earned/possible) | 
 - `POST /api/v2/upload?year=X&quarter=QX` - Upload and score employees
 - `GET /api/v2/employees` - Get V2 employees
 - `GET /api/v2/rankings/{year}/{quarter}` - Get rankings (by score)
-- `GET /api/v2/full-rankings/{year}/{quarter}` - **NEW** Hierarchy-based rankings
+- `GET /api/v2/full-rankings/{year}/{quarter}` - Hierarchy-based rankings
+- `GET /api/v2/full-rankings/{year}/{quarter}/pdf` - **NEW** Download rankings as PDF
 - `GET /api/v2/top-performers/{year}/{quarter}` - Get top performers
 - `GET /api/v2/template` - Download CSV template (includes Job Title)
 - `DELETE /api/v2/employees?year=X&quarter=QX` - Clear data (unlocks quarter)
@@ -105,8 +114,11 @@ Position | Employee Name | Tier | Total Score | Bonus | PPA (earned/possible) | 
 ```
 /app/
 ├── backend/
-│   ├── server.py           # FastAPI app, V1 & V2 routes
-│   ├── scoring_engine.py   # V2 scoring logic, hierarchy rankings
+│   ├── server.py               # FastAPI app, V1 & V2 routes
+│   ├── scoring_engine.py       # V2 scoring logic, hierarchy rankings
+│   ├── pdf_full_rankings.py    # NEW - Full rankings PDF generator
+│   ├── pdf_top_performers.py
+│   ├── pdf_analytics.py
 │   └── tests/
 │       ├── test_v2_scoring_engine.py
 │       └── test_full_rankings.py
@@ -114,7 +126,7 @@ Position | Employee Name | Tier | Total Score | Bonus | PPA (earned/possible) | 
     └── src/
         ├── pages/
         │   ├── Dashboard.js
-        │   ├── FullRankings.js    # NEW
+        │   ├── FullRankings.js     # Rankings with PDF download
         │   ├── QuarterSettings.js
         │   ├── EmployeeList.js
         │   ├── ReviewGeneration.js
@@ -137,13 +149,17 @@ Position | Employee Name | Tier | Total Score | Bonus | PPA (earned/possible) | 
   - New weights: PPA(25%), LSC(25%), LBW(20%), Glass(15%), CV(15%)
 - ✅ **Split Alcohol Sales Input** (Liquor + Beer + Wine = LBW Total)
 - ✅ **All Pages Updated to V2 API**
-- ✅ **Full Rankings Tab (NEW)**
+- ✅ **Full Rankings Tab**
   - Hierarchy-based sorting: Trainers > Bartenders > A > B > C Servers
   - Settings-driven tier thresholds (A: 85.1, B: 70.1)
   - Position labels (T1, Bar1, A1, B1, C1...)
   - Table with full scoring breakdown
   - Filter by tier (no re-sorting allowed)
   - Settings page tier threshold inputs
+- ✅ **Rankings PDF Download**
+  - Isolated columns for each point type (Base + Bonus per metric)
+  - Landscape A4 format with all 28 employees
+  - Scoring formula legend included
 
 ## Upcoming Tasks (P1)
 1. **PDF Review Generation Migration** - Use V2 data model for reviews
@@ -154,4 +170,3 @@ Position | Employee Name | Tier | Total Score | Bonus | PPA (earned/possible) | 
 - Analytics enhancements (benchmark thresholds display)
 - Batch line graph PDF uploads
 - Time-series graph auto-generation
-- Rankings Tab PDF export
