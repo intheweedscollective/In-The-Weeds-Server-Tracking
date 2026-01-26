@@ -376,7 +376,7 @@ export default function QuarterSettings() {
         <div className="bubba-card mb-8">
           <div className="tape tape-blue" style={{ top: '-8px', left: '50%', transform: 'translateX(-50%) rotate(1deg)' }} />
           <div className="p-6 pt-8">
-            <h2 className="text-lg font-serif font-bold text-foreground mb-4">Metric Weights</h2>
+            <h2 className="text-lg font-serif font-bold text-foreground mb-4">Metric Weights (Q1 2026 Model)</h2>
             <p className="text-sm text-gray-500 mb-4">
               Weights must sum to 1.0. Current sum: 
               <span className={`ml-2 font-bold ${weightsValid ? 'text-green-600' : 'text-red-600'}`}>
@@ -384,9 +384,9 @@ export default function QuarterSettings() {
               </span>
             </p>
             
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">PPA Weight</label>
+                <label className="text-sm font-medium">PPA (25%)</label>
                 <Input
                   type="number"
                   step="0.05"
@@ -399,7 +399,7 @@ export default function QuarterSettings() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">LBW Weight</label>
+                <label className="text-sm font-medium">LBW (20%)</label>
                 <Input
                   type="number"
                   step="0.05"
@@ -412,7 +412,7 @@ export default function QuarterSettings() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Glass Weight</label>
+                <label className="text-sm font-medium">Glass (15%)</label>
                 <Input
                   type="number"
                   step="0.05"
@@ -425,7 +425,7 @@ export default function QuarterSettings() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">LSC Weight</label>
+                <label className="text-sm font-medium">LSC (25%)</label>
                 <Input
                   type="number"
                   step="0.05"
@@ -436,6 +436,20 @@ export default function QuarterSettings() {
                   disabled={settings?.is_locked}
                   className="border-2"
                 />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">CV & Reviews (15%)</label>
+                <Input
+                  type="number"
+                  step="0.05"
+                  min="0"
+                  max="1"
+                  value={formData.weight_cv}
+                  onChange={(e) => setFormData(prev => ({ ...prev, weight_cv: parseFloat(e.target.value) || 0 }))}
+                  disabled={settings?.is_locked}
+                  className="border-2"
+                />
+                <p className="text-xs text-gray-400">Customer Voice + Review Tracker</p>
               </div>
             </div>
           </div>
