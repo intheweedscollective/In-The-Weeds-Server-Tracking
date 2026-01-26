@@ -2254,7 +2254,8 @@ async def get_all_yodeck_slides(year: int, quarter: str):
         "id": "top10",
         "name": "Top 10 Performers",
         "endpoint": f"/api/v2/yodeck/{year}/{quarter}/top10",
-        "pages": 1
+        "pages": 1,
+        "category": "primary"
     })
     
     # Tier slides
@@ -2273,15 +2274,223 @@ async def get_all_yodeck_slides(year: int, quarter: str):
                 "name": f"{tier_label} Rankings",
                 "endpoint": f"/api/v2/yodeck/{year}/{quarter}/tier/{tier_key}",
                 "employee_count": count,
-                "pages": total_pages
+                "pages": total_pages,
+                "category": "tier"
             })
+    
+    # Special slides
+    slides.append({
+        "id": "most-improved",
+        "name": "Most Improved",
+        "endpoint": f"/api/v2/yodeck/{year}/{quarter}/most-improved",
+        "pages": 1,
+        "category": "special"
+    })
+    
+    # Promotion watchlist (B-Servers close to A)
+    b_servers_close = len([r for r in rankings if r.get("tier_label") == "B-Server" and (settings.a_server_min_score - r.get("total_score", 0)) <= 10])
+    if b_servers_close > 0:
+        slides.append({
+            "id": "promotion-watchlist",
+            "name": "Promotion Watchlist",
+            "endpoint": f"/api/v2/yodeck/{year}/{quarter}/promotion-watchlist",
+            "employee_count": b_servers_close,
+            "pages": 1,
+            "category": "special"
+        })
+    
+    # At Risk (C-Servers) - manager only
+    if tier_counts["C-Server"] > 0:
+        slides.append({
+            "id": "at-risk",
+            "name": "Coaching Focus (Manager Only)",
+            "endpoint": f"/api/v2/yodeck/{year}/{quarter}/at-risk",
+            "employee_count": tier_counts["C-Server"],
+            "pages": 1,
+            "category": "manager"
+        })
     
     return {
         "quarter": quarter.upper(),
         "year": year,
         "total_employees": len(employees),
         "tier_counts": tier_counts,
+        "theme": settings.slide_theme or "dark_navy",
+        "available_themes": list(THEMES.keys()),
         "slides": slides
+    }
+
+
+@api_router.get("/v2/yodeck/{year}/{quarter}/most-improved")
+async def get_yodeck_most_improved_slide(year: int, quarter: str):
+    """Generate Most Improved slide - employees with biggest score increase."""
+    settings_doc = await db.quarter_settings.find_one(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    )
+    if not settings_doc:
+        raise HTTPException(status_code=404, detail=f"Settings not found for {quarter} {year}")
+    
+    settings = QuarterSettings(**settings_doc)
+    
+    # Get current quarter rankings
+    employees_docs = await db.employees_v2.find(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    ).to_list(5000)
+    
+    if not employees_docs:
+        raise HTTPException(status_code=404, detail=f"No employee data for {quarter} {year}")
+    
+    employees = [EmployeeV2(**doc) for doc in employees_docs]
+    current_rankings = generate_hierarchy_rankings(employees, settings)
+    
+    # Try to get previous quarter rankings
+    prev_quarter_map = {"Q1": "Q4", "Q2": "Q1", "Q3": "Q2", "Q4": "Q3"}
+    prev_quarter = prev_quarter_map.get(quarter.upper(), "Q4")
+    prev_year = year - 1 if quarter.upper() == "Q1" else year
+    
+    prev_employees_docs = await db.employees_v2.find(
+        {"year": prev_year, "quarter": prev_quarter},
+        {"_id": 0}
+    ).to_list(5000)
+    
+    prev_rankings = []
+    if prev_employees_docs:
+        prev_settings_doc = await db.quarter_settings.find_one(
+            {"year": prev_year, "quarter": prev_quarter},
+            {"_id": 0}
+        )
+        if prev_settings_doc:
+            prev_settings = QuarterSettings(**prev_settings_doc)
+            prev_employees = [EmployeeV2(**doc) for doc in prev_employees_docs]
+            prev_rankings = generate_hierarchy_rankings(prev_employees, prev_settings)
+    
+    # Get theme settings
+    theme = settings.slide_theme or "dark_navy"
+    custom_colors = None
+    if theme == "custom":
+        custom_colors = {
+            "background": settings.slide_bg_color,
+            "background_gradient": settings.slide_bg_gradient,
+            "primary": settings.slide_accent_color,
+            "secondary": settings.slide_secondary_color,
+            "text_white": settings.slide_text_color,
+        }
+    
+    slide_bytes = generate_most_improved_slide(
+        current_rankings, prev_rankings, quarter.upper(), year,
+        theme=theme, custom_colors=custom_colors, custom_bg_image=settings.slide_custom_bg_image
+    )
+    
+    filename = f"yodeck_most_improved_{quarter}_{year}.png"
+    return Response(
+        content=slide_bytes,
+        media_type="image/png",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+@api_router.get("/v2/yodeck/{year}/{quarter}/promotion-watchlist")
+async def get_yodeck_promotion_watchlist_slide(year: int, quarter: str):
+    """Generate Promotion Watchlist slide - B-Servers close to A-Server threshold."""
+    settings_doc = await db.quarter_settings.find_one(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    )
+    if not settings_doc:
+        raise HTTPException(status_code=404, detail=f"Settings not found for {quarter} {year}")
+    
+    settings = QuarterSettings(**settings_doc)
+    
+    employees_docs = await db.employees_v2.find(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    ).to_list(5000)
+    
+    if not employees_docs:
+        raise HTTPException(status_code=404, detail=f"No employee data for {quarter} {year}")
+    
+    employees = [EmployeeV2(**doc) for doc in employees_docs]
+    rankings = generate_hierarchy_rankings(employees, settings)
+    
+    theme = settings.slide_theme or "dark_navy"
+    custom_colors = None
+    if theme == "custom":
+        custom_colors = {
+            "background": settings.slide_bg_color,
+            "background_gradient": settings.slide_bg_gradient,
+            "primary": settings.slide_accent_color,
+            "secondary": settings.slide_secondary_color,
+            "text_white": settings.slide_text_color,
+        }
+    
+    slide_bytes = generate_promotion_watchlist_slide(
+        rankings, settings.a_server_min_score, quarter.upper(), year,
+        theme=theme, custom_colors=custom_colors, custom_bg_image=settings.slide_custom_bg_image
+    )
+    
+    filename = f"yodeck_promotion_watchlist_{quarter}_{year}.png"
+    return Response(
+        content=slide_bytes,
+        media_type="image/png",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+@api_router.get("/v2/yodeck/{year}/{quarter}/at-risk")
+async def get_yodeck_at_risk_slide(year: int, quarter: str):
+    """Generate At Risk / Coaching Focus slide - C-Servers needing attention. Manager only."""
+    settings_doc = await db.quarter_settings.find_one(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    )
+    if not settings_doc:
+        raise HTTPException(status_code=404, detail=f"Settings not found for {quarter} {year}")
+    
+    settings = QuarterSettings(**settings_doc)
+    
+    employees_docs = await db.employees_v2.find(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    ).to_list(5000)
+    
+    if not employees_docs:
+        raise HTTPException(status_code=404, detail=f"No employee data for {quarter} {year}")
+    
+    employees = [EmployeeV2(**doc) for doc in employees_docs]
+    rankings = generate_hierarchy_rankings(employees, settings)
+    
+    theme = settings.slide_theme or "dark_navy"
+    custom_colors = None
+    if theme == "custom":
+        custom_colors = {
+            "background": settings.slide_bg_color,
+            "background_gradient": settings.slide_bg_gradient,
+            "primary": settings.slide_accent_color,
+            "secondary": settings.slide_secondary_color,
+            "text_white": settings.slide_text_color,
+        }
+    
+    slide_bytes = generate_at_risk_slide(
+        rankings, settings.b_server_min_score, quarter.upper(), year,
+        theme=theme, custom_colors=custom_colors, custom_bg_image=settings.slide_custom_bg_image
+    )
+    
+    filename = f"yodeck_at_risk_{quarter}_{year}.png"
+    return Response(
+        content=slide_bytes,
+        media_type="image/png",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+@api_router.get("/v2/yodeck/themes")
+async def get_available_themes():
+    """Get list of available slide themes."""
+    return {
+        "themes": list(THEMES.keys()),
+        "default": "dark_navy"
     }
 
 
