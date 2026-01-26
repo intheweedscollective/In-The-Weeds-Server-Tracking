@@ -2530,10 +2530,21 @@ async def get_yodeck_at_risk_slide(year: int, quarter: str):
 
 @api_router.get("/v2/yodeck/themes")
 async def get_available_themes():
-    """Get list of available slide themes."""
+    """Get list of available slide themes, including seasonal options."""
+    from yodeck_slides import SEASONAL_THEMES, get_current_seasonal_theme
+    
+    current_seasonal = get_current_seasonal_theme()
+    
     return {
         "themes": list(THEMES.keys()),
-        "default": "dark_navy"
+        "default": "dark_navy",
+        "seasonal_themes": {
+            key: {"name": val["name"], "emoji": val["emoji"]} 
+            for key, val in SEASONAL_THEMES.items()
+        },
+        "seasonal_options": ["auto", "none"] + list(SEASONAL_THEMES.keys()),
+        "current_auto_seasonal": current_seasonal,
+        "current_seasonal_name": SEASONAL_THEMES[current_seasonal]["name"] if current_seasonal else None
     }
 
 
