@@ -430,11 +430,11 @@ export default function Analytics() {
         {/* Top 10 Overall + Top 10 per Metric */}
         <div className="mt-10 space-y-8">
           <div className="space-y-4" data-testid="analytics-top-overall">
-            <h2 className="text-2xl font-serif font-bold text-foreground">Top 10 Overall (Cumulative Score)</h2>
+            <h2 className="text-2xl font-serif font-bold text-foreground">Top 10 Overall (Total Score)</h2>
             <div className="bubba-card">
               <div className="p-5">
                 <div className="space-y-2">
-                  {getTopEmployees("cumulative_score", 10).map((emp, idx) => (
+                  {getTopEmployees("pre_dar_score", 10).map((emp, idx) => (
                     <div
                       key={emp.id}
                       className="flex items-center justify-between p-3 border border-gray-200 rounded-lg bg-gray-50"
