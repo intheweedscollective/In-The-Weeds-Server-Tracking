@@ -1267,6 +1267,14 @@ class QuarterSettingsUpdate(BaseModel):
     # Server tier thresholds
     a_server_min_score: Optional[float] = None
     b_server_min_score: Optional[float] = None
+    # Slide theme settings
+    slide_theme: Optional[str] = None
+    slide_bg_color: Optional[str] = None
+    slide_bg_gradient: Optional[str] = None
+    slide_text_color: Optional[str] = None
+    slide_accent_color: Optional[str] = None
+    slide_secondary_color: Optional[str] = None
+    slide_custom_bg_image: Optional[str] = None
 
 
 # === DAR (Disciplinary Action Reports) Management ===
