@@ -227,3 +227,17 @@ Position | Employee Name | Tier | Total Score | Bonus | PPA (earned/possible) | 
   - Created V2 PDF endpoints (`/v2/top-performers/{year}/{quarter}/pdf`, `/v2/analytics/{year}/{quarter}/pdf`)
   - Updated frontend to use V2 PDF endpoints
   - Codebase reduced by ~500 lines, now exclusively uses V2 scoring engine
+- ✅ **Time-Series Graph Auto-Generation (Jan 26, 2026)**
+  - Created `trend_charts.py` module using matplotlib for chart generation
+  - Added trend API endpoints:
+    - `GET /api/v2/trends/{year}/{quarter}/team` - Team comparison chart (PNG)
+    - `GET /api/v2/trends/{year}/{quarter}/team/data` - Team trend data (JSON)
+    - `GET /api/v2/trends/{year}/{quarter}/employee/{id}` - Individual employee chart
+    - `GET /api/v2/trends/{year}/{quarter}/employee/{id}/data` - Individual trend data
+  - Chart types: Comparison bars, Change %, Tier distribution pie charts
+  - Metrics compared: PPA, LBW/Guest, Glass/Guest, Guests/LSC, CV Score, Total Score
+  - Added "Quarter Trends" tab to Analytics page with:
+    - Team Average Comparison chart
+    - Tier Distribution comparison (pie charts)
+    - Metric change cards with up/down indicators
+    - Tier count changes summary
