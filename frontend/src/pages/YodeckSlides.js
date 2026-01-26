@@ -97,7 +97,8 @@ export default function YodeckSlides() {
     setDownloading(prev => ({ ...prev, [key]: true }));
     
     try {
-      const url = page > 1 ? `${API}${endpoint}?page=${page}` : `${API}${endpoint}`;
+      // endpoint already includes /api prefix, so use BACKEND_URL directly
+      const url = page > 1 ? `${BACKEND_URL}${endpoint}?page=${page}` : `${BACKEND_URL}${endpoint}`;
       
       // Use fetch to get the blob directly - more reliable than anchor download
       const response = await fetch(url, {
@@ -129,7 +130,7 @@ export default function YodeckSlides() {
     } catch (error) {
       console.error("Error downloading slide:", error);
       // Fallback: open in new tab
-      const url = page > 1 ? `${API}${endpoint}?page=${page}` : `${API}${endpoint}`;
+      const url = page > 1 ? `${BACKEND_URL}${endpoint}?page=${page}` : `${BACKEND_URL}${endpoint}`;
       window.open(url, '_blank');
       toast.info("Opening slide in new tab - right-click to save");
     } finally {
