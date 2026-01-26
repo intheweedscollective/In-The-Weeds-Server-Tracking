@@ -1837,6 +1837,78 @@ async def get_employee_v2(employee_id: str):
     return employee
 
 
+@api_router.post("/v2/employees/{employee_id}/generate-review")
+async def generate_employee_review_v2(employee_id: str, review_data: ReviewCreate):
+    """
+    Generate AI-powered performance review PDF using V2 employee data and Q1 2026 scoring model.
+    """
+    # Get V2 employee
+    employee_doc = await db.employees_v2.find_one({"id": employee_id}, {"_id": 0})
+    if not employee_doc:
+        raise HTTPException(status_code=404, detail="Employee not found in V2 data")
+    
+    # Convert to EmployeeV2 object
+    if isinstance(employee_doc.get('created_at'), str):
+        employee_doc['created_at'] = datetime.fromisoformat(employee_doc['created_at'])
+    
+    employee = EmployeeV2(**employee_doc)
+    
+    # Get quarter settings for tier thresholds
+    settings_doc = await db.quarter_settings.find_one(
+        {"year": review_data.year, "quarter": review_data.quarter.upper()},
+        {"_id": 0}
+    )
+    settings = QuarterSettings(**settings_doc) if settings_doc else QuarterSettings(year=review_data.year, quarter=review_data.quarter)
+    
+    try:
+        # Generate AI review content using V2 data
+        review_content = await generate_review_content_v2(employee, settings, review_data.quarter, review_data.year)
+        
+        # Get employee line graph for this quarter/year if available
+        line_graph = await db.line_graphs.find_one(
+            {
+                "employee_id": employee_id,
+                "quarter": review_data.quarter.upper(),
+                "year": review_data.year,
+                "graph_kind": "quarter",
+            },
+            {"_id": 0},
+        )
+        
+        # Create review record
+        review = Review(
+            employee_id=employee_id,
+            employee_name=employee.name,
+            review_content=review_content,
+            quarter=review_data.quarter.upper(),
+            year=review_data.year
+        )
+        
+        # Save review to database
+        review_doc = review.model_dump()
+        review_doc['created_at'] = review_doc['created_at'].isoformat()
+        await db.reviews.insert_one(review_doc)
+        
+        # Generate PDF with V2 scoring breakdown
+        base_pdf = generate_pdf_v2(employee, settings, review_content, review_data.quarter, review_data.year)
+        merged_pdf = _merge_review_with_graph(base_pdf, line_graph) if line_graph else base_pdf
+        pdf_base64 = base64.b64encode(merged_pdf).decode('utf-8')
+        
+        return ReviewResponse(
+            success=True,
+            review_id=review.id,
+            message="Review generated successfully (V2)",
+            pdf_base64=pdf_base64
+        )
+        
+    except Exception as e:
+        logging.error(f"Error generating V2 review: {str(e)}")
+        return ReviewResponse(
+            success=False,
+            message=f"Error generating review: {str(e)}"
+        )
+
+
 @api_router.get("/v2/rankings/{year}/{quarter}")
 async def get_rankings_v2(year: int, quarter: str):
     """Get ranked employee list for a quarter"""
