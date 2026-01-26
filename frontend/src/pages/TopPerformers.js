@@ -44,48 +44,23 @@ export default function TopPerformers() {
     fetchEmployees();
   }, [fetchEmployees]);
 
-  useEffect(() => {
-    if (employees.length > 0) {
-      calculateTopPerformers();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [employees]);
+  const getTopEmployees = (metric, limit = 10) => {
+    const config = V2_METRICS[metric];
+    const valid = employees.filter((e) => e[metric] != null);
 
-  const calculateTopPerformers = () => {
-    const metrics = Object.keys(V2_METRICS);
-    const topPerformersData = {};
-
-    metrics.forEach(metric => {
-      const config = V2_METRICS[metric];
-      const valid = employees.filter(emp => emp[metric] != null);
-      
-      let sortedEmployees;
-      if (!config.higherBetter) {
-        // For metrics where lower is better (like guests_per_lsc)
-        sortedEmployees = [...valid].sort((a, b) => (a[metric] || 0) - (b[metric] || 0));
-      } else {
-        // For metrics where higher is better
-        sortedEmployees = [...valid].sort((a, b) => (b[metric] || 0) - (a[metric] || 0));
-      }
-
-      topPerformersData[metric] = sortedEmployees.slice(0, 10);
+    const sorted = [...valid].sort((a, b) => {
+      if (!config.higherBetter) return (a[metric] || 0) - (b[metric] || 0);
+      return (b[metric] || 0) - (a[metric] || 0);
     });
 
-    // Top 10 overall = top by pre_dar_score (Total Score)
-    const overall = [...employees]
-      .filter(emp => emp.pre_dar_score != null)
-      .sort((a, b) => (b.pre_dar_score || 0) - (a.pre_dar_score || 0))
-      .slice(0, 10);
-
-    setTopOverall(overall);
-    setTopPerformers(topPerformersData);
+    return sorted.slice(0, limit);
   };
 
-  const getMetricIcon = (rank) => {
+  const getRankBadge = (rank) => {
     if (rank === 1) return <Trophy className="w-5 h-5 text-yellow-500" />;
     if (rank === 2) return <Medal className="w-5 h-5 text-gray-400" />;
     if (rank === 3) return <Award className="w-5 h-5 text-amber-600" />;
-    return <span className="w-5 h-5 flex items-center justify-center text-xs font-bold text-gray-600">#{rank}</span>;
+    return <span className="w-5 h-5 flex items-center justify-center font-bold text-gray-500">#{rank}</span>;
   };
 
   const formatMetricValue = (metric, value) => {
@@ -104,6 +79,7 @@ export default function TopPerformers() {
   // Computed values
   const topOverall = useMemo(() => {
     return getTopEmployees('pre_dar_score', 10);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employees]);
 
   const topPerformers = useMemo(() => {
@@ -112,6 +88,7 @@ export default function TopPerformers() {
       result[metric] = getTopEmployees(metric, 10);
     });
     return result;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employees]);
 
   const getMetricIcon = (rank) => {
