@@ -60,6 +60,32 @@ api_router = APIRouter(prefix="/api")
 
 
 # ============================================================================
+# V2 MODELS
+# ============================================================================
+
+class ReviewCreateV2(BaseModel):
+    quarter: str = "Q1"
+    year: int = 2026
+
+class ReviewV2(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    employee_id: str
+    employee_name: str
+    review_content: str
+    quarter: str
+    year: int
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class ReviewResponseV2(BaseModel):
+    success: bool
+    review_id: Optional[str] = None
+    message: str
+    pdf_base64: Optional[str] = None
+
+
+# ============================================================================
 # V2 REVIEW GENERATION (Uses EmployeeV2 with Q1 2026 scoring model)
 # ============================================================================
 
