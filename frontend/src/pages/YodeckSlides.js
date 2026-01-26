@@ -261,7 +261,7 @@ export default function YodeckSlides() {
               
               {/* Custom Colors */}
               <div className="mb-6">
-                <label className="text-sm font-medium mb-3 block">Custom Colors (for "custom" theme)</label>
+                <label className="text-sm font-medium mb-3 block">Custom Colors (for &quot;custom&quot; theme)</label>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                   <div>
                     <label className="text-xs text-gray-500 block mb-1">Background</label>
