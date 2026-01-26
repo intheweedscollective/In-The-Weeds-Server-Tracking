@@ -844,12 +844,11 @@ export default function QuarterSettings() {
                 <button
                   key={key}
                   onClick={() => setFormData(prev => ({ ...prev, slide_seasonal_theme: key }))}
-                  disabled={settings?.is_locked}
                   className={`p-3 rounded-lg border-2 transition-all ${
                     formData.slide_seasonal_theme === key 
                       ? 'border-pink-500 ring-2 ring-pink-500/20 bg-pink-50' 
                       : 'border-gray-200 hover:border-gray-300 bg-white'
-                  } ${settings?.is_locked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  }`}
                   data-testid={`seasonal-theme-${key}`}
                 >
                   <div className="text-center">
