@@ -236,7 +236,11 @@ def validate_upload_columns(df_columns: List[str]) -> Dict[str, Any]:
     }
     
     required_fields = ["name", "guests", "net_sales", "lbw", "glassware_sales", "lsc_count"]
-    optional_fields = ["review_tracker", "cv_positive", "cv_negative"]
+    optional_fields = [
+        "cv_promoters", "cv_passives", "cv_detractors",  # Customer Voice
+        "review_mentions",  # Review Tracker
+        "review_tracker", "cv_positive", "cv_negative"   # Legacy text fields
+    ]
     
     df_columns_lower = [col.lower().strip() for col in df_columns]
     
