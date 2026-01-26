@@ -2704,6 +2704,244 @@ async def get_employee_dar(employee_id: str):
     }
 
 
+# ============================================================================
+# V2 PDF ENDPOINTS (Replacing Legacy V1)
+# ============================================================================
+
+@api_router.get("/v2/top-performers/{year}/{quarter}/pdf")
+async def get_top_performers_pdf_v2(year: int, quarter: str):
+    """Generate Top Performers PDF for V2 data."""
+    from reportlab.lib import colors as rl_colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import inch
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    
+    employees_docs = await db.employees_v2.find(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    ).sort("pre_dar_score", -1).to_list(5000)
+    
+    if not employees_docs:
+        raise HTTPException(status_code=404, detail=f"No employee data for {quarter} {year}")
+    
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5*inch, bottomMargin=0.5*inch,
+                          leftMargin=0.6*inch, rightMargin=0.6*inch)
+    
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('title', parent=styles['Title'], fontName='Helvetica-Bold',
+                                fontSize=20, textColor=rl_colors.HexColor('#D12E2E'), alignment=1, spaceAfter=10)
+    subtitle_style = ParagraphStyle('subtitle', parent=styles['Normal'], fontName='Helvetica',
+                                   fontSize=10, textColor=rl_colors.HexColor('#374151'), alignment=1, spaceAfter=16)
+    section_style = ParagraphStyle('section', parent=styles['Heading2'], fontName='Helvetica-Bold',
+                                  fontSize=12, textColor=rl_colors.HexColor('#005B96'), spaceBefore=10, spaceAfter=6)
+    
+    story = []
+    story.append(Paragraph("Top Performers Report", title_style))
+    story.append(Paragraph(f"{quarter} {year} • Bubba Gump Shrimp Co. • Las Vegas", subtitle_style))
+    story.append(Spacer(1, 10))
+    
+    # Top 10 Overall
+    story.append(Paragraph("🏆 Top 10 Overall", section_style))
+    top_10 = employees_docs[:10]
+    table_data = [["Rank", "Name", "Job Title", "Score"]]
+    for i, emp in enumerate(top_10, 1):
+        table_data.append([f"#{i}", emp.get("name", ""), emp.get("job_title", "Server"), 
+                         f"{emp.get('pre_dar_score', 0):.1f}"])
+    
+    table = Table(table_data, colWidths=[50, 180, 120, 80])
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), rl_colors.HexColor('#D12E2E')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), rl_colors.white),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+        ('BACKGROUND', (0, 1), (-1, -1), rl_colors.HexColor('#F9FAFB')),
+        ('GRID', (0, 0), (-1, -1), 0.5, rl_colors.HexColor('#E5E7EB')),
+    ]))
+    story.append(table)
+    story.append(Spacer(1, 20))
+    
+    # Top by each metric
+    metrics = [
+        ("ppa", "💰 Top 10 by PPA", True),
+        ("lbw_per_guest", "🍷 Top 10 by LBW/Guest", True),
+        ("glassware_per_guest", "🥂 Top 10 by Glassware", True),
+        ("guests_per_lsc", "📋 Top 10 by LSC Efficiency", False),
+    ]
+    
+    for metric_key, title, higher_better in metrics:
+        story.append(Paragraph(title, section_style))
+        sorted_emps = sorted([e for e in employees_docs if e.get(metric_key) is not None],
+                           key=lambda x: x.get(metric_key, 0), reverse=higher_better)[:10]
+        
+        table_data = [["Rank", "Name", "Value"]]
+        for i, emp in enumerate(sorted_emps, 1):
+            val = emp.get(metric_key, 0)
+            formatted = f"${val:.2f}" if metric_key != "guests_per_lsc" else f"{val:.1f}"
+            table_data.append([f"#{i}", emp.get("name", ""), formatted])
+        
+        table = Table(table_data, colWidths=[50, 200, 100])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), rl_colors.HexColor('#005B96')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), rl_colors.white),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+            ('BACKGROUND', (0, 1), (-1, -1), rl_colors.HexColor('#F9FAFB')),
+            ('GRID', (0, 0), (-1, -1), 0.5, rl_colors.HexColor('#E5E7EB')),
+        ]))
+        story.append(table)
+        story.append(Spacer(1, 15))
+    
+    # Footer
+    story.append(Spacer(1, 20))
+    footer_style = ParagraphStyle('footer', parent=styles['Normal'], fontSize=8, 
+                                 textColor=rl_colors.HexColor('#9CA3AF'), alignment=1)
+    story.append(Paragraph(f"Generated {datetime.now().strftime('%m/%d/%Y %H:%M')} • Confidential", footer_style))
+    
+    doc.build(story)
+    buffer.seek(0)
+    
+    return Response(
+        content=buffer.getvalue(),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=top_performers_{quarter}_{year}.pdf"}
+    )
+
+
+@api_router.get("/v2/analytics/{year}/{quarter}/pdf")
+async def get_analytics_pdf_v2(year: int, quarter: str):
+    """Generate Analytics PDF for V2 data."""
+    from reportlab.lib import colors as rl_colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import inch
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    
+    employees_docs = await db.employees_v2.find(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    ).to_list(5000)
+    
+    if not employees_docs:
+        raise HTTPException(status_code=404, detail=f"No employee data for {quarter} {year}")
+    
+    # Get settings for benchmarks
+    settings_doc = await db.quarter_settings.find_one(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    )
+    
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5*inch, bottomMargin=0.5*inch,
+                          leftMargin=0.6*inch, rightMargin=0.6*inch)
+    
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('title', parent=styles['Title'], fontName='Helvetica-Bold',
+                                fontSize=20, textColor=rl_colors.HexColor('#D12E2E'), alignment=1, spaceAfter=10)
+    subtitle_style = ParagraphStyle('subtitle', parent=styles['Normal'], fontName='Helvetica',
+                                   fontSize=10, textColor=rl_colors.HexColor('#374151'), alignment=1, spaceAfter=16)
+    section_style = ParagraphStyle('section', parent=styles['Heading2'], fontName='Helvetica-Bold',
+                                  fontSize=12, textColor=rl_colors.HexColor('#005B96'), spaceBefore=10, spaceAfter=6)
+    
+    story = []
+    story.append(Paragraph("Analytics Report", title_style))
+    story.append(Paragraph(f"{quarter} {year} • Bubba Gump Shrimp Co. • Las Vegas", subtitle_style))
+    story.append(Spacer(1, 10))
+    
+    # Team Summary
+    story.append(Paragraph("📊 Team Performance Summary", section_style))
+    
+    metrics_config = [
+        ("ppa", "PPA", settings_doc.get("benchmark_ppa", 55.0) if settings_doc else 55.0, True),
+        ("lbw_per_guest", "LBW/Guest", settings_doc.get("benchmark_lbw", 8.0) if settings_doc else 8.0, True),
+        ("glassware_per_guest", "Glass/Guest", settings_doc.get("benchmark_glass", 1.0) if settings_doc else 1.0, True),
+        ("guests_per_lsc", "Guests/LSC", settings_doc.get("benchmark_lsc", 100.0) if settings_doc else 100.0, False),
+        ("cv_score", "CV Score", settings_doc.get("benchmark_cv", 5.0) if settings_doc else 5.0, True),
+    ]
+    
+    summary_data = [["Metric", "Benchmark", "Team Avg", "Meeting Benchmark", "Status"]]
+    for metric_key, label, benchmark, higher_better in metrics_config:
+        values = [e.get(metric_key, 0) for e in employees_docs if e.get(metric_key) is not None]
+        if not values:
+            continue
+        avg = sum(values) / len(values)
+        if higher_better:
+            meeting = sum(1 for v in values if v >= benchmark)
+        else:
+            meeting = sum(1 for v in values if v <= benchmark)
+        pct = (meeting / len(values)) * 100 if values else 0
+        status = "✅" if pct >= 50 else "⚠️" if pct >= 30 else "❌"
+        
+        summary_data.append([
+            label, 
+            f"${benchmark:.2f}" if metric_key != "guests_per_lsc" and metric_key != "cv_score" else f"{benchmark:.1f}",
+            f"${avg:.2f}" if metric_key != "guests_per_lsc" and metric_key != "cv_score" else f"{avg:.1f}",
+            f"{meeting}/{len(values)} ({pct:.0f}%)",
+            status
+        ])
+    
+    table = Table(summary_data, colWidths=[80, 80, 80, 100, 50])
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), rl_colors.HexColor('#D12E2E')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), rl_colors.white),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+        ('BACKGROUND', (0, 1), (-1, -1), rl_colors.HexColor('#F9FAFB')),
+        ('GRID', (0, 0), (-1, -1), 0.5, rl_colors.HexColor('#E5E7EB')),
+    ]))
+    story.append(table)
+    story.append(Spacer(1, 20))
+    
+    # Tier Distribution
+    story.append(Paragraph("📈 Server Tier Distribution", section_style))
+    tier_counts = {"Trainer": 0, "Bartender": 0, "A-Server": 0, "B-Server": 0, "C-Server": 0}
+    for emp in employees_docs:
+        tier = emp.get("tier_label", "C-Server")
+        if tier in tier_counts:
+            tier_counts[tier] += 1
+    
+    tier_data = [["Tier", "Count", "Percentage"]]
+    total = len(employees_docs)
+    for tier, count in tier_counts.items():
+        pct = (count / total * 100) if total > 0 else 0
+        tier_data.append([tier, str(count), f"{pct:.1f}%"])
+    
+    table = Table(tier_data, colWidths=[120, 80, 80])
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), rl_colors.HexColor('#005B96')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), rl_colors.white),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+        ('BACKGROUND', (0, 1), (-1, -1), rl_colors.HexColor('#F9FAFB')),
+        ('GRID', (0, 0), (-1, -1), 0.5, rl_colors.HexColor('#E5E7EB')),
+    ]))
+    story.append(table)
+    story.append(Spacer(1, 20))
+    
+    # Footer
+    footer_style = ParagraphStyle('footer', parent=styles['Normal'], fontSize=8, 
+                                 textColor=rl_colors.HexColor('#9CA3AF'), alignment=1)
+    story.append(Paragraph(f"Generated {datetime.now().strftime('%m/%d/%Y %H:%M')} • Confidential", footer_style))
+    
+    doc.build(story)
+    buffer.seek(0)
+    
+    return Response(
+        content=buffer.getvalue(),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=analytics_{quarter}_{year}.pdf"}
+    )
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
