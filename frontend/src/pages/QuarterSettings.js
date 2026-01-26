@@ -166,7 +166,14 @@ export default function QuarterSettings() {
         bonus_rate: response.data.bonus_rate,
         bonus_cap: response.data.bonus_cap,
         a_server_min_score: response.data.a_server_min_score || 85.1,
-        b_server_min_score: response.data.b_server_min_score || 70.1
+        b_server_min_score: response.data.b_server_min_score || 70.1,
+        // Slide theme settings
+        slide_theme: response.data.slide_theme || "dark_navy",
+        slide_bg_color: response.data.slide_bg_color || "#0A1628",
+        slide_bg_gradient: response.data.slide_bg_gradient || "#132238",
+        slide_text_color: response.data.slide_text_color || "#FFFFFF",
+        slide_accent_color: response.data.slide_accent_color || "#D12E2E",
+        slide_secondary_color: response.data.slide_secondary_color || "#005B96"
       });
       setIsNew(false);
     } catch (error) {
