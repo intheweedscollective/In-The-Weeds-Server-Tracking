@@ -101,7 +101,9 @@ export default function QuarterSettings() {
           slide_bg_gradient: response.data.slide_bg_gradient || "#132238",
           slide_text_color: response.data.slide_text_color || "#FFFFFF",
           slide_accent_color: response.data.slide_accent_color || "#D12E2E",
-          slide_secondary_color: response.data.slide_secondary_color || "#005B96"
+          slide_secondary_color: response.data.slide_secondary_color || "#005B96",
+          // Seasonal theme setting
+          slide_seasonal_theme: response.data.slide_seasonal_theme || "auto"
         });
         setIsNew(false);
       } catch (error) {
