@@ -288,8 +288,8 @@ def generate_team_comparison_chart(
         previous_avgs.append(prev_avg)
     
     # Create bars
-    bars1 = ax.bar(x - width/2, previous_avgs, width, label=f'{prev_quarter} {prev_year} Team Avg', 
-                   color=COLORS['previous'], edgecolor='white', linewidth=1)
+    ax.bar(x - width/2, previous_avgs, width, label=f'{prev_quarter} {prev_year} Team Avg', 
+           color=COLORS['previous'], edgecolor='white', linewidth=1)
     bars2 = ax.bar(x + width/2, current_avgs, width, label=f'{current_quarter} {current_year} Team Avg', 
                    color=COLORS['secondary'], edgecolor='white', linewidth=1)
     
