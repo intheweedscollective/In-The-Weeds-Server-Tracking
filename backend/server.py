@@ -1679,7 +1679,7 @@ async def download_full_rankings_pdf(year: int, quarter: str):
             r["bonus_lbw"] = emp.bonus_lbw or 0
             r["bonus_lsc"] = emp.bonus_lsc or 0
             r["bonus_glass"] = emp.bonus_glass or 0
-            r["cv_score"] = emp.customer_voice_score or 0
+            r["cv_score"] = emp.cv_score or 0
     
     # Generate PDF
     thresholds = {
