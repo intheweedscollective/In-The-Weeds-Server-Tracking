@@ -935,7 +935,7 @@ async def top_performers_pdf():
 
 
 # ============================================================================
-# V2 ENDPOINTS - NEW SCORING ENGINE
+# V2 ENDPOINTS - NEW SCORING ENGINE (Q1 2026 Official Model)
 # ============================================================================
 
 # === QUARTER SETTINGS ===
@@ -947,10 +947,12 @@ class QuarterSettingsCreate(BaseModel):
     benchmark_lbw: float = 8.0
     benchmark_glass: float = 1.0
     benchmark_lsc: float = 100.0
-    weight_ppa: float = 0.30
-    weight_lbw: float = 0.25
-    weight_glass: float = 0.20
-    weight_lsc: float = 0.25
+    benchmark_cv: float = 5.0       # Customer Voice benchmark
+    weight_ppa: float = 0.25        # Q1 2026: 25%
+    weight_lbw: float = 0.20        # Q1 2026: 20%
+    weight_glass: float = 0.15      # Q1 2026: 15%
+    weight_lsc: float = 0.25        # Q1 2026: 25%
+    weight_cv: float = 0.15         # Q1 2026: 15% (Customer Voice & Review Tracker)
     bonus_rate: float = 0.2
     bonus_cap: float = 5.0
 
@@ -960,12 +962,21 @@ class QuarterSettingsUpdate(BaseModel):
     benchmark_lbw: Optional[float] = None
     benchmark_glass: Optional[float] = None
     benchmark_lsc: Optional[float] = None
+    benchmark_cv: Optional[float] = None
     weight_ppa: Optional[float] = None
     weight_lbw: Optional[float] = None
     weight_glass: Optional[float] = None
     weight_lsc: Optional[float] = None
+    weight_cv: Optional[float] = None
     bonus_rate: Optional[float] = None
     bonus_cap: Optional[float] = None
+
+
+# === DAR (Disciplinary Action Reports) Management ===
+
+class DARUpdate(BaseModel):
+    written_warnings: int = 0
+    suspensions: int = 0
 
 
 @api_router.get("/v2/quarter-settings")
