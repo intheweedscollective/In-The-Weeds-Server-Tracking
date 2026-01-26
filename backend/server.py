@@ -1181,12 +1181,14 @@ async def get_benchmark_suggestions(year: int, quarter: str):
 async def download_template():
     """
     Download a sample CSV template with Q1 2026 column format.
-    Includes Customer Voice (NPS) and Review Tracker fields.
+    
+    IMPORTANT: LBW must NOT be a column. Use individual Liquor, Beer, Wine columns.
+    LBW Total is calculated automatically: LBW = Liquor + Beer + Wine
     """
-    template_content = """Employee Name,Guests,Net Sales,LBW,Glassware Sales,LSC Count,CV Promoters,CV Passives,CV Detractors,Review Mentions
-John Smith,450,24750,4050,540,5,3,2,1,8
-Jane Doe,520,28600,4680,624,9,5,1,0,12
-Sample Employee,400,22000,3600,480,4,2,3,2,5"""
+    template_content = """Employee Name,Guests,Net Sales,Liquor Sales,Beer Sales,Wine Sales,Glassware Sales,LSC Count,CV Promoters,CV Passives,CV Detractors,Review Mentions
+John Smith,450,24750,1500,1350,1200,540,5,3,2,1,8
+Jane Doe,520,28600,1800,1500,1380,624,9,5,1,0,12
+Sample Employee,400,22000,1200,1200,1200,480,4,2,3,2,5"""
     
     return Response(
         content=template_content,
