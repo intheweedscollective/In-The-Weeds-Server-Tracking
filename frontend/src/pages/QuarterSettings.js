@@ -681,12 +681,11 @@ export default function QuarterSettings() {
                   <button
                     key={key}
                     onClick={() => applyThemePreset(key)}
-                    disabled={settings?.is_locked}
                     className={`p-4 rounded-lg border-2 transition-all ${
                       formData.slide_theme === key 
                         ? 'border-primary ring-2 ring-primary/20' 
                         : 'border-gray-200 hover:border-gray-300'
-                    } ${settings?.is_locked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    }`}
                     style={{ backgroundColor: theme.bg }}
                     data-testid={`theme-preset-${key}`}
                   >
