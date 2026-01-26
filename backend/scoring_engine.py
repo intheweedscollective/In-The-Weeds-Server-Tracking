@@ -1,13 +1,12 @@
 """
-Restaurant Performance Engine v2.0
-New Scoring Logic - Deterministic, Auditable
+Restaurant Performance Engine v2.1
+Q1 2026 Official Scoring Model - Bubba Gump Shrimp Co.
 
-This module replaces the legacy scoring system with the new spec:
-- Canonical data fields
-- Derived metrics (app-calculated)
-- Benchmark-relative normalized scores
-- Bonus point calculation
-- Percentile-based tiers
+Scoring Logic:
+- PPA (25%), LSC (25%), LBW (20%), Glassware (15%), Customer Voice (15%)
+- Customer Voice: NPS-style internal feedback scoring
+- Review Tracker: External platform bonus points
+- DAR: Disciplinary penalties (admin-only, applied at final stage)
 """
 
 from typing import Optional, Dict, Any, List, Tuple
@@ -18,13 +17,33 @@ import math
 
 
 # ============================================================================
-# NEW CANONICAL DATA MODEL
+# CUSTOMER VOICE & REVIEW TRACKER CONSTANTS
+# ============================================================================
+
+# Customer Voice NPS-style scoring
+CV_PROMOTER_POINTS = 1      # Score 9-10
+CV_PASSIVE_POINTS = 0       # Score 7-8
+CV_DETRACTOR_POINTS = -2    # Score 6 or below
+CV_MAX_POINTS = 10          # Quarterly cap for positive
+CV_MIN_POINTS = -6          # Quarterly floor for negative
+
+# Review Tracker
+RT_MENTIONS_PER_POINT = 5   # Every 5 positive mentions = +1 point
+RT_MAX_BONUS = 10           # Quarterly cap
+
+# DAR Penalties
+DAR_WRITTEN_WARNING = -3
+DAR_SUSPENSION = -5
+
+
+# ============================================================================
+# DATA MODELS
 # ============================================================================
 
 class EmployeeV2(BaseModel):
     """
-    New Employee model with canonical fields.
-    Raw data from upload + derived metrics + scores
+    Employee model with Q1 2026 official scoring fields.
+    Raw data from upload + derived metrics + scores + Customer Voice + DAR
     """
     model_config = ConfigDict(extra="ignore")
     
@@ -38,7 +57,19 @@ class EmployeeV2(BaseModel):
     glassware_sales: float  # Total glassware dollars
     lsc_count: int  # LSC signups count, >= 0
     
-    # === OPTIONAL FIELDS (stored, not scored) ===
+    # === CUSTOMER VOICE FIELDS (from upload) ===
+    cv_promoters: int = 0       # Count of 9-10 scores (service-related only)
+    cv_passives: int = 0        # Count of 7-8 scores
+    cv_detractors: int = 0      # Count of 6 or below scores
+    
+    # === REVIEW TRACKER FIELDS (from upload) ===
+    review_mentions: int = 0    # Named positive mentions from external platforms
+    
+    # === DAR FIELDS (admin-only, not in upload) ===
+    dar_written_warnings: int = 0
+    dar_suspensions: int = 0
+    
+    # === LEGACY OPTIONAL FIELDS ===
     review_tracker: Optional[str] = None
     cv_positive: Optional[str] = None
     cv_negative: Optional[str] = None
@@ -55,19 +86,31 @@ class EmployeeV2(BaseModel):
     score_glass: Optional[float] = None  # (Glass/Guest / Benchmark) * 100
     score_lsc: Optional[float] = None  # (Benchmark / Guests per LSC) * 100 (inverse)
     
-    # === BONUS POINTS ===
+    # === CUSTOMER VOICE SCORE ===
+    cv_raw_points: Optional[float] = None      # Raw CV calculation before cap
+    cv_score: Optional[float] = None           # Capped CV score (-6 to +10)
+    score_cv: Optional[float] = None           # Normalized for weighting (0-100 scale)
+    
+    # === REVIEW TRACKER BONUS ===
+    review_tracker_bonus: Optional[float] = None  # Capped at 10
+    
+    # === BONUS POINTS (for exceeding benchmarks) ===
     bonus_ppa: Optional[float] = None
     bonus_lbw: Optional[float] = None
     bonus_glass: Optional[float] = None
     bonus_lsc: Optional[float] = None
-    total_bonus: Optional[float] = None
+    total_metric_bonus: Optional[float] = None
+    
+    # === DAR PENALTY (applied at final stage, not visible in rankings) ===
+    dar_penalty: Optional[float] = None  # Hidden from rankings display
     
     # === FINAL SCORE & RANKING ===
-    weighted_score: Optional[float] = None
-    total_score: Optional[float] = None
-    peer_rank: Optional[int] = None  # 1-based rank
-    peer_rank_display: Optional[str] = None  # "X of N"
-    performance_tier: Optional[str] = None  # Top Performer, etc.
+    weighted_score: Optional[float] = None      # Before bonuses and penalties
+    pre_dar_score: Optional[float] = None       # Score shown in rankings (before DAR)
+    total_score: Optional[float] = None         # Final score (includes DAR, admin-only)
+    peer_rank: Optional[int] = None             # 1-based rank (based on pre_dar_score)
+    peer_rank_display: Optional[str] = None     # "X of N"
+    performance_tier: Optional[str] = None      # Top Performer, etc.
     
     # === METADATA ===
     quarter: Optional[str] = None  # Q1, Q2, Q3, Q4
