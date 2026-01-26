@@ -2511,9 +2511,13 @@ async def get_yodeck_at_risk_slide(year: int, quarter: str):
             "text_white": settings.slide_text_color,
         }
     
+    # Get seasonal theme setting
+    seasonal_theme = getattr(settings, 'slide_seasonal_theme', 'auto')
+    
     slide_bytes = generate_at_risk_slide(
         rankings, settings.b_server_min_score, quarter.upper(), year,
-        theme=theme, custom_colors=custom_colors, custom_bg_image=settings.slide_custom_bg_image
+        theme=theme, custom_colors=custom_colors, custom_bg_image=settings.slide_custom_bg_image,
+        seasonal_theme=seasonal_theme
     )
     
     filename = f"yodeck_at_risk_{quarter}_{year}.png"
