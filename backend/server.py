@@ -1411,11 +1411,16 @@ async def upload_employees_v2(
                     if not pd.isna(val):
                         cv_negative = str(val)
                 
+                # Create employee with individual alcohol fields
+                # LBW is calculated automatically in run_full_scoring
                 emp = EmployeeV2(
                     name=name,
                     guests=guests,
                     net_sales=net_sales,
-                    lbw=lbw,
+                    liquor_sales=liquor_sales,  # Individual input
+                    beer_sales=beer_sales,      # Individual input
+                    wine_sales=wine_sales,      # Individual input
+                    # lbw is calculated automatically from liquor+beer+wine
                     glassware_sales=glassware_sales,
                     lsc_count=lsc_count,
                     cv_promoters=cv_promoters,
