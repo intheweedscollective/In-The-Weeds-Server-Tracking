@@ -1007,7 +1007,7 @@ async def get_quarter_settings(year: int, quarter: str):
 
 @api_router.post("/v2/quarter-settings")
 async def create_quarter_settings(data: QuarterSettingsCreate):
-    """Create new quarter settings"""
+    """Create new quarter settings (Q1 2026 Official Model)"""
     # Check if settings already exist
     existing = await db.quarter_settings.find_one({
         "year": data.year, 
@@ -1019,8 +1019,8 @@ async def create_quarter_settings(data: QuarterSettingsCreate):
             detail=f"Settings already exist for {data.quarter} {data.year}. Use PUT to update."
         )
     
-    # Validate weights sum to 1.0
-    weight_sum = data.weight_ppa + data.weight_lbw + data.weight_glass + data.weight_lsc
+    # Validate weights sum to 1.0 (now includes CV weight)
+    weight_sum = data.weight_ppa + data.weight_lbw + data.weight_glass + data.weight_lsc + data.weight_cv
     if abs(weight_sum - 1.0) > 0.01:
         raise HTTPException(
             status_code=400, 
@@ -1034,10 +1034,12 @@ async def create_quarter_settings(data: QuarterSettingsCreate):
         benchmark_lbw=data.benchmark_lbw,
         benchmark_glass=data.benchmark_glass,
         benchmark_lsc=data.benchmark_lsc,
+        benchmark_cv=data.benchmark_cv,
         weight_ppa=data.weight_ppa,
         weight_lbw=data.weight_lbw,
         weight_glass=data.weight_glass,
         weight_lsc=data.weight_lsc,
+        weight_cv=data.weight_cv,
         bonus_rate=data.bonus_rate,
         bonus_cap=data.bonus_cap
     )
