@@ -75,12 +75,12 @@ export default function Analytics() {
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
       if (isIOS) {
-        window.open(`${API}/analytics/pdf`, "_blank", "noopener,noreferrer");
+        window.open(`${API}/v2/analytics/${selectedYear}/${selectedQuarter}/pdf`, "_blank", "noopener,noreferrer");
         toast.success("Opened Analytics PDF");
         return;
       }
 
-      const response = await axios.get(`${API}/analytics/pdf`, {
+      const response = await axios.get(`${API}/v2/analytics/${selectedYear}/${selectedQuarter}/pdf`, {
         responseType: "blob",
       });
 
@@ -88,7 +88,7 @@ export default function Analytics() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "analytics_report.pdf";
+      a.download = `analytics_${selectedQuarter}_${selectedYear}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
