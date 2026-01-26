@@ -57,6 +57,33 @@ export default function FullRankings() {
     fetchRankings();
   }, [fetchRankings]);
 
+  const handleDownloadPdf = async () => {
+    setDownloadingPdf(true);
+    try {
+      const response = await axios.get(
+        `${API}/v2/full-rankings/${selectedYear}/${selectedQuarter}/pdf`,
+        { responseType: 'blob' }
+      );
+      
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `full_rankings_${selectedQuarter}_${selectedYear}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success("Rankings PDF downloaded successfully!");
+    } catch (error) {
+      console.error("Error downloading PDF:", error);
+      toast.error("Failed to download PDF");
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   const getTierStyle = (tier) => {
     return TIER_STYLES[tier] || { bg: "bg-gray-100", text: "text-gray-800", border: "border-gray-200" };
   };
