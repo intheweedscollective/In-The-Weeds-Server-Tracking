@@ -1060,7 +1060,7 @@ async def get_employee_v2(employee_id: str):
 
 
 @api_router.post("/v2/employees/{employee_id}/generate-review")
-async def generate_employee_review_v2(employee_id: str, review_data: ReviewCreate):
+async def generate_employee_review_v2(employee_id: str, review_data: ReviewCreateV2):
     """
     Generate AI-powered performance review PDF using V2 employee data and Q1 2026 scoring model.
     """
@@ -1098,7 +1098,7 @@ async def generate_employee_review_v2(employee_id: str, review_data: ReviewCreat
         )
         
         # Create review record
-        review = Review(
+        review = ReviewV2(
             employee_id=employee_id,
             employee_name=employee.name,
             review_content=review_content,
@@ -1113,10 +1113,20 @@ async def generate_employee_review_v2(employee_id: str, review_data: ReviewCreat
         
         # Generate PDF with V2 scoring breakdown
         base_pdf = generate_pdf_v2(employee, settings, review_content, review_data.quarter, review_data.year)
-        merged_pdf = _merge_review_with_graph(base_pdf, line_graph) if line_graph else base_pdf
+        
+        # Merge with line graph if available
+        if line_graph and line_graph.get('file_data'):
+            try:
+                graph_pdf = _create_graph_pdf_from_image_bytes(base64.b64decode(line_graph['file_data']))
+                merged_pdf = _merge_pdfs(base_pdf, graph_pdf)
+            except Exception:
+                merged_pdf = base_pdf
+        else:
+            merged_pdf = base_pdf
+        
         pdf_base64 = base64.b64encode(merged_pdf).decode('utf-8')
         
-        return ReviewResponse(
+        return ReviewResponseV2(
             success=True,
             review_id=review.id,
             message="Review generated successfully (V2)",
@@ -1125,7 +1135,7 @@ async def generate_employee_review_v2(employee_id: str, review_data: ReviewCreat
         
     except Exception as e:
         logging.error(f"Error generating V2 review: {str(e)}")
-        return ReviewResponse(
+        return ReviewResponseV2(
             success=False,
             message=f"Error generating review: {str(e)}"
         )
