@@ -195,13 +195,21 @@ def draw_tier_badge(draw: ImageDraw.Draw, x: int, y: int, tier: str, font: Image
     return badge_width
 
 
-def generate_top_10_slide(rankings: List[Dict[str, Any]], quarter: str, year: int) -> bytes:
+def generate_top_10_slide(
+    rankings: List[Dict[str, Any]], 
+    quarter: str, 
+    year: int,
+    theme: str = "dark_navy",
+    custom_colors: Dict = None,
+    custom_bg_image: str = None
+) -> bytes:
     """
     Generate Top 10 Performers slide.
     Simple: Rank, Name, Tier Badge, Total Score
     Readable from 15 feet away.
     """
-    img = create_gradient_background(SLIDE_WIDTH, SLIDE_HEIGHT)
+    colors = get_theme_colors(theme, custom_colors)
+    img = create_gradient_background(SLIDE_WIDTH, SLIDE_HEIGHT, colors, custom_bg_image)
     draw = ImageDraw.Draw(img)
     
     # Fonts
@@ -221,7 +229,7 @@ def generate_top_10_slide(rankings: List[Dict[str, Any]], quarter: str, year: in
         ((SLIDE_WIDTH - title_width) // 2, 40),
         title_text,
         font=font_title,
-        fill=COLORS["primary"]
+        fill=colors["primary"]
     )
     
     # Subtitle
@@ -232,11 +240,11 @@ def generate_top_10_slide(rankings: List[Dict[str, Any]], quarter: str, year: in
         ((SLIDE_WIDTH - subtitle_width) // 2, 115),
         subtitle,
         font=font_subtitle,
-        fill=COLORS["text_muted"]
+        fill=colors["text_muted"]
     )
     
     # Divider line
-    draw.line([(100, 160), (SLIDE_WIDTH - 100, 160)], fill=COLORS["secondary"], width=3)
+    draw.line([(100, 160), (SLIDE_WIDTH - 100, 160)], fill=colors["secondary"], width=3)
     
     # Top 10 list
     start_y = 190
@@ -248,13 +256,13 @@ def generate_top_10_slide(rankings: List[Dict[str, Any]], quarter: str, year: in
         
         # Rank medal color
         if rank == 1:
-            rank_color = COLORS["gold"]
+            rank_color = colors["gold"]
         elif rank == 2:
-            rank_color = COLORS["silver"]
+            rank_color = colors["silver"]
         elif rank == 3:
-            rank_color = COLORS["bronze"]
+            rank_color = colors["bronze"]
         else:
-            rank_color = COLORS["text_light"]
+            rank_color = colors["text_light"]
         
         # Rank number
         rank_text = f"#{rank}"
