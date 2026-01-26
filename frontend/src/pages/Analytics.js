@@ -477,7 +477,7 @@ export default function Analytics() {
                   <div key={metric} className="bubba-card">
                     <div className="p-5">
                       <h3 className="text-lg font-serif font-bold text-foreground">
-                        {metricInfo.shortName} — {metricInfo.name}
+                        {metricInfo.label}
                       </h3>
                       <p className="text-sm text-gray-500 mb-4">Top 10 employees for this metric</p>
                       
