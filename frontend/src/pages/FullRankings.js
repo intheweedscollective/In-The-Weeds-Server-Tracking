@@ -1,0 +1,369 @@
+import { useState, useEffect, useCallback } from "react";
+import { Trophy, Calendar, Filter, ChevronDown, ChevronUp } from "lucide-react";
+import { toast } from "sonner";
+import axios from "axios";
+import Navigation from "../components/Navigation";
+import { Button } from "../components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { formatNumber } from "../utils/formatters";
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const API = `${BACKEND_URL}/api`;
+
+// Tier badge colors (professional, no gimmicks)
+const TIER_STYLES = {
+  "Trainer": { bg: "bg-purple-100", text: "text-purple-800", border: "border-purple-200" },
+  "Bartender": { bg: "bg-blue-100", text: "text-blue-800", border: "border-blue-200" },
+  "A-Server": { bg: "bg-green-100", text: "text-green-800", border: "border-green-200" },
+  "B-Server": { bg: "bg-yellow-100", text: "text-yellow-800", border: "border-yellow-200" },
+  "C-Server": { bg: "bg-red-100", text: "text-red-800", border: "border-red-200" }
+};
+
+export default function FullRankings() {
+  const [rankings, setRankings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedYear, setSelectedYear] = useState(2026);
+  const [selectedQuarter, setSelectedQuarter] = useState("Q1");
+  const [tierFilter, setTierFilter] = useState("all");
+  const [thresholds, setThresholds] = useState({ a_server_min: 85.1, b_server_min: 70.1 });
+  const [totalEmployees, setTotalEmployees] = useState(0);
+  const [expandedRow, setExpandedRow] = useState(null);
+
+  const fetchRankings = useCallback(async () => {
+    setLoading(true);
+    try {
+      const tierParam = tierFilter !== "all" ? `&tier_filter=${tierFilter}` : "";
+      const response = await axios.get(
+        `${API}/v2/full-rankings/${selectedYear}/${selectedQuarter}?${tierParam}`
+      );
+      setRankings(response.data.rankings || []);
+      setTotalEmployees(response.data.total_employees || 0);
+      setThresholds(response.data.tier_thresholds || { a_server_min: 85.1, b_server_min: 70.1 });
+    } catch (error) {
+      console.error("Error fetching rankings:", error);
+      if (error.response?.status === 404) {
+        toast.error(`No data found for ${selectedQuarter} ${selectedYear}`);
+        setRankings([]);
+      } else {
+        toast.error("Error loading rankings");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedYear, selectedQuarter, tierFilter]);
+
+  useEffect(() => {
+    fetchRankings();
+  }, [fetchRankings]);
+
+  const getTierStyle = (tier) => {
+    return TIER_STYLES[tier] || { bg: "bg-gray-100", text: "text-gray-800", border: "border-gray-200" };
+  };
+
+  const renderPointsCell = (points) => {
+    const earned = points?.earned ?? 0;
+    const possible = points?.possible ?? 0;
+    const percentage = possible > 0 ? (earned / possible) * 100 : 0;
+    
+    return (
+      <div className="text-center">
+        <div className="font-semibold text-sm">
+          {formatNumber(earned)} / {possible}
+        </div>
+        <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+          <div 
+            className={`h-1.5 rounded-full ${percentage >= 80 ? 'bg-green-500' : percentage >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
+            style={{ width: `${Math.min(percentage, 100)}%` }}
+          />
+        </div>
+      </div>
+    );
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navigation />
+        <div className="flex items-center justify-center h-96">
+          <div className="loading-spinner"></div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background relative overflow-hidden">
+      <div className="splash-red" style={{ top: '10%', right: '5%' }} />
+      <div className="splash-blue" style={{ bottom: '15%', left: '3%', opacity: 0.5 }} />
+      
+      <Navigation />
+      
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center gap-3 mb-2">
+            <Trophy className="w-8 h-8 text-secondary" />
+            <h1 className="text-3xl font-serif font-black text-foreground" data-testid="page-title">
+              Full Rankings
+            </h1>
+          </div>
+          <p className="text-gray-500" data-testid="page-subtitle">
+            Complete team standings with hierarchy-based tiering
+          </p>
+        </div>
+
+        {/* Filters Card */}
+        <div className="bubba-card mb-6" data-testid="filters-card">
+          <div className="tape tape-blue" style={{ top: '-8px', left: '50%', transform: 'translateX(-50%) rotate(-1deg)' }} />
+          <div className="p-6 pt-8">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                <Filter className="w-5 h-5 text-secondary" />
+              </div>
+              <h2 className="text-lg font-serif font-bold text-foreground">Filters</h2>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {/* Quarter Selection */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium flex items-center gap-2">
+                  <Calendar className="w-4 h-4" />
+                  Quarter
+                </label>
+                <div className="flex gap-2">
+                  <select 
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                    className="flex-1 h-10 px-3 border-2 border-gray-200 rounded-lg focus:border-secondary"
+                    data-testid="year-select"
+                  >
+                    <option value={2024}>2024</option>
+                    <option value={2025}>2025</option>
+                    <option value={2026}>2026</option>
+                    <option value={2027}>2027</option>
+                  </select>
+                  <select
+                    value={selectedQuarter}
+                    onChange={(e) => setSelectedQuarter(e.target.value)}
+                    className="flex-1 h-10 px-3 border-2 border-gray-200 rounded-lg focus:border-secondary"
+                    data-testid="quarter-select"
+                  >
+                    <option value="Q1">Q1</option>
+                    <option value="Q2">Q2</option>
+                    <option value="Q3">Q3</option>
+                    <option value="Q4">Q4</option>
+                  </select>
+                </div>
+              </div>
+              
+              {/* Tier Filter */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Filter by Tier</label>
+                <Select value={tierFilter} onValueChange={setTierFilter}>
+                  <SelectTrigger data-testid="tier-filter" className="border-2 border-gray-200">
+                    <SelectValue placeholder="All Tiers" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Tiers</SelectItem>
+                    <SelectItem value="Trainer">Trainers</SelectItem>
+                    <SelectItem value="Bartender">Bartenders</SelectItem>
+                    <SelectItem value="A-Server">A-Servers</SelectItem>
+                    <SelectItem value="B-Server">B-Servers</SelectItem>
+                    <SelectItem value="C-Server">C-Servers</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Threshold Display */}
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-medium">Score Thresholds (from Settings)</label>
+                <div className="flex gap-4 text-sm">
+                  <span className="px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
+                    <span className="font-medium text-green-800">A-Server:</span> ≥ {thresholds.a_server_min}
+                  </span>
+                  <span className="px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <span className="font-medium text-yellow-800">B-Server:</span> ≥ {thresholds.b_server_min}
+                  </span>
+                  <span className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
+                    <span className="font-medium text-red-800">C-Server:</span> &lt; {thresholds.b_server_min}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Results Summary */}
+        <div className="mb-4 flex items-center justify-between" data-testid="results-summary">
+          <p className="text-gray-500 font-medium">
+            Showing <span className="text-primary font-bold">{rankings.length}</span> of {totalEmployees} team members
+          </p>
+          <p className="text-sm text-gray-400">
+            {selectedQuarter} {selectedYear} • Rank is final
+          </p>
+        </div>
+
+        {/* Rankings Table */}
+        {rankings.length === 0 ? (
+          <div className="bubba-card p-12 text-center" data-testid="no-results">
+            <Trophy className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-serif font-bold mb-2">No rankings found</h3>
+            <p className="text-gray-500">
+              No data for {selectedQuarter} {selectedYear}. Upload employee data on the Dashboard.
+            </p>
+          </div>
+        ) : (
+          <div className="bubba-card overflow-hidden" data-testid="rankings-table-container">
+            <div className="tape" style={{ top: '-8px', left: '50%', transform: 'translateX(-50%) rotate(1deg)' }} />
+            <div className="overflow-x-auto pt-4">
+              <table className="w-full" data-testid="rankings-table">
+                <thead>
+                  <tr className="bg-gradient-to-r from-secondary to-primary text-white">
+                    <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider">Position</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider">Employee</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider">Tier</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider">Total Score</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider">Bonus</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider">PPA (25%)</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider">LBW (20%)</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider">LSC (25%)</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider">Glass (15%)</th>
+                    <th className="px-2 py-3 text-center text-xs font-bold uppercase tracking-wider"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {rankings.map((employee, index) => {
+                    const tierStyle = getTierStyle(employee.tier_label);
+                    const isExpanded = expandedRow === employee.employee_id;
+                    
+                    return (
+                      <>
+                        <tr 
+                          key={employee.employee_id}
+                          className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors`}
+                          data-testid={`ranking-row-${employee.position}`}
+                        >
+                          {/* Position */}
+                          <td className="px-4 py-4">
+                            <div className="flex items-center gap-2">
+                              <span className="text-2xl font-serif font-black text-gray-300">{employee.position}</span>
+                              <span className={`px-2 py-1 rounded text-xs font-bold ${tierStyle.bg} ${tierStyle.text} ${tierStyle.border} border`}>
+                                {employee.position_label}
+                              </span>
+                            </div>
+                          </td>
+                          
+                          {/* Employee Name */}
+                          <td className="px-4 py-4">
+                            <div>
+                              <div className="font-semibold text-foreground" data-testid={`employee-name-${employee.position}`}>
+                                {employee.name}
+                              </div>
+                              <div className="text-xs text-gray-500">{employee.job_title}</div>
+                            </div>
+                          </td>
+                          
+                          {/* Tier Badge */}
+                          <td className="px-4 py-4 text-center">
+                            <span className={`px-3 py-1 rounded-full text-xs font-bold ${tierStyle.bg} ${tierStyle.text}`}>
+                              {employee.tier_label}
+                            </span>
+                          </td>
+                          
+                          {/* Total Score */}
+                          <td className="px-4 py-4 text-center">
+                            <span className="text-xl font-serif font-black text-primary" data-testid={`total-score-${employee.position}`}>
+                              {formatNumber(employee.total_score)}
+                            </span>
+                          </td>
+                          
+                          {/* Bonus Points */}
+                          <td className="px-4 py-4 text-center">
+                            <span className="text-sm font-semibold text-green-600">
+                              +{formatNumber(employee.bonus_points)}
+                            </span>
+                          </td>
+                          
+                          {/* PPA Points */}
+                          <td className="px-4 py-4">
+                            {renderPointsCell(employee.ppa_points)}
+                          </td>
+                          
+                          {/* LBW Points */}
+                          <td className="px-4 py-4">
+                            {renderPointsCell(employee.lbw_points)}
+                          </td>
+                          
+                          {/* LSC Points */}
+                          <td className="px-4 py-4">
+                            {renderPointsCell(employee.lsc_points)}
+                          </td>
+                          
+                          {/* Glassware Points */}
+                          <td className="px-4 py-4">
+                            {renderPointsCell(employee.glassware_points)}
+                          </td>
+                          
+                          {/* Expand Toggle */}
+                          <td className="px-2 py-4">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setExpandedRow(isExpanded ? null : employee.employee_id)}
+                              className="p-1"
+                            >
+                              {isExpanded ? (
+                                <ChevronUp className="w-4 h-4" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4" />
+                              )}
+                            </Button>
+                          </td>
+                        </tr>
+                        
+                        {/* Expanded Details Row */}
+                        {isExpanded && (
+                          <tr key={`${employee.employee_id}-details`} className="bg-blue-50">
+                            <td colSpan={10} className="px-6 py-4">
+                              <div className="grid grid-cols-4 gap-4 text-sm">
+                                <div>
+                                  <span className="text-gray-500">Performance Tier:</span>
+                                  <span className="ml-2 font-semibold">{employee.performance_tier || 'N/A'}</span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500">PPA Score:</span>
+                                  <span className="ml-2 font-semibold">{formatNumber(employee.ppa_points?.earned)} pts</span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500">LBW Score:</span>
+                                  <span className="ml-2 font-semibold">{formatNumber(employee.lbw_points?.earned)} pts</span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500">Total Bonus:</span>
+                                  <span className="ml-2 font-semibold text-green-600">+{formatNumber(employee.bonus_points)}</span>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Legend */}
+        <div className="mt-6 bubba-card p-4">
+          <div className="text-sm text-gray-600">
+            <span className="font-semibold">Hierarchy Order:</span> Trainers → Bartenders → A-Servers → B-Servers → C-Servers
+            <span className="ml-4">|</span>
+            <span className="ml-4">Within each tier, employees are sorted by Total Score (highest first)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
