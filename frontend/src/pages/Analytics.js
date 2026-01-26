@@ -173,21 +173,6 @@ export default function Analytics() {
     return Math.round((count / total) * 100);
   };
 
-  const formatMetricValueOld = (metric, value) => {
-    switch (metric) {
-      case 'ppa':
-      case 'lbw_per_guest':
-      case 'glassware_per_guest':
-        return formatCurrency(value);
-      case 'guests_per_lsc':
-      case 'cv_score':
-      case 'pre_dar_score':
-        return formatNumber(value);
-      default:
-        return value?.toString() || 'N/A';
-    }
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
