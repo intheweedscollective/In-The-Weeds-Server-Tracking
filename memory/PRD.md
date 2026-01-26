@@ -97,13 +97,14 @@ A deterministic, in-app scoring engine that replaces Excel-based logic:
         └── components/
 ```
 
-## Completed (as of Jan 25, 2026)
+## Completed (as of Jan 26, 2026)
 - ✅ V2 Scoring Engine Backend (scoring_engine.py)
 - ✅ V2 API Endpoints (all CRUD operations)
 - ✅ Quarter Settings page (/settings)
 - ✅ Dashboard V2 integration (upload, validation, display)
 - ✅ Lint warnings fixed
 - ✅ Comprehensive test suite (21 backend tests, all passing)
+- ✅ Download CSV Template feature (helps users get correct column format)
 
 ## Upcoming Tasks (P1)
 1. **Phase 5: Update PDF Review Generation** - Use V2 data model for reviews
