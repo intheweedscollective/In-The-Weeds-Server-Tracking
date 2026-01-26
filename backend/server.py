@@ -1406,6 +1406,21 @@ async def update_quarter_settings(year: int, quarter: str, data: QuarterSettings
         update_data["a_server_min_score"] = data.a_server_min_score
     if data.b_server_min_score is not None:
         update_data["b_server_min_score"] = data.b_server_min_score
+    # Slide theme settings
+    if data.slide_theme is not None:
+        update_data["slide_theme"] = data.slide_theme
+    if data.slide_bg_color is not None:
+        update_data["slide_bg_color"] = data.slide_bg_color
+    if data.slide_bg_gradient is not None:
+        update_data["slide_bg_gradient"] = data.slide_bg_gradient
+    if data.slide_text_color is not None:
+        update_data["slide_text_color"] = data.slide_text_color
+    if data.slide_accent_color is not None:
+        update_data["slide_accent_color"] = data.slide_accent_color
+    if data.slide_secondary_color is not None:
+        update_data["slide_secondary_color"] = data.slide_secondary_color
+    if data.slide_custom_bg_image is not None:
+        update_data["slide_custom_bg_image"] = data.slide_custom_bg_image
     
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
     
