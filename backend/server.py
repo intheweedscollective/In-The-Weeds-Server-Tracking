@@ -2125,12 +2125,16 @@ async def get_yodeck_top10_slide(year: int, quarter: str):
             "text_white": settings.slide_text_color,
         }
     
+    # Get seasonal theme setting
+    seasonal_theme = getattr(settings, 'slide_seasonal_theme', 'auto')
+    
     # Generate slide with theme
     slide_bytes = generate_top_10_slide(
         rankings, quarter.upper(), year,
         theme=theme,
         custom_colors=custom_colors,
-        custom_bg_image=settings.slide_custom_bg_image
+        custom_bg_image=settings.slide_custom_bg_image,
+        seasonal_theme=seasonal_theme
     )
     
     filename = f"yodeck_top10_{quarter}_{year}.png"
