@@ -1180,17 +1180,18 @@ async def get_benchmark_suggestions(year: int, quarter: str):
 @api_router.get("/v2/template")
 async def download_template():
     """
-    Download a sample CSV template with correct column format for V2 upload.
+    Download a sample CSV template with Q1 2026 column format.
+    Includes Customer Voice (NPS) and Review Tracker fields.
     """
-    template_content = """Employee Name,Guests,Net Sales,LBW,Glassware Sales,LSC Count
-John Smith,450,24750,4050,540,5
-Jane Doe,520,28600,4680,624,9
-Sample Employee,400,22000,3600,480,4"""
+    template_content = """Employee Name,Guests,Net Sales,LBW,Glassware Sales,LSC Count,CV Promoters,CV Passives,CV Detractors,Review Mentions
+John Smith,450,24750,4050,540,5,3,2,1,8
+Jane Doe,520,28600,4680,624,9,5,1,0,12
+Sample Employee,400,22000,3600,480,4,2,3,2,5"""
     
     return Response(
         content=template_content,
         media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=employee_template.csv"}
+        headers={"Content-Disposition": "attachment; filename=employee_template_q1_2026.csv"}
     )
 
 
