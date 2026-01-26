@@ -526,6 +526,61 @@ export default function QuarterSettings() {
           </div>
         </div>
 
+        {/* Server Tier Thresholds */}
+        <div className="bubba-card mb-8">
+          <div className="tape tape-red" style={{ top: '-8px', left: '50%', transform: 'translateX(-50%) rotate(1deg)' }} />
+          <div className="p-6 pt-8">
+            <h2 className="text-lg font-serif font-bold text-foreground mb-4">Server Tier Thresholds</h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Rankings hierarchy: Trainers → Bartenders → A-Servers → B-Servers → C-Servers.
+              Server tiers are determined by Total Score thresholds (adjustable).
+            </p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full bg-green-500"></span>
+                  A-Server Minimum Score
+                </label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={formData.a_server_min_score}
+                  onChange={(e) => setFormData(prev => ({ ...prev, a_server_min_score: parseFloat(e.target.value) || 85.1 }))}
+                  disabled={settings?.is_locked}
+                  className="border-2"
+                />
+                <p className="text-xs text-gray-400">Score ≥ this = A-Server</p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full bg-yellow-500"></span>
+                  B-Server Minimum Score
+                </label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={formData.b_server_min_score}
+                  onChange={(e) => setFormData(prev => ({ ...prev, b_server_min_score: parseFloat(e.target.value) || 70.1 }))}
+                  disabled={settings?.is_locked}
+                  className="border-2"
+                />
+                <p className="text-xs text-gray-400">Score ≥ this AND &lt; A-Server = B-Server</p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full bg-red-500"></span>
+                  C-Server (Auto)
+                </label>
+                <div className="h-10 flex items-center px-3 bg-gray-100 border-2 border-gray-200 rounded-lg text-gray-500">
+                  Score &lt; {formData.b_server_min_score}
+                </div>
+                <p className="text-xs text-gray-400">Automatically calculated</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Save Button */}
         {!settings?.is_locked && (
           <div className="flex justify-end">
