@@ -469,47 +469,119 @@ export default function Dashboard() {
                 </span>
               </div>
               
-              <div className="space-y-3">
-                {employees.slice(0, 5).map((employee, idx) => (
+              <div className="space-y-4">
+                {employees.slice(0, 10).map((employee, idx) => (
                   <div 
                     key={employee.id} 
-                    className="flex items-center justify-between p-4 rounded-xl border-2 border-gray-200 bg-gray-50 hover:bg-gray-100 transition-colors"
+                    className="rounded-xl border-2 border-gray-200 bg-gray-50 overflow-hidden"
+                    data-testid={`ranking-card-${employee.id}`}
                   >
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-full bg-white border-2 border-gray-200 flex items-center justify-center font-serif font-bold text-primary">
-                        {employee.peer_rank || idx + 1}
+                    {/* Main Row */}
+                    <div className="flex items-center justify-between p-4">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-full bg-white border-2 border-gray-200 flex items-center justify-center font-serif font-bold text-primary">
+                          {employee.peer_rank || idx + 1}
+                        </div>
+                        <div>
+                          <h3 className="font-serif font-bold text-foreground">
+                            {employee.name}
+                          </h3>
+                          <p className="text-gray-500 text-sm">{employee.performance_tier || 'Not Assessed'}</p>
+                        </div>
                       </div>
-                      <div>
-                        <h3 className="font-serif font-bold text-foreground">
-                          {employee.name}
-                        </h3>
-                        <p className="text-gray-500 text-sm">{employee.position || 'Server'}</p>
+                      
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <div className="text-xl font-serif font-bold text-primary">
+                            {formatNumber(employee.pre_dar_score || employee.total_score || 0)}
+                          </div>
+                          <div className="text-xs text-gray-500">Total Score</div>
+                        </div>
+                        {employee.performance_tier && (
+                          <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                            employee.performance_tier === 'Top Performer' ? 'bg-green-100 text-green-800' :
+                            employee.performance_tier === 'Above Average' ? 'bg-blue-100 text-blue-800' :
+                            employee.performance_tier === 'Below Average' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-red-100 text-red-800'
+                          }`}>
+                            {employee.performance_tier}
+                          </span>
+                        )}
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <div className="text-xl font-serif font-bold text-primary">
-                          {formatNumber(employee.total_score || employee.cumulative_score)}
+                    {/* Scoring Breakdown Row */}
+                    <div className="px-4 pb-4 pt-2 border-t border-gray-200 bg-white">
+                      <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Points Breakdown</div>
+                      <div className="grid grid-cols-5 gap-2">
+                        {/* PPA - 25% */}
+                        <div className="text-center p-2 bg-blue-50 rounded-lg border border-blue-100">
+                          <div className="text-sm font-bold text-secondary">
+                            {formatNumber((employee.score_ppa || 0) * 0.25)}
+                          </div>
+                          <div className="text-[10px] text-gray-500">/ 25</div>
+                          <div className="text-[10px] font-semibold text-blue-600 mt-1">PPA</div>
                         </div>
-                        <div className="text-xs text-gray-500">Total Score</div>
+                        
+                        {/* LSC - 25% */}
+                        <div className="text-center p-2 bg-green-50 rounded-lg border border-green-100">
+                          <div className="text-sm font-bold text-green-700">
+                            {formatNumber((employee.score_lsc || 0) * 0.25)}
+                          </div>
+                          <div className="text-[10px] text-gray-500">/ 25</div>
+                          <div className="text-[10px] font-semibold text-green-600 mt-1">LSC</div>
+                        </div>
+                        
+                        {/* LBW - 20% */}
+                        <div className="text-center p-2 bg-purple-50 rounded-lg border border-purple-100">
+                          <div className="text-sm font-bold text-purple-700">
+                            {formatNumber((employee.score_lbw || 0) * 0.20)}
+                          </div>
+                          <div className="text-[10px] text-gray-500">/ 20</div>
+                          <div className="text-[10px] font-semibold text-purple-600 mt-1">LBW</div>
+                        </div>
+                        
+                        {/* Glass - 15% */}
+                        <div className="text-center p-2 bg-gray-100 rounded-lg border border-gray-200">
+                          <div className="text-sm font-bold text-gray-700">
+                            {formatNumber((employee.score_glass || 0) * 0.15)}
+                          </div>
+                          <div className="text-[10px] text-gray-500">/ 15</div>
+                          <div className="text-[10px] font-semibold text-gray-600 mt-1">Glass</div>
+                        </div>
+                        
+                        {/* CV - 15% */}
+                        <div className="text-center p-2 bg-yellow-50 rounded-lg border border-yellow-100">
+                          <div className="text-sm font-bold text-yellow-700">
+                            {formatNumber((employee.score_cv || 0) * 0.15)}
+                          </div>
+                          <div className="text-[10px] text-gray-500">/ 15</div>
+                          <div className="text-[10px] font-semibold text-yellow-600 mt-1">CV</div>
+                        </div>
                       </div>
-                      {employee.performance_tier && (
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                          employee.performance_tier === 'Top Performer' ? 'bg-green-100 text-green-800' :
-                          employee.performance_tier === 'Above Average' ? 'bg-blue-100 text-blue-800' :
-                          employee.performance_tier === 'Below Average' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-red-100 text-red-800'
-                        }`}>
-                          {employee.performance_tier}
-                        </span>
+                      
+                      {/* Bonuses Row */}
+                      {((employee.total_metric_bonus || 0) > 0 || (employee.review_tracker_bonus || 0) > 0) && (
+                        <div className="mt-2 flex items-center gap-2 text-xs">
+                          <span className="text-gray-500">Bonuses:</span>
+                          {(employee.total_metric_bonus || 0) > 0 && (
+                            <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
+                              +{formatNumber(employee.total_metric_bonus)} metric
+                            </span>
+                          )}
+                          {(employee.review_tracker_bonus || 0) > 0 && (
+                            <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+                              +{formatNumber(employee.review_tracker_bonus)} reviews
+                            </span>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
                 ))}
               </div>
               
-              {employees.length > 5 && (
+              {employees.length > 10 && (
                 <div className="mt-6 text-center">
                   <Link to="/employees">
                     <button className="bubba-btn-secondary">
