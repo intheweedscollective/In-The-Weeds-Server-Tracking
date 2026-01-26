@@ -684,6 +684,165 @@ export default function Analytics() {
             </div>
           </div>
         </div>
+          </>
+        ) : (
+          /* Trends Tab Content */
+          <div className="space-y-8" data-testid="trends-content">
+            {/* Trend Overview Banner */}
+            <div className="bubba-card p-6 bg-gradient-to-r from-primary/5 to-secondary/5">
+              <div className="flex items-center gap-4 mb-4">
+                <TrendingUp className="w-8 h-8 text-primary" />
+                <div>
+                  <h2 className="text-xl font-serif font-bold text-foreground">
+                    Quarter-over-Quarter Trends
+                  </h2>
+                  <p className="text-sm text-gray-500">
+                    Comparing {trendData?.previous_quarter || 'Previous'} {trendData?.previous_year || ''} → {selectedQuarter} {selectedYear}
+                  </p>
+                </div>
+              </div>
+              
+              {!trendData?.has_previous_data && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-yellow-800">
+                  <Info className="w-5 h-5 inline mr-2" />
+                  No previous quarter data available for comparison. Trends will show once multiple quarters have data.
+                </div>
+              )}
+            </div>
+
+            {/* Team Trend Charts */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Team Comparison Chart */}
+              <div className="bubba-card">
+                <div className="p-5">
+                  <h3 className="text-lg font-serif font-bold text-foreground mb-4">
+                    📊 Team Average Comparison
+                  </h3>
+                  <img 
+                    src={`${API}/v2/trends/${selectedYear}/${selectedQuarter}/team?chart_type=comparison`}
+                    alt="Team Comparison Chart"
+                    className="w-full rounded-lg"
+                    data-testid="team-comparison-chart"
+                  />
+                </div>
+              </div>
+
+              {/* Tier Distribution Chart */}
+              <div className="bubba-card">
+                <div className="p-5">
+                  <h3 className="text-lg font-serif font-bold text-foreground mb-4">
+                    📈 Tier Distribution
+                  </h3>
+                  <img 
+                    src={`${API}/v2/trends/${selectedYear}/${selectedQuarter}/team?chart_type=distribution`}
+                    alt="Tier Distribution Chart"
+                    className="w-full rounded-lg"
+                    data-testid="tier-distribution-chart"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Metric Change Cards */}
+            {trendData && (
+              <div className="bubba-card">
+                <div className="p-6">
+                  <h3 className="text-lg font-serif font-bold text-foreground mb-4">
+                    📉 Team Metric Changes
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                    {Object.entries(V2_METRICS).map(([metricKey, metricInfo]) => {
+                      const change = trendData.changes?.[metricKey] || 0;
+                      const currentVal = trendData.current_averages?.[metricKey] || 0;
+                      const isPositive = metricInfo.higherBetter ? change > 0 : change < 0;
+                      const isNeutral = change === 0;
+                      
+                      return (
+                        <div 
+                          key={metricKey}
+                          className={`p-4 rounded-lg border-2 ${
+                            isNeutral 
+                              ? 'border-gray-200 bg-gray-50'
+                              : isPositive 
+                                ? 'border-green-200 bg-green-50' 
+                                : 'border-red-200 bg-red-50'
+                          }`}
+                          data-testid={`trend-card-${metricKey}`}
+                        >
+                          <div className="text-xs text-gray-500 font-medium mb-1">
+                            {metricInfo.label}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg font-bold text-foreground">
+                              {metricInfo.format === 'currency' ? '$' : ''}{currentVal?.toFixed(2) || '0'}
+                            </span>
+                            <span className={`flex items-center text-sm font-semibold ${
+                              isNeutral 
+                                ? 'text-gray-500'
+                                : isPositive 
+                                  ? 'text-green-600' 
+                                  : 'text-red-600'
+                            }`}>
+                              {isNeutral ? (
+                                <Minus className="w-4 h-4" />
+                              ) : isPositive ? (
+                                <ArrowUp className="w-4 h-4" />
+                              ) : (
+                                <ArrowDown className="w-4 h-4" />
+                              )}
+                              {Math.abs(change).toFixed(1)}%
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Tier Movement Summary */}
+            {trendData && trendData.has_previous_data && (
+              <div className="bubba-card">
+                <div className="p-6">
+                  <h3 className="text-lg font-serif font-bold text-foreground mb-4">
+                    🔄 Tier Count Changes
+                  </h3>
+                  <div className="grid grid-cols-5 gap-4">
+                    {['Trainer', 'Bartender', 'A-Server', 'B-Server', 'C-Server'].map((tier) => {
+                      const currentCount = trendData.current_tier_distribution?.[tier] || 0;
+                      const prevCount = trendData.previous_tier_distribution?.[tier] || 0;
+                      const diff = currentCount - prevCount;
+                      
+                      const tierColors = {
+                        'Trainer': 'bg-purple-100 border-purple-300 text-purple-700',
+                        'Bartender': 'bg-blue-100 border-blue-300 text-blue-700',
+                        'A-Server': 'bg-green-100 border-green-300 text-green-700',
+                        'B-Server': 'bg-yellow-100 border-yellow-300 text-yellow-700',
+                        'C-Server': 'bg-red-100 border-red-300 text-red-700',
+                      };
+                      
+                      return (
+                        <div 
+                          key={tier}
+                          className={`p-4 rounded-lg border-2 text-center ${tierColors[tier]}`}
+                        >
+                          <div className="text-sm font-medium mb-1">{tier}</div>
+                          <div className="text-2xl font-bold">{currentCount}</div>
+                          {diff !== 0 && (
+                            <div className={`text-xs font-semibold ${diff > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {diff > 0 ? '+' : ''}{diff} from prev
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
       </div>
     </div>
