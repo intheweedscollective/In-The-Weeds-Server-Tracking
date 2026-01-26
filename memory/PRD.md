@@ -197,6 +197,14 @@ Position | Employee Name | Tier | Total Score | Bonus | PPA (earned/possible) | 
   - "vs Target" percentage showing how team performs against benchmark
   - Metric weights displayed (e.g., PPA 25%, LBW 20%)
   - "Higher/Lower is better" indicator for each metric
+- ✅ **Seasonal/Holiday Slide Decorations (Jan 26, 2026)**
+  - Added 8 holiday themes: Valentine's Day, St. Patrick's Day, Easter, 4th of July, Halloween, Thanksgiving, Christmas, New Year
+  - Auto-detect mode automatically shows decorations based on current date
+  - Manual override option on Settings page to force any holiday theme
+  - Theme decorations include hearts, shamrocks, eggs, stars, pumpkins, leaves, snowflakes, fireworks
+  - Emoji in slide title changes based on selected theme
+  - Background colors adapt to holiday (e.g., pink/magenta for Valentine's)
+  - Theme and seasonal settings can be updated even when quarter is locked
 
 ## Upcoming Tasks (P1)
 - None! All major features complete.
