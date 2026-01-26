@@ -757,8 +757,8 @@ def generate_tier_slide(
     tier_config = TIER_CONFIG.get(tier_name, TIER_CONFIG["A-Server"])
     tier_color = tier_config["color"]
     
-    # Header
-    title_text = f"🦐 {tier_name.upper()} RANKINGS 🦐"
+    # Header with seasonal emoji
+    title_text = f"{emoji} {tier_name.upper()} RANKINGS {emoji}"
     title_bbox = draw.textbbox((0, 0), title_text, font=font_title)
     title_width = title_bbox[2] - title_bbox[0]
     draw.text(
