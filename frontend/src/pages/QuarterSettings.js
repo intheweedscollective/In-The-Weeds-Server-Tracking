@@ -32,7 +32,10 @@ export default function QuarterSettings() {
     weight_lsc: 0.25,
     weight_cv: 0.15,
     bonus_rate: 0.2,
-    bonus_cap: 5.0
+    bonus_cap: 5.0,
+    // Server tier thresholds
+    a_server_min_score: 85.1,
+    b_server_min_score: 70.1
   });
 
   useEffect(() => {
