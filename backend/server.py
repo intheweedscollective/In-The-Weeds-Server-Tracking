@@ -2568,7 +2568,22 @@ async def upload_snapshot_data(snapshot_id: str, file: UploadFile = File(...)):
                 emp = calculate_bonus_points(emp, settings)
                 emp = calculate_total_score(emp, settings)
                 
-                employees.append(emp.model_dump())
+                # Determine tier label based on job title and score
+                job_title = (emp.job_title or "Server").strip().lower()
+                if job_title == "trainer":
+                    tier_label = "Trainer"
+                elif job_title == "bartender":
+                    tier_label = "Bartender"
+                elif emp.total_score >= settings.a_server_min:
+                    tier_label = "A-Server"
+                elif emp.total_score >= settings.b_server_min:
+                    tier_label = "B-Server"
+                else:
+                    tier_label = "C-Server"
+                
+                emp_dict = emp.model_dump()
+                emp_dict["tier_label"] = tier_label
+                employees.append(emp_dict)
             except Exception as e:
                 logging.warning(f"Error processing row {idx}: {e}")
                 continue
