@@ -796,7 +796,11 @@ def validate_upload_data(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         
         # Check for duplicate names
         raw_name = row.get("name")
-        name = str(raw_name).strip().lower() if raw_name is not None else ""
+        # Handle both None and pandas NaN
+        if raw_name is not None and not (isinstance(raw_name, float) and pd.isna(raw_name)):
+            name = str(raw_name).strip().lower()
+        else:
+            name = ""
         if name and name in names_seen:
             duplicate_names.append(name)
         if name:
