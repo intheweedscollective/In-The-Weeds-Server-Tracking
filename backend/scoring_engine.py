@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime, timezone
 import uuid
 import math
+import pandas as pd
 
 
 # ============================================================================
