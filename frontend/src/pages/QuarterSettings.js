@@ -93,7 +93,7 @@ export default function QuarterSettings() {
           weight_cv: response.data.weight_cv || 0.15,
           bonus_rate: response.data.bonus_rate,
           bonus_cap: response.data.bonus_cap,
-          a_server_min_score: response.data.a_server_min_score || 85.1,
+          a_server_min_score: response.data.a_server_min_score || 80.0,
           b_server_min_score: response.data.b_server_min_score || 70.1,
           // Slide theme settings
           slide_theme: response.data.slide_theme || "dark_navy",
