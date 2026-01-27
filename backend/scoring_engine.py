@@ -794,10 +794,12 @@ def validate_upload_data(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
             invalid_count += 1
         
         # Check for duplicate names
-        name = row.get("name", "").strip().lower()
-        if name in names_seen:
+        raw_name = row.get("name")
+        name = str(raw_name).strip().lower() if raw_name is not None else ""
+        if name and name in names_seen:
             duplicate_names.append(name)
-        names_seen.add(name)
+        if name:
+            names_seen.add(name)
     
     return {
         "valid": invalid_count == 0 and len(duplicate_names) == 0,
