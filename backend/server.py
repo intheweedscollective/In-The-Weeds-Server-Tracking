@@ -2566,7 +2566,7 @@ async def upload_snapshot_data(snapshot_id: str, file: UploadFile = File(...)):
                 emp = calculate_derived_metrics(emp)
                 emp = calculate_normalized_scores(emp, settings)
                 emp = calculate_bonus_points(emp, settings)
-                emp = calculate_total_score(emp)
+                emp = calculate_total_score(emp, settings)
                 
                 employees.append(emp.model_dump())
             except Exception as e:
