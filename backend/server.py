@@ -990,31 +990,12 @@ async def upload_employees_v2(
                     continue
                 
                 # Customer Voice fields (optional)
-                cv_promoters = 0
-                cv_passives = 0
-                cv_detractors = 0
-                
-                if mapping.get("cv_promoters"):
-                    val = row.get(mapping["cv_promoters"])
-                    if not pd.isna(val):
-                        cv_promoters = int(val)
-                
-                if mapping.get("cv_passives"):
-                    val = row.get(mapping["cv_passives"])
-                    if not pd.isna(val):
-                        cv_passives = int(val)
-                
-                if mapping.get("cv_detractors"):
-                    val = row.get(mapping["cv_detractors"])
-                    if not pd.isna(val):
-                        cv_detractors = int(val)
+                cv_promoters = safe_int(row.get(mapping.get("cv_promoters", ""))) if mapping.get("cv_promoters") else 0
+                cv_passives = safe_int(row.get(mapping.get("cv_passives", ""))) if mapping.get("cv_passives") else 0
+                cv_detractors = safe_int(row.get(mapping.get("cv_detractors", ""))) if mapping.get("cv_detractors") else 0
                 
                 # Review Tracker field (optional)
-                review_mentions = 0
-                if mapping.get("review_mentions"):
-                    val = row.get(mapping["review_mentions"])
-                    if not pd.isna(val):
-                        review_mentions = int(val)
+                review_mentions = safe_int(row.get(mapping.get("review_mentions", ""))) if mapping.get("review_mentions") else 0
                 
                 # Legacy optional text fields
                 review_tracker = None
