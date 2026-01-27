@@ -625,7 +625,7 @@ export default function QuarterSettings() {
                   type="number"
                   step="0.1"
                   value={formData.a_server_min_score}
-                  onChange={(e) => setFormData(prev => ({ ...prev, a_server_min_score: parseFloat(e.target.value) || 85.1 }))}
+                  onChange={(e) => setFormData(prev => ({ ...prev, a_server_min_score: parseFloat(e.target.value) || 80.0 }))}
                   disabled={settings?.is_locked}
                   className="border-2"
                 />
