@@ -29,10 +29,10 @@ export default function Navigation() {
               data-testid="nav-logo"
             />
             <div className="text-white text-center md:text-left">
-              <h1 className="text-2xl md:text-5xl lg:text-6xl font-serif font-bold tracking-wide" data-testid="nav-title">
+              <h1 className="text-2xl md:text-5xl lg:text-6xl font-display font-bold tracking-wide" data-testid="nav-title">
                 Bubba Gump Shrimp Co.
               </h1>
-              <p className="text-sm md:text-2xl lg:text-3xl opacity-90 mt-1 md:mt-2" data-testid="nav-subtitle">
+              <p className="text-sm md:text-2xl lg:text-3xl opacity-90 mt-1 md:mt-2 font-medium" data-testid="nav-subtitle">
                 Las Vegas • Performance Management
               </p>
             </div>
