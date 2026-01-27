@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { FileText, Download, Clock, User, Anchor, Ship, Calendar } from "lucide-react";
+import { FileText, Download, Clock, User, Anchor, Ship, Calendar, TrendingUp, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import Navigation from "../components/Navigation";
@@ -20,6 +20,8 @@ export default function ReviewGeneration() {
   const [selectedYear, setSelectedYear] = useState("2026");
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [selectedGraphKind, setSelectedGraphKind] = useState("quarter");
+  const [expandedTrends, setExpandedTrends] = useState({}); // Track which employee trend charts are expanded
+  const [trendData, setTrendData] = useState({}); // Store trend data per employee
 
   const fetchEmployees = useCallback(async () => {
     try {
