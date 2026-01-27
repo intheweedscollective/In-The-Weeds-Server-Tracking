@@ -2576,7 +2576,7 @@ async def upload_snapshot_data(snapshot_id: str, file: UploadFile = File(...)):
         # Calculate rankings
         employees = calculate_rankings(employees)
         employees = calculate_performance_tiers(employees)
-        employees = generate_hierarchy_rankings(employees)
+        employees = generate_hierarchy_rankings(employees, settings)
         
         # Update snapshot
         await db.snapshots.update_one(
