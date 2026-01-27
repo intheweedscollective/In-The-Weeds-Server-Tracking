@@ -207,13 +207,14 @@ Position | Employee Name | Tier | Total Score | Bonus | PPA (earned/possible) | 
   - Theme and seasonal settings can be updated even when quarter is locked
 
 ## Upcoming Tasks (P1)
-- None! All major features complete.
+- **Trend Charts in Employee Review PDFs** - Embed the generated trend chart images directly into the employee review PDF documents
 
 ## Future/Backlog (P2)
 - Download all slides as ZIP archive
 - Batch line graph PDF uploads
-- Time-series graph auto-generation
+- Interactive Analytics Filters (click performance zones to filter employees)
 - Automated daily/weekly slide pack generation for Yodeck playlists
+- Final code cleanup pass on server.py
 
 ## Completed Cleanup (Jan 26, 2026)
 - ✅ **V1 Legacy Code Removal**
