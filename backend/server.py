@@ -2588,10 +2588,9 @@ async def upload_snapshot_data(snapshot_id: str, file: UploadFile = File(...)):
                 logging.warning(f"Error processing row {idx}: {e}")
                 continue
         
-        # Calculate rankings
-        employees = calculate_rankings(employees)
-        employees = calculate_performance_tiers(employees)
-        employees = generate_hierarchy_rankings(employees, settings)
+        # Sort employees by tier hierarchy and score
+        tier_order = {"Trainer": 0, "Bartender": 1, "A-Server": 2, "B-Server": 3, "C-Server": 4}
+        employees.sort(key=lambda x: (tier_order.get(x.get("tier_label", "C-Server"), 4), -(x.get("total_score", 0) or 0)))
         
         # Update snapshot
         await db.snapshots.update_one(
