@@ -13,7 +13,7 @@ import io
 import pandas as pd
 from pypdf import PdfReader
 
-BASE_URL = "https://meritdash.preview.emergentagent.com"
+BASE_URL = "https://resto-stats.preview.emergentagent.com"
 API_URL = f"{BASE_URL}/api"
 
 def test_specific_requirements():
