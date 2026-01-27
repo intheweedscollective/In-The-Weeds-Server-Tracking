@@ -294,7 +294,8 @@ def validate_upload_columns(df_columns: List[str]) -> Dict[str, Any]:
         "review_tracker", "cv_positive", "cv_negative"   # Legacy text fields
     ]
     
-    df_columns_lower = [col.lower().strip() for col in df_columns]
+    # Handle None column names safely
+    df_columns_lower = [str(col).lower().strip() for col in df_columns if col is not None]
     
     # Check for rejected (derived) columns - especially LBW totals
     for rejected in REJECTED_COLUMNS:
