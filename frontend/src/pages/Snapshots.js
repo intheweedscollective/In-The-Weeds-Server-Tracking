@@ -458,5 +458,6 @@ export default function Snapshots() {
         </CardContent>
       </Card>
     </div>
+    </>
   );
 }
