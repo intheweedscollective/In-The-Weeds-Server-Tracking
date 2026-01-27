@@ -309,6 +309,8 @@ export default function ReviewGeneration() {
               const review = getEmployeeReview(employee.id);
               const isGenerating = generating[employee.id];
               const tier = getTierLabel(employee);
+              const isExpanded = expandedTrends[employee.id];
+              const employeeTrend = trendData[employee.id];
               
               return (
                 <div key={employee.id} className="bubba-card" data-testid={`employee-review-card-${employee.id}`}>
@@ -345,6 +347,19 @@ export default function ReviewGeneration() {
                       </div>
                       
                       <div className="flex items-center gap-3">
+                        {/* Trend Toggle Button */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => toggleTrend(employee.id)}
+                          className="flex items-center gap-1"
+                          data-testid={`trend-toggle-${employee.id}`}
+                        >
+                          <TrendingUp className="w-4 h-4" />
+                          Trends
+                          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </Button>
+                        
                         {hasReview && (
                           <div className="flex items-center gap-2 text-green-600">
                             <Clock className="w-4 h-4" />
@@ -374,6 +389,77 @@ export default function ReviewGeneration() {
                         </Button>
                       </div>
                     </div>
+                    
+                    {/* Expandable Trend Section */}
+                    {isExpanded && (
+                      <div className="mt-4 pt-4 border-t border-gray-200" data-testid={`trend-section-${employee.id}`}>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                          {/* Trend Chart */}
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <h4 className="text-sm font-semibold text-gray-700 mb-3">
+                              📊 Quarter Comparison Chart
+                            </h4>
+                            <img 
+                              src={`${API}/v2/trends/${selectedYear}/${selectedQuarter}/employee/${employee.id}?chart_type=comparison`}
+                              alt={`${employee.name} trend chart`}
+                              className="w-full rounded-lg"
+                              data-testid={`trend-chart-${employee.id}`}
+                            />
+                          </div>
+                          
+                          {/* Metric Changes */}
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <h4 className="text-sm font-semibold text-gray-700 mb-3">
+                              📈 Metric Changes ({employeeTrend?.previous_quarter || 'Prev'} → {selectedQuarter})
+                            </h4>
+                            
+                            {!employeeTrend?.has_previous_data && (
+                              <div className="text-sm text-gray-500 italic mb-3">
+                                No previous quarter data available for comparison
+                              </div>
+                            )}
+                            
+                            <div className="grid grid-cols-2 gap-3">
+                              {[
+                                { key: 'ppa', label: 'PPA', format: '$', higherBetter: true },
+                                { key: 'lbw_per_guest', label: 'LBW/Guest', format: '$', higherBetter: true },
+                                { key: 'glassware_per_guest', label: 'Glass/Guest', format: '$', higherBetter: true },
+                                { key: 'guests_per_lsc', label: 'Guests/LSC', format: '', higherBetter: false },
+                                { key: 'cv_score', label: 'CV Score', format: '', higherBetter: true },
+                                { key: 'pre_dar_score', label: 'Total Score', format: '', higherBetter: true },
+                              ].map(metric => {
+                                const currentVal = employeeTrend?.current?.[metric.key] || employee[metric.key] || 0;
+                                const prevVal = employeeTrend?.previous?.[metric.key] || 0;
+                                const change = employeeTrend?.changes?.[metric.key] || 0;
+                                const indicator = getChangeIndicator(change, metric.higherBetter);
+                                
+                                return (
+                                  <div 
+                                    key={metric.key}
+                                    className={`p-2 rounded-lg border ${indicator.bg} border-gray-200`}
+                                  >
+                                    <div className="text-xs text-gray-500 font-medium">{metric.label}</div>
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-sm font-bold text-foreground">
+                                        {metric.format}{currentVal?.toFixed(2) || '0'}
+                                      </span>
+                                      <span className={`text-xs font-semibold ${indicator.color}`}>
+                                        {indicator.icon} {Math.abs(change).toFixed(1)}%
+                                      </span>
+                                    </div>
+                                    {employeeTrend?.has_previous_data && (
+                                      <div className="text-xs text-gray-400">
+                                        was {metric.format}{prevVal?.toFixed(2) || '0'}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
