@@ -284,7 +284,7 @@ def generate_snapshot_slide(
         {"name": "PPA", "short": "$/Guest", "width": 85, "key": "ppa", "benchmark_key": "ppa_benchmark", "desc": "Per Person Avg"},
         {"name": "LBW", "short": "$/Guest", "width": 85, "key": "lbw_per_guest", "benchmark_key": "lbw_benchmark", "desc": "Liquor Beer Wine"},
         {"name": "Glass", "short": "$/Guest", "width": 85, "key": "glassware_per_guest", "benchmark_key": "glassware_benchmark", "desc": "Glassware Sales"},
-        {"name": "LSC", "short": "Guests", "width": 85, "key": "guests_per_lsc", "benchmark_key": "lsc_benchmark", "inverse": True, "desc": "Landshark Calls"},
+        {"name": "LSC", "short": "Guests/#", "width": 85, "key": "guests_per_lsc", "benchmark_key": "lsc_benchmark", "inverse": True, "desc": "Select Card"},
         {"name": "CV", "short": "Score", "width": 75, "key": "cv_score", "benchmark_key": "cv_benchmark", "desc": "Customer Voice"},
         {"name": "TOTAL", "short": "Score", "width": 85, "key": "total_score", "benchmark_key": "total_benchmark", "desc": "Overall"},
     ]
