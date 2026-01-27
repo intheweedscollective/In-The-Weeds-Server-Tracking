@@ -57,7 +57,7 @@ export default function QuarterSettings() {
     bonus_rate: 0.2,
     bonus_cap: 5.0,
     // Server tier thresholds
-    a_server_min_score: 85.1,
+    a_server_min_score: 80.0,
     b_server_min_score: 70.1,
     // Slide theme settings
     slide_theme: "dark_navy",
@@ -123,7 +123,7 @@ export default function QuarterSettings() {
             weight_cv: 0.15,
             bonus_rate: 0.2,
             bonus_cap: 5.0,
-            a_server_min_score: 85.1,
+            a_server_min_score: 80.0,
             b_server_min_score: 70.1,
             // Slide theme settings
             slide_theme: "dark_navy",
