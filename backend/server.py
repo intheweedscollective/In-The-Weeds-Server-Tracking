@@ -2398,6 +2398,245 @@ async def get_team_trend_data(year: int, quarter: str):
     }
 
 
+# ============================================================================
+# SNAPSHOT ENDPOINTS (Bi-weekly Team Snapshots)
+# ============================================================================
+
+class SnapshotCreate(BaseModel):
+    """Model for creating a new snapshot."""
+    snapshot_date: str  # e.g., "2026-01-15"
+    title: Optional[str] = None
+    year: int
+    quarter: str
+
+class SnapshotResponse(BaseModel):
+    """Model for snapshot response."""
+    id: str
+    snapshot_date: str
+    title: Optional[str]
+    year: int
+    quarter: str
+    employee_count: int
+    created_at: str
+
+
+@api_router.get("/v2/snapshots")
+async def list_snapshots(year: Optional[int] = None):
+    """List all snapshots, optionally filtered by year."""
+    query = {}
+    if year:
+        query["year"] = year
+    
+    snapshots = await db.snapshots.find(query, {"_id": 0}).sort("snapshot_date", -1).to_list(100)
+    return snapshots
+
+
+@api_router.get("/v2/snapshots/{snapshot_id}")
+async def get_snapshot(snapshot_id: str):
+    """Get a specific snapshot by ID."""
+    snapshot = await db.snapshots.find_one({"id": snapshot_id}, {"_id": 0})
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    return snapshot
+
+
+@api_router.post("/v2/snapshots")
+async def create_snapshot(data: SnapshotCreate):
+    """Create a new empty snapshot for the given date."""
+    snapshot_id = str(uuid.uuid4())
+    
+    # Get benchmarks from quarter settings
+    settings = await db.quarter_settings.find_one(
+        {"year": data.year, "quarter": data.quarter.upper()},
+        {"_id": 0}
+    )
+    
+    benchmarks = {
+        "ppa_benchmark": settings.get("ppa_benchmark", 55) if settings else 55,
+        "lbw_benchmark": settings.get("lbw_benchmark", 6.5) if settings else 6.5,
+        "glassware_benchmark": settings.get("glassware_benchmark", 1.2) if settings else 1.2,
+        "lsc_benchmark": settings.get("lsc_benchmark", 30) if settings else 30,
+        "cv_benchmark": settings.get("cv_benchmark", 20) if settings else 20,
+        "total_benchmark": settings.get("total_benchmark", 100) if settings else 100,
+    }
+    
+    snapshot = {
+        "id": snapshot_id,
+        "snapshot_date": data.snapshot_date,
+        "title": data.title,
+        "year": data.year,
+        "quarter": data.quarter.upper(),
+        "employees": [],
+        "benchmarks": benchmarks,
+        "employee_count": 0,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    
+    await db.snapshots.insert_one(snapshot)
+    return {"id": snapshot_id, "message": "Snapshot created successfully"}
+
+
+@api_router.post("/v2/snapshots/{snapshot_id}/upload")
+async def upload_snapshot_data(snapshot_id: str, file: UploadFile = File(...)):
+    """Upload employee data for a snapshot."""
+    # Get the snapshot
+    snapshot = await db.snapshots.find_one({"id": snapshot_id})
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    
+    # Read file
+    contents = await file.read()
+    filename = file.filename.lower()
+    
+    try:
+        if filename.endswith('.csv'):
+            df = pd.read_csv(io.BytesIO(contents))
+        else:
+            df = pd.read_excel(io.BytesIO(contents))
+        
+        # Clean column names
+        df.columns = [str(col).strip() if col is not None else f"Unnamed_{i}" for i, col in enumerate(df.columns)]
+        
+        # Validate columns
+        column_validation = validate_upload_columns(list(df.columns))
+        if not column_validation["valid"]:
+            raise HTTPException(status_code=400, detail=f"Missing required columns: {column_validation['missing_required']}")
+        
+        mapping = column_validation["mapping"]
+        
+        # Get settings for scoring
+        settings_doc = await db.quarter_settings.find_one(
+            {"year": snapshot["year"], "quarter": snapshot["quarter"]},
+            {"_id": 0}
+        )
+        settings = QuarterSettings(**(settings_doc or {}))
+        
+        employees = []
+        for idx, row in df.iterrows():
+            try:
+                name = str(row.get(mapping["name"], "")).strip()
+                if not name:
+                    continue
+                
+                # Extract job title
+                job_title = "Server"
+                if mapping.get("job_title"):
+                    val = row.get(mapping["job_title"])
+                    if val is not None and str(val).strip():
+                        job_title = str(val).strip()
+                
+                # Build employee data
+                emp = EmployeeV2(
+                    id=str(uuid.uuid4()),
+                    name=name,
+                    job_title=job_title,
+                    guests=int(row.get(mapping.get("guests", ""), 0) or 0),
+                    net_sales=float(row.get(mapping.get("net_sales", ""), 0) or 0),
+                    liquor_sales=float(row.get(mapping.get("liquor_sales", ""), 0) or 0),
+                    beer_sales=float(row.get(mapping.get("beer_sales", ""), 0) or 0),
+                    wine_sales=float(row.get(mapping.get("wine_sales", ""), 0) or 0),
+                    glassware_sales=float(row.get(mapping.get("glassware_sales", ""), 0) or 0),
+                    lsc_count=int(row.get(mapping.get("lsc_count", ""), 0) or 0),
+                    cv_promoters=int(row.get(mapping.get("cv_promoters", ""), 0) or 0),
+                    cv_detractors=int(row.get(mapping.get("cv_detractors", ""), 0) or 0),
+                    review_mentions=int(row.get(mapping.get("review_mentions", ""), 0) or 0),
+                    year=snapshot["year"],
+                    quarter=snapshot["quarter"],
+                )
+                
+                # Calculate metrics and scores
+                emp = calculate_derived_metrics(emp)
+                emp = calculate_normalized_scores(emp, settings)
+                emp = calculate_bonus_points(emp, settings)
+                emp = calculate_total_score(emp)
+                
+                employees.append(emp.model_dump())
+            except Exception as e:
+                logging.warning(f"Error processing row {idx}: {e}")
+                continue
+        
+        # Calculate rankings
+        employees = calculate_rankings(employees)
+        employees = calculate_performance_tiers(employees, settings)
+        employees = generate_hierarchy_rankings(employees)
+        
+        # Update snapshot
+        await db.snapshots.update_one(
+            {"id": snapshot_id},
+            {
+                "$set": {
+                    "employees": employees,
+                    "employee_count": len(employees),
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                }
+            }
+        )
+        
+        return {
+            "message": "Snapshot data uploaded successfully",
+            "employee_count": len(employees)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
+
+
+@api_router.delete("/v2/snapshots/{snapshot_id}")
+async def delete_snapshot(snapshot_id: str):
+    """Delete a snapshot."""
+    result = await db.snapshots.delete_one({"id": snapshot_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    return {"message": "Snapshot deleted successfully"}
+
+
+@api_router.get("/v2/snapshots/{snapshot_id}/slide")
+async def generate_snapshot_slide_endpoint(
+    snapshot_id: str,
+    background: str = "midnight_blue"
+):
+    """Generate PNG slide for a snapshot."""
+    snapshot = await db.snapshots.find_one({"id": snapshot_id}, {"_id": 0})
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    
+    employees = snapshot.get("employees", [])
+    if not employees:
+        raise HTTPException(status_code=400, detail="Snapshot has no employee data")
+    
+    benchmarks = snapshot.get("benchmarks", {})
+    snapshot_date = snapshot.get("snapshot_date", "")
+    title = snapshot.get("title")
+    
+    # Format date nicely
+    try:
+        date_obj = datetime.strptime(snapshot_date, "%Y-%m-%d")
+        formatted_date = date_obj.strftime("%B %d, %Y")
+    except:
+        formatted_date = snapshot_date
+    
+    # Generate slide
+    slide_bytes = generate_snapshot_slide(
+        employees=employees,
+        benchmarks=benchmarks,
+        snapshot_date=formatted_date,
+        background=background,
+        title=title
+    )
+    
+    return Response(
+        content=slide_bytes,
+        media_type="image/png",
+        headers={"Content-Disposition": f"attachment; filename=snapshot_{snapshot_date}.png"}
+    )
+
+
+@api_router.get("/v2/snapshots/backgrounds")
+async def get_snapshot_backgrounds():
+    """Get available background options for snapshots."""
+    return get_available_backgrounds()
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
