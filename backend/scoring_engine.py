@@ -162,7 +162,7 @@ class QuarterSettings(BaseModel):
     
     # === SERVER TIER THRESHOLDS (Settings-driven) ===
     a_server_min_score: float = 80.0   # Total Score >= this = A-Server
-    b_server_min_score: float = 70.1   # Total Score >= this AND < A-Server = B-Server
+    b_server_min_score: float = 70.0   # Total Score >= this AND < A-Server = B-Server
     # C-Server: Total Score < B-Server min
     
     # === PREVIOUS QUARTER AVERAGES (for benchmark suggestions) ===
