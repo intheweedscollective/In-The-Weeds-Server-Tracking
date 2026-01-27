@@ -18,8 +18,11 @@ module.exports = {
     },
     extend: {
       fontFamily: {
+        'display': ['Fredoka', 'Nunito', 'sans-serif'],
+        'body': ['Nunito', 'sans-serif'],
+        'script': ['Pacifico', 'cursive'],
         'serif': ['Merriweather', 'serif'],
-        'sans': ['Inter', 'sans-serif'],
+        'sans': ['Nunito', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",
