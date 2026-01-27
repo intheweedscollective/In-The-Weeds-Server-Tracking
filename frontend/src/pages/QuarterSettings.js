@@ -1149,7 +1149,7 @@ export default function QuarterSettings() {
                 </div>
                 <div>
                   <h5 className="font-semibold text-gray-800">What does "Guests/LSC" mean?</h5>
-                  <p className="text-gray-600 text-sm">Guests per Landshark Call. Lower is better - it means the employee is doing more LSCs relative to their guest count.</p>
+                  <p className="text-gray-600 text-sm">Guests per Landry's Select Card enrollment. Lower is better - it means the employee is signing up more cards relative to their guest count.</p>
                 </div>
               </div>
             </div>
