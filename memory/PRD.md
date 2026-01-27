@@ -241,3 +241,13 @@ Position | Employee Name | Tier | Total Score | Bonus | PPA (earned/possible) | 
     - Tier Distribution comparison (pie charts)
     - Metric change cards with up/down indicators
     - Tier count changes summary
+- ✅ **Individual Employee Trend Charts on Reviews Page (Jan 27, 2026)**
+  - Added "Trends" toggle button on each employee card in /reviews page
+  - Expandable section showing Quarter Comparison Chart (bar chart)
+  - Metric Changes panel showing current vs previous quarter values
+  - Up/down indicators with percentage change for each metric
+  - Color-coded backgrounds (green for improvement, red for decline)
+  - Graceful handling when no previous quarter data exists
+  - API endpoints used:
+    - `GET /api/v2/trends/{year}/{quarter}/employee/{id}?chart_type=comparison` - PNG chart
+    - `GET /api/v2/trends/{year}/{quarter}/employee/{id}/data` - JSON trend data
