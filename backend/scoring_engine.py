@@ -246,7 +246,8 @@ def find_column_match(df_columns: List[str], canonical_field: str) -> Optional[s
     Returns the actual column name from the dataframe, or None if not found.
     """
     candidates = CANONICAL_COLUMN_MAPPING.get(canonical_field, [])
-    df_columns_lower = {col.lower().strip(): col for col in df_columns}
+    # Handle None column names safely
+    df_columns_lower = {str(col).lower().strip(): col for col in df_columns if col is not None}
     
     for candidate in candidates:
         if candidate in df_columns_lower:
