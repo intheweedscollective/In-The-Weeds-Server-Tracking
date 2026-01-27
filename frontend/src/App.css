@@ -1,7 +1,44 @@
 /* ============================================
    BUBBA GUMP PERFORMANCE HUB
-   Cocktail Menu Inspired Design
+   Fun & Professional Design
    ============================================ */
+
+/* ===========================================
+   TYPOGRAPHY - Fun but Professional Fonts
+   =========================================== */
+
+/* Fredoka - Fun rounded headers */
+.font-display, h1, h2, h3 {
+  font-family: 'Fredoka', 'Nunito', sans-serif !important;
+}
+
+/* Nunito - Friendly body text */
+body, p, span, div, li, td, th, input, select, textarea, button {
+  font-family: 'Nunito', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Pacifico - Playful accent (use sparingly) */
+.font-script {
+  font-family: 'Pacifico', cursive;
+}
+
+/* Navigation title - Restaurant branding feel */
+nav h1 {
+  font-family: 'Fredoka', sans-serif !important;
+  letter-spacing: 0.5px;
+}
+
+/* Cards headers */
+.bubba-card h3, .bubba-card h4 {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+}
+
+/* Stats and numbers - clean and bold */
+.stat-number {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 700;
+}
 
 /* ===========================================
    SPLASH DECORATION - Red/Blue paint splashes
