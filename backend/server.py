@@ -2508,35 +2508,56 @@ async def upload_snapshot_data(snapshot_id: str, file: UploadFile = File(...)):
         )
         settings = QuarterSettings(**(settings_doc or {}))
         
+        # Helper functions to safely convert values
+        def safe_int(val, default=0):
+            if val is None or (isinstance(val, float) and pd.isna(val)):
+                return default
+            try:
+                return int(float(val))
+            except (ValueError, TypeError):
+                return default
+        
+        def safe_float(val, default=0.0):
+            if val is None or (isinstance(val, float) and pd.isna(val)):
+                return default
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                return default
+        
         employees = []
         for idx, row in df.iterrows():
             try:
                 name = str(row.get(mapping["name"], "")).strip()
-                if not name:
+                if not name or name == "nan":
                     continue
                 
                 # Extract job title
                 job_title = "Server"
                 if mapping.get("job_title"):
                     val = row.get(mapping["job_title"])
-                    if val is not None and str(val).strip():
+                    if val is not None and not pd.isna(val) and str(val).strip() and str(val).strip().lower() != "nan":
                         job_title = str(val).strip()
+                
+                guests = safe_int(row.get(mapping.get("guests", "")))
+                if guests <= 0:
+                    continue
                 
                 # Build employee data
                 emp = EmployeeV2(
                     id=str(uuid.uuid4()),
                     name=name,
                     job_title=job_title,
-                    guests=int(row.get(mapping.get("guests", ""), 0) or 0),
-                    net_sales=float(row.get(mapping.get("net_sales", ""), 0) or 0),
-                    liquor_sales=float(row.get(mapping.get("liquor_sales", ""), 0) or 0),
-                    beer_sales=float(row.get(mapping.get("beer_sales", ""), 0) or 0),
-                    wine_sales=float(row.get(mapping.get("wine_sales", ""), 0) or 0),
-                    glassware_sales=float(row.get(mapping.get("glassware_sales", ""), 0) or 0),
-                    lsc_count=int(row.get(mapping.get("lsc_count", ""), 0) or 0),
-                    cv_promoters=int(row.get(mapping.get("cv_promoters", ""), 0) or 0),
-                    cv_detractors=int(row.get(mapping.get("cv_detractors", ""), 0) or 0),
-                    review_mentions=int(row.get(mapping.get("review_mentions", ""), 0) or 0),
+                    guests=guests,
+                    net_sales=safe_float(row.get(mapping.get("net_sales", ""))),
+                    liquor_sales=safe_float(row.get(mapping.get("liquor_sales", ""))),
+                    beer_sales=safe_float(row.get(mapping.get("beer_sales", ""))),
+                    wine_sales=safe_float(row.get(mapping.get("wine_sales", ""))),
+                    glassware_sales=safe_float(row.get(mapping.get("glassware_sales", ""))),
+                    lsc_count=safe_int(row.get(mapping.get("lsc_count", ""))),
+                    cv_promoters=safe_int(row.get(mapping.get("cv_promoters", ""))),
+                    cv_detractors=safe_int(row.get(mapping.get("cv_detractors", ""))),
+                    review_mentions=safe_int(row.get(mapping.get("review_mentions", ""))),
                     year=snapshot["year"],
                     quarter=snapshot["quarter"],
                 )
