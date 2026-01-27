@@ -2574,9 +2574,9 @@ async def upload_snapshot_data(snapshot_id: str, file: UploadFile = File(...)):
                     tier_label = "Trainer"
                 elif job_title == "bartender":
                     tier_label = "Bartender"
-                elif emp.total_score >= settings.a_server_min:
+                elif emp.total_score >= settings.a_server_min_score:
                     tier_label = "A-Server"
-                elif emp.total_score >= settings.b_server_min:
+                elif emp.total_score >= settings.b_server_min_score:
                     tier_label = "B-Server"
                 else:
                     tier_label = "C-Server"
