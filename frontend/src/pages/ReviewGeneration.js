@@ -110,6 +110,35 @@ export default function ReviewGeneration() {
     return { label: "C-Server", color: "bg-red-100 text-red-800" };
   };
 
+  // Toggle trend chart visibility for an employee
+  const toggleTrend = async (employeeId) => {
+    const isExpanded = expandedTrends[employeeId];
+    
+    if (!isExpanded && !trendData[employeeId]) {
+      // Fetch trend data when expanding for the first time
+      try {
+        const response = await axios.get(`${API}/v2/trends/${selectedYear}/${selectedQuarter}/employee/${employeeId}/data`);
+        setTrendData(prev => ({ ...prev, [employeeId]: response.data }));
+      } catch (error) {
+        console.error("Error fetching trend data:", error);
+        // Still allow expansion even if data fetch fails
+      }
+    }
+    
+    setExpandedTrends(prev => ({ ...prev, [employeeId]: !isExpanded }));
+  };
+
+  // Get change indicator
+  const getChangeIndicator = (change, higherBetter = true) => {
+    if (change === 0 || change === null || change === undefined) {
+      return { icon: '−', color: 'text-gray-500', bg: 'bg-gray-100' };
+    }
+    const isPositive = higherBetter ? change > 0 : change < 0;
+    return isPositive 
+      ? { icon: '↑', color: 'text-green-600', bg: 'bg-green-100' }
+      : { icon: '↓', color: 'text-red-600', bg: 'bg-red-100' };
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
