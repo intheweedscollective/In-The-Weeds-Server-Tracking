@@ -1052,7 +1052,7 @@ export default function QuarterSettings() {
               <ul className="text-sm text-gray-600 space-y-1 ml-10">
                 <li>• <strong>Benchmarks</strong> - Target values for PPA, LBW, Glassware, LSC, CV</li>
                 <li>• <strong>Weights</strong> - How much each metric contributes to total score (must = 100%)</li>
-                <li>• <strong>Tier Thresholds</strong> - Score cutoffs for A-Server (≥85.1) and B-Server (≥70.1)</li>
+                <li>• <strong>Tier Thresholds</strong> - Score cutoffs for A-Server (≥80.0) and B-Server (≥70.1)</li>
                 <li>• <strong>Slide Themes</strong> - Colors and seasonal decorations for Yodeck</li>
               </ul>
               <div className="mt-3 p-3 bg-yellow-50 rounded-lg text-sm text-yellow-800">
