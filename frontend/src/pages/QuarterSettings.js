@@ -1077,8 +1077,8 @@ export default function QuarterSettings() {
                   <h5 className="font-semibold mb-2">Server Tiers:</h5>
                   <ul className="space-y-1 text-gray-600">
                     <li>🟢 <strong>A-Server</strong>: Score ≥ 80.0</li>
-                    <li>🟡 <strong>B-Server</strong>: Score ≥ 70.1</li>
-                    <li>🔴 <strong>C-Server</strong>: Score &lt; 70.1</li>
+                    <li>🟡 <strong>B-Server</strong>: Score ≥ 70</li>
+                    <li>🔴 <strong>C-Server</strong>: Score &lt; 70</li>
                   </ul>
                 </div>
                 <div>
