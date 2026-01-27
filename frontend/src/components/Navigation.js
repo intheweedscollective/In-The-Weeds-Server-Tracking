@@ -19,20 +19,20 @@ export default function Navigation() {
   return (
     <nav className="bg-gradient-to-r from-secondary via-secondary to-primary shadow-lg" data-testid="main-navigation">
       <div className="w-full px-2 sm:px-4 lg:px-8">
-        {/* Header Row - Logo and Title */}
-        <div className="flex items-center justify-center py-4 md:py-6 border-b border-white/20">
-          <div className="flex items-center gap-3 md:gap-6" data-testid="nav-brand">
+        {/* Header Row - Logo and Title - LARGE */}
+        <div className="flex items-center justify-center py-6 md:py-8 border-b border-white/20">
+          <div className="flex items-center gap-4 md:gap-8" data-testid="nav-brand">
             <img 
               src="https://customer-assets.emergentagent.com/job_beaba37a-d1bc-43b6-b0ee-0f4c332229d2/artifacts/shpi6789_IMG_0599.png" 
               alt="Bubba Gump" 
-              className="w-14 h-14 md:w-24 md:h-24 lg:w-28 lg:h-28 rounded-full flex-shrink-0 border-4 border-white/40 shadow-lg"
+              className="w-20 h-20 md:w-28 md:h-28 lg:w-36 lg:h-36 rounded-full flex-shrink-0 border-4 border-white/40 shadow-xl"
               data-testid="nav-logo"
             />
             <div className="text-white text-center md:text-left">
-              <h1 className="text-xl md:text-4xl lg:text-5xl font-serif font-bold tracking-wide" data-testid="nav-title">
+              <h1 className="text-2xl md:text-5xl lg:text-6xl font-serif font-bold tracking-wide" data-testid="nav-title">
                 Bubba Gump Shrimp Co.
               </h1>
-              <p className="text-xs md:text-xl lg:text-2xl opacity-90 mt-1" data-testid="nav-subtitle">
+              <p className="text-sm md:text-2xl lg:text-3xl opacity-90 mt-1 md:mt-2" data-testid="nav-subtitle">
                 Las Vegas • Performance Management
               </p>
             </div>
