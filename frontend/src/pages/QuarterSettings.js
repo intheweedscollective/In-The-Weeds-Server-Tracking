@@ -902,6 +902,259 @@ export default function QuarterSettings() {
             </p>
           </div>
         )}
+
+        {/* User Manual Section */}
+        <div className="mt-12 border-t-4 border-primary pt-8" data-testid="user-manual">
+          <h2 className="text-3xl font-serif font-bold text-foreground mb-6 flex items-center gap-3">
+            📖 User Manual
+          </h2>
+          
+          {/* Quick Start Guide */}
+          <div className="bubba-card mb-6">
+            <div className="tape" style={{ top: '-8px', left: '20%', transform: 'rotate(-2deg)' }} />
+            <div className="p-6 pt-8">
+              <h3 className="text-xl font-bold text-primary mb-4">🚀 Quick Start Guide</h3>
+              <ol className="space-y-3 text-gray-700">
+                <li className="flex gap-3">
+                  <span className="font-bold text-primary">1.</span>
+                  <div>
+                    <strong>Set Up Quarter Settings (this page)</strong> - Configure benchmarks and weights before uploading data. These determine how scores are calculated.
+                  </div>
+                </li>
+                <li className="flex gap-3">
+                  <span className="font-bold text-primary">2.</span>
+                  <div>
+                    <strong>Upload Employee Data (Dashboard)</strong> - Download the template, fill it with your team's numbers, and upload it back.
+                  </div>
+                </li>
+                <li className="flex gap-3">
+                  <span className="font-bold text-primary">3.</span>
+                  <div>
+                    <strong>Review Rankings</strong> - Check the Rankings page to see how everyone stacks up by tier.
+                  </div>
+                </li>
+                <li className="flex gap-3">
+                  <span className="font-bold text-primary">4.</span>
+                  <div>
+                    <strong>Generate Reviews & Slides</strong> - Create individual PDF reviews and Yodeck display slides.
+                  </div>
+                </li>
+              </ol>
+            </div>
+          </div>
+
+          {/* Page-by-Page Guide */}
+          <div className="grid gap-4">
+            {/* Dashboard */}
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+              <h4 className="font-bold text-lg mb-2 flex items-center gap-2">
+                <span className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-primary">🏠</span>
+                Dashboard
+              </h4>
+              <p className="text-gray-600 mb-3">Your home base for uploading and managing employee data.</p>
+              <ul className="text-sm text-gray-600 space-y-1 ml-10">
+                <li>• <strong>Download Template</strong> - Get the Excel/CSV template with the correct columns</li>
+                <li>• <strong>Upload Data</strong> - Upload your filled template to calculate scores</li>
+                <li>• <strong>View Stats</strong> - See quick summary of team performance</li>
+              </ul>
+              <div className="mt-3 p-3 bg-blue-50 rounded-lg text-sm text-blue-800">
+                <strong>💡 Tip:</strong> Don't include the CV Passives column - it doesn't affect scores.
+              </div>
+            </div>
+
+            {/* Rankings */}
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+              <h4 className="font-bold text-lg mb-2 flex items-center gap-2">
+                <span className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center text-purple-600">📊</span>
+                Rankings
+              </h4>
+              <p className="text-gray-600 mb-3">Full team rankings sorted by hierarchy and score.</p>
+              <ul className="text-sm text-gray-600 space-y-1 ml-10">
+                <li>• <strong>Tier Order</strong> - Trainers → Bartenders → A-Servers → B-Servers → C-Servers</li>
+                <li>• <strong>Position Labels</strong> - T1, T2 for Trainers; Bar1, Bar2 for Bartenders; A1, B1, C1, etc.</li>
+                <li>• <strong>Download PDF</strong> - Export the full rankings table</li>
+              </ul>
+            </div>
+
+            {/* Reviews */}
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+              <h4 className="font-bold text-lg mb-2 flex items-center gap-2">
+                <span className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center text-green-600">📝</span>
+                Reviews
+              </h4>
+              <p className="text-gray-600 mb-3">Generate individual employee performance reviews with AI.</p>
+              <ul className="text-sm text-gray-600 space-y-1 ml-10">
+                <li>• <strong>Generate Review</strong> - AI creates personalized feedback based on metrics</li>
+                <li>• <strong>Download PDF</strong> - Print-ready review document</li>
+                <li>• <strong>View Trends</strong> - See quarter-over-quarter performance graphs</li>
+              </ul>
+            </div>
+
+            {/* Snapshots */}
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+              <h4 className="font-bold text-lg mb-2 flex items-center gap-2">
+                <span className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center text-orange-600">📸</span>
+                Snapshots (Bi-Weekly)
+              </h4>
+              <p className="text-gray-600 mb-3">Create mid-month check-in slides showing everyone on one page.</p>
+              <ul className="text-sm text-gray-600 space-y-1 ml-10">
+                <li>• <strong>Schedule</strong> - Upload on the 1st and 15th of each month</li>
+                <li>• <strong>Grid Layout</strong> - All employees visible on one slide, sorted by tier</li>
+                <li>• <strong>Color Coding</strong> - 🟢 ≥80%, 🟡 70-79%, 🔴 &lt;70% of benchmark</li>
+                <li>• <strong>Fun Backgrounds</strong> - Choose from 12 colorful themes</li>
+              </ul>
+              <div className="mt-3 p-3 bg-orange-50 rounded-lg text-sm text-orange-800">
+                <strong>💡 Tip:</strong> Snapshots are standalone - each upload creates a separate point-in-time record.
+              </div>
+            </div>
+
+            {/* Yodeck Slides */}
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+              <h4 className="font-bold text-lg mb-2 flex items-center gap-2">
+                <span className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">🖥️</span>
+                Yodeck Slides
+              </h4>
+              <p className="text-gray-600 mb-3">Generate 1920x1080 PNG slides for digital signage displays.</p>
+              <ul className="text-sm text-gray-600 space-y-1 ml-10">
+                <li>• <strong>Top 10</strong> - Leaderboard of best performers</li>
+                <li>• <strong>Tier Slides</strong> - Separate slides for each tier (Trainers, Bartenders, A/B/C)</li>
+                <li>• <strong>Most Improved</strong> - Employees with biggest score increases</li>
+                <li>• <strong>Promotion Watchlist</strong> - B-Servers close to A-Server status</li>
+                <li>• <strong>Coaching Focus</strong> - C-Servers needing attention (manager only)</li>
+              </ul>
+              <div className="mt-3 p-3 bg-blue-50 rounded-lg text-sm text-blue-800">
+                <strong>🎨 Themes:</strong> Customize colors and seasonal decorations (Valentine's, Christmas, etc.) in Settings above.
+              </div>
+            </div>
+
+            {/* Analytics */}
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+              <h4 className="font-bold text-lg mb-2 flex items-center gap-2">
+                <span className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600">📈</span>
+                Analytics
+              </h4>
+              <p className="text-gray-600 mb-3">Deep dive into team metrics and trends.</p>
+              <ul className="text-sm text-gray-600 space-y-1 ml-10">
+                <li>• <strong>Overview Tab</strong> - Average metrics with visual range charts vs benchmarks</li>
+                <li>• <strong>Trends Tab</strong> - Quarter-over-quarter comparisons</li>
+                <li>• <strong>Tier Distribution</strong> - Pie charts showing team composition</li>
+                <li>• <strong>Download PDF</strong> - Export analytics summary</li>
+              </ul>
+            </div>
+
+            {/* Settings */}
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+              <h4 className="font-bold text-lg mb-2 flex items-center gap-2">
+                <span className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-gray-600">⚙️</span>
+                Settings (This Page)
+              </h4>
+              <p className="text-gray-600 mb-3">Configure how scores are calculated and how slides look.</p>
+              <ul className="text-sm text-gray-600 space-y-1 ml-10">
+                <li>• <strong>Benchmarks</strong> - Target values for PPA, LBW, Glassware, LSC, CV</li>
+                <li>• <strong>Weights</strong> - How much each metric contributes to total score (must = 100%)</li>
+                <li>• <strong>Tier Thresholds</strong> - Score cutoffs for A-Server (≥85.1) and B-Server (≥70.1)</li>
+                <li>• <strong>Slide Themes</strong> - Colors and seasonal decorations for Yodeck</li>
+              </ul>
+              <div className="mt-3 p-3 bg-yellow-50 rounded-lg text-sm text-yellow-800">
+                <strong>⚠️ Note:</strong> Once scores are generated, benchmarks and weights are locked. Only theme settings can be changed.
+              </div>
+            </div>
+          </div>
+
+          {/* Scoring Formula */}
+          <div className="bubba-card mt-6">
+            <div className="tape tape-red" style={{ top: '-8px', right: '20%', transform: 'rotate(2deg)' }} />
+            <div className="p-6 pt-8">
+              <h3 className="text-xl font-bold text-primary mb-4">🧮 How Scoring Works</h3>
+              <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm mb-4">
+                <p className="text-gray-700 mb-2"><strong>Normalized Score</strong> = (Actual Value / Benchmark) × 100</p>
+                <p className="text-gray-700 mb-2"><strong>Metric Points</strong> = Normalized Score × Weight × Max Points</p>
+                <p className="text-gray-700 mb-2"><strong>Bonus</strong> = MIN((Score - 100) × 0.2, 5) if Score &gt; 100</p>
+                <p className="text-gray-700"><strong>Total Score</strong> = Sum of all Metric Points + Bonuses</p>
+              </div>
+              <div className="grid md:grid-cols-2 gap-4 text-sm">
+                <div>
+                  <h5 className="font-semibold mb-2">Server Tiers:</h5>
+                  <ul className="space-y-1 text-gray-600">
+                    <li>🟢 <strong>A-Server</strong>: Score ≥ 85.1</li>
+                    <li>🟡 <strong>B-Server</strong>: Score ≥ 70.1</li>
+                    <li>🔴 <strong>C-Server</strong>: Score &lt; 70.1</li>
+                  </ul>
+                </div>
+                <div>
+                  <h5 className="font-semibold mb-2">Special Roles:</h5>
+                  <ul className="space-y-1 text-gray-600">
+                    <li>👑 <strong>Trainer</strong>: Always ranked first</li>
+                    <li>🍸 <strong>Bartender</strong>: Ranked after Trainers</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Template Columns */}
+          <div className="bubba-card mt-6">
+            <div className="tape" style={{ top: '-8px', left: '40%', transform: 'rotate(-1deg)' }} />
+            <div className="p-6 pt-8">
+              <h3 className="text-xl font-bold text-primary mb-4">📋 Upload Template Columns</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b-2 border-primary">
+                      <th className="text-left py-2 px-3">Column</th>
+                      <th className="text-left py-2 px-3">Required</th>
+                      <th className="text-left py-2 px-3">Description</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-gray-600">
+                    <tr className="border-b"><td className="py-2 px-3 font-medium">Employee Name</td><td className="py-2 px-3">✅ Yes</td><td className="py-2 px-3">Full name</td></tr>
+                    <tr className="border-b"><td className="py-2 px-3 font-medium">Job Title</td><td className="py-2 px-3">✅ Yes</td><td className="py-2 px-3">Server, Bartender, or Trainer</td></tr>
+                    <tr className="border-b"><td className="py-2 px-3 font-medium">Guests</td><td className="py-2 px-3">✅ Yes</td><td className="py-2 px-3">Total guests served</td></tr>
+                    <tr className="border-b"><td className="py-2 px-3 font-medium">Net Sales</td><td className="py-2 px-3">✅ Yes</td><td className="py-2 px-3">Total sales in $</td></tr>
+                    <tr className="border-b"><td className="py-2 px-3 font-medium">Liquor Sales</td><td className="py-2 px-3">✅ Yes</td><td className="py-2 px-3">Liquor sales in $</td></tr>
+                    <tr className="border-b"><td className="py-2 px-3 font-medium">Beer Sales</td><td className="py-2 px-3">✅ Yes</td><td className="py-2 px-3">Beer sales in $</td></tr>
+                    <tr className="border-b"><td className="py-2 px-3 font-medium">Wine Sales</td><td className="py-2 px-3">✅ Yes</td><td className="py-2 px-3">Wine sales in $</td></tr>
+                    <tr className="border-b"><td className="py-2 px-3 font-medium">Glassware Sales</td><td className="py-2 px-3">✅ Yes</td><td className="py-2 px-3">Glassware sales in $</td></tr>
+                    <tr className="border-b"><td className="py-2 px-3 font-medium">LSC Count</td><td className="py-2 px-3">✅ Yes</td><td className="py-2 px-3">Number of Landshark Calls completed</td></tr>
+                    <tr className="border-b"><td className="py-2 px-3 font-medium">CV Promoters</td><td className="py-2 px-3">Optional</td><td className="py-2 px-3">Customer Voice scores 9-10</td></tr>
+                    <tr className="border-b"><td className="py-2 px-3 font-medium">CV Detractors</td><td className="py-2 px-3">Optional</td><td className="py-2 px-3">Customer Voice scores 0-6</td></tr>
+                    <tr><td className="py-2 px-3 font-medium">Review Mentions</td><td className="py-2 px-3">Optional</td><td className="py-2 px-3">Online review mentions</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {/* FAQ */}
+          <div className="bubba-card mt-6 mb-8">
+            <div className="tape tape-red" style={{ top: '-8px', left: '60%', transform: 'rotate(1deg)' }} />
+            <div className="p-6 pt-8">
+              <h3 className="text-xl font-bold text-primary mb-4">❓ Frequently Asked Questions</h3>
+              <div className="space-y-4">
+                <div>
+                  <h5 className="font-semibold text-gray-800">Why can't I change benchmarks after uploading data?</h5>
+                  <p className="text-gray-600 text-sm">Once scores are generated, benchmarks are locked to maintain consistency. Create a new quarter if you need different settings.</p>
+                </div>
+                <div>
+                  <h5 className="font-semibold text-gray-800">What's the difference between Quarterly Data and Snapshots?</h5>
+                  <p className="text-gray-600 text-sm">Quarterly data (Dashboard) is your main scoring - one upload per quarter. Snapshots are bi-weekly check-ins (1st & 15th) that create standalone visual reports.</p>
+                </div>
+                <div>
+                  <h5 className="font-semibold text-gray-800">How do I fix a mistake in uploaded data?</h5>
+                  <p className="text-gray-600 text-sm">Go to Employees page, find the employee, and use Edit to correct values. Or delete all and re-upload a corrected file.</p>
+                </div>
+                <div>
+                  <h5 className="font-semibold text-gray-800">What's LBW?</h5>
+                  <p className="text-gray-600 text-sm">LBW = Liquor + Beer + Wine sales combined. It's automatically calculated from the three separate columns.</p>
+                </div>
+                <div>
+                  <h5 className="font-semibold text-gray-800">What does "Guests/LSC" mean?</h5>
+                  <p className="text-gray-600 text-sm">Guests per Landshark Call. Lower is better - it means the employee is doing more LSCs relative to their guest count.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
