@@ -942,32 +942,48 @@ async def upload_employees_v2(
         mapping = column_validation["mapping"]
         employees = []
         
+        # Helper function to safely convert to int
+        def safe_int(val, default=0):
+            if val is None or (isinstance(val, float) and pd.isna(val)):
+                return default
+            try:
+                return int(float(val))
+            except (ValueError, TypeError):
+                return default
+        
+        # Helper function to safely convert to float
+        def safe_float(val, default=0.0):
+            if val is None or (isinstance(val, float) and pd.isna(val)):
+                return default
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                return default
+        
         for idx, row in df.iterrows():
             try:
                 # Extract core values
                 name = str(row.get(mapping["name"], "")).strip()
-                guests = int(row.get(mapping["guests"], 0))
-                net_sales = float(row.get(mapping["net_sales"], 0))
+                if not name or name == "nan":
+                    continue
+                
+                guests = safe_int(row.get(mapping["guests"]))
+                net_sales = safe_float(row.get(mapping["net_sales"]))
                 
                 # Job Title (optional) - for hierarchy-based rankings
                 job_title = "Server"  # Default
                 if mapping.get("job_title"):
                     val = row.get(mapping["job_title"])
-                    if not pd.isna(val) and str(val).strip():
+                    if val is not None and not pd.isna(val) and str(val).strip() and str(val).strip().lower() != "nan":
                         job_title = str(val).strip()
                 
                 # Individual alcohol sales (required) - LBW calculated automatically
-                liquor_val = row.get(mapping["liquor_sales"])
-                beer_val = row.get(mapping["beer_sales"])
-                wine_val = row.get(mapping["wine_sales"])
+                liquor_sales = safe_float(row.get(mapping["liquor_sales"]))
+                beer_sales = safe_float(row.get(mapping["beer_sales"]))
+                wine_sales = safe_float(row.get(mapping["wine_sales"]))
                 
-                # Treat missing/blank as zero
-                liquor_sales = float(liquor_val) if not pd.isna(liquor_val) else 0.0
-                beer_sales = float(beer_val) if not pd.isna(beer_val) else 0.0
-                wine_sales = float(wine_val) if not pd.isna(wine_val) else 0.0
-                
-                glassware_sales = float(row.get(mapping["glassware_sales"], 0))
-                lsc_count = int(row.get(mapping["lsc_count"], 0))
+                glassware_sales = safe_float(row.get(mapping["glassware_sales"]))
+                lsc_count = safe_int(row.get(mapping["lsc_count"]))
                 
                 if guests <= 0:
                     logging.warning(f"Row {idx + 2}: Skipping {name} - guests must be > 0")
