@@ -764,11 +764,12 @@ async def download_template():
     LBW Total is calculated automatically: LBW = Liquor + Beer + Wine
     
     NEW: Job Title column for hierarchy-based rankings (Trainer > Bartender > Server)
+    NOTE: CV Passives removed - they contribute 0 points to score
     """
-    template_content = """Employee Name,Job Title,Guests,Net Sales,Liquor Sales,Beer Sales,Wine Sales,Glassware Sales,LSC Count,CV Promoters,CV Passives,CV Detractors,Review Mentions
-John Smith,Server,450,24750,1500,1350,1200,540,5,3,2,1,8
-Jane Doe,Bartender,520,28600,1800,1500,1380,624,9,5,1,0,12
-Sarah Johnson,Trainer,400,22000,1200,1200,1200,480,4,2,3,2,5"""
+    template_content = """Employee Name,Job Title,Guests,Net Sales,Liquor Sales,Beer Sales,Wine Sales,Glassware Sales,LSC Count,CV Promoters,CV Detractors,Review Mentions
+John Smith,Server,450,24750,1500,1350,1200,540,5,3,1,8
+Jane Doe,Bartender,520,28600,1800,1500,1380,624,9,5,0,12
+Sarah Johnson,Trainer,400,22000,1200,1200,1200,480,4,2,2,5"""
     
     return Response(
         content=template_content,
