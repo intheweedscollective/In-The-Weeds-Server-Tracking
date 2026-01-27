@@ -1115,7 +1115,7 @@ export default function QuarterSettings() {
                     <tr className="border-b"><td className="py-2 px-3 font-medium">Beer Sales</td><td className="py-2 px-3">✅ Yes</td><td className="py-2 px-3">Beer sales in $</td></tr>
                     <tr className="border-b"><td className="py-2 px-3 font-medium">Wine Sales</td><td className="py-2 px-3">✅ Yes</td><td className="py-2 px-3">Wine sales in $</td></tr>
                     <tr className="border-b"><td className="py-2 px-3 font-medium">Glassware Sales</td><td className="py-2 px-3">✅ Yes</td><td className="py-2 px-3">Glassware sales in $</td></tr>
-                    <tr className="border-b"><td className="py-2 px-3 font-medium">LSC Count</td><td className="py-2 px-3">✅ Yes</td><td className="py-2 px-3">Number of Landshark Calls completed</td></tr>
+                    <tr className="border-b"><td className="py-2 px-3 font-medium">LSC Count</td><td className="py-2 px-3">✅ Yes</td><td className="py-2 px-3">Number of Landry's Select Card enrollments</td></tr>
                     <tr className="border-b"><td className="py-2 px-3 font-medium">CV Promoters</td><td className="py-2 px-3">Optional</td><td className="py-2 px-3">Customer Voice scores 9-10</td></tr>
                     <tr className="border-b"><td className="py-2 px-3 font-medium">CV Detractors</td><td className="py-2 px-3">Optional</td><td className="py-2 px-3">Customer Voice scores 0-6</td></tr>
                     <tr><td className="py-2 px-3 font-medium">Review Mentions</td><td className="py-2 px-3">Optional</td><td className="py-2 px-3">Online review mentions</td></tr>
