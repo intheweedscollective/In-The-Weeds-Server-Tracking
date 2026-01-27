@@ -1,268 +1,292 @@
 """
-Yodeck Slide Generator
+Yodeck Slide Generator v2.0
 Generates 16:9 (1920x1080) PNG slides for digital signage.
-Vegas Strip professional - clean, branded, high-contrast.
-Supports per-quarter theme customization and seasonal themes.
+Premium Vegas-style design - bold, vibrant, eye-catching.
 """
 import io
 from typing import List, Dict, Any, Tuple, Optional
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from datetime import datetime, date
 import base64
 import math
+import random
 
 # ============================================================================
-# DESIGN CONSTANTS (Vegas Strip Professional)
+# DESIGN CONSTANTS
 # ============================================================================
 
 SLIDE_WIDTH = 1920
 SLIDE_HEIGHT = 1080
 
-# Pre-built themes
+# Premium themes with more vibrant colors
 THEMES = {
     "dark_navy": {
         "background": "#0A1628",
-        "background_gradient": "#132238",
-        "primary": "#D12E2E",
-        "secondary": "#005B96",
+        "background_gradient": "#1A2744",
+        "card_bg": "#1E3A5F",
+        "primary": "#FF4757",
+        "secondary": "#3742FA",
+        "accent": "#FFA502",
         "text_white": "#FFFFFF",
-        "text_light": "#E5E7EB",
-        "text_muted": "#9CA3AF",
+        "text_light": "#E8EEF7",
+        "text_muted": "#8899AA",
         "gold": "#FFD700",
         "silver": "#C0C0C0",
         "bronze": "#CD7F32",
+        "glow": "#00D9FF",
     },
     "light_corporate": {
-        "background": "#F8FAFC",
+        "background": "#F0F4F8",
         "background_gradient": "#E2E8F0",
-        "primary": "#D12E2E",
-        "secondary": "#005B96",
-        "text_white": "#1E293B",
-        "text_light": "#334155",
-        "text_muted": "#64748B",
-        "gold": "#D97706",
-        "silver": "#6B7280",
-        "bronze": "#92400E",
+        "card_bg": "#FFFFFF",
+        "primary": "#E53E3E",
+        "secondary": "#3182CE",
+        "accent": "#DD6B20",
+        "text_white": "#1A202C",
+        "text_light": "#2D3748",
+        "text_muted": "#718096",
+        "gold": "#D69E2E",
+        "silver": "#718096",
+        "bronze": "#C05621",
+        "glow": "#4299E1",
     },
     "bubba_red": {
-        "background": "#7F1D1D",
-        "background_gradient": "#450A0A",
+        "background": "#450A0A",
+        "background_gradient": "#7F1D1D",
+        "card_bg": "#991B1B",
         "primary": "#FEF2F2",
         "secondary": "#FCA5A5",
+        "accent": "#FCD34D",
         "text_white": "#FFFFFF",
         "text_light": "#FEE2E2",
         "text_muted": "#FECACA",
         "gold": "#FFD700",
         "silver": "#E5E7EB",
         "bronze": "#F59E0B",
+        "glow": "#FF6B6B",
     },
     "ocean_blue": {
-        "background": "#0C4A6E",
-        "background_gradient": "#082F49",
+        "background": "#082F49",
+        "background_gradient": "#0C4A6E",
+        "card_bg": "#0369A1",
         "primary": "#F0F9FF",
         "secondary": "#38BDF8",
+        "accent": "#FB923C",
         "text_white": "#FFFFFF",
         "text_light": "#E0F2FE",
         "text_muted": "#BAE6FD",
         "gold": "#FCD34D",
         "silver": "#E5E7EB",
         "bronze": "#FB923C",
+        "glow": "#22D3EE",
+    },
+    "vegas_gold": {
+        "background": "#1A1A2E",
+        "background_gradient": "#16213E",
+        "card_bg": "#0F3460",
+        "primary": "#FFD700",
+        "secondary": "#E94560",
+        "accent": "#00FFF5",
+        "text_white": "#FFFFFF",
+        "text_light": "#F5F5F5",
+        "text_muted": "#AAAAAA",
+        "gold": "#FFD700",
+        "silver": "#C0C0C0",
+        "bronze": "#CD7F32",
+        "glow": "#FFD700",
     },
 }
 
-# ============================================================================
-# SEASONAL/HOLIDAY THEMES
-# ============================================================================
-
+# Seasonal themes (keeping existing)
 SEASONAL_THEMES = {
     "valentines": {
         "name": "Valentine's Day",
         "background": "#4A0D2A",
         "background_gradient": "#2D0519",
+        "card_bg": "#6B1E4A",
         "primary": "#FF6B9D",
         "secondary": "#FF1493",
+        "accent": "#FFB6C1",
         "text_white": "#FFFFFF",
         "text_light": "#FFE4EC",
         "text_muted": "#FFB6C1",
         "gold": "#FFD700",
         "silver": "#FFC0CB",
         "bronze": "#FF69B4",
+        "glow": "#FF1493",
         "emoji": "💕",
         "decorations": ["heart"],
     },
     "st_patricks": {
         "name": "St. Patrick's Day",
         "background": "#0D3B0D",
-        "background_gradient": "#051F05",
+        "background_gradient": "#1A5C1A",
+        "card_bg": "#228B22",
         "primary": "#00FF7F",
         "secondary": "#32CD32",
+        "accent": "#FFD700",
         "text_white": "#FFFFFF",
         "text_light": "#E8F5E9",
         "text_muted": "#A5D6A7",
         "gold": "#FFD700",
         "silver": "#98FB98",
         "bronze": "#228B22",
+        "glow": "#00FF7F",
         "emoji": "🍀",
         "decorations": ["shamrock"],
-    },
-    "easter": {
-        "name": "Easter",
-        "background": "#E8E4F0",
-        "background_gradient": "#D4C8E8",
-        "primary": "#9C27B0",
-        "secondary": "#FF9800",
-        "text_white": "#4A148C",
-        "text_light": "#6A1B9A",
-        "text_muted": "#7B1FA2",
-        "gold": "#FFD54F",
-        "silver": "#CE93D8",
-        "bronze": "#FF7043",
-        "emoji": "🐣",
-        "decorations": ["egg"],
-    },
-    "july_4th": {
-        "name": "4th of July",
-        "background": "#0A1628",
-        "background_gradient": "#1A237E",
-        "primary": "#F44336",
-        "secondary": "#2196F3",
-        "text_white": "#FFFFFF",
-        "text_light": "#E3F2FD",
-        "text_muted": "#BBDEFB",
-        "gold": "#FFD700",
-        "silver": "#E0E0E0",
-        "bronze": "#FF5722",
-        "emoji": "🇺🇸",
-        "decorations": ["star", "firework"],
-    },
-    "halloween": {
-        "name": "Halloween",
-        "background": "#1A0A00",
-        "background_gradient": "#0D0500",
-        "primary": "#FF6600",
-        "secondary": "#9C27B0",
-        "text_white": "#FFFFFF",
-        "text_light": "#FFE0B2",
-        "text_muted": "#FFCC80",
-        "gold": "#FFD700",
-        "silver": "#E0E0E0",
-        "bronze": "#FF9800",
-        "emoji": "🎃",
-        "decorations": ["pumpkin", "bat"],
-    },
-    "thanksgiving": {
-        "name": "Thanksgiving",
-        "background": "#3E2723",
-        "background_gradient": "#1B0F0A",
-        "primary": "#FF8F00",
-        "secondary": "#8D6E63",
-        "text_white": "#FFFFFF",
-        "text_light": "#FFF3E0",
-        "text_muted": "#FFE0B2",
-        "gold": "#FFD700",
-        "silver": "#BCAAA4",
-        "bronze": "#A1887F",
-        "emoji": "🦃",
-        "decorations": ["leaf"],
     },
     "christmas": {
         "name": "Christmas",
         "background": "#0D2818",
-        "background_gradient": "#051208",
+        "background_gradient": "#1A4D2E",
+        "card_bg": "#2D5A3D",
         "primary": "#FF0000",
         "secondary": "#228B22",
+        "accent": "#FFD700",
         "text_white": "#FFFFFF",
         "text_light": "#E8F5E9",
         "text_muted": "#C8E6C9",
         "gold": "#FFD700",
         "silver": "#C0C0C0",
         "bronze": "#CD7F32",
+        "glow": "#FF0000",
         "emoji": "🎄",
         "decorations": ["snowflake", "tree"],
+    },
+    "halloween": {
+        "name": "Halloween",
+        "background": "#1A0A00",
+        "background_gradient": "#2D1500",
+        "card_bg": "#4A2500",
+        "primary": "#FF6600",
+        "secondary": "#9C27B0",
+        "accent": "#FFD700",
+        "text_white": "#FFFFFF",
+        "text_light": "#FFE0B2",
+        "text_muted": "#FFCC80",
+        "gold": "#FFD700",
+        "silver": "#E0E0E0",
+        "bronze": "#FF9800",
+        "glow": "#FF6600",
+        "emoji": "🎃",
+        "decorations": ["pumpkin"],
+    },
+    "july_4th": {
+        "name": "4th of July",
+        "background": "#0A1628",
+        "background_gradient": "#1A237E",
+        "card_bg": "#283593",
+        "primary": "#F44336",
+        "secondary": "#2196F3",
+        "accent": "#FFFFFF",
+        "text_white": "#FFFFFF",
+        "text_light": "#E3F2FD",
+        "text_muted": "#BBDEFB",
+        "gold": "#FFD700",
+        "silver": "#E0E0E0",
+        "bronze": "#FF5722",
+        "glow": "#F44336",
+        "emoji": "🇺🇸",
+        "decorations": ["star", "firework"],
     },
     "new_year": {
         "name": "New Year",
         "background": "#0A0A1A",
-        "background_gradient": "#000005",
+        "background_gradient": "#1A1A3A",
+        "card_bg": "#2A2A5A",
         "primary": "#FFD700",
         "secondary": "#C0C0C0",
+        "accent": "#00FFFF",
         "text_white": "#FFFFFF",
         "text_light": "#FFF9C4",
         "text_muted": "#FFF59D",
         "gold": "#FFD700",
         "silver": "#E0E0E0",
         "bronze": "#FF8F00",
+        "glow": "#FFD700",
         "emoji": "🎆",
         "decorations": ["firework", "confetti"],
     },
+    "thanksgiving": {
+        "name": "Thanksgiving",
+        "background": "#3E2723",
+        "background_gradient": "#5D4037",
+        "card_bg": "#6D4C41",
+        "primary": "#FF8F00",
+        "secondary": "#8D6E63",
+        "accent": "#FFD700",
+        "text_white": "#FFFFFF",
+        "text_light": "#FFF3E0",
+        "text_muted": "#FFE0B2",
+        "gold": "#FFD700",
+        "silver": "#BCAAA4",
+        "bronze": "#A1887F",
+        "glow": "#FF8F00",
+        "emoji": "🦃",
+        "decorations": ["leaf"],
+    },
+    "easter": {
+        "name": "Easter",
+        "background": "#E8E4F0",
+        "background_gradient": "#D4C8E8",
+        "card_bg": "#C8B8E0",
+        "primary": "#9C27B0",
+        "secondary": "#FF9800",
+        "accent": "#4CAF50",
+        "text_white": "#4A148C",
+        "text_light": "#6A1B9A",
+        "text_muted": "#7B1FA2",
+        "gold": "#FFD54F",
+        "silver": "#CE93D8",
+        "bronze": "#FF7043",
+        "glow": "#9C27B0",
+        "emoji": "🐣",
+        "decorations": ["egg"],
+    },
 }
 
-# Holiday date ranges (month, start_day, end_day)
+# Holiday dates
 HOLIDAY_DATES = {
-    "new_year": [(1, 1, 7)],  # Jan 1-7
-    "valentines": [(2, 7, 14)],  # Feb 7-14
-    "st_patricks": [(3, 10, 17)],  # Mar 10-17
-    "easter": [(3, 25, 31), (4, 1, 21)],  # Late March to mid-April (approximate)
-    "july_4th": [(6, 28, 30), (7, 1, 7)],  # Jun 28 - Jul 7
-    "halloween": [(10, 24, 31)],  # Oct 24-31
-    "thanksgiving": [(11, 18, 28)],  # Nov 18-28 (4th Thursday varies)
-    "christmas": [(12, 15, 31)],  # Dec 15-31
+    "new_year": [(1, 1, 7)],
+    "valentines": [(2, 7, 14)],
+    "st_patricks": [(3, 10, 17)],
+    "easter": [(3, 25, 31), (4, 1, 21)],
+    "july_4th": [(6, 28, 30), (7, 1, 7)],
+    "halloween": [(10, 24, 31)],
+    "thanksgiving": [(11, 18, 28)],
+    "christmas": [(12, 15, 31)],
+}
+
+# Tier colors
+TIER_CONFIG = {
+    "Trainer": {"color": "#A855F7", "bg": "#581C87", "short": "T", "icon": "👑"},
+    "Bartender": {"color": "#3B82F6", "bg": "#1E3A8A", "short": "BAR", "icon": "🍸"},
+    "A-Server": {"color": "#22C55E", "bg": "#14532D", "short": "A", "icon": "⭐"},
+    "B-Server": {"color": "#EAB308", "bg": "#713F12", "short": "B", "icon": "📈"},
+    "C-Server": {"color": "#EF4444", "bg": "#7F1D1D", "short": "C", "icon": "💪"},
 }
 
 
 def get_current_seasonal_theme() -> Optional[str]:
-    """
-    Auto-detect current seasonal theme based on today's date.
-    Returns the theme key or None if no holiday is active.
-    """
+    """Auto-detect current seasonal theme based on date."""
     today = date.today()
-    month = today.month
-    day = today.day
-    
     for theme_key, date_ranges in HOLIDAY_DATES.items():
         for (m, start_day, end_day) in date_ranges:
-            if month == m and start_day <= day <= end_day:
+            if today.month == m and start_day <= today.day <= end_day:
                 return theme_key
-    
     return None
-
-
-def get_seasonal_theme_colors(theme_key: str) -> Optional[Dict]:
-    """Get colors for a seasonal theme."""
-    if theme_key in SEASONAL_THEMES:
-        return SEASONAL_THEMES[theme_key]
-    return None
-
-# Default colors (dark_navy)
-COLORS = THEMES["dark_navy"]
-
-# Tier configuration
-TIER_CONFIG = {
-    "Trainer": {"color": "#9333EA", "short": "T"},
-    "Bartender": {"color": "#2563EB", "short": "BAR"},
-    "A-Server": {"color": "#16A34A", "short": "A"},
-    "B-Server": {"color": "#CA8A04", "short": "B"},
-    "C-Server": {"color": "#DC2626", "short": "C"},
-}
 
 
 def get_theme_colors(theme_name: str = "dark_navy", custom_colors: Dict = None, seasonal_override: str = None) -> Dict:
-    """
-    Get colors for a theme, with optional custom overrides and seasonal themes.
-    Priority: seasonal_override > custom > theme_name
-    """
-    # Check for seasonal override first
-    if seasonal_override and seasonal_override != "auto" and seasonal_override != "none":
-        if seasonal_override in SEASONAL_THEMES:
-            return SEASONAL_THEMES[seasonal_override].copy()
+    """Get colors for a theme."""
+    if seasonal_override and seasonal_override not in ["auto", "none"] and seasonal_override in SEASONAL_THEMES:
+        return SEASONAL_THEMES[seasonal_override].copy()
     
-    # Auto-detect seasonal theme
     if seasonal_override == "auto":
         auto_theme = get_current_seasonal_theme()
         if auto_theme:
             return SEASONAL_THEMES[auto_theme].copy()
     
-    # Custom theme
     if theme_name == "custom" and custom_colors:
         base = THEMES["dark_navy"].copy()
         base.update(custom_colors)
@@ -271,318 +295,228 @@ def get_theme_colors(theme_name: str = "dark_navy", custom_colors: Dict = None, 
     return THEMES.get(theme_name, THEMES["dark_navy"]).copy()
 
 
-def get_seasonal_emoji(seasonal_theme: str = None) -> str:
-    """Get the emoji for the current seasonal theme."""
-    if seasonal_theme and seasonal_theme in SEASONAL_THEMES:
-        return SEASONAL_THEMES[seasonal_theme].get("emoji", "🦐")
-    
-    # Auto-detect
-    auto_theme = get_current_seasonal_theme()
-    if auto_theme:
-        return SEASONAL_THEMES[auto_theme].get("emoji", "🦐")
-    
-    return "🦐"  # Default Bubba Gump shrimp
-
-
-def draw_heart(draw: ImageDraw, x: int, y: int, size: int, color: tuple, alpha: int = 100):
-    """Draw a heart shape at the given position."""
-    # Heart is made of two circles and a triangle
-    r = size // 3
-    # Left circle
-    draw.ellipse([x - r, y - r, x + r, y + r], fill=color + (alpha,))
-    # Right circle
-    draw.ellipse([x + r - 2, y - r, x + 3*r - 2, y + r], fill=color + (alpha,))
-    # Bottom triangle
-    draw.polygon([
-        (x - r, y),
-        (x + 3*r - 2, y),
-        (x + r - 1, y + int(size * 0.9))
-    ], fill=color + (alpha,))
-
-
-def draw_snowflake(draw: ImageDraw, x: int, y: int, size: int, color: tuple, alpha: int = 80):
-    """Draw a simple snowflake at the given position."""
-    # 6 lines radiating from center
-    for angle in range(0, 360, 60):
-        rad = math.radians(angle)
-        x2 = x + int(size * math.cos(rad))
-        y2 = y + int(size * math.sin(rad))
-        draw.line([(x, y), (x2, y2)], fill=color + (alpha,), width=2)
-
-
-def draw_star(draw: ImageDraw, x: int, y: int, size: int, color: tuple, alpha: int = 100):
-    """Draw a 5-pointed star at the given position."""
-    points = []
-    for i in range(10):
-        angle = math.radians(i * 36 - 90)
-        r = size if i % 2 == 0 else size // 2
-        points.append((
-            x + int(r * math.cos(angle)),
-            y + int(r * math.sin(angle))
-        ))
-    draw.polygon(points, fill=color + (alpha,))
-
-
-def draw_shamrock(draw: ImageDraw, x: int, y: int, size: int, color: tuple, alpha: int = 100):
-    """Draw a shamrock (3 leaves) at the given position."""
-    r = size // 3
-    # Three circles for leaves
-    offsets = [(-r, -r//2), (r, -r//2), (0, -r)]
-    for ox, oy in offsets:
-        draw.ellipse([x + ox - r//2, y + oy - r//2, x + ox + r//2, y + oy + r//2], fill=color + (alpha,))
-    # Stem
-    draw.rectangle([x - 2, y, x + 2, y + size//2], fill=color + (alpha,))
-
-
-def draw_pumpkin(draw: ImageDraw, x: int, y: int, size: int, color: tuple, alpha: int = 100):
-    """Draw a simple pumpkin at the given position."""
-    # Main body (orange ellipse)
-    draw.ellipse([x - size//2, y - size//3, x + size//2, y + size//3], fill=color + (alpha,))
-    # Stem (brown/green)
-    stem_color = (34, 139, 34)  # Forest green
-    draw.rectangle([x - 3, y - size//3 - 8, x + 3, y - size//3], fill=stem_color + (alpha,))
-
-
-def add_seasonal_decorations(img: Image.Image, seasonal_theme: str, colors: Dict) -> Image.Image:
-    """
-    Add seasonal decorations to the slide image.
-    Creates a new RGBA layer for decorations and composites it.
-    """
-    if not seasonal_theme or seasonal_theme not in SEASONAL_THEMES:
-        return img
-    
-    theme_info = SEASONAL_THEMES[seasonal_theme]
-    decorations = theme_info.get("decorations", [])
-    
-    if not decorations:
-        return img
-    
-    # Create an overlay for decorations
-    overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(overlay)
-    
-    # Get primary color for decorations
-    primary_rgb = hex_to_rgb(colors.get("primary", "#FF6B9D"))
-    secondary_rgb = hex_to_rgb(colors.get("secondary", "#FF1493"))
-    
-    import random
-    random.seed(42)  # Consistent decoration placement
-    
-    # Add decorations based on theme
-    if "heart" in decorations:
-        # Scatter hearts in corners and edges
-        positions = [
-            (80, 80, 40), (150, 150, 25), (1840, 80, 35), (1770, 140, 20),
-            (80, 1000, 30), (1840, 1000, 35), (960, 50, 20), (500, 80, 15),
-            (1400, 80, 18), (200, 900, 22), (1720, 950, 28)
-        ]
-        for px, py, size in positions:
-            alpha = random.randint(40, 80)
-            c = primary_rgb if random.random() > 0.5 else secondary_rgb
-            draw_heart(draw, px, py, size, c, alpha)
-    
-    if "snowflake" in decorations:
-        positions = [
-            (100, 100, 30), (200, 200, 20), (1800, 100, 25), (1700, 180, 18),
-            (150, 900, 22), (1750, 950, 28), (960, 60, 15), (400, 120, 12),
-            (1500, 100, 16), (300, 980, 20)
-        ]
-        for px, py, size in positions:
-            alpha = random.randint(50, 90)
-            draw_snowflake(draw, px, py, size, (255, 255, 255), alpha)
-    
-    if "star" in decorations:
-        positions = [
-            (100, 80, 25), (180, 150, 15), (1820, 80, 20), (1750, 130, 12),
-            (100, 980, 18), (1820, 980, 22), (500, 60, 10), (1400, 60, 14)
-        ]
-        for px, py, size in positions:
-            alpha = random.randint(60, 100)
-            c = (255, 215, 0) if random.random() > 0.3 else (255, 255, 255)  # Gold or white
-            draw_star(draw, px, py, size, c, alpha)
-    
-    if "shamrock" in decorations:
-        positions = [
-            (100, 100, 35), (180, 180, 25), (1820, 100, 30), (1740, 170, 20),
-            (100, 950, 28), (1820, 960, 32), (500, 80, 18), (1400, 80, 22)
-        ]
-        for px, py, size in positions:
-            alpha = random.randint(50, 90)
-            draw_shamrock(draw, px, py, size, primary_rgb, alpha)
-    
-    if "pumpkin" in decorations:
-        positions = [
-            (100, 100, 40), (1820, 100, 35), (100, 980, 30), (1820, 980, 38)
-        ]
-        for px, py, size in positions:
-            alpha = random.randint(60, 100)
-            draw_pumpkin(draw, px, py, size, primary_rgb, alpha)
-    
-    if "bat" in decorations:
-        # Simple bat silhouettes (small triangles)
-        positions = [(300, 150, 20), (600, 100, 15), (1300, 120, 18), (1600, 90, 22)]
-        for px, py, size in positions:
-            alpha = random.randint(30, 60)
-            # Simple bat shape
-            draw.polygon([
-                (px, py), (px - size, py + size//2), (px - size//2, py),
-                (px, py - size//3), (px + size//2, py), (px + size, py + size//2)
-            ], fill=(0, 0, 0) + (alpha,))
-    
-    if "leaf" in decorations:
-        # Fall leaves (simple ellipses in fall colors)
-        fall_colors = [(255, 140, 0), (255, 69, 0), (178, 34, 34), (218, 165, 32)]
-        positions = [
-            (120, 100, 25), (200, 180, 18), (1800, 110, 22), (1720, 170, 15),
-            (130, 950, 20), (1810, 960, 24)
-        ]
-        for i, (px, py, size) in enumerate(positions):
-            alpha = random.randint(50, 90)
-            c = fall_colors[i % len(fall_colors)]
-            draw.ellipse([px - size, py - size//2, px + size, py + size//2], fill=c + (alpha,))
-    
-    if "egg" in decorations:
-        # Easter eggs (colorful ellipses)
-        egg_colors = [(255, 182, 193), (152, 251, 152), (173, 216, 230), (255, 218, 185), (221, 160, 221)]
-        positions = [
-            (100, 100, 20), (180, 170, 15), (1820, 100, 18), (1740, 160, 12),
-            (100, 960, 16), (1820, 970, 20)
-        ]
-        for i, (px, py, size) in enumerate(positions):
-            alpha = random.randint(60, 100)
-            c = egg_colors[i % len(egg_colors)]
-            draw.ellipse([px - size//2, py - size, px + size//2, py + size], fill=c + (alpha,))
-    
-    if "tree" in decorations:
-        # Simple Christmas trees (triangles)
-        positions = [(100, 120, 40), (1820, 120, 35)]
-        for px, py, size in positions:
-            alpha = random.randint(50, 80)
-            # Tree shape
-            draw.polygon([
-                (px, py - size), (px - size//2, py + size//2), (px + size//2, py + size//2)
-            ], fill=(34, 139, 34) + (alpha,))
-            # Trunk
-            draw.rectangle([px - 4, py + size//2, px + 4, py + size//2 + 10], fill=(139, 69, 19) + (alpha,))
-    
-    if "firework" in decorations or "confetti" in decorations:
-        # Sparkle dots
-        for _ in range(30):
-            px = random.randint(50, 1870)
-            py = random.randint(50, 200) if random.random() > 0.5 else random.randint(880, 1030)
-            size = random.randint(2, 6)
-            alpha = random.randint(40, 100)
-            c = random.choice([primary_rgb, secondary_rgb, (255, 215, 0), (255, 255, 255)])
-            draw.ellipse([px - size, py - size, px + size, py + size], fill=c + (alpha,))
-    
-    # Composite the overlay onto the original image
-    img = img.convert('RGBA')
-    img = Image.alpha_composite(img, overlay)
-    return img.convert('RGB')
-
-
 def hex_to_rgb(hex_color: str) -> Tuple[int, int, int]:
-    """Convert hex color to RGB tuple."""
+    """Convert hex to RGB."""
     hex_color = hex_color.lstrip('#')
     return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
 
-def create_gradient_background(width: int, height: int, colors: Dict = None, custom_bg_image: str = None) -> Image.Image:
-    """Create a gradient background or use custom image."""
-    if colors is None:
-        colors = COLORS
-    
-    # If custom background image provided
-    if custom_bg_image:
+def get_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
+    """Get system font."""
+    font_paths = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    ]
+    for path in font_paths:
         try:
-            if custom_bg_image.startswith('data:'):
-                # Base64 encoded image
-                img_data = base64.b64decode(custom_bg_image.split(',')[1])
-                img = Image.open(io.BytesIO(img_data))
-            else:
-                # URL - would need to fetch, for now skip
-                img = None
-            
-            if img:
-                img = img.convert('RGB')
-                img = img.resize((width, height), Image.Resampling.LANCZOS)
-                return img
-        except Exception:
-            pass  # Fall back to gradient
-    
+            return ImageFont.truetype(path, size)
+        except:
+            continue
+    return ImageFont.load_default()
+
+
+def create_gradient_background(width: int, height: int, colors: Dict) -> Image.Image:
+    """Create a rich gradient background with subtle pattern."""
     img = Image.new('RGB', (width, height))
     draw = ImageDraw.Draw(img)
     
     top_color = hex_to_rgb(colors.get("background", "#0A1628"))
-    bottom_color = hex_to_rgb(colors.get("background_gradient", "#132238"))
+    bottom_color = hex_to_rgb(colors.get("background_gradient", "#1A2744"))
     
+    # Vertical gradient
     for y in range(height):
         ratio = y / height
+        # Add slight curve to gradient
+        ratio = ratio ** 0.8
         r = int(top_color[0] + (bottom_color[0] - top_color[0]) * ratio)
         g = int(top_color[1] + (bottom_color[1] - top_color[1]) * ratio)
         b = int(top_color[2] + (bottom_color[2] - top_color[2]) * ratio)
         draw.line([(0, y), (width, y)], fill=(r, g, b))
     
+    # Add subtle diagonal pattern
+    pattern_color = hex_to_rgb(colors.get("card_bg", "#1E3A5F"))
+    for i in range(-height, width + height, 80):
+        draw.line([(i, 0), (i + height, height)], fill=pattern_color + (15,), width=1)
+    
     return img
 
 
-def get_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
-    """Get font - uses system fonts with fallback."""
-    font_paths = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-    ]
+def draw_glow_circle(img: Image.Image, x: int, y: int, radius: int, color: tuple, intensity: int = 50):
+    """Draw a glowing circle effect."""
+    overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
     
-    for path in font_paths:
-        try:
-            return ImageFont.truetype(path, size)
-        except (IOError, OSError):
-            continue
+    # Multiple layers for glow effect
+    for i in range(5, 0, -1):
+        r = radius + i * 10
+        alpha = intensity // i
+        draw.ellipse([x - r, y - r, x + r, y + r], fill=color + (alpha,))
     
-    # Fallback to default
-    return ImageFont.load_default()
+    img = img.convert('RGBA')
+    return Image.alpha_composite(img, overlay).convert('RGB')
 
 
-def draw_rounded_rect(draw: ImageDraw.Draw, bbox: Tuple[int, int, int, int], 
-                      radius: int, fill: str, outline: str = None):
-    """Draw a rounded rectangle."""
+def draw_card(draw: ImageDraw.Draw, bbox: Tuple[int, int, int, int], colors: Dict, highlight: bool = False):
+    """Draw a modern card with optional highlight."""
     x1, y1, x2, y2 = bbox
-    draw.rounded_rectangle(bbox, radius=radius, fill=fill, outline=outline)
+    card_color = hex_to_rgb(colors.get("card_bg", "#1E3A5F"))
+    
+    if highlight:
+        # Highlighted card has brighter background
+        card_color = tuple(min(c + 30, 255) for c in card_color)
+    
+    # Draw rounded rectangle
+    draw.rounded_rectangle(bbox, radius=16, fill=card_color)
+    
+    # Add subtle border
+    border_color = hex_to_rgb(colors.get("secondary", "#3742FA"))
+    if highlight:
+        draw.rounded_rectangle(bbox, radius=16, outline=border_color + (100,), width=2)
 
 
-def draw_tier_badge(draw: ImageDraw.Draw, x: int, y: int, tier: str, font: ImageFont.FreeTypeFont):
-    """Draw a tier badge with color coding."""
+def draw_medal(draw: ImageDraw.Draw, x: int, y: int, rank: int, colors: Dict, size: int = 60):
+    """Draw a stylish medal for top 3."""
+    if rank == 1:
+        medal_color = colors["gold"]
+        inner_color = "#FFE55C"
+        icon = "🥇"
+    elif rank == 2:
+        medal_color = colors["silver"]
+        inner_color = "#E8E8E8"
+        icon = "🥈"
+    elif rank == 3:
+        medal_color = colors["bronze"]
+        inner_color = "#E8A45C"
+        icon = "🥉"
+    else:
+        return
+    
+    # Outer circle
+    draw.ellipse([x - size//2, y - size//2, x + size//2, y + size//2], 
+                 fill=hex_to_rgb(medal_color))
+    # Inner circle
+    draw.ellipse([x - size//3, y - size//3, x + size//3, y + size//3], 
+                 fill=hex_to_rgb(inner_color))
+    
+    # Rank number
+    font = get_font(size//2, bold=True)
+    draw.text((x - size//6, y - size//4), str(rank), font=font, fill="#1A1A2E", anchor="lt")
+
+
+def draw_tier_badge(draw: ImageDraw.Draw, x: int, y: int, tier: str, size: str = "normal"):
+    """Draw a stylish tier badge."""
     config = TIER_CONFIG.get(tier, TIER_CONFIG["A-Server"])
-    badge_color = config["color"]
-    badge_text = tier
     
-    # Calculate badge size
-    text_bbox = draw.textbbox((0, 0), badge_text, font=font)
-    text_width = text_bbox[2] - text_bbox[0]
-    text_height = text_bbox[3] - text_bbox[1]
+    font_size = 24 if size == "normal" else 20
+    font = get_font(font_size, bold=True)
     
-    padding_x = 16
-    padding_y = 8
-    badge_width = text_width + padding_x * 2
-    badge_height = text_height + padding_y * 2
+    # Badge dimensions
+    padding = 16 if size == "normal" else 12
+    text_bbox = draw.textbbox((0, 0), tier, font=font)
+    badge_width = text_bbox[2] - text_bbox[0] + padding * 2
+    badge_height = text_bbox[3] - text_bbox[1] + padding
     
-    # Draw badge background
-    draw_rounded_rect(
-        draw, 
-        (x, y, x + badge_width, y + badge_height),
-        radius=6,
-        fill=badge_color
+    # Draw badge with gradient effect
+    bg_color = hex_to_rgb(config["bg"])
+    border_color = hex_to_rgb(config["color"])
+    
+    draw.rounded_rectangle(
+        [x, y, x + badge_width, y + badge_height],
+        radius=badge_height // 2,
+        fill=bg_color,
+        outline=border_color,
+        width=2
     )
     
-    # Draw badge text
-    draw.text(
-        (x + padding_x, y + padding_y - 2),
-        badge_text,
-        font=font,
-        fill=COLORS["text_white"]
-    )
+    # Text
+    draw.text((x + padding, y + padding//2 - 2), tier, font=font, fill=config["color"])
     
     return badge_width
+
+
+def draw_score_bar(draw: ImageDraw.Draw, x: int, y: int, width: int, score: float, max_score: float, colors: Dict):
+    """Draw a visual score bar."""
+    bar_height = 8
+    fill_width = int((score / max_score) * width) if max_score > 0 else 0
+    
+    # Background bar
+    draw.rounded_rectangle([x, y, x + width, y + bar_height], radius=4, 
+                          fill=hex_to_rgb(colors["text_muted"]) + (50,))
+    
+    # Fill bar with gradient effect
+    if fill_width > 0:
+        # Color based on score percentage
+        pct = score / max_score if max_score > 0 else 0
+        if pct >= 0.85:
+            fill_color = hex_to_rgb(TIER_CONFIG["A-Server"]["color"])
+        elif pct >= 0.70:
+            fill_color = hex_to_rgb(TIER_CONFIG["B-Server"]["color"])
+        else:
+            fill_color = hex_to_rgb(TIER_CONFIG["C-Server"]["color"])
+        
+        draw.rounded_rectangle([x, y, x + fill_width, y + bar_height], radius=4, fill=fill_color)
+
+
+def add_decorations(img: Image.Image, seasonal_theme: str, colors: Dict) -> Image.Image:
+    """Add seasonal decorations."""
+    if not seasonal_theme or seasonal_theme not in SEASONAL_THEMES:
+        return img
+    
+    theme_info = SEASONAL_THEMES[seasonal_theme]
+    decorations = theme_info.get("decorations", [])
+    if not decorations:
+        return img
+    
+    overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    
+    random.seed(42)
+    primary_rgb = hex_to_rgb(colors.get("primary", "#FF6B9D"))
+    
+    if "heart" in decorations:
+        for _ in range(15):
+            px, py = random.randint(50, 1870), random.choice([random.randint(50, 150), random.randint(930, 1030)])
+            size = random.randint(15, 35)
+            alpha = random.randint(30, 70)
+            r = size // 3
+            draw.ellipse([px - r, py - r, px + r, py + r], fill=primary_rgb + (alpha,))
+            draw.ellipse([px + r - 2, py - r, px + 3*r - 2, py + r], fill=primary_rgb + (alpha,))
+            draw.polygon([(px - r, py), (px + 3*r - 2, py), (px + r - 1, py + int(size * 0.9))], fill=primary_rgb + (alpha,))
+    
+    if "snowflake" in decorations:
+        for _ in range(20):
+            px, py = random.randint(50, 1870), random.choice([random.randint(50, 200), random.randint(880, 1030)])
+            size = random.randint(12, 25)
+            alpha = random.randint(40, 80)
+            for angle in range(0, 360, 60):
+                rad = math.radians(angle)
+                x2, y2 = px + int(size * math.cos(rad)), py + int(size * math.sin(rad))
+                draw.line([(px, py), (x2, y2)], fill=(255, 255, 255, alpha), width=2)
+    
+    if "star" in decorations:
+        for _ in range(12):
+            px, py = random.randint(50, 1870), random.choice([random.randint(50, 150), random.randint(930, 1030)])
+            size = random.randint(10, 22)
+            alpha = random.randint(50, 100)
+            c = (255, 215, 0) if random.random() > 0.3 else (255, 255, 255)
+            points = []
+            for i in range(10):
+                angle = math.radians(i * 36 - 90)
+                r = size if i % 2 == 0 else size // 2
+                points.append((px + int(r * math.cos(angle)), py + int(r * math.sin(angle))))
+            draw.polygon(points, fill=c + (alpha,))
+    
+    if "firework" in decorations or "confetti" in decorations:
+        for _ in range(40):
+            px = random.randint(50, 1870)
+            py = random.randint(50, 200) if random.random() > 0.5 else random.randint(880, 1030)
+            size = random.randint(2, 8)
+            alpha = random.randint(40, 100)
+            c = random.choice([primary_rgb, hex_to_rgb(colors.get("secondary", "#C0C0C0")), (255, 215, 0), (255, 255, 255)])
+            draw.ellipse([px - size, py - size, px + size, py + size], fill=c + (alpha,))
+    
+    img = img.convert('RGBA')
+    return Image.alpha_composite(img, overlay).convert('RGB')
 
 
 def generate_top_10_slide(
@@ -594,120 +528,100 @@ def generate_top_10_slide(
     custom_bg_image: str = None,
     seasonal_theme: str = None
 ) -> bytes:
-    """
-    Generate Top 10 Performers slide.
-    Simple: Rank, Name, Tier Badge, Total Score
-    Readable from 15 feet away.
-    """
+    """Generate premium Top 10 Performers slide."""
     colors = get_theme_colors(theme, custom_colors, seasonal_theme)
-    img = create_gradient_background(SLIDE_WIDTH, SLIDE_HEIGHT, colors, custom_bg_image)
+    img = create_gradient_background(SLIDE_WIDTH, SLIDE_HEIGHT, colors)
     
-    # Add seasonal decorations if applicable
+    # Add seasonal decorations
     active_seasonal = seasonal_theme if seasonal_theme and seasonal_theme != "none" else (get_current_seasonal_theme() if seasonal_theme == "auto" else None)
     if active_seasonal:
-        img = add_seasonal_decorations(img, active_seasonal, colors)
+        img = add_decorations(img, active_seasonal, colors)
     
     draw = ImageDraw.Draw(img)
     
-    # Get seasonal emoji
-    emoji = get_seasonal_emoji(active_seasonal)
+    # Add glow effects for top performers
+    if len(rankings) >= 1:
+        img = draw_glow_circle(img, 960, 300, 100, hex_to_rgb(colors["gold"]), 30)
+    
+    draw = ImageDraw.Draw(img)
     
     # Fonts
-    font_title = get_font(64, bold=True)
+    font_title = get_font(72, bold=True)
     font_subtitle = get_font(28)
-    font_rank = get_font(48, bold=True)
-    font_name = get_font(40, bold=True)
+    font_rank = get_font(42, bold=True)
+    font_name = get_font(38, bold=True)
     font_score = get_font(44, bold=True)
-    font_tier = get_font(22, bold=True)
-    font_footer = get_font(20)
+    font_tier = get_font(20, bold=True)
     
-    # Header - with seasonal emoji
-    title_text = f"{emoji} TOP 10 PERFORMERS {emoji}"
-    title_bbox = draw.textbbox((0, 0), title_text, font=font_title)
-    title_width = title_bbox[2] - title_bbox[0]
-    draw.text(
-        ((SLIDE_WIDTH - title_width) // 2, 40),
-        title_text,
-        font=font_title,
-        fill=colors["primary"]
-    )
+    # Get emoji
+    emoji = SEASONAL_THEMES.get(active_seasonal, {}).get("emoji", "🏆")
+    
+    # Header with shadow effect
+    title = f"{emoji} TOP 10 PERFORMERS {emoji}"
+    # Shadow
+    draw.text((SLIDE_WIDTH//2 + 3, 43), title, font=font_title, fill=(0, 0, 0, 100), anchor="mt")
+    # Main text
+    draw.text((SLIDE_WIDTH//2, 40), title, font=font_title, fill=colors["primary"], anchor="mt")
     
     # Subtitle
     subtitle = f"{quarter} {year} • Bubba Gump Shrimp Co. • Las Vegas"
-    subtitle_bbox = draw.textbbox((0, 0), subtitle, font=font_subtitle)
-    subtitle_width = subtitle_bbox[2] - subtitle_bbox[0]
-    draw.text(
-        ((SLIDE_WIDTH - subtitle_width) // 2, 115),
-        subtitle,
-        font=font_subtitle,
-        fill=colors["text_muted"]
-    )
+    draw.text((SLIDE_WIDTH//2, 120), subtitle, font=font_subtitle, fill=colors["text_muted"], anchor="mt")
     
-    # Divider line
-    draw.line([(100, 160), (SLIDE_WIDTH - 100, 160)], fill=colors["secondary"], width=3)
+    # Decorative line with gradient
+    for i, x in enumerate(range(150, SLIDE_WIDTH - 150)):
+        progress = (x - 150) / (SLIDE_WIDTH - 300)
+        alpha = int(255 * (1 - abs(progress - 0.5) * 2) * 0.8)
+        draw.point((x, 165), fill=hex_to_rgb(colors["secondary"]) + (alpha,))
+    draw.line([(150, 165), (SLIDE_WIDTH - 150, 165)], fill=colors["secondary"], width=2)
     
-    # Top 10 list
-    start_y = 190
-    row_height = 80
+    # Top 10 list with cards
+    start_y = 195
+    row_height = 82
+    card_margin = 100
     
     for idx, emp in enumerate(rankings[:10]):
         rank = idx + 1
         y = start_y + idx * row_height
         
-        # Rank medal color
-        if rank == 1:
-            rank_color = colors["gold"]
-        elif rank == 2:
-            rank_color = colors["silver"]
-        elif rank == 3:
-            rank_color = colors["bronze"]
-        else:
-            rank_color = colors["text_light"]
+        # Card background for top 3
+        if rank <= 3:
+            draw_card(draw, (card_margin - 20, y - 5, SLIDE_WIDTH - card_margin + 20, y + row_height - 15), colors, highlight=True)
         
-        # Rank number
-        rank_text = f"#{rank}"
-        draw.text((100, y + 15), rank_text, font=font_rank, fill=rank_color)
+        # Medal for top 3
+        if rank <= 3:
+            draw_medal(draw, 140, y + 35, rank, colors, size=50)
+            name_x = 200
+        else:
+            # Rank number for others
+            rank_colors = [colors["gold"], colors["silver"], colors["bronze"]] + [colors["text_light"]] * 7
+            draw.text((card_margin + 20, y + 18), f"#{rank}", font=font_rank, fill=rank_colors[idx])
+            name_x = 200
         
         # Name
-        name = emp.get("name", "Unknown")[:25]  # Truncate long names
-        draw.text((220, y + 18), name, font=font_name, fill=colors["text_white"])
+        name = emp.get("name", "Unknown")[:22]
+        draw.text((name_x, y + 20), name, font=font_name, fill=colors["text_white"])
         
         # Tier badge
         tier = emp.get("tier_label", "A-Server")
-        draw_tier_badge(draw, 750, y + 18, tier, font_tier)
+        draw_tier_badge(draw, 680, y + 18, tier, "small")
         
-        # Score - right aligned
+        # Score with visual bar
         score = emp.get("total_score", 0)
-        score_text = f"{score:.1f}"
-        score_bbox = draw.textbbox((0, 0), score_text, font=font_score)
-        score_width = score_bbox[2] - score_bbox[0]
-        draw.text(
-            (SLIDE_WIDTH - 150 - score_width, y + 12),
-            score_text,
-            font=font_score,
-            fill=colors["gold"] if rank <= 3 else colors["text_white"]
-        )
+        max_score = 120  # Reasonable max
         
-        # Subtle row divider
-        if idx < 9:
-            draw.line(
-                [(100, y + row_height - 5), (SLIDE_WIDTH - 100, y + row_height - 5)],
-                fill=hex_to_rgb(colors["background_gradient"]),
-                width=1
-            )
+        # Score bar
+        draw_score_bar(draw, SLIDE_WIDTH - 400, y + 45, 200, score, max_score, colors)
+        
+        # Score number
+        score_text = f"{score:.1f}"
+        score_color = colors["gold"] if rank <= 3 else colors["text_white"]
+        draw.text((SLIDE_WIDTH - 150, y + 15), score_text, font=font_score, fill=score_color, anchor="rt")
     
     # Footer
-    footer_text = f"Generated {datetime.now().strftime('%m/%d/%Y')} • Confidential"
-    footer_bbox = draw.textbbox((0, 0), footer_text, font=font_footer)
-    footer_width = footer_bbox[2] - footer_bbox[0]
-    draw.text(
-        ((SLIDE_WIDTH - footer_width) // 2, SLIDE_HEIGHT - 50),
-        footer_text,
-        font=font_footer,
-        fill=colors["text_muted"]
-    )
+    font_footer = get_font(20)
+    footer = f"Generated {datetime.now().strftime('%m/%d/%Y')} • Performance Rankings"
+    draw.text((SLIDE_WIDTH//2, SLIDE_HEIGHT - 40), footer, font=font_footer, fill=colors["text_muted"], anchor="mt")
     
-    # Save to bytes
     buffer = io.BytesIO()
     img.save(buffer, format='PNG', optimize=True)
     buffer.seek(0)
@@ -726,152 +640,123 @@ def generate_tier_slide(
     custom_bg_image: str = None,
     seasonal_theme: str = None
 ) -> bytes:
-    """
-    Generate a tier-specific slide (Trainers, Bartenders, A/B/C-Servers).
-    Shows: Name, Total Score, optional metric indicators.
-    """
+    """Generate premium tier-specific slide."""
     colors = get_theme_colors(theme, custom_colors, seasonal_theme)
-    img = create_gradient_background(SLIDE_WIDTH, SLIDE_HEIGHT, colors, custom_bg_image)
+    img = create_gradient_background(SLIDE_WIDTH, SLIDE_HEIGHT, colors)
     
-    # Add seasonal decorations if applicable
     active_seasonal = seasonal_theme if seasonal_theme and seasonal_theme != "none" else (get_current_seasonal_theme() if seasonal_theme == "auto" else None)
     if active_seasonal:
-        img = add_seasonal_decorations(img, active_seasonal, colors)
+        img = add_decorations(img, active_seasonal, colors)
     
     draw = ImageDraw.Draw(img)
     
-    # Get seasonal emoji
-    emoji = get_seasonal_emoji(active_seasonal)
-    draw = ImageDraw.Draw(img)
-    
-    # Fonts
-    font_title = get_font(56, bold=True)
-    font_subtitle = get_font(24)
-    font_rank = get_font(36, bold=True)
-    font_name = get_font(34, bold=True)
-    font_score = get_font(38, bold=True)
-    font_footer = get_font(18)
-    font_indicator = get_font(20)
-    
-    # Get tier config
     tier_config = TIER_CONFIG.get(tier_name, TIER_CONFIG["A-Server"])
     tier_color = tier_config["color"]
+    tier_icon = tier_config.get("icon", "⭐")
     
-    # Header with seasonal emoji
-    title_text = f"{emoji} {tier_name.upper()} RANKINGS {emoji}"
-    title_bbox = draw.textbbox((0, 0), title_text, font=font_title)
-    title_width = title_bbox[2] - title_bbox[0]
-    draw.text(
-        ((SLIDE_WIDTH - title_width) // 2, 35),
-        title_text,
-        font=font_title,
-        fill=tier_color
-    )
+    # Fonts
+    font_title = get_font(64, bold=True)
+    font_subtitle = get_font(24)
+    font_header = get_font(18, bold=True)
+    font_rank = get_font(36, bold=True)
+    font_name = get_font(32, bold=True)
+    font_score = get_font(36, bold=True)
+    font_metric = get_font(20)
     
-    # Subtitle with page info
+    # Header with icon
+    title = f"{tier_icon} {tier_name.upper()} RANKINGS {tier_icon}"
+    draw.text((SLIDE_WIDTH//2 + 2, 37), title, font=font_title, fill=(0, 0, 0, 80), anchor="mt")
+    draw.text((SLIDE_WIDTH//2, 35), title, font=font_title, fill=tier_color, anchor="mt")
+    
+    # Subtitle
     page_info = f" • Page {page}/{total_pages}" if total_pages > 1 else ""
     subtitle = f"{quarter} {year} • Bubba Gump Shrimp Co.{page_info}"
-    subtitle_bbox = draw.textbbox((0, 0), subtitle, font=font_subtitle)
-    subtitle_width = subtitle_bbox[2] - subtitle_bbox[0]
-    draw.text(
-        ((SLIDE_WIDTH - subtitle_width) // 2, 100),
-        subtitle,
-        font=font_subtitle,
-        fill=colors["text_muted"]
-    )
+    draw.text((SLIDE_WIDTH//2, 105), subtitle, font=font_subtitle, fill=colors["text_muted"], anchor="mt")
     
-    # Divider
-    draw.line([(100, 140), (SLIDE_WIDTH - 100, 140)], fill=tier_color, width=3)
+    # Decorative line
+    draw.line([(100, 145), (SLIDE_WIDTH - 100, 145)], fill=tier_color, width=3)
     
     # Column headers
-    header_y = 160
-    draw.text((100, header_y), "RANK", font=font_indicator, fill=colors["text_muted"])
-    draw.text((200, header_y), "NAME", font=font_indicator, fill=colors["text_muted"])
-    draw.text((SLIDE_WIDTH - 450, header_y), "PPA  LBW  LSC  GLS", font=font_indicator, fill=colors["text_muted"])
-    draw.text((SLIDE_WIDTH - 180, header_y), "SCORE", font=font_indicator, fill=colors["text_muted"])
+    header_y = 165
+    headers = [("RANK", 120), ("NAME", 220), ("PPA", 650), ("LBW", 750), ("LSC", 850), ("GLASS", 950), ("SCORE", SLIDE_WIDTH - 180)]
+    for text, x in headers:
+        draw.text((x, header_y), text, font=font_header, fill=colors["text_muted"])
     
     # Employee rows
     start_y = 200
-    row_height = 70
+    row_height = 75
     max_per_page = 10
     
     for idx, emp in enumerate(employees[:max_per_page]):
         y = start_y + idx * row_height
         
-        # Position label (e.g., A1, B2, Bar3)
-        position_label = emp.get("position_label", f"{idx + 1}")
-        draw.text((100, y + 12), position_label, font=font_rank, fill=tier_color)
+        # Alternating row backgrounds
+        if idx % 2 == 0:
+            draw.rounded_rectangle(
+                [90, y - 5, SLIDE_WIDTH - 90, y + row_height - 15],
+                radius=8,
+                fill=hex_to_rgb(colors["card_bg"]) + (40,)
+            )
+        
+        # Position label
+        position = emp.get("position_label", f"{idx + 1}")
+        draw.text((120, y + 12), position, font=font_rank, fill=tier_color)
         
         # Name
-        name = emp.get("name", "Unknown")[:22]
-        draw.text((200, y + 14), name, font=font_name, fill=colors["text_white"])
+        name = emp.get("name", "Unknown")[:20]
+        draw.text((220, y + 14), name, font=font_name, fill=colors["text_white"])
         
-        # Metric indicators (visual dots/bars, not numbers)
-        indicator_x = SLIDE_WIDTH - 450
-        indicator_y = y + 18
-        indicator_spacing = 55
+        # Metric values with color coding
+        metrics = [
+            ("ppa", 650, 25),
+            ("lbw_per_guest", 750, 20),
+            ("guests_per_lsc", 850, 15),  # Lower is better
+            ("glassware_per_guest", 950, 15),
+        ]
         
-        # PPA indicator
-        ppa_earned = emp.get("ppa_points", {}).get("earned", 0)
-        ppa_color = TIER_CONFIG["A-Server"]["color"] if ppa_earned >= 22 else TIER_CONFIG["B-Server"]["color"] if ppa_earned >= 18 else TIER_CONFIG["C-Server"]["color"]
-        draw.ellipse((indicator_x, indicator_y, indicator_x + 20, indicator_y + 20), fill=ppa_color)
+        for metric_key, x_pos, threshold in metrics:
+            value = emp.get(metric_key, 0) or 0
+            
+            # Color based on performance
+            if metric_key == "guests_per_lsc":
+                # Lower is better for guests per LSC
+                if value <= threshold * 0.8:
+                    color = TIER_CONFIG["A-Server"]["color"]
+                elif value <= threshold * 1.2:
+                    color = TIER_CONFIG["B-Server"]["color"]
+                else:
+                    color = TIER_CONFIG["C-Server"]["color"]
+            else:
+                if value >= threshold * 1.1:
+                    color = TIER_CONFIG["A-Server"]["color"]
+                elif value >= threshold * 0.9:
+                    color = TIER_CONFIG["B-Server"]["color"]
+                else:
+                    color = TIER_CONFIG["C-Server"]["color"]
+            
+            if metric_key == "ppa":
+                text = f"${value:.0f}"
+            elif metric_key in ["lbw_per_guest", "glassware_per_guest"]:
+                text = f"${value:.2f}"
+            else:
+                text = f"{value:.0f}"
+            
+            draw.text((x_pos, y + 18), text, font=font_metric, fill=color)
         
-        # LBW indicator
-        lbw_earned = emp.get("lbw_points", {}).get("earned", 0)
-        lbw_color = TIER_CONFIG["A-Server"]["color"] if lbw_earned >= 18 else TIER_CONFIG["B-Server"]["color"] if lbw_earned >= 14 else TIER_CONFIG["C-Server"]["color"]
-        draw.ellipse((indicator_x + indicator_spacing, indicator_y, indicator_x + indicator_spacing + 20, indicator_y + 20), fill=lbw_color)
-        
-        # LSC indicator
-        lsc_earned = emp.get("lsc_points", {}).get("earned", 0)
-        lsc_color = TIER_CONFIG["A-Server"]["color"] if lsc_earned >= 20 else TIER_CONFIG["B-Server"]["color"] if lsc_earned >= 15 else TIER_CONFIG["C-Server"]["color"]
-        draw.ellipse((indicator_x + indicator_spacing * 2, indicator_y, indicator_x + indicator_spacing * 2 + 20, indicator_y + 20), fill=lsc_color)
-        
-        # Glass indicator
-        glass_earned = emp.get("glassware_points", {}).get("earned", 0)
-        glass_color = TIER_CONFIG["A-Server"]["color"] if glass_earned >= 14 else TIER_CONFIG["B-Server"]["color"] if glass_earned >= 10 else TIER_CONFIG["C-Server"]["color"]
-        draw.ellipse((indicator_x + indicator_spacing * 3, indicator_y, indicator_x + indicator_spacing * 3 + 20, indicator_y + 20), fill=glass_color)
-        
-        # Total Score
+        # Total Score with emphasis
         score = emp.get("total_score", 0)
-        score_text = f"{score:.1f}"
-        score_bbox = draw.textbbox((0, 0), score_text, font=font_score)
-        score_width = score_bbox[2] - score_bbox[0]
-        draw.text(
-            (SLIDE_WIDTH - 120 - score_width, y + 10),
-            score_text,
-            font=font_score,
-            fill=colors["text_white"]
-        )
-        
-        # Row divider
-        if idx < len(employees) - 1 and idx < max_per_page - 1:
-            draw.line(
-                [(100, y + row_height - 5), (SLIDE_WIDTH - 100, y + row_height - 5)],
-                fill=hex_to_rgb(colors["background_gradient"]),
-                width=1
-            )
+        draw.text((SLIDE_WIDTH - 130, y + 10), f"{score:.1f}", font=font_score, fill=colors["text_white"], anchor="rt")
     
-    # Footer
-    footer_text = f"Generated {datetime.now().strftime('%m/%d/%Y')} • 🟢 Strong  🟡 Average  🔴 Needs Focus"
-    footer_bbox = draw.textbbox((0, 0), footer_text, font=font_footer)
-    footer_width = footer_bbox[2] - footer_bbox[0]
-    draw.text(
-        ((SLIDE_WIDTH - footer_width) // 2, SLIDE_HEIGHT - 45),
-        footer_text,
-        font=font_footer,
-        fill=colors["text_muted"]
-    )
+    # Footer with legend
+    font_footer = get_font(18)
+    legend = "🟢 Above Target  🟡 On Target  🔴 Below Target"
+    draw.text((SLIDE_WIDTH//2, SLIDE_HEIGHT - 45), legend, font=font_footer, fill=colors["text_muted"], anchor="mt")
     
-    # Save to bytes
     buffer = io.BytesIO()
     img.save(buffer, format='PNG', optimize=True)
     buffer.seek(0)
     return buffer.getvalue()
 
-
-# ============================================================================
-# SPECIAL SLIDES (Most Improved, Promotion Watchlist, At Risk)
-# ============================================================================
 
 def generate_most_improved_slide(
     current_rankings: List[Dict[str, Any]],
@@ -883,39 +768,35 @@ def generate_most_improved_slide(
     custom_bg_image: str = None,
     seasonal_theme: str = None
 ) -> bytes:
-    """
-    Generate "Most Improved" slide showing employees with biggest score increase.
-    """
+    """Generate Most Improved slide with visual impact."""
     colors = get_theme_colors(theme, custom_colors, seasonal_theme)
-    img = create_gradient_background(SLIDE_WIDTH, SLIDE_HEIGHT, colors, custom_bg_image)
+    img = create_gradient_background(SLIDE_WIDTH, SLIDE_HEIGHT, colors)
     
-    # Add seasonal decorations if applicable
     active_seasonal = seasonal_theme if seasonal_theme and seasonal_theme != "none" else (get_current_seasonal_theme() if seasonal_theme == "auto" else None)
     if active_seasonal:
-        img = add_seasonal_decorations(img, active_seasonal, colors)
+        img = add_decorations(img, active_seasonal, colors)
+    
+    # Add celebratory glow
+    img = draw_glow_circle(img, SLIDE_WIDTH//2, 200, 150, hex_to_rgb("#22C55E"), 25)
     
     draw = ImageDraw.Draw(img)
     
-    font_title = get_font(56, bold=True)
+    font_title = get_font(64, bold=True)
     font_subtitle = get_font(24)
     font_rank = get_font(42, bold=True)
     font_name = get_font(36, bold=True)
-    font_score = get_font(32, bold=True)
-    font_change = get_font(28, bold=True)
-    font_footer = get_font(18)
+    font_change = get_font(32, bold=True)
+    font_score = get_font(30)
     
     # Header
-    title_text = "🚀 MOST IMPROVED 🚀"
-    title_bbox = draw.textbbox((0, 0), title_text, font=font_title)
-    title_width = title_bbox[2] - title_bbox[0]
-    draw.text(((SLIDE_WIDTH - title_width) // 2, 40), title_text, font=font_title, fill=colors["gold"])
+    title = "🚀 MOST IMPROVED 🚀"
+    draw.text((SLIDE_WIDTH//2 + 2, 42), title, font=font_title, fill=(0, 0, 0, 80), anchor="mt")
+    draw.text((SLIDE_WIDTH//2, 40), title, font=font_title, fill="#22C55E", anchor="mt")
     
     subtitle = f"{quarter} {year} • Rising Stars"
-    subtitle_bbox = draw.textbbox((0, 0), subtitle, font=font_subtitle)
-    subtitle_width = subtitle_bbox[2] - subtitle_bbox[0]
-    draw.text(((SLIDE_WIDTH - subtitle_width) // 2, 105), subtitle, font=font_subtitle, fill=colors["text_muted"])
+    draw.text((SLIDE_WIDTH//2, 115), subtitle, font=font_subtitle, fill=colors["text_muted"], anchor="mt")
     
-    draw.line([(100, 150), (SLIDE_WIDTH - 100, 150)], fill=colors["gold"], width=3)
+    draw.line([(100, 155), (SLIDE_WIDTH - 100, 155)], fill="#22C55E", width=3)
     
     # Calculate improvements
     prev_scores = {r.get("name"): r.get("total_score", 0) for r in previous_rankings}
@@ -935,43 +816,39 @@ def generate_most_improved_slide(
                 "tier_label": emp.get("tier_label", "Server")
             })
     
-    # Sort by biggest improvement
     improvements.sort(key=lambda x: x["change"], reverse=True)
     
-    # Show top 8 most improved
-    start_y = 180
-    row_height = 95
+    start_y = 185
+    row_height = 100
     
     for idx, emp in enumerate(improvements[:8]):
         y = start_y + idx * row_height
         
+        # Card background
+        draw_card(draw, (100, y - 5, SLIDE_WIDTH - 100, y + row_height - 15), colors, highlight=(idx < 3))
+        
         # Rank
-        draw.text((100, y + 20), f"#{idx + 1}", font=font_rank, fill=colors["gold"])
+        rank_color = colors["gold"] if idx == 0 else colors["silver"] if idx == 1 else colors["bronze"] if idx == 2 else colors["text_light"]
+        draw.text((140, y + 22), f"#{idx + 1}", font=font_rank, fill=rank_color)
         
         # Name
-        draw.text((200, y + 22), emp["name"][:20], font=font_name, fill=colors["text_white"])
+        draw.text((230, y + 25), emp["name"][:18], font=font_name, fill=colors["text_white"])
         
-        # Score change (green arrow up)
-        change_text = f"+{emp['change']:.1f}"
-        draw.text((750, y + 25), change_text, font=font_change, fill="#22C55E")
+        # Change with arrow
+        change_text = f"↑ +{emp['change']:.1f}"
+        draw.text((700, y + 28), change_text, font=font_change, fill="#22C55E")
         
-        # Current score
-        score_text = f"{emp['current_score']:.1f}"
-        score_bbox = draw.textbbox((0, 0), score_text, font=font_score)
-        score_width = score_bbox[2] - score_bbox[0]
-        draw.text((SLIDE_WIDTH - 150 - score_width, y + 25), score_text, font=font_score, fill=colors["text_white"])
+        # Score progression
+        progression = f"{emp['prev_score']:.1f} → {emp['current_score']:.1f}"
+        draw.text((SLIDE_WIDTH - 200, y + 30), progression, font=font_score, fill=colors["text_muted"], anchor="rt")
     
     if not improvements:
-        no_data_text = "No improvement data available (requires previous quarter data)"
-        no_data_bbox = draw.textbbox((0, 0), no_data_text, font=font_subtitle)
-        no_data_width = no_data_bbox[2] - no_data_bbox[0]
-        draw.text(((SLIDE_WIDTH - no_data_width) // 2, 400), no_data_text, font=font_subtitle, fill=colors["text_muted"])
+        font_no_data = get_font(28)
+        draw.text((SLIDE_WIDTH//2, 450), "No improvement data available", font=font_no_data, fill=colors["text_muted"], anchor="mt")
+        draw.text((SLIDE_WIDTH//2, 490), "(Requires previous quarter data)", font=font_subtitle, fill=colors["text_muted"], anchor="mt")
     
-    # Footer
-    footer_text = f"Generated {datetime.now().strftime('%m/%d/%Y')} • Keep Up The Great Work!"
-    footer_bbox = draw.textbbox((0, 0), footer_text, font=font_footer)
-    footer_width = footer_bbox[2] - footer_bbox[0]
-    draw.text(((SLIDE_WIDTH - footer_width) // 2, SLIDE_HEIGHT - 45), footer_text, font=font_footer, fill=colors["text_muted"])
+    font_footer = get_font(18)
+    draw.text((SLIDE_WIDTH//2, SLIDE_HEIGHT - 40), "Keep Up The Great Work! 💪", font=font_footer, fill=colors["text_muted"], anchor="mt")
     
     buffer = io.BytesIO()
     img.save(buffer, format='PNG', optimize=True)
@@ -989,88 +866,71 @@ def generate_promotion_watchlist_slide(
     custom_bg_image: str = None,
     seasonal_theme: str = None
 ) -> bytes:
-    """
-    Generate "Promotion Watchlist" slide - B-Servers close to A-Server threshold.
-    """
+    """Generate Promotion Watchlist slide."""
     colors = get_theme_colors(theme, custom_colors, seasonal_theme)
-    img = create_gradient_background(SLIDE_WIDTH, SLIDE_HEIGHT, colors, custom_bg_image)
+    img = create_gradient_background(SLIDE_WIDTH, SLIDE_HEIGHT, colors)
     
-    # Add seasonal decorations if applicable
     active_seasonal = seasonal_theme if seasonal_theme and seasonal_theme != "none" else (get_current_seasonal_theme() if seasonal_theme == "auto" else None)
     if active_seasonal:
-        img = add_seasonal_decorations(img, active_seasonal, colors)
+        img = add_decorations(img, active_seasonal, colors)
     
     draw = ImageDraw.Draw(img)
     
-    font_title = get_font(56, bold=True)
+    font_title = get_font(64, bold=True)
     font_subtitle = get_font(24)
-    font_rank = get_font(40, bold=True)
-    font_name = get_font(36, bold=True)
-    font_score = get_font(32, bold=True)
-    font_gap = get_font(26)
-    font_footer = get_font(18)
+    font_rank = get_font(38, bold=True)
+    font_name = get_font(34, bold=True)
+    font_gap = get_font(28, bold=True)
+    font_score = get_font(28)
     
     # Header
-    title_text = "⭐ PROMOTION WATCHLIST ⭐"
-    title_bbox = draw.textbbox((0, 0), title_text, font=font_title)
-    title_width = title_bbox[2] - title_bbox[0]
-    draw.text(((SLIDE_WIDTH - title_width) // 2, 40), title_text, font=font_title, fill=TIER_CONFIG["A-Server"]["color"])
+    title = "⭐ PROMOTION WATCHLIST ⭐"
+    draw.text((SLIDE_WIDTH//2 + 2, 42), title, font=font_title, fill=(0, 0, 0, 80), anchor="mt")
+    draw.text((SLIDE_WIDTH//2, 40), title, font=font_title, fill=TIER_CONFIG["A-Server"]["color"], anchor="mt")
     
-    subtitle = f"{quarter} {year} • Almost A-Server (threshold: {a_server_threshold})"
-    subtitle_bbox = draw.textbbox((0, 0), subtitle, font=font_subtitle)
-    subtitle_width = subtitle_bbox[2] - subtitle_bbox[0]
-    draw.text(((SLIDE_WIDTH - subtitle_width) // 2, 105), subtitle, font=font_subtitle, fill=colors["text_muted"])
+    subtitle = f"{quarter} {year} • Almost A-Server! (threshold: {a_server_threshold})"
+    draw.text((SLIDE_WIDTH//2, 115), subtitle, font=font_subtitle, fill=colors["text_muted"], anchor="mt")
     
-    draw.line([(100, 150), (SLIDE_WIDTH - 100, 150)], fill=TIER_CONFIG["A-Server"]["color"], width=3)
+    draw.line([(100, 155), (SLIDE_WIDTH - 100, 155)], fill=TIER_CONFIG["A-Server"]["color"], width=3)
     
-    # Find B-Servers close to A threshold (within 10 points)
+    # Find B-Servers close to A threshold
     watchlist = []
     for emp in rankings:
         if emp.get("tier_label") == "B-Server":
             score = emp.get("total_score", 0)
             gap = a_server_threshold - score
-            if gap <= 10 and gap > 0:
-                watchlist.append({
-                    "name": emp.get("name"),
-                    "score": score,
-                    "gap": gap,
-                    "position_label": emp.get("position_label")
-                })
+            if 0 < gap <= 10:
+                watchlist.append({"name": emp.get("name"), "score": score, "gap": gap, "position_label": emp.get("position_label")})
     
-    watchlist.sort(key=lambda x: x["gap"])  # Closest first
+    watchlist.sort(key=lambda x: x["gap"])
     
-    start_y = 180
-    row_height = 95
+    start_y = 185
+    row_height = 100
     
     for idx, emp in enumerate(watchlist[:8]):
         y = start_y + idx * row_height
         
-        # Position label
-        draw.text((100, y + 20), emp["position_label"], font=font_rank, fill=TIER_CONFIG["B-Server"]["color"])
+        draw_card(draw, (100, y - 5, SLIDE_WIDTH - 100, y + row_height - 15), colors, highlight=(idx < 3))
         
-        # Name
-        draw.text((220, y + 22), emp["name"][:20], font=font_name, fill=colors["text_white"])
+        draw.text((140, y + 22), emp["position_label"], font=font_rank, fill=TIER_CONFIG["B-Server"]["color"])
+        draw.text((250, y + 25), emp["name"][:18], font=font_name, fill=colors["text_white"])
         
-        # Gap to A-Server
-        gap_text = f"{emp['gap']:.1f} pts to go"
-        draw.text((700, y + 26), gap_text, font=font_gap, fill=colors["gold"])
+        # Gap indicator with progress bar
+        gap_pct = 1 - (emp["gap"] / 10)
+        bar_width = 150
+        bar_x = 680
+        draw.rounded_rectangle([bar_x, y + 35, bar_x + bar_width, y + 45], radius=5, fill=colors["text_muted"] + (50,))
+        draw.rounded_rectangle([bar_x, y + 35, bar_x + int(bar_width * gap_pct), y + 45], radius=5, fill=TIER_CONFIG["A-Server"]["color"])
         
-        # Current score
-        score_text = f"{emp['score']:.1f}"
-        score_bbox = draw.textbbox((0, 0), score_text, font=font_score)
-        score_width = score_bbox[2] - score_bbox[0]
-        draw.text((SLIDE_WIDTH - 150 - score_width, y + 25), score_text, font=font_score, fill=colors["text_white"])
+        draw.text((bar_x + bar_width + 15, y + 28), f"{emp['gap']:.1f} pts to go", font=font_gap, fill=colors["gold"])
+        draw.text((SLIDE_WIDTH - 150, y + 28), f"{emp['score']:.1f}", font=font_score, fill=colors["text_white"], anchor="rt")
     
     if not watchlist:
-        no_data_text = "No B-Servers within 10 points of A-Server threshold"
-        no_data_bbox = draw.textbbox((0, 0), no_data_text, font=font_subtitle)
-        no_data_width = no_data_bbox[2] - no_data_bbox[0]
-        draw.text(((SLIDE_WIDTH - no_data_width) // 2, 400), no_data_text, font=font_subtitle, fill=colors["text_muted"])
+        font_no_data = get_font(28)
+        draw.text((SLIDE_WIDTH//2, 450), "No B-Servers within 10 points of A-Server", font=font_no_data, fill=colors["text_muted"], anchor="mt")
     
-    footer_text = f"Generated {datetime.now().strftime('%m/%d/%Y')} • Keep Pushing!"
-    footer_bbox = draw.textbbox((0, 0), footer_text, font=font_footer)
-    footer_width = footer_bbox[2] - footer_bbox[0]
-    draw.text(((SLIDE_WIDTH - footer_width) // 2, SLIDE_HEIGHT - 45), footer_text, font=font_footer, fill=colors["text_muted"])
+    font_footer = get_font(18)
+    draw.text((SLIDE_WIDTH//2, SLIDE_HEIGHT - 40), "Keep Pushing! You're Almost There! 🎯", font=font_footer, fill=colors["text_muted"], anchor="mt")
     
     buffer = io.BytesIO()
     img.save(buffer, format='PNG', optimize=True)
@@ -1088,47 +948,38 @@ def generate_at_risk_slide(
     custom_bg_image: str = None,
     seasonal_theme: str = None
 ) -> bytes:
-    """
-    Generate "At Risk / Coaching Group" slide - C-Servers needing attention.
-    Manager-only slide.
-    """
+    """Generate At Risk / Coaching Focus slide."""
     colors = get_theme_colors(theme, custom_colors, seasonal_theme)
-    img = create_gradient_background(SLIDE_WIDTH, SLIDE_HEIGHT, colors, custom_bg_image)
+    img = create_gradient_background(SLIDE_WIDTH, SLIDE_HEIGHT, colors)
     
-    # Add seasonal decorations if applicable
     active_seasonal = seasonal_theme if seasonal_theme and seasonal_theme != "none" else (get_current_seasonal_theme() if seasonal_theme == "auto" else None)
     if active_seasonal:
-        img = add_seasonal_decorations(img, active_seasonal, colors)
+        img = add_decorations(img, active_seasonal, colors)
     
     draw = ImageDraw.Draw(img)
     
-    font_title = get_font(56, bold=True)
+    font_title = get_font(60, bold=True)
+    font_warning = get_font(22, bold=True)
     font_subtitle = get_font(24)
-    font_rank = get_font(40, bold=True)
-    font_name = get_font(36, bold=True)
-    font_score = get_font(32, bold=True)
+    font_rank = get_font(36, bold=True)
+    font_name = get_font(32, bold=True)
     font_gap = get_font(26)
-    font_footer = get_font(18)
-    font_warning = get_font(20, bold=True)
+    font_score = get_font(28)
     
     # Header
-    title_text = "📋 COACHING FOCUS GROUP 📋"
-    title_bbox = draw.textbbox((0, 0), title_text, font=font_title)
-    title_width = title_bbox[2] - title_bbox[0]
-    draw.text(((SLIDE_WIDTH - title_width) // 2, 40), title_text, font=font_title, fill=TIER_CONFIG["C-Server"]["color"])
+    title = "📋 COACHING FOCUS GROUP 📋"
+    draw.text((SLIDE_WIDTH//2 + 2, 37), title, font=font_title, fill=(0, 0, 0, 80), anchor="mt")
+    draw.text((SLIDE_WIDTH//2, 35), title, font=font_title, fill=TIER_CONFIG["C-Server"]["color"], anchor="mt")
     
-    subtitle = f"{quarter} {year} • Development Priority (B-Server threshold: {b_server_threshold})"
-    subtitle_bbox = draw.textbbox((0, 0), subtitle, font=font_subtitle)
-    subtitle_width = subtitle_bbox[2] - subtitle_bbox[0]
-    draw.text(((SLIDE_WIDTH - subtitle_width) // 2, 105), subtitle, font=font_subtitle, fill=colors["text_muted"])
+    subtitle = f"{quarter} {year} • Development Priority (B-Server: {b_server_threshold})"
+    draw.text((SLIDE_WIDTH//2, 100), subtitle, font=font_subtitle, fill=colors["text_muted"], anchor="mt")
     
-    # Manager only warning
-    warning_text = "⚠️ MANAGER ONLY - NOT FOR PUBLIC DISPLAY ⚠️"
-    warning_bbox = draw.textbbox((0, 0), warning_text, font=font_warning)
-    warning_width = warning_bbox[2] - warning_bbox[0]
-    draw.text(((SLIDE_WIDTH - warning_width) // 2, 135), warning_text, font=font_warning, fill=TIER_CONFIG["C-Server"]["color"])
+    # Warning banner
+    warning = "⚠️ MANAGER ONLY - CONFIDENTIAL ⚠️"
+    draw.rounded_rectangle([SLIDE_WIDTH//2 - 220, 130, SLIDE_WIDTH//2 + 220, 160], radius=8, fill=TIER_CONFIG["C-Server"]["bg"])
+    draw.text((SLIDE_WIDTH//2, 138), warning, font=font_warning, fill=TIER_CONFIG["C-Server"]["color"], anchor="mt")
     
-    draw.line([(100, 170), (SLIDE_WIDTH - 100, 170)], fill=TIER_CONFIG["C-Server"]["color"], width=3)
+    draw.line([(100, 175), (SLIDE_WIDTH - 100, 175)], fill=TIER_CONFIG["C-Server"]["color"], width=3)
     
     # Find C-Servers
     at_risk = []
@@ -1136,47 +987,29 @@ def generate_at_risk_slide(
         if emp.get("tier_label") == "C-Server":
             score = emp.get("total_score", 0)
             gap = b_server_threshold - score
-            at_risk.append({
-                "name": emp.get("name"),
-                "score": score,
-                "gap": gap,
-                "position_label": emp.get("position_label")
-            })
+            at_risk.append({"name": emp.get("name"), "score": score, "gap": gap, "position_label": emp.get("position_label")})
     
-    at_risk.sort(key=lambda x: x["score"], reverse=True)  # Highest C-Server first
+    at_risk.sort(key=lambda x: x["score"], reverse=True)
     
     start_y = 200
-    row_height = 85
+    row_height = 90
     
     for idx, emp in enumerate(at_risk[:8]):
         y = start_y + idx * row_height
         
-        # Position label
-        draw.text((100, y + 18), emp["position_label"], font=font_rank, fill=TIER_CONFIG["C-Server"]["color"])
+        draw_card(draw, (100, y - 5, SLIDE_WIDTH - 100, y + row_height - 15), colors)
         
-        # Name
-        draw.text((220, y + 20), emp["name"][:20], font=font_name, fill=colors["text_white"])
-        
-        # Gap to B-Server
-        gap_text = f"{emp['gap']:.1f} pts needed"
-        draw.text((700, y + 24), gap_text, font=font_gap, fill=TIER_CONFIG["B-Server"]["color"])
-        
-        # Current score
-        score_text = f"{emp['score']:.1f}"
-        score_bbox = draw.textbbox((0, 0), score_text, font=font_score)
-        score_width = score_bbox[2] - score_bbox[0]
-        draw.text((SLIDE_WIDTH - 150 - score_width, y + 22), score_text, font=font_score, fill=colors["text_white"])
+        draw.text((140, y + 18), emp["position_label"], font=font_rank, fill=TIER_CONFIG["C-Server"]["color"])
+        draw.text((250, y + 22), emp["name"][:18], font=font_name, fill=colors["text_white"])
+        draw.text((700, y + 24), f"{emp['gap']:.1f} pts needed", font=font_gap, fill=TIER_CONFIG["B-Server"]["color"])
+        draw.text((SLIDE_WIDTH - 150, y + 22), f"{emp['score']:.1f}", font=font_score, fill=colors["text_white"], anchor="rt")
     
     if not at_risk:
-        no_data_text = "No C-Servers - Great job team!"
-        no_data_bbox = draw.textbbox((0, 0), no_data_text, font=font_subtitle)
-        no_data_width = no_data_bbox[2] - no_data_bbox[0]
-        draw.text(((SLIDE_WIDTH - no_data_width) // 2, 400), no_data_text, font=font_subtitle, fill=colors["text_muted"])
+        font_no_data = get_font(28)
+        draw.text((SLIDE_WIDTH//2, 450), "No C-Servers - Great job team! 🎉", font=font_no_data, fill=colors["text_muted"], anchor="mt")
     
-    footer_text = f"Generated {datetime.now().strftime('%m/%d/%Y')} • Confidential Management Document"
-    footer_bbox = draw.textbbox((0, 0), footer_text, font=font_footer)
-    footer_width = footer_bbox[2] - footer_bbox[0]
-    draw.text(((SLIDE_WIDTH - footer_width) // 2, SLIDE_HEIGHT - 45), footer_text, font=font_footer, fill=colors["text_muted"])
+    font_footer = get_font(18)
+    draw.text((SLIDE_WIDTH//2, SLIDE_HEIGHT - 40), "Confidential Management Document", font=font_footer, fill=colors["text_muted"], anchor="mt")
     
     buffer = io.BytesIO()
     img.save(buffer, format='PNG', optimize=True)
@@ -1184,73 +1017,27 @@ def generate_at_risk_slide(
     return buffer.getvalue()
 
 
-def generate_all_slides(rankings: List[Dict[str, Any]], quarter: str, year: int) -> Dict[str, List[bytes]]:
-    """
-    Generate all Yodeck slides for a quarter.
+def generate_all_slides(rankings: List[Dict[str, Any]], quarter: str, year: int, theme: str = "dark_navy", custom_colors: Dict = None, seasonal_theme: str = None) -> Dict[str, List[bytes]]:
+    """Generate all Yodeck slides for a quarter."""
+    slides = {"top_10": [], "trainers": [], "bartenders": [], "a_servers": [], "b_servers": [], "c_servers": []}
     
-    Returns dict with:
-    - "top_10": [slide_bytes]
-    - "trainers": [slide_bytes, ...]
-    - "bartenders": [slide_bytes, ...]
-    - "a_servers": [slide_bytes, ...]
-    - "b_servers": [slide_bytes, ...]
-    - "c_servers": [slide_bytes, ...]
-    """
-    slides = {
-        "top_10": [],
-        "trainers": [],
-        "bartenders": [],
-        "a_servers": [],
-        "b_servers": [],
-        "c_servers": [],
-    }
+    slides["top_10"].append(generate_top_10_slide(rankings, quarter, year, theme, custom_colors, None, seasonal_theme))
     
-    # Top 10 slide
-    slides["top_10"].append(generate_top_10_slide(rankings, quarter, year))
-    
-    # Group by tier
-    tier_groups = {
-        "Trainer": [],
-        "Bartender": [],
-        "A-Server": [],
-        "B-Server": [],
-        "C-Server": [],
-    }
-    
+    tier_groups = {"Trainer": [], "Bartender": [], "A-Server": [], "B-Server": [], "C-Server": []}
     for emp in rankings:
         tier = emp.get("tier_label", "A-Server")
         if tier in tier_groups:
             tier_groups[tier].append(emp)
     
-    # Generate tier slides (paginated if needed)
     max_per_slide = 10
-    
-    for tier_name, tier_key in [
-        ("Trainer", "trainers"),
-        ("Bartender", "bartenders"),
-        ("A-Server", "a_servers"),
-        ("B-Server", "b_servers"),
-        ("C-Server", "c_servers"),
-    ]:
+    for tier_name, tier_key in [("Trainer", "trainers"), ("Bartender", "bartenders"), ("A-Server", "a_servers"), ("B-Server", "b_servers"), ("C-Server", "c_servers")]:
         employees = tier_groups[tier_name]
         if not employees:
             continue
-            
         total_pages = (len(employees) + max_per_slide - 1) // max_per_slide
-        
         for page in range(total_pages):
             start_idx = page * max_per_slide
-            end_idx = start_idx + max_per_slide
-            page_employees = employees[start_idx:end_idx]
-            
-            slide = generate_tier_slide(
-                tier_name,
-                page_employees,
-                quarter,
-                year,
-                page=page + 1,
-                total_pages=total_pages
-            )
-            slides[tier_key].append(slide)
+            page_employees = employees[start_idx:start_idx + max_per_slide]
+            slides[tier_key].append(generate_tier_slide(tier_name, page_employees, quarter, year, page + 1, total_pages, theme, custom_colors, None, seasonal_theme))
     
     return slides
