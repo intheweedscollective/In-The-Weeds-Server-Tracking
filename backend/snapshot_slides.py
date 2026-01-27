@@ -260,32 +260,33 @@ def generate_snapshot_slide(
     # Fonts
     font_title = get_font(42, bold=True)
     font_subtitle = get_font(22)
-    font_header = get_font(font_size_cell + 2, bold=True)
+    font_header = get_font(font_size_cell + 4, bold=True)
     font_name = get_font(font_size_name, bold=True)
     font_cell = get_font(font_size_cell)
     font_tier = get_font(font_size_cell - 2, bold=True)
+    font_subheader = get_font(12)
     
     # Header
     title_text = title or "TEAM SNAPSHOT"
-    draw.text((SLIDE_WIDTH//2, 30), title_text, font=font_title, fill="#FFFFFF", anchor="mt")
-    draw.text((SLIDE_WIDTH//2, 80), f"📊 {snapshot_date} • Bubba Gump Shrimp Co.", 
+    draw.text((SLIDE_WIDTH//2, 25), title_text, font=font_title, fill="#FFFFFF", anchor="mt")
+    draw.text((SLIDE_WIDTH//2, 72), f"📊 {snapshot_date} • Bubba Gump Shrimp Co.", 
               font=font_subtitle, fill="#E0E0E0", anchor="mt")
     
     # Grid layout
     margin_left = 50
     margin_right = 50
-    margin_top = 130
+    margin_top = 115
     
-    # Column definitions (Name, Tier, PPA%, LBW%, Glass%, LSC%, CV%, Total%)
+    # Column definitions with full names and short names
     columns = [
-        {"name": "Name", "width": 200, "key": None},
-        {"name": "Tier", "width": 90, "key": None},
-        {"name": "PPA", "width": 80, "key": "ppa", "benchmark_key": "ppa_benchmark"},
-        {"name": "LBW", "width": 80, "key": "lbw_per_guest", "benchmark_key": "lbw_benchmark"},
-        {"name": "Glass", "width": 80, "key": "glassware_per_guest", "benchmark_key": "glassware_benchmark"},
-        {"name": "LSC", "width": 80, "key": "guests_per_lsc", "benchmark_key": "lsc_benchmark", "inverse": True},
-        {"name": "CV", "width": 80, "key": "cv_score", "benchmark_key": "cv_benchmark"},
-        {"name": "Total", "width": 80, "key": "total_score", "benchmark_key": "total_benchmark"},
+        {"name": "Employee", "short": "Name", "width": 200, "key": None, "desc": ""},
+        {"name": "Tier", "short": "Tier", "width": 80, "key": None, "desc": ""},
+        {"name": "PPA", "short": "$/Guest", "width": 85, "key": "ppa", "benchmark_key": "ppa_benchmark", "desc": "Per Person Avg"},
+        {"name": "LBW", "short": "$/Guest", "width": 85, "key": "lbw_per_guest", "benchmark_key": "lbw_benchmark", "desc": "Liquor Beer Wine"},
+        {"name": "Glass", "short": "$/Guest", "width": 85, "key": "glassware_per_guest", "benchmark_key": "glassware_benchmark", "desc": "Glassware Sales"},
+        {"name": "LSC", "short": "Guests", "width": 85, "key": "guests_per_lsc", "benchmark_key": "lsc_benchmark", "inverse": True, "desc": "Landshark Calls"},
+        {"name": "CV", "short": "Score", "width": 75, "key": "cv_score", "benchmark_key": "cv_benchmark", "desc": "Customer Voice"},
+        {"name": "TOTAL", "short": "Score", "width": 85, "key": "total_score", "benchmark_key": "total_benchmark", "desc": "Overall"},
     ]
     
     # Calculate column positions
@@ -298,30 +299,38 @@ def generate_snapshot_slide(
         col_positions.append(x)
         x += col["width"]
     
-    # Draw header row
+    # Draw header row with two lines (name + description)
     header_y = margin_top
+    header_height = row_height + 15
     
-    # Header background
+    # Header background - darker and more prominent
     draw.rounded_rectangle(
-        [start_x - 10, header_y - 5, start_x + total_width + 10, header_y + row_height],
-        radius=8,
-        fill=(255, 255, 255, 40)
+        [start_x - 10, header_y - 8, start_x + total_width + 10, header_y + header_height],
+        radius=10,
+        fill=(0, 0, 0, 120)
     )
     
+    # Draw column headers
     for i, col in enumerate(columns):
-        draw.text((col_positions[i] + col["width"]//2, header_y + row_height//2 - 5),
-                  col["name"], font=font_header, fill="#FFFFFF", anchor="mt")
+        center_x = col_positions[i] + col["width"]//2
+        # Main header name
+        draw.text((center_x, header_y + 8), col["name"], font=font_header, fill="#FFFFFF", anchor="mt")
+        # Sub-description if exists
+        if col.get("short") and col["name"] not in ["Employee", "Tier"]:
+            draw.text((center_x, header_y + 30), col["short"], font=font_subheader, fill="#AAAAAA", anchor="mt")
     
-    # Draw legend
-    legend_y = header_y + row_height + 5
+    # Draw legend - moved to top right
+    legend_y = header_y + 5
+    legend_x = SLIDE_WIDTH - 280
+    draw.text((legend_x, legend_y), "Legend:", font=get_font(14, bold=True), fill="#FFFFFF")
+    legend_y += 18
     legend_items = [("🟢 ≥80%", CELL_COLORS["green"]), ("🟡 70-79%", CELL_COLORS["yellow"]), ("🔴 <70%", CELL_COLORS["red"])]
-    legend_x = SLIDE_WIDTH - 300
     for text, color in legend_items:
-        draw.text((legend_x, legend_y), text, font=get_font(14), fill=color)
-        legend_x += 90
+        draw.text((legend_x, legend_y), text, font=get_font(13), fill=color)
+        legend_y += 16
     
     # Draw employee rows
-    data_start_y = header_y + row_height + 25
+    data_start_y = header_y + header_height + 8
     current_tier = None
     
     for idx, emp in enumerate(sorted_employees):
