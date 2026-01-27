@@ -8,6 +8,7 @@ import Analytics from "./pages/Analytics";
 import QuarterSettings from "./pages/QuarterSettings";
 import FullRankings from "./pages/FullRankings";
 import YodeckSlides from "./pages/YodeckSlides";
+import Snapshots from "./pages/Snapshots";
 import "./App.css";
 
 function App() {
@@ -20,6 +21,7 @@ function App() {
           <Route path="/employees" element={<EmployeeList />} />
           <Route path="/reviews" element={<ReviewGeneration />} />
           <Route path="/yodeck" element={<YodeckSlides />} />
+          <Route path="/snapshots" element={<Snapshots />} />
           <Route path="/top-performers" element={<TopPerformers />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/settings" element={<QuarterSettings />} />
