@@ -724,10 +724,11 @@ def validate_employee_row(row_data: Dict[str, Any], row_number: int) -> Validati
     """
     errors = []
     warnings = []
-    name = str(row_data.get("name", f"Row {row_number}"))
+    raw_name = row_data.get("name")
+    name = str(raw_name) if raw_name is not None else f"Row {row_number}"
     
     # Check required fields
-    if not row_data.get("name") or str(row_data.get("name")).strip() == "":
+    if raw_name is None or str(raw_name).strip() == "":
         errors.append("Employee Name is required")
     
     # Guests must be > 0
