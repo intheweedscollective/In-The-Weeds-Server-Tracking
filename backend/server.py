@@ -30,6 +30,7 @@ from yodeck_slides import (
     generate_most_improved_slide, generate_promotion_watchlist_slide, generate_at_risk_slide,
     THEMES
 )
+from snapshot_slides import generate_snapshot_slide, get_available_backgrounds, BACKGROUNDS
 
 # Import new scoring engine
 from scoring_engine import (
