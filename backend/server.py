@@ -796,8 +796,8 @@ async def validate_upload_file(file: UploadFile = File(...)):
         else:
             df = pd.read_excel(io.BytesIO(contents))
         
-        # Clean column names
-        df.columns = df.columns.str.strip()
+        # Clean column names - handle non-string column names safely
+        df.columns = [str(col).strip() if col is not None else f"Unnamed_{i}" for i, col in enumerate(df.columns)]
         
         # Validate columns
         column_validation = validate_upload_columns(list(df.columns))
@@ -925,8 +925,8 @@ async def upload_employees_v2(
         else:
             df = pd.read_excel(io.BytesIO(contents))
         
-        # Clean column names
-        df.columns = df.columns.str.strip()
+        # Clean column names - handle non-string column names safely
+        df.columns = [str(col).strip() if col is not None else f"Unnamed_{i}" for i, col in enumerate(df.columns)]
         
         # Validate columns
         column_validation = validate_upload_columns(list(df.columns))
