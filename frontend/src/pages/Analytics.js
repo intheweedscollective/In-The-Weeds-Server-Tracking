@@ -612,13 +612,23 @@ export default function Analytics() {
                           TARGET
                         </div>
                         
-                        {/* Average indicator - BLUE diamond for clear distinction */}
-                        <div 
-                          className="absolute top-1/2 transform -translate-y-1/2 -translate-x-1/2 z-20"
+                        {/* Average indicator - BLUE diamond for clear distinction - CLICKABLE */}
+                        <button 
+                          onClick={() => filterByZone(metricKey, ZONE_TYPES.AVERAGE)}
+                          className={`absolute top-1/2 transform -translate-y-1/2 -translate-x-1/2 z-20 cursor-pointer group ${
+                            activeFilter?.metric === metricKey && activeFilter?.zone === ZONE_TYPES.AVERAGE 
+                              ? '' : ''
+                          }`}
                           style={{ left: `${averagePosition}%` }}
+                          title="Click to see employees near team average"
+                          data-testid={`zone-average-${metricKey}`}
                         >
-                          <div className="w-5 h-5 bg-blue-500 rotate-45 shadow-lg border-2 border-white" />
-                        </div>
+                          <div className={`w-5 h-5 bg-blue-500 rotate-45 shadow-lg border-2 border-white group-hover:scale-125 transition-transform ${
+                            activeFilter?.metric === metricKey && activeFilter?.zone === ZONE_TYPES.AVERAGE 
+                              ? 'scale-125 ring-2 ring-blue-400' 
+                              : ''
+                          }`} />
+                        </button>
                         {/* Team Avg label */}
                         <div 
                           className="absolute top-1 text-[10px] font-bold text-blue-600 whitespace-nowrap z-30"
