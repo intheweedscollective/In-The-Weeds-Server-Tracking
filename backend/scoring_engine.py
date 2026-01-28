@@ -25,12 +25,13 @@ import pandas as pd
 CV_PROMOTER_POINTS = 1      # Score 9-10
 CV_PASSIVE_POINTS = 0       # Score 7-8
 CV_DETRACTOR_POINTS = -2    # Score 6 or below
-CV_MAX_POINTS = 10          # Quarterly cap for positive
 CV_MIN_POINTS = -6          # Quarterly floor for negative
 
 # Review Tracker
 RT_MENTIONS_PER_POINT = 5   # Every 5 positive mentions = +1 point
-RT_MAX_BONUS = 10           # Quarterly cap
+
+# COMBINED CAP: CV + Review Tracker cannot exceed 20 points per quarter
+CV_RT_COMBINED_MAX = 20     # Combined cap for CV + Review Tracker
 
 # DAR Penalties
 DAR_WRITTEN_WARNING = -3
