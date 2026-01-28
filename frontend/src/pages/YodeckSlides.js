@@ -61,6 +61,7 @@ export default function YodeckSlides() {
   // Theme settings
   const [themeSettings, setThemeSettings] = useState({
     slide_theme: "dark_navy",
+    slide_seasonal_theme: "none",
     slide_bg_color: "#0A1628",
     slide_bg_gradient: "#132238",
     slide_text_color: "#FFFFFF",
