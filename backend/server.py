@@ -1605,6 +1605,17 @@ async def get_all_yodeck_slides(year: int, quarter: str):
         "category": "primary"
     })
     
+    # Complete Rankings (all employees on one slide)
+    slides.append({
+        "id": "complete-rankings",
+        "name": "Complete Rankings",
+        "description": "All team members top to bottom",
+        "endpoint": f"/api/v2/yodeck/{year}/{quarter}/complete-rankings",
+        "employee_count": len(rankings),
+        "pages": 1,
+        "category": "primary"
+    })
+    
     # Tier slides
     for tier_key, tier_label in [
         ("trainers", "Trainer"),
