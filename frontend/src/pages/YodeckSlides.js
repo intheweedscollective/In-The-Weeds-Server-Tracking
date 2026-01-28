@@ -12,10 +12,25 @@ const API = `${BACKEND_URL}/api`;
 
 // Pre-built theme previews
 const THEME_PREVIEWS = {
-  dark_navy: { bg: "#0A1628", text: "#FFFFFF", accent: "#D12E2E", name: "Dark Navy" },
-  light_corporate: { bg: "#F8FAFC", text: "#1E293B", accent: "#D12E2E", name: "Light Corporate" },
-  bubba_red: { bg: "#7F1D1D", text: "#FFFFFF", accent: "#FEF2F2", name: "Bubba Red" },
-  ocean_blue: { bg: "#0C4A6E", text: "#FFFFFF", accent: "#38BDF8", name: "Ocean Blue" },
+  dark_navy: { bg: "#0A1628", text: "#FFFFFF", accent: "#FF4757", name: "Dark Navy" },
+  light_corporate: { bg: "#F0F4F8", text: "#1A202C", accent: "#E53E3E", name: "Light Corporate" },
+  bubba_red: { bg: "#7F1D1D", text: "#FFFFFF", accent: "#FCD34D", name: "Bubba Red" },
+  ocean_blue: { bg: "#082F49", text: "#FFFFFF", accent: "#FB923C", name: "Ocean Blue" },
+  vegas_gold: { bg: "#1A1A2E", text: "#FFFFFF", accent: "#FFD700", name: "Vegas Gold" },
+};
+
+// Seasonal theme previews (auto-applied based on date, or manually selected)
+const SEASONAL_THEMES = {
+  none: { name: "None (Use Main Theme)", emoji: "" },
+  auto: { name: "Auto (Based on Date)", emoji: "📅" },
+  valentines: { bg: "#4A0D2A", text: "#FFFFFF", accent: "#FF6B9D", name: "Valentine's Day", emoji: "💕" },
+  st_patricks: { bg: "#0D3B0D", text: "#FFFFFF", accent: "#00FF7F", name: "St. Patrick's Day", emoji: "🍀" },
+  easter: { bg: "#E8F5E9", text: "#1A202C", accent: "#E91E63", name: "Easter", emoji: "🐰" },
+  july_4th: { bg: "#0A1628", text: "#FFFFFF", accent: "#F44336", name: "4th of July", emoji: "🇺🇸" },
+  halloween: { bg: "#1A0A00", text: "#FFFFFF", accent: "#FF6600", name: "Halloween", emoji: "🎃" },
+  thanksgiving: { bg: "#3E2723", text: "#FFFFFF", accent: "#FF8A65", name: "Thanksgiving", emoji: "🦃" },
+  christmas: { bg: "#0D2818", text: "#FFFFFF", accent: "#FF0000", name: "Christmas", emoji: "🎄" },
+  new_year: { bg: "#0A0A1A", text: "#FFFFFF", accent: "#FFD700", name: "New Year", emoji: "🎆" },
 };
 
 // Category icons
