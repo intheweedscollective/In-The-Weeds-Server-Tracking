@@ -45,9 +45,85 @@ export default function Analytics() {
   const [trendData, setTrendData] = useState(null);
   const [activeTab, setActiveTab] = useState('metrics'); // 'metrics' or 'trends'
   
+  // Interactive filter state
+  const [activeFilter, setActiveFilter] = useState(null); // { metric: 'ppa', zone: 'high' }
+  const [filteredEmployees, setFilteredEmployees] = useState([]);
+  
   // V2 Quarter Selection
   const [selectedYear, setSelectedYear] = useState(2026);
   const [selectedQuarter, setSelectedQuarter] = useState("Q1");
+
+  // Filter employees by zone
+  const filterByZone = (metricKey, zone) => {
+    const config = V2_METRICS[metricKey];
+    const data = analytics[metricKey];
+    if (!config || !data) return;
+    
+    const benchmark = data.benchmarkValue;
+    const highThreshold = data.highThreshold;
+    const lowThreshold = data.lowThreshold;
+    const average = data.average;
+    
+    let filtered = [];
+    
+    if (zone === ZONE_TYPES.HIGH) {
+      filtered = employees.filter(emp => {
+        const val = emp[metricKey];
+        if (val == null) return false;
+        if (!config.higherBetter) {
+          return val <= highThreshold;
+        }
+        return val >= highThreshold;
+      });
+    } else if (zone === ZONE_TYPES.LOW) {
+      filtered = employees.filter(emp => {
+        const val = emp[metricKey];
+        if (val == null) return false;
+        if (!config.higherBetter) {
+          return val >= lowThreshold;
+        }
+        return val < lowThreshold;
+      });
+    } else if (zone === ZONE_TYPES.MEDIUM) {
+      filtered = employees.filter(emp => {
+        const val = emp[metricKey];
+        if (val == null) return false;
+        if (!config.higherBetter) {
+          return val > highThreshold && val < lowThreshold;
+        }
+        return val >= lowThreshold && val < highThreshold;
+      });
+    } else if (zone === ZONE_TYPES.AVERAGE) {
+      // Show employees within 10% of average
+      const tolerance = average * 0.1;
+      filtered = employees.filter(emp => {
+        const val = emp[metricKey];
+        if (val == null) return false;
+        return Math.abs(val - average) <= tolerance;
+      });
+    }
+    
+    // Sort by the metric value
+    filtered.sort((a, b) => {
+      if (!config.higherBetter) {
+        return (a[metricKey] || 0) - (b[metricKey] || 0);
+      }
+      return (b[metricKey] || 0) - (a[metricKey] || 0);
+    });
+    
+    setActiveFilter({ metric: metricKey, zone });
+    setFilteredEmployees(filtered);
+    
+    // Scroll to the filtered results
+    setTimeout(() => {
+      document.getElementById('filtered-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  };
+  
+  const clearFilter = () => {
+    setActiveFilter(null);
+    setFilteredEmployees([]);
+  };
 
   const fetchEmployees = useCallback(async () => {
     setLoading(true);
