@@ -9,6 +9,7 @@ Build a full-stack application to generate quarterly performance reviews for res
 
 ## Recent Changes
 ### Jan 28, 2026
+- **Complete Rankings Slide**: Added new Yodeck slide showing ALL employees from top to bottom on one 1920x1080 slide. Uses multi-column compact layout with tier color badges (T=Trainer, BAR=Bartender, A/B/C=Server tiers).
 - **Interactive Analytics**: Added clickable zones on metric charts that filter employees by performance zone (Exceeds/Near/Below Target). Shows filtered employee list with color-coded cards.
 - **Analytics Context**: Added "How to read this chart" explanations, distinct colors for Target (orange) vs Team Average (blue diamond), and improved legend.
 
