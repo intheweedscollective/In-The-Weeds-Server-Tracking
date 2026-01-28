@@ -307,8 +307,8 @@ export default function YodeckSlides() {
               
               {/* Pre-built Themes */}
               <div className="mb-6">
-                <label className="text-sm font-medium mb-3 block">Pre-built Themes</label>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <label className="text-sm font-medium mb-3 block">Base Theme</label>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                   {Object.entries(THEME_PREVIEWS).map(([key, theme]) => (
                     <button
                       key={key}
@@ -323,6 +323,31 @@ export default function YodeckSlides() {
                       <div className="text-center">
                         <div className="w-8 h-8 rounded-full mx-auto mb-2" style={{ backgroundColor: theme.accent }}></div>
                         <span className="text-xs font-medium" style={{ color: theme.text }}>{theme.name}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Seasonal Theme Overlay */}
+              <div className="mb-6">
+                <label className="text-sm font-medium mb-3 block">Seasonal Theme (Optional Overlay)</label>
+                <p className="text-xs text-gray-500 mb-3">Adds festive decorations and colors to your slides</p>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                  {Object.entries(SEASONAL_THEMES).map(([key, theme]) => (
+                    <button
+                      key={key}
+                      onClick={() => setThemeSettings(prev => ({ ...prev, slide_seasonal_theme: key }))}
+                      className={`p-3 rounded-lg border-2 transition-all ${
+                        themeSettings.slide_seasonal_theme === key 
+                          ? 'border-primary ring-2 ring-primary/20' 
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                      style={{ backgroundColor: theme.bg || '#f8fafc' }}
+                    >
+                      <div className="text-center">
+                        <span className="text-2xl block mb-1">{theme.emoji || '🎨'}</span>
+                        <span className="text-xs font-medium" style={{ color: theme.text || '#1a202c' }}>{theme.name}</span>
                       </div>
                     </button>
                   ))}
