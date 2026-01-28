@@ -820,7 +820,7 @@ def generate_complete_rankings_slide(
     return buffer.getvalue()
 
 
-
+def generate_tier_slide(
     tier_name: str,
     employees: List[Dict[str, Any]], 
     quarter: str, 
