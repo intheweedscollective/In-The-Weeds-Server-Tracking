@@ -638,24 +638,33 @@ export default function Analytics() {
                         </div>
                       </div>
                       
-                      {/* Legend - more descriptive */}
+                      {/* Legend - more descriptive with click hint */}
                       <div className="flex items-center justify-center gap-6 text-xs pt-4 mt-2 border-t border-dashed border-gray-200">
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-4 h-1 bg-amber-500" style={{ background: 'repeating-linear-gradient(to right, #f59e0b, #f59e0b 3px, transparent 3px, transparent 6px)' }} />
-                          <span className="text-gray-600 font-medium">Target Goal</span>
+                        <div className="flex items-center gap-1 text-slate-500">
+                          <Filter className="w-3 h-3" />
+                          <span className="font-medium">Click zones to filter:</span>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-3 h-3 bg-blue-500 rotate-45" />
-                          <span className="text-gray-600 font-medium">Team Average</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
+                        <button 
+                          onClick={() => filterByZone(metricKey, ZONE_TYPES.HIGH)}
+                          className="flex items-center gap-1.5 hover:opacity-70 transition-opacity cursor-pointer"
+                        >
                           <div className="w-3 h-3 bg-green-300 rounded-sm border border-green-400" />
-                          <span className="text-gray-600 font-medium">Exceeds Target</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
+                          <span className="text-gray-600 font-medium">Exceeds ({data.high})</span>
+                        </button>
+                        <button 
+                          onClick={() => filterByZone(metricKey, ZONE_TYPES.MEDIUM)}
+                          className="flex items-center gap-1.5 hover:opacity-70 transition-opacity cursor-pointer"
+                        >
+                          <div className="w-3 h-3 bg-yellow-200 rounded-sm border border-yellow-400" />
+                          <span className="text-gray-600 font-medium">Near Target ({data.medium})</span>
+                        </button>
+                        <button 
+                          onClick={() => filterByZone(metricKey, ZONE_TYPES.LOW)}
+                          className="flex items-center gap-1.5 hover:opacity-70 transition-opacity cursor-pointer"
+                        >
                           <div className="w-3 h-3 bg-red-300 rounded-sm border border-red-400" />
-                          <span className="text-gray-600 font-medium">Below Target</span>
-                        </div>
+                          <span className="text-gray-600 font-medium">Below ({data.low})</span>
+                        </button>
                       </div>
                     </div>
                     
