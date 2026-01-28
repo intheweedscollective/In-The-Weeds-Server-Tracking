@@ -429,71 +429,108 @@ export default function Analytics() {
                   </div>
                 
                   <div className="space-y-4">
+                    {/* Contextual Explanation Box */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-3">
+                      <div className="flex items-start gap-2">
+                        <Info className="w-4 h-4 text-slate-500 mt-0.5 flex-shrink-0" />
+                        <div className="text-xs text-slate-600">
+                          <span className="font-semibold">How to read this chart:</span> The scale below shows where your team stands. 
+                          The <span className="font-bold text-amber-600">orange target line</span> is your benchmark goal ({formatMetricValue(metricKey, benchmark)}). 
+                          The <span className="font-bold text-blue-600">blue diamond</span> shows the team's current average ({formatMetricValue(metricKey, data.average)}).
+                          {isInverse 
+                            ? " For this metric, lower values are better — aim to stay left of the target."
+                            : " For this metric, higher values are better — aim to stay right of the target."
+                          }
+                        </div>
+                      </div>
+                    </div>
+                    
                     {/* Visual Range Chart with Benchmark Line */}
                     <div className="space-y-2">
-                      <div className="flex justify-between text-xs font-medium text-gray-500">
-                        <span>{isInverse ? 'Best' : 'Low'}: {formatMetricValue(metricKey, isInverse ? rangeMin : rangeMin)}</span>
-                        <span>{isInverse ? 'Worst' : 'High'}: {formatMetricValue(metricKey, isInverse ? rangeMax : rangeMax)}</span>
+                      <div className="flex justify-between text-xs font-semibold">
+                        <span className={isInverse ? "text-green-600" : "text-red-500"}>
+                          {isInverse ? '✓ Best' : '⚠ Low'}: {formatMetricValue(metricKey, rangeMin)}
+                        </span>
+                        <span className={isInverse ? "text-red-500" : "text-green-600"}>
+                          {isInverse ? '⚠ Worst' : '✓ High'}: {formatMetricValue(metricKey, rangeMax)}
+                        </span>
                       </div>
                       
                       {/* Visual scale with zones and benchmark line */}
-                      <div className="relative h-12 bg-gradient-to-r from-red-100 via-yellow-100 to-green-100 rounded-lg overflow-hidden">
+                      <div className="relative h-14 bg-gradient-to-r from-red-100 via-yellow-50 to-green-100 rounded-lg overflow-visible border border-gray-200">
                         {/* Zone indicators */}
                         <div 
-                          className="absolute top-0 h-full bg-green-200/50"
+                          className="absolute top-0 h-full bg-green-300/40"
                           style={{ 
                             left: isInverse ? '0%' : `${highThresholdPos}%`,
                             width: isInverse ? `${100 - highThresholdPos}%` : `${100 - highThresholdPos}%`
                           }}
                         />
                         <div 
-                          className="absolute top-0 h-full bg-red-200/50"
+                          className="absolute top-0 h-full bg-red-300/40"
                           style={{ 
                             left: isInverse ? `${100 - lowThresholdPos}%` : '0%',
                             width: isInverse ? `${lowThresholdPos}%` : `${lowThresholdPos}%`
                           }}
                         />
                         
-                        {/* Benchmark line - prominent red dashed line */}
+                        {/* Benchmark/Target line - ORANGE dashed line for clear distinction */}
                         <div 
-                          className="absolute top-0 h-full w-1 bg-primary z-20"
+                          className="absolute top-0 h-full w-0.5 z-20"
+                          style={{ 
+                            left: `${benchmarkPosition}%`, 
+                            transform: 'translateX(-50%)',
+                            background: 'repeating-linear-gradient(to bottom, #f59e0b, #f59e0b 4px, transparent 4px, transparent 8px)',
+                          }}
+                        />
+                        {/* Target arrow indicator at top */}
+                        <div 
+                          className="absolute -top-2 z-30"
                           style={{ left: `${benchmarkPosition}%`, transform: 'translateX(-50%)' }}
                         >
-                          <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-primary" />
+                          <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-t-[8px] border-l-transparent border-r-transparent border-t-amber-500" />
+                        </div>
+                        {/* Target label at bottom */}
+                        <div 
+                          className="absolute -bottom-5 text-[10px] font-bold text-amber-600 whitespace-nowrap z-30"
+                          style={{ left: `${benchmarkPosition}%`, transform: 'translateX(-50%)' }}
+                        >
+                          TARGET
                         </div>
                         
-                        {/* Average indicator - blue diamond */}
+                        {/* Average indicator - BLUE diamond for clear distinction */}
                         <div 
-                          className="absolute top-1/2 transform -translate-y-1/2 -translate-x-1/2 w-4 h-4 bg-secondary rotate-45 z-10 shadow-md"
+                          className="absolute top-1/2 transform -translate-y-1/2 -translate-x-1/2 z-20"
                           style={{ left: `${averagePosition}%` }}
-                        />
-                        
-                        {/* Labels */}
-                        <div 
-                          className="absolute bottom-0 text-xs font-bold text-primary whitespace-nowrap"
-                          style={{ left: `${benchmarkPosition}%`, transform: 'translateX(-50%)' }}
                         >
-                          Target
+                          <div className="w-5 h-5 bg-blue-500 rotate-45 shadow-lg border-2 border-white" />
+                        </div>
+                        {/* Team Avg label */}
+                        <div 
+                          className="absolute top-1 text-[10px] font-bold text-blue-600 whitespace-nowrap z-30"
+                          style={{ left: `${averagePosition}%`, transform: 'translateX(-50%)' }}
+                        >
+                          TEAM AVG
                         </div>
                       </div>
                       
-                      {/* Legend */}
-                      <div className="flex items-center justify-center gap-4 text-xs">
-                        <div className="flex items-center gap-1">
-                          <div className="w-3 h-3 bg-primary rounded-sm" />
-                          <span>Benchmark</span>
+                      {/* Legend - more descriptive */}
+                      <div className="flex items-center justify-center gap-6 text-xs pt-4 mt-2 border-t border-dashed border-gray-200">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-4 h-1 bg-amber-500" style={{ background: 'repeating-linear-gradient(to right, #f59e0b, #f59e0b 3px, transparent 3px, transparent 6px)' }} />
+                          <span className="text-gray-600 font-medium">Target Goal</span>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <div className="w-3 h-3 bg-secondary rotate-45" />
-                          <span>Team Avg</span>
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-3 h-3 bg-blue-500 rotate-45" />
+                          <span className="text-gray-600 font-medium">Team Average</span>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <div className="w-3 h-3 bg-green-200 rounded-sm" />
-                          <span>High Zone</span>
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-3 h-3 bg-green-300 rounded-sm border border-green-400" />
+                          <span className="text-gray-600 font-medium">Exceeds Target</span>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <div className="w-3 h-3 bg-red-200 rounded-sm" />
-                          <span>Low Zone</span>
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-3 h-3 bg-red-300 rounded-sm border border-red-400" />
+                          <span className="text-gray-600 font-medium">Below Target</span>
                         </div>
                       </div>
                     </div>
