@@ -639,12 +639,13 @@ def run_full_scoring(employees: List[EmployeeV2], settings: QuarterSettings) -> 
     2. Derived metrics (PPA, LBW/G, Glass/G, G/LSC)
     3. Customer Voice score (NPS-style)
     4. Review Tracker bonus
-    5. Normalized scores (benchmark-relative)
-    6. Metric bonus points (exceeding benchmarks)
-    7. DAR penalties (applied last, hidden from rankings)
-    8. Total scores
-    9. Rankings (based on pre-DAR score)
-    10. Performance tiers
+    5. Apply combined CV + RT cap (max 20 points per quarter)
+    6. Normalized scores (benchmark-relative)
+    7. Metric bonus points (exceeding benchmarks)
+    8. DAR penalties (applied last, hidden from rankings)
+    9. Total scores
+    10. Rankings (based on pre-DAR score)
+    11. Performance tiers
     """
     # Step 1: Calculate LBW Total from individual alcohol sales (MANDATORY)
     for emp in employees:
@@ -662,19 +663,23 @@ def run_full_scoring(employees: List[EmployeeV2], settings: QuarterSettings) -> 
     for emp in employees:
         calculate_review_tracker_bonus(emp)
     
-    # Step 5: Calculate normalized scores (including CV)
+    # Step 5: Apply combined CV + RT cap (max 20 per quarter)
+    for emp in employees:
+        calculate_combined_cv_rt(emp)
+    
+    # Step 6: Calculate normalized scores (including CV)
     for emp in employees:
         calculate_normalized_scores(emp, settings)
     
-    # Step 6: Calculate metric bonus points
+    # Step 7: Calculate metric bonus points
     for emp in employees:
         calculate_bonus_points(emp, settings)
     
-    # Step 7: Calculate DAR penalties
+    # Step 8: Calculate DAR penalties
     for emp in employees:
         calculate_dar_penalty(emp)
     
-    # Step 8: Calculate total scores
+    # Step 9: Calculate total scores
     for emp in employees:
         calculate_total_score(emp, settings)
     
