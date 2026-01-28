@@ -8,7 +8,7 @@ import base64
 from pypdf import PdfReader
 
 class BubbaGumpAPITester:
-    def __init__(self, base_url="https://resto-stats.preview.emergentagent.com"):
+    def __init__(self, base_url="https://eatery-stats-1.preview.emergentagent.com"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
         self.tests_run = 0

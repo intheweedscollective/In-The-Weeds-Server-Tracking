@@ -1,76 +1,90 @@
 <analysis>**original_problem_statement:**
-The user wants a performance review application for restaurant employees. This evolved from an Excel-based tool to a full-stack application with a deterministic, in-app scoring engine (V2).
+The user wants to build a comprehensive performance review application for restaurant employees, evolving from a simple Excel tool to a full-stack web application. The app should handle data ingestion from CSV/Excel, calculate employee scores based on configurable metrics, and generate various outputs like PDFs, leaderboards, and slides for digital signage (Yodeck).
 
-PRODUCT REQUIREMENTS (New Refactor Spec):
-1.  **Data Ingestion**: A simplified Excel/CSV template with columns for , , , , etc.
-2.  **Quarter Settings**: A UI () for admins to configure metric weights, benchmarks, bonus rules, and server tier score thresholds (, ). Also includes settings for customizing the theme of generated Yodeck slides.
-3.  **Scoring Engine (Phase 5 Model)**: A backend engine that calculates a final score based on a weighted formula and applies bonuses/penalties.
-4.  **Full Rankings Tab**: A new tab displaying all employees in a fixed, hierarchy-driven order: Trainers, Bartenders, A-Servers, B-Servers, and C-Servers. The server tiers (A, B, C) are determined dynamically based on the configurable score thresholds from the settings.
-5.  **PDF & Slide Generation**:
-    *   Generate individual Employee Review PDFs.
-    *   Generate a PDF of the full rankings table.
-    *   Generate 1920x1080 PNG slides (Yodeck compatible) for various leaderboards.
-    *   The visual theme of the slides is customizable, including seasonal/holiday themes.
-6.  **Time-Series Analytics**: Generate and display quarter-over-quarter trend graphs for team and individual employee performance.
+PRODUCT REQUIREMENTS:
+1.  **Data Ingestion**: A simplified Excel/CSV template for uploading employee performance data.
+2.  **Quarter Settings**: A UI () for admins to configure metric weights, benchmarks, bonus rules, and server tier score thresholds. Also includes theme customization for Yodeck slides.
+3.  **Scoring Engine**: A backend engine that calculates a final score based on a weighted formula, applies bonuses/penalties, and assigns performance tiers.
+4.  **Rankings Tab**: A display of all employees sorted by a fixed hierarchy (Trainers, Bartenders, A/B/C-Servers).
+5.  **PDF & Slide Generation**: Generate individual review PDFs, full rankings PDFs, and themed 1920x1080 PNG slides for leaderboards.
+6.  **Time-Series Analytics**: Display quarter-over-quarter trend graphs for team and individual performance.
+7.  **Bi-Weekly Snapshots**: A new feature for generating a one-page, color-coded grid of all employees' performance against benchmarks, intended for bi-weekly check-ins (1st and 15th of the month).
+8.  **User Manual**: An in-app guide explaining the application's features.
 
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack React + FastAPI application. The application has been significantly refactored to a V2 data model and API.
-
--   **Backend**: The backend features a V2 scoring engine, API endpoints for all core features, and modules for generating PDFs (), themed PNG slides (, ), and time-series charts (, ). All legacy V1 code has been removed.
--   **Frontend**: The frontend is built with React and Tailwind CSS. All pages now use V2 APIs. Key features include a dashboard, employee management, a rankings page, review generation, and advanced settings for quarter configuration and slide themes (including seasonal decorations). The Analytics page has been enhanced with visual benchmark indicators and a new Trends tab for quarter-over-quarter analysis.
+A full-stack React + FastAPI application with a MongoDB database. The V2 refactor is complete. The backend includes modules for scoring (), PDF generation (), themed Yodeck slides (), trend charts (), and the new Snapshot slides (). The frontend features a dashboard, employee management, rankings, review generation, advanced settings, analytics, and the new Snapshots page. The UI has been updated with new fonts (Fredoka, Nunito) and a larger, redesigned header. A User Manual has been added to the Settings page.
 
 **Last working item**:
--   Last item agent was working: Adding individual employee trend charts to the  page. The agent updated  to include state management and a Show Trends button on each employee's card, which will toggle the display of a generated trend chart image. The UI scaffolding for this feature has been added.
+-   Last item agent was working: Debugging a  that caused the Promotion Watchlist slide generation to fail with a File Not Found error on the frontend and a 520 server error. The agent identified the error was caused by incorrectly attempting to concatenate a tuple (for color alpha) to a hex color string in .
 -   Status: **IN PROGRESS**
 -   Agent Testing Done: N
--   Which testing method agent to use? **frontend testing agent**. The agent should take a screenshot of the  page, instruct the testing agent to click the Show Trends button for an employee, and verify that the corresponding trend chart image loads correctly.
+-   Which testing method agent to use? **manual testing by curl**. The agent should restart the backend, then call the endpoint  to verify a valid PNG file is generated.
 -   User Testing Done: N
 
 **All Pending/In progress Issue list**:
-No pending issues.
+-   **Issue 1: Promotion Watchlist slide generation fails (P0)**
+-   **Issue 2: Production deployment is broken (P1)**
+
+Issues Detail:
+-   **Issue 1: Promotion Watchlist slide generation fails (P0)**
+    -   Attempted fixes: The agent implemented a helper function  in  and used it within the  function to correctly handle color transparency.
+    -   Next debug checklist:
+        1.  Restart the backend service to apply the fix.
+        2.  Test the endpoint directly via  as described in Last working item.
+        3.  **Crucially**, search through the rest of  for any other instances where a color tuple  might be incorrectly added to a hex string. The agent was about to perform this check before the session ended.
+    -   Why fix this issue and what will be achieved with the fix? This will resolve a broken feature, allowing the user to generate the Promotion Watchlist slide from the Yodeck page.
+    -   Status: **IN PROGRESS**
+    -   Is recurring issue? N
+    -   Should Test frontend/backend/both after fix? backend
+    -   Blocked on other issue: None
+
+-   **Issue 2: Production deployment is broken (P1)**
+    -   Attempted fixes:
+        -   The  in  was corrected to remove quotes, as the production environment should inject this variable.
+        -   The  in  was temporarily changed to the production URL for debugging but was reverted to the preview URL to keep the preview environment functional.
+    -   Next debug checklist: The user's deployed app at  was returning a 502 Bad Gateway error, indicating the backend service is not running in production. This is a platform configuration issue, not a code issue.
+        1.  Confirm with the user that they have clicked the Deploy button after the latest  file changes.
+        2.  If it still fails, explain that the production environment is not correctly receiving the  and  environment variables.
+        3.  Suggest using the  for a fresh analysis of the production environment's configuration.
+    -   Why fix this issue and what will be achieved with the fix? This will make the application accessible and functional on the public production URL.
+    -   Status: **BLOCKED** (Requires user to redeploy and/or platform-level configuration check)
+    -   Is recurring issue? Y
+    -   Should Test frontend/backend/both after fix? both
+    -   Blocked on other issue: None
 
 **In progress Task List**:
--   **Task 1: Complete Individual Employee Trend Charts on Reviews Page (P0)**
-    -   Description: Finalize the implementation of displaying individual time-series trend charts on the  page. This allows managers to see an employee's performance trajectory directly within the review generation workflow.
-    -   Where to resume: The file  has been modified but not yet tested. The immediate next step is to lint the file, then use the screenshot tool to verify the UI changes and test the functionality of the Show Trends button.
-    -   What will be achieved with this? Managers will have immediate visual context of an employee's performance trends over time before generating a formal review.
-    -   Status: **IN PROGRESS**
-    -   Should Test frontend/backend/both after fix? frontend
-    -   Blocked on something: None.
+N/A
 
 **Upcoming and Future Tasks**
 Upcoming Tasks:
 -   **Individual Trend Charts in PDFs (P1)**: Integrate the generated employee trend chart images into the final employee review PDFs.
--   **Interactive Analytics Filters (P2)**: Enhance the  page by making the visual range charts interactive. Clicking a performance zone (e.g., High Zone) should filter the employee list below.
--   **Final Code Cleanup (P3)**: Perform a final pass on  to ensure all newly added models and variables from the V1 cleanup are being used efficiently and remove any dead code.
+-   **Interactive Analytics Filters (P2)**: Enhance the  page by making the visual range charts interactive (e.g., clicking a performance zone filters the employee list).
+-   **Final Code Cleanup (P3)**: Perform a final pass on  and  to remove dead code and improve structure.
 
 Future Tasks:
 -   Automated daily/weekly slide pack generation for Yodeck playlists.
 -   Batch uploads of line graph PDFs.
 
 **Completed work in this session**
--   **Yodeck Theme Customization & Download Fix**:
-    -   Fixed a critical linting error in .
-    -   Implemented a full theme customization UI on the  page.
-    -   Resolved a recurring Failed to load error for slide downloads by implementing a robust blob-based download method.
--   **Seasonal Holiday Decorations**:
-    -   Implemented backend logic for auto-detecting holidays and applying themed decorations (e.g., Valentine's Day hearts) to Yodeck slides.
-    -   Added a manual override in the UI for users to select a holiday theme.
-    -   Modified backend logic to allow theme settings to be updated even when quarter scores are locked.
--   **Analytics Page Enhancements**:
-    -   Added visual range charts to each metric on the  page, showing team average vs. a benchmark target line.
--   **Legacy V1 Code Cleanup**:
-    -   Removed all legacy V1 API endpoints, Pydantic models, and helper functions from .
-    -   Deleted obsolete V1 PDF generation files (, ).
-    -   Updated the frontend to use the corresponding V2 endpoints.
--   **Time-Series Graph Generation (Team-Level)**:
-    -   Created a new  backend module using  to generate quarter-over-quarter trend charts.
-    -   Added a Trends tab to the  page displaying team-level performance comparison charts.
+-   **Feature: Bi-Weekly Snapshot System**: Created a full-stack feature allowing users to upload data for a specific date and generate a single-page, color-coded grid slide showing all employees' performance against benchmarks. Includes backend logic, API endpoints, and a new frontend page with background theme selection.
+-   **Feature: In-App User Manual**: Added a comprehensive, collapsible User Manual section to the Settings page explaining all features and scoring logic.
+-   **Bug Fix: File Upload Robustness**: Fixed multiple crashes related to handling  and  values from uploaded Excel/CSV files in both the main data upload and the snapshot upload.
+-   **Bug Fix: Snapshot Employee Count**: Corrected a bug where snapshots only included a subset of employees due to an incorrect attribute name for server tier thresholds.
+-   **UI/UX Overhaul**:
+    -   **Header & Logo**: Enlarged the header, logo, and titles by 200-300%.
+    -   **Navigation Tabs**: Fixed the horizontal tab bar cutoff and made it scrollable on smaller screens.
+    -   **Fonts**: Updated app-wide fonts to Fredoka (headings) and Nunito (body).
+    -   **Snapshot Clarity**: Added clear column headers and corrected the LSC sub-label on snapshot slides.
+-   **Scoring Engine Adjustments**:
+    -   Removed the CV Passives column from the upload template as it had zero score impact.
+    -   Updated server tier thresholds: A-Server to  and B-Server to .
+    -   Implemented a combined 20-point maximum cap for Customer Voice (CV) and Review Tracker scores.
+-   **Yodeck Slide Redesign**: Rewrote  to produce more visually engaging slides with gradients, glow effects, score bars, and improved layouts.
 
 **Earlier issues found/mentioned but not fixed**
--   **Issue 1: Intermittent Failed to load Error in Preview** - This recurring issue was investigated and fixed by implementing a more robust file download mechanism using  and blobs. The testing agent confirmed the fix. Status: **RESOLVED**.
+-   None. The active deployment issue is covered in the Pending/In progress Issue list.
 
 **Known issue recurrence from previous fork**
 -   N/A
@@ -79,67 +93,75 @@ Future Tasks:
 
 
 **Key Technical Concepts**
--   **Backend**: FastAPI, Pydantic, ReportLab (for PDFs), Pillow (for PNGs), Matplotlib (for charts).
--   **Frontend**: React.js, Tailwind CSS, Axios for API calls.
+-   **Backend**: FastAPI, Pydantic, ReportLab (PDFs), Pillow (PNGs), Matplotlib (charts).
+-   **Frontend**: React.js, Tailwind CSS, Axios.
 -   **Architecture**: V2 API-driven full-stack application.
 
 **key DB schema**
 -   **quarter_settings**: 
 -   **employees_v2**: 
+-   **snapshots**:  (NEW)
 
 **changes in tech stack**
--    was added as a new backend dependency for generating trend charts.
+-   None.
 
 **All files of reference**
--   **Backend (New/Modified)**: , , , 
--   **Frontend (Modified)**: , , , , 
--   **Backend (Deleted)**: , 
+-   **Backend (New/Modified)**:  (new), , , .
+-   **Frontend (New/Modified)**:  (new), , , , , .
 
 **Areas that need refactoring**:
--   No major refactoring is needed. A large-scale V1 code cleanup was just completed.
+-    is now over 2500 lines and contains logic for all API endpoints. It should be broken down into smaller, more manageable router files (e.g., , ).
 
 **key api endpoints**
--   : Gets team-level quarter-over-quarter trend data.
--   : Generates a PNG image of the team trend chart.
--   : Generates a PNG image of an individual employee's trend chart.
--   : Updates quarter settings; now allows theme-only updates on locked quarters.
--   : New V2 endpoint for the Top Performers PDF.
--   : New V2 endpoint for the Analytics summary PDF.
+-    (BROKEN)
+-    (NEW)
+-    (NEW)
+-    (NEW)
+-    (NEW)
+-    (NEW)
 
 **Critical Info for New Agent**
--   Your immediate task is to complete the implementation of individual employee trend charts on the  page. Start by linting and testing the recent changes in .
--   The user has approved a multi-step plan for time-series charts. After completing the UI on the  page, the next logical step is to integrate these same charts into the employee review PDFs.
--   A major legacy V1 code cleanup was just performed. While tested, be vigilant for any unexpected side effects in related features like review generation or PDF downloads.
+-   Your immediate priority is to finish debugging the Promotion Watchlist slide generation. A fix has been applied to  but it needs to be tested, and the rest of the file should be checked for similar errors.
+-   The user is blocked by a production deployment failure (502 Bad Gateway). This is a platform configuration issue, not a code issue. Guide the user to click Deploy again. If it still fails, the root cause is likely the  not being correctly injected by the deployment service.
+-   The preview environment's database has been cleared and repopulated with test data. Be aware that the user's original data is not present.
+-   The  in  is correctly set to the preview URL. Do not change it to the production URL; the deployment platform is responsible for injecting the correct URL in production.
 
 **documents and test reports created in this job**
--   
--   
+-   None
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **Agent**: Proposes next tasks from backlog: V1 Code Cleanup or Time-Series Graphs.
-2.  **User**: 1 and then 4 (Do cleanup first, then graphs).
-3.  **Agent**: Completes V1 cleanup, then proposes a detailed plan for time-series graphs.
-4.  **User**: Approves graph plan with specific requirements for metrics, comparison period, and display locations.
-5.  **Agent**: Implements backend and team-level trend charts on the Analytics page and summarizes completion.
-6.  **User**: Yes, please create the employee trend charts
-7.  **Agent**: Begins implementing individual employee trend charts on the ReviewGeneration page.
+1.  **User**: Asks for the final score formula.
+2.  **Agent**: Provides a detailed breakdown of the scoring formula.
+3.  **User**: Yes. A server is above 80.
+4.  **Agent**: Updates A-server threshold to 80.
+5.  **User**: The cutoff between B and C servers is 70 even, not 70.1.
+6.  **Agent**: Updates B/C-server threshold to 70.
+7.  **User**: Asks to make fonts business professional but fun.
+8.  **Agent**: Implements new Google Fonts (Fredoka, Nunito).
+9.  **User**: Can you ensure that all of the scores are right? I have a feeling something’s cute cause your number is different than mine.
+10. **User**: Confirms a combined 20-point cap for CV and Review Tracker scores is correct.
+11. **User**: Asks what is needed to generate the progress slide (Snapshot).
+12. **User**: Promotion watch slide goes to file not found page. (Last user message, reporting the current P0 issue).
 
 **Project Health Check:**
--   **Broken**: None.
+-   **Broken**:
+    -   Production Deployment ( is down with a 502 error).
+    -   Yodeck Promotion Watchlist slide generation endpoint is failing.
 -   **Mocked**: None.
 
 **3rd Party Integrations**
--   **OpenAI GPT**: Used via  for generating text content for employee reviews.
--   **Matplotlib**: A new dependency added to the backend for chart generation.
+-   **OpenAI GPT**: Used via  for text generation.
+-   **Matplotlib**: Used for generating trend charts.
 
 **Testing status**
--   Testing agent used after significant changes: YES (for Yodeck theme customization).
+-   Testing agent used after significant changes: NO
 -   Troubleshoot agent used after agent stuck in loop: NO
 -   Test files created: None.
--   Known regressions: None.
+-   Known regressions: The Promotion Watchlist slide generation was working before the slide redesign and is now broken.
 
 **Credentials to test flow:**
 N/A
 
 **What agent forgot to execute**
--   The agent did not lint or test the most recent changes made to  before the session ended. This is the immediate next action to take.</analysis>
+-   After applying a fix to  in , the agent did not proceed to check the rest of the file for similar color-handling errors, which was the intended next step.
+-   The agent did not test the Promotion Watchlist fix before the session ended.</analysis>
