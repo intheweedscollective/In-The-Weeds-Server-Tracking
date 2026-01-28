@@ -540,22 +540,52 @@ export default function Analytics() {
                         </span>
                       </div>
                       
-                      {/* Visual scale with zones and benchmark line */}
+                      {/* Visual scale with zones and benchmark line - INTERACTIVE */}
                       <div className="relative h-14 bg-gradient-to-r from-red-100 via-yellow-50 to-green-100 rounded-lg overflow-visible border border-gray-200">
-                        {/* Zone indicators */}
-                        <div 
-                          className="absolute top-0 h-full bg-green-300/40"
+                        {/* Clickable Green Zone (Exceeds Target) */}
+                        <button 
+                          onClick={() => filterByZone(metricKey, ZONE_TYPES.HIGH)}
+                          className={`absolute top-0 h-full bg-green-300/40 hover:bg-green-400/60 transition-colors cursor-pointer z-10 ${
+                            activeFilter?.metric === metricKey && activeFilter?.zone === ZONE_TYPES.HIGH 
+                              ? 'ring-2 ring-green-500 ring-inset bg-green-400/60' 
+                              : ''
+                          }`}
                           style={{ 
                             left: isInverse ? '0%' : `${highThresholdPos}%`,
                             width: isInverse ? `${100 - highThresholdPos}%` : `${100 - highThresholdPos}%`
                           }}
+                          title={`Click to see ${data.high} employees exceeding target`}
+                          data-testid={`zone-high-${metricKey}`}
                         />
-                        <div 
-                          className="absolute top-0 h-full bg-red-300/40"
+                        {/* Clickable Red Zone (Below Target) */}
+                        <button 
+                          onClick={() => filterByZone(metricKey, ZONE_TYPES.LOW)}
+                          className={`absolute top-0 h-full bg-red-300/40 hover:bg-red-400/60 transition-colors cursor-pointer z-10 ${
+                            activeFilter?.metric === metricKey && activeFilter?.zone === ZONE_TYPES.LOW 
+                              ? 'ring-2 ring-red-500 ring-inset bg-red-400/60' 
+                              : ''
+                          }`}
                           style={{ 
                             left: isInverse ? `${100 - lowThresholdPos}%` : '0%',
                             width: isInverse ? `${lowThresholdPos}%` : `${lowThresholdPos}%`
                           }}
+                          title={`Click to see ${data.low} employees below target`}
+                          data-testid={`zone-low-${metricKey}`}
+                        />
+                        {/* Clickable Middle Zone (Near Target) */}
+                        <button 
+                          onClick={() => filterByZone(metricKey, ZONE_TYPES.MEDIUM)}
+                          className={`absolute top-0 h-full hover:bg-yellow-200/60 transition-colors cursor-pointer z-10 ${
+                            activeFilter?.metric === metricKey && activeFilter?.zone === ZONE_TYPES.MEDIUM 
+                              ? 'ring-2 ring-yellow-500 ring-inset bg-yellow-200/60' 
+                              : ''
+                          }`}
+                          style={{ 
+                            left: isInverse ? `${100 - lowThresholdPos}%` : `${lowThresholdPos}%`,
+                            width: `${Math.abs(highThresholdPos - lowThresholdPos)}%`
+                          }}
+                          title={`Click to see ${data.medium} employees near target`}
+                          data-testid={`zone-medium-${metricKey}`}
                         />
                         
                         {/* Benchmark/Target line - ORANGE dashed line for clear distinction */}
