@@ -770,6 +770,116 @@ export default function Analytics() {
           })}
         </div>
 
+        {/* Interactive Filtered Results Panel */}
+        {activeFilter && (
+          <div id="filtered-results" className="mt-8 scroll-mt-8" data-testid="filtered-results-panel">
+            <div className="bubba-card border-2 border-primary/30 shadow-lg">
+              <div className="p-6">
+                {/* Header with filter info and clear button */}
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      activeFilter.zone === ZONE_TYPES.HIGH ? 'bg-green-100' :
+                      activeFilter.zone === ZONE_TYPES.LOW ? 'bg-red-100' :
+                      activeFilter.zone === ZONE_TYPES.MEDIUM ? 'bg-yellow-100' :
+                      'bg-blue-100'
+                    }`}>
+                      <Users className={`w-5 h-5 ${
+                        activeFilter.zone === ZONE_TYPES.HIGH ? 'text-green-600' :
+                        activeFilter.zone === ZONE_TYPES.LOW ? 'text-red-600' :
+                        activeFilter.zone === ZONE_TYPES.MEDIUM ? 'text-yellow-600' :
+                        'text-blue-600'
+                      }`} />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-serif font-bold text-foreground">
+                        {activeFilter.zone === ZONE_TYPES.HIGH && 'Exceeding Target'}
+                        {activeFilter.zone === ZONE_TYPES.LOW && 'Below Target'}
+                        {activeFilter.zone === ZONE_TYPES.MEDIUM && 'Near Target'}
+                        {activeFilter.zone === ZONE_TYPES.AVERAGE && 'Near Team Average'}
+                        {' '}— {V2_METRICS[activeFilter.metric]?.label}
+                      </h3>
+                      <p className="text-sm text-gray-500">
+                        {filteredEmployees.length} employee{filteredEmployees.length !== 1 ? 's' : ''} in this zone
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={clearFilter}
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center gap-2"
+                    data-testid="clear-filter-btn"
+                  >
+                    <X className="w-4 h-4" />
+                    Clear Filter
+                  </Button>
+                </div>
+                
+                {/* Filtered Employee List */}
+                {filteredEmployees.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <Users className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                    <p>No employees found in this zone</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {filteredEmployees.map((emp, idx) => {
+                      const metricVal = emp[activeFilter.metric];
+                      const config = V2_METRICS[activeFilter.metric];
+                      
+                      return (
+                        <div 
+                          key={emp.id}
+                          className={`p-4 rounded-lg border-2 transition-all ${
+                            activeFilter.zone === ZONE_TYPES.HIGH ? 'border-green-200 bg-green-50/50' :
+                            activeFilter.zone === ZONE_TYPES.LOW ? 'border-red-200 bg-red-50/50' :
+                            activeFilter.zone === ZONE_TYPES.MEDIUM ? 'border-yellow-200 bg-yellow-50/50' :
+                            'border-blue-200 bg-blue-50/50'
+                          }`}
+                          data-testid={`filtered-employee-${emp.id}`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className={`text-sm font-bold ${
+                                  activeFilter.zone === ZONE_TYPES.HIGH ? 'text-green-700' :
+                                  activeFilter.zone === ZONE_TYPES.LOW ? 'text-red-700' :
+                                  activeFilter.zone === ZONE_TYPES.MEDIUM ? 'text-yellow-700' :
+                                  'text-blue-700'
+                                }`}>#{idx + 1}</span>
+                                <span className="font-semibold text-foreground truncate">{emp.name}</span>
+                              </div>
+                              {emp.ranking && (
+                                <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
+                                  {emp.ranking}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-right shrink-0 ml-2">
+                              <div className={`text-lg font-bold ${
+                                activeFilter.zone === ZONE_TYPES.HIGH ? 'text-green-600' :
+                                activeFilter.zone === ZONE_TYPES.LOW ? 'text-red-600' :
+                                activeFilter.zone === ZONE_TYPES.MEDIUM ? 'text-yellow-600' :
+                                'text-blue-600'
+                              }`}>
+                                {config?.format === 'currency' ? formatCurrency(metricVal) : formatNumber(metricVal)}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {config?.label}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Top 10 Overall + Top 10 per Metric */}
         <div className="mt-10 space-y-8">
           <div className="space-y-4" data-testid="analytics-top-overall">
