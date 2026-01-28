@@ -628,7 +628,199 @@ def generate_top_10_slide(
     return buffer.getvalue()
 
 
-def generate_tier_slide(
+def generate_complete_rankings_slide(
+    rankings: List[Dict[str, Any]], 
+    quarter: str, 
+    year: int,
+    theme: str = "dark_navy",
+    custom_colors: Dict = None,
+    custom_bg_image: str = None,
+    seasonal_theme: str = None
+) -> bytes:
+    """
+    Generate a complete rankings slide showing ALL employees from top to bottom.
+    Uses a compact multi-column layout to fit everyone on one slide.
+    """
+    colors = get_theme_colors(theme, custom_colors, seasonal_theme)
+    img = create_gradient_background(SLIDE_WIDTH, SLIDE_HEIGHT, colors)
+    
+    # Add seasonal decorations
+    active_seasonal = seasonal_theme if seasonal_theme and seasonal_theme != "none" else (get_current_seasonal_theme() if seasonal_theme == "auto" else None)
+    if active_seasonal:
+        img = add_decorations(img, active_seasonal, colors)
+    
+    draw = ImageDraw.Draw(img)
+    
+    total_employees = len(rankings)
+    
+    # Dynamic font sizing based on employee count
+    if total_employees <= 20:
+        font_name_size = 26
+        font_score_size = 24
+        font_rank_size = 22
+        row_height = 42
+        columns = 2
+    elif total_employees <= 30:
+        font_name_size = 22
+        font_score_size = 20
+        font_rank_size = 18
+        row_height = 32
+        columns = 3
+    elif total_employees <= 45:
+        font_name_size = 18
+        font_score_size = 16
+        font_rank_size = 15
+        row_height = 26
+        columns = 3
+    else:
+        font_name_size = 15
+        font_score_size = 14
+        font_rank_size = 13
+        row_height = 22
+        columns = 4
+    
+    font_title = get_font(52, bold=True)
+    font_subtitle = get_font(22)
+    font_name = get_font(font_name_size, bold=True)
+    font_score = get_font(font_score_size, bold=True)
+    font_rank = get_font(font_rank_size, bold=True)
+    font_tier = get_font(max(12, font_rank_size - 4))
+    
+    # Get emoji
+    emoji = SEASONAL_THEMES.get(active_seasonal, {}).get("emoji", "📊")
+    
+    # Header
+    title = f"{emoji} COMPLETE RANKINGS {emoji}"
+    draw.text((SLIDE_WIDTH//2 + 2, 27), title, font=font_title, fill=(0, 0, 0, 80), anchor="mt")
+    draw.text((SLIDE_WIDTH//2, 25), title, font=font_title, fill=colors["primary"], anchor="mt")
+    
+    # Subtitle
+    subtitle = f"{quarter} {year} • All {total_employees} Team Members • Top to Bottom"
+    draw.text((SLIDE_WIDTH//2, 85), subtitle, font=font_subtitle, fill=colors["text_muted"], anchor="mt")
+    
+    # Decorative line
+    draw.line([(80, 115), (SLIDE_WIDTH - 80, 115)], fill=colors["secondary"], width=2)
+    
+    # Calculate layout
+    start_y = 135
+    available_height = SLIDE_HEIGHT - start_y - 50  # Leave room for footer
+    col_width = (SLIDE_WIDTH - 100) // columns
+    rows_per_col = (total_employees + columns - 1) // columns
+    
+    # Tier color mapping for compact display
+    tier_colors = {
+        "Trainer": "#9333EA",      # Purple
+        "Bartender": "#3B82F6",    # Blue
+        "A-Server": "#22C55E",     # Green
+        "B-Server": "#EAB308",     # Yellow
+        "C-Server": "#EF4444",     # Red
+    }
+    
+    tier_abbrev = {
+        "Trainer": "T",
+        "Bartender": "BAR",
+        "A-Server": "A",
+        "B-Server": "B", 
+        "C-Server": "C",
+    }
+    
+    # Draw each employee
+    for idx, emp in enumerate(rankings):
+        col = idx // rows_per_col
+        row = idx % rows_per_col
+        
+        x_start = 50 + col * col_width
+        y = start_y + row * row_height
+        
+        rank = idx + 1
+        name = emp.get("name", "Unknown")
+        score = emp.get("total_score", 0)
+        tier = emp.get("tier_label", "A-Server")
+        
+        # Truncate name based on column width
+        max_name_len = 14 if columns >= 3 else 18
+        if len(name) > max_name_len:
+            name = name[:max_name_len-1] + "…"
+        
+        # Rank styling - top 3 get special colors
+        if rank == 1:
+            rank_color = colors["gold"]
+            bg_color = hex_to_rgb(colors["gold"]) + (40,)
+        elif rank == 2:
+            rank_color = colors["silver"]
+            bg_color = hex_to_rgb(colors["silver"]) + (30,)
+        elif rank == 3:
+            rank_color = colors["bronze"]
+            bg_color = hex_to_rgb(colors["bronze"]) + (30,)
+        else:
+            rank_color = colors["text_muted"]
+            bg_color = None
+        
+        # Subtle highlight for top 3
+        if bg_color and row_height >= 26:
+            draw.rounded_rectangle(
+                [x_start - 5, y - 2, x_start + col_width - 15, y + row_height - 6],
+                radius=4,
+                fill=bg_color
+            )
+        
+        # Rank number
+        rank_text = f"#{rank}"
+        draw.text((x_start, y), rank_text, font=font_rank, fill=rank_color)
+        
+        # Tier indicator (small colored dot or letter)
+        tier_color = tier_colors.get(tier, "#888888")
+        tier_x = x_start + 40
+        
+        # Draw tier badge as small colored rectangle with letter
+        badge_width = 22 if columns < 4 else 18
+        badge_height = font_rank_size + 2
+        draw.rounded_rectangle(
+            [tier_x, y + 1, tier_x + badge_width, y + badge_height],
+            radius=3,
+            fill=tier_color
+        )
+        tier_letter = tier_abbrev.get(tier, "?")
+        draw.text((tier_x + badge_width//2, y + badge_height//2), tier_letter, 
+                  font=font_tier, fill="#FFFFFF", anchor="mm")
+        
+        # Name
+        name_x = tier_x + badge_width + 8
+        draw.text((name_x, y), name, font=font_name, fill=colors["text_white"])
+        
+        # Score (right-aligned within column)
+        score_text = f"{score:.1f}"
+        score_x = x_start + col_width - 25
+        score_color = colors["gold"] if rank <= 3 else colors["text_light"]
+        draw.text((score_x, y), score_text, font=font_score, fill=score_color, anchor="rt")
+    
+    # Footer with legend
+    font_footer = get_font(14)
+    footer_y = SLIDE_HEIGHT - 35
+    
+    # Legend
+    legend_items = [("T", "Trainer", "#9333EA"), ("BAR", "Bartender", "#3B82F6"), 
+                   ("A", "A-Server", "#22C55E"), ("B", "B-Server", "#EAB308"), ("C", "C-Server", "#EF4444")]
+    legend_x = 80
+    for abbr, full_name, color in legend_items:
+        # Small badge
+        draw.rounded_rectangle([legend_x, footer_y, legend_x + 20, footer_y + 16], radius=3, fill=color)
+        draw.text((legend_x + 10, footer_y + 8), abbr, font=font_footer, fill="#FFFFFF", anchor="mm")
+        legend_x += 25
+        draw.text((legend_x, footer_y), f"={full_name}", font=font_footer, fill=colors["text_muted"])
+        legend_x += 100
+    
+    # Date
+    date_text = f"Generated {datetime.now().strftime('%m/%d/%Y')}"
+    draw.text((SLIDE_WIDTH - 80, footer_y), date_text, font=font_footer, fill=colors["text_muted"], anchor="rt")
+    
+    buffer = io.BytesIO()
+    img.save(buffer, format='PNG', optimize=True)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+
     tier_name: str,
     employees: List[Dict[str, Any]], 
     quarter: str, 
