@@ -84,6 +84,7 @@ export default function YodeckSlides() {
       if (settingsResponse.data) {
         setThemeSettings({
           slide_theme: settingsResponse.data.slide_theme || "dark_navy",
+          slide_seasonal_theme: settingsResponse.data.slide_seasonal_theme || "none",
           slide_bg_color: settingsResponse.data.slide_bg_color || "#0A1628",
           slide_bg_gradient: settingsResponse.data.slide_bg_gradient || "#132238",
           slide_text_color: settingsResponse.data.slide_text_color || "#FFFFFF",
