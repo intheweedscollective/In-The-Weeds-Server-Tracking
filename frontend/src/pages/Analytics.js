@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { BarChart3, TrendingUp, Target, Download, Calendar, Info, ArrowUp, ArrowDown, Minus } from "lucide-react";
+import { BarChart3, TrendingUp, Target, Download, Calendar, Info, ArrowUp, ArrowDown, Minus, X, Users, Filter } from "lucide-react";
 import axios from "axios";
 import Navigation from "../components/Navigation";
 import { Button } from "../components/ui/button";
@@ -17,6 +17,14 @@ const V2_METRICS = {
   guests_per_lsc: { label: 'Guests/LSC', defaultBenchmark: 100.0, format: 'number', higherBetter: false, settingsKey: 'benchmark_lsc', unit: 'guests', weight: 0.25 },
   cv_score: { label: 'CV Score', defaultBenchmark: 5.0, format: 'number', higherBetter: true, settingsKey: 'benchmark_cv', unit: 'pts', weight: 0.15 },
   pre_dar_score: { label: 'Total Score', defaultBenchmark: 100.0, format: 'number', higherBetter: true, settingsKey: null, unit: 'pts', weight: null },
+};
+
+// Zone types for filtering
+const ZONE_TYPES = {
+  HIGH: 'high',
+  MEDIUM: 'medium', 
+  LOW: 'low',
+  AVERAGE: 'average'
 };
 
 // Helper to get actual benchmark from settings or default
