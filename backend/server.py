@@ -1407,6 +1407,60 @@ async def get_yodeck_top10_slide(year: int, quarter: str):
     )
 
 
+@api_router.get("/v2/yodeck/{year}/{quarter}/complete-rankings")
+async def get_yodeck_complete_rankings_slide(year: int, quarter: str):
+    """
+    Generate a complete rankings slide showing ALL employees top to bottom on one slide.
+    Uses a compact multi-column layout.
+    """
+    # Get all rankings
+    employees = list(db.employees_v2.find(
+        {"year": year, "quarter": quarter},
+        {"_id": 0}
+    ))
+    
+    if not employees:
+        raise HTTPException(status_code=404, detail=f"No data for {quarter} {year}")
+    
+    # Sort by peer_rank (complete ranking order)
+    employees.sort(key=lambda e: e.get("peer_rank", 999))
+    
+    # Get theme settings
+    settings = db.quarter_settings.find_one(
+        {"year": year, "quarter": quarter},
+        {"_id": 0}
+    ) or {}
+    
+    theme = settings.get("slide_theme", "dark_navy")
+    seasonal_theme = settings.get("slide_seasonal_theme", None)
+    custom_colors = None
+    
+    if theme == "custom":
+        custom_colors = {
+            "background": settings.get("slide_bg_color", "#0A1628"),
+            "background_gradient": settings.get("slide_bg_gradient", "#132238"),
+            "text_white": settings.get("slide_text_color", "#FFFFFF"),
+            "primary": settings.get("slide_accent_color", "#D12E2E"),
+            "secondary": settings.get("slide_secondary_color", "#005B96"),
+        }
+    
+    slide_bytes = generate_complete_rankings_slide(
+        rankings=employees,
+        quarter=quarter,
+        year=year,
+        theme=theme,
+        custom_colors=custom_colors,
+        seasonal_theme=seasonal_theme
+    )
+    
+    filename = f"yodeck_complete_rankings_{quarter}_{year}.png"
+    return Response(
+        content=slide_bytes,
+        media_type="image/png",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
 @api_router.get("/v2/yodeck/{year}/{quarter}/tier/{tier_name}")
 async def get_yodeck_tier_slide(year: int, quarter: str, tier_name: str, page: int = 1):
     """
