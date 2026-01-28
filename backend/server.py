@@ -1413,11 +1413,11 @@ async def get_yodeck_complete_rankings_slide(year: int, quarter: str):
     Generate a complete rankings slide showing ALL employees top to bottom on one slide.
     Uses a compact multi-column layout.
     """
-    # Get all rankings
-    employees = list(db.employees_v2.find(
-        {"year": year, "quarter": quarter},
+    # Get all rankings (async)
+    employees = await db.employees_v2.find(
+        {"year": year, "quarter": quarter.upper()},
         {"_id": 0}
-    ))
+    ).to_list(5000)
     
     if not employees:
         raise HTTPException(status_code=404, detail=f"No data for {quarter} {year}")
@@ -1425,9 +1425,9 @@ async def get_yodeck_complete_rankings_slide(year: int, quarter: str):
     # Sort by peer_rank (complete ranking order)
     employees.sort(key=lambda e: e.get("peer_rank", 999))
     
-    # Get theme settings
-    settings = db.quarter_settings.find_one(
-        {"year": year, "quarter": quarter},
+    # Get theme settings (async)
+    settings = await db.quarter_settings.find_one(
+        {"year": year, "quarter": quarter.upper()},
         {"_id": 0}
     ) or {}
     
