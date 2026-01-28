@@ -100,11 +100,14 @@ class EmployeeV2(BaseModel):
     
     # === CUSTOMER VOICE SCORE ===
     cv_raw_points: Optional[float] = None      # Raw CV calculation before cap
-    cv_score: Optional[float] = None           # Capped CV score (-6 to +10)
+    cv_score: Optional[float] = None           # Capped CV score (min -6)
     score_cv: Optional[float] = None           # Normalized for weighting (0-100 scale)
     
     # === REVIEW TRACKER BONUS ===
-    review_tracker_bonus: Optional[float] = None  # Capped at 10
+    review_tracker_bonus: Optional[float] = None
+    
+    # === COMBINED CV + REVIEW TRACKER (capped at 20 total) ===
+    cv_rt_combined: Optional[float] = None     # Combined CV + RT (max 20 per quarter)
     
     # === BONUS POINTS (for exceeding benchmarks) ===
     bonus_ppa: Optional[float] = None
