@@ -7,6 +7,11 @@ Build a full-stack application to generate quarterly performance reviews for res
 3. Generate AI-powered performance reviews with PDF output
 4. Display rankings and analytics dashboards
 
+## Recent Changes
+### Jan 28, 2026
+- **Interactive Analytics**: Added clickable zones on metric charts that filter employees by performance zone (Exceeds/Near/Below Target). Shows filtered employee list with color-coded cards.
+- **Analytics Context**: Added "How to read this chart" explanations, distinct colors for Target (orange) vs Team Average (blue diamond), and improved legend.
+
 ## Tech Stack
 - **Frontend**: React.js, Tailwind CSS, Shadcn/UI
 - **Backend**: FastAPI (Python)
