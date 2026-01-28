@@ -919,8 +919,9 @@ def generate_promotion_watchlist_slide(
         gap_pct = 1 - (emp["gap"] / 10)
         bar_width = 150
         bar_x = 680
-        draw.rounded_rectangle([bar_x, y + 35, bar_x + bar_width, y + 45], radius=5, fill=colors["text_muted"] + (50,))
-        draw.rounded_rectangle([bar_x, y + 35, bar_x + int(bar_width * gap_pct), y + 45], radius=5, fill=TIER_CONFIG["A-Server"]["color"])
+        bar_bg = hex_to_rgb(colors["text_muted"])
+        draw.rounded_rectangle([bar_x, y + 35, bar_x + bar_width, y + 45], radius=5, fill=bar_bg)
+        draw.rounded_rectangle([bar_x, y + 35, bar_x + int(bar_width * gap_pct), y + 45], radius=5, fill=hex_to_rgb(TIER_CONFIG["A-Server"]["color"]))
         
         draw.text((bar_x + bar_width + 15, y + 28), f"{emp['gap']:.1f} pts to go", font=font_gap, fill=colors["gold"])
         draw.text((SLIDE_WIDTH - 150, y + 28), f"{emp['score']:.1f}", font=font_score, fill=colors["text_white"], anchor="rt")
