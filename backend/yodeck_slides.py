@@ -528,99 +528,106 @@ def generate_top_10_slide(
     custom_bg_image: str = None,
     seasonal_theme: str = None
 ) -> bytes:
-    """Generate premium Top 10 Performers slide."""
+    """Generate clean, professional Top 10 Performers slide without emoji dependencies."""
     colors = get_theme_colors(theme, custom_colors, seasonal_theme)
     img = create_gradient_background(SLIDE_WIDTH, SLIDE_HEIGHT, colors)
-    
-    # Add seasonal decorations
-    active_seasonal = seasonal_theme if seasonal_theme and seasonal_theme != "none" else (get_current_seasonal_theme() if seasonal_theme == "auto" else None)
-    if active_seasonal:
-        img = add_decorations(img, active_seasonal, colors)
-    
-    draw = ImageDraw.Draw(img)
-    
-    # Add glow effects for top performers
-    if len(rankings) >= 1:
-        img = draw_glow_circle(img, 960, 300, 100, hex_to_rgb(colors["gold"]), 30)
-    
     draw = ImageDraw.Draw(img)
     
     # Fonts
-    font_title = get_font(72, bold=True)
-    font_subtitle = get_font(28)
-    font_rank = get_font(42, bold=True)
-    font_name = get_font(38, bold=True)
-    font_score = get_font(44, bold=True)
-    font_tier = get_font(20, bold=True)
+    font_title = get_font(64, bold=True)
+    font_subtitle = get_font(26)
+    font_rank = get_font(36, bold=True)
+    font_name = get_font(32, bold=True)
+    font_score = get_font(38, bold=True)
+    font_tier = get_font(18, bold=True)
+    font_footer = get_font(18)
     
-    # Get emoji
-    emoji = SEASONAL_THEMES.get(active_seasonal, {}).get("emoji", "🏆")
-    
-    # Header with shadow effect
-    title = f"{emoji} TOP 10 PERFORMERS {emoji}"
-    # Shadow
-    draw.text((SLIDE_WIDTH//2 + 3, 43), title, font=font_title, fill=(0, 0, 0, 100), anchor="mt")
-    # Main text
-    draw.text((SLIDE_WIDTH//2, 40), title, font=font_title, fill=colors["primary"], anchor="mt")
+    # Header - clean text without emojis
+    title = "TOP 10 PERFORMERS"
+    draw.text((SLIDE_WIDTH//2 + 3, 38), title, font=font_title, fill=(0, 0, 0, 100), anchor="mt")
+    draw.text((SLIDE_WIDTH//2, 35), title, font=font_title, fill=colors["primary"], anchor="mt")
     
     # Subtitle
-    subtitle = f"{quarter} {year} • Bubba Gump Shrimp Co. • Las Vegas"
-    draw.text((SLIDE_WIDTH//2, 120), subtitle, font=font_subtitle, fill=colors["text_muted"], anchor="mt")
+    subtitle = f"{quarter} {year}  |  Bubba Gump Shrimp Co.  |  Las Vegas"
+    draw.text((SLIDE_WIDTH//2, 110), subtitle, font=font_subtitle, fill=colors["text_muted"], anchor="mt")
     
-    # Decorative line with gradient
-    for i, x in enumerate(range(150, SLIDE_WIDTH - 150)):
-        progress = (x - 150) / (SLIDE_WIDTH - 300)
-        alpha = int(255 * (1 - abs(progress - 0.5) * 2) * 0.8)
-        draw.point((x, 165), fill=hex_to_rgb(colors["secondary"]) + (alpha,))
-    draw.line([(150, 165), (SLIDE_WIDTH - 150, 165)], fill=colors["secondary"], width=2)
+    # Decorative line
+    draw.line([(200, 150), (SLIDE_WIDTH - 200, 150)], fill=colors["secondary"], width=3)
     
-    # Top 10 list with cards
-    start_y = 195
-    row_height = 82
-    card_margin = 100
+    # Top 10 list
+    start_y = 175
+    row_height = 85
+    left_margin = 100
     
     for idx, emp in enumerate(rankings[:10]):
         rank = idx + 1
         y = start_y + idx * row_height
         
-        # Card background for top 3
+        # Row background for top 3
         if rank <= 3:
-            draw_card(draw, (card_margin - 20, y - 5, SLIDE_WIDTH - card_margin + 20, y + row_height - 15), colors, highlight=True)
+            medal_colors = {1: colors["gold"], 2: colors["silver"], 3: colors["bronze"]}
+            bg = hex_to_rgb(medal_colors[rank]) + (30,)
+            draw.rounded_rectangle(
+                [left_margin - 20, y - 5, SLIDE_WIDTH - left_margin + 20, y + row_height - 15],
+                radius=8, fill=bg
+            )
         
-        # Medal for top 3
+        # Rank medal/number
         if rank <= 3:
-            draw_medal(draw, 140, y + 35, rank, colors, size=50)
-            name_x = 200
+            # Draw medal circle
+            medal_colors_map = {1: colors["gold"], 2: colors["silver"], 3: colors["bronze"]}
+            medal_color = medal_colors_map[rank]
+            cx, cy = left_margin + 30, y + 32
+            draw.ellipse([cx - 25, cy - 25, cx + 25, cy + 25], fill=medal_color)
+            draw.ellipse([cx - 18, cy - 18, cx + 18, cy + 18], fill=hex_to_rgb(medal_color))
+            draw.text((cx, cy), str(rank), font=font_rank, fill="#1A1A2E", anchor="mm")
+            name_x = left_margin + 80
         else:
-            # Rank number for others
-            rank_colors = [colors["gold"], colors["silver"], colors["bronze"]] + [colors["text_light"]] * 7
-            draw.text((card_margin + 20, y + 18), f"#{rank}", font=font_rank, fill=rank_colors[idx])
-            name_x = 200
+            draw.text((left_margin + 10, y + 15), f"#{rank}", font=font_rank, fill=colors["text_muted"])
+            name_x = left_margin + 80
         
         # Name
-        name = emp.get("name", "Unknown")[:22]
-        draw.text((name_x, y + 20), name, font=font_name, fill=colors["text_white"])
+        name = emp.get("name", "Unknown")
+        if len(name) > 20:
+            name = name[:19] + ".."
+        draw.text((name_x, y + 18), name, font=font_name, fill=colors["text_white"])
         
         # Tier badge
         tier = emp.get("tier_label", "A-Server")
-        draw_tier_badge(draw, 680, y + 18, tier, "small")
+        tier_colors = {"Trainer": "#A855F7", "Bartender": "#3B82F6", "A-Server": "#22C55E", "B-Server": "#EAB308", "C-Server": "#EF4444"}
+        tier_color = tier_colors.get(tier, "#888888")
         
-        # Score with visual bar
+        tier_x = 620
+        draw.rounded_rectangle([tier_x, y + 15, tier_x + 90, y + 50], radius=15, fill=tier_color)
+        draw.text((tier_x + 45, y + 32), tier, font=font_tier, fill="#FFFFFF", anchor="mm")
+        
+        # Score
         score = emp.get("total_score", 0)
-        max_score = 120  # Reasonable max
-        
-        # Score bar
-        draw_score_bar(draw, SLIDE_WIDTH - 400, y + 45, 200, score, max_score, colors)
-        
-        # Score number
         score_text = f"{score:.1f}"
         score_color = colors["gold"] if rank <= 3 else colors["text_white"]
-        draw.text((SLIDE_WIDTH - 150, y + 15), score_text, font=font_score, fill=score_color, anchor="rt")
+        
+        # Score bar background
+        bar_x = SLIDE_WIDTH - 380
+        bar_y = y + 42
+        bar_width = 180
+        bar_height = 10
+        draw.rounded_rectangle([bar_x, bar_y, bar_x + bar_width, bar_y + bar_height], radius=5, 
+                              fill=hex_to_rgb(colors["text_muted"]) + (50,))
+        
+        # Score bar fill
+        max_score = 150
+        fill_width = int((score / max_score) * bar_width)
+        if fill_width > 0:
+            bar_color = colors["gold"] if rank <= 3 else colors["secondary"]
+            draw.rounded_rectangle([bar_x, bar_y, bar_x + fill_width, bar_y + bar_height], radius=5, 
+                                  fill=bar_color)
+        
+        # Score number
+        draw.text((SLIDE_WIDTH - left_margin - 20, y + 15), score_text, font=font_score, fill=score_color, anchor="rt")
     
     # Footer
-    font_footer = get_font(20)
-    footer = f"Generated {datetime.now().strftime('%m/%d/%Y')} • Performance Rankings"
-    draw.text((SLIDE_WIDTH//2, SLIDE_HEIGHT - 40), footer, font=font_footer, fill=colors["text_muted"], anchor="mt")
+    footer = f"Generated {datetime.now().strftime('%m/%d/%Y')}  |  Performance Rankings"
+    draw.text((SLIDE_WIDTH//2, SLIDE_HEIGHT - 35), footer, font=font_footer, fill=colors["text_muted"], anchor="mt")
     
     buffer = io.BytesIO()
     img.save(buffer, format='PNG', optimize=True)
