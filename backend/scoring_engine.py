@@ -29,13 +29,21 @@ CV_MIN_POINTS = -6          # Quarterly floor for negative
 
 # Review Tracker
 RT_MENTIONS_PER_POINT = 5   # Every 5 positive mentions = +1 point
+RT_BONUS_MAX = 5            # Review Tracker bonus capped at 5 pts (separate from CV)
 
-# COMBINED CAP: CV + Review Tracker cannot exceed 20 points per quarter
-CV_RT_COMBINED_MAX = 20     # Combined cap for CV + Review Tracker
+# CV is part of the base 100 weighted score (15% weight)
+# Review Tracker is a SEPARATE bonus on top (max 5 pts)
 
 # DAR Penalties
 DAR_WRITTEN_WARNING = -3
 DAR_SUSPENSION = -5
+
+
+# MAX SCORE BREAKDOWN:
+# Base Weighted: 100 pts (PPA 25 + LSC 25 + LBW 20 + Glass 15 + CV 15)
+# Metric Bonuses: 20 pts (PPA 5 + LSC 5 + LBW 5 + Glass 5)
+# Review Tracker Bonus: 5 pts
+# TOTAL MAX: 125 pts
 
 
 # ============================================================================
