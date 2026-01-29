@@ -538,26 +538,308 @@ def add_decorations(img: Image.Image, seasonal_theme: str, colors: Dict) -> Imag
     return Image.alpha_composite(img, overlay).convert('RGB')
 
 
+# ============================================================================
+# PREMIUM VISUAL EFFECTS (v3.0)
+# ============================================================================
+
+def draw_progress_ring(img: Image.Image, x: int, y: int, radius: int, 
+                       score: float, max_score: float, colors: Dict, 
+                       thickness: int = 12) -> Image.Image:
+    """Draw a circular progress ring with score."""
+    overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    
+    # Background ring
+    bg_color = hex_to_rgb(colors.get("text_muted", "#888888")) + (60,)
+    draw.ellipse([x - radius, y - radius, x + radius, y + radius], outline=bg_color, width=thickness)
+    
+    # Progress arc
+    pct = min(score / max_score, 1.0) if max_score > 0 else 0
+    if pct > 0:
+        end_angle = -90 + (360 * pct)
+        
+        # Determine color based on score
+        if pct >= 0.85:
+            ring_color = hex_to_rgb(colors.get("gold", "#FFD700"))
+        elif pct >= 0.70:
+            ring_color = hex_to_rgb(colors.get("secondary", "#3742FA"))
+        else:
+            ring_color = hex_to_rgb(colors.get("accent", "#FFA502"))
+        
+        draw.arc([x - radius, y - radius, x + radius, y + radius], 
+                 start=-90, end=end_angle, fill=ring_color + (255,), width=thickness)
+    
+    img = img.convert('RGBA')
+    return Image.alpha_composite(img, overlay).convert('RGB')
+
+
+def draw_glossy_badge(draw: ImageDraw.Draw, x: int, y: int, width: int, height: int,
+                      bg_color: str, text: str, text_color: str = "#FFFFFF"):
+    """Draw a glossy pill-shaped badge with ribbon effect."""
+    bg = hex_to_rgb(bg_color)
+    
+    # Main badge
+    draw.rounded_rectangle([x, y, x + width, y + height], radius=height//2, fill=bg)
+    
+    # Glossy highlight
+    highlight = tuple(min(c + 60, 255) for c in bg) + (80,)
+    draw.rounded_rectangle([x + 2, y + 2, x + width - 2, y + height//2], 
+                          radius=height//4, fill=highlight)
+    
+    # Text
+    font = get_font(height - 10, bold=True)
+    draw.text((x + width//2, y + height//2), text, font=font, 
+              fill=text_color, anchor="mm")
+
+
+def draw_card_with_shadow(img: Image.Image, bbox: Tuple[int, int, int, int], 
+                          colors: Dict, glow: bool = False) -> Image.Image:
+    """Draw a card with shadow and optional glow effect."""
+    overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    
+    x1, y1, x2, y2 = bbox
+    
+    # Shadow layers
+    shadow_color = (0, 0, 0)
+    for i in range(4, 0, -1):
+        shadow_bbox = [x1 + i*2, y1 + i*2, x2 + i*2, y2 + i*2]
+        draw.rounded_rectangle(shadow_bbox, radius=16, fill=shadow_color + (20,))
+    
+    # Glow effect for top performers
+    if glow:
+        glow_color = hex_to_rgb(colors.get("glow", "#00D9FF"))
+        for i in range(3, 0, -1):
+            glow_bbox = [x1 - i*3, y1 - i*3, x2 + i*3, y2 + i*3]
+            draw.rounded_rectangle(glow_bbox, radius=18, fill=glow_color + (15 * i,))
+    
+    # Main card
+    card_color = hex_to_rgb(colors.get("card_bg", "#1E3A5F"))
+    draw.rounded_rectangle(bbox, radius=16, fill=card_color + (240,))
+    
+    # Subtle border
+    border_color = hex_to_rgb(colors.get("secondary", "#3742FA"))
+    draw.rounded_rectangle(bbox, radius=16, outline=border_color + (100,), width=2)
+    
+    img = img.convert('RGBA')
+    return Image.alpha_composite(img, overlay).convert('RGB')
+
+
+def draw_geometric_decorations(img: Image.Image, colors: Dict) -> Image.Image:
+    """Add geometric decorative elements to background."""
+    overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    
+    primary = hex_to_rgb(colors.get("primary", "#E63946"))
+    secondary = hex_to_rgb(colors.get("secondary", "#1D8CC7"))
+    accent = hex_to_rgb(colors.get("accent", "#F4A261"))
+    
+    # Top right corner geometric shape
+    draw.polygon([(SLIDE_WIDTH - 200, 0), (SLIDE_WIDTH, 0), (SLIDE_WIDTH, 200)], 
+                 fill=primary + (25,))
+    draw.polygon([(SLIDE_WIDTH - 300, 0), (SLIDE_WIDTH, 0), (SLIDE_WIDTH, 300)], 
+                 fill=secondary + (15,))
+    
+    # Bottom left corner geometric shape
+    draw.polygon([(0, SLIDE_HEIGHT - 150), (0, SLIDE_HEIGHT), (150, SLIDE_HEIGHT)], 
+                 fill=accent + (25,))
+    draw.polygon([(0, SLIDE_HEIGHT - 250), (0, SLIDE_HEIGHT), (250, SLIDE_HEIGHT)], 
+                 fill=secondary + (15,))
+    
+    # Diagonal accent lines
+    for i in range(3):
+        y_offset = 120 + i * 25
+        draw.line([(0, y_offset), (400 - i*80, 0)], 
+                  fill=primary + (40 - i*10,), width=3)
+    
+    # Subtle grid pattern in corners
+    for x in range(SLIDE_WIDTH - 150, SLIDE_WIDTH, 30):
+        for y in range(0, 150, 30):
+            draw.ellipse([x-2, y-2, x+2, y+2], fill=(255, 255, 255, 20))
+    
+    for x in range(0, 150, 30):
+        for y in range(SLIDE_HEIGHT - 150, SLIDE_HEIGHT, 30):
+            draw.ellipse([x-2, y-2, x+2, y+2], fill=(255, 255, 255, 20))
+    
+    img = img.convert('RGBA')
+    return Image.alpha_composite(img, overlay).convert('RGB')
+
+
+def draw_premium_medal(img: Image.Image, x: int, y: int, rank: int, 
+                       colors: Dict, size: int = 70) -> Image.Image:
+    """Draw a premium 3D-style medal with glow effect."""
+    overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    
+    if rank == 1:
+        outer_color = hex_to_rgb(colors.get("gold", "#FFD700"))
+        inner_color = (255, 240, 150)
+        glow_color = (255, 215, 0)
+    elif rank == 2:
+        outer_color = hex_to_rgb(colors.get("silver", "#C0C0C0"))
+        inner_color = (220, 220, 230)
+        glow_color = (200, 200, 210)
+    elif rank == 3:
+        outer_color = hex_to_rgb(colors.get("bronze", "#CD7F32"))
+        inner_color = (230, 160, 100)
+        glow_color = (205, 127, 50)
+    else:
+        return img
+    
+    # Glow effect
+    for i in range(5, 0, -1):
+        glow_size = size + i * 8
+        draw.ellipse([x - glow_size//2, y - glow_size//2, 
+                      x + glow_size//2, y + glow_size//2], 
+                     fill=glow_color + (15 * i,))
+    
+    # Outer medal ring
+    draw.ellipse([x - size//2, y - size//2, x + size//2, y + size//2], 
+                 fill=outer_color + (255,))
+    
+    # Inner medal
+    inner_size = int(size * 0.75)
+    draw.ellipse([x - inner_size//2, y - inner_size//2, 
+                  x + inner_size//2, y + inner_size//2], 
+                 fill=inner_color + (255,))
+    
+    # 3D highlight
+    highlight_size = int(size * 0.5)
+    draw.ellipse([x - highlight_size//2 - 5, y - highlight_size//2 - 5, 
+                  x + highlight_size//2 - 10, y + highlight_size//2 - 10], 
+                 fill=(255, 255, 255, 80))
+    
+    # Rank number
+    font = get_font(size//2, bold=True)
+    draw.text((x, y + 3), str(rank), font=font, fill=(30, 30, 30, 255), anchor="mm")
+    
+    img = img.convert('RGBA')
+    return Image.alpha_composite(img, overlay).convert('RGB')
+
+
+# ============================================================================
+# SLIDE GENERATORS (v3.0 - Premium Styling)
+# ============================================================================
+
 def generate_top_10_slide(
     rankings: List[Dict[str, Any]], 
     quarter: str, 
     year: int,
-    theme: str = "dark_navy",
+    theme: str = "bubba_gump",
     custom_colors: Dict = None,
     custom_bg_image: str = None,
     seasonal_theme: str = None
 ) -> bytes:
-    """Generate clean, professional Top 10 Performers slide without emoji dependencies."""
+    """
+    Generate premium Top 10 Performers slide.
+    Sports leaderboard style with Bubba Gump branding.
+    """
     colors = get_theme_colors(theme, custom_colors, seasonal_theme)
     img = create_gradient_background(SLIDE_WIDTH, SLIDE_HEIGHT, colors)
+    
+    # Add geometric decorations
+    img = draw_geometric_decorations(img, colors)
+    
     draw = ImageDraw.Draw(img)
     
     # Fonts
-    font_title = get_font(64, bold=True)
-    font_subtitle = get_font(26)
-    font_rank = get_font(36, bold=True)
-    font_name = get_font(32, bold=True)
-    font_score = get_font(38, bold=True)
+    font_title = get_font(72, bold=True)
+    font_subtitle = get_font(24)
+    font_rank = get_font(32, bold=True)
+    font_name = get_font(30, bold=True)
+    font_score = get_font(36, bold=True)
+    font_tier = get_font(16, bold=True)
+    font_footer = get_font(16)
+    
+    # === HEADER SECTION ===
+    # Title with shadow effect
+    title = "TOP 10 PERFORMERS"
+    title_y = 45
+    draw.text((SLIDE_WIDTH//2 + 3, title_y + 3), title, font=font_title, 
+              fill=(0, 0, 0, 150), anchor="mt")
+    draw.text((SLIDE_WIDTH//2, title_y), title, font=font_title, 
+              fill=colors.get("primary", "#E63946"), anchor="mt")
+    
+    # Decorative underline
+    line_y = 115
+    primary_rgb = hex_to_rgb(colors.get("primary", "#E63946"))
+    secondary_rgb = hex_to_rgb(colors.get("secondary", "#1D8CC7"))
+    draw.rectangle([SLIDE_WIDTH//2 - 250, line_y, SLIDE_WIDTH//2 + 250, line_y + 4], 
+                   fill=primary_rgb)
+    draw.rectangle([SLIDE_WIDTH//2 - 150, line_y + 6, SLIDE_WIDTH//2 + 150, line_y + 8], 
+                   fill=secondary_rgb)
+    
+    # Subtitle
+    subtitle = f"{quarter} {year}  •  BUBBA GUMP SHRIMP CO.  •  LAS VEGAS"
+    draw.text((SLIDE_WIDTH//2, line_y + 25), subtitle, font=font_subtitle, 
+              fill=colors.get("text_muted", "#778DA9"), anchor="mt")
+    
+    # === LEADERBOARD SECTION ===
+    start_y = 170
+    row_height = 85
+    left_margin = 80
+    right_margin = 80
+    card_width = SLIDE_WIDTH - left_margin - right_margin
+    
+    for idx, emp in enumerate(rankings[:10]):
+        rank = idx + 1
+        y = start_y + idx * row_height
+        
+        # Draw card with shadow (glow for top 3)
+        card_bbox = (left_margin, y, SLIDE_WIDTH - right_margin, y + row_height - 8)
+        img = draw_card_with_shadow(img, card_bbox, colors, glow=(rank <= 3))
+        draw = ImageDraw.Draw(img)  # Refresh draw object
+        
+        # Medal for top 3
+        if rank <= 3:
+            img = draw_premium_medal(img, left_margin + 50, y + row_height//2 - 4, rank, colors, size=60)
+            draw = ImageDraw.Draw(img)
+            name_x = left_margin + 110
+        else:
+            # Rank number for others
+            rank_text = f"#{rank}"
+            draw.text((left_margin + 30, y + row_height//2 - 5), rank_text, 
+                      font=font_rank, fill=colors.get("text_muted", "#888"), anchor="lm")
+            name_x = left_margin + 100
+        
+        # Employee name
+        name = emp.get("name", "Unknown")
+        if len(name) > 18:
+            name = name[:17] + ".."
+        draw.text((name_x, y + row_height//2 - 5), name, font=font_name, 
+                  fill=colors.get("text_white", "#FFFFFF"), anchor="lm")
+        
+        # Tier badge (glossy pill)
+        tier = emp.get("tier_label", "A-Server")
+        tier_config = TIER_CONFIG.get(tier, TIER_CONFIG["A-Server"])
+        tier_x = 500
+        draw_glossy_badge(draw, tier_x, y + row_height//2 - 15, 100, 30, 
+                         tier_config["color"], tier, "#FFFFFF")
+        
+        # Score visualization - Progress Ring
+        score = emp.get("total_score", 0)
+        max_score = 130
+        ring_x = SLIDE_WIDTH - right_margin - 180
+        ring_y = y + row_height//2 - 4
+        img = draw_progress_ring(img, ring_x, ring_y, 28, score, max_score, colors, thickness=8)
+        draw = ImageDraw.Draw(img)
+        
+        # Score number
+        score_text = f"{score:.1f}"
+        score_color = colors.get("gold", "#FFD700") if rank <= 3 else colors.get("text_white", "#FFFFFF")
+        draw.text((SLIDE_WIDTH - right_margin - 40, y + row_height//2 - 5), 
+                  score_text, font=font_score, fill=score_color, anchor="rm")
+    
+    # === FOOTER ===
+    footer_y = SLIDE_HEIGHT - 40
+    footer_text = f"Generated {datetime.now().strftime('%m/%d/%Y')}  •  Performance Rankings  •  Max Score: 130"
+    draw.text((SLIDE_WIDTH//2, footer_y), footer_text, font=font_footer, 
+              fill=colors.get("text_muted", "#778DA9"), anchor="mm")
+    
+    buffer = io.BytesIO()
+    img.save(buffer, format='PNG', optimize=True)
+    buffer.seek(0)
+    return buffer.getvalue()
     font_tier = get_font(18, bold=True)
     font_footer = get_font(18)
     
