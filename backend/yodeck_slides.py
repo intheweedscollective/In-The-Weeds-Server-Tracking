@@ -862,9 +862,9 @@ def generate_complete_rankings_slide(
     total_employees = len(rankings)
     
     # Calculate row height based on employee count to fit all on one slide
-    header_height = 120
+    header_height = 110
     footer_height = 40
-    table_header_height = 45
+    table_header_height = 50  # Larger header for column names
     available_height = SLIDE_HEIGHT - header_height - footer_height - table_header_height
     row_height = min(38, max(24, available_height // total_employees))
     
