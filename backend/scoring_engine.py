@@ -26,10 +26,11 @@ CV_PROMOTER_POINTS = 1      # Score 9-10
 CV_PASSIVE_POINTS = 0       # Score 7-8
 CV_DETRACTOR_POINTS = -2    # Score 6 or below
 CV_MIN_POINTS = -6          # Quarterly floor for negative
+CV_MAX_POINTS = 10          # Quarterly cap for positive
 
 # Review Tracker
 RT_MENTIONS_PER_POINT = 5   # Every 5 positive mentions = +1 point
-RT_BONUS_MAX = 5            # Review Tracker bonus capped at 5 pts (separate from CV)
+RT_BONUS_MAX = 10           # Review Tracker bonus capped at 10 pts
 
 # CV is part of the base 100 weighted score (15% weight)
 # Review Tracker is a SEPARATE bonus on top (max 5 pts)
