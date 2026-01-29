@@ -937,14 +937,22 @@ def generate_complete_rankings_slide(
     table_y = header_height
     x = left_margin
     
-    # Header background
+    # Header background - make it more prominent
     draw.rectangle([left_margin, table_y, SLIDE_WIDTH - left_margin, table_y + table_header_height], 
                    fill=header_bg)
     
-    # Header text
+    # Add a subtle bottom border to header
+    draw.rectangle([left_margin, table_y + table_header_height - 3, SLIDE_WIDTH - left_margin, table_y + table_header_height], 
+                   fill=hex_to_rgb(colors.get("accent", "#F4A261")))
+    
+    # Header text - larger and bolder
+    font_header_large = get_font(font_header_size + 2, bold=True)
     for label, width, key, fmt in columns:
+        # Shadow for better visibility
+        draw.text((x + width//2 + 1, table_y + table_header_height//2 + 1), label, 
+                  font=font_header_large, fill=(0, 0, 0, 100), anchor="mm")
         draw.text((x + width//2, table_y + table_header_height//2), label, 
-                  font=font_header, fill="#FFFFFF", anchor="mm")
+                  font=font_header_large, fill="#FFFFFF", anchor="mm")
         x += width
     
     # === DATA ROWS ===
