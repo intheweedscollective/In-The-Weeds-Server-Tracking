@@ -404,7 +404,7 @@ def calculate_customer_voice_score(employee: EmployeeV2) -> EmployeeV2:
     raw_points = promoter_points + passive_points + detractor_points
     employee.cv_raw_points = round(raw_points, 2)
     
-    # Apply minimum floor only (combined cap applied in calculate_combined_cv_rt)
+    # Apply minimum floor only (no cap - CV is part of base weighted score)
     capped_score = max(CV_MIN_POINTS, raw_points)
     employee.cv_score = round(capped_score, 2)
     
@@ -416,12 +416,13 @@ def calculate_review_tracker_bonus(employee: EmployeeV2) -> EmployeeV2:
     Calculate Review Tracker bonus from external platform mentions.
     
     - Every 5 positive named mentions = +1 bonus point
+    - Capped at 5 points max (separate from CV)
     - No negative penalties from external platforms
-    - Combined cap with CV applied in calculate_combined_cv_rt
     """
     if employee.review_mentions > 0:
         bonus = employee.review_mentions // RT_MENTIONS_PER_POINT
-        employee.review_tracker_bonus = round(bonus, 2)
+        # Cap at RT_BONUS_MAX (5 pts)
+        employee.review_tracker_bonus = round(min(bonus, RT_BONUS_MAX), 2)
     else:
         employee.review_tracker_bonus = 0
     
@@ -430,30 +431,13 @@ def calculate_review_tracker_bonus(employee: EmployeeV2) -> EmployeeV2:
 
 def calculate_combined_cv_rt(employee: EmployeeV2) -> EmployeeV2:
     """
-    Apply combined cap for CV + Review Tracker.
+    Store combined CV + Review Tracker for reference.
     
-    Per quarter, the employee cannot exceed 20 points total
-    between CV and Review Tracker combined.
+    Note: CV is part of base score (15% weight), 
+    Review Tracker is a separate bonus (max 5 pts).
+    No combined cap - they are independent.
     """
-    cv_points = employee.cv_score or 0
-    rt_points = employee.review_tracker_bonus or 0
-    
-    combined = cv_points + rt_points
-    
-    # Apply combined cap of 20 points max
-    if combined > CV_RT_COMBINED_MAX:
-        # Reduce proportionally if over cap
-        excess = combined - CV_RT_COMBINED_MAX
-        # Reduce review tracker first (since CV can be negative)
-        if rt_points >= excess:
-            employee.review_tracker_bonus = round(rt_points - excess, 2)
-        else:
-            # Reduce CV if review tracker isn't enough
-            employee.review_tracker_bonus = 0
-            remaining_excess = excess - rt_points
-            employee.cv_score = round(cv_points - remaining_excess, 2)
-    
-    # Store combined score for reference
+    # Store combined score for reference (no capping needed)
     employee.cv_rt_combined = round(
         (employee.cv_score or 0) + (employee.review_tracker_bonus or 0), 2
     )
