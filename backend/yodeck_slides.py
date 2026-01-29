@@ -845,7 +845,6 @@ def generate_tier_slide(
     
     tier_config = TIER_CONFIG.get(tier_name, TIER_CONFIG["A-Server"])
     tier_color = tier_config["color"]
-    tier_icon = tier_config.get("icon", "⭐")
     
     # Fonts
     font_title = get_font(64, bold=True)
@@ -856,8 +855,8 @@ def generate_tier_slide(
     font_score = get_font(36, bold=True)
     font_metric = get_font(20)
     
-    # Header with icon
-    title = f"{tier_icon} {tier_name.upper()} RANKINGS {tier_icon}"
+    # Header - clean without emojis
+    title = f"{tier_name.upper()} RANKINGS"
     draw.text((SLIDE_WIDTH//2 + 2, 37), title, font=font_title, fill=(0, 0, 0, 80), anchor="mt")
     draw.text((SLIDE_WIDTH//2, 35), title, font=font_title, fill=tier_color, anchor="mt")
     
