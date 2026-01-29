@@ -948,12 +948,14 @@ def generate_complete_rankings_slide(
         x += width
     
     # === DATA ROWS ===
-    tier_colors = {
-        "Trainer": "#A855F7",
-        "Bartender": "#3B82F6", 
-        "A-Server": "#22C55E",
-        "B-Server": "#EAB308",
-        "C-Server": "#EF4444",
+    # Map job_title to display names and colors
+    tier_display = {
+        "trainer": ("Trainer", "#A855F7"),
+        "bartender": ("Bartender", "#3B82F6"),
+        "server": ("Server", "#22C55E"),
+        "a-server": ("A-Server", "#22C55E"),
+        "b-server": ("B-Server", "#EAB308"),
+        "c-server": ("C-Server", "#EF4444"),
     }
     
     data_start_y = table_y + table_header_height
