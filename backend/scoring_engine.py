@@ -546,14 +546,26 @@ def calculate_total_score(employee: EmployeeV2, settings: QuarterSettings) -> Em
                   + Review Tracker Bonus 
                   + Metric Bonuses
                   - DAR Penalties
+    
+    Each metric score is CAPPED at 100 before weighting.
+    Bonuses are added on top of the capped weighted score.
     """
-    # Calculate weighted score from all 5 metrics
+    # Cap each metric score at 100 before applying weight
+    # This ensures each category has a max contribution:
+    # PPA: 25 pts, LSC: 25 pts, LBW: 20 pts, Glass: 15 pts, CV: 15 pts = 100 base
+    capped_ppa = min((employee.score_ppa or 0), 100)
+    capped_lbw = min((employee.score_lbw or 0), 100)
+    capped_glass = min((employee.score_glass or 0), 100)
+    capped_lsc = min((employee.score_lsc or 0), 100)
+    capped_cv = min((employee.score_cv or 0), 100)
+    
+    # Calculate weighted score from capped metrics
     employee.weighted_score = round(
-        (employee.score_ppa or 0) * settings.weight_ppa +
-        (employee.score_lbw or 0) * settings.weight_lbw +
-        (employee.score_glass or 0) * settings.weight_glass +
-        (employee.score_lsc or 0) * settings.weight_lsc +
-        (employee.score_cv or 0) * settings.weight_cv,
+        capped_ppa * settings.weight_ppa +
+        capped_lbw * settings.weight_lbw +
+        capped_glass * settings.weight_glass +
+        capped_lsc * settings.weight_lsc +
+        capped_cv * settings.weight_cv,
         2
     )
     
