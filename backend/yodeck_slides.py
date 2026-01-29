@@ -899,6 +899,11 @@ def generate_complete_rankings_slide(
     text_white = colors.get("text_white", "#FFFFFF")
     text_muted = colors.get("text_muted", "#778DA9")
     
+    # Progress bar colors (red/yellow/green)
+    bar_red = "#EF4444"      # Low performance
+    bar_yellow = "#EAB308"   # Medium performance  
+    bar_green = "#22C55E"    # High performance
+    
     # === HEADER ===
     title = f"COMPLETE RANKINGS - {quarter} {year}"
     draw.text((SLIDE_WIDTH//2, 35), title, font=font_title, fill=primary, anchor="mt")
@@ -912,7 +917,7 @@ def generate_complete_rankings_slide(
     columns = [
         ("RANK", 60, "peer_rank", "rank"),
         ("EMPLOYEE", 160, "name", "text"),
-        ("TIER", 90, "tier_label", "tier"),
+        ("TIER", 90, "job_title", "tier"),  # Use job_title field
         ("TOTAL", 70, "total_score", "score"),
         ("PPA (25%)", 110, "score_ppa", "metric"),
         ("LBW (20%)", 110, "score_lbw", "metric"),
