@@ -158,8 +158,8 @@ class QuarterSettings(BaseModel):
     # === BENCHMARKS (editable before lock) ===
     benchmark_ppa: float = 55.0
     benchmark_lbw: float = 8.0
-    benchmark_glass: float = 1.0
-    benchmark_lsc: float = 100.0  # Guests per LSC (lower is better)
+    benchmark_glass: float = 1.25  # Per handout: $1.25 per person
+    benchmark_lsc: float = 100.0   # Guests per LSC (lower is better)
     benchmark_cv: float = 5.0     # Expected CV score (baseline for normalization)
     
     # === METRIC WEIGHTS (must sum to 1.0) - Q1 2026 Official ===
