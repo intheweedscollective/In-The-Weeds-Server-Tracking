@@ -12,6 +12,7 @@ const API = `${BACKEND_URL}/api`;
 
 // Pre-built theme previews
 const THEME_PREVIEWS = {
+  bubba_gump: { bg: "#0D1B2A", text: "#FFFFFF", accent: "#E63946", name: "Bubba Gump (Recommended)", featured: true },
   dark_navy: { bg: "#0A1628", text: "#FFFFFF", accent: "#FF4757", name: "Dark Navy" },
   light_corporate: { bg: "#F0F4F8", text: "#1A202C", accent: "#E53E3E", name: "Light Corporate" },
   bubba_red: { bg: "#7F1D1D", text: "#FFFFFF", accent: "#FCD34D", name: "Bubba Red" },
