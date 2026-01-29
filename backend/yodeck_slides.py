@@ -852,204 +852,243 @@ def generate_complete_rankings_slide(
     seasonal_theme: str = None
 ) -> bytes:
     """
-    Generate premium complete rankings slide showing ALL employees.
-    Multi-column layout with card-based design.
+    Generate a full-width table-style rankings slide showing ALL employees
+    with all metric scores displayed - like the Rankings tab.
     """
     colors = get_theme_colors(theme, custom_colors, seasonal_theme)
     img = create_gradient_background(SLIDE_WIDTH, SLIDE_HEIGHT, colors)
-    
-    # Add subtle geometric decorations
-    img = draw_geometric_decorations(img, colors)
-    
     draw = ImageDraw.Draw(img)
     
     total_employees = len(rankings)
     
-    # Dynamic layout based on employee count
-    if total_employees <= 15:
-        columns = 2
-        row_height = 55
-        font_name_size = 22
-        font_score_size = 20
-        font_rank_size = 18
-    elif total_employees <= 24:
-        columns = 3
-        row_height = 48
-        font_name_size = 18
-        font_score_size = 16
-        font_rank_size = 16
-    elif total_employees <= 36:
-        columns = 3
-        row_height = 38
-        font_name_size = 16
-        font_score_size = 14
-        font_rank_size = 14
-    else:
-        columns = 4
-        row_height = 32
-        font_name_size = 14
-        font_score_size = 12
-        font_rank_size = 12
+    # Calculate row height based on employee count to fit all on one slide
+    header_height = 120
+    footer_height = 40
+    table_header_height = 45
+    available_height = SLIDE_HEIGHT - header_height - footer_height - table_header_height
+    row_height = min(38, max(24, available_height // total_employees))
     
-    font_title = get_font(60, bold=True)
-    font_subtitle = get_font(22)
-    font_name = get_font(font_name_size, bold=True)
-    font_score = get_font(font_score_size, bold=True)
-    font_rank = get_font(font_rank_size, bold=True)
-    font_tier = get_font(max(10, font_rank_size - 4), bold=True)
-    font_legend = get_font(13)
+    # Font sizes based on row height
+    if row_height >= 34:
+        font_header_size = 16
+        font_data_size = 15
+        font_score_size = 14
+    elif row_height >= 28:
+        font_header_size = 14
+        font_data_size = 13
+        font_score_size = 12
+    else:
+        font_header_size = 12
+        font_data_size = 11
+        font_score_size = 10
+    
+    font_title = get_font(48, bold=True)
+    font_subtitle = get_font(18)
+    font_header = get_font(font_header_size, bold=True)
+    font_data = get_font(font_data_size)
+    font_data_bold = get_font(font_data_size, bold=True)
+    font_score = get_font(font_score_size)
+    font_footer = get_font(12)
+    
+    # Colors
+    primary = colors.get("primary", "#E63946")
+    secondary = colors.get("secondary", "#1D8CC7")
+    header_bg = hex_to_rgb(primary)
+    row_bg_odd = hex_to_rgb(colors.get("card_bg", "#1E3A5F")) + (180,)
+    row_bg_even = hex_to_rgb(colors.get("background_gradient", "#1A2744")) + (120,)
+    text_white = colors.get("text_white", "#FFFFFF")
+    text_muted = colors.get("text_muted", "#778DA9")
     
     # === HEADER ===
-    title = "COMPLETE RANKINGS"
-    title_y = 35
-    draw.text((SLIDE_WIDTH//2 + 3, title_y + 3), title, font=font_title, 
-              fill=(0, 0, 0, 150), anchor="mt")
-    draw.text((SLIDE_WIDTH//2, title_y), title, font=font_title, 
-              fill=colors.get("primary", "#E63946"), anchor="mt")
+    title = f"COMPLETE RANKINGS - {quarter} {year}"
+    draw.text((SLIDE_WIDTH//2, 35), title, font=font_title, fill=primary, anchor="mt")
     
-    # Decorative underlines
-    line_y = 95
-    primary_rgb = hex_to_rgb(colors.get("primary", "#E63946"))
-    secondary_rgb = hex_to_rgb(colors.get("secondary", "#1D8CC7"))
-    draw.rectangle([SLIDE_WIDTH//2 - 200, line_y, SLIDE_WIDTH//2 + 200, line_y + 3], fill=primary_rgb)
-    draw.rectangle([SLIDE_WIDTH//2 - 120, line_y + 5, SLIDE_WIDTH//2 + 120, line_y + 7], fill=secondary_rgb)
+    subtitle = f"All {total_employees} Team Members • Full Metric Breakdown • Max Score: 130"
+    draw.text((SLIDE_WIDTH//2, 85), subtitle, font=font_subtitle, fill=text_muted, anchor="mt")
     
-    # Subtitle
-    subtitle = f"{quarter} {year}  •  ALL {total_employees} TEAM MEMBERS  •  TOP TO BOTTOM"
-    draw.text((SLIDE_WIDTH//2, line_y + 18), subtitle, font=font_subtitle, 
-              fill=colors.get("text_muted", "#778DA9"), anchor="mt")
+    # === TABLE STRUCTURE ===
+    # Column definitions: (label, width, key, format)
+    left_margin = 30
+    columns = [
+        ("RANK", 60, "peer_rank", "rank"),
+        ("EMPLOYEE", 160, "name", "text"),
+        ("TIER", 90, "tier_label", "tier"),
+        ("TOTAL", 70, "total_score", "score"),
+        ("PPA (25%)", 110, "score_ppa", "metric"),
+        ("LBW (20%)", 110, "score_lbw", "metric"),
+        ("LSC (25%)", 110, "score_lsc", "metric"),
+        ("GLASS (15%)", 110, "score_glass", "metric"),
+        ("CV (15%)", 90, "score_cv", "metric"),
+        ("BONUS", 70, "total_metric_bonus", "bonus"),
+    ]
     
-    # === CONTENT AREA ===
-    header_height = 140
-    footer_height = 50
-    content_height = SLIDE_HEIGHT - header_height - footer_height
-    rows_per_col = math.ceil(total_employees / columns)
-    actual_row_height = min(row_height, content_height // rows_per_col)
+    # Adjust column widths to fit slide
+    total_width = sum(c[1] for c in columns)
+    available_width = SLIDE_WIDTH - left_margin * 2
+    scale = available_width / total_width
+    columns = [(c[0], int(c[1] * scale), c[2], c[3]) for c in columns]
     
-    col_width = (SLIDE_WIDTH - 100) // columns
-    col_margin = 50
+    # === TABLE HEADER ROW ===
+    table_y = header_height
+    x = left_margin
     
-    # Tier configuration
-    tier_colors_map = {
+    # Header background
+    draw.rectangle([left_margin, table_y, SLIDE_WIDTH - left_margin, table_y + table_header_height], 
+                   fill=header_bg)
+    
+    # Header text
+    for label, width, key, fmt in columns:
+        draw.text((x + width//2, table_y + table_header_height//2), label, 
+                  font=font_header, fill="#FFFFFF", anchor="mm")
+        x += width
+    
+    # === DATA ROWS ===
+    tier_colors = {
         "Trainer": "#A855F7",
-        "Bartender": "#3B82F6",
+        "Bartender": "#3B82F6", 
         "A-Server": "#22C55E",
         "B-Server": "#EAB308",
         "C-Server": "#EF4444",
     }
-    tier_abbrev = {"Trainer": "T", "Bartender": "BAR", "A-Server": "A", "B-Server": "B", "C-Server": "C"}
     
-    # Draw employees
+    data_start_y = table_y + table_header_height
+    
     for idx, emp in enumerate(rankings):
-        col = idx // rows_per_col
-        row = idx % rows_per_col
+        y = data_start_y + idx * row_height
         
-        x_base = col_margin + col * col_width
-        y = header_height + row * actual_row_height
+        # Stop if we run out of space
+        if y + row_height > SLIDE_HEIGHT - footer_height:
+            break
         
-        rank = idx + 1
-        name = emp.get("name", "Unknown")
-        score = emp.get("total_score", 0)
-        tier = emp.get("tier_label", "A-Server")
+        # Alternating row background
+        row_bg = row_bg_odd if idx % 2 == 0 else row_bg_even
         
-        # Truncate name
-        max_name_len = 12 if columns >= 4 else (14 if columns >= 3 else 18)
-        display_name = name[:max_name_len] + ".." if len(name) > max_name_len else name
+        # Highlight top 3
+        if idx < 3:
+            medal_colors = {
+                0: hex_to_rgb(colors.get("gold", "#FFD700")) + (50,),
+                1: hex_to_rgb(colors.get("silver", "#C0C0C0")) + (40,),
+                2: hex_to_rgb(colors.get("bronze", "#CD7F32")) + (40,),
+            }
+            row_bg = medal_colors[idx]
         
-        # Draw row card for top 3 (with glow)
-        if rank <= 3:
-            card_bbox = (x_base - 5, y, x_base + col_width - 25, y + actual_row_height - 4)
-            medal_colors = {1: colors.get("gold"), 2: colors.get("silver"), 3: colors.get("bronze")}
-            glow_rgb = hex_to_rgb(medal_colors[rank])
+        # Draw row background
+        overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
+        row_draw = ImageDraw.Draw(overlay)
+        row_draw.rectangle([left_margin, y, SLIDE_WIDTH - left_margin, y + row_height - 1], fill=row_bg)
+        img = Image.alpha_composite(img.convert('RGBA'), overlay).convert('RGB')
+        draw = ImageDraw.Draw(img)
+        
+        # Draw cell data
+        x = left_margin
+        for label, width, key, fmt in columns:
+            cell_center_x = x + width // 2
+            cell_center_y = y + row_height // 2
             
-            # Glow effect
-            overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
-            glow_draw = ImageDraw.Draw(overlay)
-            for i in range(3, 0, -1):
-                glow_bbox = [card_bbox[0] - i*2, card_bbox[1] - i*2, 
-                            card_bbox[2] + i*2, card_bbox[3] + i*2]
-                glow_draw.rounded_rectangle(glow_bbox, radius=8, fill=glow_rgb + (20 * i,))
-            img = Image.alpha_composite(img.convert('RGBA'), overlay).convert('RGB')
-            draw = ImageDraw.Draw(img)
+            value = emp.get(key, 0)
             
-            # Card background
-            bg_rgb = hex_to_rgb(medal_colors[rank]) + (40,)
-            draw.rounded_rectangle(card_bbox, radius=6, fill=bg_rgb)
+            if fmt == "rank":
+                # Rank with medal indicator for top 3
+                rank = idx + 1
+                if rank == 1:
+                    text_color = colors.get("gold", "#FFD700")
+                elif rank == 2:
+                    text_color = colors.get("silver", "#C0C0C0")
+                elif rank == 3:
+                    text_color = colors.get("bronze", "#CD7F32")
+                else:
+                    text_color = text_white
+                draw.text((cell_center_x, cell_center_y), f"#{rank}", 
+                          font=font_data_bold, fill=text_color, anchor="mm")
+            
+            elif fmt == "text":
+                # Employee name
+                name = str(value) if value else "Unknown"
+                if len(name) > 18:
+                    name = name[:17] + ".."
+                draw.text((x + 10, cell_center_y), name, 
+                          font=font_data_bold, fill=text_white, anchor="lm")
+            
+            elif fmt == "tier":
+                # Tier badge
+                tier = str(value) if value else "A-Server"
+                tier_color = tier_colors.get(tier, "#888888")
+                badge_width = width - 20
+                badge_height = row_height - 10
+                badge_x = x + 10
+                badge_y = y + 5
+                
+                draw.rounded_rectangle([badge_x, badge_y, badge_x + badge_width, badge_y + badge_height], 
+                                      radius=badge_height//2, fill=tier_color)
+                
+                # Abbreviate tier name
+                tier_abbrev = {"Trainer": "Trainer", "Bartender": "Bartender", 
+                              "A-Server": "A-Server", "B-Server": "B-Server", "C-Server": "C-Server"}
+                tier_text = tier_abbrev.get(tier, tier)
+                if badge_width < 80:
+                    tier_text = {"Trainer": "T", "Bartender": "BAR", "A-Server": "A", 
+                                "B-Server": "B", "C-Server": "C"}.get(tier, tier[0])
+                draw.text((badge_x + badge_width//2, badge_y + badge_height//2), tier_text,
+                          font=get_font(font_score_size, bold=True), fill="#FFFFFF", anchor="mm")
+            
+            elif fmt == "score":
+                # Total score (prominent)
+                score = float(value) if value else 0
+                if idx < 3:
+                    score_color = colors.get("gold", "#FFD700")
+                else:
+                    score_color = text_white
+                draw.text((cell_center_x, cell_center_y), f"{score:.1f}", 
+                          font=font_data_bold, fill=score_color, anchor="mm")
+            
+            elif fmt == "metric":
+                # Metric score with mini progress bar
+                score = float(value) if value else 0
+                max_metric = 100
+                
+                # Score text
+                score_text = f"{score:.1f}"
+                draw.text((cell_center_x, cell_center_y - 5), score_text, 
+                          font=font_score, fill=text_white, anchor="mm")
+                
+                # Mini progress bar
+                bar_width = width - 30
+                bar_height = 4
+                bar_x = x + 15
+                bar_y = cell_center_y + 8
+                
+                # Bar background
+                draw.rectangle([bar_x, bar_y, bar_x + bar_width, bar_y + bar_height], 
+                              fill=hex_to_rgb(text_muted) + (80,))
+                
+                # Bar fill
+                fill_pct = min(score / max_metric, 1.0)
+                if fill_pct > 0:
+                    fill_width = int(bar_width * fill_pct)
+                    bar_color = colors.get("gold", "#FFD700") if score >= 100 else colors.get("secondary", "#1D8CC7")
+                    draw.rectangle([bar_x, bar_y, bar_x + fill_width, bar_y + bar_height], fill=bar_color)
+            
+            elif fmt == "bonus":
+                # Bonus points
+                bonus = float(value) if value else 0
+                if bonus > 0:
+                    bonus_color = colors.get("accent", "#F4A261")
+                    draw.text((cell_center_x, cell_center_y), f"+{bonus:.1f}", 
+                              font=font_data, fill=bonus_color, anchor="mm")
+                else:
+                    draw.text((cell_center_x, cell_center_y), "-", 
+                              font=font_data, fill=text_muted, anchor="mm")
+            
+            x += width
         
-        x_pos = x_base + 5
-        
-        # Rank with medal color for top 3
-        if rank == 1:
-            rank_color = colors.get("gold", "#FFD700")
-        elif rank == 2:
-            rank_color = colors.get("silver", "#C0C0C0")
-        elif rank == 3:
-            rank_color = colors.get("bronze", "#CD7F32")
-        else:
-            rank_color = colors.get("text_muted", "#888888")
-        
-        rank_text = f"#{rank}"
-        draw.text((x_pos, y + actual_row_height//2 - 2), rank_text, 
-                  font=font_rank, fill=rank_color, anchor="lm")
-        x_pos += 45 if columns <= 2 else 35
-        
-        # Tier badge (small glossy pill)
-        tier_color = tier_colors_map.get(tier, "#888888")
-        tier_letter = tier_abbrev.get(tier, "?")
-        badge_w = 26 if columns <= 2 else 22
-        badge_h = actual_row_height - 16
-        
-        # Glossy badge
-        tier_rgb = hex_to_rgb(tier_color)
-        draw.rounded_rectangle([x_pos, y + 6, x_pos + badge_w, y + 6 + badge_h], 
-                              radius=badge_h//2, fill=tier_rgb)
-        # Highlight
-        highlight = tuple(min(c + 60, 255) for c in tier_rgb) + (60,)
-        draw.rounded_rectangle([x_pos + 2, y + 7, x_pos + badge_w - 2, y + 6 + badge_h//2], 
-                              radius=badge_h//4, fill=highlight)
-        draw.text((x_pos + badge_w//2, y + 6 + badge_h//2), tier_letter, 
-                  font=font_tier, fill="#FFFFFF", anchor="mm")
-        x_pos += badge_w + 8
-        
-        # Name
-        draw.text((x_pos, y + actual_row_height//2 - 2), display_name, 
-                  font=font_name, fill=colors.get("text_white", "#FFFFFF"), anchor="lm")
-        
-        # Score (right-aligned)
-        score_text = f"{score:.1f}"
-        score_color = colors.get("gold") if rank <= 3 else colors.get("text_light", "#E8EEF7")
-        score_x = x_base + col_width - 30
-        draw.text((score_x, y + actual_row_height//2 - 2), score_text, 
-                  font=font_score, fill=score_color, anchor="rm")
+        # Row separator line
+        draw.line([(left_margin, y + row_height - 1), (SLIDE_WIDTH - left_margin, y + row_height - 1)], 
+                  fill=hex_to_rgb(text_muted) + (40,), width=1)
     
-    # === FOOTER LEGEND ===
-    footer_y = SLIDE_HEIGHT - 42
-    
-    legend_items = [
-        ("T", "Trainer", "#A855F7"),
-        ("BAR", "Bartender", "#3B82F6"),
-        ("A", "A-Server", "#22C55E"),
-        ("B", "B-Server", "#EAB308"),
-        ("C", "C-Server", "#EF4444"),
-    ]
-    
-    legend_x = 100
-    for abbr, label, color in legend_items:
-        # Mini glossy badge
-        badge_rgb = hex_to_rgb(color)
-        draw.rounded_rectangle([legend_x, footer_y, legend_x + 24, footer_y + 18], 
-                              radius=9, fill=badge_rgb)
-        draw.text((legend_x + 12, footer_y + 9), abbr, 
-                  font=get_font(10, bold=True), fill="#FFFFFF", anchor="mm")
-        legend_x += 28
-        draw.text((legend_x, footer_y + 2), f"= {label}", font=font_legend, 
-                  fill=colors.get("text_muted", "#778DA9"))
-        legend_x += 85
-    
-    # Date
-    date_text = f"Generated {datetime.now().strftime('%m/%d/%Y')}  •  Max: 130 pts"
-    draw.text((SLIDE_WIDTH - 100, footer_y + 2), date_text, font=font_legend, 
-              fill=colors.get("text_muted", "#778DA9"), anchor="rt")
+    # === FOOTER ===
+    footer_y = SLIDE_HEIGHT - footer_height + 5
+    footer_text = f"Generated {datetime.now().strftime('%m/%d/%Y')} • Bubba Gump Shrimp Co. Las Vegas • Performance Rankings"
+    draw.text((SLIDE_WIDTH//2, footer_y), footer_text, font=font_footer, fill=text_muted, anchor="mt")
     
     buffer = io.BytesIO()
     img.save(buffer, format='PNG', optimize=True)
