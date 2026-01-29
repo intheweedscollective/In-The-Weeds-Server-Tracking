@@ -1,7 +1,10 @@
 """
-Yodeck Slide Generator v2.0
+Yodeck Slide Generator v3.0
 Generates 16:9 (1920x1080) PNG slides for digital signage.
-Premium Vegas-style design - bold, vibrant, eye-catching.
+Bubba Gump Brand + Sports Leaderboard Style
+- Vibrant red/blue colors with tropical accents
+- ESPN-style rankings with dynamic energy
+- Geometric patterns, glow effects, card-based layouts
 """
 import io
 from typing import List, Dict, Any, Tuple, Optional
@@ -18,7 +21,7 @@ import random
 SLIDE_WIDTH = 1920
 SLIDE_HEIGHT = 1080
 
-# Premium themes with more vibrant colors
+# Premium themes - Bubba Gump Brand + Sports Energy
 THEMES = {
     "dark_navy": {
         "background": "#0A1628",
@@ -34,6 +37,22 @@ THEMES = {
         "silver": "#C0C0C0",
         "bronze": "#CD7F32",
         "glow": "#00D9FF",
+    },
+    "bubba_gump": {
+        "background": "#0D1B2A",
+        "background_gradient": "#1B263B",
+        "card_bg": "#1B3A4B",
+        "primary": "#E63946",      # Bubba Gump Red
+        "secondary": "#1D8CC7",    # Ocean Blue
+        "accent": "#F4A261",       # Tropical Orange
+        "tropical": "#2A9D8F",     # Teal accent
+        "text_white": "#FFFFFF",
+        "text_light": "#E8EEF7",
+        "text_muted": "#778DA9",
+        "gold": "#FFD700",
+        "silver": "#B8C5D6",
+        "bronze": "#E76F51",
+        "glow": "#00D4FF",
     },
     "light_corporate": {
         "background": "#F0F4F8",
