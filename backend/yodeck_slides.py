@@ -941,18 +941,19 @@ def generate_complete_rankings_slide(
     
     header_y = title_height
     
-    # Header background - VERY BRIGHT RED
+    # Header background - VERY BRIGHT RED (override theme to ensure visibility)
+    bright_red = (220, 38, 38)  # Tailwind red-600
     draw.rectangle([left_margin, header_y, SLIDE_WIDTH - left_margin, header_y + column_header_height], 
-                   fill=hex_to_rgb(primary))
+                   fill=bright_red)
     
     # Add gradient shine effect at top of header
-    for i in range(10):
-        alpha = 80 - i * 8
+    for i in range(12):
+        alpha = 100 - i * 8
         draw.line([(left_margin, header_y + i), (SLIDE_WIDTH - left_margin, header_y + i)], 
                   fill=(255, 255, 255, alpha), width=1)
     
     # Column header text - VERY LARGE WHITE TEXT with strong shadow
-    font_col_header_big = get_font(20, bold=True)  # Even bigger
+    font_col_header_big = get_font(22, bold=True)  # Even bigger
     x = left_margin
     for label, width in columns:
         # Add percentage labels for metrics
