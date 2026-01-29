@@ -43,8 +43,8 @@ DAR_SUSPENSION = -5
 # MAX SCORE BREAKDOWN:
 # Base Weighted: 100 pts (PPA 25 + LSC 25 + LBW 20 + Glass 15 + CV 15)
 # Metric Bonuses: 20 pts (PPA 5 + LSC 5 + LBW 5 + Glass 5)
-# Review Tracker Bonus: 5 pts
-# TOTAL MAX: 125 pts
+# Review Tracker Bonus: 10 pts (1 pt per 5 mentions, max 10)
+# TOTAL MAX: 130 pts
 
 
 # ============================================================================
