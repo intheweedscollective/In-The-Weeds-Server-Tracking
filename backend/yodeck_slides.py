@@ -919,7 +919,7 @@ def generate_complete_rankings_slide(
     subtitle = f"{quarter} {year} • {total_employees} Team Members • Max Score: 130"
     draw.text((SLIDE_WIDTH//2, 60), subtitle, font=font_subtitle, fill=text_muted, anchor="mt")
     
-    # === COLUMN HEADERS (PROMINENT) ===
+    # === COLUMN HEADERS (VERY PROMINENT) ===
     left_margin = 25
     columns = [
         ("#", 45),
@@ -941,11 +941,18 @@ def generate_complete_rankings_slide(
     
     header_y = title_height
     
-    # Header background - BRIGHT AND PROMINENT
+    # Header background - VERY BRIGHT RED
     draw.rectangle([left_margin, header_y, SLIDE_WIDTH - left_margin, header_y + column_header_height], 
                    fill=hex_to_rgb(primary))
     
-    # Column header text - LARGE WHITE TEXT
+    # Add gradient shine effect at top of header
+    for i in range(10):
+        alpha = 80 - i * 8
+        draw.line([(left_margin, header_y + i), (SLIDE_WIDTH - left_margin, header_y + i)], 
+                  fill=(255, 255, 255, alpha), width=1)
+    
+    # Column header text - VERY LARGE WHITE TEXT with strong shadow
+    font_col_header_big = get_font(20, bold=True)  # Even bigger
     x = left_margin
     for label, width in columns:
         # Add percentage labels for metrics
@@ -961,16 +968,16 @@ def generate_complete_rankings_slide(
         elif label == "CV":
             display_label = "CV (15%)"
         
-        # Shadow for depth
-        draw.text((x + width//2 + 1, header_y + column_header_height//2 + 1), display_label, 
-                  font=font_col_header, fill=(0, 0, 0, 120), anchor="mm")
-        # Main text
+        # Strong shadow for depth
+        draw.text((x + width//2 + 2, header_y + column_header_height//2 + 2), display_label, 
+                  font=font_col_header_big, fill=(0, 0, 0, 180), anchor="mm")
+        # Main text - BRIGHT WHITE
         draw.text((x + width//2, header_y + column_header_height//2), display_label, 
-                  font=font_col_header, fill="#FFFFFF", anchor="mm")
+                  font=font_col_header_big, fill="#FFFFFF", anchor="mm")
         x += width
     
-    # Accent line under header
-    draw.rectangle([left_margin, header_y + column_header_height - 4, 
+    # Thick accent line under header
+    draw.rectangle([left_margin, header_y + column_header_height - 5, 
                    SLIDE_WIDTH - left_margin, header_y + column_header_height], 
                    fill=colors.get("accent", "#F4A261"))
     
