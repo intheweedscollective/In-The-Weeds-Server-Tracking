@@ -1017,9 +1017,10 @@ def generate_complete_rankings_slide(
                           font=font_data_bold, fill=text_white, anchor="lm")
             
             elif fmt == "tier":
-                # Tier badge
-                tier = str(value) if value else "A-Server"
-                tier_color = tier_colors.get(tier, "#888888")
+                # Tier badge - use job_title field
+                job_title = str(value).lower() if value else "server"
+                tier_name, tier_color = tier_display.get(job_title, ("Server", "#22C55E"))
+                
                 badge_width = width - 20
                 badge_height = row_height - 10
                 badge_x = x + 10
@@ -1028,13 +1029,12 @@ def generate_complete_rankings_slide(
                 draw.rounded_rectangle([badge_x, badge_y, badge_x + badge_width, badge_y + badge_height], 
                                       radius=badge_height//2, fill=tier_color)
                 
-                # Abbreviate tier name
-                tier_abbrev = {"Trainer": "Trainer", "Bartender": "Bartender", 
-                              "A-Server": "A-Server", "B-Server": "B-Server", "C-Server": "C-Server"}
-                tier_text = tier_abbrev.get(tier, tier)
-                if badge_width < 80:
-                    tier_text = {"Trainer": "T", "Bartender": "BAR", "A-Server": "A", 
-                                "B-Server": "B", "C-Server": "C"}.get(tier, tier[0])
+                # Show full name or abbreviate based on width
+                if badge_width < 70:
+                    tier_text = {"Trainer": "T", "Bartender": "BAR", "Server": "SRV",
+                                "A-Server": "A", "B-Server": "B", "C-Server": "C"}.get(tier_name, tier_name[0])
+                else:
+                    tier_text = tier_name
                 draw.text((badge_x + badge_width//2, badge_y + badge_height//2), tier_text,
                           font=get_font(font_score_size, bold=True), fill="#FFFFFF", anchor="mm")
             
@@ -1049,7 +1049,7 @@ def generate_complete_rankings_slide(
                           font=font_data_bold, fill=score_color, anchor="mm")
             
             elif fmt == "metric":
-                # Metric score with mini progress bar
+                # Metric score with RED/YELLOW/GREEN progress bar
                 score = float(value) if value else 0
                 max_metric = 100
                 
@@ -1068,11 +1068,21 @@ def generate_complete_rankings_slide(
                 draw.rectangle([bar_x, bar_y, bar_x + bar_width, bar_y + bar_height], 
                               fill=hex_to_rgb(text_muted) + (80,))
                 
-                # Bar fill
+                # Bar fill with RED/YELLOW/GREEN based on performance
                 fill_pct = min(score / max_metric, 1.0)
                 if fill_pct > 0:
                     fill_width = int(bar_width * fill_pct)
-                    bar_color = colors.get("gold", "#FFD700") if score >= 100 else colors.get("secondary", "#1D8CC7")
+                    
+                    # Determine bar color based on score percentage
+                    if score >= 100:
+                        bar_color = bar_green  # Exceeds benchmark
+                    elif score >= 80:
+                        bar_color = bar_green  # Good
+                    elif score >= 60:
+                        bar_color = bar_yellow  # Medium
+                    else:
+                        bar_color = bar_red  # Needs improvement
+                    
                     draw.rectangle([bar_x, bar_y, bar_x + fill_width, bar_y + bar_height], fill=bar_color)
             
             elif fmt == "bonus":
