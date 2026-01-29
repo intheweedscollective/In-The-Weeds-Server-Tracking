@@ -586,10 +586,10 @@ def generate_top_10_slide(
             draw.text((left_margin + 10, y + 15), f"#{rank}", font=font_rank, fill=colors["text_muted"])
             name_x = left_margin + 80
         
-        # Name
+        # Name - allow longer names since we have space
         name = emp.get("name", "Unknown")
-        if len(name) > 20:
-            name = name[:19] + ".."
+        if len(name) > 24:
+            name = name[:23] + ".."
         draw.text((name_x, y + 18), name, font=font_name, fill=colors["text_white"])
         
         # Tier badge
