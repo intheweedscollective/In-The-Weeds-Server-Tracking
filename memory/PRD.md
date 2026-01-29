@@ -8,10 +8,15 @@ Build a full-stack application to generate quarterly performance reviews for res
 4. Display rankings and analytics dashboards
 
 ## Recent Changes
+### Jan 29, 2026
+- **CRITICAL BUG FIX: Scoring Engine Cap**: Fixed bug where metric scores were not capped at 100 before weighting. This caused employees with extreme LSC values to gain unfair advantage. Each category now correctly caps at its max points (PPA: 25, LSC: 25, LBW: 20, Glass: 15, CV: 15 = 100 base). Bonuses still apply on top.
+
 ### Jan 28, 2026
-- **Complete Rankings Slide**: Added new Yodeck slide showing ALL employees from top to bottom on one 1920x1080 slide. Uses multi-column compact layout with tier color badges (T=Trainer, BAR=Bartender, A/B/C=Server tiers).
-- **Interactive Analytics**: Added clickable zones on metric charts that filter employees by performance zone (Exceeds/Near/Below Target). Shows filtered employee list with color-coded cards.
-- **Analytics Context**: Added "How to read this chart" explanations, distinct colors for Target (orange) vs Team Average (blue diamond), and improved legend.
+- **Yodeck Slides Redesigned**: Removed emoji dependencies (were showing as boxes), increased name length limits, clean text-only headers.
+- **Complete Rankings Slide**: Added new slide type showing ALL employees top to bottom on one slide.
+- **Theme Options Expanded**: Added Vegas Gold theme + 10 seasonal theme overlays.
+- **Interactive Analytics**: Added clickable zones on metric charts that filter employees by performance zone.
+- **Analytics Context**: Added "How to read this chart" explanations, distinct colors for Target vs Team Average.
 
 ## Tech Stack
 - **Frontend**: React.js, Tailwind CSS, Shadcn/UI
