@@ -736,8 +736,8 @@ def generate_complete_rankings_slide(
         score = emp.get("total_score", 0)
         tier = emp.get("tier_label", "A-Server")
         
-        # Truncate name
-        max_name_len = 12 if columns >= 4 else (14 if columns >= 3 else 16)
+        # Truncate name - increase limits for better readability
+        max_name_len = 14 if columns >= 4 else (16 if columns >= 3 else 20)
         display_name = name[:max_name_len] + ".." if len(name) > max_name_len else name
         
         # Row background for top 3
