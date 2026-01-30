@@ -943,36 +943,43 @@ def generate_complete_rankings_slide(
     table_top = margin_y + title_height
     
     def draw_circle_progress(cx, cy, radius, percentage, color):
-        """Draw a smooth circular progress indicator using anti-aliasing."""
-        # Draw at 4x size for anti-aliasing, then we'll composite
-        scale = 4
-        size = (radius * 2 + 10) * scale
-        circle_img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+        """Draw a smooth circular progress indicator using filled shapes."""
+        # Create a separate image for the circle at higher resolution
+        scale = 3
+        img_size = (radius * 2 + 12) * scale
+        circle_img = Image.new('RGBA', (img_size, img_size), (0, 0, 0, 0))
         circle_draw = ImageDraw.Draw(circle_img)
         
-        center = size // 2
-        r = radius * scale
-        line_width = 3 * scale
+        center = img_size // 2
+        outer_r = radius * scale
+        inner_r = int(outer_r * 0.65)  # Inner radius for donut hole
         
-        # Background circle (full gray ring)
-        circle_draw.ellipse([center - r, center - r, center + r, center + r],
-                           outline=progress_bg, width=line_width)
+        # Draw background ring (full gray donut)
+        circle_draw.ellipse([center - outer_r, center - outer_r, 
+                            center + outer_r, center + outer_r],
+                           fill=progress_bg)
         
-        # Progress arc
+        # Draw progress arc as pie slice
         if percentage > 0:
-            start_angle = -90  # Start from top
+            start_angle = -90
             end_angle = -90 + (percentage * 360 / 100)
-            # Use pieslice for smoother rendering, then overlay
-            circle_draw.arc([center - r, center - r, center + r, center + r],
-                           start=start_angle, end=end_angle, fill=color, width=line_width)
+            circle_draw.pieslice([center - outer_r, center - outer_r,
+                                 center + outer_r, center + outer_r],
+                                start=start_angle, end=end_angle, fill=color)
         
-        # Scale down with anti-aliasing
-        small_size = (radius * 2 + 10, radius * 2 + 10)
-        circle_img = circle_img.resize(small_size, Image.LANCZOS)
+        # Cut out center to make donut (white/transparent center)
+        # Use the row background color for center
+        circle_draw.ellipse([center - inner_r, center - inner_r,
+                            center + inner_r, center + inner_r],
+                           fill=(255, 255, 255, 255))
+        
+        # Scale down with high-quality resampling
+        final_size = radius * 2 + 12
+        circle_img = circle_img.resize((final_size, final_size), Image.LANCZOS)
         
         # Paste onto main image
-        paste_x = cx - small_size[0] // 2
-        paste_y = cy - small_size[1] // 2
+        paste_x = cx - final_size // 2
+        paste_y = cy - final_size // 2
         img.paste(circle_img, (paste_x, paste_y), circle_img)
     
     def get_position_badge_color(pos_label):
