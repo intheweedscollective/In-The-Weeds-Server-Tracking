@@ -889,7 +889,8 @@ def generate_complete_rankings_slide(
     text_dark = "#1F2937"
     text_gray = "#6B7280"
     text_light_gray = "#9CA3AF"
-    header_red = "#DC2626"
+    header_blue = "#60A5FA"  # Light blue for header
+    divider_blue = "#60A5FA"  # Light blue for divider
     score_red = "#DC2626"
     bonus_green = "#16A34A"
     
