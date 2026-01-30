@@ -1411,9 +1411,9 @@ async def get_yodeck_top10_slide(year: int, quarter: str):
 async def get_yodeck_complete_rankings_slide(year: int, quarter: str):
     """
     Generate a complete rankings slide showing ALL employees top to bottom on one slide.
-    Uses a compact multi-column layout.
+    Uses a compact multi-column layout with proper tier labels and circular progress.
     """
-    # Get all rankings (async)
+    # Get all rankings using the full-rankings format for proper tier labels
     employees = await db.employees_v2.find(
         {"year": year, "quarter": quarter.upper()},
         {"_id": 0}
@@ -1422,14 +1422,84 @@ async def get_yodeck_complete_rankings_slide(year: int, quarter: str):
     if not employees:
         raise HTTPException(status_code=404, detail=f"No data for {quarter} {year}")
     
-    # Sort by peer_rank (complete ranking order)
-    employees.sort(key=lambda e: e.get("peer_rank", 999))
-    
-    # Get theme settings (async)
+    # Get settings for tier thresholds
     settings = await db.quarter_settings.find_one(
         {"year": year, "quarter": quarter.upper()},
         {"_id": 0}
     ) or {}
+    
+    a_server_min = settings.get("a_server_min_score", 80.1)
+    b_server_min = settings.get("b_server_min_score", 70.1)
+    
+    # Transform employees to have proper tier labels and points structure
+    tier_counters = {"trainer": 0, "bartender": 0, "a-server": 0, "b-server": 0, "c-server": 0}
+    
+    # Sort by hierarchy then by score within each tier
+    def get_sort_key(e):
+        job = str(e.get("job_title", "server")).lower()
+        if job == "trainer":
+            return (0, -float(e.get("total_score", 0) or 0))
+        elif job == "bartender":
+            return (1, -float(e.get("total_score", 0) or 0))
+        else:
+            # Servers sorted by A/B/C then score
+            score = float(e.get("total_score", 0) or 0)
+            if score >= a_server_min:
+                return (2, -score)
+            elif score >= b_server_min:
+                return (3, -score)
+            else:
+                return (4, -score)
+    
+    employees.sort(key=get_sort_key)
+    
+    # Add tier labels and position labels
+    for emp in employees:
+        job = str(emp.get("job_title", "server")).lower()
+        score = float(emp.get("total_score", 0) or 0)
+        
+        if job == "trainer":
+            tier_counters["trainer"] += 1
+            emp["tier_label"] = "Trainer"
+            emp["position_label"] = f"T{tier_counters['trainer']}"
+        elif job == "bartender":
+            tier_counters["bartender"] += 1
+            emp["tier_label"] = "Bartender"
+            emp["position_label"] = f"Bar{tier_counters['bartender']}"
+        else:
+            # Determine server tier based on score
+            if score >= a_server_min:
+                tier_counters["a-server"] += 1
+                emp["tier_label"] = "A-Server"
+                emp["position_label"] = f"A{tier_counters['a-server']}"
+            elif score >= b_server_min:
+                tier_counters["b-server"] += 1
+                emp["tier_label"] = "B-Server"
+                emp["position_label"] = f"B{tier_counters['b-server']}"
+            else:
+                tier_counters["c-server"] += 1
+                emp["tier_label"] = "C-Server"
+                emp["position_label"] = f"C{tier_counters['c-server']}"
+        
+        # Add points structure (earned/possible) - cap scores at max
+        ppa_raw = float(emp.get("score_ppa", 0) or 0)
+        lbw_raw = float(emp.get("score_lbw", 0) or 0)
+        lsc_raw = float(emp.get("score_lsc", 0) or 0)
+        glass_raw = float(emp.get("score_glass", 0) or 0)
+        
+        # Calculate weighted scores (capped at 100% of weight, then scaled)
+        ppa_pct = min(ppa_raw / 100, 1.0)
+        lbw_pct = min(lbw_raw / 100, 1.0)
+        lsc_pct = min(lsc_raw / 100, 1.0)
+        glass_pct = min(glass_raw / 100, 1.0)
+        
+        emp["ppa_points"] = {"earned": round(ppa_pct * 30, 2), "possible": 30}
+        emp["lbw_points"] = {"earned": round(lbw_pct * 25, 2), "possible": 25}
+        emp["lsc_points"] = {"earned": round(lsc_pct * 30, 2), "possible": 30}
+        emp["glassware_points"] = {"earned": round(glass_pct * 20, 2), "possible": 20}
+        
+        # Bonus points
+        emp["bonus_total"] = float(emp.get("bonus_total", 0) or emp.get("total_metric_bonus", 0) or 0)
     
     theme = settings.get("slide_theme", "dark_navy")
     seasonal_theme = settings.get("slide_seasonal_theme", None)
