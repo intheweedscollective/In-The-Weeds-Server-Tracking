@@ -1352,6 +1352,7 @@ async def download_full_rankings_pdf(year: int, quarter: str):
 async def get_yodeck_top10_slide(year: int, quarter: str):
     """
     Generate Top 10 Performers slide (1920x1080 PNG).
+    Shows the 10 highest scores OVERALL regardless of tier.
     Uses per-quarter theme settings.
     """
     # Get settings and rankings
@@ -1372,8 +1373,30 @@ async def get_yodeck_top10_slide(year: int, quarter: str):
     if not employees_docs:
         raise HTTPException(status_code=404, detail=f"No employee data for {quarter} {year}")
     
-    employees = [EmployeeV2(**doc) for doc in employees_docs]
-    rankings = generate_hierarchy_rankings(employees, settings)
+    # Sort by total_score descending to get TOP 10 overall (not by tier)
+    employees_docs.sort(key=lambda e: float(e.get("total_score", 0) or 0), reverse=True)
+    
+    # Add tier_label based on job_title and score for display
+    a_server_min = settings.a_server_min_score or 80.1
+    b_server_min = settings.b_server_min_score or 70.1
+    
+    for emp in employees_docs[:10]:
+        job = str(emp.get("job_title", "server")).lower()
+        score = float(emp.get("total_score", 0) or 0)
+        
+        if job == "trainer":
+            emp["tier_label"] = "Trainer"
+        elif job == "bartender":
+            emp["tier_label"] = "Bartender"
+        else:
+            if score >= a_server_min:
+                emp["tier_label"] = "A-Server"
+            elif score >= b_server_min:
+                emp["tier_label"] = "B-Server"
+            else:
+                emp["tier_label"] = "C-Server"
+    
+    rankings = employees_docs[:10]
     
     # Get theme settings
     theme = settings.slide_theme or "dark_navy"
