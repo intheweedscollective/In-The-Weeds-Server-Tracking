@@ -996,11 +996,11 @@ def generate_complete_rankings_slide(
             return position_badge_colors["C"]
         return "#6B7280"
     
-    def draw_table(employees, start_x, t_width):
+    def draw_table(employees, start_x, t_width, start_row_num=1):
         """Draw a complete table matching the Rankings tab exactly."""
         
-        # Column widths (proportional) - adjusted for circles
-        # POSITION(50) | EMPLOYEE(85) | TIER(55) | SCORE(45) | BONUS(40) | PPA(55) | LBW(55) | LSC(55) | GLASS(55)
+        # Column widths (proportional)
+        # POSITION(50) | NAME(85) | TIER(55) | SCORE(45) | BONUS(40) | PPA(55) | LBW(55) | LSC(55) | GLASS(55)
         col_widths_raw = [50, 85, 55, 45, 40, 55, 55, 55, 55]
         total_raw = sum(col_widths_raw)
         scale = t_width / total_raw
@@ -1018,13 +1018,20 @@ def generate_complete_rankings_slide(
         draw.rectangle([start_x, header_y, start_x + t_width, header_y + header_height],
                        fill=header_red)
         
-        # Header labels - simplified and centered
+        # Header labels - aligned to match data columns
         headers = ["#", "NAME", "TIER", "SCORE", "BONUS", "PPA", "LBW", "LSC", "GLASS"]
+        # Alignment: left-align NAME, center others
+        header_aligns = ["mm", "lm", "mm", "mm", "mm", "mm", "mm", "mm", "mm"]
         
-        for i, label in enumerate(headers):
-            cx = start_x + col_x[i] + col_widths[i] // 2
-            draw.text((cx, header_y + header_height // 2), label, 
-                      font=font_header, fill="#FFFFFF", anchor="mm")
+        for i, (label, align) in enumerate(zip(headers, header_aligns)):
+            if align == "lm":
+                # Left-align (like NAME column)
+                hx = start_x + col_x[i] + 4
+            else:
+                # Center-align
+                hx = start_x + col_x[i] + col_widths[i] // 2
+            draw.text((hx, header_y + header_height // 2), label, 
+                      font=font_header, fill="#FFFFFF", anchor=align)
         
         # === DATA ROWS ===
         y = header_y + header_height
@@ -1033,9 +1040,11 @@ def generate_complete_rankings_slide(
             if idx >= 14:
                 break
             
+            row_num = start_row_num + idx  # Use the passed start number
+            
             job_title = str(emp.get("job_title", "server")).lower()
             tier_label = emp.get("tier_label", "Server")
-            position_label = emp.get("position_label", str(idx + 1))
+            position_label = emp.get("position_label", str(row_num))
             
             # Alternating row background (white/light gray like the app)
             if idx % 2 == 0:
@@ -1049,12 +1058,12 @@ def generate_complete_rankings_slide(
             draw.line([start_x, y + row_height - 1, start_x + t_width, y + row_height - 1],
                       fill=(229, 231, 235), width=1)
             
-            # --- POSITION column ---
+            # --- POSITION column (#) ---
             col_idx = 0
             
             # Large gray position number
             draw.text((start_x + col_x[col_idx] + 12, y + row_height // 2),
-                      str(idx + 1), font=font_position, fill=text_light_gray, anchor="mm")
+                      str(row_num), font=font_position, fill=text_light_gray, anchor="mm")
             
             # Position badge (T1, Bar1, A1, B1, C1)
             badge_color = get_position_badge_color(position_label)
@@ -1067,7 +1076,7 @@ def generate_complete_rankings_slide(
             draw.text((badge_x + badge_w // 2, badge_y + badge_h // 2), position_label,
                       font=font_badge, fill="#FFFFFF", anchor="mm")
             
-            # --- EMPLOYEE column ---
+            # --- NAME column (left-aligned) ---
             col_idx = 1
             name = str(emp.get("name", "Unknown"))
             if len(name) > 10:
