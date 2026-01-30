@@ -1078,6 +1078,11 @@ def generate_complete_rankings_slide(
     # Draw right table
     draw_table(right_employees, right_x, col_width)
     
+    # === VERTICAL DIVIDER LINE (drawn after tables so it's on top) ===
+    divider_x = margin_x + col_width + (divider_width // 2)
+    draw.line([divider_x, table_top, divider_x, SLIDE_HEIGHT - footer_height - margin_y],
+              fill=colors.get("primary", "#E63946"), width=divider_width)
+    
     # === FOOTER ===
     footer_y = SLIDE_HEIGHT - footer_height + 2
     footer_text = f"Generated {datetime.now().strftime('%m/%d/%Y')}  •  Bubba Gump Shrimp Co. Las Vegas"
