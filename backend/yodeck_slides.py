@@ -1111,7 +1111,7 @@ def generate_complete_rankings_slide(
             draw.text((start_x + col_x[col_idx] + col_widths[col_idx] // 2, y + row_height // 2),
                       bonus_text, font=font_bonus, fill=bonus_green, anchor="mm")
             
-            # --- METRIC columns with CIRCULAR progress indicators ---
+            # --- METRIC columns with HORIZONTAL PROGRESS BARS ---
             metrics = [
                 (5, "ppa_points", 30),
                 (6, "lbw_points", 25),
@@ -1125,7 +1125,6 @@ def generate_complete_rankings_slide(
                     earned = float(points.get("earned", 0) or 0)
                     possible = float(points.get("possible", default_max) or default_max)
                 else:
-                    # Fallback for old format
                     earned = float(points or 0)
                     possible = default_max
                 
@@ -1133,22 +1132,37 @@ def generate_complete_rankings_slide(
                 
                 # Determine color based on percentage
                 if percentage >= 80:
-                    prog_color = progress_green
+                    bar_color = progress_green
                 elif percentage >= 50:
-                    prog_color = progress_yellow
+                    bar_color = progress_yellow
                 else:
-                    prog_color = progress_red
+                    bar_color = progress_red
                 
-                cx = start_x + col_x[col_idx] + col_widths[col_idx] // 2
-                cy = y + row_height // 2
+                col_cx = start_x + col_x[col_idx]
+                col_w = col_widths[col_idx]
                 
-                # Draw circular progress (radius 12)
-                radius = 11
-                draw_circle_progress(cx, cy, radius, percentage, prog_color)
+                # Score text: "earned / possible"
+                score_text = f"{earned:.0f}/{int(possible)}"
+                draw.text((col_cx + col_w // 2, y + row_height // 2 - 6), score_text,
+                          font=font_metric_val, fill=text_dark, anchor="mm")
                 
-                # Score text inside circle
-                draw.text((cx, cy - 3), f"{earned:.0f}", font=font_metric_val, fill=text_dark, anchor="mm")
-                draw.text((cx, cy + 6), f"/{int(possible)}", font=font_metric_max, fill=text_gray, anchor="mm")
+                # Horizontal progress bar
+                bar_margin = 6
+                bar_w = col_w - (bar_margin * 2)
+                bar_h = 5
+                bar_x = col_cx + bar_margin
+                bar_y = y + row_height // 2 + 5
+                
+                # Bar background (light gray with rounded ends)
+                draw.rounded_rectangle([bar_x, bar_y, bar_x + bar_w, bar_y + bar_h],
+                                       radius=2, fill=progress_bg)
+                
+                # Bar fill
+                fill_pct = min(percentage / 100, 1.0)
+                if fill_pct > 0:
+                    fill_w = max(int(bar_w * fill_pct), 4)  # Minimum 4px for visibility
+                    draw.rounded_rectangle([bar_x, bar_y, bar_x + fill_w, bar_y + bar_h],
+                                           radius=2, fill=bar_color)
             
             y += row_height
     
