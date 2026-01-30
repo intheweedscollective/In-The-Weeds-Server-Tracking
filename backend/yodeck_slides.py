@@ -1017,7 +1017,7 @@ def generate_complete_rankings_slide(
         # === HEADER ROW ===
         header_y = table_top
         draw.rectangle([start_x, header_y, start_x + t_width, header_y + header_height],
-                       fill=header_red)
+                       fill=header_blue)
         
         # Header labels - aligned to match data columns
         headers = ["#", "NAME", "TIER", "SCORE", "BONUS", "PPA", "LBW", "LSC", "GLASS"]
