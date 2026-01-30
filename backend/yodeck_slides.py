@@ -907,15 +907,15 @@ def generate_complete_rankings_slide(
     
     # Layout - two columns side by side
     margin_x = 15
-    margin_y = 10
+    margin_y = 5
     divider_width = 4
     col_width = (SLIDE_WIDTH - (margin_x * 2) - divider_width) // 2
     
-    title_height = 45
-    header_height = 26
-    footer_height = 22
+    title_height = 38
+    header_height = 24
+    footer_height = 18
     
-    # Calculate row height to fit 14 rows in available space
+    # Calculate row height to fit 14 rows exactly in available space
     available_height = SLIDE_HEIGHT - margin_y - title_height - header_height - footer_height - margin_y
     row_height = available_height // 14
     
