@@ -932,11 +932,6 @@ def generate_complete_rankings_slide(
     right_x = margin_x + col_width + divider_width
     table_top = margin_y + title_height
     
-    # === VERTICAL DIVIDER LINE ===
-    divider_x = margin_x + col_width + (divider_width // 2)
-    draw.line([divider_x, table_top, divider_x, SLIDE_HEIGHT - footer_height - margin_y],
-              fill=colors.get("primary", "#E63946"), width=divider_width)
-    
     def draw_table(employees, start_x, table_width):
         """Draw a complete table with header and rows."""
         
