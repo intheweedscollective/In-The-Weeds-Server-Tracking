@@ -1018,17 +1018,13 @@ def generate_complete_rankings_slide(
         draw.rectangle([start_x, header_y, start_x + t_width, header_y + header_height],
                        fill=header_red)
         
-        # Header labels
-        headers = ["#", "EMPLOYEE", "TIER", "SCORE", "BONUS", "PPA", "LBW", "LSC", "GLASS"]
-        header_subs = ["", "", "", "", "", "(25%)", "(20%)", "(25%)", "(15%)"]
+        # Header labels - simplified and centered
+        headers = ["#", "NAME", "TIER", "SCORE", "BONUS", "PPA", "LBW", "LSC", "GLASS"]
         
-        for i, (label, sub) in enumerate(zip(headers, header_subs)):
+        for i, label in enumerate(headers):
             cx = start_x + col_x[i] + col_widths[i] // 2
-            if sub:
-                draw.text((cx, header_y + 6), label, font=font_header, fill="#FFFFFF", anchor="mt")
-                draw.text((cx, header_y + 14), sub, font=get_font(5), fill=(255,255,255,180), anchor="mt")
-            else:
-                draw.text((cx, header_y + header_height // 2), label, font=font_header, fill="#FFFFFF", anchor="mm")
+            draw.text((cx, header_y + header_height // 2), label, 
+                      font=font_header, fill="#FFFFFF", anchor="mm")
         
         # === DATA ROWS ===
         y = header_y + header_height
