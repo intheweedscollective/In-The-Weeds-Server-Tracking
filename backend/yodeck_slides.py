@@ -921,11 +921,11 @@ def generate_complete_rankings_slide(
     
     # === TITLE (centered at top) ===
     title = f"COMPLETE TEAM RANKINGS  •  {quarter} {year}"
-    draw.text((SLIDE_WIDTH//2, margin_y + 8), title, font=font_title, 
+    draw.text((SLIDE_WIDTH//2, margin_y + 5), title, font=font_title, 
               fill=colors.get("primary", "#E63946"), anchor="mt")
     
     subtitle = f"{total_employees} Team Members  •  Trainers → Bartenders → Servers  •  Max Score: 130"
-    draw.text((SLIDE_WIDTH//2, margin_y + 32), subtitle, font=font_subtitle, fill=text_muted, anchor="mt")
+    draw.text((SLIDE_WIDTH//2, margin_y + 26), subtitle, font=font_subtitle, fill=text_muted, anchor="mt")
     
     # Column positions
     left_x = margin_x
