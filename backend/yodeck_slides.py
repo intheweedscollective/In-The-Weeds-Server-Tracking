@@ -908,7 +908,7 @@ def generate_complete_rankings_slide(
     # Layout - two columns side by side
     margin_x = 15
     margin_y = 5
-    divider_width = 4
+    divider_width = 6  # Thicker divider line
     col_width = (SLIDE_WIDTH - (margin_x * 2) - divider_width) // 2
     
     title_height = 38
