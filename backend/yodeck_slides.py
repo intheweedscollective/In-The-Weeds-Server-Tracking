@@ -919,8 +919,8 @@ def generate_complete_rankings_slide(
     footer_height = 35
     available_height = SLIDE_HEIGHT - title_area_height - footer_height
     
-    tier_header_height = 28
-    row_height = 24
+    tier_header_height = 32  # Increased for better readability
+    row_height = 22  # Slightly reduced to fit more rows
     
     # Determine which tiers go in which column
     # Put trainers + bartenders in left, servers in right (or split if needed)
