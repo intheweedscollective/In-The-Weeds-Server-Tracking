@@ -852,9 +852,10 @@ def generate_complete_rankings_slide(
     seasonal_theme: str = None
 ) -> bytes:
     """
-    Generate two side-by-side tables exactly matching the Rankings tab design.
+    Generate two side-by-side tables matching the Rankings tab design.
     14 employees on left, 14 on right, with vertical red divider.
-    Columns: POSITION | EMPLOYEE | TIER | TOTAL SCORE | BONUS | PPA | LBW | LSC | GLASS
+    Uses circular progress indicators for metrics.
+    Proper A-Server/B-Server/C-Server tier labels.
     """
     colors = get_theme_colors(theme, custom_colors, seasonal_theme)
     img = create_gradient_background(SLIDE_WIDTH, SLIDE_HEIGHT, colors)
@@ -862,35 +863,26 @@ def generate_complete_rankings_slide(
     
     total_employees = len(rankings)
     
-    # Sort by hierarchy: Trainers -> Bartenders -> Servers, then by peer_rank within each
-    tier_order = {"trainer": 0, "bartender": 1, "server": 2}
+    # Data is already sorted by hierarchy from the API
+    left_employees = rankings[:14]
+    right_employees = rankings[14:28]
     
-    def get_tier_sort_key(emp):
-        job = str(emp.get("job_title", "server")).lower()
-        tier_num = tier_order.get(job, 2)
-        return (tier_num, emp.get("peer_rank", 999))
+    # Tier badge colors (matching the app exactly)
+    tier_badge_colors = {
+        "Trainer": "#A855F7",      # Purple
+        "Bartender": "#3B82F6",    # Blue
+        "A-Server": "#22C55E",     # Green
+        "B-Server": "#EAB308",     # Yellow
+        "C-Server": "#EF4444",     # Red
+    }
     
-    sorted_rankings = sorted(rankings, key=get_tier_sort_key)
-    
-    # Split into left (14) and right (14+)
-    left_employees = sorted_rankings[:14]
-    right_employees = sorted_rankings[14:28]
-    
-    # Position badge config (T1, T2, Bar1, A1, etc.)
-    def get_position_badge(job_title, idx_in_tier):
-        job = str(job_title).lower()
-        if job == "trainer":
-            return f"T{idx_in_tier}", "#A855F7"  # Purple
-        elif job == "bartender":
-            return f"Bar{idx_in_tier}", "#3B82F6"  # Blue
-        else:
-            return f"A{idx_in_tier}", "#14B8A6"  # Teal
-    
-    # Tier badge config
-    tier_badges = {
-        "trainer": {"label": "Trainer", "color": "#A855F7"},
-        "bartender": {"label": "Bartender", "color": "#3B82F6"},
-        "server": {"label": "A-Server", "color": "#14B8A6"},
+    # Position badge colors
+    position_badge_colors = {
+        "T": "#A855F7",   # Purple for trainers
+        "Bar": "#3B82F6", # Blue for bartenders
+        "A": "#22C55E",   # Green for A-servers
+        "B": "#EAB308",   # Yellow for B-servers
+        "C": "#EF4444",   # Red for C-servers
     }
     
     # Colors
@@ -901,23 +893,24 @@ def generate_complete_rankings_slide(
     score_red = "#DC2626"
     bonus_green = "#16A34A"
     
-    # Progress bar colors
-    bar_red = "#EF4444"
-    bar_yellow = "#F59E0B"
-    bar_green = "#22C55E"
+    # Progress colors
+    progress_green = "#22C55E"
+    progress_yellow = "#F59E0B"
+    progress_red = "#EF4444"
+    progress_bg = "#E5E7EB"
     
     # Fonts
     font_title = get_font(24, bold=True)
     font_subtitle = get_font(10)
     font_header = get_font(8, bold=True)
-    font_position = get_font(18, bold=True)
+    font_position = get_font(16, bold=True)
     font_badge = get_font(7, bold=True)
     font_name = get_font(10, bold=True)
-    font_job = get_font(8)
+    font_job = get_font(7)
     font_tier = get_font(7, bold=True)
-    font_score = get_font(12, bold=True)
-    font_metric_val = get_font(9)
-    font_metric_max = get_font(7)
+    font_score = get_font(11, bold=True)
+    font_metric_val = get_font(8)
+    font_metric_max = get_font(6)
     font_bonus = get_font(9, bold=True)
     font_footer = get_font(8)
     
@@ -940,7 +933,7 @@ def generate_complete_rankings_slide(
     draw.text((SLIDE_WIDTH//2, margin_y + 3), title, font=font_title,
               fill=colors.get("primary", "#E63946"), anchor="mt")
     
-    subtitle = f"{total_employees} Team Members  •  Trainers → Bartenders → Servers"
+    subtitle = f"{total_employees} Team Members  •  Trainers → Bartenders → A/B/C Servers"
     draw.text((SLIDE_WIDTH//2, margin_y + 22), subtitle, font=font_subtitle, 
               fill=colors.get("text_muted", "#778DA9"), anchor="mt")
     
@@ -949,18 +942,39 @@ def generate_complete_rankings_slide(
     right_x = margin_x + table_width + divider_width
     table_top = margin_y + title_height
     
-    # Track tier counts for position badges
-    tier_counters = {"trainer": 0, "bartender": 0, "server": 0}
-    
-    def draw_table(employees, start_x, t_width, reset_counters=True):
-        """Draw a complete table matching the Rankings tab exactly."""
-        nonlocal tier_counters
-        if reset_counters:
-            tier_counters = {"trainer": 0, "bartender": 0, "server": 0}
+    def draw_circle_progress(cx, cy, radius, percentage, color):
+        """Draw a circular progress indicator."""
+        # Background circle
+        draw.ellipse([cx - radius, cy - radius, cx + radius, cy + radius],
+                     outline=progress_bg, width=3)
         
-        # Column widths (proportional)
-        # POSITION(45) | EMPLOYEE(90) | TIER(55) | SCORE(50) | BONUS(45) | PPA(60) | LBW(60) | LSC(60) | GLASS(60)
-        col_widths_raw = [45, 90, 55, 50, 45, 60, 60, 60, 60]
+        # Progress arc
+        if percentage > 0:
+            start_angle = -90  # Start from top
+            end_angle = start_angle + (percentage * 360 / 100)
+            draw.arc([cx - radius, cy - radius, cx + radius, cy + radius],
+                     start=start_angle, end=end_angle, fill=color, width=3)
+    
+    def get_position_badge_color(pos_label):
+        """Get badge color based on position label prefix."""
+        if pos_label.startswith("T"):
+            return position_badge_colors["T"]
+        elif pos_label.startswith("Bar"):
+            return position_badge_colors["Bar"]
+        elif pos_label.startswith("A"):
+            return position_badge_colors["A"]
+        elif pos_label.startswith("B"):
+            return position_badge_colors["B"]
+        elif pos_label.startswith("C"):
+            return position_badge_colors["C"]
+        return "#6B7280"
+    
+    def draw_table(employees, start_x, t_width):
+        """Draw a complete table matching the Rankings tab exactly."""
+        
+        # Column widths (proportional) - adjusted for circles
+        # POSITION(50) | EMPLOYEE(85) | TIER(55) | SCORE(45) | BONUS(40) | PPA(55) | LBW(55) | LSC(55) | GLASS(55)
+        col_widths_raw = [50, 85, 55, 45, 40, 55, 55, 55, 55]
         total_raw = sum(col_widths_raw)
         scale = t_width / total_raw
         col_widths = [int(w * scale) for w in col_widths_raw]
@@ -972,7 +986,7 @@ def generate_complete_rankings_slide(
             col_x.append(x)
             x += w
         
-        # === HEADER ROW (Red gradient like Rankings tab) ===
+        # === HEADER ROW ===
         header_y = table_top
         draw.rectangle([start_x, header_y, start_x + t_width, header_y + header_height],
                        fill=header_red)
@@ -985,7 +999,7 @@ def generate_complete_rankings_slide(
             cx = start_x + col_x[i] + col_widths[i] // 2
             if sub:
                 draw.text((cx, header_y + 6), label, font=font_header, fill="#FFFFFF", anchor="mt")
-                draw.text((cx, header_y + 14), sub, font=get_font(6), fill=(255,255,255,200), anchor="mt")
+                draw.text((cx, header_y + 14), sub, font=get_font(5), fill=(255,255,255,180), anchor="mt")
             else:
                 draw.text((cx, header_y + header_height // 2), label, font=font_header, fill="#FFFFFF", anchor="mm")
         
@@ -997,11 +1011,8 @@ def generate_complete_rankings_slide(
                 break
             
             job_title = str(emp.get("job_title", "server")).lower()
-            
-            # Update tier counter for position badge
-            if job_title in tier_counters:
-                tier_counters[job_title] += 1
-            tier_idx = tier_counters.get(job_title, 1)
+            tier_label = emp.get("tier_label", "Server")
+            position_label = emp.get("position_label", str(idx + 1))
             
             # Alternating row background (white/light gray like the app)
             if idx % 2 == 0:
@@ -1017,21 +1028,20 @@ def generate_complete_rankings_slide(
             
             # --- POSITION column ---
             col_idx = 0
-            overall_rank = emp.get("peer_rank", idx + 1)
             
             # Large gray position number
-            draw.text((start_x + col_x[col_idx] + 14, y + row_height // 2),
+            draw.text((start_x + col_x[col_idx] + 12, y + row_height // 2),
                       str(idx + 1), font=font_position, fill=text_light_gray, anchor="mm")
             
-            # Position badge (T1, Bar1, A1)
-            badge_text, badge_color = get_position_badge(job_title, tier_idx)
-            badge_w = 28
+            # Position badge (T1, Bar1, A1, B1, C1)
+            badge_color = get_position_badge_color(position_label)
+            badge_w = 26
             badge_h = 14
-            badge_x = start_x + col_x[col_idx] + 26
+            badge_x = start_x + col_x[col_idx] + 24
             badge_y = y + (row_height - badge_h) // 2
             draw.rounded_rectangle([badge_x, badge_y, badge_x + badge_w, badge_y + badge_h],
                                    radius=3, fill=badge_color)
-            draw.text((badge_x + badge_w // 2, badge_y + badge_h // 2), badge_text,
+            draw.text((badge_x + badge_w // 2, badge_y + badge_h // 2), position_label,
                       font=font_badge, fill="#FFFFFF", anchor="mm")
             
             # --- EMPLOYEE column ---
@@ -1043,82 +1053,83 @@ def generate_complete_rankings_slide(
             
             draw.text((start_x + col_x[col_idx] + 4, y + row_height // 2 - 5),
                       name, font=font_name, fill=text_dark, anchor="lm")
-            draw.text((start_x + col_x[col_idx] + 4, y + row_height // 2 + 6),
+            draw.text((start_x + col_x[col_idx] + 4, y + row_height // 2 + 5),
                       job_display, font=font_job, fill=text_gray, anchor="lm")
             
-            # --- TIER column ---
+            # --- TIER column (A-Server, B-Server, C-Server badges) ---
             col_idx = 2
-            tier_cfg = tier_badges.get(job_title, tier_badges["server"])
-            tier_w = col_widths[col_idx] - 6
-            tier_h = 16
-            tier_x = start_x + col_x[col_idx] + 3
+            tier_color = tier_badge_colors.get(tier_label, "#6B7280")
+            tier_w = col_widths[col_idx] - 4
+            tier_h = 14
+            tier_x = start_x + col_x[col_idx] + 2
             tier_y = y + (row_height - tier_h) // 2
             draw.rounded_rectangle([tier_x, tier_y, tier_x + tier_w, tier_y + tier_h],
-                                   radius=4, fill=tier_cfg["color"])
-            draw.text((tier_x + tier_w // 2, tier_y + tier_h // 2), tier_cfg["label"],
+                                   radius=3, fill=tier_color)
+            # Shorten label for space
+            tier_short = {"Trainer": "Train", "Bartender": "Bar", "A-Server": "A-Srv", 
+                          "B-Server": "B-Srv", "C-Server": "C-Srv"}.get(tier_label, tier_label[:5])
+            draw.text((tier_x + tier_w // 2, tier_y + tier_h // 2), tier_short,
                       font=font_tier, fill="#FFFFFF", anchor="mm")
             
             # --- SCORE column ---
             col_idx = 3
             total_score = float(emp.get("total_score", 0) or 0)
             draw.text((start_x + col_x[col_idx] + col_widths[col_idx] // 2, y + row_height // 2),
-                      f"{total_score:.2f}", font=font_score, fill=score_red, anchor="mm")
+                      f"{total_score:.1f}", font=font_score, fill=score_red, anchor="mm")
             
             # --- BONUS column ---
             col_idx = 4
             bonus = float(emp.get("bonus_total", 0) or 0)
-            bonus_text = f"+{bonus:.2f}" if bonus >= 0 else f"{bonus:.2f}"
+            bonus_text = f"+{bonus:.1f}" if bonus >= 0 else f"{bonus:.1f}"
             draw.text((start_x + col_x[col_idx] + col_widths[col_idx] // 2, y + row_height // 2),
                       bonus_text, font=font_bonus, fill=bonus_green, anchor="mm")
             
-            # --- METRIC columns with score/max and progress bars ---
+            # --- METRIC columns with CIRCULAR progress indicators ---
             metrics = [
-                (5, "score_ppa", 30),   # PPA max 30
-                (6, "score_lbw", 25),   # LBW max 25
-                (7, "score_lsc", 30),   # LSC max 30
-                (8, "score_glass", 20), # GLASS max 20
+                (5, "ppa_points", 30),
+                (6, "lbw_points", 25),
+                (7, "lsc_points", 30),
+                (8, "glassware_points", 20),
             ]
             
-            for col_idx, key, max_val in metrics:
-                score = float(emp.get(key, 0) or 0)
+            for col_idx, key, default_max in metrics:
+                points = emp.get(key, {})
+                if isinstance(points, dict):
+                    earned = float(points.get("earned", 0) or 0)
+                    possible = float(points.get("possible", default_max) or default_max)
+                else:
+                    # Fallback for old format
+                    earned = float(points or 0)
+                    possible = default_max
+                
+                percentage = (earned / possible * 100) if possible > 0 else 0
+                
+                # Determine color based on percentage
+                if percentage >= 80:
+                    prog_color = progress_green
+                elif percentage >= 50:
+                    prog_color = progress_yellow
+                else:
+                    prog_color = progress_red
+                
                 cx = start_x + col_x[col_idx] + col_widths[col_idx] // 2
+                cy = y + row_height // 2
                 
-                # Score value
-                draw.text((cx, y + row_height // 2 - 8), f"{score:.2f}",
-                          font=font_metric_val, fill=text_dark, anchor="mm")
+                # Draw circular progress (radius 12)
+                radius = 11
+                draw_circle_progress(cx, cy, radius, percentage, prog_color)
                 
-                # "/ max" text
-                draw.text((cx, y + row_height // 2 + 1), f"/ {max_val}",
-                          font=font_metric_max, fill=text_gray, anchor="mm")
-                
-                # Progress bar
-                bar_w = col_widths[col_idx] - 12
-                bar_h = 4
-                bar_x = start_x + col_x[col_idx] + 6
-                bar_y = y + row_height // 2 + 10
-                
-                # Bar background (light gray)
-                draw.rectangle([bar_x, bar_y, bar_x + bar_w, bar_y + bar_h], fill=(229, 231, 235))
-                
-                # Bar fill
-                fill_pct = min(score / max_val, 1.0) if max_val > 0 else 0
-                if fill_pct > 0:
-                    fill_w = int(bar_w * fill_pct)
-                    if fill_pct >= 0.8:
-                        bar_color = bar_green
-                    elif fill_pct >= 0.6:
-                        bar_color = bar_yellow
-                    else:
-                        bar_color = bar_red
-                    draw.rectangle([bar_x, bar_y, bar_x + fill_w, bar_y + bar_h], fill=bar_color)
+                # Score text inside circle
+                draw.text((cx, cy - 3), f"{earned:.0f}", font=font_metric_val, fill=text_dark, anchor="mm")
+                draw.text((cx, cy + 6), f"/{int(possible)}", font=font_metric_max, fill=text_gray, anchor="mm")
             
             y += row_height
     
     # Draw left table
-    draw_table(left_employees, left_x, table_width, reset_counters=True)
+    draw_table(left_employees, left_x, table_width)
     
-    # Draw right table (continue tier counters)
-    draw_table(right_employees, right_x, table_width, reset_counters=False)
+    # Draw right table
+    draw_table(right_employees, right_x, table_width)
     
     # === VERTICAL RED DIVIDER LINE ===
     divider_x = margin_x + table_width + (divider_width // 2)
@@ -1130,6 +1141,11 @@ def generate_complete_rankings_slide(
     footer_text = f"Generated {datetime.now().strftime('%m/%d/%Y')}  •  Bubba Gump Shrimp Co. Las Vegas"
     draw.text((SLIDE_WIDTH//2, footer_y), footer_text, font=font_footer, 
               fill=colors.get("text_muted", "#778DA9"), anchor="mt")
+    
+    buffer = io.BytesIO()
+    img.save(buffer, format='PNG', optimize=True)
+    buffer.seek(0)
+    return buffer.getvalue()
     
     buffer = io.BytesIO()
     img.save(buffer, format='PNG', optimize=True)
