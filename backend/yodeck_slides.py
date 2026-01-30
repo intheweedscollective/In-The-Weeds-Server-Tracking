@@ -893,11 +893,11 @@ def generate_complete_rankings_slide(
     # Fonts
     font_title = get_font(38, bold=True)
     font_subtitle = get_font(14)
-    font_tier_header = get_font(14, bold=True)
-    font_col_label = get_font(10, bold=True)
-    font_data = get_font(12)
-    font_data_bold = get_font(12, bold=True)
-    font_score = get_font(11)
+    font_tier_header = get_font(13, bold=True)
+    font_col_label = get_font(11, bold=True)  # Increased for readability
+    font_data = get_font(11)
+    font_data_bold = get_font(11, bold=True)
+    font_score = get_font(10)
     font_footer = get_font(11)
     
     # === TITLE ===
