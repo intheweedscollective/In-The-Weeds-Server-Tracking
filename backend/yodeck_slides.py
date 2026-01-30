@@ -1178,10 +1178,10 @@ def generate_complete_rankings_slide(
     # Draw right table (rows 15-28)
     draw_table(right_employees, right_x, table_width, start_row_num=15)
     
-    # === VERTICAL RED DIVIDER LINE ===
+    # === VERTICAL LIGHT BLUE DIVIDER LINE ===
     divider_x = margin_x + table_width + (divider_width // 2)
     draw.rectangle([divider_x - 2, table_top, divider_x + 2, SLIDE_HEIGHT - footer_height - margin_y],
-                   fill="#DC2626")
+                   fill=divider_blue)
     
     # === FOOTER ===
     footer_y = SLIDE_HEIGHT - footer_height + 2
