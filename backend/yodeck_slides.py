@@ -852,8 +852,9 @@ def generate_complete_rankings_slide(
     seasonal_theme: str = None
 ) -> bytes:
     """
-    Generate a clean two-column rankings slide grouped by tier.
-    Each tier section includes its own header with column labels.
+    Generate a single-column table rankings slide like the Rankings tab.
+    Full-width table with tiers separated by thin lines.
+    Hierarchy: Trainers -> Bartenders -> Servers
     """
     colors = get_theme_colors(theme, custom_colors, seasonal_theme)
     img = create_gradient_background(SLIDE_WIDTH, SLIDE_HEIGHT, colors)
@@ -861,29 +862,30 @@ def generate_complete_rankings_slide(
     
     total_employees = len(rankings)
     
-    # Group employees by tier
-    tier_order = ["trainer", "bartender", "server"]
-    tier_groups = {"trainer": [], "bartender": [], "server": []}
+    # Sort employees by hierarchy: Trainers first, then Bartenders, then Servers
+    # Within each tier, sort by peer_rank
+    tier_order = {"trainer": 0, "bartender": 1, "server": 2}
     
-    for emp in rankings:
+    def get_tier_sort_key(emp):
         job = str(emp.get("job_title", "server")).lower()
-        if job in tier_groups:
-            tier_groups[job].append(emp)
-        else:
-            tier_groups["server"].append(emp)
+        tier_num = tier_order.get(job, 2)
+        return (tier_num, emp.get("peer_rank", 999))
     
-    # Tier display config
-    tier_config = {
-        "trainer": {"label": "TRAINERS", "color": "#A855F7"},
-        "bartender": {"label": "BARTENDERS", "color": "#3B82F6"},
-        "server": {"label": "SERVERS", "color": "#22C55E"},
+    sorted_rankings = sorted(rankings, key=get_tier_sort_key)
+    
+    # Tier badge config
+    tier_badges = {
+        "trainer": {"label": "Trainer", "color": "#A855F7", "bg": "#F3E8FF"},
+        "bartender": {"label": "Bartender", "color": "#3B82F6", "bg": "#DBEAFE"},
+        "server": {"label": "Server", "color": "#14B8A6", "bg": "#CCFBF1"},
     }
     
     # Colors
     text_white = colors.get("text_white", "#FFFFFF")
     text_muted = colors.get("text_muted", "#778DA9")
     text_light = colors.get("text_light", "#E8EEF7")
-    card_bg = hex_to_rgb(colors.get("card_bg", "#1E3A5F"))
+    text_dark = "#1F2937"
+    header_red = "#DC2626"
     
     # Progress bar colors
     bar_red = "#EF4444"
@@ -891,215 +893,189 @@ def generate_complete_rankings_slide(
     bar_green = "#22C55E"
     
     # Fonts
-    font_title = get_font(38, bold=True)
-    font_subtitle = get_font(14)
-    font_tier_header = get_font(13, bold=True)
-    font_col_label = get_font(11, bold=True)  # Increased for readability
-    font_data = get_font(11)
-    font_data_bold = get_font(11, bold=True)
-    font_score = get_font(10)
-    font_footer = get_font(11)
+    font_title = get_font(36, bold=True)
+    font_subtitle = get_font(13)
+    font_header = get_font(11, bold=True)
+    font_data = get_font(12)
+    font_data_bold = get_font(12, bold=True)
+    font_score = get_font(14, bold=True)
+    font_badge = get_font(9, bold=True)
+    font_metric = get_font(10)
+    font_footer = get_font(10)
+    
+    # Layout
+    margin_x = 40
+    table_width = SLIDE_WIDTH - (margin_x * 2)
+    title_area_height = 70
+    header_height = 32
+    row_height = 32
+    footer_height = 30
     
     # === TITLE ===
-    title = f"COMPLETE RANKINGS BY TIER"
-    draw.text((SLIDE_WIDTH//2, 22), title, font=font_title, 
+    title = f"COMPLETE TEAM RANKINGS"
+    draw.text((SLIDE_WIDTH//2, 18), title, font=font_title, 
               fill=colors.get("primary", "#E63946"), anchor="mt")
     
-    subtitle = f"{quarter} {year}  •  {total_employees} Team Members  •  Max Score: 130"
-    draw.text((SLIDE_WIDTH//2, 58), subtitle, font=font_subtitle, fill=text_muted, anchor="mt")
+    subtitle = f"{quarter} {year}  •  {total_employees} Team Members  •  Hierarchy: Trainers → Bartenders → Servers"
+    draw.text((SLIDE_WIDTH//2, 52), subtitle, font=font_subtitle, fill=text_muted, anchor="mt")
     
-    # === TWO COLUMN LAYOUT ===
-    col_gap = 30
-    col_width = (SLIDE_WIDTH - 60 - col_gap) // 2  # 60 = margins
-    left_col_x = 30
-    right_col_x = left_col_x + col_width + col_gap
+    # === TABLE HEADER ===
+    header_y = title_area_height
     
-    # Layout settings
-    title_area_height = 80
-    footer_height = 35
-    available_height = SLIDE_HEIGHT - title_area_height - footer_height
+    # Red header background
+    draw.rectangle([margin_x, header_y, margin_x + table_width, header_y + header_height],
+                   fill=header_red)
     
-    tier_header_height = 32  # Increased for better readability
-    row_height = 22  # Slightly reduced to fit more rows
+    # Column definitions: (label, x_offset, width, align)
+    # Columns: RANK | EMPLOYEE | TIER | TOTAL SCORE | PPA | LBW | LSC | GLASS
+    col_defs = [
+        ("RANK", 0, 70, "center"),
+        ("EMPLOYEE", 70, 180, "left"),
+        ("TIER", 250, 100, "center"),
+        ("TOTAL SCORE", 350, 120, "center"),
+        ("PPA (25%)", 470, 130, "center"),
+        ("LBW (20%)", 600, 130, "center"),
+        ("LSC (25%)", 730, 130, "center"),
+        ("GLASS (15%)", 860, 130, "center"),
+    ]
     
-    # Determine which tiers go in which column
-    # Put trainers + bartenders in left, servers in right (or split if needed)
-    left_tiers = []
-    right_tiers = []
+    # Scale columns to fit table width
+    total_col_width = sum(c[2] for c in col_defs)
+    scale = table_width / total_col_width
     
-    trainers = tier_groups.get("trainer", [])
-    bartenders = tier_groups.get("bartender", [])
-    servers = tier_groups.get("server", [])
+    scaled_cols = []
+    x_offset = 0
+    for label, _, width, align in col_defs:
+        scaled_width = int(width * scale)
+        scaled_cols.append((label, x_offset, scaled_width, align))
+        x_offset += scaled_width
     
-    # Calculate heights
-    def calc_tier_height(emps):
-        if not emps:
-            return 0
-        return tier_header_height + len(emps) * row_height + 10  # 10 = spacing
+    # Draw header labels
+    for label, x_off, width, align in scaled_cols:
+        label_x = margin_x + x_off + (width // 2)
+        draw.text((label_x, header_y + header_height // 2), label,
+                  font=font_header, fill="#FFFFFF", anchor="mm")
     
-    left_height = calc_tier_height(trainers) + calc_tier_height(bartenders)
-    right_height = calc_tier_height(servers)
+    # === TABLE ROWS ===
+    y = header_y + header_height
+    current_tier = None
     
-    # If servers list is too long, split across both columns
-    if right_height > available_height:
-        # Put trainers + bartenders + half servers on left
-        # Rest of servers on right
-        half_servers = len(servers) // 2
-        left_tiers = [("trainer", trainers), ("bartender", bartenders), ("server", servers[:half_servers])]
-        right_tiers = [("server", servers[half_servers:])]
-    else:
-        left_tiers = [("trainer", trainers), ("bartender", bartenders)]
-        right_tiers = [("server", servers)]
-    
-    def draw_tier_section(tier_key, employees, x_start, y_start, col_w):
-        """Draw a tier section with header and employee rows."""
-        if not employees:
-            return y_start
+    for idx, emp in enumerate(sorted_rankings):
+        job_title = str(emp.get("job_title", "server")).lower()
         
-        config = tier_config[tier_key]
-        tier_color = hex_to_rgb(config["color"])
+        # Check if we need a tier separator
+        if current_tier is not None and job_title != current_tier:
+            # Draw tier separator line
+            draw.line([margin_x, y, margin_x + table_width, y],
+                      fill=colors.get("primary", "#E63946"), width=3)
+            y += 4  # Small gap after separator
         
-        # Tier header bar with column labels - gradient effect
-        draw.rectangle([x_start, y_start, x_start + col_w, y_start + tier_header_height], 
-                      fill=tier_color + (240,))
+        current_tier = job_title
         
-        # Add subtle bottom border for separation
-        draw.line([x_start, y_start + tier_header_height - 1, x_start + col_w, y_start + tier_header_height - 1],
-                  fill=(255, 255, 255, 80), width=1)
+        # Check if we have room for this row
+        if y + row_height > SLIDE_HEIGHT - footer_height:
+            break
         
-        # Tier name on left with background pill
-        tier_label = f"{config['label']} ({len(employees)})"
+        # Alternating row background
+        if idx % 2 == 0:
+            row_bg = (30, 41, 59, 180)  # Slate-800 with opacity
+        else:
+            row_bg = (51, 65, 85, 150)  # Slate-700 with opacity
         
-        # Draw tier name with slight shadow for depth
-        draw.text((x_start + 11, y_start + tier_header_height//2 + 1), tier_label, 
-                  font=font_tier_header, fill=(0, 0, 0, 100), anchor="lm")
-        draw.text((x_start + 10, y_start + tier_header_height//2), tier_label, 
-                  font=font_tier_header, fill="#FFFFFF", anchor="lm")
+        # Highlight top 3 overall
+        overall_rank = emp.get("peer_rank", 999)
+        if overall_rank <= 3:
+            medal_colors_map = {
+                1: (255, 215, 0, 60),   # Gold
+                2: (192, 192, 192, 60), # Silver
+                3: (205, 127, 50, 60),  # Bronze
+            }
+            row_bg = medal_colors_map.get(overall_rank, row_bg)
         
-        # Vertical separator between tier name and columns
-        sep_x = x_start + 130
-        draw.line([sep_x, y_start + 5, sep_x, y_start + tier_header_height - 5],
-                  fill=(255, 255, 255, 120), width=1)
+        draw.rectangle([margin_x, y, margin_x + table_width, y + row_height - 1], fill=row_bg)
         
-        # Column labels on right side of header (abbreviated)
-        # Layout: [TIER NAME] | [#] [NAME] [TOTAL] [PPA] [LBW] [LSC] [GL] [CV]
-        col_labels = ["#", "NAME", "TOTAL", "PPA", "LBW", "LSC", "GL", "CV"]
-        col_widths = [28, 110, 50, 50, 50, 50, 40, 40]  # Relative widths
+        # === Draw each column ===
         
-        # Scale to fit available space (right portion of header)
-        label_area_start = x_start + 140  # After tier name + separator
-        label_area_width = col_w - 150
-        total_label_width = sum(col_widths)
-        scale = label_area_width / total_label_width
-        col_widths = [int(w * scale) for w in col_widths]
+        # RANK column
+        col = scaled_cols[0]
+        rank_text = str(overall_rank)
+        rank_color = text_white
+        if overall_rank <= 3:
+            rank_color = {1: "#FFD700", 2: "#C0C0C0", 3: "#CD7F32"}.get(overall_rank, text_white)
+        draw.text((margin_x + col[1] + col[2]//2, y + row_height//2), rank_text,
+                  font=font_data_bold, fill=rank_color, anchor="mm")
         
-        label_x = label_area_start
-        for i, (label, width) in enumerate(zip(col_labels, col_widths)):
-            # Draw column label with full white for better visibility
-            draw.text((label_x + width//2, y_start + tier_header_height//2), label, 
-                      font=font_col_label, fill="#FFFFFF", anchor="mm")
-            label_x += width
+        # EMPLOYEE column
+        col = scaled_cols[1]
+        name = str(emp.get("name", "Unknown"))
+        if len(name) > 18:
+            name = name[:17] + ".."
+        draw.text((margin_x + col[1] + 10, y + row_height//2), name,
+                  font=font_data_bold, fill=text_white, anchor="lm")
         
-        y = y_start + tier_header_height
+        # TIER column - draw badge
+        col = scaled_cols[2]
+        badge_config = tier_badges.get(job_title, tier_badges["server"])
+        badge_label = badge_config["label"]
+        badge_color = hex_to_rgb(badge_config["color"])
         
-        # Employee rows
-        for idx, emp in enumerate(employees):
-            # Alternating row background
-            if idx % 2 == 0:
-                row_bg = card_bg + (100,)
-            else:
-                row_bg = card_bg + (60,)
+        # Badge dimensions
+        badge_w = 70
+        badge_h = 20
+        badge_x = margin_x + col[1] + (col[2] - badge_w) // 2
+        badge_y = y + (row_height - badge_h) // 2
+        
+        # Draw rounded badge
+        draw.rounded_rectangle([badge_x, badge_y, badge_x + badge_w, badge_y + badge_h],
+                               radius=4, fill=badge_color)
+        draw.text((badge_x + badge_w//2, badge_y + badge_h//2), badge_label,
+                  font=font_badge, fill="#FFFFFF", anchor="mm")
+        
+        # TOTAL SCORE column
+        col = scaled_cols[3]
+        total_score = float(emp.get("total_score", 0) or 0)
+        score_color = "#22C55E" if total_score >= 80 else ("#EAB308" if total_score >= 60 else "#EF4444")
+        draw.text((margin_x + col[1] + col[2]//2, y + row_height//2), f"{total_score:.1f}",
+                  font=font_score, fill=score_color, anchor="mm")
+        
+        # Metric columns with progress bars
+        metric_cols = [
+            (scaled_cols[4], "score_ppa", 30),    # PPA max 30
+            (scaled_cols[5], "score_lbw", 25),    # LBW max 25
+            (scaled_cols[6], "score_lsc", 30),    # LSC max 30
+            (scaled_cols[7], "score_glass", 20),  # Glass max 20
+        ]
+        
+        for col, metric_key, max_val in metric_cols:
+            score = float(emp.get(metric_key, 0) or 0)
             
-            # Highlight top 3 overall
-            overall_rank = emp.get("peer_rank", 999)
-            if overall_rank <= 3:
-                medal_colors_map = {1: colors.get("gold"), 2: colors.get("silver"), 3: colors.get("bronze")}
-                row_bg = hex_to_rgb(medal_colors_map.get(overall_rank, colors.get("gold"))) + (50,)
+            # Score text
+            score_text = f"{score:.1f}"
+            draw.text((margin_x + col[1] + col[2]//2, y + row_height//2 - 4), score_text,
+                      font=font_metric, fill=text_light, anchor="mm")
             
-            draw.rectangle([x_start, y, x_start + col_w, y + row_height - 1], fill=row_bg)
+            # Progress bar
+            bar_w = col[2] - 20
+            bar_h = 4
+            bar_x = margin_x + col[1] + 10
+            bar_y = y + row_height//2 + 8
             
-            # Data columns (same layout as header labels)
-            data_x = label_area_start
+            # Bar background
+            draw.rectangle([bar_x, bar_y, bar_x + bar_w, bar_y + bar_h], fill=(60, 60, 80))
             
-            # Rank
-            rank_text = f"#{overall_rank}"
-            if overall_rank <= 3:
-                rank_color = {1: colors.get("gold"), 2: colors.get("silver"), 3: colors.get("bronze")}.get(overall_rank, text_white)
-            else:
-                rank_color = text_light
-            draw.text((data_x + col_widths[0]//2, y + row_height//2), rank_text, 
-                      font=font_data, fill=rank_color, anchor="mm")
-            data_x += col_widths[0]
-            
-            # Name
-            name = str(emp.get("name", "Unknown"))
-            max_name = 12
-            if len(name) > max_name:
-                name = name[:max_name-1] + ".."
-            draw.text((data_x + 5, y + row_height//2), name, 
-                      font=font_data_bold, fill=text_white, anchor="lm")
-            data_x += col_widths[1]
-            
-            # Total score
-            total_score = float(emp.get("total_score", 0) or 0)
-            score_color = colors.get("gold") if overall_rank <= 3 else text_white
-            draw.text((data_x + col_widths[2]//2, y + row_height//2), f"{total_score:.0f}", 
-                      font=font_data_bold, fill=score_color, anchor="mm")
-            data_x += col_widths[2]
-            
-            # Metric scores with mini colored bars
-            metrics = [
-                ("score_ppa", col_widths[3]),
-                ("score_lbw", col_widths[4]),
-                ("score_lsc", col_widths[5]),
-                ("score_glass", col_widths[6]),
-                ("score_cv", col_widths[7]),
-            ]
-            
-            for metric_key, width in metrics:
-                score = float(emp.get(metric_key, 0) or 0)
-                
-                # Mini progress bar (just 3px tall)
-                bar_w = width - 8
-                bar_h = 3
-                bar_x = data_x + 4
-                bar_y = y + row_height - 5
-                
-                # Bar background
-                draw.rectangle([bar_x, bar_y, bar_x + bar_w, bar_y + bar_h], 
-                              fill=(60, 60, 80))
-                
-                # Bar fill
-                fill_pct = min(score / 100, 1.0)
-                if fill_pct > 0:
-                    fill_w = int(bar_w * fill_pct)
-                    if score >= 80:
-                        bar_color = bar_green
-                    elif score >= 60:
-                        bar_color = bar_yellow
-                    else:
-                        bar_color = bar_red
-                    draw.rectangle([bar_x, bar_y, bar_x + fill_w, bar_y + bar_h], fill=bar_color)
-                
-                # Score text (smaller)
-                draw.text((data_x + width//2, y + row_height//2 - 2), f"{score:.0f}", 
-                          font=font_score, fill=text_light, anchor="mm")
-                
-                data_x += width
-            
-            y += row_height
+            # Bar fill (percentage based on max value)
+            fill_pct = min(score / max_val, 1.0) if max_val > 0 else 0
+            if fill_pct > 0:
+                fill_w = int(bar_w * fill_pct)
+                if fill_pct >= 0.8:
+                    bar_color = bar_green
+                elif fill_pct >= 0.6:
+                    bar_color = bar_yellow
+                else:
+                    bar_color = bar_red
+                draw.rectangle([bar_x, bar_y, bar_x + fill_w, bar_y + bar_h], fill=bar_color)
         
-        return y + 10  # Return next y position with spacing
-    
-    # Draw left column tiers
-    y_pos = title_area_height
-    for tier_key, employees in left_tiers:
-        y_pos = draw_tier_section(tier_key, employees, left_col_x, y_pos, col_width)
-    
-    # Draw right column tiers
-    y_pos = title_area_height
-    for tier_key, employees in right_tiers:
-        y_pos = draw_tier_section(tier_key, employees, right_col_x, y_pos, col_width)
+        y += row_height
     
     # === FOOTER ===
     footer_y = SLIDE_HEIGHT - footer_height + 8
