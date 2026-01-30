@@ -902,15 +902,15 @@ def generate_complete_rankings_slide(
     # Fonts
     font_title = get_font(24, bold=True)
     font_subtitle = get_font(10)
-    font_header = get_font(8, bold=True)
+    font_header = get_font(10, bold=True)  # Increased from 8 for readability
     font_position = get_font(16, bold=True)
     font_badge = get_font(7, bold=True)
     font_name = get_font(10, bold=True)
     font_job = get_font(7)
     font_tier = get_font(7, bold=True)
     font_score = get_font(11, bold=True)
-    font_metric_val = get_font(8)
-    font_metric_max = get_font(6)
+    font_metric_val = get_font(9)  # Increased from 8
+    font_metric_max = get_font(7)  # Increased from 6
     font_bonus = get_font(9, bold=True)
     font_footer = get_font(8)
     
@@ -921,7 +921,7 @@ def generate_complete_rankings_slide(
     table_width = (SLIDE_WIDTH - (margin_x * 2) - divider_width) // 2
     
     title_height = 32
-    header_height = 22
+    header_height = 28  # Increased from 22 for better header visibility
     footer_height = 16
     
     # Calculate row height for 14 rows
