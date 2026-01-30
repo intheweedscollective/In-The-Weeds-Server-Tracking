@@ -943,17 +943,37 @@ def generate_complete_rankings_slide(
     table_top = margin_y + title_height
     
     def draw_circle_progress(cx, cy, radius, percentage, color):
-        """Draw a circular progress indicator."""
-        # Background circle
-        draw.ellipse([cx - radius, cy - radius, cx + radius, cy + radius],
-                     outline=progress_bg, width=3)
+        """Draw a smooth circular progress indicator using anti-aliasing."""
+        # Draw at 4x size for anti-aliasing, then we'll composite
+        scale = 4
+        size = (radius * 2 + 10) * scale
+        circle_img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+        circle_draw = ImageDraw.Draw(circle_img)
+        
+        center = size // 2
+        r = radius * scale
+        line_width = 3 * scale
+        
+        # Background circle (full gray ring)
+        circle_draw.ellipse([center - r, center - r, center + r, center + r],
+                           outline=progress_bg, width=line_width)
         
         # Progress arc
         if percentage > 0:
             start_angle = -90  # Start from top
-            end_angle = start_angle + (percentage * 360 / 100)
-            draw.arc([cx - radius, cy - radius, cx + radius, cy + radius],
-                     start=start_angle, end=end_angle, fill=color, width=3)
+            end_angle = -90 + (percentage * 360 / 100)
+            # Use pieslice for smoother rendering, then overlay
+            circle_draw.arc([center - r, center - r, center + r, center + r],
+                           start=start_angle, end=end_angle, fill=color, width=line_width)
+        
+        # Scale down with anti-aliasing
+        small_size = (radius * 2 + 10, radius * 2 + 10)
+        circle_img = circle_img.resize(small_size, Image.LANCZOS)
+        
+        # Paste onto main image
+        paste_x = cx - small_size[0] // 2
+        paste_y = cy - small_size[1] // 2
+        img.paste(circle_img, (paste_x, paste_y), circle_img)
     
     def get_position_badge_color(pos_label):
         """Get badge color based on position label prefix."""
