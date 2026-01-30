@@ -1075,8 +1075,9 @@ def generate_complete_rankings_slide(
     
     # === VERTICAL DIVIDER LINE (drawn after tables so it's on top) ===
     divider_x = margin_x + col_width + (divider_width // 2)
-    draw.line([divider_x, table_top, divider_x, SLIDE_HEIGHT - footer_height - margin_y],
-              fill=colors.get("primary", "#E63946"), width=divider_width)
+    # Draw a thick red rectangle as the divider for better visibility
+    draw.rectangle([divider_x - 2, table_top, divider_x + 2, SLIDE_HEIGHT - footer_height - margin_y],
+                   fill="#DC2626")
     
     # === FOOTER ===
     footer_y = SLIDE_HEIGHT - footer_height + 2
