@@ -1171,11 +1171,11 @@ def generate_complete_rankings_slide(
             
             y += row_height
     
-    # Draw left table
-    draw_table(left_employees, left_x, table_width)
+    # Draw left table (rows 1-14)
+    draw_table(left_employees, left_x, table_width, start_row_num=1)
     
-    # Draw right table
-    draw_table(right_employees, right_x, table_width)
+    # Draw right table (rows 15-28)
+    draw_table(right_employees, right_x, table_width, start_row_num=15)
     
     # === VERTICAL RED DIVIDER LINE ===
     divider_x = margin_x + table_width + (divider_width // 2)
