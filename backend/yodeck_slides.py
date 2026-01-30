@@ -959,31 +959,45 @@ def generate_complete_rankings_slide(
         config = tier_config[tier_key]
         tier_color = hex_to_rgb(config["color"])
         
-        # Tier header bar with column labels
+        # Tier header bar with column labels - gradient effect
         draw.rectangle([x_start, y_start, x_start + col_w, y_start + tier_header_height], 
-                      fill=tier_color + (220,))
+                      fill=tier_color + (240,))
         
-        # Tier name on left
+        # Add subtle bottom border for separation
+        draw.line([x_start, y_start + tier_header_height - 1, x_start + col_w, y_start + tier_header_height - 1],
+                  fill=(255, 255, 255, 80), width=1)
+        
+        # Tier name on left with background pill
         tier_label = f"{config['label']} ({len(employees)})"
-        draw.text((x_start + 8, y_start + tier_header_height//2), tier_label, 
+        
+        # Draw tier name with slight shadow for depth
+        draw.text((x_start + 11, y_start + tier_header_height//2 + 1), tier_label, 
+                  font=font_tier_header, fill=(0, 0, 0, 100), anchor="lm")
+        draw.text((x_start + 10, y_start + tier_header_height//2), tier_label, 
                   font=font_tier_header, fill="#FFFFFF", anchor="lm")
         
+        # Vertical separator between tier name and columns
+        sep_x = x_start + 130
+        draw.line([sep_x, y_start + 5, sep_x, y_start + tier_header_height - 5],
+                  fill=(255, 255, 255, 120), width=1)
+        
         # Column labels on right side of header (abbreviated)
-        # Layout: [TIER NAME]  ...  [#] [NAME] [TOTAL] [PPA] [LBW] [LSC] [GL] [CV]
+        # Layout: [TIER NAME] | [#] [NAME] [TOTAL] [PPA] [LBW] [LSC] [GL] [CV]
         col_labels = ["#", "NAME", "TOTAL", "PPA", "LBW", "LSC", "GL", "CV"]
-        col_widths = [25, 100, 45, 45, 45, 45, 35, 35]  # Relative widths
+        col_widths = [28, 110, 50, 50, 50, 50, 40, 40]  # Relative widths
         
         # Scale to fit available space (right portion of header)
-        label_area_start = x_start + 140  # After tier name
-        label_area_width = col_w - 145
+        label_area_start = x_start + 140  # After tier name + separator
+        label_area_width = col_w - 150
         total_label_width = sum(col_widths)
         scale = label_area_width / total_label_width
         col_widths = [int(w * scale) for w in col_widths]
         
         label_x = label_area_start
         for i, (label, width) in enumerate(zip(col_labels, col_widths)):
+            # Draw column label with full white for better visibility
             draw.text((label_x + width//2, y_start + tier_header_height//2), label, 
-                      font=font_col_label, fill=(255, 255, 255, 200), anchor="mm")
+                      font=font_col_label, fill="#FFFFFF", anchor="mm")
             label_x += width
         
         y = y_start + tier_header_height
