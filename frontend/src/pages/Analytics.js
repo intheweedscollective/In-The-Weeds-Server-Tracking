@@ -530,7 +530,7 @@ export default function Analytics() {
                     </div>
                     
                     {/* Visual Range Chart with Benchmark Line */}
-                    <div className="space-y-2">
+                    <div className="space-y-2" data-testid={`metric-chart-${metricKey}`}>
                       <div className="flex justify-between text-xs font-semibold">
                         <span className={isInverse ? "text-green-600" : "text-red-500"}>
                           {isInverse ? '✓ Best' : '⚠ Low'}: {formatMetricValue(metricKey, rangeMin)}
