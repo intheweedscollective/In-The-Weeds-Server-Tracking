@@ -2240,6 +2240,9 @@ async def get_analytics_pdf_v2(year: int, quarter: str):
     # Capture chart screenshots from the actual Analytics page
     chart_images = []
     
+    # Set playwright browser path
+    os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/pw-browsers"
+    
     try:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
