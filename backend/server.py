@@ -2564,9 +2564,9 @@ async def get_analytics_pdf_v2(year: int, quarter: str):
         
         chart_buffer = create_metric_chart(metric_key, cfg, data)
         if chart_buffer:
-            chart_img = RLImage(chart_buffer, width=6.8*inch, height=1.1*inch)
+            chart_img = RLImage(chart_buffer, width=7.2*inch, height=1.8*inch)
             story.append(chart_img)
-            story.append(Spacer(1, 8))
+            story.append(Spacer(1, 6))
     
     story.append(Spacer(1, 10))
     
