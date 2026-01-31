@@ -2745,8 +2745,12 @@ async def upload_snapshot_data(snapshot_id: str, file: UploadFile = File(...)):
                     quarter=snapshot["quarter"],
                 )
                 
-                # Calculate metrics and scores
-                emp = calculate_derived_metrics(emp)
+                # Calculate metrics and scores (full pipeline)
+                emp = calculate_lbw_total(emp)  # Calculate LBW from liquor+beer+wine
+                emp = calculate_derived_metrics(emp)  # PPA, LBW/Guest, Glass/Guest, G/LSC
+                emp = calculate_customer_voice_score(emp)  # CV NPS score
+                emp = calculate_review_tracker_bonus(emp)  # Review tracker bonus
+                emp = calculate_combined_cv_rt(emp)  # Combined CV + RT
                 emp = calculate_normalized_scores(emp, settings)
                 emp = calculate_bonus_points(emp, settings)
                 emp = calculate_total_score(emp, settings)
