@@ -2365,9 +2365,11 @@ async def get_analytics_pdf_v2(year: int, quarter: str):
     # === PERFORMANCE OVERVIEW CHARTS (matching the Analytics tab) ===
     story.append(Paragraph("Performance Overview", section_style))
     
-    def create_metric_chart(metric_key, cfg, data, width=7, height=1.2):
-        """Create a horizontal range chart for a metric matching the Analytics tab."""
+    def create_metric_chart(metric_key, cfg, data, width=7, height=2.2):
+        """Create a chart that exactly matches the Analytics tab design."""
         fig, ax = plt.subplots(figsize=(width, height))
+        fig.patch.set_facecolor('white')
+        ax.set_facecolor('white')
         
         values = [e.get(metric_key) for e in employees_docs if e.get(metric_key) is not None]
         if not values:
@@ -2380,12 +2382,7 @@ async def get_analytics_pdf_v2(year: int, quarter: str):
         benchmark = data["benchmark"]
         higher_better = cfg["higher_better"]
         
-        # Calculate range with padding
-        range_padding = (max_val - min_val) * 0.15 if max_val > min_val else max_val * 0.2
-        chart_min = max(0, min_val - range_padding)
-        chart_max = max_val + range_padding
-        
-        # Calculate zone thresholds
+        # Calculate thresholds (matching frontend logic)
         if higher_better:
             high_threshold = benchmark * 1.1
             low_threshold = benchmark * 0.9
@@ -2393,80 +2390,161 @@ async def get_analytics_pdf_v2(year: int, quarter: str):
             high_threshold = benchmark * 0.9
             low_threshold = benchmark * 1.1
         
-        # Draw gradient background zones
-        ax.set_xlim(chart_min, chart_max)
-        ax.set_ylim(0, 1)
-        
-        # Create gradient effect with zones
+        # Count employees in each zone
         if higher_better:
-            # Red (left/low) -> Yellow (middle) -> Green (right/high)
-            ax.axvspan(chart_min, low_threshold, alpha=0.3, color='#FEE2E2', zorder=1)
-            ax.axvspan(low_threshold, high_threshold, alpha=0.3, color='#FEF9C3', zorder=1)
-            ax.axvspan(high_threshold, chart_max, alpha=0.3, color='#DCFCE7', zorder=1)
+            high_count = sum(1 for v in values if v >= high_threshold)
+            low_count = sum(1 for v in values if v < low_threshold)
         else:
-            # Green (left/low) -> Yellow (middle) -> Red (right/high)
-            ax.axvspan(chart_min, high_threshold, alpha=0.3, color='#DCFCE7', zorder=1)
-            ax.axvspan(high_threshold, low_threshold, alpha=0.3, color='#FEF9C3', zorder=1)
-            ax.axvspan(low_threshold, chart_max, alpha=0.3, color='#FEE2E2', zorder=1)
+            high_count = sum(1 for v in values if v <= high_threshold)
+            low_count = sum(1 for v in values if v > low_threshold)
+        medium_count = len(values) - high_count - low_count
         
-        # Draw the range bar (min to max)
-        bar_height = 0.35
-        bar_y = 0.5 - bar_height/2
+        # Set up the main chart area
+        ax.set_xlim(0, 100)
+        ax.set_ylim(0, 100)
         
-        # Gradient bar from min to max
-        gradient = np.linspace(0, 1, 100)
-        for i, g in enumerate(gradient):
-            x_pos = min_val + (max_val - min_val) * i / 100
-            x_width = (max_val - min_val) / 100
-            
-            # Color based on position relative to benchmark
-            if higher_better:
-                if x_pos >= high_threshold:
-                    color = '#22C55E'  # Green
-                elif x_pos >= low_threshold:
-                    color = '#EAB308'  # Yellow
-                else:
-                    color = '#EF4444'  # Red
-            else:
-                if x_pos <= high_threshold:
-                    color = '#22C55E'  # Green
-                elif x_pos <= low_threshold:
-                    color = '#EAB308'  # Yellow
-                else:
-                    color = '#EF4444'  # Red
-            
-            ax.add_patch(plt.Rectangle((x_pos, bar_y), x_width, bar_height, 
-                                       facecolor=color, edgecolor='none', alpha=0.8, zorder=2))
+        # Calculate positions as percentages
+        range_span = max_val - min_val if max_val > min_val else 1
+        def to_pct(val):
+            return max(0, min(100, ((val - min_val) / range_span) * 100))
         
-        # Draw benchmark line
-        ax.axvline(x=benchmark, color='#1F2937', linestyle='--', linewidth=2, zorder=4, label='Benchmark')
-        ax.annotate(f'Target: {format_value(metric_key, benchmark)}', 
-                   xy=(benchmark, 0.92), fontsize=8, ha='center', color='#1F2937', fontweight='bold')
+        benchmark_pct = to_pct(benchmark)
+        avg_pct = to_pct(avg_val)
+        high_thresh_pct = to_pct(high_threshold)
+        low_thresh_pct = to_pct(low_threshold)
         
-        # Draw average marker
-        ax.plot(avg_val, 0.5, marker='D', markersize=10, color='#3B82F6', zorder=5, markeredgecolor='white', markeredgewidth=1.5)
-        ax.annotate(f'Avg: {format_value(metric_key, avg_val)}', 
-                   xy=(avg_val, 0.12), fontsize=8, ha='center', color='#3B82F6', fontweight='bold')
+        # Draw the main gradient bar (matching the tab exactly)
+        bar_y = 35
+        bar_height = 30
         
-        # Draw min/max labels
-        ax.annotate(f'Min: {format_value(metric_key, min_val)}', 
-                   xy=(min_val, 0.5), fontsize=7, ha='right' if min_val > chart_min + (chart_max-chart_min)*0.1 else 'left', 
-                   va='center', color='#6B7280')
-        ax.annotate(f'Max: {format_value(metric_key, max_val)}', 
-                   xy=(max_val, 0.5), fontsize=7, ha='left' if max_val < chart_max - (chart_max-chart_min)*0.1 else 'right',
-                   va='center', color='#6B7280')
+        # Background gradient: red -> yellow -> green (or reverse if inverse)
+        if higher_better:
+            # Red on left, green on right
+            colors_gradient = ['#FEE2E2', '#FEF9C3', '#DCFCE7']
+            zone_colors = ['#F87171', '#FBBF24', '#4ADE80']
+        else:
+            # Green on left, red on right
+            colors_gradient = ['#DCFCE7', '#FEF9C3', '#FEE2E2']
+            zone_colors = ['#4ADE80', '#FBBF24', '#F87171']
         
-        # Title
-        meeting_pct = round((data["meeting"] / data["total"]) * 100) if data["total"] > 0 else 0
-        ax.set_title(f"{cfg['label']} ({cfg['weight']}) - {meeting_pct}% Meeting Benchmark", 
-                    fontsize=10, fontweight='bold', color='#1F2937', loc='left', pad=8)
+        # Draw gradient background bar
+        from matplotlib.colors import LinearSegmentedColormap
+        gradient = np.linspace(0, 1, 256).reshape(1, -1)
+        cmap = LinearSegmentedColormap.from_list('custom', colors_gradient, N=256)
+        ax.imshow(gradient, aspect='auto', cmap=cmap, extent=[0, 100, bar_y, bar_y + bar_height], zorder=1)
+        
+        # Add border to the bar
+        ax.add_patch(plt.Rectangle((0, bar_y), 100, bar_height, fill=False, 
+                                   edgecolor='#E5E7EB', linewidth=1.5, zorder=2))
+        
+        # Draw the colored zone overlays
+        if higher_better:
+            # Red zone (below low threshold)
+            ax.add_patch(plt.Rectangle((0, bar_y), low_thresh_pct, bar_height, 
+                                       facecolor='#F87171', alpha=0.4, zorder=3))
+            # Yellow zone (between thresholds)
+            ax.add_patch(plt.Rectangle((low_thresh_pct, bar_y), high_thresh_pct - low_thresh_pct, bar_height, 
+                                       facecolor='#FBBF24', alpha=0.3, zorder=3))
+            # Green zone (above high threshold)
+            ax.add_patch(plt.Rectangle((high_thresh_pct, bar_y), 100 - high_thresh_pct, bar_height, 
+                                       facecolor='#4ADE80', alpha=0.4, zorder=3))
+        else:
+            # Green zone (below high threshold - for inverse metrics)
+            ax.add_patch(plt.Rectangle((0, bar_y), high_thresh_pct, bar_height, 
+                                       facecolor='#4ADE80', alpha=0.4, zorder=3))
+            # Yellow zone
+            ax.add_patch(plt.Rectangle((high_thresh_pct, bar_y), low_thresh_pct - high_thresh_pct, bar_height, 
+                                       facecolor='#FBBF24', alpha=0.3, zorder=3))
+            # Red zone
+            ax.add_patch(plt.Rectangle((low_thresh_pct, bar_y), 100 - low_thresh_pct, bar_height, 
+                                       facecolor='#F87171', alpha=0.4, zorder=3))
+        
+        # Draw TARGET line (orange dashed) with arrow
+        ax.axvline(x=benchmark_pct, ymin=0.35, ymax=0.75, color='#F59E0B', linestyle='--', linewidth=2, zorder=5)
+        # Triangle arrow at top
+        ax.plot(benchmark_pct, bar_y + bar_height + 3, marker='v', markersize=8, color='#F59E0B', zorder=6)
+        # TARGET label below
+        ax.text(benchmark_pct, bar_y - 8, 'TARGET', ha='center', va='top', fontsize=8, 
+                fontweight='bold', color='#D97706', zorder=6)
+        
+        # Draw TEAM AVG diamond (blue)
+        ax.plot(avg_pct, bar_y + bar_height/2, marker='D', markersize=14, color='#3B82F6', 
+                zorder=7, markeredgecolor='white', markeredgewidth=2)
+        # TEAM AVG label above
+        ax.text(avg_pct, bar_y + bar_height + 8, 'TEAM AVG', ha='center', va='bottom', fontsize=8, 
+                fontweight='bold', color='#2563EB', zorder=6)
+        
+        # Low/High labels at the ends
+        if higher_better:
+            ax.text(2, bar_y + bar_height/2, f'⚠ Low: {format_value(metric_key, min_val)}', 
+                   ha='left', va='center', fontsize=8, color='#DC2626', fontweight='semibold', zorder=6)
+            ax.text(98, bar_y + bar_height/2, f'✓ High: {format_value(metric_key, max_val)}', 
+                   ha='right', va='center', fontsize=8, color='#16A34A', fontweight='semibold', zorder=6)
+        else:
+            ax.text(2, bar_y + bar_height/2, f'✓ Best: {format_value(metric_key, min_val)}', 
+                   ha='left', va='center', fontsize=8, color='#16A34A', fontweight='semibold', zorder=6)
+            ax.text(98, bar_y + bar_height/2, f'⚠ Worst: {format_value(metric_key, max_val)}', 
+                   ha='right', va='center', fontsize=8, color='#DC2626', fontweight='semibold', zorder=6)
+        
+        # Performance Distribution bar at bottom
+        dist_y = 8
+        dist_height = 12
+        total = len(values)
+        high_pct_width = (high_count / total) * 100 if total > 0 else 0
+        medium_pct_width = (medium_count / total) * 100 if total > 0 else 0
+        low_pct_width = (low_count / total) * 100 if total > 0 else 0
+        
+        # Draw distribution bar segments
+        x_pos = 0
+        if high_count > 0:
+            ax.add_patch(plt.Rectangle((x_pos, dist_y), high_pct_width, dist_height, 
+                                       facecolor='#4ADE80', edgecolor='none', zorder=3))
+            ax.text(x_pos + high_pct_width/2, dist_y + dist_height/2, f'{round(high_pct_width)}%', 
+                   ha='center', va='center', fontsize=7, color='white', fontweight='bold', zorder=4)
+            x_pos += high_pct_width
+        
+        if medium_count > 0:
+            ax.add_patch(plt.Rectangle((x_pos, dist_y), medium_pct_width, dist_height, 
+                                       facecolor='#FBBF24', edgecolor='none', zorder=3))
+            ax.text(x_pos + medium_pct_width/2, dist_y + dist_height/2, f'{round(medium_pct_width)}%', 
+                   ha='center', va='center', fontsize=7, color='white', fontweight='bold', zorder=4)
+            x_pos += medium_pct_width
+        
+        if low_count > 0:
+            ax.add_patch(plt.Rectangle((x_pos, dist_y), low_pct_width, dist_height, 
+                                       facecolor='#F87171', edgecolor='none', zorder=3))
+            ax.text(x_pos + low_pct_width/2, dist_y + dist_height/2, f'{round(low_pct_width)}%', 
+                   ha='center', va='center', fontsize=7, color='white', fontweight='bold', zorder=4)
+        
+        # Legend below distribution bar
+        ax.text(50, 1, f'● Exceeds ({high_count})    ● Near Target ({medium_count})    ● Below ({low_count})', 
+               ha='center', va='bottom', fontsize=7, color='#6B7280', zorder=6)
+        
+        # Title with metric info (matching the tab header)
+        title_text = f"{cfg['label']}"
+        ax.text(0, 95, title_text, ha='left', va='top', fontsize=12, fontweight='bold', color='#1F2937', zorder=6)
+        ax.text(0, 87, f"Weight: {cfg['weight']}", ha='left', va='top', fontsize=9, color='#6B7280', zorder=6)
+        
+        # Benchmark info on the right
+        ax.text(100, 95, f"Benchmark: {format_value(metric_key, benchmark)}{cfg.get('unit', '')}", 
+               ha='right', va='top', fontsize=9, fontweight='semibold', color='#DC2626', zorder=6)
+        ax.text(100, 87, f"{'Higher is better' if higher_better else 'Lower is better'}", 
+               ha='right', va='top', fontsize=8, color='#9CA3AF', zorder=6)
         
         # Clean up axes
-        ax.set_yticks([])
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        ax.spines['left'].set_visible(False)
-        ax.tick_params(axis='x', labelsize=7)
+        ax.set_xlim(0, 100)
+        ax.set_ylim(0, 100)
+        ax.axis('off')
+        
+        plt.tight_layout(pad=0.5)
+        
+        # Save to buffer
+        chart_buffer = io.BytesIO()
+        plt.savefig(chart_buffer, format='png', dpi=150, bbox_inches='tight', 
+                   facecolor='white', edgecolor='none')
+        plt.close(fig)
+        chart_buffer.seek(0)
+        return chart_buffer
         
         plt.tight_layout()
         
