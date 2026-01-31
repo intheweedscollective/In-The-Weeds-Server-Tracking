@@ -2212,16 +2212,13 @@ async def get_top_performers_pdf_v2(year: int, quarter: str):
 
 @api_router.get("/v2/analytics/{year}/{quarter}/pdf")
 async def get_analytics_pdf_v2(year: int, quarter: str):
-    """Generate Analytics PDF that matches the Analytics tab exactly, including charts."""
+    """Generate Analytics PDF by capturing exact charts from the Analytics tab."""
     from reportlab.lib import colors as rl_colors
-    from reportlab.lib.pagesizes import LETTER
-    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import inch
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle, PageBreak, Image as RLImage
-    import matplotlib.pyplot as plt
-    import matplotlib.patches as mpatches
-    from matplotlib.patches import FancyBboxPatch
-    import numpy as np
+    from playwright.async_api import async_playwright
+    import asyncio
     
     employees_docs = await db.employees_v2.find(
         {"year": year, "quarter": quarter.upper()},
@@ -2230,6 +2227,140 @@ async def get_analytics_pdf_v2(year: int, quarter: str):
     
     if not employees_docs:
         raise HTTPException(status_code=404, detail=f"No employee data for {quarter} {year}")
+    
+    # Get frontend URL from environment
+    frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+    # Use the preview URL for capturing
+    preview_url = os.environ.get("REACT_APP_BACKEND_URL", "https://server-scorecard.preview.emergentagent.com")
+    if "preview.emergentagent.com" in preview_url:
+        frontend_url = preview_url.replace("/api", "").rstrip("/")
+    
+    analytics_url = f"{frontend_url}/analytics?year={year}&quarter={quarter}"
+    
+    # Capture chart screenshots from the actual Analytics page
+    chart_images = []
+    
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            page = await browser.new_page(viewport={"width": 1400, "height": 900})
+            
+            await page.goto(analytics_url, wait_until="networkidle", timeout=30000)
+            await asyncio.sleep(2)  # Wait for charts to render
+            
+            # Capture the Performance Overview section (all metric charts)
+            # First, scroll to ensure all content is loaded
+            await page.evaluate("window.scrollTo(0, 0)")
+            await asyncio.sleep(0.5)
+            
+            # Capture the score distribution boxes (top section)
+            try:
+                dist_section = page.locator('[data-testid="score-distribution"]').first
+                if await dist_section.count() > 0:
+                    dist_img = await dist_section.screenshot()
+                    chart_images.append(("Score Distribution", dist_img))
+            except:
+                pass
+            
+            # Capture each metric chart individually
+            metric_ids = ["ppa", "lbw_per_guest", "glassware_per_guest", "guests_per_lsc", "cv_score"]
+            metric_labels = ["PPA", "LBW/Guest", "Glass/Guest", "Guests/LSC", "CV Score"]
+            
+            for metric_id, label in zip(metric_ids, metric_labels):
+                try:
+                    # Try to find the chart by test id
+                    chart = page.locator(f'[data-testid="metric-chart-{metric_id}"]').first
+                    if await chart.count() > 0:
+                        await chart.scroll_into_view_if_needed()
+                        await asyncio.sleep(0.3)
+                        img_data = await chart.screenshot()
+                        chart_images.append((label, img_data))
+                except Exception as e:
+                    print(f"Could not capture {label} chart: {e}")
+            
+            # If we couldn't find individual charts, capture the whole Performance Overview section
+            if len(chart_images) < 3:
+                await page.evaluate("window.scrollTo(0, 200)")
+                await asyncio.sleep(0.5)
+                
+                # Capture full-width screenshots of the charts area
+                for scroll_pos in [200, 600, 1000, 1400]:
+                    await page.evaluate(f"window.scrollTo(0, {scroll_pos})")
+                    await asyncio.sleep(0.3)
+                    img_data = await page.screenshot(clip={"x": 50, "y": 100, "width": 1300, "height": 400})
+                    chart_images.append((f"Section_{scroll_pos}", img_data))
+            
+            # Capture Top 10 sections
+            await page.evaluate("window.scrollTo(0, 2000)")
+            await asyncio.sleep(0.5)
+            try:
+                top10_section = page.locator('text=Top 10 Overall').first
+                if await top10_section.count() > 0:
+                    await top10_section.scroll_into_view_if_needed()
+                    await asyncio.sleep(0.3)
+                    # Capture a region around the top 10 section
+                    img_data = await page.screenshot(clip={"x": 50, "y": 100, "width": 1300, "height": 500})
+                    chart_images.append(("Top 10 Overall", img_data))
+            except:
+                pass
+            
+            await browser.close()
+            
+    except Exception as e:
+        print(f"Playwright capture failed: {e}")
+        # Fall back to generating without screenshots
+    
+    # Build the PDF
+    buffer = io.BytesIO()
+    PAGE_WIDTH = 11 * inch
+    PAGE_HEIGHT = 6.1875 * inch
+    
+    doc = SimpleDocTemplate(buffer, pagesize=(PAGE_WIDTH, PAGE_HEIGHT),
+                          topMargin=0.3*inch, bottomMargin=0.3*inch,
+                          leftMargin=0.3*inch, rightMargin=0.3*inch)
+    
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('title', parent=styles['Title'], fontName='Helvetica-Bold',
+                                fontSize=20, textColor=rl_colors.HexColor('#1F2937'), alignment=1, spaceAfter=4)
+    subtitle_style = ParagraphStyle('subtitle', parent=styles['Normal'], fontName='Helvetica',
+                                   fontSize=10, textColor=rl_colors.HexColor('#6B7280'), alignment=1, spaceAfter=10)
+    
+    story = []
+    
+    # Title
+    story.append(Paragraph("Performance Analytics", title_style))
+    story.append(Paragraph(f"{quarter} {year} • Bubba Gump Shrimp Co. • Las Vegas", subtitle_style))
+    
+    # Add captured chart images
+    if chart_images:
+        for label, img_data in chart_images:
+            img_buffer = io.BytesIO(img_data)
+            # Scale image to fit page width while maintaining aspect ratio
+            img = RLImage(img_buffer, width=10*inch, height=2.5*inch, kind='proportional')
+            story.append(img)
+            story.append(Spacer(1, 10))
+            
+            # Add page break after every 2 images to avoid overflow
+            if chart_images.index((label, img_data)) % 2 == 1:
+                story.append(PageBreak())
+    else:
+        story.append(Paragraph("Charts could not be captured. Please view the Analytics tab directly.", 
+                              ParagraphStyle('note', fontSize=12, textColor=rl_colors.HexColor('#DC2626'))))
+    
+    # Footer
+    footer_style = ParagraphStyle('footer', parent=styles['Normal'], fontSize=8,
+                                 textColor=rl_colors.HexColor('#9CA3AF'), alignment=1)
+    story.append(Spacer(1, 20))
+    story.append(Paragraph(f"Generated {datetime.now().strftime('%m/%d/%Y %H:%M')} • Confidential", footer_style))
+    
+    doc.build(story)
+    buffer.seek(0)
+    
+    return Response(
+        content=buffer.getvalue(),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=analytics_{quarter}_{year}.pdf"}
+    )
     
     # Get settings for benchmarks
     settings_doc = await db.quarter_settings.find_one(
