@@ -2503,28 +2503,7 @@ async def get_analytics_pdf_v2(year: int, quarter: str):
         
         # Legend below distribution bar
         ax.text(50, 0, f'Exceeds ({exceeds_count})  •  Near Target ({near_count})  •  Below ({below_count})', 
-               ha='center', va='bottom', fontsize=8, color='#6B7280', zorder=6) 
-                                       facecolor='#4ADE80', edgecolor='none', zorder=3))
-            ax.text(x_pos + high_pct_width/2, dist_y + dist_height/2, f'{round(high_pct_width)}%', 
-                   ha='center', va='center', fontsize=7, color='white', fontweight='bold', zorder=4)
-            x_pos += high_pct_width
-        
-        if medium_count > 0:
-            ax.add_patch(plt.Rectangle((x_pos, dist_y), medium_pct_width, dist_height, 
-                                       facecolor='#FBBF24', edgecolor='none', zorder=3))
-            ax.text(x_pos + medium_pct_width/2, dist_y + dist_height/2, f'{round(medium_pct_width)}%', 
-                   ha='center', va='center', fontsize=7, color='white', fontweight='bold', zorder=4)
-            x_pos += medium_pct_width
-        
-        if low_count > 0:
-            ax.add_patch(plt.Rectangle((x_pos, dist_y), low_pct_width, dist_height, 
-                                       facecolor='#F87171', edgecolor='none', zorder=3))
-            ax.text(x_pos + low_pct_width/2, dist_y + dist_height/2, f'{round(low_pct_width)}%', 
-                   ha='center', va='center', fontsize=7, color='white', fontweight='bold', zorder=4)
-        
-        # Legend below distribution bar
-        ax.text(50, 1, f'● Exceeds ({high_count})    ● Near Target ({medium_count})    ● Below ({low_count})', 
-               ha='center', va='bottom', fontsize=7, color='#6B7280', zorder=6)
+               ha='center', va='bottom', fontsize=8, color='#6B7280', zorder=6)
         
         # Title with metric info (matching the tab header)
         title_text = f"{cfg['label']}"
@@ -2543,16 +2522,6 @@ async def get_analytics_pdf_v2(year: int, quarter: str):
         ax.axis('off')
         
         plt.tight_layout(pad=0.5)
-        
-        # Save to buffer
-        chart_buffer = io.BytesIO()
-        plt.savefig(chart_buffer, format='png', dpi=150, bbox_inches='tight', 
-                   facecolor='white', edgecolor='none')
-        plt.close(fig)
-        chart_buffer.seek(0)
-        return chart_buffer
-        
-        plt.tight_layout()
         
         # Save to buffer
         chart_buffer = io.BytesIO()
