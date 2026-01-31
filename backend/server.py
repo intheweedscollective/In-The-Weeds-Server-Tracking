@@ -2299,20 +2299,25 @@ async def get_analytics_pdf_v2(year: int, quarter: str):
     total_all = sum(a["total"] for a in analytics.values())
     
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=LETTER, topMargin=0.4*inch, bottomMargin=0.4*inch,
-                          leftMargin=0.5*inch, rightMargin=0.5*inch)
+    # 16:9 landscape format (1920x1080 ratio scaled to print)
+    PAGE_WIDTH = 11 * inch  # 11 inches wide
+    PAGE_HEIGHT = 6.1875 * inch  # Maintains 16:9 ratio
+    
+    doc = SimpleDocTemplate(buffer, pagesize=(PAGE_WIDTH, PAGE_HEIGHT), 
+                          topMargin=0.3*inch, bottomMargin=0.3*inch,
+                          leftMargin=0.4*inch, rightMargin=0.4*inch)
     
     styles = getSampleStyleSheet()
     
     # Custom styles
     title_style = ParagraphStyle('title', parent=styles['Title'], fontName='Helvetica-Bold',
-                                fontSize=22, textColor=rl_colors.HexColor('#1F2937'), alignment=1, spaceAfter=4)
+                                fontSize=20, textColor=rl_colors.HexColor('#1F2937'), alignment=1, spaceAfter=2)
     subtitle_style = ParagraphStyle('subtitle', parent=styles['Normal'], fontName='Helvetica',
-                                   fontSize=11, textColor=rl_colors.HexColor('#6B7280'), alignment=1, spaceAfter=20)
+                                   fontSize=10, textColor=rl_colors.HexColor('#6B7280'), alignment=1, spaceAfter=12)
     section_style = ParagraphStyle('section', parent=styles['Heading2'], fontName='Helvetica-Bold',
-                                  fontSize=14, textColor=rl_colors.HexColor('#1F2937'), spaceBefore=16, spaceAfter=10)
+                                  fontSize=12, textColor=rl_colors.HexColor('#1F2937'), spaceBefore=10, spaceAfter=6)
     subsection_style = ParagraphStyle('subsection', parent=styles['Heading3'], fontName='Helvetica-Bold',
-                                     fontSize=11, textColor=rl_colors.HexColor('#374151'), spaceBefore=10, spaceAfter=6)
+                                     fontSize=10, textColor=rl_colors.HexColor('#374151'), spaceBefore=8, spaceAfter=4)
     
     story = []
     
