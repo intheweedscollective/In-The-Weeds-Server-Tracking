@@ -1,7 +1,7 @@
 """
 Snapshot Slide Generator
 Generates bi-weekly team snapshot slides (1920x1080 PNG)
-All employees on one page with conditional formatting
+All employees on one page with conditional formatting - EDGE TO EDGE design
 """
 import io
 from typing import List, Dict, Any, Tuple
@@ -125,7 +125,7 @@ def get_cell_color(percentage: float) -> str:
 
 
 def create_background(width: int, height: int, bg_key: str = "midnight_blue") -> Image.Image:
-    """Create a fun background."""
+    """Create a full-bleed background (edge-to-edge)."""
     bg_config = BACKGROUNDS.get(bg_key, BACKGROUNDS["midnight_blue"])
     colors = [hex_to_rgb(c) for c in bg_config["colors"]]
     style = bg_config["style"]
@@ -138,11 +138,9 @@ def create_background(width: int, height: int, bg_key: str = "midnight_blue") ->
         for y in range(height):
             ratio = y / height
             if ratio < 0.5:
-                # First to second color
                 r = ratio * 2
                 c1, c2 = colors[0], colors[1] if len(colors) > 1 else colors[0]
             else:
-                # Second to third color
                 r = (ratio - 0.5) * 2
                 c1 = colors[1] if len(colors) > 1 else colors[0]
                 c2 = colors[2] if len(colors) > 2 else c1
@@ -155,7 +153,6 @@ def create_background(width: int, height: int, bg_key: str = "midnight_blue") ->
         for y in range(height):
             base_ratio = y / height
             for x in range(width):
-                # Add wave effect
                 wave = math.sin(x / 100 + y / 50) * 0.1
                 ratio = max(0, min(1, base_ratio + wave))
                 
@@ -177,7 +174,6 @@ def create_background(width: int, height: int, bg_key: str = "midnight_blue") ->
             for x in range(width):
                 draw.point((x, y), fill=base_color)
         
-        # Add neon glow lines
         accent = colors[2] if len(colors) > 2 else colors[0]
         for i in range(0, width, 200):
             for y in range(height):
@@ -185,14 +181,6 @@ def create_background(width: int, height: int, bg_key: str = "midnight_blue") ->
                 if alpha > 0:
                     glow_color = tuple(min(255, base_color[j] + accent[j] * alpha // 255) for j in range(3))
                     draw.point((i + int(30 * math.sin(y / 30)), y), fill=glow_color)
-    
-    # Add subtle pattern overlay
-    for y in range(0, height, 4):
-        for x in range(0, width, 4):
-            if (x + y) % 8 == 0:
-                current = img.getpixel((x, y))
-                darker = tuple(max(0, c - 5) for c in current)
-                draw.point((x, y), fill=darker)
     
     return img
 
@@ -213,10 +201,11 @@ def generate_snapshot_slide(
 ) -> bytes:
     """
     Generate a bi-weekly snapshot slide showing all employees in a grid.
+    EDGE-TO-EDGE design that fills the entire 1920x1080 canvas.
     
     Args:
         employees: List of employee data with metrics
-        benchmarks: Dict of metric benchmarks {ppa: 55, lbw_per_guest: 6.5, ...}
+        benchmarks: Dict of metric benchmarks {ppa_benchmark: 55, lbw_benchmark: 6.5, ...}
         snapshot_date: Date string (e.g., "Jan 15, 2026")
         background: Background theme key
         title: Optional custom title
@@ -235,150 +224,162 @@ def generate_snapshot_slide(
         return (tier_idx, -score)
     
     sorted_employees = sorted(employees, key=sort_key)
-    
-    # Calculate layout
     num_employees = len(sorted_employees)
+    
+    # Edge-to-edge margins (minimal)
+    MARGIN_H = 15  # Horizontal margin from edges
+    MARGIN_TOP = 70  # Space for header
+    MARGIN_BOTTOM = 35  # Space for footer
+    
+    # Calculate available space for table
+    table_width = SLIDE_WIDTH - (2 * MARGIN_H)
+    table_height = SLIDE_HEIGHT - MARGIN_TOP - MARGIN_BOTTOM
     
     # Dynamic font sizing based on employee count
     if num_employees <= 15:
-        font_size_name = 22
-        font_size_cell = 20
-        row_height = 50
+        font_size_name = 20
+        font_size_cell = 18
+        header_height = 55
     elif num_employees <= 25:
-        font_size_name = 18
-        font_size_cell = 16
-        row_height = 38
+        font_size_name = 17
+        font_size_cell = 15
+        header_height = 48
     elif num_employees <= 35:
-        font_size_name = 15
-        font_size_cell = 14
-        row_height = 30
+        font_size_name = 14
+        font_size_cell = 13
+        header_height = 42
     else:
         font_size_name = 12
         font_size_cell = 11
-        row_height = 24
+        header_height = 38
+    
+    # Calculate row height based on available space
+    data_area_height = table_height - header_height - 10
+    row_height = max(24, min(45, data_area_height // max(num_employees, 1)))
     
     # Fonts
-    font_title = get_font(42, bold=True)
-    font_subtitle = get_font(22)
-    font_header = get_font(font_size_cell + 4, bold=True)
+    font_title = get_font(32, bold=True)
+    font_subtitle = get_font(16)
+    font_header = get_font(font_size_cell + 2, bold=True)
     font_name = get_font(font_size_name, bold=True)
     font_cell = get_font(font_size_cell)
     font_tier = get_font(font_size_cell - 2, bold=True)
-    font_subheader = get_font(12)
+    font_subheader = get_font(11)
     
-    # Header
-    title_text = title or "TEAM SNAPSHOT"
-    draw.text((SLIDE_WIDTH//2, 25), title_text, font=font_title, fill="#FFFFFF", anchor="mt")
-    draw.text((SLIDE_WIDTH//2, 72), f"📊 {snapshot_date} • Bubba Gump Shrimp Co.", 
-              font=font_subtitle, fill="#E0E0E0", anchor="mt")
-    
-    # Grid layout
-    margin_left = 50
-    margin_right = 50
-    margin_top = 115
-    
-    # Column definitions with full names and short names
+    # Column definitions - using score_cv for CV display (normalized 0-100 scale)
+    # Columns spread edge-to-edge
     columns = [
-        {"name": "Employee", "short": "Name", "width": 200, "key": None, "desc": ""},
-        {"name": "Tier", "short": "Tier", "width": 80, "key": None, "desc": ""},
-        {"name": "PPA", "short": "$/Guest", "width": 85, "key": "ppa", "benchmark_key": "ppa_benchmark", "desc": "Per Person Avg"},
-        {"name": "LBW", "short": "$/Guest", "width": 85, "key": "lbw_per_guest", "benchmark_key": "lbw_benchmark", "desc": "Liquor Beer Wine"},
-        {"name": "Glass", "short": "$/Guest", "width": 85, "key": "glassware_per_guest", "benchmark_key": "glassware_benchmark", "desc": "Glassware Sales"},
-        {"name": "LSC", "short": "Guests/#", "width": 85, "key": "guests_per_lsc", "benchmark_key": "lsc_benchmark", "inverse": True, "desc": "Select Card"},
-        {"name": "CV", "short": "Score", "width": 75, "key": "cv_score", "benchmark_key": "cv_benchmark", "desc": "Customer Voice"},
-        {"name": "TOTAL", "short": "Score", "width": 85, "key": "total_score", "benchmark_key": "total_benchmark", "desc": "Overall"},
+        {"name": "Employee", "short": "", "flex": 2.5, "key": None},
+        {"name": "Tier", "short": "", "flex": 1.0, "key": None},
+        {"name": "PPA", "short": "$/Guest", "flex": 1.2, "key": "ppa", "benchmark_key": "ppa_benchmark"},
+        {"name": "LBW", "short": "$/Guest", "flex": 1.2, "key": "lbw_per_guest", "benchmark_key": "lbw_benchmark"},
+        {"name": "Glass", "short": "$/Guest", "flex": 1.2, "key": "glassware_per_guest", "benchmark_key": "glassware_benchmark"},
+        {"name": "LSC", "short": "Guests/#", "flex": 1.2, "key": "guests_per_lsc", "benchmark_key": "lsc_benchmark", "inverse": True},
+        {"name": "CV", "short": "Score", "flex": 1.0, "key": "score_cv", "benchmark_key": None, "is_normalized": True},
+        {"name": "TOTAL", "short": "Score", "flex": 1.2, "key": "total_score", "benchmark_key": "total_benchmark"},
     ]
     
-    # Calculate column positions
-    total_width = sum(c["width"] for c in columns)
-    start_x = (SLIDE_WIDTH - total_width) // 2
+    # Calculate column widths based on flex values
+    total_flex = sum(c["flex"] for c in columns)
+    col_widths = [int((c["flex"] / total_flex) * table_width) for c in columns]
     
+    # Adjust last column to fill remaining space
+    remaining = table_width - sum(col_widths)
+    col_widths[-1] += remaining
+    
+    # Calculate column positions (edge-to-edge)
     col_positions = []
-    x = start_x
-    for col in columns:
+    x = MARGIN_H
+    for width in col_widths:
         col_positions.append(x)
-        x += col["width"]
+        x += width
     
-    # Draw header row with two lines (name + description)
-    header_y = margin_top
-    header_height = row_height + 15
+    # Header area
+    title_text = title or "TEAM SNAPSHOT"
+    draw.text((SLIDE_WIDTH // 2, 12), title_text, font=font_title, fill="#FFFFFF", anchor="mt")
+    draw.text((SLIDE_WIDTH // 2, 45), f"{snapshot_date} • Bubba Gump Shrimp Co.", 
+              font=font_subtitle, fill="#E0E0E0", anchor="mt")
     
-    # Header background - darker and more prominent
-    draw.rounded_rectangle(
-        [start_x - 10, header_y - 8, start_x + total_width + 10, header_y + header_height],
-        radius=10,
-        fill=(0, 0, 0, 120)
+    # Table starts here
+    table_start_y = MARGIN_TOP
+    
+    # Draw header background (full width)
+    header_bg_color = (0, 0, 0, 100)
+    draw.rectangle(
+        [0, table_start_y, SLIDE_WIDTH, table_start_y + header_height],
+        fill=(20, 30, 50)  # Dark semi-transparent
     )
     
     # Draw column headers
     for i, col in enumerate(columns):
-        center_x = col_positions[i] + col["width"]//2
+        center_x = col_positions[i] + col_widths[i] // 2
         # Main header name
-        draw.text((center_x, header_y + 8), col["name"], font=font_header, fill="#FFFFFF", anchor="mt")
-        # Sub-description if exists
-        if col.get("short") and col["name"] not in ["Employee", "Tier"]:
-            draw.text((center_x, header_y + 30), col["short"], font=font_subheader, fill="#AAAAAA", anchor="mt")
+        draw.text((center_x, table_start_y + 10), col["name"], font=font_header, fill="#FFFFFF", anchor="mt")
+        # Sub-description
+        if col.get("short"):
+            draw.text((center_x, table_start_y + 30), col["short"], font=font_subheader, fill="#AAAAAA", anchor="mt")
     
-    # Draw legend - moved to top right
-    legend_y = header_y + 5
-    legend_x = SLIDE_WIDTH - 280
-    draw.text((legend_x, legend_y), "Legend:", font=get_font(14, bold=True), fill="#FFFFFF")
-    legend_y += 18
-    legend_items = [("🟢 ≥80%", CELL_COLORS["green"]), ("🟡 70-79%", CELL_COLORS["yellow"]), ("🔴 <70%", CELL_COLORS["red"])]
-    for text, color in legend_items:
-        draw.text((legend_x, legend_y), text, font=get_font(13), fill=color)
-        legend_y += 16
+    # Legend in top-right corner (inside header area)
+    legend_x = SLIDE_WIDTH - 200
+    legend_y = table_start_y + 8
+    legend_font = get_font(11, bold=True)
+    draw.text((legend_x, legend_y), "≥80%", font=legend_font, fill=CELL_COLORS["green"])
+    draw.text((legend_x + 50, legend_y), "70-79%", font=legend_font, fill=CELL_COLORS["yellow"])
+    draw.text((legend_x + 115, legend_y), "<70%", font=legend_font, fill=CELL_COLORS["red"])
     
     # Draw employee rows
-    data_start_y = header_y + header_height + 8
+    data_start_y = table_start_y + header_height + 5
     current_tier = None
     
     for idx, emp in enumerate(sorted_employees):
         y = data_start_y + idx * row_height
         
         # Check if we've run out of space
-        if y + row_height > SLIDE_HEIGHT - 40:
-            # Draw overflow indicator
-            draw.text((SLIDE_WIDTH//2, y + 10), f"... and {num_employees - idx} more", 
+        if y + row_height > SLIDE_HEIGHT - MARGIN_BOTTOM:
+            draw.text((SLIDE_WIDTH // 2, y + 5), f"... and {num_employees - idx} more", 
                       font=font_cell, fill="#FFFFFF", anchor="mt")
             break
         
         tier = emp.get("tier_label", "C-Server")
         
-        # Tier separator line
+        # Tier separator line (full width)
         if tier != current_tier:
             current_tier = tier
             if idx > 0:
-                draw.line([(start_x, y - 3), (start_x + total_width, y - 3)], 
-                         fill=TIER_COLORS.get(tier, "#666666"), width=2)
+                tier_line_color = TIER_COLORS.get(tier, "#666666")
+                draw.line([(0, y - 2), (SLIDE_WIDTH, y - 2)], 
+                         fill=hex_to_rgb(tier_line_color), width=2)
         
-        # Alternating row background
+        # Alternating row background (full width)
         if idx % 2 == 0:
-            draw.rounded_rectangle(
-                [start_x - 5, y - 2, start_x + total_width + 5, y + row_height - 4],
-                radius=4,
-                fill=(0, 0, 0, 60)
+            draw.rectangle(
+                [0, y - 1, SLIDE_WIDTH, y + row_height - 2],
+                fill=(0, 0, 0, 40)
             )
         
         # Name column
         name = emp.get("name", "Unknown")
-        if len(name) > 18:
-            name = name[:16] + "..."
-        draw.text((col_positions[0] + 5, y + row_height//2 - font_size_name//2 - 2),
-                  name, font=font_name, fill="#FFFFFF")
+        max_name_len = int(col_widths[0] / (font_size_name * 0.6))
+        if len(name) > max_name_len:
+            name = name[:max_name_len - 2] + ".."
+        draw.text((col_positions[0] + 8, y + row_height // 2),
+                  name, font=font_name, fill="#FFFFFF", anchor="lm")
         
-        # Tier column (with color)
+        # Tier column (badge)
         tier_color = TIER_COLORS.get(tier, "#666666")
         tier_short = {"Trainer": "TRN", "Bartender": "BAR", "A-Server": "A", "B-Server": "B", "C-Server": "C"}.get(tier, tier)
         
-        # Tier badge
-        badge_x = col_positions[1] + 10
+        badge_center_x = col_positions[1] + col_widths[1] // 2
         badge_y = y + 3
-        badge_w = 50
+        badge_w = min(50, col_widths[1] - 10)
         badge_h = row_height - 8
-        draw.rounded_rectangle([badge_x, badge_y, badge_x + badge_w, badge_y + badge_h],
-                              radius=badge_h//2, fill=hex_to_rgb(tier_color))
-        draw.text((badge_x + badge_w//2, badge_y + badge_h//2 - 2),
+        
+        draw.rounded_rectangle(
+            [badge_center_x - badge_w // 2, badge_y, badge_center_x + badge_w // 2, badge_y + badge_h],
+            radius=badge_h // 2, 
+            fill=hex_to_rgb(tier_color)
+        )
+        draw.text((badge_center_x, badge_y + badge_h // 2),
                   tier_short, font=font_tier, fill="#FFFFFF", anchor="mm")
         
         # Metric columns
@@ -386,42 +387,54 @@ def generate_snapshot_slide(
             metric_key = col.get("key")
             benchmark_key = col.get("benchmark_key")
             is_inverse = col.get("inverse", False)
+            is_normalized = col.get("is_normalized", False)
             
-            if metric_key and benchmark_key:
+            if metric_key:
                 value = emp.get(metric_key, 0) or 0
-                benchmark = benchmarks.get(benchmark_key, 0)
                 
-                if is_inverse and benchmark > 0:
-                    # For LSC, lower is better (fewer guests per LSC = more LSCs)
-                    percentage = (benchmark / value * 100) if value > 0 else 0
+                # For normalized scores (like score_cv), the value IS the percentage
+                if is_normalized:
+                    percentage = value
+                elif benchmark_key:
+                    benchmark = benchmarks.get(benchmark_key, 0)
+                    if is_inverse and benchmark > 0:
+                        # For LSC, lower is better
+                        percentage = (benchmark / value * 100) if value > 0 else 0
+                    else:
+                        percentage = calculate_percentage(value, benchmark)
                 else:
-                    percentage = calculate_percentage(value, benchmark)
+                    percentage = value  # Direct value (like total_score)
                 
                 # Get cell color
                 cell_color = get_cell_color(percentage)
                 
-                # Draw colored cell background
-                cell_x = col_positions[i]
+                # Draw colored cell background (edge-to-edge within column)
+                cell_x = col_positions[i] + 2
                 cell_y = y + 2
-                cell_w = col["width"] - 4
+                cell_w = col_widths[i] - 4
                 cell_h = row_height - 6
                 
                 draw.rounded_rectangle(
-                    [cell_x + 2, cell_y, cell_x + cell_w, cell_y + cell_h],
-                    radius=4,
+                    [cell_x, cell_y, cell_x + cell_w, cell_y + cell_h],
+                    radius=3,
                     fill=hex_to_rgb(cell_color)
                 )
                 
                 # Draw percentage text
                 pct_text = f"{percentage:.0f}%"
-                draw.text((cell_x + cell_w//2, cell_y + cell_h//2 - 2),
+                draw.text((cell_x + cell_w // 2, cell_y + cell_h // 2),
                           pct_text, font=font_cell, fill="#FFFFFF", anchor="mm")
     
-    # Footer
-    font_footer = get_font(16)
-    footer_text = f"Generated {datetime.now().strftime('%m/%d/%Y %H:%M')} • Benchmarks: PPA ${benchmarks.get('ppa_benchmark', 0):.0f}, LBW ${benchmarks.get('lbw_benchmark', 0):.2f}/guest"
-    draw.text((SLIDE_WIDTH//2, SLIDE_HEIGHT - 25), footer_text, 
-              font=font_footer, fill="#AAAAAA", anchor="mt")
+    # Footer (edge-to-edge)
+    font_footer = get_font(13)
+    footer_y = SLIDE_HEIGHT - 25
+    
+    # Footer background
+    draw.rectangle([0, footer_y - 8, SLIDE_WIDTH, SLIDE_HEIGHT], fill=(10, 20, 40))
+    
+    footer_text = f"Generated {datetime.now().strftime('%m/%d/%Y %H:%M')} • Benchmarks: PPA ${benchmarks.get('ppa_benchmark', 0):.0f}, LBW ${benchmarks.get('lbw_benchmark', 0):.2f}/guest, Glass ${benchmarks.get('glassware_benchmark', 0):.2f}/guest, LSC {benchmarks.get('lsc_benchmark', 0):.0f} guests"
+    draw.text((SLIDE_WIDTH // 2, footer_y + 5), footer_text, 
+              font=font_footer, fill="#AAAAAA", anchor="mm")
     
     # Save to bytes
     buffer = io.BytesIO()
