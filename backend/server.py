@@ -2423,9 +2423,6 @@ async def get_analytics_pdf_v2(year: int, quarter: str):
         
         # CONSISTENT gradient: always red -> yellow -> green (left to right)
         colors_gradient = ['#FEE2E2', '#FEF9C3', '#DCFCE7']
-            # Green on left, red on right
-            colors_gradient = ['#DCFCE7', '#FEF9C3', '#FEE2E2']
-            zone_colors = ['#4ADE80', '#FBBF24', '#F87171']
         
         # Draw gradient background bar
         from matplotlib.colors import LinearSegmentedColormap
@@ -2437,67 +2434,76 @@ async def get_analytics_pdf_v2(year: int, quarter: str):
         ax.add_patch(plt.Rectangle((0, bar_y), 100, bar_height, fill=False, 
                                    edgecolor='#E5E7EB', linewidth=1.5, zorder=2))
         
-        # Draw the colored zone overlays
-        if higher_better:
-            # Red zone (below low threshold)
-            ax.add_patch(plt.Rectangle((0, bar_y), low_thresh_pct, bar_height, 
-                                       facecolor='#F87171', alpha=0.4, zorder=3))
-            # Yellow zone (between thresholds)
-            ax.add_patch(plt.Rectangle((low_thresh_pct, bar_y), high_thresh_pct - low_thresh_pct, bar_height, 
-                                       facecolor='#FBBF24', alpha=0.3, zorder=3))
-            # Green zone (above high threshold)
-            ax.add_patch(plt.Rectangle((high_thresh_pct, bar_y), 100 - high_thresh_pct, bar_height, 
-                                       facecolor='#4ADE80', alpha=0.4, zorder=3))
-        else:
-            # Green zone (below high threshold - for inverse metrics)
-            ax.add_patch(plt.Rectangle((0, bar_y), high_thresh_pct, bar_height, 
-                                       facecolor='#4ADE80', alpha=0.4, zorder=3))
-            # Yellow zone
-            ax.add_patch(plt.Rectangle((high_thresh_pct, bar_y), low_thresh_pct - high_thresh_pct, bar_height, 
-                                       facecolor='#FBBF24', alpha=0.3, zorder=3))
-            # Red zone
-            ax.add_patch(plt.Rectangle((low_thresh_pct, bar_y), 100 - low_thresh_pct, bar_height, 
-                                       facecolor='#F87171', alpha=0.4, zorder=3))
-        
-        # Draw TARGET line (orange dashed) with arrow
-        ax.axvline(x=benchmark_pct, ymin=0.35, ymax=0.75, color='#F59E0B', linestyle='--', linewidth=2, zorder=5)
+        # Draw TARGET line (orange dashed) with arrow - CONSISTENT color
+        ax.axvline(x=benchmark_pct, ymin=0.35, ymax=0.75, color='#F59E0B', linestyle='--', linewidth=2.5, zorder=5)
         # Triangle arrow at top
-        ax.plot(benchmark_pct, bar_y + bar_height + 3, marker='v', markersize=8, color='#F59E0B', zorder=6)
+        ax.plot(benchmark_pct, bar_y + bar_height + 3, marker='v', markersize=10, color='#F59E0B', zorder=6)
         # TARGET label below
-        ax.text(benchmark_pct, bar_y - 8, 'TARGET', ha='center', va='top', fontsize=8, 
+        ax.text(benchmark_pct, bar_y - 6, 'TARGET', ha='center', va='top', fontsize=9, 
                 fontweight='bold', color='#D97706', zorder=6)
         
-        # Draw TEAM AVG diamond (blue)
-        ax.plot(avg_pct, bar_y + bar_height/2, marker='D', markersize=14, color='#3B82F6', 
+        # Draw TEAM AVG diamond (blue) - CONSISTENT color
+        ax.plot(avg_pct, bar_y + bar_height/2, marker='D', markersize=16, color='#3B82F6', 
                 zorder=7, markeredgecolor='white', markeredgewidth=2)
         # TEAM AVG label above
-        ax.text(avg_pct, bar_y + bar_height + 8, 'TEAM AVG', ha='center', va='bottom', fontsize=8, 
+        ax.text(avg_pct, bar_y + bar_height + 8, 'TEAM AVG', ha='center', va='bottom', fontsize=9, 
                 fontweight='bold', color='#2563EB', zorder=6)
         
-        # Low/High labels at the ends
+        # Low/High labels at the ends - CONSISTENT formatting
+        # For ALL metrics, left = lower values, right = higher values
+        # Color indicates good/bad based on metric type
         if higher_better:
-            ax.text(2, bar_y + bar_height/2, f'⚠ Low: {format_value(metric_key, min_val)}', 
-                   ha='left', va='center', fontsize=8, color='#DC2626', fontweight='semibold', zorder=6)
-            ax.text(98, bar_y + bar_height/2, f'✓ High: {format_value(metric_key, max_val)}', 
-                   ha='right', va='center', fontsize=8, color='#16A34A', fontweight='semibold', zorder=6)
+            left_label = f'Low: {format_value(metric_key, min_val)}'
+            right_label = f'High: {format_value(metric_key, max_val)}'
+            left_color = '#DC2626'  # Red (bad)
+            right_color = '#16A34A'  # Green (good)
         else:
-            ax.text(2, bar_y + bar_height/2, f'✓ Best: {format_value(metric_key, min_val)}', 
-                   ha='left', va='center', fontsize=8, color='#16A34A', fontweight='semibold', zorder=6)
-            ax.text(98, bar_y + bar_height/2, f'⚠ Worst: {format_value(metric_key, max_val)}', 
-                   ha='right', va='center', fontsize=8, color='#DC2626', fontweight='semibold', zorder=6)
+            left_label = f'Best: {format_value(metric_key, min_val)}'
+            right_label = f'Worst: {format_value(metric_key, max_val)}'
+            left_color = '#16A34A'  # Green (good for inverse)
+            right_color = '#DC2626'  # Red (bad for inverse)
         
-        # Performance Distribution bar at bottom
+        ax.text(3, bar_y + bar_height/2, left_label, 
+               ha='left', va='center', fontsize=9, color=left_color, fontweight='bold', zorder=6)
+        ax.text(97, bar_y + bar_height/2, right_label, 
+               ha='right', va='center', fontsize=9, color=right_color, fontweight='bold', zorder=6)
+        
+        # Performance Distribution bar at bottom - CONSISTENT order: green, yellow, red
         dist_y = 8
-        dist_height = 12
+        dist_height = 14
         total = len(values)
-        high_pct_width = (high_count / total) * 100 if total > 0 else 0
-        medium_pct_width = (medium_count / total) * 100 if total > 0 else 0
-        low_pct_width = (low_count / total) * 100 if total > 0 else 0
+        exceeds_pct = (exceeds_count / total) * 100 if total > 0 else 0
+        near_pct = (near_count / total) * 100 if total > 0 else 0
+        below_pct = (below_count / total) * 100 if total > 0 else 0
         
-        # Draw distribution bar segments
+        # Draw distribution bar segments - ALWAYS green first, then yellow, then red
         x_pos = 0
-        if high_count > 0:
-            ax.add_patch(plt.Rectangle((x_pos, dist_y), high_pct_width, dist_height, 
+        if exceeds_count > 0:
+            ax.add_patch(plt.Rectangle((x_pos, dist_y), exceeds_pct, dist_height, 
+                                       facecolor='#22C55E', edgecolor='none', zorder=3))
+            if exceeds_pct > 8:
+                ax.text(x_pos + exceeds_pct/2, dist_y + dist_height/2, f'{round(exceeds_pct)}%', 
+                       ha='center', va='center', fontsize=8, color='white', fontweight='bold', zorder=4)
+            x_pos += exceeds_pct
+        
+        if near_count > 0:
+            ax.add_patch(plt.Rectangle((x_pos, dist_y), near_pct, dist_height, 
+                                       facecolor='#EAB308', edgecolor='none', zorder=3))
+            if near_pct > 8:
+                ax.text(x_pos + near_pct/2, dist_y + dist_height/2, f'{round(near_pct)}%', 
+                       ha='center', va='center', fontsize=8, color='white', fontweight='bold', zorder=4)
+            x_pos += near_pct
+        
+        if below_count > 0:
+            ax.add_patch(plt.Rectangle((x_pos, dist_y), below_pct, dist_height, 
+                                       facecolor='#EF4444', edgecolor='none', zorder=3))
+            if below_pct > 8:
+                ax.text(x_pos + below_pct/2, dist_y + dist_height/2, f'{round(below_pct)}%', 
+                       ha='center', va='center', fontsize=8, color='white', fontweight='bold', zorder=4)
+        
+        # Legend below distribution bar
+        ax.text(50, 0, f'Exceeds ({exceeds_count})  •  Near Target ({near_count})  •  Below ({below_count})', 
+               ha='center', va='bottom', fontsize=8, color='#6B7280', zorder=6) 
                                        facecolor='#4ADE80', edgecolor='none', zorder=3))
             ax.text(x_pos + high_pct_width/2, dist_y + dist_height/2, f'{round(high_pct_width)}%', 
                    ha='center', va='center', fontsize=7, color='white', fontweight='bold', zorder=4)
