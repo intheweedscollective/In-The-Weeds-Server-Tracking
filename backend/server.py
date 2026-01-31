@@ -2257,11 +2257,6 @@ async def get_analytics_pdf_v2(year: int, quarter: str):
         if cfg["format"] == "currency":
             return f"${value:.2f}"
         return f"{value:.1f}"
-            return "N/A"
-        cfg = metrics_config[metric_key]
-        if cfg["format"] == "currency":
-            return f"${value:.2f}"
-        return f"{value:.1f}"
     
     # Calculate analytics for each metric (matching frontend logic)
     analytics = {}
