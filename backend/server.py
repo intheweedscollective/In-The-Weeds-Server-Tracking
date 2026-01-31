@@ -2212,12 +2212,12 @@ async def get_top_performers_pdf_v2(year: int, quarter: str):
 
 @api_router.get("/v2/analytics/{year}/{quarter}/pdf")
 async def get_analytics_pdf_v2(year: int, quarter: str):
-    """Generate Analytics PDF for V2 data."""
+    """Generate Analytics PDF that matches the Analytics tab exactly."""
     from reportlab.lib import colors as rl_colors
-    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.pagesizes import LETTER
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import inch
-    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle, PageBreak
     
     employees_docs = await db.employees_v2.find(
         {"year": year, "quarter": quarter.upper()},
@@ -2231,100 +2231,278 @@ async def get_analytics_pdf_v2(year: int, quarter: str):
     settings_doc = await db.quarter_settings.find_one(
         {"year": year, "quarter": quarter.upper()},
         {"_id": 0}
-    )
+    ) or {}
     
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5*inch, bottomMargin=0.5*inch,
-                          leftMargin=0.6*inch, rightMargin=0.6*inch)
+    # Metric definitions matching the frontend
+    metrics_config = {
+        "ppa": {"label": "PPA", "benchmark_key": "benchmark_ppa", "default": 55.0, "higher_better": True, "format": "currency", "weight": "25%"},
+        "lbw_per_guest": {"label": "LBW/Guest", "benchmark_key": "benchmark_lbw", "default": 8.0, "higher_better": True, "format": "currency", "weight": "20%"},
+        "glassware_per_guest": {"label": "Glass/Guest", "benchmark_key": "benchmark_glass", "default": 1.0, "higher_better": True, "format": "currency", "weight": "15%"},
+        "guests_per_lsc": {"label": "Guests/LSC", "benchmark_key": "benchmark_lsc", "default": 100.0, "higher_better": False, "format": "number", "weight": "25%"},
+        "cv_score": {"label": "CV Score", "benchmark_key": "benchmark_cv", "default": 5.0, "higher_better": True, "format": "number", "weight": "15%"},
+    }
     
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle('title', parent=styles['Title'], fontName='Helvetica-Bold',
-                                fontSize=20, textColor=rl_colors.HexColor('#D12E2E'), alignment=1, spaceAfter=10)
-    subtitle_style = ParagraphStyle('subtitle', parent=styles['Normal'], fontName='Helvetica',
-                                   fontSize=10, textColor=rl_colors.HexColor('#374151'), alignment=1, spaceAfter=16)
-    section_style = ParagraphStyle('section', parent=styles['Heading2'], fontName='Helvetica-Bold',
-                                  fontSize=12, textColor=rl_colors.HexColor('#005B96'), spaceBefore=10, spaceAfter=6)
+    def get_benchmark(metric_key):
+        cfg = metrics_config[metric_key]
+        return settings_doc.get(cfg["benchmark_key"], cfg["default"])
     
-    story = []
-    story.append(Paragraph("Analytics Report", title_style))
-    story.append(Paragraph(f"{quarter} {year} • Bubba Gump Shrimp Co. • Las Vegas", subtitle_style))
-    story.append(Spacer(1, 10))
+    def format_value(metric_key, value):
+        if value is None:
+            return "N/A"
+        cfg = metrics_config[metric_key]
+        if cfg["format"] == "currency":
+            return f"${value:.2f}"
+        return f"{value:.1f}"
     
-    # Team Summary
-    story.append(Paragraph("📊 Team Performance Summary", section_style))
-    
-    metrics_config = [
-        ("ppa", "PPA", settings_doc.get("benchmark_ppa", 55.0) if settings_doc else 55.0, True),
-        ("lbw_per_guest", "LBW/Guest", settings_doc.get("benchmark_lbw", 8.0) if settings_doc else 8.0, True),
-        ("glassware_per_guest", "Glass/Guest", settings_doc.get("benchmark_glass", 1.0) if settings_doc else 1.0, True),
-        ("guests_per_lsc", "Guests/LSC", settings_doc.get("benchmark_lsc", 100.0) if settings_doc else 100.0, False),
-        ("cv_score", "CV Score", settings_doc.get("benchmark_cv", 5.0) if settings_doc else 5.0, True),
-    ]
-    
-    summary_data = [["Metric", "Benchmark", "Team Avg", "Meeting Benchmark", "Status"]]
-    for metric_key, label, benchmark, higher_better in metrics_config:
-        values = [e.get(metric_key, 0) for e in employees_docs if e.get(metric_key) is not None]
+    # Calculate analytics for each metric (matching frontend logic)
+    analytics = {}
+    for metric_key, cfg in metrics_config.items():
+        values = [e.get(metric_key) for e in employees_docs if e.get(metric_key) is not None]
         if not values:
             continue
+        
+        benchmark = get_benchmark(metric_key)
         avg = sum(values) / len(values)
-        if higher_better:
+        min_val = min(values)
+        max_val = max(values)
+        
+        if cfg["higher_better"]:
+            high_threshold = benchmark * 1.1
+            low_threshold = benchmark * 0.9
+            high = sum(1 for v in values if v >= high_threshold)
+            low = sum(1 for v in values if v < low_threshold)
+            medium = len(values) - high - low
             meeting = sum(1 for v in values if v >= benchmark)
         else:
+            high_threshold = benchmark * 0.9
+            low_threshold = benchmark * 1.1
+            high = sum(1 for v in values if v <= high_threshold)
+            low = sum(1 for v in values if v >= low_threshold)
+            medium = len(values) - high - low
             meeting = sum(1 for v in values if v <= benchmark)
-        pct = (meeting / len(values)) * 100 if values else 0
-        status = "✅" if pct >= 50 else "⚠️" if pct >= 30 else "❌"
         
-        summary_data.append([
-            label, 
-            f"${benchmark:.2f}" if metric_key != "guests_per_lsc" and metric_key != "cv_score" else f"{benchmark:.1f}",
-            f"${avg:.2f}" if metric_key != "guests_per_lsc" and metric_key != "cv_score" else f"{avg:.1f}",
-            f"{meeting}/{len(values)} ({pct:.0f}%)",
-            status
+        analytics[metric_key] = {
+            "high": high, "medium": medium, "low": low,
+            "meeting": meeting, "total": len(values),
+            "average": avg, "min": min_val, "max": max_val,
+            "benchmark": benchmark
+        }
+    
+    # Calculate totals for summary
+    total_high = sum(a["high"] for a in analytics.values())
+    total_medium = sum(a["medium"] for a in analytics.values())
+    total_low = sum(a["low"] for a in analytics.values())
+    total_all = sum(a["total"] for a in analytics.values())
+    
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=LETTER, topMargin=0.4*inch, bottomMargin=0.4*inch,
+                          leftMargin=0.5*inch, rightMargin=0.5*inch)
+    
+    styles = getSampleStyleSheet()
+    
+    # Custom styles
+    title_style = ParagraphStyle('title', parent=styles['Title'], fontName='Helvetica-Bold',
+                                fontSize=22, textColor=rl_colors.HexColor('#1F2937'), alignment=1, spaceAfter=4)
+    subtitle_style = ParagraphStyle('subtitle', parent=styles['Normal'], fontName='Helvetica',
+                                   fontSize=11, textColor=rl_colors.HexColor('#6B7280'), alignment=1, spaceAfter=20)
+    section_style = ParagraphStyle('section', parent=styles['Heading2'], fontName='Helvetica-Bold',
+                                  fontSize=14, textColor=rl_colors.HexColor('#1F2937'), spaceBefore=16, spaceAfter=10)
+    subsection_style = ParagraphStyle('subsection', parent=styles['Heading3'], fontName='Helvetica-Bold',
+                                     fontSize=11, textColor=rl_colors.HexColor('#374151'), spaceBefore=10, spaceAfter=6)
+    
+    story = []
+    
+    # === TITLE ===
+    story.append(Paragraph("Performance Analytics", title_style))
+    story.append(Paragraph(f"{quarter} {year} • Bubba Gump Shrimp Co. • Las Vegas", subtitle_style))
+    
+    # === SCORE DISTRIBUTION SUMMARY (matching the 3-box layout) ===
+    story.append(Paragraph("Score Distribution Summary", section_style))
+    
+    pct_high = round((total_high / total_all) * 100) if total_all > 0 else 0
+    pct_medium = round((total_medium / total_all) * 100) if total_all > 0 else 0
+    pct_low = round((total_low / total_all) * 100) if total_all > 0 else 0
+    
+    dist_data = [
+        ["Exceeds Target", "Near Target", "Below Target"],
+        [f"{pct_high}%", f"{pct_medium}%", f"{pct_low}%"],
+        ["Top Performers", "On Track", "Needs Improvement"]
+    ]
+    
+    dist_table = Table(dist_data, colWidths=[2.3*inch, 2.3*inch, 2.3*inch])
+    dist_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        ('TEXTCOLOR', (0, 0), (0, 0), rl_colors.HexColor('#166534')),
+        ('TEXTCOLOR', (1, 0), (1, 0), rl_colors.HexColor('#854D0E')),
+        ('TEXTCOLOR', (2, 0), (2, 0), rl_colors.HexColor('#9A3412')),
+        ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 1), (-1, 1), 28),
+        ('TEXTCOLOR', (0, 1), (0, 1), rl_colors.HexColor('#22C55E')),
+        ('TEXTCOLOR', (1, 1), (1, 1), rl_colors.HexColor('#EAB308')),
+        ('TEXTCOLOR', (2, 1), (2, 1), rl_colors.HexColor('#F97316')),
+        ('FONTNAME', (0, 2), (-1, 2), 'Helvetica'),
+        ('FONTSIZE', (0, 2), (-1, 2), 8),
+        ('TEXTCOLOR', (0, 2), (-1, 2), rl_colors.HexColor('#6B7280')),
+        ('BACKGROUND', (0, 0), (0, -1), rl_colors.HexColor('#F0FDF4')),
+        ('BACKGROUND', (1, 0), (1, -1), rl_colors.HexColor('#FEFCE8')),
+        ('BACKGROUND', (2, 0), (2, -1), rl_colors.HexColor('#FFF7ED')),
+        ('BOX', (0, 0), (0, -1), 1, rl_colors.HexColor('#BBF7D0')),
+        ('BOX', (1, 0), (1, -1), 1, rl_colors.HexColor('#FEF08A')),
+        ('BOX', (2, 0), (2, -1), 1, rl_colors.HexColor('#FED7AA')),
+        ('TOPPADDING', (0, 0), (-1, -1), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+    ]))
+    story.append(dist_table)
+    story.append(Spacer(1, 20))
+    
+    # === METRIC-BY-METRIC BREAKDOWN ===
+    story.append(Paragraph("Performance by Metric", section_style))
+    
+    metric_header = ["Metric", "Weight", "Benchmark", "Team Avg", "Exceeds", "Near", "Below", "% Meeting"]
+    metric_rows = [metric_header]
+    
+    for metric_key, cfg in metrics_config.items():
+        data = analytics.get(metric_key, {})
+        if not data:
+            continue
+        
+        benchmark = data["benchmark"]
+        avg = data["average"]
+        meeting_pct = round((data["meeting"] / data["total"]) * 100) if data["total"] > 0 else 0
+        
+        metric_rows.append([
+            cfg["label"],
+            cfg["weight"],
+            format_value(metric_key, benchmark),
+            format_value(metric_key, avg),
+            str(data["high"]),
+            str(data["medium"]),
+            str(data["low"]),
+            f"{meeting_pct}%"
         ])
     
-    table = Table(summary_data, colWidths=[80, 80, 80, 100, 50])
-    table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), rl_colors.HexColor('#D12E2E')),
+    metric_table = Table(metric_rows, colWidths=[1.1*inch, 0.6*inch, 0.85*inch, 0.85*inch, 0.65*inch, 0.6*inch, 0.6*inch, 0.85*inch])
+    metric_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), rl_colors.HexColor('#60A5FA')),
         ('TEXTCOLOR', (0, 0), (-1, 0), rl_colors.white),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, -1), 9),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+        ('TOPPADDING', (0, 0), (-1, 0), 8),
         ('BACKGROUND', (0, 1), (-1, -1), rl_colors.HexColor('#F9FAFB')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [rl_colors.HexColor('#FFFFFF'), rl_colors.HexColor('#F3F4F6')]),
         ('GRID', (0, 0), (-1, -1), 0.5, rl_colors.HexColor('#E5E7EB')),
+        ('TEXTCOLOR', (4, 1), (4, -1), rl_colors.HexColor('#166534')),
+        ('TEXTCOLOR', (5, 1), (5, -1), rl_colors.HexColor('#854D0E')),
+        ('TEXTCOLOR', (6, 1), (6, -1), rl_colors.HexColor('#DC2626')),
     ]))
-    story.append(table)
+    story.append(metric_table)
     story.append(Spacer(1, 20))
     
-    # Tier Distribution
-    story.append(Paragraph("📈 Server Tier Distribution", section_style))
-    tier_counts = {"Trainer": 0, "Bartender": 0, "A-Server": 0, "B-Server": 0, "C-Server": 0}
-    for emp in employees_docs:
-        tier = emp.get("tier_label", "C-Server")
-        if tier in tier_counts:
-            tier_counts[tier] += 1
+    # === TOP 10 OVERALL ===
+    story.append(Paragraph("Top 10 Overall (Total Score)", section_style))
     
-    tier_data = [["Tier", "Count", "Percentage"]]
-    total = len(employees_docs)
-    for tier, count in tier_counts.items():
-        pct = (count / total * 100) if total > 0 else 0
-        tier_data.append([tier, str(count), f"{pct:.1f}%"])
+    # Sort by total_score descending
+    sorted_by_score = sorted(employees_docs, key=lambda e: float(e.get("total_score", 0) or 0), reverse=True)[:10]
     
-    table = Table(tier_data, colWidths=[120, 80, 80])
-    table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), rl_colors.HexColor('#005B96')),
+    top10_header = ["Rank", "Employee", "Performance Tier", "Total Score"]
+    top10_rows = [top10_header]
+    
+    for idx, emp in enumerate(sorted_by_score, 1):
+        top10_rows.append([
+            f"#{idx}",
+            emp.get("name", "Unknown"),
+            emp.get("performance_tier", "Not Assessed"),
+            f"{float(emp.get('total_score', 0) or 0):.1f}"
+        ])
+    
+    top10_table = Table(top10_rows, colWidths=[0.6*inch, 2.2*inch, 1.8*inch, 1.2*inch])
+    top10_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), rl_colors.HexColor('#60A5FA')),
         ('TEXTCOLOR', (0, 0), (-1, 0), rl_colors.white),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('ALIGN', (1, 1), (1, -1), 'LEFT'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, -1), 10),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-        ('BACKGROUND', (0, 1), (-1, -1), rl_colors.HexColor('#F9FAFB')),
+        ('TOPPADDING', (0, 0), (-1, 0), 8),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [rl_colors.HexColor('#FFFFFF'), rl_colors.HexColor('#F3F4F6')]),
         ('GRID', (0, 0), (-1, -1), 0.5, rl_colors.HexColor('#E5E7EB')),
+        ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),
+        ('TEXTCOLOR', (0, 1), (0, -1), rl_colors.HexColor('#DC2626')),
     ]))
-    story.append(table)
-    story.append(Spacer(1, 20))
+    story.append(top10_table)
     
-    # Footer
+    # Page break before Top 10 by Metric
+    story.append(PageBreak())
+    
+    # === TOP 10 BY METRIC (2-column layout) ===
+    story.append(Paragraph("Top 10 by Metric", section_style))
+    
+    def create_metric_top10_table(metric_key, cfg):
+        """Create a top 10 table for a specific metric."""
+        higher_better = cfg["higher_better"]
+        sorted_emps = sorted(
+            [e for e in employees_docs if e.get(metric_key) is not None],
+            key=lambda e: float(e.get(metric_key, 0) or 0),
+            reverse=higher_better
+        )[:10]
+        
+        rows = [[f"{cfg['label']} - Top 10", "", ""]]
+        rows.append(["Rank", "Employee", "Value"])
+        
+        for idx, emp in enumerate(sorted_emps, 1):
+            rows.append([
+                f"#{idx}",
+                emp.get("name", "Unknown")[:15],
+                format_value(metric_key, emp.get(metric_key))
+            ])
+        
+        table = Table(rows, colWidths=[0.5*inch, 1.5*inch, 0.9*inch])
+        table.setStyle(TableStyle([
+            ('SPAN', (0, 0), (-1, 0)),
+            ('BACKGROUND', (0, 0), (-1, 0), rl_colors.HexColor('#1F2937')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), rl_colors.white),
+            ('BACKGROUND', (0, 1), (-1, 1), rl_colors.HexColor('#60A5FA')),
+            ('TEXTCOLOR', (0, 1), (-1, 1), rl_colors.white),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('ALIGN', (1, 2), (1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('ROWBACKGROUNDS', (0, 2), (-1, -1), [rl_colors.HexColor('#FFFFFF'), rl_colors.HexColor('#F3F4F6')]),
+            ('GRID', (0, 1), (-1, -1), 0.5, rl_colors.HexColor('#E5E7EB')),
+            ('FONTNAME', (0, 2), (0, -1), 'Helvetica-Bold'),
+            ('TEXTCOLOR', (0, 2), (0, -1), rl_colors.HexColor('#DC2626')),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ]))
+        return table
+    
+    # Create pairs of metric tables (2-column layout)
+    metric_keys = list(metrics_config.keys())
+    for i in range(0, len(metric_keys), 2):
+        left_key = metric_keys[i]
+        left_table = create_metric_top10_table(left_key, metrics_config[left_key])
+        
+        if i + 1 < len(metric_keys):
+            right_key = metric_keys[i + 1]
+            right_table = create_metric_top10_table(right_key, metrics_config[right_key])
+            row_table = Table([[left_table, right_table]], colWidths=[3.5*inch, 3.5*inch])
+        else:
+            row_table = Table([[left_table, ""]], colWidths=[3.5*inch, 3.5*inch])
+        
+        row_table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ]))
+        story.append(row_table)
+        story.append(Spacer(1, 15))
+    
+    # === FOOTER ===
+    story.append(Spacer(1, 20))
     footer_style = ParagraphStyle('footer', parent=styles['Normal'], fontSize=8, 
                                  textColor=rl_colors.HexColor('#9CA3AF'), alignment=1)
     story.append(Paragraph(f"Generated {datetime.now().strftime('%m/%d/%Y %H:%M')} • Confidential", footer_style))
