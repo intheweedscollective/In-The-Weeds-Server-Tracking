@@ -37,8 +37,9 @@ from snapshot_slides import generate_snapshot_slide, get_available_backgrounds, 
 from scoring_engine import (
     EmployeeV2, QuarterSettings, 
     validate_upload_columns, validate_upload_data, validate_employee_row,
-    calculate_derived_metrics, calculate_normalized_scores, 
+    calculate_lbw_total, calculate_derived_metrics, calculate_normalized_scores, 
     calculate_bonus_points, calculate_total_score,
+    calculate_customer_voice_score, calculate_review_tracker_bonus, calculate_combined_cv_rt,
     calculate_rankings, calculate_performance_tiers, run_full_scoring,
     suggest_benchmarks_from_previous, calculate_previous_quarter_averages,
     CANONICAL_COLUMN_MAPPING, generate_hierarchy_rankings
