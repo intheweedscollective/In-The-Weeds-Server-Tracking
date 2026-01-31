@@ -2367,6 +2367,136 @@ async def get_analytics_pdf_v2(year: int, quarter: str):
     story.append(dist_table)
     story.append(Spacer(1, 20))
     
+    # === PERFORMANCE OVERVIEW CHARTS (matching the Analytics tab) ===
+    story.append(Paragraph("Performance Overview", section_style))
+    
+    def create_metric_chart(metric_key, cfg, data, width=7, height=1.2):
+        """Create a horizontal range chart for a metric matching the Analytics tab."""
+        fig, ax = plt.subplots(figsize=(width, height))
+        
+        values = [e.get(metric_key) for e in employees_docs if e.get(metric_key) is not None]
+        if not values:
+            plt.close(fig)
+            return None
+        
+        min_val = min(values)
+        max_val = max(values)
+        avg_val = sum(values) / len(values)
+        benchmark = data["benchmark"]
+        higher_better = cfg["higher_better"]
+        
+        # Calculate range with padding
+        range_padding = (max_val - min_val) * 0.15 if max_val > min_val else max_val * 0.2
+        chart_min = max(0, min_val - range_padding)
+        chart_max = max_val + range_padding
+        
+        # Calculate zone thresholds
+        if higher_better:
+            high_threshold = benchmark * 1.1
+            low_threshold = benchmark * 0.9
+        else:
+            high_threshold = benchmark * 0.9
+            low_threshold = benchmark * 1.1
+        
+        # Draw gradient background zones
+        ax.set_xlim(chart_min, chart_max)
+        ax.set_ylim(0, 1)
+        
+        # Create gradient effect with zones
+        if higher_better:
+            # Red (left/low) -> Yellow (middle) -> Green (right/high)
+            ax.axvspan(chart_min, low_threshold, alpha=0.3, color='#FEE2E2', zorder=1)
+            ax.axvspan(low_threshold, high_threshold, alpha=0.3, color='#FEF9C3', zorder=1)
+            ax.axvspan(high_threshold, chart_max, alpha=0.3, color='#DCFCE7', zorder=1)
+        else:
+            # Green (left/low) -> Yellow (middle) -> Red (right/high)
+            ax.axvspan(chart_min, high_threshold, alpha=0.3, color='#DCFCE7', zorder=1)
+            ax.axvspan(high_threshold, low_threshold, alpha=0.3, color='#FEF9C3', zorder=1)
+            ax.axvspan(low_threshold, chart_max, alpha=0.3, color='#FEE2E2', zorder=1)
+        
+        # Draw the range bar (min to max)
+        bar_height = 0.35
+        bar_y = 0.5 - bar_height/2
+        
+        # Gradient bar from min to max
+        gradient = np.linspace(0, 1, 100)
+        for i, g in enumerate(gradient):
+            x_pos = min_val + (max_val - min_val) * i / 100
+            x_width = (max_val - min_val) / 100
+            
+            # Color based on position relative to benchmark
+            if higher_better:
+                if x_pos >= high_threshold:
+                    color = '#22C55E'  # Green
+                elif x_pos >= low_threshold:
+                    color = '#EAB308'  # Yellow
+                else:
+                    color = '#EF4444'  # Red
+            else:
+                if x_pos <= high_threshold:
+                    color = '#22C55E'  # Green
+                elif x_pos <= low_threshold:
+                    color = '#EAB308'  # Yellow
+                else:
+                    color = '#EF4444'  # Red
+            
+            ax.add_patch(plt.Rectangle((x_pos, bar_y), x_width, bar_height, 
+                                       facecolor=color, edgecolor='none', alpha=0.8, zorder=2))
+        
+        # Draw benchmark line
+        ax.axvline(x=benchmark, color='#1F2937', linestyle='--', linewidth=2, zorder=4, label='Benchmark')
+        ax.annotate(f'Target: {format_value(metric_key, benchmark)}', 
+                   xy=(benchmark, 0.92), fontsize=8, ha='center', color='#1F2937', fontweight='bold')
+        
+        # Draw average marker
+        ax.plot(avg_val, 0.5, marker='D', markersize=10, color='#3B82F6', zorder=5, markeredgecolor='white', markeredgewidth=1.5)
+        ax.annotate(f'Avg: {format_value(metric_key, avg_val)}', 
+                   xy=(avg_val, 0.12), fontsize=8, ha='center', color='#3B82F6', fontweight='bold')
+        
+        # Draw min/max labels
+        ax.annotate(f'Min: {format_value(metric_key, min_val)}', 
+                   xy=(min_val, 0.5), fontsize=7, ha='right' if min_val > chart_min + (chart_max-chart_min)*0.1 else 'left', 
+                   va='center', color='#6B7280')
+        ax.annotate(f'Max: {format_value(metric_key, max_val)}', 
+                   xy=(max_val, 0.5), fontsize=7, ha='left' if max_val < chart_max - (chart_max-chart_min)*0.1 else 'right',
+                   va='center', color='#6B7280')
+        
+        # Title
+        meeting_pct = round((data["meeting"] / data["total"]) * 100) if data["total"] > 0 else 0
+        ax.set_title(f"{cfg['label']} ({cfg['weight']}) - {meeting_pct}% Meeting Benchmark", 
+                    fontsize=10, fontweight='bold', color='#1F2937', loc='left', pad=8)
+        
+        # Clean up axes
+        ax.set_yticks([])
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_visible(False)
+        ax.tick_params(axis='x', labelsize=7)
+        
+        plt.tight_layout()
+        
+        # Save to buffer
+        chart_buffer = io.BytesIO()
+        plt.savefig(chart_buffer, format='png', dpi=150, bbox_inches='tight', 
+                   facecolor='white', edgecolor='none')
+        plt.close(fig)
+        chart_buffer.seek(0)
+        return chart_buffer
+    
+    # Generate and add charts for each metric
+    for metric_key, cfg in metrics_config.items():
+        data = analytics.get(metric_key, {})
+        if not data:
+            continue
+        
+        chart_buffer = create_metric_chart(metric_key, cfg, data)
+        if chart_buffer:
+            chart_img = RLImage(chart_buffer, width=6.8*inch, height=1.1*inch)
+            story.append(chart_img)
+            story.append(Spacer(1, 8))
+    
+    story.append(Spacer(1, 10))
+    
     # === METRIC-BY-METRIC BREAKDOWN ===
     story.append(Paragraph("Performance by Metric", section_style))
     
