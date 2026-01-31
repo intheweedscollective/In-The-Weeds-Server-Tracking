@@ -2370,8 +2370,8 @@ async def get_analytics_pdf_v2(year: int, quarter: str):
     # === PERFORMANCE OVERVIEW CHARTS (matching the Analytics tab) ===
     story.append(Paragraph("Performance Overview", section_style))
     
-    def create_metric_chart(metric_key, cfg, data, width=7, height=2.2):
-        """Create a chart that exactly matches the Analytics tab design."""
+    def create_metric_chart(metric_key, cfg, data, width=9, height=1.8):
+        """Create a chart that exactly matches the Analytics tab design with CONSISTENT colors."""
         fig, ax = plt.subplots(figsize=(width, height))
         fig.patch.set_facecolor('white')
         ax.set_facecolor('white')
@@ -2395,14 +2395,15 @@ async def get_analytics_pdf_v2(year: int, quarter: str):
             high_threshold = benchmark * 0.9
             low_threshold = benchmark * 1.1
         
-        # Count employees in each zone
+        # Count employees in each zone - ALWAYS: exceeds=green, near=yellow, below=red
         if higher_better:
-            high_count = sum(1 for v in values if v >= high_threshold)
-            low_count = sum(1 for v in values if v < low_threshold)
+            exceeds_count = sum(1 for v in values if v >= high_threshold)
+            below_count = sum(1 for v in values if v < low_threshold)
         else:
-            high_count = sum(1 for v in values if v <= high_threshold)
-            low_count = sum(1 for v in values if v > low_threshold)
-        medium_count = len(values) - high_count - low_count
+            # For inverse metrics (like LSC where lower is better)
+            exceeds_count = sum(1 for v in values if v <= high_threshold)
+            below_count = sum(1 for v in values if v > low_threshold)
+        near_count = len(values) - exceeds_count - below_count
         
         # Set up the main chart area
         ax.set_xlim(0, 100)
@@ -2415,19 +2416,13 @@ async def get_analytics_pdf_v2(year: int, quarter: str):
         
         benchmark_pct = to_pct(benchmark)
         avg_pct = to_pct(avg_val)
-        high_thresh_pct = to_pct(high_threshold)
-        low_thresh_pct = to_pct(low_threshold)
         
-        # Draw the main gradient bar (matching the tab exactly)
+        # Draw the main gradient bar - ALWAYS red on left, green on right for visual consistency
         bar_y = 35
         bar_height = 30
         
-        # Background gradient: red -> yellow -> green (or reverse if inverse)
-        if higher_better:
-            # Red on left, green on right
-            colors_gradient = ['#FEE2E2', '#FEF9C3', '#DCFCE7']
-            zone_colors = ['#F87171', '#FBBF24', '#4ADE80']
-        else:
+        # CONSISTENT gradient: always red -> yellow -> green (left to right)
+        colors_gradient = ['#FEE2E2', '#FEF9C3', '#DCFCE7']
             # Green on left, red on right
             colors_gradient = ['#DCFCE7', '#FEF9C3', '#FEE2E2']
             zone_colors = ['#4ADE80', '#FBBF24', '#F87171']
