@@ -2212,12 +2212,16 @@ async def get_top_performers_pdf_v2(year: int, quarter: str):
 
 @api_router.get("/v2/analytics/{year}/{quarter}/pdf")
 async def get_analytics_pdf_v2(year: int, quarter: str):
-    """Generate Analytics PDF that matches the Analytics tab exactly."""
+    """Generate Analytics PDF that matches the Analytics tab exactly, including charts."""
     from reportlab.lib import colors as rl_colors
     from reportlab.lib.pagesizes import LETTER
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import inch
-    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle, PageBreak
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle, PageBreak, Image as RLImage
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as mpatches
+    from matplotlib.patches import FancyBboxPatch
+    import numpy as np
     
     employees_docs = await db.employees_v2.find(
         {"year": year, "quarter": quarter.upper()},
@@ -2235,11 +2239,11 @@ async def get_analytics_pdf_v2(year: int, quarter: str):
     
     # Metric definitions matching the frontend
     metrics_config = {
-        "ppa": {"label": "PPA", "benchmark_key": "benchmark_ppa", "default": 55.0, "higher_better": True, "format": "currency", "weight": "25%"},
-        "lbw_per_guest": {"label": "LBW/Guest", "benchmark_key": "benchmark_lbw", "default": 8.0, "higher_better": True, "format": "currency", "weight": "20%"},
-        "glassware_per_guest": {"label": "Glass/Guest", "benchmark_key": "benchmark_glass", "default": 1.0, "higher_better": True, "format": "currency", "weight": "15%"},
-        "guests_per_lsc": {"label": "Guests/LSC", "benchmark_key": "benchmark_lsc", "default": 100.0, "higher_better": False, "format": "number", "weight": "25%"},
-        "cv_score": {"label": "CV Score", "benchmark_key": "benchmark_cv", "default": 5.0, "higher_better": True, "format": "number", "weight": "15%"},
+        "ppa": {"label": "PPA", "benchmark_key": "benchmark_ppa", "default": 55.0, "higher_better": True, "format": "currency", "weight": "25%", "unit": "/guest"},
+        "lbw_per_guest": {"label": "LBW/Guest", "benchmark_key": "benchmark_lbw", "default": 8.0, "higher_better": True, "format": "currency", "weight": "20%", "unit": "/guest"},
+        "glassware_per_guest": {"label": "Glass/Guest", "benchmark_key": "benchmark_glass", "default": 1.25, "higher_better": True, "format": "currency", "weight": "15%", "unit": "/guest"},
+        "guests_per_lsc": {"label": "Guests/LSC", "benchmark_key": "benchmark_lsc", "default": 100.0, "higher_better": False, "format": "number", "weight": "25%", "unit": " guests"},
+        "cv_score": {"label": "CV Score", "benchmark_key": "benchmark_cv", "default": 5.0, "higher_better": True, "format": "number", "weight": "15%", "unit": " pts"},
     }
     
     def get_benchmark(metric_key):
@@ -2248,6 +2252,11 @@ async def get_analytics_pdf_v2(year: int, quarter: str):
     
     def format_value(metric_key, value):
         if value is None:
+            return "N/A"
+        cfg = metrics_config[metric_key]
+        if cfg["format"] == "currency":
+            return f"${value:.2f}"
+        return f"{value:.1f}"
             return "N/A"
         cfg = metrics_config[metric_key]
         if cfg["format"] == "currency":
