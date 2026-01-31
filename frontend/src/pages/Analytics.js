@@ -389,7 +389,7 @@ export default function Analytics() {
         {activeTab === 'metrics' ? (
           <>
         {/* Overview Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10" data-testid="score-distribution">
           <div className="bubba-card p-5">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
