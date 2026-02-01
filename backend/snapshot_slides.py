@@ -261,10 +261,10 @@ def generate_snapshot_slide(
         draw.text((col_x[1] + 8, row_cy), name,
                   font=name_font, fill=(20, 20, 20), anchor="lm")
         
-        # Column borders
+        # Column borders - BLACK
         for i in range(len(columns)):
-            draw.line([(col_x[i], y), (col_x[i], y + row_h)], fill=(180, 185, 190), width=1)
-        draw.line([(table_right, y), (table_right, y + row_h)], fill=(180, 185, 190), width=1)
+            draw.line([(col_x[i], y), (col_x[i], y + row_h)], fill=(0, 0, 0), width=1)
+        draw.line([(table_right, y), (table_right, y + row_h)], fill=(0, 0, 0), width=1)
         
         # Score columns - COLORED CELLS with BOLD BLACK TEXT
         for i, col in enumerate(columns[2:], start=2):
