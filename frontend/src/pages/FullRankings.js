@@ -60,20 +60,32 @@ export default function FullRankings() {
   const handleDownloadPdf = async () => {
     setDownloadingPdf(true);
     try {
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      const filename = `full_rankings_${selectedQuarter}_${selectedYear}.pdf`;
+      
+      if (isIOS) {
+        // For iOS, open in new tab
+        window.open(`${API}/v2/full-rankings/${selectedYear}/${selectedQuarter}/pdf`, '_blank');
+        toast.success("Rankings PDF opened. Tap share to save.");
+        setDownloadingPdf(false);
+        return;
+      }
+      
       const response = await axios.get(
         `${API}/v2/full-rankings/${selectedYear}/${selectedQuarter}/pdf`,
         { responseType: 'blob' }
       );
       
       // Create download link
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `full_rankings_${selectedQuarter}_${selectedYear}.pdf`);
+      link.setAttribute('download', filename);
       document.body.appendChild(link);
       link.click();
       link.remove();
-      window.URL.revokeObjectURL(url);
+      setTimeout(() => window.URL.revokeObjectURL(url), 1000);
       
       toast.success("Rankings PDF downloaded successfully!");
     } catch (error) {
