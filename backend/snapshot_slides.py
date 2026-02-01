@@ -385,13 +385,10 @@ def generate_snapshot_slide(
         # Metric columns - all use pre-calculated normalized scores (0-100+ scale)
         for i, col in enumerate(columns[2:], start=2):
             metric_key = col.get("key")
+            is_binary = col.get("is_binary", False)
             
             if metric_key:
-                # Get pre-calculated score (already a percentage)
-                percentage = emp.get(metric_key, 0) or 0
-                
-                # Get cell color based on percentage
-                cell_color = get_cell_color(percentage)
+                value = emp.get(metric_key, 0) or 0
                 
                 # Draw colored cell background (edge-to-edge within column)
                 cell_x = col_positions[i] + 2
@@ -399,16 +396,29 @@ def generate_snapshot_slide(
                 cell_w = col_widths[i] - 4
                 cell_h = row_height - 6
                 
+                if is_binary:
+                    # Binary column (CV): green if positive, red if 0 or negative
+                    cell_color = CELL_COLORS["green"] if value > 0 else CELL_COLORS["red"]
+                    # Show the actual value (not percentage)
+                    if value > 0:
+                        display_text = f"+{int(value)}"
+                    elif value < 0:
+                        display_text = f"{int(value)}"
+                    else:
+                        display_text = "0"
+                else:
+                    # Standard percentage column
+                    cell_color = get_cell_color(value)
+                    display_text = f"{value:.0f}%"
+                
                 draw.rounded_rectangle(
                     [cell_x, cell_y, cell_x + cell_w, cell_y + cell_h],
                     radius=3,
                     fill=hex_to_rgb(cell_color)
                 )
                 
-                # Draw percentage text
-                pct_text = f"{percentage:.0f}%"
                 draw.text((cell_x + cell_w // 2, cell_y + cell_h // 2),
-                          pct_text, font=font_cell, fill="#FFFFFF", anchor="mm")
+                          display_text, font=font_cell, fill="#FFFFFF", anchor="mm")
     
     # Footer (edge-to-edge)
     font_footer = get_font(13)
