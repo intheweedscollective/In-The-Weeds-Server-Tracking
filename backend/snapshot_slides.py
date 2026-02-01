@@ -200,7 +200,7 @@ def generate_snapshot_slide(
         draw.rounded_rectangle([tier_badge_x, row_cy - 14, tier_badge_x + tier_badge_w, row_cy + 14],
                                radius=14, fill=tier_color)
         draw.text((tier_badge_x + tier_badge_w//2, row_cy), tier_label, font=get_font(12, True),
-                  fill=tier_text_color, anchor="mm")
+                  fill=(0, 0, 0), anchor="mm")  # BLACK text
         
         # Column 4: Total Score - RED bold text
         total = emp.get("total_score", 0) or 0
