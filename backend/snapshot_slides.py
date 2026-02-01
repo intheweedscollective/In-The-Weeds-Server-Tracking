@@ -1,26 +1,40 @@
 """
-Server Performance Snapshot - Matching 1.15.26 snap.png style exactly
-Dark textured background, oversized logo, bold black text on colored cells
+Server Performance Snapshot - Clean Web Style with Gridlines
+Matches the Full Rankings page design exactly
 """
 import io
 import os
 from typing import List, Dict, Any, Tuple
 from PIL import Image, ImageDraw, ImageFont
 from datetime import datetime
-import random
-import math
 
 SLIDE_WIDTH = 1920
 SLIDE_HEIGHT = 1080
 
-BACKGROUNDS = {"fire": {"name": "Fire Texture"}, "dark": {"name": "Dark"}}
+BACKGROUNDS = {"clean": {"name": "Clean White"}}
 
-# TRUE performance colors
-PERF_COLORS = {
-    "exceeding": (0, 0, 255),          # TRUE BLUE
-    "meeting": (0, 200, 0),             # TRUE GREEN (slightly darker for readability)
-    "progress": (255, 255, 0),          # TRUE YELLOW
-    "improvement": (255, 0, 0),         # TRUE RED
+# Tier colors matching web design
+TIER_COLORS = {
+    "Trainer": (216, 180, 254),       # Light purple
+    "Bartender": (147, 197, 253),     # Light blue
+    "A-Server": (134, 239, 172),      # Light green
+    "B-Server": (253, 186, 116),      # Light orange
+    "C-Server": (252, 165, 165),      # Light red
+}
+
+TIER_TEXT_COLORS = {
+    "Trainer": (126, 34, 206),        # Purple text
+    "Bartender": (37, 99, 235),       # Blue text
+    "A-Server": (22, 163, 74),        # Green text
+    "B-Server": (234, 88, 12),        # Orange text
+    "C-Server": (220, 38, 38),        # Red text
+}
+
+# Progress bar colors
+PROGRESS_COLORS = {
+    "green": (34, 197, 94),
+    "yellow": (234, 179, 8),
+    "red": (239, 68, 68),
 }
 
 
@@ -34,64 +48,25 @@ def get_font(size: int, bold: bool = False):
     return ImageFont.load_default()
 
 
-def get_perf_color(val: float) -> Tuple[int, int, int]:
-    if val >= 100:
-        return PERF_COLORS["exceeding"]
-    elif val >= 80:
-        return PERF_COLORS["meeting"]
-    elif val >= 70:
-        return PERF_COLORS["progress"]
-    return PERF_COLORS["improvement"]
-
-
-def create_fire_texture_background(w: int, h: int) -> Image.Image:
-    """Create dark textured background like reference - red/orange/black fire texture."""
-    img = Image.new('RGB', (w, h))
-    draw = ImageDraw.Draw(img)
-    
-    # Base dark gradient
-    for y in range(h):
-        for x in range(w):
-            # Create organic fire-like texture
-            noise1 = math.sin(x * 0.02 + y * 0.01) * 0.5 + 0.5
-            noise2 = math.sin(x * 0.015 - y * 0.02) * 0.5 + 0.5
-            noise3 = math.sin((x + y) * 0.01) * 0.5 + 0.5
-            
-            combined = (noise1 + noise2 + noise3) / 3
-            
-            # Dark red/orange/black palette
-            r = int(30 + combined * 80)
-            g = int(10 + combined * 30)
-            b = int(5 + combined * 15)
-            
-            draw.point((x, y), fill=(r, g, b))
-    
-    # Add some brighter spots for texture
-    random.seed(42)
-    for _ in range(200):
-        x = random.randint(0, w)
-        y = random.randint(0, h)
-        brightness = random.randint(60, 120)
-        size = random.randint(20, 60)
-        for r in range(size, 0, -5):
-            alpha = int(brightness * (r / size) * 0.15)
-            color = (80 + alpha, 30 + alpha // 2, 10 + alpha // 4)
-            draw.ellipse([x - r, y - r, x + r, y + r], outline=color)
-    
-    return img
+def get_progress_color(percentage: float) -> Tuple[int, int, int]:
+    if percentage >= 80:
+        return PROGRESS_COLORS["green"]
+    elif percentage >= 70:
+        return PROGRESS_COLORS["yellow"]
+    return PROGRESS_COLORS["red"]
 
 
 def generate_snapshot_slide(
     employees: List[Dict[str, Any]],
     benchmarks: Dict[str, float],
     snapshot_date: str,
-    background: str = "fire",
+    background: str = "clean",
     title: str = None
 ) -> bytes:
-    """Generate snapshot matching 1.15.26 snap.png style exactly."""
+    """Generate snapshot matching the clean web design with gridlines."""
     
-    # Create fire texture background
-    img = create_fire_texture_background(SLIDE_WIDTH, SLIDE_HEIGHT)
+    # White/light gray background
+    img = Image.new('RGB', (SLIDE_WIDTH, SLIDE_HEIGHT), (248, 250, 252))
     draw = ImageDraw.Draw(img)
     
     # Sort employees
@@ -102,136 +77,79 @@ def generate_snapshot_slide(
     ))
     num_emps = len(sorted_emps)
     
-    # ===== LEFT PANEL =====
-    left_width = 320
-    
-    # OVERSIZED LOGO - much bigger
+    # Logo in top left
     logo_path = "/app/backend/assets/bubba_gump_logo.png"
     if os.path.exists(logo_path):
         try:
             logo = Image.open(logo_path).convert("RGBA")
-            logo.thumbnail((240, 240), Image.Resampling.LANCZOS)  # OVERSIZED
-            logo_x = (left_width - logo.width) // 2
-            img.paste(logo, (logo_x, 15), logo)
+            logo.thumbnail((100, 100), Image.Resampling.LANCZOS)
+            img.paste(logo, (20, 15), logo)
         except:
             pass
     
     draw = ImageDraw.Draw(img)
     
-    # Title - LARGE FONTS matching reference
-    title_y = 280
+    # Title next to logo
+    draw.text((140, 30), "SERVER PERFORMANCE SNAPSHOT", font=get_font(28, True), fill=(30, 41, 59))
+    draw.text((140, 65), snapshot_date, font=get_font(18), fill=(100, 116, 139))
     
-    # Quarter identifier
-    draw.text((left_width // 2, title_y), "Q1 SERVER", font=get_font(32, True),
-              fill=(255, 255, 255), anchor="mm")
-    
-    # "PERFORMANCE" in RED - large
-    draw.text((left_width // 2, title_y + 45), "PERFORMANCE", font=get_font(34, True),
-              fill=(255, 50, 50), anchor="mm")
-    
-    # "SNAPSHOT" in YELLOW
-    draw.text((left_width // 2, title_y + 90), "SNAPSHOT", font=get_font(32, True),
-              fill=(255, 220, 0), anchor="mm")
-    
-    # Date
-    draw.text((left_width // 2, title_y + 135), snapshot_date, font=get_font(22, True),
-              fill=(255, 255, 255), anchor="mm")
-    
-    # Legend - LARGER colored squares with BIGGER text
-    legend_y = 460
-    legend_items = [
-        (PERF_COLORS["exceeding"], "EXCEEDING ALL", "EXPECTATIONS"),
-        (PERF_COLORS["meeting"], "MEETING", "EXPECTATIONS"),
-        (PERF_COLORS["progress"], "WORK IN", "PROGRESS"),
-        (PERF_COLORS["improvement"], "NEEDS IMMEDIATE", "IMPROVEMENT"),
-    ]
-    
-    for i, (color, line1, line2) in enumerate(legend_items):
-        y = legend_y + i * 95
-        # Larger colored square
-        draw.rectangle([12, y, 58, y + 48], fill=color)
-        # EVEN LARGER text in matching color - 24pt bold
-        draw.text((68, y + 2), line1, font=get_font(24, True), fill=color)
-        draw.text((68, y + 30), line2, font=get_font(24, True), fill=color)
-    
-    # Footer
-    footer_y = SLIDE_HEIGHT - 100
-    draw.text((left_width // 2, footer_y), "DON'T WAIT TO IMPACT THIS NUMBER.", 
-              font=get_font(11, True), fill=(200, 200, 200), anchor="mm")
-    draw.text((left_width // 2, footer_y + 18), "IF YOU HAVE ANY QUESTIONS PLEASE SEE",
-              font=get_font(11, True), fill=(200, 200, 200), anchor="mm")
-    draw.text((left_width // 2, footer_y + 36), "A MEMBER OF MANAGEMENT.",
-              font=get_font(11, True), fill=(200, 200, 200), anchor="mm")
-    
-    # ===== TABLE - RIGHT SIDE =====
-    table_left = left_width + 10
-    table_right = SLIDE_WIDTH - 10
-    table_top = 25
+    # Table dimensions
+    table_left = 20
+    table_right = SLIDE_WIDTH - 20
+    table_top = 120
     table_width = table_right - table_left
     
-    # Calculate row height for ALL employees - LARGER rows
-    header_h = 55
+    # Header height and row calculations
+    header_h = 50
     avail_h = SLIDE_HEIGHT - table_top - 30
     row_h = (avail_h - header_h) // max(num_emps, 1)
-    row_h = max(32, min(42, row_h))  # Larger minimum
+    row_h = max(38, min(50, row_h))
     
-    # LARGER fonts
-    name_sz = 16
-    val_sz = 15
-    
-    # Columns - ALL EQUAL WIDTH
+    # Columns - equal width
     columns = [
-        {"name": "Rank"},
-        {"name": "Employee Name"},
-        {"name": "PPA", "key": "score_ppa"},
-        {"name": "LBW", "key": "score_lbw"},
-        {"name": "GLASS", "key": "score_glass"},
-        {"name": "LSC", "key": "score_lsc"},
-        {"name": "Review\nBonus", "key": "review_tracker_bonus", "is_bonus": True},
-        {"name": "Metric\nBonus", "key": "total_metric_bonus", "is_bonus": True},
-        {"name": "Total Score", "key": "total_score"},
+        {"name": "POSITION", "width": 100},
+        {"name": "EMPLOYEE", "width": 200},
+        {"name": "TIER", "width": 120},
+        {"name": "TOTAL SCORE", "width": 140},
+        {"name": "BONUS", "width": 100},
+        {"name": "PPA (25%)", "width": 180, "key": "score_ppa", "max": 30},
+        {"name": "LBW (20%)", "width": 180, "key": "score_lbw", "max": 25},
+        {"name": "LSC (25%)", "width": 180, "key": "score_lsc", "max": 30},
+        {"name": "GLASS (15%)", "width": 180, "key": "score_glass", "max": 20},
     ]
     
-    # Equal width for all columns
-    num_cols = len(columns)
-    col_width = table_width // num_cols
-    col_widths = [col_width] * num_cols
-    col_widths[-1] += table_width - sum(col_widths)  # Adjust last column for rounding
+    # Adjust widths to fit
+    total_w = sum(c["width"] for c in columns)
+    scale = table_width / total_w
+    for c in columns:
+        c["width"] = int(c["width"] * scale)
     
+    # Calculate positions
     col_x = []
     x = table_left
-    for w in col_widths:
+    for c in columns:
         col_x.append(x)
-        x += w
+        x += c["width"]
     
-    # Header row - dark blue with BLACK border
-    draw.rectangle([table_left, table_top, table_right, table_top + header_h],
-                   fill=(30, 60, 100))
-    draw.rectangle([table_left, table_top, table_right, table_top + header_h],
-                   outline=(0, 0, 0), width=2)
+    # Red accent line at top
+    draw.rectangle([table_left, table_top - 4, table_right, table_top], fill=(239, 68, 68))
     
-    # Header column separators - BLACK
-    for i in range(len(columns)):
-        draw.line([(col_x[i], table_top), (col_x[i], table_top + header_h)], fill=(0, 0, 0), width=1)
-    draw.line([(table_right, table_top), (table_right, table_top + header_h)], fill=(0, 0, 0), width=1)
+    # Header row - dark navy
+    draw.rectangle([table_left, table_top, table_right, table_top + header_h], fill=(30, 41, 59))
     
-    # Header text - WHITE, LARGE
-    header_font = get_font(14, True)
+    # Yellow accent under header for metric columns
+    metric_start = col_x[5]  # PPA column
+    draw.rectangle([metric_start, table_top + header_h, table_right, table_top + header_h + 4], fill=(250, 204, 21))
+    
+    # Header text
+    header_font = get_font(13, True)
     for i, col in enumerate(columns):
-        cx = col_x[i] + col_widths[i] // 2
-        name = col["name"]
-        if "\n" in name:
-            lines = name.split("\n")
-            draw.text((cx, table_top + 18), lines[0], font=header_font, fill=(255, 255, 255), anchor="mm")
-            draw.text((cx, table_top + 38), lines[1], font=header_font, fill=(255, 255, 255), anchor="mm")
-        else:
-            draw.text((cx, table_top + header_h // 2), name, font=header_font, fill=(255, 255, 255), anchor="mm")
+        cx = col_x[i] + col["width"] // 2
+        draw.text((cx, table_top + header_h // 2), col["name"],
+                  font=header_font, fill=(255, 255, 255), anchor="mm")
     
     # Data rows
-    data_y = table_top + header_h
-    name_font = get_font(name_sz, True)
-    val_font = get_font(val_sz, True)
-    
+    data_y = table_top + header_h + 6
     tier_counts = {}
     
     for idx, emp in enumerate(sorted_emps):
@@ -243,79 +161,105 @@ def generate_snapshot_slide(
         tier = emp.get("tier_label", "C-Server")
         tier_counts[tier] = tier_counts.get(tier, 0) + 1
         
-        # WHITE and LIGHT GRAY alternating rows
-        row_bg = (255, 255, 255) if idx % 2 == 0 else (230, 235, 240)
+        # Alternating row backgrounds
+        row_bg = (255, 255, 255) if idx % 2 == 0 else (241, 245, 249)
         draw.rectangle([table_left, y, table_right, y + row_h], fill=row_bg)
         
-        # Row border - BLACK
+        # GRIDLINE between rows - black line
         draw.line([(table_left, y + row_h), (table_right, y + row_h)], fill=(0, 0, 0), width=1)
         
         row_cy = y + row_h // 2
+        tier_color = TIER_COLORS.get(tier, (200, 200, 200))
+        tier_text_color = TIER_TEXT_COLORS.get(tier, (50, 50, 50))
         
-        # Rank - plain black text
-        prefix = {"Trainer": "", "Bartender": "BAR", "A-Server": "", "B-Server": "", "C-Server": ""}.get(tier, "")
-        if prefix:
-            rank = f"{prefix}{tier_counts[tier]}"
-        else:
-            rank = str(sum(tier_counts.values()))
-        draw.text((col_x[0] + col_widths[0] // 2, row_cy), rank,
-                  font=val_font, fill=(30, 30, 30), anchor="mm")
+        # Column 1: Position with rank badge
+        pos_x = col_x[0] + 15
+        # Position number
+        draw.text((pos_x, row_cy), str(idx + 1), font=get_font(20, True), fill=(100, 116, 139), anchor="lm")
         
-        # Name - BOLD BLACK
+        # Tier badge (T1, Bar1, A1, etc.)
+        prefix = {"Trainer": "T", "Bartender": "Bar", "A-Server": "A", "B-Server": "B", "C-Server": "C"}.get(tier, "?")
+        badge_text = f"{prefix}{tier_counts[tier]}"
+        badge_x = pos_x + 35
+        badge_w, badge_h = 45, 28
+        draw.rounded_rectangle([badge_x, row_cy - badge_h//2, badge_x + badge_w, row_cy + badge_h//2],
+                               radius=6, fill=tier_color)
+        draw.text((badge_x + badge_w//2, row_cy), badge_text, font=get_font(12, True), 
+                  fill=tier_text_color, anchor="mm")
+        
+        # Column 2: Employee name
         name = emp.get("name", "Unknown")
-        max_ch = int(col_widths[1] / (name_sz * 0.5))
-        if len(name) > max_ch:
-            name = name[:max_ch - 1] + "…"
-        draw.text((col_x[1] + 8, row_cy), name,
-                  font=name_font, fill=(20, 20, 20), anchor="lm")
+        job = emp.get("job_title", "server").lower()
+        draw.text((col_x[1] + 10, row_cy - 8), name, font=get_font(15, True), fill=(30, 41, 59), anchor="lm")
+        draw.text((col_x[1] + 10, row_cy + 10), job, font=get_font(11), fill=(148, 163, 184), anchor="lm")
         
-        # Column borders - BLACK
-        for i in range(len(columns)):
-            draw.line([(col_x[i], y), (col_x[i], y + row_h)], fill=(0, 0, 0), width=1)
-        draw.line([(table_right, y), (table_right, y + row_h)], fill=(0, 0, 0), width=1)
+        # Column 3: Tier badge
+        tier_label = tier
+        tier_badge_w = 90
+        tier_badge_x = col_x[2] + (columns[2]["width"] - tier_badge_w) // 2
+        draw.rounded_rectangle([tier_badge_x, row_cy - 14, tier_badge_x + tier_badge_w, row_cy + 14],
+                               radius=14, fill=tier_color)
+        draw.text((tier_badge_x + tier_badge_w//2, row_cy), tier_label, font=get_font(12, True),
+                  fill=tier_text_color, anchor="mm")
         
-        # Score columns - COLORED CELLS with BOLD BLACK TEXT
-        for i, col in enumerate(columns[2:], start=2):
-            key = col.get("key")
-            if not key:
-                continue
-            
+        # Column 4: Total Score - RED bold text
+        total = emp.get("total_score", 0) or 0
+        draw.text((col_x[3] + columns[3]["width"]//2, row_cy), f"{total:.2f}",
+                  font=get_font(22, True), fill=(220, 38, 38), anchor="mm")
+        
+        # Column 5: Bonus
+        bonus = (emp.get("total_metric_bonus", 0) or 0) + (emp.get("review_tracker_bonus", 0) or 0)
+        bonus_color = (22, 163, 74) if bonus > 0 else (148, 163, 184)
+        bonus_text = f"+{bonus:.2f}" if bonus > 0 else f"{bonus:.2f}"
+        draw.text((col_x[4] + columns[4]["width"]//2, row_cy), bonus_text,
+                  font=get_font(14, True), fill=bonus_color, anchor="mm")
+        
+        # Metric columns with progress bars
+        metrics = [
+            ("score_ppa", 5, 30),
+            ("score_lbw", 6, 25),
+            ("score_lsc", 7, 30),
+            ("score_glass", 8, 20),
+        ]
+        
+        for key, col_idx, max_val in metrics:
             val = emp.get(key, 0) or 0
-            is_bonus = col.get("is_bonus", False)
+            # Calculate actual score (val is percentage, convert to points)
+            actual = (val / 100) * max_val
+            percentage = val
             
-            # Cell with padding
-            pad = 3
-            cx = col_x[i] + pad
-            cw = col_widths[i] - pad * 2
-            ch = row_h - 6
-            cy = y + 3
+            col_center = col_x[col_idx] + columns[col_idx]["width"] // 2
             
-            # Determine color
-            if is_bonus:
-                if val > 2:
-                    color = PERF_COLORS["meeting"]
-                elif val >= 0:
-                    color = PERF_COLORS["progress"]
-                else:
-                    color = PERF_COLORS["improvement"]
-                txt = f"{val:.2f}"
-            elif key == "total_score":
-                color = get_perf_color(val)
-                txt = f"{val:.2f}"
-            else:
-                color = get_perf_color(val)
-                txt = f"{val:.2f}"
+            # Score text
+            score_text = f"{actual:.2f} / {max_val}"
+            draw.text((col_center, row_cy - 8), score_text, font=get_font(13, True), fill=(51, 65, 85), anchor="mm")
             
-            # Draw colored cell
-            draw.rectangle([cx, cy, cx + cw, cy + ch], fill=color)
+            # Progress bar
+            bar_w = columns[col_idx]["width"] - 30
+            bar_h = 8
+            bar_x = col_x[col_idx] + 15
+            bar_y = row_cy + 8
             
-            # BOLD BLACK TEXT on colored cell
-            draw.text((cx + cw // 2, row_cy), txt,
-                      font=val_font, fill=(0, 0, 0), anchor="mm")
+            # Background bar
+            draw.rounded_rectangle([bar_x, bar_y, bar_x + bar_w, bar_y + bar_h],
+                                   radius=4, fill=(226, 232, 240))
+            
+            # Filled bar
+            fill_w = int((percentage / 100) * bar_w)
+            fill_w = min(fill_w, bar_w)
+            if fill_w > 0:
+                bar_color = get_progress_color(percentage)
+                draw.rounded_rectangle([bar_x, bar_y, bar_x + fill_w, bar_y + bar_h],
+                                       radius=4, fill=bar_color)
     
-    # Outer border - BLACK
+    # Outer border
     final_y = data_y + min(num_emps, int((SLIDE_HEIGHT - 30 - data_y) / row_h)) * row_h
     draw.rectangle([table_left, table_top, table_right, final_y], outline=(0, 0, 0), width=2)
+    
+    # Vertical gridlines
+    for i in range(len(columns)):
+        draw.line([(col_x[i], table_top), (col_x[i], final_y)], fill=(0, 0, 0), width=1)
+    draw.line([(table_right, table_top), (table_right, final_y)], fill=(0, 0, 0), width=1)
     
     # Save
     buf = io.BytesIO()
