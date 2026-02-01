@@ -471,6 +471,17 @@ export default function Snapshots() {
                       {generating === snapshot.id ? "Generating..." : "Download Slide"}
                     </Button>
                     
+                    {/* Recalculate Scores */}
+                    <Button
+                      variant="outline"
+                      onClick={() => recalculateSnapshot(snapshot.id)}
+                      disabled={snapshot.employee_count === 0 || recalculating === snapshot.id}
+                      title="Recalculate all scores with latest scoring engine"
+                    >
+                      <RefreshCw className={`w-4 h-4 mr-2 ${recalculating === snapshot.id ? 'animate-spin' : ''}`} />
+                      {recalculating === snapshot.id ? "Recalculating..." : "Recalculate"}
+                    </Button>
+                    
                     {/* Delete */}
                     <Button
                       variant="destructive"
