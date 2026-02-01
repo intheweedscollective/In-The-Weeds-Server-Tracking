@@ -2801,6 +2801,99 @@ async def upload_snapshot_data(snapshot_id: str, file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
 
 
+@api_router.post("/v2/snapshots/{snapshot_id}/recalculate")
+async def recalculate_snapshot(snapshot_id: str):
+    """Recalculate all scores for an existing snapshot without re-uploading data."""
+    snapshot = await db.snapshots.find_one({"id": snapshot_id})
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    
+    employees_data = snapshot.get("employees", [])
+    if not employees_data:
+        raise HTTPException(status_code=400, detail="Snapshot has no employee data to recalculate")
+    
+    # Get settings for scoring
+    settings_doc = await db.quarter_settings.find_one(
+        {"year": snapshot["year"], "quarter": snapshot["quarter"]},
+        {"_id": 0}
+    )
+    settings = QuarterSettings(**(settings_doc or {}))
+    
+    recalculated_employees = []
+    for emp_data in employees_data:
+        try:
+            # Create EmployeeV2 from existing data
+            emp = EmployeeV2(
+                id=emp_data.get("id", str(uuid.uuid4())),
+                name=emp_data.get("name", "Unknown"),
+                job_title=emp_data.get("job_title", "Server"),
+                guests=emp_data.get("guests", 0),
+                net_sales=emp_data.get("net_sales", 0),
+                liquor_sales=emp_data.get("liquor_sales", 0),
+                beer_sales=emp_data.get("beer_sales", 0),
+                wine_sales=emp_data.get("wine_sales", 0),
+                glassware_sales=emp_data.get("glassware_sales", 0),
+                lsc_count=emp_data.get("lsc_count", 0),
+                cv_promoters=emp_data.get("cv_promoters", 0),
+                cv_passives=emp_data.get("cv_passives", 0),
+                cv_detractors=emp_data.get("cv_detractors", 0),
+                review_mentions=emp_data.get("review_mentions", 0),
+                year=snapshot["year"],
+                quarter=snapshot["quarter"],
+            )
+            
+            # Run full scoring pipeline
+            emp = calculate_lbw_total(emp)
+            emp = calculate_derived_metrics(emp)
+            emp = calculate_customer_voice_score(emp)
+            emp = calculate_review_tracker_bonus(emp)
+            emp = calculate_combined_cv_rt(emp)
+            emp = calculate_normalized_scores(emp, settings)
+            emp = calculate_bonus_points(emp, settings)
+            emp = calculate_total_score(emp, settings)
+            
+            # Determine tier label
+            job_title = (emp.job_title or "Server").strip().lower()
+            if job_title == "trainer":
+                tier_label = "Trainer"
+            elif job_title == "bartender":
+                tier_label = "Bartender"
+            elif emp.total_score >= settings.a_server_min_score:
+                tier_label = "A-Server"
+            elif emp.total_score >= settings.b_server_min_score:
+                tier_label = "B-Server"
+            else:
+                tier_label = "C-Server"
+            
+            emp_dict = emp.model_dump()
+            emp_dict["tier_label"] = tier_label
+            recalculated_employees.append(emp_dict)
+        except Exception as e:
+            logging.warning(f"Error recalculating employee {emp_data.get('name')}: {e}")
+            continue
+    
+    # Sort by tier and score
+    tier_order = {"Trainer": 0, "Bartender": 1, "A-Server": 2, "B-Server": 3, "C-Server": 4}
+    recalculated_employees.sort(key=lambda x: (tier_order.get(x.get("tier_label", "C-Server"), 4), -(x.get("total_score", 0) or 0)))
+    
+    # Update snapshot
+    await db.snapshots.update_one(
+        {"id": snapshot_id},
+        {
+            "$set": {
+                "employees": recalculated_employees,
+                "employee_count": len(recalculated_employees),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    return {
+        "message": "Scores recalculated successfully",
+        "employee_count": len(recalculated_employees)
+    }
+
+
 @api_router.delete("/v2/snapshots/{snapshot_id}")
 async def delete_snapshot(snapshot_id: str):
     """Delete a snapshot."""
