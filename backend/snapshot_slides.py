@@ -239,8 +239,8 @@ def generate_snapshot_slide(
         row_bg = (255, 255, 255) if idx % 2 == 0 else (230, 235, 240)
         draw.rectangle([table_left, y, table_right, y + row_h], fill=row_bg)
         
-        # Row border
-        draw.line([(table_left, y + row_h), (table_right, y + row_h)], fill=(180, 185, 190), width=1)
+        # Row border - BLACK
+        draw.line([(table_left, y + row_h), (table_right, y + row_h)], fill=(0, 0, 0), width=1)
         
         row_cy = y + row_h // 2
         
