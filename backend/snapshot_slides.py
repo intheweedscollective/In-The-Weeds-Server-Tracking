@@ -275,7 +275,7 @@ def generate_snapshot_slide(
         {"name": "LBW", "short": "$/Guest", "flex": 1.2, "key": "score_lbw", "is_normalized": True},
         {"name": "Glass", "short": "$/Guest", "flex": 1.2, "key": "score_glass", "is_normalized": True},
         {"name": "LSC", "short": "Guests/#", "flex": 1.2, "key": "score_lsc", "is_normalized": True},
-        {"name": "CV", "short": "Score", "flex": 1.0, "key": "score_cv", "is_normalized": True},
+        {"name": "CV", "short": "+/-", "flex": 1.0, "key": "cv_score", "is_binary": True},  # Binary: green if >0, red if <=0
         {"name": "TOTAL", "short": "Score", "flex": 1.2, "key": "total_score", "is_normalized": True},
     ]
     
