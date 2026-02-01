@@ -179,21 +179,24 @@ def generate_snapshot_slide(
     name_sz = 16
     val_sz = 15
     
-    # Columns matching reference
+    # Columns - ALL EQUAL WIDTH
     columns = [
-        {"name": "Rank", "pct": 5},
-        {"name": "Employee Name", "pct": 13},
-        {"name": "PPA", "pct": 9, "key": "score_ppa"},
-        {"name": "LBW", "pct": 9, "key": "score_lbw"},
-        {"name": "GLASS", "pct": 9, "key": "score_glass"},
-        {"name": "LSC", "pct": 9, "key": "score_lsc"},
-        {"name": "Review\nBonus", "pct": 10, "key": "review_tracker_bonus", "is_bonus": True},
-        {"name": "Metric\nBonus", "pct": 10, "key": "total_metric_bonus", "is_bonus": True},
-        {"name": "Total Score", "pct": 12, "key": "total_score"},
+        {"name": "Rank"},
+        {"name": "Employee Name"},
+        {"name": "PPA", "key": "score_ppa"},
+        {"name": "LBW", "key": "score_lbw"},
+        {"name": "GLASS", "key": "score_glass"},
+        {"name": "LSC", "key": "score_lsc"},
+        {"name": "Review\nBonus", "key": "review_tracker_bonus", "is_bonus": True},
+        {"name": "Metric\nBonus", "key": "total_metric_bonus", "is_bonus": True},
+        {"name": "Total Score", "key": "total_score"},
     ]
     
-    col_widths = [int(c["pct"] / 100 * table_width) for c in columns]
-    col_widths[-1] += table_width - sum(col_widths)
+    # Equal width for all columns
+    num_cols = len(columns)
+    col_width = table_width // num_cols
+    col_widths = [col_width] * num_cols
+    col_widths[-1] += table_width - sum(col_widths)  # Adjust last column for rounding
     
     col_x = []
     x = table_left
