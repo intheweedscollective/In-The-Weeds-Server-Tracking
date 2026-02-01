@@ -15,12 +15,12 @@ SLIDE_HEIGHT = 1080
 
 BACKGROUNDS = {"fire": {"name": "Fire Texture"}, "dark": {"name": "Dark"}}
 
-# Vibrant performance colors matching reference
+# TRUE performance colors
 PERF_COLORS = {
-    "exceeding": (65, 145, 255),      # Bright Blue
-    "meeting": (50, 205, 50),          # Lime Green
-    "progress": (255, 215, 0),         # Gold/Yellow
-    "improvement": (255, 70, 70),      # Bright Red
+    "exceeding": (0, 0, 255),          # TRUE BLUE
+    "meeting": (0, 200, 0),             # TRUE GREEN (slightly darker for readability)
+    "progress": (255, 255, 0),          # TRUE YELLOW
+    "improvement": (255, 0, 0),         # TRUE RED
 }
 
 
