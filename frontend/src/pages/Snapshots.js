@@ -122,8 +122,9 @@ export default function Snapshots() {
         { responseType: 'blob' }
       );
       
-      // Create download link
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      // Create download link with explicit PNG type
+      const blob = new Blob([response.data], { type: 'image/png' });
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', `snapshot_${snapshot.snapshot_date}.png`);
