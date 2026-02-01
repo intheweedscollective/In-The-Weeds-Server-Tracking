@@ -57,6 +57,8 @@ Build a comprehensive performance review application for restaurant employees (B
 - ✅ **Snapshot CV Score**: Added full CV scoring pipeline to snapshot upload
 - ✅ **Snapshot Slide Edge-to-Edge**: Rewrote slide generator for full 1920x1080 coverage
 - ✅ **CV Column Display**: Changed to use `score_cv` (normalized 0-100) instead of `cv_score`
+- ✅ **Recalculate Button**: Added `/api/v2/snapshots/{id}/recalculate` endpoint and UI button
+- ✅ **iOS Download Fix**: Added iOS-compatible download handling for all file downloads
 
 ## Backlog
 
