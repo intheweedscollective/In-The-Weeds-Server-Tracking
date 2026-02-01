@@ -13,6 +13,13 @@ import math
 SLIDE_WIDTH = 1920
 SLIDE_HEIGHT = 1080
 
+# Background themes (exported for API)
+BACKGROUNDS = {
+    "midnight_blue": {"name": "Midnight Blue"},
+    "forest_green": {"name": "Forest Green"},
+    "slate_dark": {"name": "Slate Dark"},
+}
+
 # Performance tier colors (matching reference design)
 TIER_COLORS = {
     "exceeding": (0, 120, 215),      # Blue - Exceeding expectations (>=100%)
