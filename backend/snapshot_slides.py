@@ -1,7 +1,7 @@
 """
-Snapshot Slide Generator
+Snapshot Slide Generator - TV OPTIMIZED
 Generates bi-weekly team snapshot slides (1920x1080 PNG)
-All employees on one page with conditional formatting - EDGE TO EDGE design
+Designed for readability on large TV displays from a distance
 """
 import io
 from typing import List, Dict, Any, Tuple
@@ -12,96 +12,63 @@ import math
 SLIDE_WIDTH = 1920
 SLIDE_HEIGHT = 1080
 
-# Fun background themes
+# Background themes
 BACKGROUNDS = {
-    "ocean_wave": {
-        "name": "Ocean Wave",
-        "colors": ["#0077B6", "#00B4D8", "#90E0EF"],
-        "style": "wave"
+    "midnight_blue": {
+        "name": "Midnight Blue",
+        "bg_color": (10, 25, 50),
+        "header_color": (20, 45, 80),
+        "row_alt": (15, 35, 65),
+        "accent": (59, 130, 246),
     },
-    "sunset_gradient": {
-        "name": "Sunset Gradient",
-        "colors": ["#FF6B6B", "#FFA07A", "#FFD93D"],
-        "style": "gradient"
+    "slate_dark": {
+        "name": "Slate Dark",
+        "bg_color": (15, 23, 42),
+        "header_color": (30, 41, 59),
+        "row_alt": (20, 30, 50),
+        "accent": (100, 116, 139),
     },
     "forest_green": {
         "name": "Forest Green",
-        "colors": ["#2D5A27", "#4A7C23", "#6B9B37"],
-        "style": "gradient"
-    },
-    "purple_haze": {
-        "name": "Purple Haze",
-        "colors": ["#4A0E4E", "#7B2D8E", "#A855F7"],
-        "style": "gradient"
-    },
-    "midnight_blue": {
-        "name": "Midnight Blue",
-        "colors": ["#0A1628", "#1E3A5F", "#2563EB"],
-        "style": "gradient"
-    },
-    "coral_reef": {
-        "name": "Coral Reef",
-        "colors": ["#FF6F61", "#FF9A8B", "#FFECD2"],
-        "style": "gradient"
-    },
-    "neon_nights": {
-        "name": "Neon Nights",
-        "colors": ["#0D0221", "#2D1B69", "#FF00FF"],
-        "style": "neon"
-    },
-    "tropical_paradise": {
-        "name": "Tropical Paradise",
-        "colors": ["#00CED1", "#20B2AA", "#3CB371"],
-        "style": "wave"
-    },
-    "golden_hour": {
-        "name": "Golden Hour",
-        "colors": ["#FF8C00", "#FFD700", "#FFF8DC"],
-        "style": "gradient"
-    },
-    "cherry_blossom": {
-        "name": "Cherry Blossom",
-        "colors": ["#FFB7C5", "#FF69B4", "#FFC0CB"],
-        "style": "gradient"
-    },
-    "slate_professional": {
-        "name": "Slate Professional",
-        "colors": ["#1E293B", "#334155", "#475569"],
-        "style": "gradient"
+        "bg_color": (10, 30, 20),
+        "header_color": (20, 50, 35),
+        "row_alt": (15, 40, 28),
+        "accent": (34, 197, 94),
     },
     "bubba_red": {
         "name": "Bubba Gump Red",
-        "colors": ["#7F1D1D", "#B91C1C", "#DC2626"],
-        "style": "gradient"
+        "bg_color": (40, 10, 10),
+        "header_color": (60, 20, 20),
+        "row_alt": (50, 15, 15),
+        "accent": (220, 38, 38),
     },
 }
 
-# Tier configuration
-TIER_ORDER = ["Trainer", "Bartender", "A-Server", "B-Server", "C-Server"]
+# Tier colors - bright and visible
 TIER_COLORS = {
     "Trainer": "#A855F7",
-    "Bartender": "#3B82F6",
+    "Bartender": "#3B82F6", 
     "A-Server": "#22C55E",
     "B-Server": "#EAB308",
     "C-Server": "#EF4444",
 }
 
-# Conditional formatting colors
-CELL_COLORS = {
-    "green": "#22C55E",   # ≥80%
-    "yellow": "#EAB308",  # 70-79.99%
-    "red": "#EF4444",     # <70%
+# Performance colors - high contrast
+COLORS = {
+    "green": (34, 197, 94),      # Bright green
+    "yellow": (234, 179, 8),     # Bright yellow
+    "red": (239, 68, 68),        # Bright red
+    "white": (255, 255, 255),
+    "light_gray": (200, 200, 200),
 }
 
 
 def hex_to_rgb(hex_color: str) -> Tuple[int, int, int]:
-    """Convert hex to RGB."""
     hex_color = hex_color.lstrip('#')
     return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
 
 def get_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
-    """Get system font."""
     font_paths = [
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
@@ -114,82 +81,14 @@ def get_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
     return ImageFont.load_default()
 
 
-def get_cell_color(percentage: float) -> str:
-    """Get cell color based on percentage of benchmark."""
-    if percentage >= 80:
-        return CELL_COLORS["green"]
-    elif percentage >= 70:
-        return CELL_COLORS["yellow"]
+def get_perf_color(value: float) -> Tuple[int, int, int]:
+    """Get performance color based on percentage."""
+    if value >= 80:
+        return COLORS["green"]
+    elif value >= 70:
+        return COLORS["yellow"]
     else:
-        return CELL_COLORS["red"]
-
-
-def create_background(width: int, height: int, bg_key: str = "midnight_blue") -> Image.Image:
-    """Create a full-bleed background (edge-to-edge)."""
-    bg_config = BACKGROUNDS.get(bg_key, BACKGROUNDS["midnight_blue"])
-    colors = [hex_to_rgb(c) for c in bg_config["colors"]]
-    style = bg_config["style"]
-    
-    img = Image.new('RGB', (width, height))
-    draw = ImageDraw.Draw(img)
-    
-    if style == "gradient":
-        # Vertical gradient with multiple color stops
-        for y in range(height):
-            ratio = y / height
-            if ratio < 0.5:
-                r = ratio * 2
-                c1, c2 = colors[0], colors[1] if len(colors) > 1 else colors[0]
-            else:
-                r = (ratio - 0.5) * 2
-                c1 = colors[1] if len(colors) > 1 else colors[0]
-                c2 = colors[2] if len(colors) > 2 else c1
-            
-            color = tuple(int(c1[i] + (c2[i] - c1[i]) * r) for i in range(3))
-            draw.line([(0, y), (width, y)], fill=color)
-    
-    elif style == "wave":
-        # Wave pattern background
-        for y in range(height):
-            base_ratio = y / height
-            for x in range(width):
-                wave = math.sin(x / 100 + y / 50) * 0.1
-                ratio = max(0, min(1, base_ratio + wave))
-                
-                if ratio < 0.5:
-                    r = ratio * 2
-                    c1, c2 = colors[0], colors[1] if len(colors) > 1 else colors[0]
-                else:
-                    r = (ratio - 0.5) * 2
-                    c1 = colors[1] if len(colors) > 1 else colors[0]
-                    c2 = colors[2] if len(colors) > 2 else c1
-                
-                color = tuple(int(c1[i] + (c2[i] - c1[i]) * r) for i in range(3))
-                draw.point((x, y), fill=color)
-    
-    elif style == "neon":
-        # Dark base with neon accents
-        base_color = colors[0]
-        for y in range(height):
-            for x in range(width):
-                draw.point((x, y), fill=base_color)
-        
-        accent = colors[2] if len(colors) > 2 else colors[0]
-        for i in range(0, width, 200):
-            for y in range(height):
-                alpha = int(50 * (1 - abs(y - height/2) / (height/2)))
-                if alpha > 0:
-                    glow_color = tuple(min(255, base_color[j] + accent[j] * alpha // 255) for j in range(3))
-                    draw.point((i + int(30 * math.sin(y / 30)), y), fill=glow_color)
-    
-    return img
-
-
-def calculate_percentage(value: float, benchmark: float) -> float:
-    """Calculate percentage of benchmark."""
-    if benchmark <= 0:
-        return 0
-    return (value / benchmark) * 100
+        return COLORS["red"]
 
 
 def generate_snapshot_slide(
@@ -200,238 +99,187 @@ def generate_snapshot_slide(
     title: str = None
 ) -> bytes:
     """
-    Generate a bi-weekly snapshot slide showing all employees in a grid.
-    EDGE-TO-EDGE design that fills the entire 1920x1080 canvas.
-    
-    Args:
-        employees: List of employee data with metrics
-        benchmarks: Dict of metric benchmarks {ppa_benchmark: 55, lbw_benchmark: 6.5, ...}
-        snapshot_date: Date string (e.g., "Jan 15, 2026")
-        background: Background theme key
-        title: Optional custom title
-    
-    Returns:
-        PNG image bytes
+    Generate a TV-optimized snapshot slide.
+    Large fonts, high contrast, clear layout for viewing from distance.
     """
-    img = create_background(SLIDE_WIDTH, SLIDE_HEIGHT, background)
+    theme = BACKGROUNDS.get(background, BACKGROUNDS["midnight_blue"])
+    
+    # Create base image
+    img = Image.new('RGB', (SLIDE_WIDTH, SLIDE_HEIGHT), theme["bg_color"])
     draw = ImageDraw.Draw(img)
     
-    # Sort employees by tier hierarchy, then by score within tier
-    def sort_key(emp):
-        tier = emp.get("tier_label", "C-Server")
-        tier_idx = TIER_ORDER.index(tier) if tier in TIER_ORDER else 4
-        score = emp.get("total_score", 0)
-        return (tier_idx, -score)
+    # Sort employees by tier then score
+    tier_order = {"Trainer": 0, "Bartender": 1, "A-Server": 2, "B-Server": 3, "C-Server": 4}
+    sorted_employees = sorted(employees, key=lambda x: (
+        tier_order.get(x.get("tier_label", "C-Server"), 4),
+        -(x.get("total_score", 0) or 0)
+    ))
     
-    sorted_employees = sorted(employees, key=sort_key)
     num_employees = len(sorted_employees)
     
-    # Edge-to-edge margins (minimal)
-    MARGIN_H = 15  # Horizontal margin from edges
-    MARGIN_TOP = 70  # Space for header
-    MARGIN_BOTTOM = 35  # Space for footer
+    # ===== HEADER AREA =====
+    header_height = 80
+    draw.rectangle([0, 0, SLIDE_WIDTH, header_height], fill=theme["header_color"])
     
-    # Calculate available space for table
-    table_width = SLIDE_WIDTH - (2 * MARGIN_H)
-    table_height = SLIDE_HEIGHT - MARGIN_TOP - MARGIN_BOTTOM
+    # Title
+    title_font = get_font(42, bold=True)
+    title_text = title or "TEAM SNAPSHOT"
+    draw.text((40, 20), title_text, font=title_font, fill=COLORS["white"])
     
-    # Dynamic font sizing based on employee count
-    if num_employees <= 15:
-        font_size_name = 20
-        font_size_cell = 18
-        header_height = 55
-    elif num_employees <= 25:
-        font_size_name = 17
-        font_size_cell = 15
-        header_height = 48
-    elif num_employees <= 35:
-        font_size_name = 14
-        font_size_cell = 13
-        header_height = 42
-    else:
-        font_size_name = 12
-        font_size_cell = 11
-        header_height = 38
+    # Date and company on right
+    subtitle_font = get_font(24)
+    date_text = f"{snapshot_date}"
+    draw.text((SLIDE_WIDTH - 40, 20), date_text, font=subtitle_font, fill=COLORS["light_gray"], anchor="ra")
+    draw.text((SLIDE_WIDTH - 40, 50), "Bubba Gump Shrimp Co.", font=get_font(18), fill=COLORS["light_gray"], anchor="ra")
     
-    # Calculate row height based on available space
-    data_area_height = table_height - header_height - 10
-    row_height = max(24, min(45, data_area_height // max(num_employees, 1)))
+    # Legend on header
+    legend_font = get_font(18, bold=True)
+    legend_x = 500
+    draw.rectangle([legend_x, 25, legend_x + 25, 50], fill=COLORS["green"])
+    draw.text((legend_x + 32, 30), "≥80%", font=legend_font, fill=COLORS["white"])
+    draw.rectangle([legend_x + 100, 25, legend_x + 125, 50], fill=COLORS["yellow"])
+    draw.text((legend_x + 132, 30), "70-79%", font=legend_font, fill=COLORS["white"])
+    draw.rectangle([legend_x + 220, 25, legend_x + 245, 50], fill=COLORS["red"])
+    draw.text((legend_x + 252, 30), "<70%", font=legend_font, fill=COLORS["white"])
     
-    # Fonts
-    font_title = get_font(32, bold=True)
-    font_subtitle = get_font(16)
-    font_header = get_font(font_size_cell + 2, bold=True)
-    font_name = get_font(font_size_name, bold=True)
-    font_cell = get_font(font_size_cell)
-    font_tier = get_font(font_size_cell - 2, bold=True)
-    font_subheader = get_font(11)
+    # ===== TABLE SETUP =====
+    table_top = header_height + 10
+    table_bottom = SLIDE_HEIGHT - 50
+    available_height = table_bottom - table_top
     
-    # Column definitions - use pre-calculated normalized scores from employee data
-    # These were calculated during upload/recalculate with the correct quarter settings
-    columns = [
-        {"name": "Employee", "short": "", "flex": 2.5, "key": None},
-        {"name": "Tier", "short": "", "flex": 1.0, "key": None},
-        {"name": "PPA", "short": "$/Guest", "flex": 1.2, "key": "score_ppa", "is_normalized": True},
-        {"name": "LBW", "short": "$/Guest", "flex": 1.2, "key": "score_lbw", "is_normalized": True},
-        {"name": "Glass", "short": "$/Guest", "flex": 1.2, "key": "score_glass", "is_normalized": True},
-        {"name": "LSC", "short": "Guests/#", "flex": 1.2, "key": "score_lsc", "is_normalized": True},
-        {"name": "CV", "short": "+/-", "flex": 1.0, "key": "cv_score", "is_binary": True},  # Binary: green if >0, red if <=0
-        {"name": "TOTAL", "short": "Score", "flex": 1.2, "key": "total_score", "is_normalized": True},
+    # Column headers row
+    col_header_height = 50
+    
+    # Calculate row height - optimize for readability
+    max_rows = 20  # Maximum rows for good readability
+    rows_to_show = min(num_employees, max_rows)
+    row_height = min(48, (available_height - col_header_height) // rows_to_show)
+    row_height = max(36, row_height)  # Minimum row height
+    
+    # Define columns with fixed widths for TV readability
+    # Name gets more space, metrics are equal width
+    col_defs = [
+        {"name": "EMPLOYEE", "width": 280},
+        {"name": "TIER", "width": 100},
+        {"name": "PPA", "width": 140, "key": "score_ppa"},
+        {"name": "LBW", "width": 140, "key": "score_lbw"},
+        {"name": "GLASS", "width": 140, "key": "score_glass"},
+        {"name": "LSC", "width": 140, "key": "score_lsc"},
+        {"name": "CV", "width": 100, "key": "cv_score", "is_binary": True},
+        {"name": "TOTAL", "width": 160, "key": "total_score"},
     ]
     
-    # Calculate column widths based on flex values
-    total_flex = sum(c["flex"] for c in columns)
-    col_widths = [int((c["flex"] / total_flex) * table_width) for c in columns]
+    # Calculate starting x to center the table
+    total_width = sum(c["width"] for c in col_defs)
+    start_x = (SLIDE_WIDTH - total_width) // 2
     
-    # Adjust last column to fill remaining space
-    remaining = table_width - sum(col_widths)
-    col_widths[-1] += remaining
-    
-    # Calculate column positions (edge-to-edge)
+    # Calculate column positions
     col_positions = []
-    x = MARGIN_H
-    for width in col_widths:
+    x = start_x
+    for col in col_defs:
         col_positions.append(x)
-        x += width
+        x += col["width"]
     
-    # Header area
-    title_text = title or "TEAM SNAPSHOT"
-    draw.text((SLIDE_WIDTH // 2, 12), title_text, font=font_title, fill="#FFFFFF", anchor="mt")
-    draw.text((SLIDE_WIDTH // 2, 45), f"{snapshot_date} • Bubba Gump Shrimp Co.", 
-              font=font_subtitle, fill="#E0E0E0", anchor="mt")
+    # ===== COLUMN HEADERS =====
+    header_y = table_top
+    draw.rectangle([start_x - 5, header_y, start_x + total_width + 5, header_y + col_header_height], 
+                   fill=theme["header_color"])
     
-    # Table starts here
-    table_start_y = MARGIN_TOP
+    header_font = get_font(22, bold=True)
+    for i, col in enumerate(col_defs):
+        center_x = col_positions[i] + col["width"] // 2
+        draw.text((center_x, header_y + col_header_height // 2), 
+                  col["name"], font=header_font, fill=COLORS["white"], anchor="mm")
     
-    # Draw header background (full width)
-    header_bg_color = (0, 0, 0, 100)
-    draw.rectangle(
-        [0, table_start_y, SLIDE_WIDTH, table_start_y + header_height],
-        fill=(20, 30, 50)  # Dark semi-transparent
-    )
+    # ===== DATA ROWS =====
+    data_start_y = header_y + col_header_height + 5
     
-    # Draw column headers
-    for i, col in enumerate(columns):
-        center_x = col_positions[i] + col_widths[i] // 2
-        # Main header name
-        draw.text((center_x, table_start_y + 10), col["name"], font=font_header, fill="#FFFFFF", anchor="mt")
-        # Sub-description
-        if col.get("short"):
-            draw.text((center_x, table_start_y + 30), col["short"], font=font_subheader, fill="#AAAAAA", anchor="mt")
+    name_font = get_font(22, bold=True)
+    value_font = get_font(24, bold=True)
+    tier_font = get_font(18, bold=True)
     
-    # Legend in top-right corner (inside header area)
-    legend_x = SLIDE_WIDTH - 200
-    legend_y = table_start_y + 8
-    legend_font = get_font(11, bold=True)
-    draw.text((legend_x, legend_y), "≥80%", font=legend_font, fill=CELL_COLORS["green"])
-    draw.text((legend_x + 50, legend_y), "70-79%", font=legend_font, fill=CELL_COLORS["yellow"])
-    draw.text((legend_x + 115, legend_y), "<70%", font=legend_font, fill=CELL_COLORS["red"])
-    
-    # Draw employee rows
-    data_start_y = table_start_y + header_height + 5
-    current_tier = None
-    
-    for idx, emp in enumerate(sorted_employees):
+    for idx, emp in enumerate(sorted_employees[:rows_to_show]):
         y = data_start_y + idx * row_height
         
-        # Check if we've run out of space
-        if y + row_height > SLIDE_HEIGHT - MARGIN_BOTTOM:
-            draw.text((SLIDE_WIDTH // 2, y + 5), f"... and {num_employees - idx} more", 
-                      font=font_cell, fill="#FFFFFF", anchor="mt")
-            break
+        # Alternating row background
+        if idx % 2 == 0:
+            draw.rectangle([start_x - 5, y, start_x + total_width + 5, y + row_height - 2],
+                          fill=theme["row_alt"])
         
         tier = emp.get("tier_label", "C-Server")
+        tier_color = hex_to_rgb(TIER_COLORS.get(tier, "#666666"))
         
-        # Tier separator line (full width)
-        if tier != current_tier:
-            current_tier = tier
-            if idx > 0:
-                tier_line_color = TIER_COLORS.get(tier, "#666666")
-                draw.line([(0, y - 2), (SLIDE_WIDTH, y - 2)], 
-                         fill=hex_to_rgb(tier_line_color), width=2)
+        # Left color bar for tier
+        draw.rectangle([start_x - 5, y, start_x, y + row_height - 2], fill=tier_color)
         
-        # Alternating row background (full width)
-        if idx % 2 == 0:
-            draw.rectangle(
-                [0, y - 1, SLIDE_WIDTH, y + row_height - 2],
-                fill=(0, 0, 0, 40)
-            )
+        row_center_y = y + row_height // 2
         
-        # Name column
+        # Employee name
         name = emp.get("name", "Unknown")
-        max_name_len = int(col_widths[0] / (font_size_name * 0.6))
-        if len(name) > max_name_len:
-            name = name[:max_name_len - 2] + ".."
-        draw.text((col_positions[0] + 8, y + row_height // 2),
-                  name, font=font_name, fill="#FFFFFF", anchor="lm")
+        if len(name) > 16:
+            name = name[:15] + "…"
+        draw.text((col_positions[0] + 15, row_center_y), name, 
+                  font=name_font, fill=COLORS["white"], anchor="lm")
         
-        # Tier column (badge)
-        tier_color = TIER_COLORS.get(tier, "#666666")
-        tier_short = {"Trainer": "TRN", "Bartender": "BAR", "A-Server": "A", "B-Server": "B", "C-Server": "C"}.get(tier, tier)
-        
-        badge_center_x = col_positions[1] + col_widths[1] // 2
-        badge_y = y + 3
-        badge_w = min(50, col_widths[1] - 10)
-        badge_h = row_height - 8
-        
+        # Tier badge
+        tier_short = {"Trainer": "TRN", "Bartender": "BAR", "A-Server": "A", "B-Server": "B", "C-Server": "C"}.get(tier, "?")
+        badge_x = col_positions[1] + col_defs[1]["width"] // 2
+        badge_w, badge_h = 60, 28
         draw.rounded_rectangle(
-            [badge_center_x - badge_w // 2, badge_y, badge_center_x + badge_w // 2, badge_y + badge_h],
-            radius=badge_h // 2, 
-            fill=hex_to_rgb(tier_color)
+            [badge_x - badge_w//2, row_center_y - badge_h//2, 
+             badge_x + badge_w//2, row_center_y + badge_h//2],
+            radius=14, fill=tier_color
         )
-        draw.text((badge_center_x, badge_y + badge_h // 2),
-                  tier_short, font=font_tier, fill="#FFFFFF", anchor="mm")
+        draw.text((badge_x, row_center_y), tier_short, font=tier_font, fill=COLORS["white"], anchor="mm")
         
-        # Metric columns - all use pre-calculated normalized scores (0-100+ scale)
-        for i, col in enumerate(columns[2:], start=2):
-            metric_key = col.get("key")
+        # Metric columns
+        for i, col in enumerate(col_defs[2:], start=2):
+            key = col.get("key")
+            if not key:
+                continue
+                
+            value = emp.get(key, 0) or 0
             is_binary = col.get("is_binary", False)
             
-            if metric_key:
-                value = emp.get(metric_key, 0) or 0
-                
-                # Draw colored cell background (edge-to-edge within column)
-                cell_x = col_positions[i] + 2
-                cell_y = y + 2
-                cell_w = col_widths[i] - 4
-                cell_h = row_height - 6
-                
-                if is_binary:
-                    # Binary column (CV): green if positive, red if 0 or negative
-                    cell_color = CELL_COLORS["green"] if value > 0 else CELL_COLORS["red"]
-                    # Show the actual value (not percentage)
-                    if value > 0:
-                        display_text = f"+{int(value)}"
-                    elif value < 0:
-                        display_text = f"{int(value)}"
-                    else:
-                        display_text = "0"
-                else:
-                    # Standard percentage column
-                    cell_color = get_cell_color(value)
-                    display_text = f"{value:.0f}%"
-                
-                draw.rounded_rectangle(
-                    [cell_x, cell_y, cell_x + cell_w, cell_y + cell_h],
-                    radius=3,
-                    fill=hex_to_rgb(cell_color)
-                )
-                
-                draw.text((cell_x + cell_w // 2, cell_y + cell_h // 2),
-                          display_text, font=font_cell, fill="#FFFFFF", anchor="mm")
+            cell_x = col_positions[i]
+            cell_w = col["width"]
+            cell_padding = 8
+            
+            # Cell background with performance color
+            if is_binary:
+                # CV: binary green/red
+                cell_color = COLORS["green"] if value > 0 else COLORS["red"]
+                display_text = f"+{int(value)}" if value > 0 else "0"
+            else:
+                cell_color = get_perf_color(value)
+                display_text = f"{value:.0f}%"
+            
+            # Draw cell
+            draw.rounded_rectangle(
+                [cell_x + cell_padding, y + 4, 
+                 cell_x + cell_w - cell_padding, y + row_height - 6],
+                radius=6, fill=cell_color
+            )
+            
+            # Draw value
+            draw.text((cell_x + cell_w // 2, row_center_y), display_text,
+                      font=value_font, fill=COLORS["white"], anchor="mm")
     
-    # Footer (edge-to-edge)
-    font_footer = get_font(13)
-    footer_y = SLIDE_HEIGHT - 25
+    # Show overflow indicator if needed
+    if num_employees > rows_to_show:
+        overflow_text = f"+ {num_employees - rows_to_show} more employees"
+        overflow_font = get_font(20)
+        draw.text((SLIDE_WIDTH // 2, table_bottom - 20), overflow_text,
+                  font=overflow_font, fill=COLORS["light_gray"], anchor="mm")
     
-    # Footer background
-    draw.rectangle([0, footer_y - 8, SLIDE_WIDTH, SLIDE_HEIGHT], fill=(10, 20, 40))
+    # ===== FOOTER =====
+    footer_font = get_font(16)
+    footer_y = SLIDE_HEIGHT - 35
+    footer_text = f"Generated {datetime.now().strftime('%m/%d/%Y')} • {num_employees} employees"
+    draw.text((SLIDE_WIDTH // 2, footer_y), footer_text, 
+              font=footer_font, fill=COLORS["light_gray"], anchor="mm")
     
-    footer_text = f"Generated {datetime.now().strftime('%m/%d/%Y %H:%M')} • Benchmarks: PPA ${benchmarks.get('ppa_benchmark', 0):.0f}, LBW ${benchmarks.get('lbw_benchmark', 0):.2f}/guest, Glass ${benchmarks.get('glassware_benchmark', 0):.2f}/guest, LSC {benchmarks.get('lsc_benchmark', 0):.0f} guests"
-    draw.text((SLIDE_WIDTH // 2, footer_y + 5), footer_text, 
-              font=font_footer, fill="#AAAAAA", anchor="mm")
-    
-    # Save to bytes
+    # Save
     buffer = io.BytesIO()
     img.save(buffer, format='PNG', optimize=True)
     buffer.seek(0)
