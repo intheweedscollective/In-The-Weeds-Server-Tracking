@@ -185,7 +185,7 @@ def generate_snapshot_slide(
         draw.rounded_rectangle([badge_x, row_cy - badge_h//2, badge_x + badge_w, row_cy + badge_h//2],
                                radius=6, fill=tier_color)
         draw.text((badge_x + badge_w//2, row_cy), badge_text, font=get_font(12, True), 
-                  fill=tier_text_color, anchor="mm")
+                  fill=(0, 0, 0), anchor="mm")  # BLACK text
         
         # Column 2: Employee name
         name = emp.get("name", "Unknown")
