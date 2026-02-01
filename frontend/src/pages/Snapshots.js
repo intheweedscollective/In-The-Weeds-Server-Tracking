@@ -125,15 +125,36 @@ export default function Snapshots() {
       // Create download link with explicit PNG type
       const blob = new Blob([response.data], { type: 'image/png' });
       const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `snapshot_${snapshot.snapshot_date}.png`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      const filename = `snapshot_${snapshot.snapshot_date}.png`;
       
-      toast({ title: "Success", description: "Snapshot slide downloaded!" });
+      // iOS/Safari compatible download
+      if (navigator.userAgent.match(/iPhone|iPad|iPod/i)) {
+        // For iOS, open in new tab (will allow saving via share sheet)
+        const newTab = window.open(url, '_blank');
+        if (newTab) {
+          toast({ title: "Image Opened", description: "Tap and hold to save the image" });
+        } else {
+          // Fallback: create link anyway
+          const link = document.createElement('a');
+          link.href = url;
+          link.setAttribute('download', filename);
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+        }
+      } else {
+        // Standard download for desktop browsers
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        toast({ title: "Success", description: "Snapshot slide downloaded!" });
+      }
+      
+      // Cleanup URL after short delay
+      setTimeout(() => window.URL.revokeObjectURL(url), 1000);
     } catch (error) {
       toast({
         title: "Error",
