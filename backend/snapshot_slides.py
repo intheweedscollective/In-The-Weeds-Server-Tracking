@@ -138,7 +138,7 @@ def generate_snapshot_slide(
               fill=(255, 255, 255), anchor="mm")
     
     # Legend - LARGER colored squares with BIGGER text
-    legend_y = 470
+    legend_y = 460
     legend_items = [
         (PERF_COLORS["exceeding"], "EXCEEDING ALL", "EXPECTATIONS"),
         (PERF_COLORS["meeting"], "MEETING", "EXPECTATIONS"),
@@ -147,12 +147,12 @@ def generate_snapshot_slide(
     ]
     
     for i, (color, line1, line2) in enumerate(legend_items):
-        y = legend_y + i * 85
+        y = legend_y + i * 95
         # Larger colored square
-        draw.rectangle([15, y, 55, y + 40], fill=color)
-        # LARGER text in matching color
-        draw.text((65, y + 2), line1, font=get_font(20, True), fill=color)
-        draw.text((65, y + 26), line2, font=get_font(20, True), fill=color)
+        draw.rectangle([12, y, 58, y + 48], fill=color)
+        # EVEN LARGER text in matching color - 24pt bold
+        draw.text((68, y + 2), line1, font=get_font(24, True), fill=color)
+        draw.text((68, y + 30), line2, font=get_font(24, True), fill=color)
     
     # Footer
     footer_y = SLIDE_HEIGHT - 100
