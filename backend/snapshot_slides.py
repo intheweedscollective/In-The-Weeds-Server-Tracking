@@ -382,30 +382,15 @@ def generate_snapshot_slide(
         draw.text((badge_center_x, badge_y + badge_h // 2),
                   tier_short, font=font_tier, fill="#FFFFFF", anchor="mm")
         
-        # Metric columns
+        # Metric columns - all use pre-calculated normalized scores (0-100+ scale)
         for i, col in enumerate(columns[2:], start=2):
             metric_key = col.get("key")
-            benchmark_key = col.get("benchmark_key")
-            is_inverse = col.get("inverse", False)
-            is_normalized = col.get("is_normalized", False)
             
             if metric_key:
-                value = emp.get(metric_key, 0) or 0
+                # Get pre-calculated score (already a percentage)
+                percentage = emp.get(metric_key, 0) or 0
                 
-                # For normalized scores (like score_cv), the value IS the percentage
-                if is_normalized:
-                    percentage = value
-                elif benchmark_key:
-                    benchmark = benchmarks.get(benchmark_key, 0)
-                    if is_inverse and benchmark > 0:
-                        # For LSC, lower is better
-                        percentage = (benchmark / value * 100) if value > 0 else 0
-                    else:
-                        percentage = calculate_percentage(value, benchmark)
-                else:
-                    percentage = value  # Direct value (like total_score)
-                
-                # Get cell color
+                # Get cell color based on percentage
                 cell_color = get_cell_color(percentage)
                 
                 # Draw colored cell background (edge-to-edge within column)
