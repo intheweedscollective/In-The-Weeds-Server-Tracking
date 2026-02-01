@@ -201,11 +201,16 @@ def generate_snapshot_slide(
         col_x.append(x)
         x += w
     
-    # Header row - dark blue
+    # Header row - dark blue with BLACK border
     draw.rectangle([table_left, table_top, table_right, table_top + header_h],
                    fill=(30, 60, 100))
     draw.rectangle([table_left, table_top, table_right, table_top + header_h],
-                   outline=(50, 80, 120), width=2)
+                   outline=(0, 0, 0), width=2)
+    
+    # Header column separators - BLACK
+    for i in range(len(columns)):
+        draw.line([(col_x[i], table_top), (col_x[i], table_top + header_h)], fill=(0, 0, 0), width=1)
+    draw.line([(table_right, table_top), (table_right, table_top + header_h)], fill=(0, 0, 0), width=1)
     
     # Header text - WHITE, LARGE
     header_font = get_font(14, True)
