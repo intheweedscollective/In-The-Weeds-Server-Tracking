@@ -305,9 +305,9 @@ def generate_snapshot_slide(
             draw.text((cx + cw // 2, row_cy), txt,
                       font=val_font, fill=(0, 0, 0), anchor="mm")
     
-    # Outer border
+    # Outer border - BLACK
     final_y = data_y + min(num_emps, int((SLIDE_HEIGHT - 30 - data_y) / row_h)) * row_h
-    draw.rectangle([table_left, table_top, table_right, final_y], outline=(100, 110, 120), width=2)
+    draw.rectangle([table_left, table_top, table_right, final_y], outline=(0, 0, 0), width=2)
     
     # Save
     buf = io.BytesIO()
