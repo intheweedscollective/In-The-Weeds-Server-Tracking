@@ -166,6 +166,25 @@ export default function Snapshots() {
     setGenerating(null);
   };
 
+  const recalculateSnapshot = async (snapshotId) => {
+    setRecalculating(snapshotId);
+    try {
+      const res = await axios.post(`${API}/v2/snapshots/${snapshotId}/recalculate`);
+      toast({ 
+        title: "Success", 
+        description: `Recalculated scores for ${res.data.employee_count} employees` 
+      });
+      await fetchSnapshots();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error.response?.data?.detail || "Failed to recalculate scores",
+        variant: "destructive"
+      });
+    }
+    setRecalculating(null);
+  };
+
   const deleteSnapshot = async (snapshotId) => {
     if (!window.confirm("Are you sure you want to delete this snapshot?")) return;
     
