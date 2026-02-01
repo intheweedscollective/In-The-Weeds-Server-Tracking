@@ -20,6 +20,7 @@ export default function Snapshots() {
   const [creating, setCreating] = useState(false);
   const [uploading, setUploading] = useState(null);
   const [generating, setGenerating] = useState(null);
+  const [recalculating, setRecalculating] = useState(null);
   
   // New snapshot form
   const [showCreateForm, setShowCreateForm] = useState(false);
