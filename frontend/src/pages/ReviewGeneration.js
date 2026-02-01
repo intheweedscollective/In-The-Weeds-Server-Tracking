@@ -58,6 +58,15 @@ export default function ReviewGeneration() {
     setGenerating(prev => ({ ...prev, [employeeId]: true }));
     try {
       const employee = employees.find(e => e.id === employeeId);
+      const filename = `${employee?.name.replace(/[^a-zA-Z0-9]/g, '_') || 'Employee'}_${selectedQuarter}_${selectedYear}_Review.pdf`;
+      
+      // iOS/Safari compatible download - open in new tab
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      if (isIOS) {
+        // For iOS, open the PDF in a new tab (POST not supported for window.open, use GET if available)
+        toast.info("Generating review... Please wait");
+      }
+      
       // Use V2 API endpoint
       const response = await axios.post(
         `${API}/v2/employees/${employeeId}/generate-review`,
@@ -67,16 +76,23 @@ export default function ReviewGeneration() {
       
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      const filename = `${employee?.name.replace(/[^a-zA-Z0-9]/g, '_') || 'Employee'}_${selectedQuarter}_${selectedYear}_Review.pdf`;
-      link.setAttribute('download', filename);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
       
-      toast.success(`Review generated for ${employee?.name || 'employee'}`);
+      if (isIOS) {
+        // For iOS, open in new tab
+        window.open(url, '_blank');
+        toast.success(`Review opened for ${employee?.name || 'employee'}. Tap share to save.`);
+      } else {
+        // Standard download for desktop
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        toast.success(`Review generated for ${employee?.name || 'employee'}`);
+      }
+      
+      setTimeout(() => window.URL.revokeObjectURL(url), 1000);
       fetchReviews();
     } catch (error) {
       console.error("Error generating review:", error);
