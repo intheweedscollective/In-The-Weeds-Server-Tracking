@@ -266,17 +266,17 @@ def generate_snapshot_slide(
     font_tier = get_font(font_size_cell - 2, bold=True)
     font_subheader = get_font(11)
     
-    # Column definitions - using score_cv for CV display (normalized 0-100 scale)
-    # Columns spread edge-to-edge
+    # Column definitions - use pre-calculated normalized scores from employee data
+    # These were calculated during upload/recalculate with the correct quarter settings
     columns = [
         {"name": "Employee", "short": "", "flex": 2.5, "key": None},
         {"name": "Tier", "short": "", "flex": 1.0, "key": None},
-        {"name": "PPA", "short": "$/Guest", "flex": 1.2, "key": "ppa", "benchmark_key": "ppa_benchmark"},
-        {"name": "LBW", "short": "$/Guest", "flex": 1.2, "key": "lbw_per_guest", "benchmark_key": "lbw_benchmark"},
-        {"name": "Glass", "short": "$/Guest", "flex": 1.2, "key": "glassware_per_guest", "benchmark_key": "glassware_benchmark"},
-        {"name": "LSC", "short": "Guests/#", "flex": 1.2, "key": "guests_per_lsc", "benchmark_key": "lsc_benchmark", "inverse": True},
-        {"name": "CV", "short": "Score", "flex": 1.0, "key": "score_cv", "benchmark_key": None, "is_normalized": True},
-        {"name": "TOTAL", "short": "Score", "flex": 1.2, "key": "total_score", "benchmark_key": "total_benchmark"},
+        {"name": "PPA", "short": "$/Guest", "flex": 1.2, "key": "score_ppa", "is_normalized": True},
+        {"name": "LBW", "short": "$/Guest", "flex": 1.2, "key": "score_lbw", "is_normalized": True},
+        {"name": "Glass", "short": "$/Guest", "flex": 1.2, "key": "score_glass", "is_normalized": True},
+        {"name": "LSC", "short": "Guests/#", "flex": 1.2, "key": "score_lsc", "is_normalized": True},
+        {"name": "CV", "short": "Score", "flex": 1.0, "key": "score_cv", "is_normalized": True},
+        {"name": "TOTAL", "short": "Score", "flex": 1.2, "key": "total_score", "is_normalized": True},
     ]
     
     # Calculate column widths based on flex values
