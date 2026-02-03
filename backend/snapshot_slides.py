@@ -274,34 +274,39 @@ def generate_snapshot_slide(
                 # Review Bonus: 0=Red, 1-5=Yellow, 5-10=Green, +10=Blue
                 if val >= 10:
                     color = COLORS["blue"]
+                    text_color = COLORS["white"]  # White text on blue
                 elif val >= 5:
                     color = COLORS["green"]
+                    text_color = (0, 0, 0)  # Black text
                 elif val >= 1:
                     color = COLORS["yellow"]
+                    text_color = (0, 0, 0)  # Black text
                 else:
                     color = COLORS["red"]
+                    text_color = (0, 0, 0)  # Black text
                 text = f"{val:.2f}"
-                text_color = COLORS["white"]
             elif key == "total_metric_bonus":
                 # Metric Bonus: 0=Red, +1=Green, +10=Blue
                 if val >= 10:
                     color = COLORS["blue"]
+                    text_color = COLORS["white"]  # White text on blue
                 elif val >= 1:
                     color = COLORS["green"]
+                    text_color = (0, 0, 0)  # Black text
                 else:
                     color = COLORS["red"]
+                    text_color = (0, 0, 0)  # Black text
                 text = f"{val:.2f}"
-                text_color = COLORS["white"]
             elif key == "total_score":
                 # Total score - colored based on value
                 color = get_cell_color(val)
+                text_color = COLORS["white"] if color == COLORS["blue"] else (0, 0, 0)
                 text = f"{val:.2f}"
-                text_color = COLORS["white"]
             else:
                 # Metric scores - colored cells
                 color = get_cell_color(val)
+                text_color = COLORS["white"] if color == COLORS["blue"] else (0, 0, 0)
                 text = f"{val:.2f}"
-                text_color = COLORS["white"]
             
             # Draw colored cell
             draw.rectangle([cx, cy, cx + cw, cy + ch], fill=color)
