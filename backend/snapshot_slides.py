@@ -267,11 +267,28 @@ def generate_snapshot_slide(
             cy = y + 4
             
             # Determine color and format
-            if is_bonus:
-                # Bonus columns - white background, black text
-                color = COLORS["row_white"]
+            if key == "review_tracker_bonus":
+                # Review Bonus: 0=Red, 1-5=Yellow, 5-10=Green, +10=Blue
+                if val >= 10:
+                    color = COLORS["blue"]
+                elif val >= 5:
+                    color = COLORS["green"]
+                elif val >= 1:
+                    color = COLORS["yellow"]
+                else:
+                    color = COLORS["red"]
                 text = f"{val:.2f}"
-                text_color = (50, 50, 50)
+                text_color = COLORS["white"]
+            elif key == "total_metric_bonus":
+                # Metric Bonus: 0=Red, +1=Green, +10=Blue
+                if val >= 10:
+                    color = COLORS["blue"]
+                elif val >= 1:
+                    color = COLORS["green"]
+                else:
+                    color = COLORS["red"]
+                text = f"{val:.2f}"
+                text_color = COLORS["white"]
             elif key == "total_score":
                 # Total score - colored based on value
                 color = get_cell_color(val)
