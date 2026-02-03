@@ -124,24 +124,26 @@ def generate_snapshot_slide(
     draw.text((center_x, title_y + 145), snapshot_date, font=get_font(24, "medium"),
               fill=COLORS["title_green"], anchor="mm")
     
-    # Legend - CENTERED under logo, 24pt font
-    legend_y = 510
+    # Legend - 42pt font (same as PERFORMANCE)
+    legend_y = 500
     legend_items = [
-        (COLORS["blue"], "EXCEEDING ALL EXPECTATIONS"),
-        (COLORS["green"], "MEETING EXPECTATIONS"),
-        (COLORS["yellow"], "WORK IN PROGRESS"),
-        (COLORS["red"], "NEEDS IMMEDIATE IMPROVEMENT"),
+        (COLORS["blue"], "EXCEEDING ALL", "EXPECTATIONS"),
+        (COLORS["green"], "MEETING", "EXPECTATIONS"),
+        (COLORS["yellow"], "WORK IN", "PROGRESS"),
+        (COLORS["red"], "NEEDS IMMEDIATE", "IMPROVEMENT"),
     ]
     
-    for i, (color, text) in enumerate(legend_items):
-        y = legend_y + i * 60
+    for i, (color, line1, line2) in enumerate(legend_items):
+        y = legend_y + i * 70
         # Colored square - larger
-        square_size = 45
-        square_x = 25
+        square_size = 50
+        square_x = 20
         draw.rectangle([square_x, y, square_x + square_size, y + square_size], fill=color)
-        # Text in matching color - 24pt
-        draw.text((square_x + square_size + 15, y + square_size // 2), text, 
-                  font=get_font(24, "semibold"), fill=color, anchor="lm")
+        # Text in matching color - 42pt like PERFORMANCE (split into 2 lines)
+        draw.text((square_x + square_size + 12, y + 8), line1, 
+                  font=get_font(28, "semibold"), fill=color, anchor="lm")
+        draw.text((square_x + square_size + 12, y + 36), line2, 
+                  font=get_font(28, "semibold"), fill=color, anchor="lm")
     
     # Footer text - 36pt like SNAPSHOT
     footer_y = SLIDE_HEIGHT - 130
