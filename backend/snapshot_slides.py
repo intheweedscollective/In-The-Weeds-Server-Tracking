@@ -22,11 +22,11 @@ COLORS = {
     "row_gray": (240, 242, 245),
     "bar_row": (25, 40, 65),           # BAR1/BAR2 row background
     
-    # Performance colors
-    "blue": (0, 120, 215),             # Exceeding
-    "green": (34, 177, 76),            # Meeting
-    "yellow": (255, 185, 0),           # Work in Progress
-    "red": (237, 28, 36),              # Needs Improvement
+    # Performance colors - EXACT hex values
+    "blue": (12, 118, 158),            # #0c769e - Exceeding
+    "green": (51, 204, 51),            # #33cc33 - Meeting
+    "yellow": (255, 255, 0),           # #ffff00 - Work in Progress
+    "red": (255, 0, 0),                # #ff0000 - Needs Improvement
     
     # Title colors
     "title_red": (255, 50, 50),
