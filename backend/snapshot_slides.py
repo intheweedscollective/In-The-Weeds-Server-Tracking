@@ -261,7 +261,15 @@ def generate_snapshot_slide(
             if not key:
                 continue
             
-            val = emp.get(key, 0) or 0
+            # Calculate Review Bonus using correct formula
+            if key == "review_tracker_bonus":
+                review_mentions = emp.get("review_mentions", 0) or 0
+                cv_promoters = emp.get("cv_promoters", 0) or 0
+                cv_detractors = emp.get("cv_detractors", 0) or 0
+                val = (review_mentions * 0.2) + cv_promoters - (cv_detractors * 2)
+            else:
+                val = emp.get(key, 0) or 0
+            
             is_bonus = col.get("is_bonus", False)
             
             # Cell dimensions
