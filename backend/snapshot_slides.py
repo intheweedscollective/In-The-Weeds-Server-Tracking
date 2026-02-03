@@ -236,8 +236,8 @@ def generate_snapshot_slide(
         # Draw row background
         draw.rectangle([table_left, y, table_right, y + row_h], fill=row_bg)
         
-        # Row border
-        draw.line([(table_left, y + row_h), (table_right, y + row_h)], fill=(200, 200, 200), width=1)
+        # Row border - BLACK
+        draw.line([(table_left, y + row_h), (table_right, y + row_h)], fill=(0, 0, 0), width=1)
         
         row_cy = y + row_h // 2
         
