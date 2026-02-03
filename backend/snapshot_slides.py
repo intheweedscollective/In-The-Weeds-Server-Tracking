@@ -317,14 +317,14 @@ def generate_snapshot_slide(
         
         row_idx += 1
     
-    # Outer border
+    # Outer border - BLACK
     final_y = data_y + row_idx * row_h
-    draw.rectangle([table_left, table_top, table_right, final_y], outline=(100, 100, 100), width=1)
+    draw.rectangle([table_left, table_top, table_right, final_y], outline=(0, 0, 0), width=1)
     
-    # Vertical column lines
+    # Vertical column lines - BLACK
     for i in range(len(columns)):
-        draw.line([(col_x[i], table_top), (col_x[i], final_y)], fill=(180, 180, 180), width=1)
-    draw.line([(table_right, table_top), (table_right, final_y)], fill=(180, 180, 180), width=1)
+        draw.line([(col_x[i], table_top), (col_x[i], final_y)], fill=(0, 0, 0), width=1)
+    draw.line([(table_right, table_top), (table_right, final_y)], fill=(0, 0, 0), width=1)
     
     # Save
     buf = io.BytesIO()
