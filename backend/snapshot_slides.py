@@ -124,31 +124,33 @@ def generate_snapshot_slide(
     draw.text((center_x, title_y + 145), snapshot_date, font=get_font(24, "medium"),
               fill=COLORS["title_green"], anchor="mm")
     
-    # Legend
+    # Legend - CENTERED under logo
     legend_y = 540
     legend_items = [
-        (COLORS["blue"], "EXCEEDING ALL", "EXPECTATIONS"),
-        (COLORS["green"], "MEETING", "EXPECTATIONS"),
-        (COLORS["yellow"], "WORK IN", "PROGRESS"),
-        (COLORS["red"], "NEEDS IMMEDIATE", "IMPROVEMENT"),
+        (COLORS["blue"], "EXCEEDING ALL EXPECTATIONS"),
+        (COLORS["green"], "MEETING EXPECTATIONS"),
+        (COLORS["yellow"], "WORK IN PROGRESS"),
+        (COLORS["red"], "NEEDS IMMEDIATE IMPROVEMENT"),
     ]
     
-    for i, (color, line1, line2) in enumerate(legend_items):
-        y = legend_y + i * 70
-        # Colored square
-        draw.rectangle([30, y, 65, y + 35], fill=color)
-        # Text in matching color
-        draw.text((80, y + 3), line1, font=get_font(18, "semibold"), fill=color)
-        draw.text((80, y + 23), line2, font=get_font(18, "semibold"), fill=color)
+    for i, (color, text) in enumerate(legend_items):
+        y = legend_y + i * 65
+        # Colored square - centered
+        square_size = 35
+        square_x = center_x - 120
+        draw.rectangle([square_x, y, square_x + square_size, y + square_size], fill=color)
+        # Text in matching color - next to square
+        draw.text((square_x + square_size + 12, y + square_size // 2), text, 
+                  font=get_font(16, "semibold"), fill=color, anchor="lm")
     
-    # Footer text
-    footer_y = SLIDE_HEIGHT - 80
+    # Footer text - LARGER and more legible
+    footer_y = SLIDE_HEIGHT - 100
     draw.text((center_x, footer_y), "DON'T WAIT TO IMPACT THIS NUMBER.", 
-              font=get_font(11, "medium"), fill=COLORS["white"], anchor="mm")
-    draw.text((center_x, footer_y + 16), "IF YOU HAVE ANY QUESTIONS PLEASE SEE",
-              font=get_font(11, "medium"), fill=COLORS["white"], anchor="mm")
-    draw.text((center_x, footer_y + 32), "A MEMBER OF MANAGEMENT.",
-              font=get_font(11, "medium"), fill=COLORS["white"], anchor="mm")
+              font=get_font(16, "semibold"), fill=COLORS["white"], anchor="mm")
+    draw.text((center_x, footer_y + 22), "IF YOU HAVE ANY QUESTIONS PLEASE SEE",
+              font=get_font(16, "semibold"), fill=COLORS["white"], anchor="mm")
+    draw.text((center_x, footer_y + 44), "A MEMBER OF MANAGEMENT.",
+              font=get_font(16, "semibold"), fill=COLORS["white"], anchor="mm")
     
     # ===== RIGHT PANEL (Table) =====
     table_left = left_width + 20
