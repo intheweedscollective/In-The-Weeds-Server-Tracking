@@ -193,6 +193,10 @@ def generate_snapshot_slide(
     draw.rectangle([table_left, table_top, table_right, table_top + header_h],
                    fill=COLORS["header_blue"])
     
+    # Header border - BLACK lines
+    draw.line([(table_left, table_top), (table_right, table_top)], fill=(0, 0, 0), width=1)
+    draw.line([(table_left, table_top + header_h), (table_right, table_top + header_h)], fill=(0, 0, 0), width=1)
+    
     # Header text
     header_font = get_font(16, "semibold")
     for i, col in enumerate(columns):
