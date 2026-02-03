@@ -37,10 +37,13 @@ COLORS = {
 FONT_REGULAR = "/app/backend/assets/fonts/Poppins-Regular.ttf"
 FONT_MEDIUM = "/app/backend/assets/fonts/Poppins-Medium.ttf"
 FONT_SEMIBOLD = "/app/backend/assets/fonts/Poppins-SemiBold.ttf"
+FONT_APTOS_NARROW_BOLD = "/app/backend/assets/fonts/Aptos-Narrow-Bold.ttf"
 
 
 def get_font(size: int, weight: str = "regular"):
-    if weight == "semibold":
+    if weight == "aptos":
+        path = FONT_APTOS_NARROW_BOLD
+    elif weight == "semibold":
         path = FONT_SEMIBOLD
     elif weight == "medium":
         path = FONT_MEDIUM
