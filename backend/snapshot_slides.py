@@ -156,9 +156,11 @@ def generate_snapshot_slide(
     table_top = 30
     table_width = table_right - table_left
     
-    # Calculate row sizing
-    header_h = 50
-    row_h = 42
+    # Calculate row sizing to fit ALL employees
+    header_h = 45
+    available_height = SLIDE_HEIGHT - table_top - 20 - header_h
+    row_h = available_height // max(num_emps, 1)
+    row_h = max(28, min(42, row_h))  # Between 28-42px
     
     # Columns
     columns = [
