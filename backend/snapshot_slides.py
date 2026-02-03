@@ -241,17 +241,17 @@ def generate_snapshot_slide(
         
         row_cy = y + row_h // 2
         
-        # Rank column - black text
+        # Rank column - Aptos Narrow Bold, black text
         draw.text((col_x[0] + columns[0]["width"] // 2, row_cy), rank_text,
-                  font=get_font(16, "medium"), fill=(50, 50, 50), anchor="mm")
+                  font=get_font(16, "aptos"), fill=(0, 0, 0), anchor="mm")
         
-        # Employee name - black text
+        # Employee name - Aptos Narrow Bold, black text
         name = emp.get("name", "Unknown")
         max_ch = columns[1]["width"] // 10
         if len(name) > max_ch:
             name = name[:max_ch-1] + "…"
         draw.text((col_x[1] + 10, row_cy), name,
-                  font=get_font(16, "medium"), fill=(30, 30, 30), anchor="lm")
+                  font=get_font(16, "aptos"), fill=(0, 0, 0), anchor="lm")
         
         # Metric columns - colored cells
         for i, col in enumerate(columns[2:], start=2):
