@@ -124,7 +124,7 @@ def generate_snapshot_slide(
     draw.text((center_x, title_y + 145), snapshot_date, font=get_font(24, "medium"),
               fill=COLORS["title_green"], anchor="mm")
     
-    # Legend - 42pt font (same as PERFORMANCE)
+    # Legend - 42pt font (same as PERFORMANCE) - CENTERED with logo
     legend_y = 500
     legend_items = [
         (COLORS["blue"], "EXCEEDING ALL", "EXPECTATIONS"),
@@ -135,14 +135,17 @@ def generate_snapshot_slide(
     
     for i, (color, line1, line2) in enumerate(legend_items):
         y = legend_y + i * 70
-        # Colored square - larger
+        # Colored square - centered with logo
         square_size = 50
-        square_x = 20
-        draw.rectangle([square_x, y, square_x + square_size, y + square_size], fill=color)
-        # Text in matching color - 42pt like PERFORMANCE (split into 2 lines)
-        draw.text((square_x + square_size + 12, y + 8), line1, 
+        # Calculate total legend width (square + gap + text)
+        legend_content_width = square_size + 12 + 250  # approximate text width
+        legend_start_x = (left_width - legend_content_width) // 2
+        
+        draw.rectangle([legend_start_x, y, legend_start_x + square_size, y + square_size], fill=color)
+        # Text in matching color - 28pt (split into 2 lines)
+        draw.text((legend_start_x + square_size + 12, y + 8), line1, 
                   font=get_font(28, "semibold"), fill=color, anchor="lm")
-        draw.text((square_x + square_size + 12, y + 36), line2, 
+        draw.text((legend_start_x + square_size + 12, y + 36), line2, 
                   font=get_font(28, "semibold"), fill=color, anchor="lm")
     
     # Footer text - 36pt like SNAPSHOT
