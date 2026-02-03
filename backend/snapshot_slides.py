@@ -88,8 +88,8 @@ def generate_snapshot_slide(
     ))
     num_emps = len(sorted_emps)
     
-    # ===== LEFT PANEL (30% width) =====
-    left_width = 400
+    # ===== LEFT PANEL - WIDER to give more space for legend =====
+    left_width = 480
     
     # Logo - large, top of left panel
     logo_path = "/app/backend/assets/bubba_gump_logo.png"
