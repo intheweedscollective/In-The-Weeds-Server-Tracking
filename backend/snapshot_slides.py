@@ -311,9 +311,9 @@ def generate_snapshot_slide(
             # Draw colored cell
             draw.rectangle([cx, cy, cx + cw, cy + ch], fill=color)
             
-            # Draw text
+            # Draw text - Aptos Narrow Bold
             draw.text((cx + cw // 2, row_cy), text,
-                      font=get_font(14, "medium"), fill=text_color, anchor="mm")
+                      font=get_font(14, "aptos"), fill=text_color, anchor="mm")
         
         row_idx += 1
     
