@@ -69,6 +69,7 @@ api_router = APIRouter(prefix="/api")
 class ReviewCreateV2(BaseModel):
     quarter: str = "Q1"
     year: int = 2026
+    time_range: str = "quarter"  # "quarter" (default), "year", or "all" - for trend chart
 
 class ReviewV2(BaseModel):
     model_config = ConfigDict(extra="ignore")
