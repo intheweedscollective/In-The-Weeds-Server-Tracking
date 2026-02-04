@@ -405,3 +405,137 @@ def generate_tier_distribution_chart(
 def chart_to_base64(chart_bytes: bytes) -> str:
     """Convert chart bytes to base64 string."""
     return base64.b64encode(chart_bytes).decode('utf-8')
+
+
+def generate_biweekly_trend_chart(
+    employee_name: str,
+    employee_scores: List[Dict[str, Any]],
+    restaurant_averages: List[Dict[str, Any]],
+    quarter: str = None,
+    year: int = None,
+    time_range: str = "quarter"  # "quarter", "year", or "all"
+) -> bytes:
+    """
+    Generate a line chart showing employee Total Score vs Restaurant Average over bi-weekly snapshots.
+    
+    Args:
+        employee_name: Name of the employee
+        employee_scores: List of dicts with 'date' and 'total_score' for the employee
+        restaurant_averages: List of dicts with 'date' and 'avg_score' for restaurant
+        quarter: Current quarter (e.g., "Q1")
+        year: Current year (e.g., 2026)
+        time_range: "quarter" (default), "year", or "all"
+    
+    Returns PNG image bytes.
+    """
+    if not employee_scores:
+        # Return empty chart if no data
+        fig, ax = plt.subplots(figsize=(10, 5), facecolor=COLORS['background'])
+        ax.text(0.5, 0.5, 'No snapshot data available', ha='center', va='center', 
+                fontsize=14, color=COLORS['text'], transform=ax.transAxes)
+        ax.set_facecolor(COLORS['background'])
+        ax.axis('off')
+        buffer = io.BytesIO()
+        plt.savefig(buffer, format='png', dpi=150, bbox_inches='tight', facecolor=COLORS['background'])
+        plt.close(fig)
+        buffer.seek(0)
+        return buffer.getvalue()
+    
+    # Sort by date
+    employee_scores = sorted(employee_scores, key=lambda x: x['date'])
+    restaurant_averages = sorted(restaurant_averages, key=lambda x: x['date'])
+    
+    # Extract data
+    dates = [d['date'] for d in employee_scores]
+    emp_scores = [d['total_score'] for d in employee_scores]
+    
+    # Match restaurant averages to employee dates
+    rest_avg_dict = {d['date']: d['avg_score'] for d in restaurant_averages}
+    rest_scores = [rest_avg_dict.get(d, None) for d in dates]
+    
+    # Format dates for display
+    date_labels = []
+    for d in dates:
+        try:
+            from datetime import datetime as dt
+            parsed = dt.strptime(d, "%Y-%m-%d")
+            date_labels.append(parsed.strftime("%b %d"))
+        except:
+            date_labels.append(d[-5:])  # Last 5 chars as fallback
+    
+    # Setup figure
+    fig, ax = plt.subplots(figsize=(10, 5), facecolor=COLORS['background'])
+    ax.set_facecolor(COLORS['background'])
+    
+    x = np.arange(len(dates))
+    
+    # Plot employee line (red, primary)
+    ax.plot(x, emp_scores, 'o-', color=COLORS['primary'], linewidth=2.5, markersize=8,
+            label=employee_name, zorder=3)
+    
+    # Plot restaurant average line (blue, secondary)
+    # Filter out None values
+    valid_rest_indices = [i for i, s in enumerate(rest_scores) if s is not None]
+    if valid_rest_indices:
+        rest_x = [x[i] for i in valid_rest_indices]
+        rest_y = [rest_scores[i] for i in valid_rest_indices]
+        ax.plot(rest_x, rest_y, 's--', color=COLORS['secondary'], linewidth=2, markersize=6,
+                label='Restaurant Avg', alpha=0.8, zorder=2)
+    
+    # Add data point labels for employee
+    for i, (xi, score) in enumerate(zip(x, emp_scores)):
+        ax.annotate(f'{score:.1f}', (xi, score), textcoords="offset points",
+                   xytext=(0, 10), ha='center', fontsize=9, fontweight='bold',
+                   color=COLORS['primary'])
+    
+    # Add benchmark line at 80 (Meeting Expectations threshold)
+    ax.axhline(y=80, color=COLORS['positive'], linestyle=':', linewidth=1.5, 
+               alpha=0.7, label='Meeting Expectations (80)')
+    
+    # Styling
+    ax.set_xlabel('Snapshot Date', fontsize=11, color=COLORS['text'])
+    ax.set_ylabel('Total Score', fontsize=11, color=COLORS['text'])
+    
+    # Title based on time range
+    if time_range == "quarter" and quarter and year:
+        title = f'📈 {employee_name} - {quarter} {year} Performance Trend'
+    elif time_range == "year" and year:
+        title = f'📈 {employee_name} - {year} Performance Trend'
+    else:
+        title = f'📈 {employee_name} - Performance Trend'
+    
+    ax.set_title(title, fontsize=14, fontweight='bold', color=COLORS['primary'], pad=15)
+    
+    ax.set_xticks(x)
+    ax.set_xticklabels(date_labels, fontsize=10, rotation=45, ha='right')
+    
+    # Set y-axis range with some padding
+    all_scores = emp_scores + [s for s in rest_scores if s is not None]
+    if all_scores:
+        min_score = max(0, min(all_scores) - 10)
+        max_score = min(120, max(all_scores) + 10)
+        ax.set_ylim(min_score, max_score)
+    
+    # Legend
+    ax.legend(loc='upper left', framealpha=0.9, fontsize=9)
+    
+    # Grid
+    ax.yaxis.grid(True, linestyle='--', alpha=0.7, color=COLORS['grid'])
+    ax.xaxis.grid(True, linestyle='--', alpha=0.3, color=COLORS['grid'])
+    ax.set_axisbelow(True)
+    
+    # Remove top and right spines
+    for spine in ['top', 'right']:
+        ax.spines[spine].set_visible(False)
+    ax.spines['left'].set_color(COLORS['grid'])
+    ax.spines['bottom'].set_color(COLORS['grid'])
+    
+    plt.tight_layout()
+    
+    # Save to bytes
+    buffer = io.BytesIO()
+    plt.savefig(buffer, format='png', dpi=150, bbox_inches='tight', facecolor=COLORS['background'])
+    plt.close(fig)
+    buffer.seek(0)
+    
+    return buffer.getvalue()
