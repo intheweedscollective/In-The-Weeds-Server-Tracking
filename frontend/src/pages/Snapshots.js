@@ -287,8 +287,8 @@ export default function Snapshots() {
                 onClick={() => setSelectedBackground(bg.key)}
                 className={`p-3 rounded-lg border-2 transition-all text-sm font-medium ${
                   selectedBackground === bg.key
-                    ? "border-primary bg-primary/10"
-                    : "border-transparent bg-secondary hover:border-muted-foreground/30"
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-muted bg-card text-foreground hover:border-primary/50"
                 }`}
                 data-testid={`bg-option-${bg.key}`}
               >
