@@ -498,11 +498,11 @@ def generate_biweekly_trend_chart(
     
     # Title based on time range
     if time_range == "quarter" and quarter and year:
-        title = f'📈 {employee_name} - {quarter} {year} Performance Trend'
+        title = f'{employee_name} - {quarter} {year} Performance Trend'
     elif time_range == "year" and year:
-        title = f'📈 {employee_name} - {year} Performance Trend'
+        title = f'{employee_name} - {year} Performance Trend'
     else:
-        title = f'📈 {employee_name} - Performance Trend'
+        title = f'{employee_name} - Performance Trend'
     
     ax.set_title(title, fontsize=14, fontweight='bold', color=COLORS['primary'], pad=15)
     
