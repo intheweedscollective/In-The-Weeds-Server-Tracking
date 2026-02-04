@@ -3162,9 +3162,35 @@ async def recalculate_snapshot(snapshot_id: str):
         }
     )
     
+    # ============================================================
+    # SYNC TO MAIN EMPLOYEES_V2 COLLECTION
+    # This makes the recalculated snapshot data the "current" data
+    # ============================================================
+    
+    # Clear existing employees for this quarter/year
+    await db.employees_v2.delete_many({
+        "year": snapshot["year"],
+        "quarter": snapshot["quarter"]
+    })
+    
+    # Insert the recalculated employee data
+    if recalculated_employees:
+        main_employees = []
+        for emp in recalculated_employees:
+            main_emp = emp.copy()
+            if isinstance(main_emp.get('created_at'), datetime):
+                main_emp['created_at'] = main_emp['created_at'].isoformat()
+            elif not main_emp.get('created_at'):
+                main_emp['created_at'] = datetime.now(timezone.utc).isoformat()
+            main_employees.append(main_emp)
+        
+        await db.employees_v2.insert_many(main_employees)
+        logging.info(f"Synced {len(main_employees)} recalculated employees to employees_v2")
+    
     return {
-        "message": "Scores recalculated successfully",
-        "employee_count": len(recalculated_employees)
+        "message": "Scores recalculated and synced to Dashboard",
+        "employee_count": len(recalculated_employees),
+        "synced_to_dashboard": True
     }
 
 
