@@ -121,11 +121,18 @@ def generate_snapshot_slide(
               fill=COLORS["white"], anchor="mm")
     
     # Date - green
+    date_bottom_y = title_y + 145 + 20  # Date position + some padding
     draw.text((center_x, title_y + 145), snapshot_date, font=get_font(24, "medium"),
               fill=COLORS["title_green"], anchor="mm")
     
-    # Legend - 42pt font (same as PERFORMANCE) - CENTERED with logo
-    legend_y = 500
+    # Footer text - positioned at bottom
+    footer_y = SLIDE_HEIGHT - 130
+    
+    # Calculate legend position - CENTERED between date and footer
+    legend_height = 4 * 70  # 4 items × 70px spacing
+    available_space = footer_y - date_bottom_y
+    legend_y = date_bottom_y + (available_space - legend_height) // 2
+    
     legend_items = [
         (COLORS["blue"], "EXCEEDING ALL", "EXPECTATIONS"),
         (COLORS["green"], "MEETING", "EXPECTATIONS"),
@@ -148,8 +155,7 @@ def generate_snapshot_slide(
         draw.text((legend_start_x + square_size + 12, y + 36), line2, 
                   font=get_font(28, "semibold"), fill=color, anchor="lm")
     
-    # Footer text - 36pt like SNAPSHOT
-    footer_y = SLIDE_HEIGHT - 130
+    # Footer text
     draw.text((center_x, footer_y), "DON'T WAIT TO IMPACT", 
               font=get_font(24, "semibold"), fill=COLORS["white"], anchor="mm")
     draw.text((center_x, footer_y + 30), "THIS NUMBER.",
