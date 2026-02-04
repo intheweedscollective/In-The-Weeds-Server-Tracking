@@ -368,15 +368,20 @@ export default function Dashboard() {
                         </div>
                         <div className="text-xs text-gray-500">Total Score</div>
                       </div>
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                        employee.tier_label === 'Trainer' ? 'bg-purple-100 text-purple-800' :
-                        employee.tier_label === 'Bartender' ? 'bg-blue-100 text-blue-800' :
-                        employee.tier_label === 'A-Server' ? 'bg-green-100 text-green-800' :
-                        employee.tier_label === 'B-Server' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'
-                      }`}>
-                        {employee.tier_label || 'Server'}
-                      </span>
+                      {(() => {
+                        const tierOrJob = employee.tier_label || employee.job_title || 'Server';
+                        const tierLower = tierOrJob.toLowerCase();
+                        let colorClass = 'bg-red-100 text-red-800'; // default C-Server
+                        if (tierLower.includes('trainer')) colorClass = 'bg-purple-100 text-purple-800';
+                        else if (tierLower.includes('bartender')) colorClass = 'bg-blue-100 text-blue-800';
+                        else if (tierLower.includes('a-server') || tierLower === 'a') colorClass = 'bg-green-100 text-green-800';
+                        else if (tierLower.includes('b-server') || tierLower === 'b') colorClass = 'bg-yellow-100 text-yellow-800';
+                        return (
+                          <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize ${colorClass}`}>
+                            {tierOrJob}
+                          </span>
+                        );
+                      })()}
                     </div>
                   </div>
                 ))}
