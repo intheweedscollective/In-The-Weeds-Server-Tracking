@@ -2950,12 +2950,6 @@ async def generate_snapshot_slide_endpoint(
     )
 
 
-@api_router.get("/v2/snapshots/backgrounds")
-async def get_snapshot_backgrounds():
-    """Get available background options for snapshots."""
-    return get_available_backgrounds()
-
-
 # Include the router in the main app
 app.include_router(api_router)
 
