@@ -3037,9 +3037,38 @@ async def upload_snapshot_data(snapshot_id: str, file: UploadFile = File(...)):
             }
         )
         
+        # ============================================================
+        # SYNC TO MAIN EMPLOYEES_V2 COLLECTION
+        # This makes the bi-weekly snapshot data the "current" data
+        # for Dashboard, Rankings, Reviews, and Yodeck slides
+        # ============================================================
+        
+        # First, clear existing employees for this quarter/year
+        await db.employees_v2.delete_many({
+            "year": snapshot["year"],
+            "quarter": snapshot["quarter"]
+        })
+        
+        # Insert the new employee data from snapshot
+        if employees:
+            # Prepare employees for main collection (remove snapshot-specific fields if any)
+            main_employees = []
+            for emp in employees:
+                main_emp = emp.copy()
+                # Ensure created_at is set properly
+                if isinstance(main_emp.get('created_at'), datetime):
+                    main_emp['created_at'] = main_emp['created_at'].isoformat()
+                elif not main_emp.get('created_at'):
+                    main_emp['created_at'] = datetime.now(timezone.utc).isoformat()
+                main_employees.append(main_emp)
+            
+            await db.employees_v2.insert_many(main_employees)
+            logging.info(f"Synced {len(main_employees)} employees to employees_v2 for {snapshot['quarter']} {snapshot['year']}")
+        
         return {
-            "message": "Snapshot data uploaded successfully",
-            "employee_count": len(employees)
+            "message": "Snapshot data uploaded and synced to Dashboard",
+            "employee_count": len(employees),
+            "synced_to_dashboard": True
         }
         
     except Exception as e:
