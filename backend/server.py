@@ -2371,7 +2371,7 @@ async def get_analytics_pdf_v2(year: int, quarter: str):
 from trend_charts import (
     generate_employee_comparison_chart, generate_employee_change_chart,
     generate_team_comparison_chart, generate_tier_distribution_chart,
-    get_previous_quarter, chart_to_base64
+    get_previous_quarter, chart_to_base64, generate_biweekly_trend_chart
 )
 
 
