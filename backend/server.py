@@ -2612,6 +2612,12 @@ async def list_snapshots(year: Optional[int] = None):
     return snapshots
 
 
+@api_router.get("/v2/snapshots/backgrounds")
+async def get_snapshot_backgrounds():
+    """Get available background options for snapshots."""
+    return get_available_backgrounds()
+
+
 @api_router.get("/v2/snapshots/{snapshot_id}")
 async def get_snapshot(snapshot_id: str):
     """Get a specific snapshot by ID."""
