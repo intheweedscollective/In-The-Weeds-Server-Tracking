@@ -1122,6 +1122,7 @@ async def get_employee_v2(employee_id: str):
 async def generate_employee_review_v2(employee_id: str, review_data: ReviewCreateV2):
     """
     Generate AI-powered performance review PDF using V2 employee data and Q1 2026 scoring model.
+    Automatically includes bi-weekly trend chart from snapshots if available.
     """
     # Get V2 employee
     employee_doc = await db.employees_v2.find_one({"id": employee_id}, {"_id": 0})
@@ -1145,7 +1146,7 @@ async def generate_employee_review_v2(employee_id: str, review_data: ReviewCreat
         # Generate AI review content using V2 data
         review_content = await generate_review_content_v2(employee, settings, review_data.quarter, review_data.year)
         
-        # Get employee line graph for this quarter/year if available
+        # Get employee line graph for this quarter/year if manually uploaded
         line_graph = await db.line_graphs.find_one(
             {
                 "employee_id": employee_id,
@@ -1155,6 +1156,67 @@ async def generate_employee_review_v2(employee_id: str, review_data: ReviewCreat
             },
             {"_id": 0},
         )
+        
+        # If no manual graph, try to generate bi-weekly trend chart from snapshots
+        trend_chart_bytes = None
+        if not line_graph or not line_graph.get('file_data'):
+            try:
+                # Query snapshots for this quarter (default) with option to expand
+                time_range = review_data.time_range if hasattr(review_data, 'time_range') else "quarter"
+                query = {"year": review_data.year, "quarter": review_data.quarter.upper()}
+                
+                if time_range == "year":
+                    query = {"year": review_data.year}
+                elif time_range == "all":
+                    query = {}
+                
+                snapshots = await db.snapshots.find(query, {"_id": 0}).sort("snapshot_date", 1).to_list(100)
+                
+                if snapshots:
+                    employee_scores = []
+                    restaurant_averages = []
+                    
+                    for snapshot in snapshots:
+                        snapshot_date = snapshot.get("snapshot_date")
+                        employees_list = snapshot.get("employees", [])
+                        
+                        if not employees_list:
+                            continue
+                        
+                        # Find employee in snapshot (case-insensitive)
+                        emp_data = None
+                        for emp in employees_list:
+                            if emp.get("name", "").lower() == employee.name.lower():
+                                emp_data = emp
+                                break
+                        
+                        # Calculate restaurant average
+                        all_scores = [e.get("total_score", 0) or 0 for e in employees_list if e.get("total_score") is not None]
+                        avg_score = sum(all_scores) / len(all_scores) if all_scores else 0
+                        
+                        restaurant_averages.append({
+                            "date": snapshot_date,
+                            "avg_score": round(avg_score, 2)
+                        })
+                        
+                        if emp_data:
+                            employee_scores.append({
+                                "date": snapshot_date,
+                                "total_score": emp_data.get("total_score", 0) or 0
+                            })
+                    
+                    # Generate chart if we have data points
+                    if employee_scores:
+                        trend_chart_bytes = generate_biweekly_trend_chart(
+                            employee_name=employee.name,
+                            employee_scores=employee_scores,
+                            restaurant_averages=restaurant_averages,
+                            quarter=review_data.quarter.upper(),
+                            year=review_data.year,
+                            time_range=time_range
+                        )
+            except Exception as chart_err:
+                logging.warning(f"Could not generate bi-weekly trend chart: {chart_err}")
         
         # Create review record
         review = ReviewV2(
@@ -1173,10 +1235,16 @@ async def generate_employee_review_v2(employee_id: str, review_data: ReviewCreat
         # Generate PDF with V2 scoring breakdown
         base_pdf = generate_pdf_v2(employee, settings, review_content, review_data.quarter, review_data.year)
         
-        # Merge with line graph if available
+        # Merge with chart (prefer manual upload, fallback to auto-generated bi-weekly trend)
         if line_graph and line_graph.get('file_data'):
             try:
                 graph_pdf = _create_graph_pdf_from_image_bytes(base64.b64decode(line_graph['file_data']))
+                merged_pdf = _merge_pdfs(base_pdf, graph_pdf)
+            except Exception:
+                merged_pdf = base_pdf
+        elif trend_chart_bytes:
+            try:
+                graph_pdf = _create_graph_pdf_from_image_bytes(trend_chart_bytes)
                 merged_pdf = _merge_pdfs(base_pdf, graph_pdf)
             except Exception:
                 merged_pdf = base_pdf
