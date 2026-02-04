@@ -103,7 +103,10 @@ export default function Snapshots() {
     
     try {
       const res = await axios.post(`${API}/v2/snapshots/${snapshotId}/upload`, formData);
-      toast({ title: "Success", description: `Uploaded ${res.data.employee_count} employees` });
+      toast({ 
+        title: "Success", 
+        description: `Uploaded ${res.data.employee_count} employees. Dashboard & Rankings updated!` 
+      });
       await fetchSnapshots();
     } catch (error) {
       toast({
