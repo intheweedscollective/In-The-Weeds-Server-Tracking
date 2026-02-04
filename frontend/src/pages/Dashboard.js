@@ -1,54 +1,42 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { Upload, Users, FileText, TrendingUp, Award, Target, Anchor, Fish, Settings, AlertTriangle, CheckCircle, XCircle, Download } from "lucide-react";
-import { useDropzone } from "react-dropzone";
+import { Users, FileText, TrendingUp, Award, Target, Fish, Settings, Camera, Download } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import Navigation from "../components/Navigation";
 import StatsCard from "../components/StatsCard";
-import { Button } from "../components/ui/button";
 import { formatNumber } from "../utils/formatters";
-import ConfirmDialog from "../components/ConfirmDialog";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
 export default function Dashboard() {
   const [employees, setEmployees] = useState([]);
-  const [uploading, setUploading] = useState(false);
-  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   
-  // V2 Upload state
+  // Quarter selection
   const [selectedYear, setSelectedYear] = useState(2026);
   const [selectedQuarter, setSelectedQuarter] = useState("Q1");
   const [quarterSettings, setQuarterSettings] = useState(null);
-  const [validationResult, setValidationResult] = useState(null);
-  const [pendingFile, setPendingFile] = useState(null);
-  const [showValidation, setShowValidation] = useState(false);
+  const [latestSnapshot, setLatestSnapshot] = useState(null);
 
   const [stats, setStats] = useState({
     totalEmployees: 0,
     avgTotalScore: 0,
     topPerformers: 0,
-    recentUploads: 0
+    aServers: 0
   });
 
   const calculateStats = useCallback(() => {
     const total = employees.length;
     const avgScore = total > 0 ? employees.reduce((sum, emp) => sum + (emp.total_score || emp.cumulative_score || 0), 0) / total : 0;
-    const topPerformers = employees.filter(emp => emp.performance_tier === "Top Performer" || (emp.cumulative_score || 0) >= 85).length;
-    const recentUploads = employees.filter(emp => {
-      const uploadDate = new Date(emp.created_at);
-      const weekAgo = new Date();
-      weekAgo.setDate(weekAgo.getDate() - 7);
-      return uploadDate > weekAgo;
-    }).length;
+    const topPerformers = employees.filter(emp => (emp.total_score || 0) >= 85).length;
+    const aServers = employees.filter(emp => emp.tier_label === "A-Server").length;
 
     setStats({
       totalEmployees: total,
       avgTotalScore: avgScore.toFixed(1),
       topPerformers,
-      recentUploads
+      aServers
     });
   }, [employees]);
 
@@ -72,11 +60,26 @@ export default function Dashboard() {
     }
   }, [selectedYear, selectedQuarter]);
 
+  const fetchLatestSnapshot = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API}/v2/snapshots?year=${selectedYear}`);
+      const snapshots = response.data.filter(s => s.quarter === selectedQuarter);
+      if (snapshots.length > 0) {
+        // Get most recent snapshot
+        setLatestSnapshot(snapshots[0]);
+      } else {
+        setLatestSnapshot(null);
+      }
+    } catch (error) {
+      console.error("Error fetching snapshots:", error);
+    }
+  }, [selectedYear, selectedQuarter]);
+
   useEffect(() => {
-    // Initial load - fetch for current quarter
     fetchQuarterSettings();
     fetchEmployeesForQuarter();
-  }, [fetchQuarterSettings, fetchEmployeesForQuarter]);
+    fetchLatestSnapshot();
+  }, [fetchQuarterSettings, fetchEmployeesForQuarter, fetchLatestSnapshot]);
 
   useEffect(() => {
     calculateStats();
@@ -85,101 +88,6 @@ export default function Dashboard() {
   const downloadTemplate = () => {
     window.open(`${API}/v2/template`, '_blank');
     toast.success("Template downloaded!");
-  };
-
-  const validateFile = async (file) => {
-    const formData = new FormData();
-    formData.append("file", file);
-    
-    try {
-      const response = await axios.post(`${API}/v2/upload/validate`, formData);
-      setValidationResult(response.data);
-      setPendingFile(file);
-      setShowValidation(true);
-    } catch (error) {
-      toast.error("Error validating file: " + (error.response?.data?.detail || error.message));
-    }
-  };
-
-  const onDrop = async (acceptedFiles) => {
-    const file = acceptedFiles[0];
-    if (!file) return;
-
-    if (!file.name.match(/\.(xlsx|xls|csv)$/)) {
-      toast.error("Please upload an Excel or CSV file");
-      return;
-    }
-
-    // Check if quarter settings exist
-    if (!quarterSettings) {
-      toast.error(`Quarter settings must be created for ${selectedQuarter} ${selectedYear} first. Go to Settings.`);
-      return;
-    }
-
-    if (quarterSettings.is_locked) {
-      toast.error(`${selectedQuarter} ${selectedYear} is locked. Clear existing data first to re-upload.`);
-      return;
-    }
-
-    // Validate first
-    setUploading(true);
-    await validateFile(file);
-    setUploading(false);
-  };
-
-  const confirmUpload = async () => {
-    if (!pendingFile || !validationResult?.valid) return;
-
-    setUploading(true);
-    setShowValidation(false);
-
-    const formData = new FormData();
-    formData.append("file", pendingFile);
-
-    try {
-      const response = await axios.post(
-        `${API}/v2/upload?year=${selectedYear}&quarter=${selectedQuarter}`,
-        formData
-      );
-
-      if (response.data.success) {
-        toast.success(`Successfully imported and scored ${response.data.employees_count} employees!`);
-        fetchEmployeesForQuarter();
-        fetchQuarterSettings();
-        setValidationResult(null);
-        setPendingFile(null);
-      }
-    } catch (error) {
-      toast.error("Error uploading file: " + (error.response?.data?.detail || error.message));
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: {
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
-      "application/vnd.ms-excel": [".xls"],
-      "text/csv": [".csv"]
-    },
-    multiple: false,
-  });
-
-  const clearAllEmployees = async () => {
-    try {
-      const response = await axios.delete(`${API}/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`);
-      if (response.data.success) {
-        toast.success(`Cleared ${response.data.deleted_count} employees`);
-        fetchEmployeesForQuarter();
-        fetchQuarterSettings();
-      }
-    } catch (error) {
-      console.error("Error clearing employees:", error);
-      toast.error("Error clearing employees");
-    } finally {
-      setConfirmClearOpen(false);
-    }
   };
 
   return (
@@ -213,6 +121,35 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Quarter Selector */}
+        <div className="flex justify-center gap-4 mb-8">
+          <div className="flex items-center gap-2 bg-white rounded-lg shadow-sm border px-4 py-2">
+            <label className="text-sm font-medium text-gray-600">Year:</label>
+            <select
+              className="bg-transparent font-semibold text-primary focus:outline-none"
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+            >
+              <option value={2025}>2025</option>
+              <option value={2026}>2026</option>
+              <option value={2027}>2027</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2 bg-white rounded-lg shadow-sm border px-4 py-2">
+            <label className="text-sm font-medium text-gray-600">Quarter:</label>
+            <select
+              className="bg-transparent font-semibold text-primary focus:outline-none"
+              value={selectedQuarter}
+              onChange={(e) => setSelectedQuarter(e.target.value)}
+            >
+              <option value="Q1">Q1</option>
+              <option value="Q2">Q2</option>
+              <option value="Q3">Q3</option>
+              <option value="Q4">Q4</option>
+            </select>
+          </div>
+        </div>
+
         {/* Stats Dashboard */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-10" data-testid="stats-dashboard">
           <StatsCard 
@@ -232,144 +169,68 @@ export default function Dashboard() {
           />
           <StatsCard 
             icon={Award}
-            title="Top Performers"
-            value={stats.topPerformers}
+            title="A-Servers"
+            value={stats.aServers}
             color="bg-yellow-500"
-            testId="top-performers-card"
-            linkTo="/top-performers"
+            testId="a-servers-card"
+            linkTo="/rankings"
           />
           <StatsCard 
             icon={Target}
-            title="New This Week"
-            value={stats.recentUploads}
+            title="Top Performers"
+            value={stats.topPerformers}
             color="bg-purple-500"
-            testId="recent-uploads-card"
+            testId="top-performers-card"
           />
         </div>
 
         {/* Main Actions */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
-          <ConfirmDialog
-            open={confirmClearOpen}
-            onOpenChange={setConfirmClearOpen}
-            title={`Clear ${selectedQuarter} ${selectedYear} data?`}
-            description="This will permanently delete all employee records for this quarter. Settings will be unlocked for re-upload."
-            confirmText="Clear All"
-            cancelText="Cancel"
-            onConfirm={clearAllEmployees}
-            variant="destructive"
-          />
-          
-          {/* File Upload */}
-          <div className="bubba-card" data-testid="upload-card">
+          {/* Upload CTA - Points to Snapshots */}
+          <div className="bubba-card" data-testid="upload-cta-card">
             <div className="tape tape-blue" style={{ top: '-8px', left: '50%', transform: 'translateX(-50%) rotate(-2deg)' }} />
             
             <div className="p-6 pt-8">
-              {/* Quarter Selector */}
-              <div className="grid grid-cols-2 gap-3 mb-5">
-                <div>
-                  <label className="text-xs font-semibold text-gray-500 uppercase">Year</label>
-                  <select
-                    className="w-full h-9 rounded-lg border-2 border-gray-200 bg-white px-2 text-sm font-medium"
-                    value={selectedYear}
-                    onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                  >
-                    <option value={2025}>2025</option>
-                    <option value={2026}>2026</option>
-                    <option value={2027}>2027</option>
-                  </select>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                  <Camera className="w-6 h-6 text-secondary" />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-gray-500 uppercase">Quarter</label>
-                  <select
-                    className="w-full h-9 rounded-lg border-2 border-gray-200 bg-white px-2 text-sm font-medium"
-                    value={selectedQuarter}
-                    onChange={(e) => setSelectedQuarter(e.target.value)}
-                  >
-                    <option value="Q1">Q1</option>
-                    <option value="Q2">Q2</option>
-                    <option value="Q3">Q3</option>
-                    <option value="Q4">Q4</option>
-                  </select>
+                  <h2 className="text-lg font-serif font-bold text-foreground">
+                    Bi-Weekly Data Upload
+                  </h2>
+                  <p className="text-sm text-gray-500">
+                    Upload on the 1st & 15th of each month
+                  </p>
                 </div>
               </div>
 
-              {/* Settings Status */}
-              <div className="mb-4">
-                {!quarterSettings ? (
-                  <div className="flex items-center gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 text-sm">
-                    <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                    <span>No settings for {selectedQuarter} {selectedYear}.</span>
-                    <Link to="/settings" className="font-semibold underline">Create Settings</Link>
+              {/* Latest Snapshot Info */}
+              {latestSnapshot ? (
+                <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-center gap-2 text-green-800 mb-1">
+                    <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                    <span className="font-semibold text-sm">Latest Upload: {latestSnapshot.snapshot_date}</span>
                   </div>
-                ) : quarterSettings.is_locked ? (
-                  <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg text-green-800 text-sm">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4" />
-                      <span>Scored: {employees.length} employees</span>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-red-600 hover:bg-red-50 font-semibold text-xs"
-                      onClick={() => setConfirmClearOpen(true)}
-                    >
-                      Clear & Re-upload
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-800 text-sm">
-                    <Settings className="w-4 h-4" />
-                    <span>Ready for upload. Benchmarks: PPA ${quarterSettings.benchmark_ppa}, LBW ${quarterSettings.benchmark_lbw}</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                    <Anchor className="w-5 h-5 text-secondary" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-serif font-bold text-foreground">
-                      Cast Your Net
-                    </h2>
-                    <p className="text-xs text-gray-500">
-                      Upload employee data (CSV/Excel)
-                    </p>
-                  </div>
+                  <p className="text-green-700 text-sm">
+                    {latestSnapshot.employee_count} employees • {latestSnapshot.title || 'Bi-weekly snapshot'}
+                  </p>
                 </div>
-              </div>
-              
-              <div
-                {...getRootProps()}
-                className={`upload-zone ${isDragActive ? 'drag-over' : ''} ${!quarterSettings || quarterSettings.is_locked ? 'opacity-50 cursor-not-allowed' : ''}`}
-                data-testid="file-upload-zone"
-              >
-                <input {...getInputProps()} disabled={!quarterSettings || quarterSettings.is_locked} />
-                {uploading ? (
-                  <div className="flex flex-col items-center py-6" data-testid="uploading-state">
-                    <div className="loading-spinner mb-4"></div>
-                    <p className="text-primary font-serif font-bold">Processing...</p>
-                  </div>
-                ) : (
-                  <div className="py-6 text-center" data-testid="upload-ready-state">
-                    <div className="relative mx-auto w-14 h-14 mb-3">
-                      <Fish className="w-14 h-14 text-blue-200" />
-                      <Upload className="w-6 h-6 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-                    </div>
-                    <p className="text-base font-serif font-bold text-foreground mb-1">
-                      {isDragActive ? 'Drop it!' : 'Drag & drop file'}
-                    </p>
-                    <p className="text-gray-500 text-xs mb-2">or click to browse</p>
-                    <span className="inline-block px-3 py-1 bg-gray-100 rounded-full text-xs font-semibold text-gray-600">
-                      .xlsx, .xls, .csv
-                    </span>
-                  </div>
-                )}
-              </div>
+              ) : (
+                <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-yellow-800 text-sm font-medium">
+                    No snapshots for {selectedQuarter} {selectedYear} yet
+                  </p>
+                </div>
+              )}
 
-              {/* Download Template Button */}
+              <Link to="/snapshots" className="block">
+                <button className="bubba-btn-primary w-full flex items-center justify-center gap-2">
+                  <Camera className="w-5 h-5" />
+                  Go to Snapshots to Upload
+                </button>
+              </Link>
+
               <div className="mt-4 text-center">
                 <button
                   onClick={downloadTemplate}
@@ -380,6 +241,12 @@ export default function Dashboard() {
                   Download CSV Template
                 </button>
               </div>
+
+              {/* Info Box */}
+              <div className="mt-4 p-3 bg-blue-50 rounded-lg text-xs text-blue-800">
+                <strong>How it works:</strong> Upload your bi-weekly data via Snapshots. 
+                This automatically updates Dashboard, Rankings, Reviews & Yodeck slides.
+              </div>
             </div>
           </div>
 
@@ -389,14 +256,14 @@ export default function Dashboard() {
             
             <div className="p-6 pt-8">
               <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                  <FileText className="w-5 h-5 text-primary" />
+                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                  <FileText className="w-6 h-6 text-primary" />
                 </div>
                 <div>
                   <h2 className="text-lg font-serif font-bold text-foreground">
                     Quick Actions
                   </h2>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-sm text-gray-500">
                     Manage your crew
                   </p>
                 </div>
@@ -417,6 +284,13 @@ export default function Dashboard() {
                   </button>
                 </Link>
 
+                <Link to="/rankings" className="block" data-testid="rankings-link">
+                  <button className="w-full flex items-center justify-center gap-2 px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-full font-semibold hover:bg-gray-50 transition-colors">
+                    <Award className="w-5 h-5" />
+                    Full Rankings
+                  </button>
+                </Link>
+
                 <Link to="/settings" className="block" data-testid="settings-link">
                   <button className="w-full flex items-center justify-center gap-2 px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-full font-semibold hover:bg-gray-50 transition-colors">
                     <Settings className="w-5 h-5" />
@@ -425,25 +299,22 @@ export default function Dashboard() {
                 </Link>
               </div>
 
-              <div className="mt-5 pt-4 border-t-2 border-dashed border-gray-200" data-testid="system-info">
+              {/* Settings Status */}
+              <div className="mt-5 pt-4 border-t-2 border-dashed border-gray-200">
                 <h4 className="font-serif font-bold text-foreground mb-2 flex items-center gap-2 text-sm">
-                  <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                  System Status
+                  <span className={`w-2 h-2 rounded-full ${quarterSettings ? 'bg-green-500' : 'bg-yellow-500'}`}></span>
+                  {selectedQuarter} {selectedYear} Status
                 </h4>
-                <div className="grid grid-cols-3 gap-2 text-xs">
-                  <div className="text-center p-2 bg-green-50 rounded-lg">
-                    <div className="font-bold text-green-600">Online</div>
-                    <div className="text-gray-500">DB</div>
+                {quarterSettings ? (
+                  <div className="text-xs text-gray-600">
+                    <p>Benchmarks: PPA ${quarterSettings.benchmark_ppa}, LBW ${quarterSettings.benchmark_lbw}</p>
+                    <p className="mt-1">A-Server: ≥{quarterSettings.a_server_min_score} pts, B-Server: ≥{quarterSettings.b_server_min_score} pts</p>
                   </div>
-                  <div className="text-center p-2 bg-green-50 rounded-lg">
-                    <div className="font-bold text-green-600">Ready</div>
-                    <div className="text-gray-500">AI</div>
+                ) : (
+                  <div className="text-xs text-yellow-700">
+                    <Link to="/settings" className="underline font-semibold">Create settings</Link> for {selectedQuarter} {selectedYear}
                   </div>
-                  <div className="text-center p-2 bg-green-50 rounded-lg">
-                    <div className="font-bold text-green-600">V2</div>
-                    <div className="text-gray-500">Engine</div>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           </div>
@@ -461,129 +332,59 @@ export default function Dashboard() {
                     <Award className="w-5 h-5 text-yellow-600" />
                   </div>
                   <h2 className="text-lg font-serif font-bold text-foreground">
-                    {selectedQuarter} {selectedYear} Rankings
+                    {selectedQuarter} {selectedYear} Top Performers
                   </h2>
                 </div>
-                <span className="text-sm text-gray-500 font-medium">
-                  {employees.length} employees
-                </span>
+                <Link to="/rankings" className="text-sm text-primary font-semibold hover:underline">
+                  View All →
+                </Link>
               </div>
               
-              <div className="space-y-4">
-                {employees.slice(0, 10).map((employee, idx) => (
+              <div className="space-y-3">
+                {employees.slice(0, 5).map((employee, idx) => (
                   <div 
                     key={employee.id} 
-                    className="rounded-xl border-2 border-gray-200 bg-gray-50 overflow-hidden"
+                    className="flex items-center justify-between p-4 rounded-xl border-2 border-gray-200 bg-gray-50 hover:bg-white transition-colors"
                     data-testid={`ranking-card-${employee.id}`}
                   >
-                    {/* Main Row */}
-                    <div className="flex items-center justify-between p-4">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-full bg-white border-2 border-gray-200 flex items-center justify-center font-serif font-bold text-primary">
-                          {employee.peer_rank || idx + 1}
-                        </div>
-                        <div>
-                          <h3 className="font-serif font-bold text-foreground">
-                            {employee.name}
-                          </h3>
-                          <p className="text-gray-500 text-sm">{employee.performance_tier || 'Not Assessed'}</p>
-                        </div>
+                    <div className="flex items-center gap-4">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-serif font-bold text-white ${
+                        idx === 0 ? 'bg-yellow-500' : idx === 1 ? 'bg-gray-400' : idx === 2 ? 'bg-amber-600' : 'bg-blue-400'
+                      }`}>
+                        {idx + 1}
                       </div>
-                      
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <div className="text-xl font-serif font-bold text-primary">
-                            {formatNumber(employee.pre_dar_score || employee.total_score || 0)}
-                          </div>
-                          <div className="text-xs text-gray-500">Total Score</div>
-                        </div>
-                        {employee.performance_tier && (
-                          <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                            employee.performance_tier === 'Top Performer' ? 'bg-green-100 text-green-800' :
-                            employee.performance_tier === 'Above Average' ? 'bg-blue-100 text-blue-800' :
-                            employee.performance_tier === 'Below Average' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-red-100 text-red-800'
-                          }`}>
-                            {employee.performance_tier}
-                          </span>
-                        )}
+                      <div>
+                        <h3 className="font-serif font-bold text-foreground">
+                          {employee.name}
+                        </h3>
+                        <p className="text-gray-500 text-sm">{employee.tier_label || employee.job_title || 'Server'}</p>
                       </div>
                     </div>
                     
-                    {/* Scoring Breakdown Row */}
-                    <div className="px-4 pb-4 pt-2 border-t border-gray-200 bg-white">
-                      <div className="text-xs font-semibold text-gray-500 uppercase mb-2">Points Breakdown</div>
-                      <div className="grid grid-cols-5 gap-2">
-                        {/* PPA - 25% weight, max 30 pts */}
-                        <div className="text-center p-2 bg-blue-50 rounded-lg border border-blue-100">
-                          <div className="text-sm font-bold text-secondary">
-                            {formatNumber(Math.min((employee.score_ppa || 0), 100) * 0.25 + (employee.bonus_ppa || 0))}
-                          </div>
-                          <div className="text-[10px] text-gray-500">/ 30</div>
-                          <div className="text-[10px] font-semibold text-blue-600 mt-1">PPA</div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <div className="text-xl font-serif font-bold text-primary">
+                          {formatNumber(employee.total_score || 0)}
                         </div>
-                        
-                        {/* LSC - 25% weight, max 30 pts */}
-                        <div className="text-center p-2 bg-green-50 rounded-lg border border-green-100">
-                          <div className="text-sm font-bold text-green-700">
-                            {formatNumber(Math.min((employee.score_lsc || 0), 100) * 0.25 + (employee.bonus_lsc || 0))}
-                          </div>
-                          <div className="text-[10px] text-gray-500">/ 30</div>
-                          <div className="text-[10px] font-semibold text-green-600 mt-1">LSC</div>
-                        </div>
-                        
-                        {/* LBW - 20% weight, max 25 pts */}
-                        <div className="text-center p-2 bg-purple-50 rounded-lg border border-purple-100">
-                          <div className="text-sm font-bold text-purple-700">
-                            {formatNumber(Math.min((employee.score_lbw || 0), 100) * 0.20 + (employee.bonus_lbw || 0))}
-                          </div>
-                          <div className="text-[10px] text-gray-500">/ 25</div>
-                          <div className="text-[10px] font-semibold text-purple-600 mt-1">LBW</div>
-                        </div>
-                        
-                        {/* Glass - 15% weight, max 20 pts */}
-                        <div className="text-center p-2 bg-gray-100 rounded-lg border border-gray-200">
-                          <div className="text-sm font-bold text-gray-700">
-                            {formatNumber(Math.min((employee.score_glass || 0), 100) * 0.15 + (employee.bonus_glass || 0))}
-                          </div>
-                          <div className="text-[10px] text-gray-500">/ 20</div>
-                          <div className="text-[10px] font-semibold text-gray-600 mt-1">Glass</div>
-                        </div>
-                        
-                        {/* CV - 15% weight, max 20 pts */}
-                        <div className="text-center p-2 bg-yellow-50 rounded-lg border border-yellow-100">
-                          <div className="text-sm font-bold text-yellow-700">
-                            {formatNumber(Math.min((employee.score_cv || 0), 100) * 0.15)}
-                          </div>
-                          <div className="text-[10px] text-gray-500">/ 20</div>
-                          <div className="text-[10px] font-semibold text-yellow-600 mt-1">CV</div>
-                        </div>
+                        <div className="text-xs text-gray-500">Total Score</div>
                       </div>
-                      
-                      {/* Bonuses Row */}
-                      {((employee.total_metric_bonus || 0) > 0 || (employee.review_tracker_bonus || 0) > 0) && (
-                        <div className="mt-2 flex items-center gap-2 text-xs">
-                          <span className="text-gray-500">Bonuses:</span>
-                          {(employee.total_metric_bonus || 0) > 0 && (
-                            <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
-                              +{formatNumber(employee.total_metric_bonus)} metric
-                            </span>
-                          )}
-                          {(employee.review_tracker_bonus || 0) > 0 && (
-                            <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
-                              +{formatNumber(employee.review_tracker_bonus)} reviews
-                            </span>
-                          )}
-                        </div>
-                      )}
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                        employee.tier_label === 'Trainer' ? 'bg-purple-100 text-purple-800' :
+                        employee.tier_label === 'Bartender' ? 'bg-blue-100 text-blue-800' :
+                        employee.tier_label === 'A-Server' ? 'bg-green-100 text-green-800' :
+                        employee.tier_label === 'B-Server' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        {employee.tier_label || 'Server'}
+                      </span>
                     </div>
                   </div>
                 ))}
               </div>
               
-              {employees.length > 10 && (
+              {employees.length > 5 && (
                 <div className="mt-6 text-center">
-                  <Link to="/employees">
+                  <Link to="/rankings">
                     <button className="bubba-btn-secondary">
                       View All {employees.length} Crew Members
                     </button>
@@ -601,128 +402,15 @@ export default function Dashboard() {
             <p className="empty-state-quote">
               No data for {selectedQuarter} {selectedYear} yet.
             </p>
-            <p className="text-sm text-gray-500 mt-4">
-              {quarterSettings ? "Upload a file above to get started" : "Create quarter settings first, then upload"}
+            <p className="text-sm text-gray-500 mt-4 mb-6">
+              Upload your first bi-weekly snapshot to see your crew's performance
             </p>
-          </div>
-        )}
-
-        {/* Validation Modal */}
-        {showValidation && validationResult && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-auto shadow-2xl">
-              <div className="p-6 border-b border-gray-200">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-serif font-bold text-foreground flex items-center gap-2">
-                    {validationResult.valid ? (
-                      <><CheckCircle className="w-6 h-6 text-green-600" /> Validation Passed</>
-                    ) : (
-                      <><XCircle className="w-6 h-6 text-red-600" /> Validation Failed</>
-                    )}
-                  </h2>
-                  <Button variant="ghost" onClick={() => setShowValidation(false)}>×</Button>
-                </div>
-              </div>
-              
-              <div className="p-6">
-                {/* Column Mapping */}
-                <div className="mb-6">
-                  <h3 className="font-semibold mb-2">Column Mapping</h3>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    {Object.entries(validationResult.column_validation?.mapping || {}).map(([field, col]) => (
-                      <div key={field} className="flex items-center gap-2 p-2 bg-green-50 rounded">
-                        <CheckCircle className="w-4 h-4 text-green-600" />
-                        <span className="font-medium">{field}</span>
-                        <span className="text-gray-500">← {col}</span>
-                      </div>
-                    ))}
-                  </div>
-                  {validationResult.column_validation?.missing?.length > 0 && (
-                    <div className="mt-2">
-                      <div className="text-red-600 font-semibold">Missing columns:</div>
-                      {validationResult.column_validation.missing.map(col => (
-                        <span key={col} className="inline-block px-2 py-1 bg-red-100 text-red-800 rounded mr-2 mt-1 text-sm">{col}</span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Row Validation */}
-                <div className="mb-6">
-                  <h3 className="font-semibold mb-2">Row Validation</h3>
-                  <div className="flex gap-4 text-sm">
-                    <span className="text-green-600 font-medium">✓ {validationResult.row_validation?.valid_rows || 0} valid</span>
-                    <span className="text-red-600 font-medium">✗ {validationResult.row_validation?.invalid_rows || 0} invalid</span>
-                  </div>
-                  
-                  {validationResult.row_validation?.errors?.length > 0 && (
-                    <div className="mt-3 max-h-40 overflow-auto">
-                      {validationResult.row_validation.errors.map((err, i) => (
-                        <div key={i} className="p-2 bg-red-50 rounded mb-2 text-sm">
-                          <span className="font-medium">Row {err.row}: {err.name}</span>
-                          <ul className="text-red-700 ml-4">
-                            {err.errors.map((e, j) => <li key={j}>• {e}</li>)}
-                          </ul>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {validationResult.row_validation?.duplicate_names?.length > 0 && (
-                    <div className="mt-2 p-2 bg-yellow-50 rounded text-sm">
-                      <span className="font-medium text-yellow-800">Duplicate names found: </span>
-                      {validationResult.row_validation.duplicate_names.join(', ')}
-                    </div>
-                  )}
-                </div>
-
-                {/* Preview */}
-                {validationResult.preview && (
-                  <div className="mb-6">
-                    <h3 className="font-semibold mb-2">Preview (first 5 rows)</h3>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="bg-gray-100">
-                            <th className="p-2 text-left">Name</th>
-                            <th className="p-2 text-right">Guests</th>
-                            <th className="p-2 text-right">Net Sales</th>
-                            <th className="p-2 text-right">LBW</th>
-                            <th className="p-2 text-right">Glass</th>
-                            <th className="p-2 text-right">LSC</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {validationResult.preview.map((row, i) => (
-                            <tr key={i} className="border-b">
-                              <td className="p-2">{row.name}</td>
-                              <td className="p-2 text-right">{row.guests}</td>
-                              <td className="p-2 text-right">${row.net_sales?.toFixed(0)}</td>
-                              <td className="p-2 text-right">${row.lbw?.toFixed(0)}</td>
-                              <td className="p-2 text-right">${row.glassware_sales?.toFixed(0)}</td>
-                              <td className="p-2 text-right">{row.lsc_count}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
-                <Button variant="outline" onClick={() => setShowValidation(false)}>
-                  Cancel
-                </Button>
-                <Button 
-                  onClick={confirmUpload} 
-                  disabled={!validationResult.valid}
-                  className="bubba-btn-primary"
-                >
-                  Import & Score {validationResult.row_validation?.valid_rows || 0} Employees
-                </Button>
-              </div>
-            </div>
+            <Link to="/snapshots">
+              <button className="bubba-btn-primary">
+                <Camera className="w-5 h-5 mr-2 inline" />
+                Go to Snapshots
+              </button>
+            </Link>
           </div>
         )}
       </div>
