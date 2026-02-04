@@ -120,10 +120,11 @@ def generate_snapshot_slide(
     draw.text((center_x, title_y + 100), "SNAPSHOT", font=get_font(36, "semibold"),
               fill=COLORS["white"], anchor="mm")
     
-    # Date - green
-    date_bottom_y = title_y + 145 + 20  # Date position + some padding
-    draw.text((center_x, title_y + 145), snapshot_date, font=get_font(24, "medium"),
-              fill=COLORS["title_green"], anchor="mm")
+    # Date - red
+    date_y = title_y + 145
+    draw.text((center_x, date_y), snapshot_date, font=get_font(24, "medium"),
+              fill=COLORS["title_red"], anchor="mm")
+    date_bottom_y = date_y + 20  # Add padding below date
     
     # Footer text - positioned at bottom
     footer_y = SLIDE_HEIGHT - 130
