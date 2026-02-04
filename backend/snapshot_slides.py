@@ -129,10 +129,13 @@ def generate_snapshot_slide(
     # Footer text - positioned at bottom
     footer_y = SLIDE_HEIGHT - 130
     
-    # Calculate legend position - CENTERED between date and footer
-    legend_height = 4 * 70  # 4 items × 70px spacing
+    # Calculate legend position - EQUALLY CENTERED between date and footer statement
+    legend_height = 4 * 70  # 4 items × 70px spacing (280px total)
+    # Available space from date bottom to footer top
     available_space = footer_y - date_bottom_y
-    legend_y = date_bottom_y + (available_space - legend_height) // 2
+    # Position legend so space above and below is equal
+    space_above = (available_space - legend_height) // 2
+    legend_y = date_bottom_y + space_above
     
     legend_items = [
         (COLORS["blue"], "EXCEEDING ALL", "EXPECTATIONS"),
