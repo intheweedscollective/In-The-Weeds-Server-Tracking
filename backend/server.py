@@ -2579,6 +2579,176 @@ async def get_team_trend_data(year: int, quarter: str):
     }
 
 
+@api_router.get("/v2/trends/biweekly/{employee_name}")
+async def get_biweekly_trend_chart(
+    employee_name: str,
+    year: Optional[int] = None,
+    quarter: Optional[str] = None,
+    time_range: str = "quarter"  # "quarter", "year", or "all"
+):
+    """
+    Generate a bi-weekly trend line chart for an employee showing their Total Score
+    vs Restaurant Average over time, using data from bi-weekly snapshots.
+    
+    Args:
+        employee_name: Name of the employee
+        year: Year to filter (defaults to current year)
+        quarter: Quarter to filter (e.g., "Q1") - only used if time_range is "quarter"
+        time_range: "quarter" (default), "year", or "all"
+    
+    Returns PNG image of the line chart.
+    """
+    from datetime import datetime as dt
+    
+    # Default to current year/quarter if not specified
+    if not year:
+        year = dt.now().year
+    if not quarter:
+        month = dt.now().month
+        quarter = f"Q{(month - 1) // 3 + 1}"
+    
+    # Build query based on time_range
+    query = {}
+    if time_range == "quarter":
+        query["year"] = year
+        query["quarter"] = quarter.upper()
+    elif time_range == "year":
+        query["year"] = year
+    # "all" has no filter
+    
+    # Fetch snapshots
+    snapshots = await db.snapshots.find(query, {"_id": 0}).sort("snapshot_date", 1).to_list(100)
+    
+    if not snapshots:
+        raise HTTPException(status_code=404, detail="No snapshots found for the specified period")
+    
+    # Extract employee scores and restaurant averages
+    employee_scores = []
+    restaurant_averages = []
+    
+    for snapshot in snapshots:
+        snapshot_date = snapshot.get("snapshot_date")
+        employees = snapshot.get("employees", [])
+        
+        if not employees:
+            continue
+        
+        # Find the employee in this snapshot (case-insensitive match)
+        emp_data = None
+        for emp in employees:
+            if emp.get("name", "").lower() == employee_name.lower():
+                emp_data = emp
+                break
+        
+        # Calculate restaurant average for this snapshot
+        all_scores = [e.get("total_score", 0) or 0 for e in employees if e.get("total_score") is not None]
+        avg_score = sum(all_scores) / len(all_scores) if all_scores else 0
+        
+        restaurant_averages.append({
+            "date": snapshot_date,
+            "avg_score": round(avg_score, 2)
+        })
+        
+        if emp_data:
+            employee_scores.append({
+                "date": snapshot_date,
+                "total_score": emp_data.get("total_score", 0) or 0
+            })
+    
+    if not employee_scores:
+        raise HTTPException(
+            status_code=404, 
+            detail=f"Employee '{employee_name}' not found in any snapshots for the specified period"
+        )
+    
+    # Generate the chart
+    chart_bytes = generate_biweekly_trend_chart(
+        employee_name=employee_name,
+        employee_scores=employee_scores,
+        restaurant_averages=restaurant_averages,
+        quarter=quarter.upper() if quarter else None,
+        year=year,
+        time_range=time_range
+    )
+    
+    return Response(
+        content=chart_bytes,
+        media_type="image/png",
+        headers={"Content-Disposition": f"attachment; filename={employee_name}_trend.png"}
+    )
+
+
+@api_router.get("/v2/trends/biweekly/{employee_name}/data")
+async def get_biweekly_trend_data(
+    employee_name: str,
+    year: Optional[int] = None,
+    quarter: Optional[str] = None,
+    time_range: str = "quarter"
+):
+    """
+    Get raw bi-weekly trend data for an employee (JSON format).
+    Useful for custom visualizations or debugging.
+    """
+    from datetime import datetime as dt
+    
+    if not year:
+        year = dt.now().year
+    if not quarter:
+        month = dt.now().month
+        quarter = f"Q{(month - 1) // 3 + 1}"
+    
+    query = {}
+    if time_range == "quarter":
+        query["year"] = year
+        query["quarter"] = quarter.upper()
+    elif time_range == "year":
+        query["year"] = year
+    
+    snapshots = await db.snapshots.find(query, {"_id": 0}).sort("snapshot_date", 1).to_list(100)
+    
+    employee_scores = []
+    restaurant_averages = []
+    
+    for snapshot in snapshots:
+        snapshot_date = snapshot.get("snapshot_date")
+        employees = snapshot.get("employees", [])
+        
+        if not employees:
+            continue
+        
+        emp_data = None
+        for emp in employees:
+            if emp.get("name", "").lower() == employee_name.lower():
+                emp_data = emp
+                break
+        
+        all_scores = [e.get("total_score", 0) or 0 for e in employees if e.get("total_score") is not None]
+        avg_score = sum(all_scores) / len(all_scores) if all_scores else 0
+        
+        restaurant_averages.append({
+            "date": snapshot_date,
+            "avg_score": round(avg_score, 2)
+        })
+        
+        if emp_data:
+            employee_scores.append({
+                "date": snapshot_date,
+                "total_score": emp_data.get("total_score", 0) or 0,
+                "name": emp_data.get("name")
+            })
+    
+    return {
+        "employee_name": employee_name,
+        "time_range": time_range,
+        "year": year,
+        "quarter": quarter.upper() if quarter else None,
+        "snapshot_count": len(snapshots),
+        "employee_data_points": len(employee_scores),
+        "employee_scores": employee_scores,
+        "restaurant_averages": restaurant_averages
+    }
+
+
 # ============================================================================
 # SNAPSHOT ENDPOINTS (Bi-weekly Team Snapshots)
 # ============================================================================
