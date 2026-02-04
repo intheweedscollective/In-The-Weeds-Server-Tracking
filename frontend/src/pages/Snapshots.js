@@ -175,7 +175,7 @@ export default function Snapshots() {
       const res = await axios.post(`${API}/v2/snapshots/${snapshotId}/recalculate`);
       toast({ 
         title: "Success", 
-        description: `Recalculated scores for ${res.data.employee_count} employees` 
+        description: `Recalculated ${res.data.employee_count} employees. Dashboard & Rankings updated!` 
       });
       await fetchSnapshots();
     } catch (error) {
