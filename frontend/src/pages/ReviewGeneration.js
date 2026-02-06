@@ -60,21 +60,30 @@ export default function ReviewGeneration() {
       const employee = employees.find(e => e.id === employeeId);
       const filename = `${employee?.name.replace(/[^a-zA-Z0-9]/g, '_') || 'Employee'}_${selectedQuarter}_${selectedYear}_Review.pdf`;
       
-      // iOS/Safari compatible download - open in new tab
+      // iOS/Safari compatible download
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
       if (isIOS) {
-        // For iOS, open the PDF in a new tab (POST not supported for window.open, use GET if available)
         toast.info("Generating review... Please wait");
       }
       
-      // Use V2 API endpoint
+      // Use V2 API endpoint - returns JSON with pdf_base64
       const response = await axios.post(
         `${API}/v2/employees/${employeeId}/generate-review`,
-        { quarter: selectedQuarter, year: parseInt(selectedYear) },
-        { responseType: 'blob' }
+        { quarter: selectedQuarter, year: parseInt(selectedYear) }
       );
       
-      const blob = new Blob([response.data], { type: 'application/pdf' });
+      if (!response.data.success || !response.data.pdf_base64) {
+        throw new Error(response.data.message || "Failed to generate review");
+      }
+      
+      // Convert base64 to blob
+      const byteCharacters = atob(response.data.pdf_base64);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
       
       if (isIOS) {
@@ -96,7 +105,7 @@ export default function ReviewGeneration() {
       fetchReviews();
     } catch (error) {
       console.error("Error generating review:", error);
-      toast.error("Error generating review: " + (error.response?.data?.detail || error.message));
+      toast.error("Error generating review: " + (error.response?.data?.message || error.message));
     } finally {
       setGenerating(prev => ({ ...prev, [employeeId]: false }));
     }
