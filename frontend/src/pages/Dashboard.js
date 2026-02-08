@@ -182,7 +182,7 @@ export default function Dashboard() {
             icon={TrendingUp}
             title="Avg Score"
             value={stats.avgTotalScore}
-            color="bg-green-500"
+            color="bg-yellow-500"
             testId="avg-score-card"
             linkTo="/analytics"
           />
@@ -190,7 +190,7 @@ export default function Dashboard() {
             icon={Award}
             title="Top Performers"
             value={stats.topPerformers}
-            color="bg-yellow-500"
+            color="bg-green-500"
             testId="top-performers-card"
             onClick={() => setShowTopPerformers(true)}
           />
@@ -198,7 +198,7 @@ export default function Dashboard() {
             icon={AlertTriangle}
             title="Under Performers"
             value={stats.underPerformers}
-            color="bg-purple-500"
+            color="bg-red-500"
             testId="under-performers-card"
             onClick={() => setShowUnderPerformers(true)}
           />
