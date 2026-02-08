@@ -459,12 +459,12 @@ export default function Dashboard() {
       {showTopPerformers && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowTopPerformers(false)}>
           <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="bg-gradient-to-r from-yellow-400 to-yellow-500 p-6 flex items-center justify-between">
+            <div className="bg-gradient-to-r from-green-500 to-green-600 p-6 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Award className="w-8 h-8 text-white" />
                 <div>
                   <h2 className="text-2xl font-serif font-bold text-white">Top Performers</h2>
-                  <p className="text-yellow-100 text-sm">{selectedQuarter} {selectedYear} • Score ≥ {quarterSettings?.a_server_min_score || 80}</p>
+                  <p className="text-green-100 text-sm">{selectedQuarter} {selectedYear} • Score ≥ {quarterSettings?.a_server_min_score || 80}</p>
                 </div>
               </div>
               <button onClick={() => setShowTopPerformers(false)} className="text-white hover:bg-white/20 rounded-full p-2 transition-colors">
@@ -492,16 +492,16 @@ export default function Dashboard() {
                   }
                   
                   return (
-                    <div key={emp.id} className="flex items-start gap-4 p-4 border-b border-gray-100 last:border-0 hover:bg-yellow-50 transition-colors rounded-lg">
+                    <div key={emp.id} className="flex items-start gap-4 p-4 border-b border-gray-100 last:border-0 hover:bg-green-50 transition-colors rounded-lg">
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${
-                        idx === 0 ? 'bg-yellow-500' : idx === 1 ? 'bg-gray-400' : idx === 2 ? 'bg-amber-600' : 'bg-blue-400'
+                        idx === 0 ? 'bg-yellow-500' : idx === 1 ? 'bg-gray-400' : idx === 2 ? 'bg-amber-600' : 'bg-green-500'
                       }`}>
                         {idx + 1}
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center justify-between">
                           <h3 className="font-serif font-bold text-lg">{emp.name}</h3>
-                          <span className="text-xl font-bold text-yellow-600">{score.toFixed(1)}</span>
+                          <span className="text-xl font-bold text-green-600">{score.toFixed(1)}</span>
                         </div>
                         <p className="text-sm text-gray-500 capitalize mb-2">{emp.job_title || 'Server'}</p>
                         <p className="text-sm text-gray-700 italic">"{justification}"</p>
@@ -521,12 +521,12 @@ export default function Dashboard() {
       {showUnderPerformers && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowUnderPerformers(false)}>
           <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="bg-gradient-to-r from-purple-500 to-purple-600 p-6 flex items-center justify-between">
+            <div className="bg-gradient-to-r from-red-500 to-red-600 p-6 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <AlertTriangle className="w-8 h-8 text-white" />
                 <div>
                   <h2 className="text-2xl font-serif font-bold text-white">Under Performers</h2>
-                  <p className="text-purple-100 text-sm">{selectedQuarter} {selectedYear} • Score &lt; {quarterSettings?.b_server_min_score || 70}</p>
+                  <p className="text-red-100 text-sm">{selectedQuarter} {selectedYear} • Score &lt; {quarterSettings?.b_server_min_score || 70}</p>
                 </div>
               </div>
               <button onClick={() => setShowUnderPerformers(false)} className="text-white hover:bg-white/20 rounded-full p-2 transition-colors">
@@ -562,15 +562,15 @@ export default function Dashboard() {
                   justification += `Coaching focus: ${weakAreas[0] || 'overall upselling techniques'} and guest engagement.`;
                   
                   return (
-                    <div key={emp.id} className="p-4 border-b border-gray-100 last:border-0 hover:bg-purple-50 transition-colors rounded-lg">
+                    <div key={emp.id} className="p-4 border-b border-gray-100 last:border-0 hover:bg-red-50 transition-colors rounded-lg">
                       <div className="flex items-start gap-4">
-                        <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center">
-                          <span className="text-purple-600 font-bold">{emp.name.charAt(0)}</span>
+                        <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                          <span className="text-red-600 font-bold">{emp.name.charAt(0)}</span>
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center justify-between mb-2">
                             <h3 className="font-serif font-bold text-lg">{emp.name}</h3>
-                            <span className="text-xl font-bold text-purple-600">{score.toFixed(1)}</span>
+                            <span className="text-xl font-bold text-red-600">{score.toFixed(1)}</span>
                           </div>
                           
                           {/* Mini Profile */}
@@ -593,7 +593,7 @@ export default function Dashboard() {
                             </div>
                           </div>
                           
-                          <p className="text-sm text-gray-700 italic bg-purple-50 p-3 rounded-lg">"{justification}"</p>
+                          <p className="text-sm text-gray-700 italic bg-red-50 p-3 rounded-lg">"{justification}"</p>
                         </div>
                       </div>
                     </div>
