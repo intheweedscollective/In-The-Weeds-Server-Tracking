@@ -8,14 +8,15 @@ const colorMap = {
   'bg-red-500': { accent: '#D12E2E', iconBg: 'bg-red-100', iconColor: 'text-red-600' },
 };
 
-export default function StatsCard({ icon: Icon, title, value, color, testId, linkTo }) {
+export default function StatsCard({ icon: Icon, title, value, color, testId, linkTo, onClick }) {
   const colorConfig = colorMap[color] || colorMap['bg-blue-500'];
   
   const cardContent = (
     <div 
-      className={`kpi-card ${linkTo ? 'cursor-pointer' : ''}`}
+      className={`kpi-card ${linkTo || onClick ? 'cursor-pointer hover:scale-105 transition-transform' : ''}`}
       style={{ '--kpi-accent': colorConfig.accent }}
       data-testid={testId}
+      onClick={onClick}
     >
       <div 
         className={`w-14 h-14 rounded-full ${colorConfig.iconBg} flex items-center justify-center mb-3`}
