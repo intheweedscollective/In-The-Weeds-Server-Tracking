@@ -33,22 +33,27 @@ export default function Dashboard() {
   const calculateStats = useCallback(() => {
     const total = employees.length;
     const avgScore = total > 0 ? employees.reduce((sum, emp) => sum + (emp.total_score || 0), 0) / total : 0;
-    const topPerformers = employees.filter(emp => (emp.total_score || 0) >= 85).length;
     
-    // Calculate A-Servers based on score threshold from settings, fallback to 80
+    // Get thresholds from settings
     const aServerThreshold = quarterSettings?.a_server_min_score || 80;
-    const aServers = employees.filter(emp => {
+    const bServerThreshold = quarterSettings?.b_server_min_score || 70;
+    
+    // Top performers: score >= A-Server threshold
+    const topPerformers = employees.filter(emp => (emp.total_score || 0) >= aServerThreshold).length;
+    
+    // Under performers: score < B-Server threshold (C-Servers)
+    const underPerformers = employees.filter(emp => {
       const score = emp.total_score || 0;
       const jobTitle = (emp.job_title || '').toLowerCase();
-      // Count as A-Server if: score >= threshold AND is a server (not bartender/trainer)
-      return score >= aServerThreshold && jobTitle === 'server';
+      // Only count servers as under performers (not trainers/bartenders)
+      return score < bServerThreshold && jobTitle === 'server';
     }).length;
 
     setStats({
       totalEmployees: total,
       avgTotalScore: avgScore.toFixed(1),
       topPerformers,
-      aServers
+      underPerformers
     });
   }, [employees, quarterSettings]);
 
