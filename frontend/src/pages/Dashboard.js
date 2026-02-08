@@ -62,7 +62,9 @@ export default function Dashboard() {
   const fetchEmployeesForQuarter = useCallback(async () => {
     try {
       const response = await axios.get(`${API}/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`);
-      setEmployees(response.data);
+      // Sort by total_score descending for display
+      const sorted = (response.data || []).sort((a, b) => (b.total_score || 0) - (a.total_score || 0));
+      setEmployees(sorted);
     } catch (error) {
       console.error("Error fetching employees:", error);
     }
