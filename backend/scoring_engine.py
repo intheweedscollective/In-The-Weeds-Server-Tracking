@@ -550,10 +550,12 @@ def calculate_total_score(employee: EmployeeV2, settings: QuarterSettings) -> Em
     Final Score = Weighted(PPA + LSC + LBW + Glass + CV) 
                   + Review Tracker Bonus 
                   + Metric Bonuses
+                  + CV Penalty (if negative)
                   - DAR Penalties
     
     Each metric score is CAPPED at 100 before weighting.
     Bonuses are added on top of the capped weighted score.
+    CV Penalty is applied directly (negative value subtracts from total).
     """
     # Cap each metric score at 100 before applying weight
     # This ensures each category has a max contribution:
@@ -575,10 +577,12 @@ def calculate_total_score(employee: EmployeeV2, settings: QuarterSettings) -> Em
     )
     
     # Pre-DAR score (shown in rankings)
+    # CV penalty is applied here as a direct point deduction
     employee.pre_dar_score = round(
         employee.weighted_score + 
         (employee.total_metric_bonus or 0) +
-        (employee.review_tracker_bonus or 0),
+        (employee.review_tracker_bonus or 0) +
+        (employee.cv_penalty or 0),  # Negative CV directly subtracts
         2
     )
     
