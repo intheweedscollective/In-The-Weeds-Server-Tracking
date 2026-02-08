@@ -351,50 +351,65 @@ export default function Dashboard() {
               </div>
               
               <div className="space-y-3">
-                {employees.slice(0, 5).map((employee, idx) => (
-                  <div 
-                    key={employee.id} 
-                    className="flex items-center justify-between p-4 rounded-xl border-2 border-gray-200 bg-gray-50 hover:bg-white transition-colors"
-                    data-testid={`ranking-card-${employee.id}`}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-serif font-bold text-white ${
-                        idx === 0 ? 'bg-yellow-500' : idx === 1 ? 'bg-gray-400' : idx === 2 ? 'bg-amber-600' : 'bg-blue-400'
-                      }`}>
-                        {idx + 1}
-                      </div>
-                      <div>
-                        <h3 className="font-serif font-bold text-foreground">
-                          {employee.name}
-                        </h3>
-                        <p className="text-gray-500 text-sm">{employee.tier_label || employee.job_title || 'Server'}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <div className="text-xl font-serif font-bold text-primary">
-                          {formatNumber(employee.total_score || 0)}
+                {employees.slice(0, 5).map((employee, idx) => {
+                  // Derive tier from score and job title
+                  const score = employee.total_score || 0;
+                  const jobTitle = (employee.job_title || 'server').toLowerCase();
+                  const aMin = quarterSettings?.a_server_min_score || 80;
+                  const bMin = quarterSettings?.b_server_min_score || 70;
+                  
+                  let tierLabel, colorClass;
+                  if (jobTitle.includes('trainer')) {
+                    tierLabel = 'Trainer';
+                    colorClass = 'bg-purple-100 text-purple-800';
+                  } else if (jobTitle.includes('bartender')) {
+                    tierLabel = 'Bartender';
+                    colorClass = 'bg-blue-100 text-blue-800';
+                  } else if (score >= aMin) {
+                    tierLabel = 'A-Server';
+                    colorClass = 'bg-green-100 text-green-800';
+                  } else if (score >= bMin) {
+                    tierLabel = 'B-Server';
+                    colorClass = 'bg-yellow-100 text-yellow-800';
+                  } else {
+                    tierLabel = 'C-Server';
+                    colorClass = 'bg-red-100 text-red-800';
+                  }
+                  
+                  return (
+                    <div 
+                      key={employee.id} 
+                      className="flex items-center justify-between p-4 rounded-xl border-2 border-gray-200 bg-gray-50 hover:bg-white transition-colors"
+                      data-testid={`ranking-card-${employee.id}`}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-serif font-bold text-white ${
+                          idx === 0 ? 'bg-yellow-500' : idx === 1 ? 'bg-gray-400' : idx === 2 ? 'bg-amber-600' : 'bg-blue-400'
+                        }`}>
+                          {idx + 1}
                         </div>
-                        <div className="text-xs text-gray-500">Total Score</div>
+                        <div>
+                          <h3 className="font-serif font-bold text-foreground">
+                            {employee.name}
+                          </h3>
+                          <p className="text-gray-500 text-sm capitalize">{employee.job_title || 'Server'}</p>
+                        </div>
                       </div>
-                      {(() => {
-                        const tierOrJob = employee.tier_label || employee.job_title || 'Server';
-                        const tierLower = tierOrJob.toLowerCase();
-                        let colorClass = 'bg-red-100 text-red-800'; // default C-Server
-                        if (tierLower.includes('trainer')) colorClass = 'bg-purple-100 text-purple-800';
-                        else if (tierLower.includes('bartender')) colorClass = 'bg-blue-100 text-blue-800';
-                        else if (tierLower.includes('a-server') || tierLower === 'a') colorClass = 'bg-green-100 text-green-800';
-                        else if (tierLower.includes('b-server') || tierLower === 'b') colorClass = 'bg-yellow-100 text-yellow-800';
-                        return (
-                          <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize ${colorClass}`}>
-                            {tierOrJob}
-                          </span>
-                        );
-                      })()}
+                      
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <div className="text-xl font-serif font-bold text-primary">
+                            {formatNumber(score)}
+                          </div>
+                          <div className="text-xs text-gray-500">Total Score</div>
+                        </div>
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${colorClass}`}>
+                          {tierLabel}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
               
               {employees.length > 5 && (
