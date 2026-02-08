@@ -426,26 +426,99 @@ export default function FullRankings() {
                         
                         {/* Expanded Details Row */}
                         {isExpanded && (
-                          <tr key={`${employee.employee_id}-details`} className="bg-blue-50">
-                            <td colSpan={10} className="px-6 py-4">
-                              <div className="grid grid-cols-4 gap-4 text-sm">
-                                <div>
-                                  <span className="text-gray-500">Performance Tier:</span>
-                                  <span className="ml-2 font-semibold">{employee.performance_tier || 'N/A'}</span>
-                                </div>
-                                <div>
-                                  <span className="text-gray-500">PPA Score:</span>
-                                  <span className="ml-2 font-semibold">{formatNumber(employee.ppa_points?.earned)} pts</span>
-                                </div>
-                                <div>
-                                  <span className="text-gray-500">LBW Score:</span>
-                                  <span className="ml-2 font-semibold">{formatNumber(employee.lbw_points?.earned)} pts</span>
-                                </div>
-                                <div>
-                                  <span className="text-gray-500">Total Bonus:</span>
-                                  <span className="ml-2 font-semibold text-green-600">+{formatNumber(employee.bonus_points)}</span>
-                                </div>
-                              </div>
+                          <tr key={`${employee.employee_id}-details`} className="bg-gradient-to-r from-blue-50 to-indigo-50">
+                            <td colSpan={10} className="px-6 py-5">
+                              {(() => {
+                                const emp = getEmployeeDetails(employee.employee_id);
+                                const ranks = metricRankings[employee.employee_id] || {};
+                                const total = employees.length;
+                                const benchmarks = quarterSettings || {};
+                                
+                                const metrics = [
+                                  {
+                                    label: 'PPA',
+                                    value: `$${(emp.ppa || 0).toFixed(2)}`,
+                                    benchmark: `$${benchmarks.benchmark_ppa || 55}`,
+                                    rank: ranks.ppa,
+                                    total,
+                                    color: (emp.ppa || 0) >= (benchmarks.benchmark_ppa || 55) ? 'text-green-600' : 'text-red-600'
+                                  },
+                                  {
+                                    label: 'LBW/Guest',
+                                    value: `$${(emp.lbw_per_guest || 0).toFixed(2)}`,
+                                    benchmark: `$${benchmarks.benchmark_lbw || 8}`,
+                                    rank: ranks.lbw,
+                                    total,
+                                    color: (emp.lbw_per_guest || 0) >= (benchmarks.benchmark_lbw || 8) ? 'text-green-600' : 'text-red-600'
+                                  },
+                                  {
+                                    label: 'Glassware/Guest',
+                                    value: `$${(emp.glassware_per_guest || 0).toFixed(2)}`,
+                                    benchmark: `$${benchmarks.benchmark_glass || 1.25}`,
+                                    rank: ranks.glass,
+                                    total,
+                                    color: (emp.glassware_per_guest || 0) >= (benchmarks.benchmark_glass || 1.25) ? 'text-green-600' : 'text-red-600'
+                                  },
+                                  {
+                                    label: 'Guests/LSC',
+                                    value: (emp.guests_per_lsc || 0).toFixed(1),
+                                    benchmark: `≤${benchmarks.benchmark_lsc || 100}`,
+                                    rank: ranks.lsc,
+                                    total,
+                                    color: (emp.guests_per_lsc || 999) <= (benchmarks.benchmark_lsc || 100) ? 'text-green-600' : 'text-red-600'
+                                  },
+                                  {
+                                    label: 'CV Score',
+                                    value: emp.cv_score || 0,
+                                    benchmark: benchmarks.benchmark_cv || 5,
+                                    rank: ranks.cv,
+                                    total,
+                                    color: (emp.cv_score || 0) >= 0 ? 'text-green-600' : 'text-red-600'
+                                  }
+                                ];
+                                
+                                return (
+                                  <div className="space-y-4">
+                                    <div className="flex items-center gap-2 mb-3">
+                                      <span className="text-lg font-serif font-bold text-gray-700">Metric Breakdown</span>
+                                      <span className="text-sm text-gray-500">• {employee.name}</span>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-5 gap-4">
+                                      {metrics.map((m, i) => (
+                                        <div key={i} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                                          <div className="text-xs font-semibold text-gray-500 uppercase mb-2">{m.label}</div>
+                                          <div className={`text-2xl font-bold ${m.color}`}>{m.value}</div>
+                                          <div className="text-xs text-gray-400 mt-1">Benchmark: {m.benchmark}</div>
+                                          <div className="mt-2 pt-2 border-t border-gray-100">
+                                            <span className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-semibold">
+                                              {m.rank}{m.rank === 1 ? 'st' : m.rank === 2 ? 'nd' : m.rank === 3 ? 'rd' : 'th'} of {m.total}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                    
+                                    {/* Summary Row */}
+                                    <div className="flex items-center justify-between bg-white rounded-xl p-4 shadow-sm border border-gray-100 mt-4">
+                                      <div>
+                                        <span className="text-sm text-gray-500">Performance Tier:</span>
+                                        <span className={`ml-2 px-3 py-1 rounded-full text-sm font-bold ${tierStyle.bg} ${tierStyle.text}`}>
+                                          {employee.performance_tier || employee.tier_label}
+                                        </span>
+                                      </div>
+                                      <div>
+                                        <span className="text-sm text-gray-500">Total Bonus:</span>
+                                        <span className="ml-2 text-lg font-bold text-green-600">+{formatNumber(employee.bonus_points)}</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-sm text-gray-500">Overall Rank:</span>
+                                        <span className="ml-2 text-lg font-bold text-primary">#{employee.position} of {totalEmployees}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
                             </td>
                           </tr>
                         )}
