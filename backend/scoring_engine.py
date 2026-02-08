@@ -111,6 +111,7 @@ class EmployeeV2(BaseModel):
     cv_raw_points: Optional[float] = None      # Raw CV calculation before cap
     cv_score: Optional[float] = None           # Capped CV score (min -6)
     score_cv: Optional[float] = None           # Normalized for weighting (0-100 scale)
+    cv_penalty: Optional[float] = None         # Negative CV penalty (applied to final score)
     
     # === REVIEW TRACKER BONUS ===
     review_tracker_bonus: Optional[float] = None
