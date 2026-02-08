@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { Users, FileText, TrendingUp, Award, Target, Fish, Settings, Camera, Download } from "lucide-react";
+import { Users, FileText, TrendingUp, Award, Target, Fish, Settings, Camera, Download, X, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import Navigation from "../components/Navigation";
@@ -18,12 +18,16 @@ export default function Dashboard() {
   const [selectedQuarter, setSelectedQuarter] = useState("Q1");
   const [quarterSettings, setQuarterSettings] = useState(null);
   const [latestSnapshot, setLatestSnapshot] = useState(null);
+  
+  // Modal states
+  const [showTopPerformers, setShowTopPerformers] = useState(false);
+  const [showUnderPerformers, setShowUnderPerformers] = useState(false);
 
   const [stats, setStats] = useState({
     totalEmployees: 0,
     avgTotalScore: 0,
     topPerformers: 0,
-    aServers: 0
+    underPerformers: 0
   });
 
   const calculateStats = useCallback(() => {
