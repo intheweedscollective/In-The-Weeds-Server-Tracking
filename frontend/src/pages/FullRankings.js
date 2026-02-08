@@ -21,6 +21,8 @@ const TIER_STYLES = {
 
 export default function FullRankings() {
   const [rankings, setRankings] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [quarterSettings, setQuarterSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [selectedYear, setSelectedYear] = useState(2026);
@@ -34,12 +36,17 @@ export default function FullRankings() {
     setLoading(true);
     try {
       const tierParam = tierFilter !== "all" ? `&tier_filter=${tierFilter}` : "";
-      const response = await axios.get(
-        `${API}/v2/full-rankings/${selectedYear}/${selectedQuarter}?${tierParam}`
-      );
-      setRankings(response.data.rankings || []);
-      setTotalEmployees(response.data.total_employees || 0);
-      setThresholds(response.data.tier_thresholds || { a_server_min: 85.1, b_server_min: 70.1 });
+      const [rankingsRes, employeesRes, settingsRes] = await Promise.all([
+        axios.get(`${API}/v2/full-rankings/${selectedYear}/${selectedQuarter}?${tierParam}`),
+        axios.get(`${API}/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`),
+        axios.get(`${API}/v2/quarter-settings/${selectedYear}/${selectedQuarter}`).catch(() => null)
+      ]);
+      
+      setRankings(rankingsRes.data.rankings || []);
+      setEmployees(employeesRes.data || []);
+      setQuarterSettings(settingsRes?.data || null);
+      setTotalEmployees(rankingsRes.data.total_employees || 0);
+      setThresholds(rankingsRes.data.tier_thresholds || { a_server_min: 85.1, b_server_min: 70.1 });
     } catch (error) {
       console.error("Error fetching rankings:", error);
       if (error.response?.status === 404) {
@@ -52,6 +59,40 @@ export default function FullRankings() {
       setLoading(false);
     }
   }, [selectedYear, selectedQuarter, tierFilter]);
+
+  // Calculate metric rankings for all employees
+  const getMetricRankings = useCallback(() => {
+    if (!employees.length) return {};
+    
+    const metrics = {
+      ppa: employees.map(e => ({ id: e.id, name: e.name, value: e.ppa || 0 })).sort((a, b) => b.value - a.value),
+      lbw: employees.map(e => ({ id: e.id, name: e.name, value: e.lbw_per_guest || 0 })).sort((a, b) => b.value - a.value),
+      glass: employees.map(e => ({ id: e.id, name: e.name, value: e.glassware_per_guest || 0 })).sort((a, b) => b.value - a.value),
+      lsc: employees.map(e => ({ id: e.id, name: e.name, value: e.guests_per_lsc || 999 })).sort((a, b) => a.value - b.value), // Lower is better for LSC
+      cv: employees.map(e => ({ id: e.id, name: e.name, value: e.cv_score || 0 })).sort((a, b) => b.value - a.value),
+    };
+    
+    // Create lookup: employeeId -> { ppa: rank, lbw: rank, ... }
+    const rankLookup = {};
+    employees.forEach(e => {
+      rankLookup[e.id] = {
+        ppa: metrics.ppa.findIndex(m => m.id === e.id) + 1,
+        lbw: metrics.lbw.findIndex(m => m.id === e.id) + 1,
+        glass: metrics.glass.findIndex(m => m.id === e.id) + 1,
+        lsc: metrics.lsc.findIndex(m => m.id === e.id) + 1,
+        cv: metrics.cv.findIndex(m => m.id === e.id) + 1,
+      };
+    });
+    
+    return rankLookup;
+  }, [employees]);
+  
+  const metricRankings = getMetricRankings();
+
+  // Get employee details by ID
+  const getEmployeeDetails = (employeeId) => {
+    return employees.find(e => e.id === employeeId) || {};
+  };
 
   useEffect(() => {
     fetchRankings();
