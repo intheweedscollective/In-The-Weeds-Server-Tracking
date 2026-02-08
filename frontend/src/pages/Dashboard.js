@@ -454,6 +454,166 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      {/* Top Performers Modal */}
+      {showTopPerformers && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowTopPerformers(false)}>
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="bg-gradient-to-r from-yellow-400 to-yellow-500 p-6 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Award className="w-8 h-8 text-white" />
+                <div>
+                  <h2 className="text-2xl font-serif font-bold text-white">Top Performers</h2>
+                  <p className="text-yellow-100 text-sm">{selectedQuarter} {selectedYear} • Score ≥ {quarterSettings?.a_server_min_score || 80}</p>
+                </div>
+              </div>
+              <button onClick={() => setShowTopPerformers(false)} className="text-white hover:bg-white/20 rounded-full p-2 transition-colors">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[60vh]">
+              {employees
+                .filter(emp => (emp.total_score || 0) >= (quarterSettings?.a_server_min_score || 80))
+                .map((emp, idx) => {
+                  const score = emp.total_score || 0;
+                  const aMin = quarterSettings?.a_server_min_score || 80;
+                  const jobTitle = (emp.job_title || 'server').toLowerCase();
+                  
+                  // Generate justification
+                  let justification = '';
+                  if (jobTitle.includes('trainer')) {
+                    justification = `As a Trainer with a ${score.toFixed(1)} score, ${emp.name} demonstrates leadership and mentoring abilities that elevate the entire team.`;
+                  } else if (jobTitle.includes('bartender')) {
+                    justification = `${emp.name} excels behind the bar with a ${score.toFixed(1)} score, showing strong upselling skills and customer engagement.`;
+                  } else if (score >= aMin + 10) {
+                    justification = `Exceptional performance with a ${score.toFixed(1)} score. ${emp.name} consistently exceeds expectations across all metrics.`;
+                  } else {
+                    justification = `Solid A-Server performance at ${score.toFixed(1)}. ${emp.name} meets high standards in PPA, LBW, and guest satisfaction.`;
+                  }
+                  
+                  return (
+                    <div key={emp.id} className="flex items-start gap-4 p-4 border-b border-gray-100 last:border-0 hover:bg-yellow-50 transition-colors rounded-lg">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${
+                        idx === 0 ? 'bg-yellow-500' : idx === 1 ? 'bg-gray-400' : idx === 2 ? 'bg-amber-600' : 'bg-blue-400'
+                      }`}>
+                        {idx + 1}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-serif font-bold text-lg">{emp.name}</h3>
+                          <span className="text-xl font-bold text-yellow-600">{score.toFixed(1)}</span>
+                        </div>
+                        <p className="text-sm text-gray-500 capitalize mb-2">{emp.job_title || 'Server'}</p>
+                        <p className="text-sm text-gray-700 italic">"{justification}"</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              {employees.filter(emp => (emp.total_score || 0) >= (quarterSettings?.a_server_min_score || 80)).length === 0 && (
+                <p className="text-center text-gray-500 py-8">No top performers found for this quarter.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Under Performers Modal */}
+      {showUnderPerformers && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowUnderPerformers(false)}>
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="bg-gradient-to-r from-purple-500 to-purple-600 p-6 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="w-8 h-8 text-white" />
+                <div>
+                  <h2 className="text-2xl font-serif font-bold text-white">Under Performers</h2>
+                  <p className="text-purple-100 text-sm">{selectedQuarter} {selectedYear} • Score &lt; {quarterSettings?.b_server_min_score || 70}</p>
+                </div>
+              </div>
+              <button onClick={() => setShowUnderPerformers(false)} className="text-white hover:bg-white/20 rounded-full p-2 transition-colors">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[60vh]">
+              {employees
+                .filter(emp => {
+                  const score = emp.total_score || 0;
+                  const jobTitle = (emp.job_title || '').toLowerCase();
+                  return score < (quarterSettings?.b_server_min_score || 70) && jobTitle === 'server';
+                })
+                .map((emp, idx) => {
+                  const score = emp.total_score || 0;
+                  const bMin = quarterSettings?.b_server_min_score || 70;
+                  const ppa = emp.ppa || 0;
+                  const lbw = emp.lbw_per_guest || 0;
+                  const ppaBenchmark = quarterSettings?.benchmark_ppa || 55;
+                  const lbwBenchmark = quarterSettings?.benchmark_lbw || 8;
+                  
+                  // Generate specific justification based on weak areas
+                  let weakAreas = [];
+                  if (ppa < ppaBenchmark * 0.8) weakAreas.push('PPA');
+                  if (lbw < lbwBenchmark * 0.8) weakAreas.push('LBW');
+                  if ((emp.glassware_per_guest || 0) < 1) weakAreas.push('Glassware');
+                  if ((emp.cv_score || 0) < 0) weakAreas.push('Customer Voice');
+                  
+                  let justification = `${emp.name} scored ${score.toFixed(1)}, which is ${(bMin - score).toFixed(1)} points below the B-Server threshold. `;
+                  if (weakAreas.length > 0) {
+                    justification += `Key areas for improvement: ${weakAreas.join(', ')}. `;
+                  }
+                  justification += `Coaching focus: ${weakAreas[0] || 'overall upselling techniques'} and guest engagement.`;
+                  
+                  return (
+                    <div key={emp.id} className="p-4 border-b border-gray-100 last:border-0 hover:bg-purple-50 transition-colors rounded-lg">
+                      <div className="flex items-start gap-4">
+                        <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center">
+                          <span className="text-purple-600 font-bold">{emp.name.charAt(0)}</span>
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between mb-2">
+                            <h3 className="font-serif font-bold text-lg">{emp.name}</h3>
+                            <span className="text-xl font-bold text-purple-600">{score.toFixed(1)}</span>
+                          </div>
+                          
+                          {/* Mini Profile */}
+                          <div className="grid grid-cols-4 gap-2 mb-3 text-center">
+                            <div className="bg-gray-100 rounded p-2">
+                              <div className="text-sm font-bold">${ppa.toFixed(0)}</div>
+                              <div className="text-xs text-gray-500">PPA</div>
+                            </div>
+                            <div className="bg-gray-100 rounded p-2">
+                              <div className="text-sm font-bold">${lbw.toFixed(2)}</div>
+                              <div className="text-xs text-gray-500">LBW/G</div>
+                            </div>
+                            <div className="bg-gray-100 rounded p-2">
+                              <div className="text-sm font-bold">${(emp.glassware_per_guest || 0).toFixed(2)}</div>
+                              <div className="text-xs text-gray-500">Glass</div>
+                            </div>
+                            <div className="bg-gray-100 rounded p-2">
+                              <div className="text-sm font-bold">{emp.cv_score || 0}</div>
+                              <div className="text-xs text-gray-500">CV</div>
+                            </div>
+                          </div>
+                          
+                          <p className="text-sm text-gray-700 italic bg-purple-50 p-3 rounded-lg">"{justification}"</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              {employees.filter(emp => {
+                const score = emp.total_score || 0;
+                const jobTitle = (emp.job_title || '').toLowerCase();
+                return score < (quarterSettings?.b_server_min_score || 70) && jobTitle === 'server';
+              }).length === 0 && (
+                <div className="text-center py-8">
+                  <Award className="w-16 h-16 text-green-300 mx-auto mb-4" />
+                  <p className="text-gray-500">Great news! No under performers this quarter.</p>
+                  <p className="text-sm text-gray-400">All servers are meeting or exceeding expectations.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
