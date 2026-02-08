@@ -188,18 +188,19 @@ export default function Dashboard() {
           />
           <StatsCard 
             icon={Award}
-            title="A-Servers"
-            value={stats.aServers}
-            color="bg-yellow-500"
-            testId="a-servers-card"
-            linkTo="/rankings"
-          />
-          <StatsCard 
-            icon={Target}
             title="Top Performers"
             value={stats.topPerformers}
-            color="bg-purple-500"
+            color="bg-yellow-500"
             testId="top-performers-card"
+            onClick={() => setShowTopPerformers(true)}
+          />
+          <StatsCard 
+            icon={AlertTriangle}
+            title="Under Performers"
+            value={stats.underPerformers}
+            color="bg-purple-500"
+            testId="under-performers-card"
+            onClick={() => setShowUnderPerformers(true)}
           />
         </div>
 
