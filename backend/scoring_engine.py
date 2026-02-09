@@ -395,12 +395,15 @@ def calculate_customer_voice_score(employee: EmployeeV2) -> EmployeeV2:
     - Promoters (9-10): +1 point each
     - Passives (7-8): 0 points
     - Detractors (0-6): -2 points each
-    - Review Mentions: +1 point each (combined with CV)
+    - Review Mentions: 5 mentions = 1 point (combined with CV)
     
     Quarterly Cap: +10 / -6 points
     """
-    # Calculate raw CV points (now includes review mentions as positives)
-    promoter_points = (employee.cv_promoters + employee.review_mentions) * CV_PROMOTER_POINTS
+    # Calculate raw CV points
+    # Review mentions: 5 mentions = 1 point (integer division)
+    review_points = employee.review_mentions // 5
+    
+    promoter_points = (employee.cv_promoters + review_points) * CV_PROMOTER_POINTS
     passive_points = employee.cv_passives * CV_PASSIVE_POINTS
     detractor_points = employee.cv_detractors * CV_DETRACTOR_POINTS
     
