@@ -491,17 +491,17 @@ def calculate_normalized_scores(employee: EmployeeV2, settings: QuarterSettings)
         employee.score_lsc = 0
     
     # Customer Voice Score - Zero-Based with Penalty Floor
-    # If CV = 0 → 0 points (no feedback = no reward)
-    # If CV > 0 → Scale 0-100 (where +20 combined = 100)
-    # If CV < 0 → Store as negative penalty (applied separately in weighted score)
-    cv_combined = (employee.cv_score or 0) + (employee.review_tracker_bonus or 0)
+    # CV + Review Mentions are now combined
+    # If combined = 0 → 0 points (no feedback = no reward)
+    # If combined > 0 → Scale 0-100 (where +10 = 100, since that's the cap)
+    # If combined < 0 → Store as negative penalty (applied separately)
+    cv_combined = employee.cv_score or 0  # Already includes review mentions
     
     if cv_combined > 0:
-        # Positive CV: Scale from 0-100 where +20 = 100
-        employee.score_cv = round((cv_combined / 20) * 100, 2)
+        # Positive CV: Scale from 0-100 where +10 (cap) = 100
+        employee.score_cv = round((cv_combined / 10) * 100, 2)
     elif cv_combined < 0:
         # Negative CV: Store as penalty (will be subtracted in final score)
-        # score_cv stays at 0, penalty applied via cv_penalty field
         employee.score_cv = 0
         employee.cv_penalty = round(cv_combined, 2)  # Negative value
     else:
