@@ -542,39 +542,34 @@ def calculate_total_score(employee: EmployeeV2, settings: QuarterSettings) -> Em
     Final Score = Weighted(PPA + LSC + LBW + Glass + CV) 
                   + Review Tracker Bonus 
                   + Metric Bonuses
-                  + CV Penalty (if negative)
+                  + CV Raw Points (direct addition)
                   - DAR Penalties
     
-    Each metric score is CAPPED at 100 before weighting.
-    Bonuses are added on top of the capped weighted score.
-    CV Penalty is applied directly (negative value subtracts from total).
+    Weights: PPA 25%, LSC 25%, LBW 20%, Glass 15% = 85% base
+    CV: Raw points added directly (not weighted)
     """
     # Cap each metric score at 100 before applying weight
-    # This ensures each category has a max contribution:
-    # PPA: 25 pts, LSC: 25 pts, LBW: 20 pts, Glass: 15 pts, CV: 15 pts = 100 base
+    # Base weighted score: PPA + LSC + LBW + Glass = 85 pts max
     capped_ppa = min((employee.score_ppa or 0), 100)
     capped_lbw = min((employee.score_lbw or 0), 100)
     capped_glass = min((employee.score_glass or 0), 100)
     capped_lsc = min((employee.score_lsc or 0), 100)
-    capped_cv = min((employee.score_cv or 0), 100)
     
-    # Calculate weighted score from capped metrics
+    # Calculate weighted score from capped metrics (no CV weight - it's added raw)
     employee.weighted_score = round(
         capped_ppa * settings.weight_ppa +
         capped_lbw * settings.weight_lbw +
         capped_glass * settings.weight_glass +
-        capped_lsc * settings.weight_lsc +
-        capped_cv * settings.weight_cv,
+        capped_lsc * settings.weight_lsc,
         2
     )
     
     # Pre-DAR score (shown in rankings)
-    # CV penalty is applied here as a direct point deduction
+    # CV is added as raw points (score_cv already contains raw value)
     employee.pre_dar_score = round(
         employee.weighted_score + 
         (employee.total_metric_bonus or 0) +
-        (employee.review_tracker_bonus or 0) +
-        (employee.cv_penalty or 0),  # Negative CV directly subtracts
+        (employee.score_cv or 0),  # CV raw points added directly
         2
     )
     
