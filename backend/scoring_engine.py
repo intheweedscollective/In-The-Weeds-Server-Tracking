@@ -395,11 +395,12 @@ def calculate_customer_voice_score(employee: EmployeeV2) -> EmployeeV2:
     - Promoters (9-10): +1 point each
     - Passives (7-8): 0 points
     - Detractors (0-6): -2 points each
+    - Review Mentions: +1 point each (combined with CV)
     
     Quarterly Cap: +10 / -6 points
     """
-    # Calculate raw CV points
-    promoter_points = employee.cv_promoters * CV_PROMOTER_POINTS
+    # Calculate raw CV points (now includes review mentions as positives)
+    promoter_points = (employee.cv_promoters + employee.review_mentions) * CV_PROMOTER_POINTS
     passive_points = employee.cv_passives * CV_PASSIVE_POINTS
     detractor_points = employee.cv_detractors * CV_DETRACTOR_POINTS
     
@@ -415,18 +416,11 @@ def calculate_customer_voice_score(employee: EmployeeV2) -> EmployeeV2:
 
 def calculate_review_tracker_bonus(employee: EmployeeV2) -> EmployeeV2:
     """
-    Calculate Review Tracker bonus from external platform mentions.
-    
-    - Every 5 positive named mentions = +1 bonus point
-    - Capped at 10 points max per quarter
-    - No negative penalties from external platforms
+    Review Tracker bonus is now combined into CV score directly.
+    This function is kept for backwards compatibility but sets bonus to 0.
     """
-    if employee.review_mentions > 0:
-        bonus = employee.review_mentions // RT_MENTIONS_PER_POINT
-        # Cap at RT_BONUS_MAX (5 pts)
-        employee.review_tracker_bonus = round(min(bonus, RT_BONUS_MAX), 2)
-    else:
-        employee.review_tracker_bonus = 0
+    # Review mentions are now added to CV score directly
+    employee.review_tracker_bonus = 0
     
     return employee
 
