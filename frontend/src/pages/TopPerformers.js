@@ -201,45 +201,54 @@ export default function TopPerformers() {
 
         {/* Summary Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10 print:mb-6">
-          <div className="bubba-card p-5">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
-                <Users className="w-6 h-6 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-serif font-bold text-primary">{employees.length}</p>
-                <p className="text-xs text-gray-500 font-semibold uppercase">Total Crew</p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bubba-card p-5">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center">
-                <Trophy className="w-6 h-6 text-yellow-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-serif font-bold text-yellow-600">
-                  {employees.filter(emp => (emp.pre_dar_score || 0) >= 90).length}
-                </p>
-                <p className="text-xs text-gray-500 font-semibold uppercase">Excellent</p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bubba-card p-5">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
-                <Award className="w-6 h-6 text-green-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-serif font-bold text-green-600">
-                  {employees.filter(emp => (emp.pre_dar_score || 0) >= 80).length}
-                </p>
-                <p className="text-xs text-gray-500 font-semibold uppercase">Above Average+</p>
-              </div>
-            </div>
-          </div>
+          {(() => {
+            const avgScore = employees.length > 0 
+              ? employees.reduce((sum, emp) => sum + (emp.pre_dar_score || emp.total_score || 0), 0) / employees.length 
+              : 0;
+            const topPerformerThreshold = avgScore * 1.10;
+            const topPerformersCount = employees.filter(emp => (emp.pre_dar_score || emp.total_score || 0) >= topPerformerThreshold).length;
+            
+            return (
+              <>
+                <div className="bubba-card p-5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                      <Users className="w-6 h-6 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-serif font-bold text-primary">{employees.length}</p>
+                      <p className="text-xs text-gray-500 font-semibold uppercase">Total Crew</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bubba-card p-5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                      <Trophy className="w-6 h-6 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-serif font-bold text-green-600">{topPerformersCount}</p>
+                      <p className="text-xs text-gray-500 font-semibold uppercase">Top Performers</p>
+                      <p className="text-xs text-gray-400">≥{topPerformerThreshold.toFixed(1)} (10% above avg)</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bubba-card p-5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center">
+                      <Award className="w-6 h-6 text-yellow-600" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-serif font-bold text-yellow-600">{avgScore.toFixed(1)}</p>
+                      <p className="text-xs text-gray-500 font-semibold uppercase">Team Average</p>
+                    </div>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
         </div>
 
         {/* Top 10 Overall */}
