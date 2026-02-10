@@ -109,41 +109,66 @@ def generate_employee_comparison_chart(
         # Get employee values for this metric from snapshots
         emp_values = []
         rest_values = []
+        plot_dates = []
+        plot_date_labels = []
         
         if snapshot_history and len(snapshot_history) > 0:
             # Build lookup from snapshot history
             snap_by_date = {}
             for snap in snapshot_history:
                 snap_date = snap.get('date', '')
-                if snap_date not in snap_by_date:
-                    snap_by_date[snap_date] = snap
+                snap_by_date[snap_date] = snap
             
             rest_by_date = {}
             if restaurant_avg_history:
                 for r in restaurant_avg_history:
                     rest_by_date[r.get('date', '')] = r
             
-            for d in dates:
+            # Only include dates where this employee has valid data for this metric
+            for i, d in enumerate(dates):
                 snap = snap_by_date.get(d, {})
-                emp_values.append(snap.get(metric, 0) or 0)
+                emp_val = snap.get(metric, None)
+                
+                # Skip if employee has no data or zero value for this metric on this date
+                if emp_val is None or emp_val == 0:
+                    continue
+                
+                emp_values.append(emp_val)
+                plot_dates.append(i)
+                plot_date_labels.append(date_labels[i] if i < len(date_labels) else d)
                 
                 rest_snap = rest_by_date.get(d, {})
-                rest_values.append(rest_snap.get(metric, 0) or 0)
+                rest_val = rest_snap.get(metric, 0) or 0
+                rest_values.append(rest_val)
         else:
             # Fallback to current/previous data
+            plot_dates = list(range(len(dates)))
+            plot_date_labels = date_labels
             if previous_data:
                 emp_values.append(previous_data.get(metric, 0) or 0)
                 rest_values.append(restaurant_averages.get(metric, 0) * 0.95 if restaurant_averages else 0)
             emp_values.append(current_data.get(metric, 0) or 0)
             rest_values.append(restaurant_averages.get(metric, 0) if restaurant_averages else 0)
         
+        # Skip this metric if no valid data points
+        if not emp_values:
+            ax.text(0.5, 0.5, 'No data', ha='center', va='center', fontsize=10, 
+                   color=COLORS['text'], transform=ax.transAxes)
+            ax.set_title(metric_label, fontsize=12, fontweight='bold', color=COLORS['text'], pad=10)
+            continue
+        
+        x = np.arange(len(emp_values))
+        
         # Plot employee line - solid red
         ax.plot(x, emp_values, 'o-', color=COLORS['primary'], linewidth=2.5, markersize=8,
                 label=employee_name, zorder=3)
         
-        # Plot restaurant average - dotted blue
-        if any(v > 0 for v in rest_values):
-            ax.plot(x, rest_values, '^:', color=COLORS['secondary'], linewidth=2, markersize=6,
+        # Plot restaurant average - dotted blue (only non-zero values)
+        valid_rest = [(i, v) for i, v in enumerate(rest_values) if v > 0]
+        if valid_rest:
+            rest_x = [v[0] for v in valid_rest]
+            rest_y = [v[1] for v in valid_rest]
+            ax.plot(rest_x, rest_y, '^:', color=COLORS['secondary'], linewidth=2, markersize=6,
                     label='Restaurant Avg', alpha=0.85, zorder=2)
         
         # Plot benchmark as horizontal dashed line - green (FLAT)
@@ -162,21 +187,20 @@ def generate_employee_comparison_chart(
         # Styling - Add box/border around each subplot
         ax.set_title(metric_label, fontsize=12, fontweight='bold', color=COLORS['text'], pad=10)
         ax.set_xticks(x)
-        ax.set_xticklabels(date_labels, fontsize=9, rotation=45 if len(dates) > 4 else 0, 
-                          ha='right' if len(dates) > 4 else 'center')
+        ax.set_xticklabels(plot_date_labels[:len(x)], fontsize=9, rotation=45 if len(x) > 4 else 0, 
+                          ha='right' if len(x) > 4 else 'center')
         
         # Calculate y-axis range to fit ALL lines (employee, benchmark, restaurant avg)
-        all_vals = []
-        all_vals.extend([v for v in emp_values if v > 0])
-        all_vals.extend([v for v in rest_values if v > 0])
-        if benchmark_val > 0:
-            all_vals.append(benchmark_val)
+        all_vals = list(emp_values)  # Always include employee values
+        all_vals.extend([v for v in rest_values if v > 0])  # Include non-zero restaurant values
+        all_vals.append(benchmark_val)  # Always include benchmark
         
         if all_vals:
             min_val = min(all_vals)
             max_val = max(all_vals)
-            # Add 15% padding on both sides to ensure no line is cut off
-            padding = (max_val - min_val) * 0.20 if max_val != min_val else max_val * 0.20
+            # Add 20% padding on both sides to ensure no line is cut off
+            value_range = max_val - min_val if max_val != min_val else max_val * 0.5
+            padding = value_range * 0.25
             y_min = max(0, min_val - padding)
             y_max = max_val + padding
             ax.set_ylim(y_min, y_max)
