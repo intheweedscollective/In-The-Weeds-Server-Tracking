@@ -2163,16 +2163,17 @@ async def create_employee(data: EmployeeCreate):
     score = employee.pre_dar_score or 0
     job = employee.job_title.lower()
     if job in ['trainer', 'bartender']:
-        employee.tier_label = job.title()
+        tier_label = job.title()
     elif score >= settings.a_server_min_score:
-        employee.tier_label = "A-Server"
+        tier_label = "A-Server"
     elif score >= settings.b_server_min_score:
-        employee.tier_label = "B-Server"
+        tier_label = "B-Server"
     else:
-        employee.tier_label = "C-Server"
+        tier_label = "C-Server"
     
     # Save to database
     emp_dict = employee.model_dump()
+    emp_dict['tier_label'] = tier_label
     emp_dict['created_at'] = datetime.now(timezone.utc).isoformat()
     await db.employees_v2.insert_one(emp_dict)
     
