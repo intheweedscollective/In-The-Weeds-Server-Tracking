@@ -268,7 +268,7 @@ export default function TopPerformers() {
                       </div>
                       <div>
                         <h4 className="font-semibold text-foreground">{employee.name}</h4>
-                        <p className="text-sm text-gray-500">{employee.performance_tier || 'Not Assessed'}</p>
+                        <p className="text-sm text-gray-500 capitalize">{employee.tier_label || employee.job_title || 'Server'}</p>
                       </div>
                     </div>
 
