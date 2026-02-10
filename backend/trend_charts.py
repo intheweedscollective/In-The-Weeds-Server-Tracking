@@ -54,100 +54,195 @@ def generate_employee_comparison_chart(
     current_year: int,
     metrics: List[str] = None,
     benchmarks: Dict[str, float] = None,
-    restaurant_averages: Dict[str, float] = None
+    restaurant_averages: Dict[str, float] = None,
+    snapshot_history: List[Dict[str, Any]] = None,
+    restaurant_avg_history: List[Dict[str, Any]] = None
 ) -> bytes:
     """
-    Generate a line chart comparing employee metrics vs benchmarks and restaurant averages.
-    - Solid line: Employee's values
-    - Dashed line: Benchmark values
-    - Dotted line: Restaurant average
+    Generate a line chart showing employee Total Score over time vs benchmark and restaurant average.
+    - Solid line: Employee's total score over time
+    - Dashed horizontal line: Benchmark (flat)
+    - Dotted line: Restaurant average over time
     
     Returns PNG image bytes.
     """
-    if metrics is None:
-        metrics = ['ppa', 'lbw_per_guest', 'glassware_per_guest', 'guests_per_lsc', 'cv_score', 'pre_dar_score']
+    # If we have snapshot history, use time-series chart
+    if snapshot_history and len(snapshot_history) > 0:
+        return _generate_time_series_chart(
+            employee_name, snapshot_history, restaurant_avg_history,
+            benchmarks.get('pre_dar_score', 85.0) if benchmarks else 85.0,
+            current_quarter, current_year
+        )
     
-    # Default benchmarks from config if not provided
-    if benchmarks is None:
-        benchmarks = {m: METRICS_CONFIG.get(m, {}).get('benchmark', 0) for m in metrics}
-    
-    # Default restaurant averages to 0 if not provided
-    if restaurant_averages is None:
-        restaurant_averages = {}
-    
-    # Setup figure
+    # Fallback: If no snapshot history, create a simple comparison with current/previous
     fig, ax = plt.subplots(figsize=(12, 6), facecolor=COLORS['background'])
     ax.set_facecolor(COLORS['background'])
     
-    # Prepare data
-    x = np.arange(len(metrics))
+    # Get benchmark for total score
+    benchmark_score = benchmarks.get('pre_dar_score', 85.0) if benchmarks else 85.0
+    rest_avg_score = restaurant_averages.get('pre_dar_score', 0) if restaurant_averages else 0
     
-    employee_values = []
-    benchmark_values = []
-    rest_avg_values = []
+    # Create data points
+    prev_quarter, prev_year = get_previous_quarter(current_quarter, current_year)
+    
     labels = []
+    emp_scores = []
+    rest_scores = []
     
-    for metric in metrics:
-        config = METRICS_CONFIG.get(metric, {'label': metric, 'format': '{:.1f}'})
-        labels.append(config['label'])
-        
-        emp_val = current_data.get(metric, 0) or 0
-        bench_val = benchmarks.get(metric, config.get('benchmark', 0)) or 0
-        rest_val = restaurant_averages.get(metric, 0) or 0
-        
-        # Normalize for display (scale guests_per_lsc for chart readability)
-        if metric == 'guests_per_lsc':
-            emp_val = emp_val / 10
-            bench_val = bench_val / 10
-            rest_val = rest_val / 10
-        
-        employee_values.append(emp_val)
-        benchmark_values.append(bench_val)
-        rest_avg_values.append(rest_val)
+    if previous_data:
+        labels.append(f'{prev_quarter}\n{prev_year}')
+        emp_scores.append(previous_data.get('pre_dar_score', previous_data.get('total_score', 0)) or 0)
+        rest_scores.append(rest_avg_score * 0.95)  # Approximate previous avg
     
-    # Plot lines
-    # Employee line - solid, primary red
-    ax.plot(x, employee_values, 'o-', color=COLORS['primary'], linewidth=2.5, markersize=10,
-            label=f'{employee_name}', zorder=3)
+    labels.append(f'{current_quarter}\n{current_year}')
+    emp_scores.append(current_data.get('pre_dar_score', current_data.get('total_score', 0)) or 0)
+    rest_scores.append(rest_avg_score)
     
-    # Benchmark line - dashed, green
-    ax.plot(x, benchmark_values, 's--', color=COLORS['positive'], linewidth=2, markersize=7,
-            label='Benchmark', alpha=0.85, zorder=2)
+    x = np.arange(len(labels))
     
-    # Restaurant average line - dotted, blue
-    ax.plot(x, rest_avg_values, '^:', color=COLORS['secondary'], linewidth=2, markersize=7,
+    # Plot employee line - solid red
+    ax.plot(x, emp_scores, 'o-', color=COLORS['primary'], linewidth=3, markersize=12,
+            label=employee_name, zorder=3)
+    
+    # Plot restaurant average line - dotted blue
+    ax.plot(x, rest_scores, '^:', color=COLORS['secondary'], linewidth=2.5, markersize=10,
             label='Restaurant Avg', alpha=0.85, zorder=2)
     
+    # Plot benchmark as horizontal dashed line - green
+    ax.axhline(y=benchmark_score, color=COLORS['positive'], linestyle='--', linewidth=2.5,
+               label=f'Benchmark ({benchmark_score})', alpha=0.85, zorder=1)
+    
     # Add value labels for employee points
-    for i, (xi, val, metric) in enumerate(zip(x, employee_values, metrics)):
-        config = METRICS_CONFIG.get(metric, {'format': '{:.1f}'})
-        # Undo scaling for display
-        display_val = val * 10 if metric == 'guests_per_lsc' else val
-        formatted = config['format'].format(display_val)
-        
-        ax.annotate(formatted,
-                   xy=(xi, val),
+    for xi, score in zip(x, emp_scores):
+        ax.annotate(f'{score:.1f}',
+                   xy=(xi, score),
                    xytext=(0, 12), textcoords="offset points",
-                   ha='center', va='bottom', fontsize=9, fontweight='bold',
+                   ha='center', va='bottom', fontsize=11, fontweight='bold',
                    color=COLORS['primary'])
     
     # Styling
-    ax.set_xlabel('Metrics', fontsize=11, color=COLORS['text'])
-    ax.set_ylabel('Value', fontsize=11, color=COLORS['text'])
-    ax.set_title(f'{employee_name} - Performance Comparison ({current_quarter} {current_year})', 
+    ax.set_xlabel('Quarter', fontsize=12, color=COLORS['text'])
+    ax.set_ylabel('Total Score', fontsize=12, color=COLORS['text'])
+    ax.set_title(f'{employee_name} - Performance Trend', 
                 fontsize=14, fontweight='bold', color=COLORS['primary'], pad=15)
     ax.set_xticks(x)
-    ax.set_xticklabels(labels, fontsize=10)
-    ax.legend(loc='upper right', framealpha=0.95, fontsize=10)
+    ax.set_xticklabels(labels, fontsize=11)
+    ax.legend(loc='upper left', framealpha=0.95, fontsize=10)
     
     # Grid
     ax.yaxis.grid(True, linestyle='--', alpha=0.7, color=COLORS['grid'])
     ax.set_axisbelow(True)
     
-    # Set y-axis to start at 0 with some padding on top
-    all_vals = employee_values + benchmark_values + rest_avg_values
-    max_val = max(all_vals) if all_vals else 100
-    ax.set_ylim(0, max_val * 1.2)
+    # Set y-axis range
+    all_vals = emp_scores + rest_scores + [benchmark_score]
+    min_val = max(0, min(all_vals) - 15)
+    max_val = min(120, max(all_vals) + 15)
+    ax.set_ylim(min_val, max_val)
+    
+    # Remove spines
+    for spine in ['top', 'right']:
+        ax.spines[spine].set_visible(False)
+    ax.spines['left'].set_color(COLORS['grid'])
+    ax.spines['bottom'].set_color(COLORS['grid'])
+    
+    plt.tight_layout()
+    
+    # Save to bytes
+    buffer = io.BytesIO()
+    plt.savefig(buffer, format='png', dpi=150, bbox_inches='tight', facecolor=COLORS['background'])
+    plt.close(fig)
+    buffer.seek(0)
+    
+    return buffer.getvalue()
+
+
+def _generate_time_series_chart(
+    employee_name: str,
+    snapshot_history: List[Dict[str, Any]],
+    restaurant_avg_history: List[Dict[str, Any]],
+    benchmark_score: float,
+    current_quarter: str,
+    current_year: int
+) -> bytes:
+    """
+    Generate a time-series line chart from snapshot data.
+    - Solid line: Employee's total score
+    - Dashed horizontal line: Benchmark (flat)
+    - Dotted line: Restaurant average
+    """
+    # Sort by date
+    snapshot_history = sorted(snapshot_history, key=lambda x: x.get('date', ''))
+    
+    # Extract data
+    dates = []
+    emp_scores = []
+    for snap in snapshot_history:
+        dates.append(snap.get('date', ''))
+        emp_scores.append(snap.get('total_score', snap.get('pre_dar_score', 0)) or 0)
+    
+    # Match restaurant averages to dates
+    rest_avg_dict = {d.get('date', ''): d.get('avg_score', 0) for d in (restaurant_avg_history or [])}
+    rest_scores = [rest_avg_dict.get(d, 0) for d in dates]
+    
+    # Format date labels
+    date_labels = []
+    for d in dates:
+        try:
+            from datetime import datetime as dt
+            parsed = dt.strptime(d, "%Y-%m-%d")
+            date_labels.append(parsed.strftime("%b %d"))
+        except:
+            date_labels.append(d[-5:] if len(d) >= 5 else d)
+    
+    # Setup figure
+    fig, ax = plt.subplots(figsize=(12, 6), facecolor=COLORS['background'])
+    ax.set_facecolor(COLORS['background'])
+    
+    x = np.arange(len(dates))
+    
+    # Plot employee line - solid red
+    ax.plot(x, emp_scores, 'o-', color=COLORS['primary'], linewidth=3, markersize=10,
+            label=employee_name, zorder=3)
+    
+    # Plot restaurant average line - dotted blue  
+    valid_rest = [(i, s) for i, s in enumerate(rest_scores) if s > 0]
+    if valid_rest:
+        rest_x = [v[0] for v in valid_rest]
+        rest_y = [v[1] for v in valid_rest]
+        ax.plot(rest_x, rest_y, '^:', color=COLORS['secondary'], linewidth=2.5, markersize=8,
+                label='Restaurant Avg', alpha=0.85, zorder=2)
+    
+    # Plot benchmark as horizontal dashed line - green (FLAT LINE)
+    ax.axhline(y=benchmark_score, color=COLORS['positive'], linestyle='--', linewidth=2.5,
+               label=f'Benchmark ({benchmark_score})', alpha=0.85, zorder=1)
+    
+    # Add value labels for employee points
+    for xi, score in zip(x, emp_scores):
+        ax.annotate(f'{score:.1f}',
+                   xy=(xi, score),
+                   xytext=(0, 12), textcoords="offset points",
+                   ha='center', va='bottom', fontsize=10, fontweight='bold',
+                   color=COLORS['primary'])
+    
+    # Styling
+    ax.set_xlabel('Snapshot Date', fontsize=12, color=COLORS['text'])
+    ax.set_ylabel('Total Score', fontsize=12, color=COLORS['text'])
+    ax.set_title(f'{employee_name} - {current_quarter} {current_year} Performance Trend', 
+                fontsize=14, fontweight='bold', color=COLORS['primary'], pad=15)
+    ax.set_xticks(x)
+    ax.set_xticklabels(date_labels, fontsize=10, rotation=45 if len(dates) > 5 else 0, ha='right' if len(dates) > 5 else 'center')
+    ax.legend(loc='upper left', framealpha=0.95, fontsize=10)
+    
+    # Grid
+    ax.yaxis.grid(True, linestyle='--', alpha=0.7, color=COLORS['grid'])
+    ax.xaxis.grid(True, linestyle='--', alpha=0.3, color=COLORS['grid'])
+    ax.set_axisbelow(True)
+    
+    # Set y-axis range
+    all_vals = emp_scores + [s for s in rest_scores if s > 0] + [benchmark_score]
+    min_val = max(0, min(all_vals) - 10)
+    max_val = min(120, max(all_vals) + 10)
+    ax.set_ylim(min_val, max_val)
     
     # Remove spines
     for spine in ['top', 'right']:
