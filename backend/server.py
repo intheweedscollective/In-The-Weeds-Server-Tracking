@@ -3651,6 +3651,174 @@ async def generate_snapshot_slide_endpoint(
     )
 
 
+# ============================================================================
+# DAR (DISCIPLINARY ACTION REPORT) & QUARTER FINALIZATION ENDPOINTS
+# ============================================================================
+
+@api_router.get("/v2/finalization/{year}/{quarter}")
+async def get_quarter_finalization(year: int, quarter: str):
+    """Get finalization data for a quarter, including DAR entries."""
+    finalization = await db.quarter_finalizations.find_one(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    )
+    
+    if finalization:
+        return finalization
+    
+    # Return empty structure if not finalized yet
+    return {
+        "quarter": quarter.upper(),
+        "year": year,
+        "is_finalized": False,
+        "dar_entries": [],
+        "final_rankings": []
+    }
+
+
+@api_router.get("/v2/dar/{year}/{quarter}")
+async def get_dar_entries(year: int, quarter: str):
+    """Get DAR entries for a quarter (even if not finalized)."""
+    # Check if there's a saved DAR draft
+    dar_data = await db.dar_entries.find_one(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    )
+    
+    if dar_data:
+        return dar_data.get("entries", [])
+    
+    return []
+
+
+@api_router.post("/v2/dar/{year}/{quarter}")
+async def save_dar_entries(year: int, quarter: str, submission: DARSubmission):
+    """Save DAR entries as a draft (before finalizing)."""
+    await db.dar_entries.update_one(
+        {"year": year, "quarter": quarter.upper()},
+        {
+            "$set": {
+                "year": year,
+                "quarter": quarter.upper(),
+                "entries": [entry.model_dump() for entry in submission.entries],
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+        },
+        upsert=True
+    )
+    
+    return {"message": "DAR entries saved", "count": len(submission.entries)}
+
+
+@api_router.post("/v2/finalize/{year}/{quarter}")
+async def finalize_quarter(year: int, quarter: str, submission: DARSubmission):
+    """
+    Finalize a quarter by applying DAR deductions and locking final rankings.
+    - Written Warning DAR: -3 points each
+    - Suspension DAR: -5 points each
+    
+    This creates the final rankings for end-of-quarter reviews.
+    """
+    # Get current employees
+    employees = await db.employees_v2.find(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    if not employees:
+        raise HTTPException(status_code=404, detail="No employees found for this quarter")
+    
+    # Build DAR lookup
+    dar_lookup = {}
+    for entry in submission.entries:
+        dar_lookup[entry.employee_id] = {
+            "written_warnings": entry.written_warnings,
+            "suspensions": entry.suspensions
+        }
+    
+    # Calculate final rankings with DAR deductions
+    final_rankings = []
+    for emp in employees:
+        emp_id = emp.get("id")
+        dar = dar_lookup.get(emp_id, {"written_warnings": 0, "suspensions": 0})
+        
+        pre_dar_score = emp.get("pre_dar_score", emp.get("total_score", 0)) or 0
+        written_deduction = dar["written_warnings"] * 3
+        suspension_deduction = dar["suspensions"] * 5
+        total_deduction = written_deduction + suspension_deduction
+        final_score = max(0, pre_dar_score - total_deduction)
+        
+        final_rankings.append({
+            "employee_id": emp_id,
+            "employee_name": emp.get("name"),
+            "job_title": emp.get("job_title", "Server"),
+            "pre_dar_score": pre_dar_score,
+            "written_warnings": dar["written_warnings"],
+            "suspensions": dar["suspensions"],
+            "total_deduction": total_deduction,
+            "final_score": final_score
+        })
+    
+    # Sort by final score descending
+    final_rankings.sort(key=lambda x: -x["final_score"])
+    
+    # Add final rank position
+    for idx, emp in enumerate(final_rankings):
+        emp["final_rank"] = idx + 1
+    
+    # Save finalization
+    finalization_doc = {
+        "year": year,
+        "quarter": quarter.upper(),
+        "is_finalized": True,
+        "finalized_at": datetime.now(timezone.utc).isoformat(),
+        "dar_entries": [entry.model_dump() for entry in submission.entries],
+        "final_rankings": final_rankings,
+        "total_employees": len(final_rankings),
+        "total_dar_deductions": sum(e["total_deduction"] for e in final_rankings)
+    }
+    
+    await db.quarter_finalizations.update_one(
+        {"year": year, "quarter": quarter.upper()},
+        {"$set": finalization_doc},
+        upsert=True
+    )
+    
+    # Also save the DAR entries separately
+    await db.dar_entries.update_one(
+        {"year": year, "quarter": quarter.upper()},
+        {
+            "$set": {
+                "year": year,
+                "quarter": quarter.upper(),
+                "entries": [entry.model_dump() for entry in submission.entries],
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+        },
+        upsert=True
+    )
+    
+    return {
+        "message": f"Quarter {quarter} {year} finalized successfully",
+        "total_employees": len(final_rankings),
+        "total_dar_deductions": sum(e["total_deduction"] for e in final_rankings),
+        "final_rankings": final_rankings
+    }
+
+
+@api_router.delete("/v2/finalize/{year}/{quarter}")
+async def unfinalize_quarter(year: int, quarter: str):
+    """Remove finalization (reopen quarter for edits)."""
+    result = await db.quarter_finalizations.delete_one(
+        {"year": year, "quarter": quarter.upper()}
+    )
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="No finalization found for this quarter")
+    
+    return {"message": f"Quarter {quarter} {year} reopened for edits"}
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
