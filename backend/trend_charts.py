@@ -450,12 +450,13 @@ def generate_team_comparison_chart(
     metrics: List[str] = None
 ) -> bytes:
     """
-    Generate a team-wide comparison chart showing average metrics.
+    Generate a multi-panel team comparison chart with one graph per metric.
+    Each graph shows current vs previous quarter team averages.
     
     Returns PNG image bytes.
     """
     if metrics is None:
-        metrics = ['ppa', 'lbw_per_guest', 'glassware_per_guest', 'cv_score', 'pre_dar_score']
+        metrics = ['ppa', 'lbw_per_guest', 'glassware_per_guest', 'guests_per_lsc', 'cv_score', 'pre_dar_score']
     
     prev_quarter, prev_year = get_previous_quarter(current_quarter, current_year)
     
@@ -464,69 +465,81 @@ def generate_team_comparison_chart(
         values = [e.get(metric, 0) for e in employees if e.get(metric) is not None]
         return sum(values) / len(values) if values else 0
     
-    # Setup figure
-    fig, ax = plt.subplots(figsize=(12, 6), facecolor=COLORS['background'])
-    ax.set_facecolor(COLORS['background'])
+    # Setup figure with 2 rows x 3 columns
+    fig, axes = plt.subplots(2, 3, figsize=(16, 10), facecolor=COLORS['background'])
+    axes = axes.flatten()
     
-    x = np.arange(len(metrics))
-    width = 0.35
+    # Create a common legend at the top
+    fig.suptitle(f'Team Performance Comparison - {prev_quarter} {prev_year} vs {current_quarter} {current_year}', 
+                fontsize=16, fontweight='bold', color=COLORS['secondary'], y=0.98)
     
-    current_avgs = []
-    previous_avgs = []
-    labels = []
-    
-    for metric in metrics:
-        config = METRICS_CONFIG.get(metric, {'label': metric})
-        labels.append(config['label'])
+    for idx, metric in enumerate(metrics):
+        ax = axes[idx]
+        ax.set_facecolor('#FAFAFA')
         
+        config = METRICS_CONFIG.get(metric, {'label': metric, 'format': '{:.1f}'})
+        metric_label = config['label']
+        
+        # Calculate averages
         curr_avg = calc_avg(current_employees, metric)
         prev_avg = calc_avg(previous_employees, metric) if previous_employees else 0
         
-        # Normalize guests_per_lsc
-        if metric == 'guests_per_lsc':
-            curr_avg = curr_avg / 10
-            prev_avg = prev_avg / 10
+        # Bar positions
+        x = np.arange(2)
         
-        current_avgs.append(curr_avg)
-        previous_avgs.append(prev_avg)
-    
-    # Create bars
-    ax.bar(x - width/2, previous_avgs, width, label=f'{prev_quarter} {prev_year} Team Avg', 
-           color=COLORS['previous'], edgecolor='white', linewidth=1)
-    bars2 = ax.bar(x + width/2, current_avgs, width, label=f'{current_quarter} {current_year} Team Avg', 
-                   color=COLORS['secondary'], edgecolor='white', linewidth=1)
-    
-    # Add value labels
-    for bar, val, metric in zip(bars2, current_avgs, metrics):
-        height = bar.get_height()
-        config = METRICS_CONFIG.get(metric, {'format': '{:.1f}'})
-        display_val = val * 10 if metric == 'guests_per_lsc' else val
-        formatted = config['format'].format(display_val)
+        # Create bars - previous on left, current on right
+        bars = ax.bar(x, [prev_avg, curr_avg], width=0.6, 
+                     color=[COLORS['previous'], COLORS['secondary']], 
+                     edgecolor='white', linewidth=2)
         
-        ax.annotate(formatted,
-                   xy=(bar.get_x() + bar.get_width() / 2, height),
-                   xytext=(0, 3), textcoords="offset points",
-                   ha='center', va='bottom', fontsize=9, fontweight='bold',
-                   color=COLORS['text'])
+        # Add value labels on bars
+        for bar, val in zip(bars, [prev_avg, curr_avg]):
+            height = bar.get_height()
+            formatted = config['format'].format(val)
+            ax.annotate(formatted,
+                       xy=(bar.get_x() + bar.get_width() / 2, height),
+                       xytext=(0, 5), textcoords="offset points",
+                       ha='center', va='bottom', fontsize=11, fontweight='bold',
+                       color=COLORS['text'],
+                       bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
+        
+        # Calculate change
+        if prev_avg > 0:
+            change = ((curr_avg - prev_avg) / prev_avg) * 100
+            change_color = COLORS['positive'] if change > 0 else COLORS['negative']
+            change_text = f"+{change:.1f}%" if change > 0 else f"{change:.1f}%"
+            ax.text(0.5, 0.95, change_text, transform=ax.transAxes, ha='center', va='top',
+                   fontsize=12, fontweight='bold', color=change_color,
+                   bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor=change_color, linewidth=2))
+        
+        # Styling
+        ax.set_title(metric_label, fontsize=12, fontweight='bold', color=COLORS['text'], pad=10)
+        ax.set_xticks(x)
+        ax.set_xticklabels([f'{prev_quarter}\n{prev_year}', f'{current_quarter}\n{current_year}'], fontsize=10)
+        
+        # Set y-axis range with padding
+        max_val = max(prev_avg, curr_avg) if max(prev_avg, curr_avg) > 0 else 1
+        ax.set_ylim(0, max_val * 1.3)
+        
+        # Grid
+        ax.yaxis.grid(True, linestyle='--', alpha=0.5, color=COLORS['grid'])
+        ax.set_axisbelow(True)
+        
+        # Add border
+        for spine in ax.spines.values():
+            spine.set_visible(True)
+            spine.set_color('#CCCCCC')
+            spine.set_linewidth(1.5)
     
-    # Styling
-    ax.set_xlabel('Metrics', fontsize=11, color=COLORS['text'])
-    ax.set_ylabel('Team Average', fontsize=11, color=COLORS['text'])
-    ax.set_title(f'📊 Team Performance Comparison - {prev_quarter} vs {current_quarter} {current_year}', 
-                fontsize=14, fontweight='bold', color=COLORS['secondary'], pad=15)
-    ax.set_xticks(x)
-    ax.set_xticklabels(labels, fontsize=10)
-    ax.legend(loc='upper right', framealpha=0.9)
+    # Add legend at the top (outside the subplots)
+    legend_elements = [
+        plt.Rectangle((0,0), 1, 1, facecolor=COLORS['previous'], edgecolor='white', label=f'{prev_quarter} {prev_year}'),
+        plt.Rectangle((0,0), 1, 1, facecolor=COLORS['secondary'], edgecolor='white', label=f'{current_quarter} {current_year}')
+    ]
+    fig.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, 0.94), 
+              ncol=2, fontsize=11, framealpha=0.95, fancybox=True, shadow=True)
     
-    # Grid
-    ax.yaxis.grid(True, linestyle='--', alpha=0.7, color=COLORS['grid'])
-    ax.set_axisbelow(True)
-    
-    # Remove spines
-    for spine in ['top', 'right']:
-        ax.spines[spine].set_visible(False)
-    
-    plt.tight_layout()
+    plt.tight_layout(rect=[0, 0, 1, 0.90], h_pad=2.5, w_pad=2.0)
     
     # Save to bytes
     buffer = io.BytesIO()
