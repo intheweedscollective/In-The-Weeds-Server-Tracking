@@ -3380,37 +3380,57 @@ async def upload_snapshot_data(snapshot_id: str, file: UploadFile = File(...)):
         
         # ============================================================
         # SYNC TO MAIN EMPLOYEES_V2 COLLECTION
-        # This makes the bi-weekly snapshot data the "current" data
-        # for Dashboard, Rankings, Reviews, and Yodeck slides
+        # Only sync if this snapshot has the LATEST snapshot_date
+        # (not the most recently uploaded, but the actual data date)
         # ============================================================
         
-        # First, clear existing employees for this quarter/year
-        await db.employees_v2.delete_many({
-            "year": snapshot["year"],
-            "quarter": snapshot["quarter"]
-        })
+        # Find the latest snapshot by snapshot_date for this quarter/year
+        latest_snapshot = await db.snapshots.find_one(
+            {"year": snapshot["year"], "quarter": snapshot["quarter"]},
+            {"_id": 0, "snapshot_date": 1, "id": 1},
+            sort=[("snapshot_date", -1)]  # Sort by snapshot_date descending
+        )
         
-        # Insert the new employee data from snapshot
-        if employees:
-            # Prepare employees for main collection (remove snapshot-specific fields if any)
-            main_employees = []
-            for emp in employees:
-                main_emp = emp.copy()
-                # Ensure created_at is set properly
-                if isinstance(main_emp.get('created_at'), datetime):
-                    main_emp['created_at'] = main_emp['created_at'].isoformat()
-                elif not main_emp.get('created_at'):
-                    main_emp['created_at'] = datetime.now(timezone.utc).isoformat()
-                main_employees.append(main_emp)
+        current_snapshot_date = snapshot.get("snapshot_date", "")
+        latest_snapshot_date = latest_snapshot.get("snapshot_date", "") if latest_snapshot else ""
+        
+        should_sync = current_snapshot_date >= latest_snapshot_date
+        
+        if should_sync:
+            # Clear existing employees for this quarter/year
+            await db.employees_v2.delete_many({
+                "year": snapshot["year"],
+                "quarter": snapshot["quarter"]
+            })
             
-            await db.employees_v2.insert_many(main_employees)
-            logging.info(f"Synced {len(main_employees)} employees to employees_v2 for {snapshot['quarter']} {snapshot['year']}")
-        
-        return {
-            "message": "Snapshot data uploaded and synced to Dashboard",
-            "employee_count": len(employees),
-            "synced_to_dashboard": True
-        }
+            # Insert the new employee data from snapshot
+            if employees:
+                # Prepare employees for main collection
+                main_employees = []
+                for emp in employees:
+                    main_emp = emp.copy()
+                    if isinstance(main_emp.get('created_at'), datetime):
+                        main_emp['created_at'] = main_emp['created_at'].isoformat()
+                    elif not main_emp.get('created_at'):
+                        main_emp['created_at'] = datetime.now(timezone.utc).isoformat()
+                    main_employees.append(main_emp)
+                
+                await db.employees_v2.insert_many(main_employees)
+                logging.info(f"Synced {len(main_employees)} employees to employees_v2 (snapshot_date: {current_snapshot_date})")
+            
+            return {
+                "message": "Snapshot data uploaded and synced to Dashboard",
+                "employee_count": len(employees),
+                "synced_to_dashboard": True
+            }
+        else:
+            logging.info(f"Skipped sync - snapshot {current_snapshot_date} is not the latest (latest is {latest_snapshot_date})")
+            return {
+                "message": f"Snapshot data uploaded. Dashboard NOT updated (this snapshot date {current_snapshot_date} is older than {latest_snapshot_date})",
+                "employee_count": len(employees),
+                "synced_to_dashboard": False,
+                "reason": f"Snapshot date {current_snapshot_date} is not the latest. Latest is {latest_snapshot_date}."
+            }
         
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
