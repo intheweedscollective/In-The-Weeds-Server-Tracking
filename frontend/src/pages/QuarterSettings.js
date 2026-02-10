@@ -551,20 +551,14 @@ export default function QuarterSettings() {
                   className="border-2"
                 />
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">CV & Reviews (15%)</label>
-                <Input
-                  type="number"
-                  step="0.05"
-                  min="0"
-                  max="1"
-                  value={formData.weight_cv}
-                  onChange={(e) => setFormData(prev => ({ ...prev, weight_cv: parseFloat(e.target.value) || 0 }))}
-                  disabled={settings?.is_locked}
-                  className="border-2"
-                />
-                <p className="text-xs text-gray-400">Customer Voice + Review Tracker</p>
-              </div>
+            </div>
+            
+            {/* Info about CV scoring */}
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <strong>Note:</strong> Customer Voice (CV) points are added directly to the total score as raw points, not as a weighted percentage.
+                Formula: (Promoters × 1) + (Mentions × 0.2) - (Detractors × 2)
+              </p>
             </div>
           </div>
         </div>
