@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { Trophy, Calendar, Filter, ChevronDown, ChevronUp, Download, FileText } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Trophy, Calendar, Filter, ChevronDown, ChevronUp, Download, FileText, Medal, Award, Star } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import Navigation from "../components/Navigation";
@@ -17,6 +17,15 @@ const TIER_STYLES = {
   "A-Server": { bg: "bg-green-100", text: "text-green-800", border: "border-green-200" },
   "B-Server": { bg: "bg-yellow-100", text: "text-yellow-800", border: "border-yellow-200" },
   "C-Server": { bg: "bg-red-100", text: "text-red-800", border: "border-red-200" }
+};
+
+// Top 10 metrics configuration
+const TOP_METRICS = {
+  ppa: { label: 'PPA', format: '$', icon: '💰' },
+  lbw_per_guest: { label: 'LBW/Guest', format: '$', icon: '🍷' },
+  glassware_per_guest: { label: 'Glassware/Guest', format: '$', icon: '🥂' },
+  guests_per_lsc: { label: 'LSC Ratio', format: '', icon: '⚡', lowerBetter: true },
+  cv_score: { label: 'Customer Voice', format: '+', icon: '⭐' }
 };
 
 export default function FullRankings() {
