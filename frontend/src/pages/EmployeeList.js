@@ -80,6 +80,72 @@ export default function EmployeeList() {
     }
   };
 
+  // Open modal for new employee
+  const openNewEmployeeModal = () => {
+    setEditingEmployee(null);
+    setFormData({ ...emptyEmployee });
+    setShowEditModal(true);
+  };
+
+  // Open modal for editing existing employee
+  const openEditModal = (employee) => {
+    setEditingEmployee(employee);
+    setFormData({
+      name: employee.name || "",
+      job_title: employee.job_title || "server",
+      guests: employee.guests || 0,
+      net_sales: employee.net_sales || 0,
+      lbw: employee.lbw || 0,
+      glassware_sales: employee.glassware_sales || 0,
+      lsc_count: employee.lsc_count || 0,
+      cv_promoters: employee.cv_promoters || 0,
+      cv_passives: employee.cv_passives || 0,
+      cv_detractors: employee.cv_detractors || 0,
+      review_mentions: employee.review_mentions || 0
+    });
+    setShowEditModal(true);
+  };
+
+  // Handle form field changes
+  const handleFormChange = (field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  // Save employee (create or update)
+  const saveEmployee = async () => {
+    if (!formData.name.trim()) {
+      toast.error("Employee name is required");
+      return;
+    }
+    
+    setSaving(true);
+    try {
+      if (editingEmployee) {
+        // Update existing
+        await axios.put(`${API}/v2/employees/${editingEmployee.id}`, formData);
+        toast.success(`Updated ${formData.name}`);
+      } else {
+        // Create new
+        await axios.post(`${API}/v2/employees`, {
+          ...formData,
+          year: selectedYear,
+          quarter: selectedQuarter
+        });
+        toast.success(`Created ${formData.name}`);
+      }
+      setShowEditModal(false);
+      fetchEmployees();
+    } catch (error) {
+      console.error("Error saving employee:", error);
+      toast.error(error.response?.data?.detail || "Error saving employee");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // V2 Performance tier mapping
   const getPerformanceLevelLocal = (tier, score) => {
     if (tier) {
