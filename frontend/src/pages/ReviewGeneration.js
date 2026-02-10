@@ -396,7 +396,7 @@ export default function ReviewGeneration() {
                                 { key: 'ppa', label: 'PPA', format: '$', higherBetter: true },
                                 { key: 'lbw_per_guest', label: 'LBW/Guest', format: '$', higherBetter: true },
                                 { key: 'glassware_per_guest', label: 'Glass/Guest', format: '$', higherBetter: true },
-                                { key: 'guests_per_lsc', label: 'Guests/LSC', format: '', higherBetter: false },
+                                { key: 'guests_per_lsc', label: 'LSC Ratio', format: '', higherBetter: false },
                                 { key: 'cv_score', label: 'CV Score', format: '', higherBetter: true },
                                 { key: 'pre_dar_score', label: 'Total Score', format: '', higherBetter: true },
                               ].map(metric => {
