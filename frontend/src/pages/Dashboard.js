@@ -465,7 +465,7 @@ export default function Dashboard() {
                 <Award className="w-8 h-8 text-white" />
                 <div>
                   <h2 className="text-2xl font-serif font-bold text-white">Top Performers</h2>
-                  <p className="text-green-100 text-sm">{selectedQuarter} {selectedYear} • Top 10 by Total Score</p>
+                  <p className="text-green-100 text-sm">{selectedQuarter} {selectedYear} • Score ≥ {stats.topPerformerThreshold} (10% above avg of {stats.avgTotalScore})</p>
                 </div>
               </div>
               <button onClick={() => setShowTopPerformers(false)} className="text-white hover:bg-white/20 rounded-full p-2 transition-colors">
@@ -474,10 +474,10 @@ export default function Dashboard() {
             </div>
             <div className="p-6 overflow-y-auto max-h-[60vh]">
               {employees
-                .slice(0, 10)
+                .filter(emp => (emp.total_score || 0) >= parseFloat(stats.topPerformerThreshold || 0))
                 .map((emp, idx) => {
                   const score = emp.total_score || 0;
-                  const aMin = quarterSettings?.a_server_min_score || 80;
+                  const avgScore = parseFloat(stats.avgTotalScore) || 0;
                   const jobTitle = (emp.job_title || 'server').toLowerCase();
                   const ppa = emp.ppa || 0;
                   const lbw = emp.lbw_per_guest || 0;
@@ -489,39 +489,66 @@ export default function Dashboard() {
                   const glassBenchmark = quarterSettings?.benchmark_glass || 1;
                   const lscBenchmark = quarterSettings?.benchmark_lsc || 100;
                   
-                  // Generate specific justification based on actual metrics
+                  // Calculate restaurant averages for comparison
+                  const avgPpa = employees.reduce((sum, e) => sum + (e.ppa || 0), 0) / employees.length;
+                  const avgLbw = employees.reduce((sum, e) => sum + (e.lbw_per_guest || 0), 0) / employees.length;
+                  const avgGlass = employees.reduce((sum, e) => sum + (e.glassware_per_guest || 0), 0) / employees.length;
+                  const avgLsc = employees.reduce((sum, e) => sum + (e.guests_per_lsc || 0), 0) / employees.length;
+                  const avgCv = employees.reduce((sum, e) => sum + (e.cv_score || 0), 0) / employees.length;
+                  
+                  // Calculate performance vs benchmark/average for each metric (higher = better)
+                  const metricPerformance = [
+                    { 
+                      name: 'PPA', 
+                      value: ppa,
+                      display: `$${ppa.toFixed(2)}`,
+                      percentAbove: ppaBenchmark > 0 ? ((ppa - ppaBenchmark) / ppaBenchmark * 100) : 0,
+                      vsAvg: avgPpa > 0 ? ((ppa - avgPpa) / avgPpa * 100) : 0
+                    },
+                    { 
+                      name: 'LBW', 
+                      value: lbw,
+                      display: `$${lbw.toFixed(2)}/guest`,
+                      percentAbove: lbwBenchmark > 0 ? ((lbw - lbwBenchmark) / lbwBenchmark * 100) : 0,
+                      vsAvg: avgLbw > 0 ? ((lbw - avgLbw) / avgLbw * 100) : 0
+                    },
+                    { 
+                      name: 'Glassware', 
+                      value: glass,
+                      display: `$${glass.toFixed(2)}/guest`,
+                      percentAbove: glassBenchmark > 0 ? ((glass - glassBenchmark) / glassBenchmark * 100) : 0,
+                      vsAvg: avgGlass > 0 ? ((glass - avgGlass) / avgGlass * 100) : 0
+                    },
+                    { 
+                      name: 'LSC Ratio', 
+                      value: lsc,
+                      display: `${lsc.toFixed(0)} guests`,
+                      // For LSC, lower is better, so invert the calculation
+                      percentAbove: lscBenchmark > 0 ? ((lscBenchmark - lsc) / lscBenchmark * 100) : 0,
+                      vsAvg: avgLsc > 0 ? ((avgLsc - lsc) / avgLsc * 100) : 0
+                    },
+                    { 
+                      name: 'Customer Voice', 
+                      value: cvScore,
+                      display: `${cvScore >= 0 ? '+' : ''}${cvScore.toFixed(1)} pts`,
+                      percentAbove: cvScore > 0 ? cvScore * 10 : cvScore * 5, // CV is already a score, weight it
+                      vsAvg: avgCv !== 0 ? ((cvScore - avgCv) / Math.abs(avgCv) * 100) : (cvScore > 0 ? 100 : 0)
+                    }
+                  ];
+                  
+                  // Sort by performance vs average (highest first) to find top 2 drivers
+                  const sortedMetrics = [...metricPerformance].sort((a, b) => b.vsAvg - a.vsAvg);
+                  const top2Metrics = sortedMetrics.slice(0, 2).filter(m => m.vsAvg > 0);
+                  
+                  // Generate justification based on top 2 driving metrics
                   let justification = '';
-                  const strengths = [];
-                  const areas = [];
-                  
-                  if (ppa >= ppaBenchmark * 1.1) strengths.push(`exceptional PPA of $${ppa.toFixed(2)}`);
-                  else if (ppa >= ppaBenchmark) strengths.push(`solid PPA of $${ppa.toFixed(2)}`);
-                  else areas.push('PPA');
-                  
-                  if (lbw >= lbwBenchmark * 1.1) strengths.push(`strong LBW at $${lbw.toFixed(2)}/guest`);
-                  else if (lbw >= lbwBenchmark) strengths.push(`consistent LBW at $${lbw.toFixed(2)}/guest`);
-                  else areas.push('LBW');
-                  
-                  if (glass >= glassBenchmark * 1.2) strengths.push(`excellent glassware sales ($${glass.toFixed(2)}/guest)`);
-                  
-                  if (lsc <= lscBenchmark * 0.9 && lsc > 0) strengths.push(`efficient guest handling (${lsc.toFixed(0)} guests/LSC)`);
-                  
-                  if (cvScore > 3) strengths.push(`outstanding customer feedback (+${cvScore.toFixed(1)} CV)`);
-                  else if (cvScore > 0) strengths.push(`positive customer voice (+${cvScore.toFixed(1)} CV)`);
-                  
-                  if (jobTitle.includes('trainer')) {
-                    justification = `As a Trainer scoring ${score.toFixed(1)}, ${emp.name} leads by example with ${strengths.slice(0, 2).join(' and ')}.`;
-                  } else if (jobTitle.includes('bartender')) {
-                    justification = `Behind the bar, ${emp.name} delivers ${score.toFixed(1)} points through ${strengths.slice(0, 2).join(' and ')}.`;
-                  } else if (strengths.length >= 3) {
-                    justification = `${emp.name} excels with ${strengths.slice(0, 3).join(', ')}, earning a ${score.toFixed(1)} total score.`;
-                  } else if (strengths.length >= 1) {
-                    justification = `${emp.name} demonstrates ${strengths.join(' and ')}, achieving ${score.toFixed(1)} points this quarter.`;
+                  if (top2Metrics.length >= 2) {
+                    justification = `${emp.name}'s success is driven by ${top2Metrics[0].name} (${top2Metrics[0].display}, ${top2Metrics[0].vsAvg.toFixed(0)}% above avg) and ${top2Metrics[1].name} (${top2Metrics[1].display}, ${top2Metrics[1].vsAvg.toFixed(0)}% above avg).`;
+                  } else if (top2Metrics.length === 1) {
+                    justification = `${emp.name}'s success is driven by ${top2Metrics[0].name} (${top2Metrics[0].display}, ${top2Metrics[0].vsAvg.toFixed(0)}% above avg).`;
                   } else {
-                    justification = `${emp.name} maintains consistent performance with a ${score.toFixed(1)} score across all metrics.`;
+                    justification = `${emp.name} shows balanced performance across all metrics, scoring ${((score - avgScore) / avgScore * 100).toFixed(0)}% above the restaurant average.`;
                   }
-                  
-                  const isAServer = score >= aMin;
                   
                   return (
                     <div key={emp.id} className="flex items-start gap-4 p-4 border-b border-gray-100 last:border-0 hover:bg-green-50 transition-colors rounded-lg">
@@ -534,25 +561,29 @@ export default function Dashboard() {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <h3 className="font-serif font-bold text-lg">{emp.name}</h3>
-                            {isAServer && <span className="px-2 py-0.5 bg-green-100 text-green-800 text-xs font-bold rounded-full">A-Server</span>}
+                            <span className="px-2 py-0.5 bg-green-100 text-green-800 text-xs font-bold rounded-full">
+                              +{((score - avgScore) / avgScore * 100).toFixed(0)}% vs avg
+                            </span>
                           </div>
                           <span className="text-xl font-bold text-green-600">{score.toFixed(1)}</span>
                         </div>
                         <p className="text-sm text-gray-500 capitalize mb-2">{emp.job_title || 'Server'}</p>
                         <p className="text-sm text-gray-700 italic">"{justification}"</p>
-                        <div className="flex gap-3 mt-2 text-xs text-gray-500">
-                          <span>PPA: ${ppa.toFixed(2)}</span>
-                          <span>LBW: ${lbw.toFixed(2)}</span>
-                          <span>Glass: ${glass.toFixed(2)}</span>
-                          <span>LSC: {lsc.toFixed(0)}</span>
-                          <span>CV: {cvScore >= 0 ? '+' : ''}{cvScore.toFixed(1)}</span>
-                        </div>
+                        {top2Metrics.length > 0 && (
+                          <div className="flex gap-2 mt-2">
+                            {top2Metrics.map((metric, i) => (
+                              <span key={i} className="px-2 py-1 bg-green-50 text-green-700 text-xs font-semibold rounded-full border border-green-200">
+                                {metric.name}: {metric.display}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
                 })}
-              {employees.length === 0 && (
-                <p className="text-center text-gray-500 py-8">No employees found for this quarter.</p>
+              {employees.filter(emp => (emp.total_score || 0) >= parseFloat(stats.topPerformerThreshold || 0)).length === 0 && (
+                <p className="text-center text-gray-500 py-8">No employees scoring 10% above the restaurant average.</p>
               )}
             </div>
           </div>
