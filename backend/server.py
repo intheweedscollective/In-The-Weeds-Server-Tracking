@@ -1123,7 +1123,7 @@ async def get_employee_v2(employee_id: str):
 async def generate_employee_review_v2(employee_id: str, review_data: ReviewCreateV2):
     """
     Generate AI-powered performance review PDF using V2 employee data and Q1 2026 scoring model.
-    Automatically includes bi-weekly trend chart from snapshots if available.
+    Automatically includes all 6 metric trend charts from snapshots if available.
     """
     # Get V2 employee
     employee_doc = await db.employees_v2.find_one({"id": employee_id}, {"_id": 0})
@@ -1158,27 +1158,23 @@ async def generate_employee_review_v2(employee_id: str, review_data: ReviewCreat
             {"_id": 0},
         )
         
-        # If no manual graph, try to generate bi-weekly trend chart from snapshots
+        # If no manual graph, try to generate all 6 metric trend charts from snapshots
         trend_chart_bytes = None
         if not line_graph or not line_graph.get('file_data'):
             try:
-                # Query snapshots for this quarter (default) with option to expand
-                time_range = review_data.time_range if hasattr(review_data, 'time_range') else "quarter"
-                query = {"year": review_data.year, "quarter": review_data.quarter.upper()}
-                
-                if time_range == "year":
-                    query = {"year": review_data.year}
-                elif time_range == "all":
-                    query = {}
-                
-                snapshots = await db.snapshots.find(query, {"_id": 0}).sort("snapshot_date", 1).to_list(100)
+                # Query snapshots for this quarter
+                snapshots = await db.snapshots.find(
+                    {"year": review_data.year, "quarter": review_data.quarter.upper()},
+                    {"_id": 0, "snapshot_date": 1, "employees": 1}
+                ).sort("snapshot_date", 1).to_list(100)
                 
                 if snapshots:
-                    employee_scores = []
-                    restaurant_averages = []
+                    metrics = ['ppa', 'lbw_per_guest', 'glassware_per_guest', 'guests_per_lsc', 'cv_score', 'pre_dar_score']
+                    snapshot_history = []
+                    restaurant_avg_history = []
                     
                     for snapshot in snapshots:
-                        snapshot_date = snapshot.get("snapshot_date")
+                        snapshot_date = snapshot.get("snapshot_date", "")
                         employees_list = snapshot.get("employees", [])
                         
                         if not employees_list:
@@ -1191,33 +1187,62 @@ async def generate_employee_review_v2(employee_id: str, review_data: ReviewCreat
                                 emp_data = emp
                                 break
                         
-                        # Calculate restaurant average
-                        all_scores = [e.get("total_score", 0) or 0 for e in employees_list if e.get("total_score") is not None]
-                        avg_score = sum(all_scores) / len(all_scores) if all_scores else 0
-                        
-                        restaurant_averages.append({
-                            "date": snapshot_date,
-                            "avg_score": round(avg_score, 2)
-                        })
-                        
                         if emp_data:
-                            employee_scores.append({
-                                "date": snapshot_date,
-                                "total_score": emp_data.get("total_score", 0) or 0
-                            })
+                            emp_snapshot = {"date": snapshot_date}
+                            for metric in metrics:
+                                emp_snapshot[metric] = emp_data.get(metric, 0) or 0
+                            snapshot_history.append(emp_snapshot)
+                        
+                        # Calculate restaurant averages for each metric
+                        rest_avg_entry = {"date": snapshot_date}
+                        for metric in metrics:
+                            values = [e.get(metric, 0) or 0 for e in employees_list if e.get(metric) is not None]
+                            rest_avg_entry[metric] = sum(values) / len(values) if values else 0
+                        restaurant_avg_history.append(rest_avg_entry)
                     
-                    # Generate chart if we have data points
-                    if employee_scores:
-                        trend_chart_bytes = generate_biweekly_trend_chart(
+                    # Generate multi-panel chart if we have data points
+                    if snapshot_history:
+                        # Get benchmarks from settings
+                        benchmarks = {
+                            'ppa': settings.benchmark_ppa,
+                            'lbw_per_guest': settings.benchmark_lbw,
+                            'glassware_per_guest': settings.benchmark_glass,
+                            'guests_per_lsc': settings.benchmark_lsc,
+                            'cv_score': settings.benchmark_cv,
+                            'pre_dar_score': settings.a_server_min_score
+                        }
+                        
+                        # Get previous quarter data for fallback
+                        prev_quarter, prev_year = get_previous_quarter(review_data.quarter, review_data.year)
+                        previous_doc = await db.employees_v2.find_one(
+                            {"year": prev_year, "quarter": prev_quarter, "name": employee.name},
+                            {"_id": 0}
+                        )
+                        
+                        # Calculate current restaurant averages
+                        all_employees = await db.employees_v2.find(
+                            {"year": review_data.year, "quarter": review_data.quarter.upper()},
+                            {"_id": 0}
+                        ).to_list(1000)
+                        
+                        restaurant_averages = {}
+                        for metric in metrics:
+                            values = [e.get(metric, 0) for e in all_employees if e.get(metric) is not None]
+                            restaurant_averages[metric] = sum(values) / len(values) if values else 0
+                        
+                        trend_chart_bytes = generate_employee_comparison_chart(
                             employee_name=employee.name,
-                            employee_scores=employee_scores,
+                            current_data=employee_doc,
+                            previous_data=previous_doc,
+                            current_quarter=review_data.quarter.upper(),
+                            current_year=review_data.year,
+                            benchmarks=benchmarks,
                             restaurant_averages=restaurant_averages,
-                            quarter=review_data.quarter.upper(),
-                            year=review_data.year,
-                            time_range=time_range
+                            snapshot_history=snapshot_history,
+                            restaurant_avg_history=restaurant_avg_history
                         )
             except Exception as chart_err:
-                logging.warning(f"Could not generate bi-weekly trend chart: {chart_err}")
+                logging.warning(f"Could not generate multi-panel trend chart: {chart_err}")
         
         # Create review record
         review = ReviewV2(
