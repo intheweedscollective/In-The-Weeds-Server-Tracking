@@ -600,6 +600,126 @@ export default function FullRankings() {
           </div>
         )}
 
+        {/* Top 10 Performers Sections */}
+        <div className="mt-10 space-y-8" data-testid="top-performers-section">
+          {/* Section Header */}
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
+              <Trophy className="w-5 h-5 text-yellow-600" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-serif font-bold text-foreground">Top 10 Performers</h2>
+              <p className="text-sm text-gray-500">Excellence in each performance category</p>
+            </div>
+          </div>
+
+          {/* Top 10 Overall */}
+          <div className="bubba-card" data-testid="top-overall-card">
+            <div className="tape tape-blue" style={{ top: '-8px', left: '30%', transform: 'rotate(-2deg)' }} />
+            <div className="p-5 pt-8">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
+                  <Trophy className="w-5 h-5 text-yellow-600" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-serif font-bold text-foreground">Top 10 Overall</h3>
+                  <p className="text-sm text-gray-500">Highest performers by Total Score</p>
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                {topOverall.map((employee, index) => (
+                  <div
+                    key={employee.id}
+                    className="flex items-center justify-between p-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+                    data-testid={`top-overall-${index + 1}`}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center justify-center w-10 h-10 bg-gray-100 rounded-full">
+                        {getMetricIcon(index + 1)}
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-foreground">{employee.name}</h4>
+                        <p className="text-sm text-gray-500 capitalize">{employee.tier_label || employee.job_title || 'Server'}</p>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <div className="text-2xl font-serif font-bold text-primary">
+                        {formatNumber(employee.pre_dar_score)}
+                      </div>
+                      <div className="text-sm text-gray-500">Total Score</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {topOverall.length === 0 && (
+                <div className="text-center py-8 text-gray-400">
+                  <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                  <p>No total score data available</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Top 10 by Each Metric */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {Object.entries(V2_METRICS).filter(([key]) => key !== 'pre_dar_score').map(([metricKey, metricInfo]) => {
+              const performers = topPerformers[metricKey] || [];
+              
+              return (
+                <div key={metricKey} className="bubba-card" data-testid={`top-10-${metricKey}`}>
+                  <div className="p-5">
+                    <h3 className="text-lg font-serif font-bold text-foreground mb-1">
+                      Top 10 - {metricInfo.label}
+                    </h3>
+                    <p className="text-sm text-gray-500 mb-4">
+                      {!metricInfo.higherBetter 
+                        ? `Best ${metricInfo.label} performers (lower is better)`
+                        : `Highest ${metricInfo.label} performers`
+                      }
+                    </p>
+                  
+                    <div className="space-y-2">
+                      {performers.map((employee, index) => (
+                        <div 
+                          key={employee.id} 
+                          className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center justify-center w-8 h-8 bg-gray-100 rounded-full text-sm font-bold text-primary">
+                              {index + 1}
+                            </div>
+                            
+                            <div>
+                              <h4 className="font-semibold text-foreground text-sm">{employee.name}</h4>
+                              <p className="text-xs text-gray-500 capitalize">{employee.tier_label || employee.job_title || 'Server'}</p>
+                            </div>
+                          </div>
+                          
+                          <div className="text-right">
+                            <div className="text-lg font-serif font-bold text-primary">
+                              {formatMetricValue(metricKey, employee[metricKey])}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    
+                    {performers.length === 0 && (
+                      <div className="text-center py-8 text-gray-400">
+                        <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                        <p>No performance data available for this metric</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Legend */}
         <div className="mt-6 bubba-card p-4">
           <div className="text-sm text-gray-600">
