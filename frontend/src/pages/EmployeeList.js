@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Trash2, Eye, FileText, Search, Filter, Users, X, Calendar, Target } from "lucide-react";
+import { Trash2, Eye, FileText, Search, Filter, Users, X, Calendar, Target, Plus, Pencil, Save } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import Navigation from "../components/Navigation";
@@ -12,6 +12,21 @@ import ConfirmDialog from "../components/ConfirmDialog";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+// Default values for new employee form
+const emptyEmployee = {
+  name: "",
+  job_title: "server",
+  guests: 0,
+  net_sales: 0,
+  lbw: 0,
+  glassware_sales: 0,
+  lsc_count: 0,
+  cv_promoters: 0,
+  cv_passives: 0,
+  cv_detractors: 0,
+  review_mentions: 0
+};
+
 export default function EmployeeList() {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -21,6 +36,12 @@ export default function EmployeeList() {
   const [showDetails, setShowDetails] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [employeeToDelete, setEmployeeToDelete] = useState(null);
+  
+  // Edit/Add modal state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState(null);
+  const [formData, setFormData] = useState(emptyEmployee);
+  const [saving, setSaving] = useState(false);
   
   // V2 Quarter Selection
   const [selectedYear, setSelectedYear] = useState(2026);
