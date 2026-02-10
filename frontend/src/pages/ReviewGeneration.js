@@ -17,8 +17,6 @@ export default function ReviewGeneration() {
   const [generating, setGenerating] = useState({});
   const [selectedQuarter, setSelectedQuarter] = useState("Q1");
   const [selectedYear, setSelectedYear] = useState("2026");
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
-  const [selectedGraphKind, setSelectedGraphKind] = useState("quarter");
   const [expandedTrends, setExpandedTrends] = useState({}); // Track which employee trend charts are expanded
   const [trendData, setTrendData] = useState({}); // Store trend data per employee
 
