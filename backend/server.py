@@ -1201,8 +1201,11 @@ async def generate_employee_review_v2(employee_id: str, review_data: ReviewCreat
                             rest_avg_entry[metric] = sum(values) / len(values) if values else 0
                         restaurant_avg_history.append(rest_avg_entry)
                     
+                    logging.info(f"Review generation for {employee.name}: Found {len(snapshot_history)} snapshot data points")
+                    
                     # Generate multi-panel chart if we have data points
                     if snapshot_history:
+                        logging.info(f"Generating multi-panel chart for {employee.name} with {len(snapshot_history)} snapshots")
                         # Get benchmarks from settings
                         benchmarks = {
                             'ppa': settings.benchmark_ppa,
