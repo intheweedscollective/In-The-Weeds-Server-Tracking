@@ -2119,7 +2119,7 @@ async def create_employee(data: EmployeeCreate):
     from scoring_engine import (
         EmployeeV2, calculate_derived_metrics, calculate_customer_voice_score,
         calculate_review_tracker_bonus, calculate_normalized_scores,
-        calculate_metric_bonuses, calculate_total_score
+        calculate_bonus_points, calculate_total_score
     )
     
     # Get quarter settings
