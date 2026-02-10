@@ -35,11 +35,11 @@ export default function Dashboard() {
     const avgScore = total > 0 ? employees.reduce((sum, emp) => sum + (emp.total_score || 0), 0) / total : 0;
     
     // Get thresholds from settings
-    const aServerThreshold = quarterSettings?.a_server_min_score || 80;
     const bServerThreshold = quarterSettings?.b_server_min_score || 70;
     
-    // Top performers: score >= A-Server threshold
-    const topPerformers = employees.filter(emp => (emp.total_score || 0) >= aServerThreshold).length;
+    // Top performers: score >= 10% above restaurant average
+    const topPerformerThreshold = avgScore * 1.10;
+    const topPerformers = employees.filter(emp => (emp.total_score || 0) >= topPerformerThreshold).length;
     
     // Under performers: score < B-Server threshold (C-Servers)
     const underPerformers = employees.filter(emp => {
@@ -53,7 +53,8 @@ export default function Dashboard() {
       totalEmployees: total,
       avgTotalScore: avgScore.toFixed(1),
       topPerformers,
-      underPerformers
+      underPerformers,
+      topPerformerThreshold: topPerformerThreshold.toFixed(1)
     });
   }, [employees, quarterSettings]);
 
