@@ -249,60 +249,6 @@ export default function ReviewGeneration() {
           </div>
         </div>
 
-        {/* Line Graph Upload Section */}
-        <div className="bubba-card mb-8" data-testid="line-graph-upload-card">
-          <div className="tape tape-blue" style={{ top: '-8px', left: '50%', transform: 'translateX(-50%) rotate(1deg)' }} />
-          <div className="p-6 pt-8">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                <Anchor className="w-5 h-5 text-secondary" />
-              </div>
-              <div>
-                <h2 className="text-lg font-serif font-bold text-foreground">Crew Line Graph</h2>
-                <p className="text-sm text-gray-500">Upload quarterly chart for page 2</p>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Crew Member</label>
-                <select
-                  className="w-full h-10 rounded-lg border-2 border-gray-200 bg-white px-3 text-sm focus:border-primary transition-colors"
-                  value={selectedEmployeeId}
-                  onChange={(e) => setSelectedEmployeeId(e.target.value)}
-                  data-testid="line-graph-employee-select"
-                >
-                  <option value="">Select a crew member</option>
-                  {employees.map((e) => (
-                    <option key={e.id} value={e.id}>{e.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Graph Type</label>
-                <select
-                  className="w-full h-10 rounded-lg border-2 border-gray-200 bg-white px-3 text-sm focus:border-primary transition-colors"
-                  value={selectedGraphKind}
-                  onChange={(e) => setSelectedGraphKind(e.target.value)}
-                  data-testid="line-graph-kind-select"
-                >
-                  <option value="quarter">Quarterly</option>
-                  <option value="ytd">Year-to-date</option>
-                </select>
-              </div>
-            </div>
-
-            <LineGraphUpload
-              employeeId={selectedEmployeeId}
-              quarter={selectedQuarter}
-              year={parseInt(selectedYear)}
-              graphKind={selectedGraphKind}
-              onUploadSuccess={() => toast.success("Line graph uploaded successfully!")}
-            />
-          </div>
-        </div>
-
         {/* Employee List */}
         {employees.length === 0 ? (
           <div className="bubba-card p-12 text-center" data-testid="no-employees">
