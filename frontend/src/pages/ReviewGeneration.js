@@ -307,7 +307,7 @@ export default function ReviewGeneration() {
                             { label: 'PPA', value: `$${(employee.ppa || 0).toFixed(0)}`, color: 'text-secondary' },
                             { label: 'LBW/G', value: `$${(employee.lbw_per_guest || 0).toFixed(2)}`, color: 'text-gray-600' },
                             { label: 'Glass', value: `$${(employee.glassware_per_guest || 0).toFixed(2)}`, color: 'text-blue-600' },
-                            { label: 'LSC', value: (employee.guests_per_lsc || 0).toFixed(0), color: 'text-green-600' },
+                            { label: 'LSC Ratio', value: (employee.guests_per_lsc || 0).toFixed(0), color: 'text-green-600' },
                             { label: 'CV', value: formatNumber(employee.cv_score || 0), color: 'text-purple-600' },
                           ].map((kpi, i) => (
                             <div key={i} className="text-center px-2 py-1 bg-gray-50 rounded-lg min-w-[50px]">
