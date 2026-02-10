@@ -391,6 +391,16 @@ export default function EmployeeList() {
                     {/* Actions */}
                     <div className="flex gap-2">
                       <Button 
+                        onClick={() => openEditModal(employee)}
+                        variant="outline" 
+                        size="sm" 
+                        className="flex-1 border-2 border-blue-200 hover:bg-blue-50"
+                        data-testid={`edit-employee-btn-${employee.id}`}
+                      >
+                        <Pencil className="w-4 h-4 mr-2" />
+                        Edit
+                      </Button>
+                      <Button 
                         onClick={() => {
                           setSelectedEmployee(employee);
                           setShowDetails(true);
