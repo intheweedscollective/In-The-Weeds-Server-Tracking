@@ -2077,6 +2077,212 @@ async def get_top_performers_v2(year: int, quarter: str, limit: int = 10):
     }
 
 
+# === EMPLOYEE CRUD OPERATIONS ===
+
+class EmployeeCreate(BaseModel):
+    """Model for creating a new employee"""
+    name: str
+    job_title: str = "server"
+    year: int = 2026
+    quarter: str = "Q1"
+    guests: float = 0
+    net_sales: float = 0
+    lbw: float = 0
+    glassware_sales: float = 0
+    lsc_count: int = 0
+    cv_promoters: int = 0
+    cv_passives: int = 0
+    cv_detractors: int = 0
+    review_mentions: int = 0
+
+
+class EmployeeUpdate(BaseModel):
+    """Model for updating an employee"""
+    name: Optional[str] = None
+    job_title: Optional[str] = None
+    guests: Optional[float] = None
+    net_sales: Optional[float] = None
+    lbw: Optional[float] = None
+    glassware_sales: Optional[float] = None
+    lsc_count: Optional[int] = None
+    cv_promoters: Optional[int] = None
+    cv_passives: Optional[int] = None
+    cv_detractors: Optional[int] = None
+    review_mentions: Optional[int] = None
+
+
+@api_router.post("/v2/employees")
+async def create_employee(data: EmployeeCreate):
+    """
+    Create a new employee and calculate their scores.
+    """
+    from scoring_engine import (
+        EmployeeV2, calculate_derived_metrics, calculate_customer_voice_score,
+        calculate_review_tracker_bonus, calculate_normalized_scores,
+        calculate_metric_bonuses, calculate_total_score
+    )
+    
+    # Get quarter settings
+    settings_doc = await db.quarter_settings.find_one(
+        {"year": data.year, "quarter": data.quarter.upper()},
+        {"_id": 0}
+    )
+    if not settings_doc:
+        raise HTTPException(status_code=400, detail=f"No settings found for {data.quarter} {data.year}. Create settings first.")
+    
+    from scoring_engine import QuarterSettings
+    settings = QuarterSettings(**settings_doc)
+    
+    # Create employee object
+    employee = EmployeeV2(
+        id=str(uuid.uuid4()),
+        name=data.name,
+        job_title=data.job_title.lower(),
+        year=data.year,
+        quarter=data.quarter.upper(),
+        guests=data.guests,
+        net_sales=data.net_sales,
+        lbw=data.lbw,
+        glassware_sales=data.glassware_sales,
+        lsc_count=data.lsc_count,
+        cv_promoters=data.cv_promoters,
+        cv_passives=data.cv_passives,
+        cv_detractors=data.cv_detractors,
+        review_mentions=data.review_mentions
+    )
+    
+    # Run through scoring pipeline
+    employee = calculate_derived_metrics(employee)
+    employee = calculate_customer_voice_score(employee)
+    employee = calculate_review_tracker_bonus(employee)
+    employee = calculate_normalized_scores(employee, settings)
+    employee = calculate_metric_bonuses(employee, settings)
+    employee = calculate_total_score(employee, settings)
+    
+    # Assign tier
+    score = employee.pre_dar_score or 0
+    job = employee.job_title.lower()
+    if job in ['trainer', 'bartender']:
+        employee.tier_label = job.title()
+    elif score >= settings.a_server_min_score:
+        employee.tier_label = "A-Server"
+    elif score >= settings.b_server_min_score:
+        employee.tier_label = "B-Server"
+    else:
+        employee.tier_label = "C-Server"
+    
+    # Save to database
+    emp_dict = employee.model_dump()
+    emp_dict['created_at'] = datetime.now(timezone.utc).isoformat()
+    await db.employees_v2.insert_one(emp_dict)
+    
+    # Recalculate peer rankings for all employees in this quarter
+    all_employees = await db.employees_v2.find(
+        {"year": data.year, "quarter": data.quarter.upper()},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    # Sort and assign peer ranks
+    sorted_emps = sorted(all_employees, key=lambda x: x.get('pre_dar_score', 0) or 0, reverse=True)
+    for rank, emp in enumerate(sorted_emps, 1):
+        await db.employees_v2.update_one(
+            {"id": emp['id']},
+            {"$set": {"peer_rank": rank}}
+        )
+    
+    return {"success": True, "employee_id": employee.id, "message": f"Created {employee.name} with score {employee.total_score}"}
+
+
+@api_router.put("/v2/employees/{employee_id}")
+async def update_employee(employee_id: str, data: EmployeeUpdate):
+    """
+    Update an existing employee and recalculate their scores.
+    """
+    from scoring_engine import (
+        EmployeeV2, calculate_derived_metrics, calculate_customer_voice_score,
+        calculate_review_tracker_bonus, calculate_normalized_scores,
+        calculate_metric_bonuses, calculate_total_score, QuarterSettings
+    )
+    
+    # Get existing employee
+    emp_doc = await db.employees_v2.find_one({"id": employee_id}, {"_id": 0})
+    if not emp_doc:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    # Get quarter settings
+    settings_doc = await db.quarter_settings.find_one(
+        {"year": emp_doc['year'], "quarter": emp_doc['quarter']},
+        {"_id": 0}
+    )
+    if not settings_doc:
+        raise HTTPException(status_code=400, detail="No settings found for this quarter")
+    
+    settings = QuarterSettings(**settings_doc)
+    
+    # Update fields that were provided
+    update_data = data.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        emp_doc[key] = value
+    
+    # Convert to EmployeeV2 and recalculate
+    if isinstance(emp_doc.get('created_at'), str):
+        emp_doc['created_at'] = datetime.fromisoformat(emp_doc['created_at'])
+    
+    employee = EmployeeV2(**emp_doc)
+    
+    # Re-run scoring pipeline
+    employee = calculate_derived_metrics(employee)
+    employee = calculate_customer_voice_score(employee)
+    employee = calculate_review_tracker_bonus(employee)
+    employee = calculate_normalized_scores(employee, settings)
+    employee = calculate_metric_bonuses(employee, settings)
+    employee = calculate_total_score(employee, settings)
+    
+    # Reassign tier
+    score = employee.pre_dar_score or 0
+    job = employee.job_title.lower()
+    if job in ['trainer', 'bartender']:
+        employee.tier_label = job.title()
+    elif score >= settings.a_server_min_score:
+        employee.tier_label = "A-Server"
+    elif score >= settings.b_server_min_score:
+        employee.tier_label = "B-Server"
+    else:
+        employee.tier_label = "C-Server"
+    
+    # Update in database
+    emp_dict = employee.model_dump()
+    emp_dict['created_at'] = emp_dict['created_at'].isoformat() if isinstance(emp_dict['created_at'], datetime) else emp_dict['created_at']
+    await db.employees_v2.update_one(
+        {"id": employee_id},
+        {"$set": emp_dict}
+    )
+    
+    # Recalculate peer rankings
+    all_employees = await db.employees_v2.find(
+        {"year": emp_doc['year'], "quarter": emp_doc['quarter']},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    sorted_emps = sorted(all_employees, key=lambda x: x.get('pre_dar_score', 0) or 0, reverse=True)
+    for rank, emp in enumerate(sorted_emps, 1):
+        await db.employees_v2.update_one(
+            {"id": emp['id']},
+            {"$set": {"peer_rank": rank}}
+        )
+    
+    return {"success": True, "message": f"Updated {employee.name} - new score: {employee.total_score}"}
+
+
+@api_router.delete("/v2/employees/{employee_id}")
+async def delete_employee(employee_id: str):
+    """Delete a single employee"""
+    result = await db.employees_v2.delete_one({"id": employee_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    return {"success": True, "message": "Employee deleted"}
+
+
 @api_router.delete("/v2/employees")
 async def clear_employees_v2(year: Optional[int] = None, quarter: Optional[str] = None):
     """Clear V2 employees (optionally for specific quarter)"""
