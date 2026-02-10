@@ -2705,6 +2705,7 @@ async def get_employee_trend_chart(year: int, quarter: str, employee_id: str, ch
         
         snapshot_history = []
         restaurant_avg_history = []
+        metrics = ['ppa', 'lbw_per_guest', 'glassware_per_guest', 'guests_per_lsc', 'cv_score', 'pre_dar_score']
         
         for snap in snapshots:
             snap_date = snap.get("snapshot_date", "")
@@ -2713,18 +2714,17 @@ async def get_employee_trend_chart(year: int, quarter: str, employee_id: str, ch
             # Find this employee in the snapshot
             emp_data = next((e for e in employees_in_snap if e.get("name") == employee_name), None)
             if emp_data:
-                snapshot_history.append({
-                    "date": snap_date,
-                    "total_score": emp_data.get("pre_dar_score", emp_data.get("total_score", 0)) or 0
-                })
+                emp_snapshot = {"date": snap_date}
+                for metric in metrics:
+                    emp_snapshot[metric] = emp_data.get(metric, 0) or 0
+                snapshot_history.append(emp_snapshot)
             
-            # Calculate restaurant average for this snapshot
-            scores = [e.get("pre_dar_score", e.get("total_score", 0)) or 0 for e in employees_in_snap]
-            if scores:
-                restaurant_avg_history.append({
-                    "date": snap_date,
-                    "avg_score": sum(scores) / len(scores)
-                })
+            # Calculate restaurant averages for each metric in this snapshot
+            rest_avg_entry = {"date": snap_date}
+            for metric in metrics:
+                values = [e.get(metric, 0) or 0 for e in employees_in_snap if e.get(metric) is not None]
+                rest_avg_entry[metric] = sum(values) / len(values) if values else 0
+            restaurant_avg_history.append(rest_avg_entry)
         
         # Calculate current restaurant average (for fallback)
         all_employees = await db.employees_v2.find(
@@ -2733,7 +2733,6 @@ async def get_employee_trend_chart(year: int, quarter: str, employee_id: str, ch
         ).to_list(1000)
         
         restaurant_averages = {}
-        metrics = ['ppa', 'lbw_per_guest', 'glassware_per_guest', 'guests_per_lsc', 'cv_score', 'pre_dar_score']
         for metric in metrics:
             values = [e.get(metric, 0) for e in all_employees if e.get(metric) is not None]
             restaurant_averages[metric] = sum(values) / len(values) if values else 0
