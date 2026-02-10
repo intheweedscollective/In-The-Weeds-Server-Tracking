@@ -98,11 +98,22 @@ export default function Dashboard() {
     }
   }, [selectedYear, selectedQuarter]);
 
+  const checkFinalizationStatus = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API}/v2/finalization/${selectedYear}/${selectedQuarter}`);
+      setIsQuarterFinalized(response.data.is_finalized || false);
+    } catch (error) {
+      console.error("Error checking finalization:", error);
+      setIsQuarterFinalized(false);
+    }
+  }, [selectedYear, selectedQuarter]);
+
   useEffect(() => {
     fetchQuarterSettings();
     fetchEmployeesForQuarter();
     fetchLatestSnapshot();
-  }, [fetchQuarterSettings, fetchEmployeesForQuarter, fetchLatestSnapshot]);
+    checkFinalizationStatus();
+  }, [fetchQuarterSettings, fetchEmployeesForQuarter, fetchLatestSnapshot, checkFinalizationStatus]);
 
   useEffect(() => {
     calculateStats();
