@@ -178,11 +178,13 @@ def generate_employee_comparison_chart(
         # Add value labels for employee points
         for xi, val in zip(x, emp_values):
             if val > 0:
-                ax.annotate(config['format'].format(val),
+                formatted_val = config['format'].format(val)
+                ax.annotate(formatted_val,
                            xy=(xi, val),
-                           xytext=(0, 8), textcoords="offset points",
-                           ha='center', va='bottom', fontsize=9, fontweight='bold',
-                           color=COLORS['primary'])
+                           xytext=(0, 10), textcoords="offset points",
+                           ha='center', va='bottom', fontsize=10, fontweight='bold',
+                           color=COLORS['primary'],
+                           bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='none'))
         
         # Styling - Add box/border around each subplot
         ax.set_title(metric_label, fontsize=12, fontweight='bold', color=COLORS['text'], pad=10)
