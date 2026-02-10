@@ -12,7 +12,6 @@ export default function Navigation() {
     { path: "/snapshots", label: "Snapshots", icon: Camera },
     { path: "/yodeck", label: "Yodeck", icon: Monitor },
     { path: "/analytics", label: "Analytics", icon: BarChart3 },
-    { path: "/top-performers", label: "Top", icon: Trophy },
     { path: "/settings", label: "Settings", icon: Settings },
   ];
 
