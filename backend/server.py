@@ -2778,6 +2778,28 @@ async def get_employee_trend_chart(year: int, quarter: str, employee_id: str, ch
                 rest_avg_entry[metric] = sum(values) / len(values) if values else 0
             restaurant_avg_history.append(rest_avg_entry)
         
+        # Always add current employee data as "Current" data point
+        current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        current_emp_snapshot = {"date": current_date}
+        for metric in metrics:
+            current_emp_snapshot[metric] = current_doc.get(metric, 0) or 0
+        
+        # Add current data if it's different from the last snapshot or if no snapshots
+        if not snapshot_history or snapshot_history[-1].get('date') != current_date:
+            snapshot_history.append(current_emp_snapshot)
+            
+            # Also add current restaurant average
+            all_current_employees = await db.employees_v2.find(
+                {"year": year, "quarter": quarter.upper()},
+                {"_id": 0}
+            ).to_list(1000)
+            
+            current_rest_avg = {"date": current_date}
+            for metric in metrics:
+                values = [e.get(metric, 0) for e in all_current_employees if e.get(metric) is not None]
+                current_rest_avg[metric] = sum(values) / len(values) if values else 0
+            restaurant_avg_history.append(current_rest_avg)
+        
         # Calculate current restaurant average (for fallback)
         all_employees = await db.employees_v2.find(
             {"year": year, "quarter": quarter.upper()},
