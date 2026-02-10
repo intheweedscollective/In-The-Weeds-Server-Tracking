@@ -29,7 +29,7 @@ METRICS_CONFIG = {
     'ppa': {'label': 'PPA', 'format': '${:.2f}', 'benchmark': 55.0, 'higher_better': True},
     'lbw_per_guest': {'label': 'LBW/Guest', 'format': '${:.2f}', 'benchmark': 8.0, 'higher_better': True},
     'glassware_per_guest': {'label': 'Glass/Guest', 'format': '${:.2f}', 'benchmark': 1.0, 'higher_better': True},
-    'guests_per_lsc': {'label': 'Guests/LSC', 'format': '{:.1f}', 'benchmark': 100.0, 'higher_better': False},
+    'guests_per_lsc': {'label': 'LSC Ratio', 'format': '{:.1f}', 'benchmark': 100.0, 'higher_better': False},
     'cv_score': {'label': 'CV Score', 'format': '{:.1f}', 'benchmark': 5.0, 'higher_better': True},
     'pre_dar_score': {'label': 'Total Score', 'format': '{:.1f}', 'benchmark': 85.0, 'higher_better': True},
 }
