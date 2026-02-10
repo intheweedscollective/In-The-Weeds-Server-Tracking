@@ -1045,7 +1045,7 @@ export default function QuarterSettings() {
               <p className="text-gray-600 mb-3">Configure how scores are calculated and how slides look.</p>
               <ul className="text-sm text-gray-600 space-y-1 ml-10">
                 <li>• <strong>Benchmarks</strong> - Target values for PPA, LBW, Glassware, LSC, CV</li>
-                <li>• <strong>Weights</strong> - How much each metric contributes to total score (must = 100%)</li>
+                <li>• <strong>Weights</strong> - How much each metric (PPA, LBW, Glass, LSC) contributes to base score (must = 85%). CV points are added separately.</li>
                 <li>• <strong>Tier Thresholds</strong> - Score cutoffs for A-Server (≥80) and B-Server (≥70)</li>
                 <li>• <strong>Slide Themes</strong> - Colors and seasonal decorations for Yodeck</li>
               </ul>
