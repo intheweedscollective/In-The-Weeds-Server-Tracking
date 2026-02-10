@@ -104,6 +104,56 @@ export default function FullRankings() {
     return employees.find(e => e.id === employeeId) || {};
   };
 
+  // Get top employees for a specific metric
+  const getTopEmployees = useCallback((metric, limit = 10) => {
+    const config = V2_METRICS[metric];
+    if (!config) return [];
+    const valid = employees.filter((e) => e[metric] != null);
+
+    const sorted = [...valid].sort((a, b) => {
+      if (!config.higherBetter) return (a[metric] || 0) - (b[metric] || 0);
+      return (b[metric] || 0) - (a[metric] || 0);
+    });
+
+    return sorted.slice(0, limit);
+  }, [employees]);
+
+  // Format metric value for display
+  const formatMetricValue = (metric, value) => {
+    if (value == null) return "N/A";
+    const config = V2_METRICS[metric];
+    if (!config) return formatNumber(value);
+    
+    switch (config.format) {
+      case 'currency':
+        return formatCurrency(value);
+      default:
+        return formatNumber(value);
+    }
+  };
+
+  // Top 10 by each metric
+  const topPerformers = useMemo(() => {
+    const result = {};
+    Object.keys(V2_METRICS).forEach(metric => {
+      result[metric] = getTopEmployees(metric, 10);
+    });
+    return result;
+  }, [getTopEmployees]);
+
+  // Top 10 overall
+  const topOverall = useMemo(() => {
+    return getTopEmployees('pre_dar_score', 10);
+  }, [getTopEmployees]);
+
+  // Get icon for rank position
+  const getMetricIcon = (rank) => {
+    if (rank === 1) return <Trophy className="w-5 h-5 text-yellow-500" />;
+    if (rank === 2) return <Medal className="w-5 h-5 text-gray-400" />;
+    if (rank === 3) return <Award className="w-5 h-5 text-amber-600" />;
+    return <span className="text-sm font-bold text-gray-500">#{rank}</span>;
+  };
+
   useEffect(() => {
     fetchRankings();
   }, [fetchRankings]);
