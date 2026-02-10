@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { Users, FileText, TrendingUp, Award, Target, Fish, Settings, Camera, Download, X, AlertTriangle } from "lucide-react";
+import { Users, FileText, TrendingUp, Award, Target, Fish, Settings, Camera, Download, X, AlertTriangle, Lock, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import Navigation from "../components/Navigation";
 import StatsCard from "../components/StatsCard";
+import FinalizeQuarterModal from "../components/FinalizeQuarterModal";
 import { formatNumber } from "../utils/formatters";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -22,6 +23,8 @@ export default function Dashboard() {
   // Modal states
   const [showTopPerformers, setShowTopPerformers] = useState(false);
   const [showUnderPerformers, setShowUnderPerformers] = useState(false);
+  const [showFinalizeModal, setShowFinalizeModal] = useState(false);
+  const [isQuarterFinalized, setIsQuarterFinalized] = useState(false);
 
   const [stats, setStats] = useState({
     totalEmployees: 0,
