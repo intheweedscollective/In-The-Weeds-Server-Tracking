@@ -1169,11 +1169,11 @@ async def generate_employee_review_v2(employee_id: str, review_data: ReviewCreat
                     {"_id": 0, "snapshot_date": 1, "employees": 1}
                 ).sort("snapshot_date", 1).to_list(100)
                 
+                metrics = ['ppa', 'lbw_per_guest', 'glassware_per_guest', 'guests_per_lsc', 'cv_score', 'pre_dar_score']
+                snapshot_history = []
+                restaurant_avg_history = []
+                
                 if snapshots:
-                    metrics = ['ppa', 'lbw_per_guest', 'glassware_per_guest', 'guests_per_lsc', 'cv_score', 'pre_dar_score']
-                    snapshot_history = []
-                    restaurant_avg_history = []
-                    
                     for snapshot in snapshots:
                         snapshot_date = snapshot.get("snapshot_date", "")
                         employees_list = snapshot.get("employees", [])
@@ -1200,11 +1200,34 @@ async def generate_employee_review_v2(employee_id: str, review_data: ReviewCreat
                             values = [e.get(metric, 0) or 0 for e in employees_list if e.get(metric) is not None]
                             rest_avg_entry[metric] = sum(values) / len(values) if values else 0
                         restaurant_avg_history.append(rest_avg_entry)
+                
+                # Always add current employee data as "Current" data point
+                # This ensures we always have at least one point, even if not in snapshots
+                current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+                current_emp_snapshot = {"date": current_date}
+                for metric in metrics:
+                    current_emp_snapshot[metric] = employee_doc.get(metric, 0) or 0
+                
+                # Add current data if it's different from the last snapshot or if no snapshots
+                if not snapshot_history or snapshot_history[-1].get('date') != current_date:
+                    snapshot_history.append(current_emp_snapshot)
                     
-                    logging.info(f"Review generation for {employee.name}: Found {len(snapshot_history)} snapshot data points")
+                    # Also add current restaurant average
+                    all_current_employees = await db.employees_v2.find(
+                        {"year": review_data.year, "quarter": review_data.quarter.upper()},
+                        {"_id": 0}
+                    ).to_list(1000)
                     
-                    # Generate multi-panel chart if we have data points
-                    if snapshot_history:
+                    current_rest_avg = {"date": current_date}
+                    for metric in metrics:
+                        values = [e.get(metric, 0) for e in all_current_employees if e.get(metric) is not None]
+                        current_rest_avg[metric] = sum(values) / len(values) if values else 0
+                    restaurant_avg_history.append(current_rest_avg)
+                
+                logging.info(f"Review generation for {employee.name}: Found {len(snapshot_history)} data points (including current)")
+                
+                # Generate multi-panel chart if we have data points
+                if snapshot_history:
                         logging.info(f"Generating multi-panel chart for {employee.name} with {len(snapshot_history)} snapshots")
                         # Get benchmarks from settings
                         benchmarks = {
