@@ -2693,10 +2693,40 @@ async def get_employee_trend_chart(year: int, quarter: str, employee_id: str, ch
             'glassware_per_guest': settings.get('benchmark_glass', 1.0) if settings else 1.0,
             'guests_per_lsc': settings.get('benchmark_lsc', 100.0) if settings else 100.0,
             'cv_score': settings.get('benchmark_cv', 5.0) if settings else 5.0,
-            'pre_dar_score': 85.0  # Standard benchmark for total score
+            'pre_dar_score': settings.get('a_server_min_score', 85.0) if settings else 85.0
         }
         
-        # Calculate restaurant averages for this quarter
+        # Get snapshot history for this employee in this quarter
+        employee_name = current_doc.get("name")
+        snapshots = await db.snapshots.find(
+            {"year": year, "quarter": quarter.upper()},
+            {"_id": 0, "snapshot_date": 1, "employees": 1}
+        ).sort("snapshot_date", 1).to_list(100)
+        
+        snapshot_history = []
+        restaurant_avg_history = []
+        
+        for snap in snapshots:
+            snap_date = snap.get("snapshot_date", "")
+            employees_in_snap = snap.get("employees", [])
+            
+            # Find this employee in the snapshot
+            emp_data = next((e for e in employees_in_snap if e.get("name") == employee_name), None)
+            if emp_data:
+                snapshot_history.append({
+                    "date": snap_date,
+                    "total_score": emp_data.get("pre_dar_score", emp_data.get("total_score", 0)) or 0
+                })
+            
+            # Calculate restaurant average for this snapshot
+            scores = [e.get("pre_dar_score", e.get("total_score", 0)) or 0 for e in employees_in_snap]
+            if scores:
+                restaurant_avg_history.append({
+                    "date": snap_date,
+                    "avg_score": sum(scores) / len(scores)
+                })
+        
+        # Calculate current restaurant average (for fallback)
         all_employees = await db.employees_v2.find(
             {"year": year, "quarter": quarter.upper()},
             {"_id": 0}
@@ -2713,7 +2743,9 @@ async def get_employee_trend_chart(year: int, quarter: str, employee_id: str, ch
             current_doc, previous_doc,
             quarter.upper(), year,
             benchmarks=benchmarks,
-            restaurant_averages=restaurant_averages
+            restaurant_averages=restaurant_averages,
+            snapshot_history=snapshot_history,
+            restaurant_avg_history=restaurant_avg_history
         )
     
     return Response(
