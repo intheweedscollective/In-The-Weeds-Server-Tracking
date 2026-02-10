@@ -677,10 +677,10 @@ export default function Analytics() {
                       <div className="w-full bg-gray-200 rounded-full h-6 overflow-hidden">
                         <div className="h-full flex">
                           <div 
-                            className="bg-green-500 h-full flex items-center justify-center text-white text-xs font-medium"
-                            style={{ width: `${getPercentage(data.high, total)}%` }}
+                            className="bg-orange-500 h-full flex items-center justify-center text-white text-xs font-medium"
+                            style={{ width: `${getPercentage(data.low, total)}%` }}
                           >
-                            {getPercentage(data.high, total) > 10 ? `${getPercentage(data.high, total)}%` : ''}
+                            {getPercentage(data.low, total) > 10 ? `${getPercentage(data.low, total)}%` : ''}
                           </div>
                           <div 
                             className="bg-yellow-500 h-full flex items-center justify-center text-white text-xs font-medium"
@@ -689,25 +689,25 @@ export default function Analytics() {
                             {getPercentage(data.medium, total) > 10 ? `${getPercentage(data.medium, total)}%` : ''}
                           </div>
                           <div 
-                            className="bg-orange-500 h-full flex items-center justify-center text-white text-xs font-medium"
-                            style={{ width: `${getPercentage(data.low, total)}%` }}
+                            className="bg-green-500 h-full flex items-center justify-center text-white text-xs font-medium"
+                            style={{ width: `${getPercentage(data.high, total)}%` }}
                           >
-                            {getPercentage(data.low, total) > 10 ? `${getPercentage(data.low, total)}%` : ''}
+                            {getPercentage(data.high, total) > 10 ? `${getPercentage(data.high, total)}%` : ''}
                           </div>
                         </div>
                       </div>
                       <div className="flex justify-between text-xs text-gray-500">
                         <span className="flex items-center gap-1">
-                          <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                          High ({data.high})
+                          <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
+                          Low ({data.low})
                         </span>
                         <span className="flex items-center gap-1">
                           <span className="w-2 h-2 bg-yellow-500 rounded-full"></span>
                           Medium ({data.medium})
                         </span>
                         <span className="flex items-center gap-1">
-                          <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
-                          Low ({data.low})
+                          <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                          High ({data.high})
                         </span>
                       </div>
                     </div>
