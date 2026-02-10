@@ -464,7 +464,7 @@ export default function Dashboard() {
                 <Award className="w-8 h-8 text-white" />
                 <div>
                   <h2 className="text-2xl font-serif font-bold text-white">Top Performers</h2>
-                  <p className="text-green-100 text-sm">{selectedQuarter} {selectedYear} • Score ≥ {quarterSettings?.a_server_min_score || 80}</p>
+                  <p className="text-green-100 text-sm">{selectedQuarter} {selectedYear} • Top 10 by Total Score</p>
                 </div>
               </div>
               <button onClick={() => setShowTopPerformers(false)} className="text-white hover:bg-white/20 rounded-full p-2 transition-colors">
@@ -473,23 +473,54 @@ export default function Dashboard() {
             </div>
             <div className="p-6 overflow-y-auto max-h-[60vh]">
               {employees
-                .filter(emp => (emp.total_score || 0) >= (quarterSettings?.a_server_min_score || 80))
+                .slice(0, 10)
                 .map((emp, idx) => {
                   const score = emp.total_score || 0;
                   const aMin = quarterSettings?.a_server_min_score || 80;
                   const jobTitle = (emp.job_title || 'server').toLowerCase();
+                  const ppa = emp.ppa || 0;
+                  const lbw = emp.lbw_per_guest || 0;
+                  const glass = emp.glassware_per_guest || 0;
+                  const lsc = emp.guests_per_lsc || 0;
+                  const cvScore = emp.cv_score || 0;
+                  const ppaBenchmark = quarterSettings?.benchmark_ppa || 55;
+                  const lbwBenchmark = quarterSettings?.benchmark_lbw || 8;
+                  const glassBenchmark = quarterSettings?.benchmark_glass || 1;
+                  const lscBenchmark = quarterSettings?.benchmark_lsc || 100;
                   
-                  // Generate justification
+                  // Generate specific justification based on actual metrics
                   let justification = '';
+                  const strengths = [];
+                  const areas = [];
+                  
+                  if (ppa >= ppaBenchmark * 1.1) strengths.push(`exceptional PPA of $${ppa.toFixed(2)}`);
+                  else if (ppa >= ppaBenchmark) strengths.push(`solid PPA of $${ppa.toFixed(2)}`);
+                  else areas.push('PPA');
+                  
+                  if (lbw >= lbwBenchmark * 1.1) strengths.push(`strong LBW at $${lbw.toFixed(2)}/guest`);
+                  else if (lbw >= lbwBenchmark) strengths.push(`consistent LBW at $${lbw.toFixed(2)}/guest`);
+                  else areas.push('LBW');
+                  
+                  if (glass >= glassBenchmark * 1.2) strengths.push(`excellent glassware sales ($${glass.toFixed(2)}/guest)`);
+                  
+                  if (lsc <= lscBenchmark * 0.9 && lsc > 0) strengths.push(`efficient guest handling (${lsc.toFixed(0)} guests/LSC)`);
+                  
+                  if (cvScore > 3) strengths.push(`outstanding customer feedback (+${cvScore.toFixed(1)} CV)`);
+                  else if (cvScore > 0) strengths.push(`positive customer voice (+${cvScore.toFixed(1)} CV)`);
+                  
                   if (jobTitle.includes('trainer')) {
-                    justification = `As a Trainer with a ${score.toFixed(1)} score, ${emp.name} demonstrates leadership and mentoring abilities that elevate the entire team.`;
+                    justification = `As a Trainer scoring ${score.toFixed(1)}, ${emp.name} leads by example with ${strengths.slice(0, 2).join(' and ')}.`;
                   } else if (jobTitle.includes('bartender')) {
-                    justification = `${emp.name} excels behind the bar with a ${score.toFixed(1)} score, showing strong upselling skills and customer engagement.`;
-                  } else if (score >= aMin + 10) {
-                    justification = `Exceptional performance with a ${score.toFixed(1)} score. ${emp.name} consistently exceeds expectations across all metrics.`;
+                    justification = `Behind the bar, ${emp.name} delivers ${score.toFixed(1)} points through ${strengths.slice(0, 2).join(' and ')}.`;
+                  } else if (strengths.length >= 3) {
+                    justification = `${emp.name} excels with ${strengths.slice(0, 3).join(', ')}, earning a ${score.toFixed(1)} total score.`;
+                  } else if (strengths.length >= 1) {
+                    justification = `${emp.name} demonstrates ${strengths.join(' and ')}, achieving ${score.toFixed(1)} points this quarter.`;
                   } else {
-                    justification = `Solid A-Server performance at ${score.toFixed(1)}. ${emp.name} meets high standards in PPA, LBW, and guest satisfaction.`;
+                    justification = `${emp.name} maintains consistent performance with a ${score.toFixed(1)} score across all metrics.`;
                   }
+                  
+                  const isAServer = score >= aMin;
                   
                   return (
                     <div key={emp.id} className="flex items-start gap-4 p-4 border-b border-gray-100 last:border-0 hover:bg-green-50 transition-colors rounded-lg">
@@ -500,17 +531,27 @@ export default function Dashboard() {
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center justify-between">
-                          <h3 className="font-serif font-bold text-lg">{emp.name}</h3>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-serif font-bold text-lg">{emp.name}</h3>
+                            {isAServer && <span className="px-2 py-0.5 bg-green-100 text-green-800 text-xs font-bold rounded-full">A-Server</span>}
+                          </div>
                           <span className="text-xl font-bold text-green-600">{score.toFixed(1)}</span>
                         </div>
                         <p className="text-sm text-gray-500 capitalize mb-2">{emp.job_title || 'Server'}</p>
                         <p className="text-sm text-gray-700 italic">"{justification}"</p>
+                        <div className="flex gap-3 mt-2 text-xs text-gray-500">
+                          <span>PPA: ${ppa.toFixed(2)}</span>
+                          <span>LBW: ${lbw.toFixed(2)}</span>
+                          <span>Glass: ${glass.toFixed(2)}</span>
+                          <span>LSC: {lsc.toFixed(0)}</span>
+                          <span>CV: {cvScore >= 0 ? '+' : ''}{cvScore.toFixed(1)}</span>
+                        </div>
                       </div>
                     </div>
                   );
                 })}
-              {employees.filter(emp => (emp.total_score || 0) >= (quarterSettings?.a_server_min_score || 80)).length === 0 && (
-                <p className="text-center text-gray-500 py-8">No top performers found for this quarter.</p>
+              {employees.length === 0 && (
+                <p className="text-center text-gray-500 py-8">No employees found for this quarter.</p>
               )}
             </div>
           </div>
