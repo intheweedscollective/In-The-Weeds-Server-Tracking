@@ -52,18 +52,28 @@ def generate_employee_comparison_chart(
     previous_data: Optional[Dict[str, Any]],
     current_quarter: str,
     current_year: int,
-    metrics: List[str] = None
+    metrics: List[str] = None,
+    benchmarks: Dict[str, float] = None,
+    restaurant_averages: Dict[str, float] = None
 ) -> bytes:
     """
-    Generate a comparison bar chart for an individual employee.
-    Shows current vs previous quarter metrics.
+    Generate a line chart comparing employee metrics vs benchmarks and restaurant averages.
+    - Solid line: Employee's values
+    - Dashed line: Benchmark values
+    - Dotted line: Restaurant average
     
     Returns PNG image bytes.
     """
     if metrics is None:
         metrics = ['ppa', 'lbw_per_guest', 'glassware_per_guest', 'guests_per_lsc', 'cv_score', 'pre_dar_score']
     
-    prev_quarter, prev_year = get_previous_quarter(current_quarter, current_year)
+    # Default benchmarks from config if not provided
+    if benchmarks is None:
+        benchmarks = {m: METRICS_CONFIG.get(m, {}).get('benchmark', 0) for m in metrics}
+    
+    # Default restaurant averages to 0 if not provided
+    if restaurant_averages is None:
+        restaurant_averages = {}
     
     # Setup figure
     fig, ax = plt.subplots(figsize=(12, 6), facecolor=COLORS['background'])
@@ -71,60 +81,73 @@ def generate_employee_comparison_chart(
     
     # Prepare data
     x = np.arange(len(metrics))
-    width = 0.35
     
-    current_values = []
-    previous_values = []
+    employee_values = []
+    benchmark_values = []
+    rest_avg_values = []
     labels = []
     
     for metric in metrics:
         config = METRICS_CONFIG.get(metric, {'label': metric, 'format': '{:.1f}'})
         labels.append(config['label'])
         
-        curr_val = current_data.get(metric, 0) or 0
-        prev_val = previous_data.get(metric, 0) if previous_data else 0
+        emp_val = current_data.get(metric, 0) or 0
+        bench_val = benchmarks.get(metric, config.get('benchmark', 0)) or 0
+        rest_val = restaurant_averages.get(metric, 0) or 0
         
-        # Normalize for display (scale guests_per_lsc)
+        # Normalize for display (scale guests_per_lsc for chart readability)
         if metric == 'guests_per_lsc':
-            curr_val = curr_val / 10  # Scale down for chart
-            prev_val = prev_val / 10 if prev_val else 0
+            emp_val = emp_val / 10
+            bench_val = bench_val / 10
+            rest_val = rest_val / 10
         
-        current_values.append(curr_val)
-        previous_values.append(prev_val)
+        employee_values.append(emp_val)
+        benchmark_values.append(bench_val)
+        rest_avg_values.append(rest_val)
     
-    # Create bars
-    ax.bar(x - width/2, previous_values, width, label=f'{prev_quarter} {prev_year}', 
-           color=COLORS['previous'], edgecolor='white', linewidth=1)
-    bars2 = ax.bar(x + width/2, current_values, width, label=f'{current_quarter} {current_year}', 
-                   color=COLORS['current'], edgecolor='white', linewidth=1)
+    # Plot lines
+    # Employee line - solid, primary red
+    ax.plot(x, employee_values, 'o-', color=COLORS['primary'], linewidth=2.5, markersize=10,
+            label=f'{employee_name}', zorder=3)
     
-    # Add value labels on bars
-    for bar, val, metric in zip(bars2, current_values, metrics):
-        height = bar.get_height()
+    # Benchmark line - dashed, green
+    ax.plot(x, benchmark_values, 's--', color=COLORS['positive'], linewidth=2, markersize=7,
+            label='Benchmark', alpha=0.85, zorder=2)
+    
+    # Restaurant average line - dotted, blue
+    ax.plot(x, rest_avg_values, '^:', color=COLORS['secondary'], linewidth=2, markersize=7,
+            label='Restaurant Avg', alpha=0.85, zorder=2)
+    
+    # Add value labels for employee points
+    for i, (xi, val, metric) in enumerate(zip(x, employee_values, metrics)):
         config = METRICS_CONFIG.get(metric, {'format': '{:.1f}'})
-        
         # Undo scaling for display
         display_val = val * 10 if metric == 'guests_per_lsc' else val
         formatted = config['format'].format(display_val)
         
         ax.annotate(formatted,
-                   xy=(bar.get_x() + bar.get_width() / 2, height),
-                   xytext=(0, 3), textcoords="offset points",
+                   xy=(xi, val),
+                   xytext=(0, 12), textcoords="offset points",
                    ha='center', va='bottom', fontsize=9, fontweight='bold',
-                   color=COLORS['text'])
+                   color=COLORS['primary'])
     
     # Styling
     ax.set_xlabel('Metrics', fontsize=11, color=COLORS['text'])
     ax.set_ylabel('Value', fontsize=11, color=COLORS['text'])
-    ax.set_title(f'📊 {employee_name} - Quarter Comparison', fontsize=14, fontweight='bold', 
-                color=COLORS['primary'], pad=15)
+    ax.set_title(f'{employee_name} - Performance Comparison ({current_quarter} {current_year})', 
+                fontsize=14, fontweight='bold', color=COLORS['primary'], pad=15)
     ax.set_xticks(x)
     ax.set_xticklabels(labels, fontsize=10)
-    ax.legend(loc='upper right', framealpha=0.9)
+    ax.legend(loc='upper right', framealpha=0.95, fontsize=10)
     
     # Grid
     ax.yaxis.grid(True, linestyle='--', alpha=0.7, color=COLORS['grid'])
     ax.set_axisbelow(True)
+    
+    # Set y-axis to start at 0 with some padding on top
+    all_vals = employee_values + benchmark_values + rest_avg_values
+    max_val = max(all_vals) if all_vals else 100
+    ax.set_ylim(0, max_val * 1.2)
     
     # Remove spines
     for spine in ['top', 'right']:
