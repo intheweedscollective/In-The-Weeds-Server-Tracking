@@ -2235,7 +2235,7 @@ async def update_employee(employee_id: str, data: EmployeeUpdate):
     employee = calculate_customer_voice_score(employee)
     employee = calculate_review_tracker_bonus(employee)
     employee = calculate_normalized_scores(employee, settings)
-    employee = calculate_metric_bonuses(employee, settings)
+    employee = calculate_bonus_points(employee, settings)
     employee = calculate_total_score(employee, settings)
     
     # Reassign tier
