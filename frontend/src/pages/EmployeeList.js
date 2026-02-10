@@ -720,6 +720,192 @@ export default function EmployeeList() {
             </div>
           </div>
         )}
+
+        {/* Edit/Add Employee Modal */}
+        {showEditModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowEditModal(false)}>
+            <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
+              <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-6 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {editingEmployee ? <Pencil className="w-6 h-6 text-white" /> : <Plus className="w-6 h-6 text-white" />}
+                  <h2 className="text-xl font-serif font-bold text-white">
+                    {editingEmployee ? `Edit ${editingEmployee.name}` : 'Add New Employee'}
+                  </h2>
+                </div>
+                <button onClick={() => setShowEditModal(false)} className="text-white hover:bg-white/20 rounded-full p-2">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="p-6 overflow-y-auto max-h-[70vh]">
+                {/* Basic Info */}
+                <div className="mb-6">
+                  <h3 className="font-semibold text-gray-700 mb-3">Basic Information</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-1">Name *</label>
+                      <Input
+                        value={formData.name}
+                        onChange={(e) => handleFormChange('name', e.target.value)}
+                        placeholder="Employee name"
+                        className="w-full"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-1">Job Title</label>
+                      <select
+                        value={formData.job_title}
+                        onChange={(e) => handleFormChange('job_title', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="server">Server</option>
+                        <option value="bartender">Bartender</option>
+                        <option value="trainer">Trainer</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sales Data */}
+                <div className="mb-6">
+                  <h3 className="font-semibold text-gray-700 mb-3">Sales Data</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-1">Guests</label>
+                      <Input
+                        type="number"
+                        value={formData.guests}
+                        onChange={(e) => handleFormChange('guests', parseFloat(e.target.value) || 0)}
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-1">Net Sales ($)</label>
+                      <Input
+                        type="number"
+                        value={formData.net_sales}
+                        onChange={(e) => handleFormChange('net_sales', parseFloat(e.target.value) || 0)}
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-1">LBW ($)</label>
+                      <Input
+                        type="number"
+                        value={formData.lbw}
+                        onChange={(e) => handleFormChange('lbw', parseFloat(e.target.value) || 0)}
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-1">Glassware ($)</label>
+                      <Input
+                        type="number"
+                        value={formData.glassware_sales}
+                        onChange={(e) => handleFormChange('glassware_sales', parseFloat(e.target.value) || 0)}
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* LSC Count */}
+                <div className="mb-6">
+                  <h3 className="font-semibold text-gray-700 mb-3">LSC (Loyalty Signups)</h3>
+                  <div className="w-1/2">
+                    <label className="block text-sm font-medium text-gray-600 mb-1">LSC Count</label>
+                    <Input
+                      type="number"
+                      value={formData.lsc_count}
+                      onChange={(e) => handleFormChange('lsc_count', parseInt(e.target.value) || 0)}
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+
+                {/* Customer Voice */}
+                <div className="mb-6">
+                  <h3 className="font-semibold text-gray-700 mb-3">Customer Voice & Reviews</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-green-600 mb-1">CV Promoters (+1 pt)</label>
+                      <Input
+                        type="number"
+                        value={formData.cv_promoters}
+                        onChange={(e) => handleFormChange('cv_promoters', parseInt(e.target.value) || 0)}
+                        placeholder="0"
+                        className="border-green-200 focus:border-green-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-1">CV Passives (0 pt)</label>
+                      <Input
+                        type="number"
+                        value={formData.cv_passives}
+                        onChange={(e) => handleFormChange('cv_passives', parseInt(e.target.value) || 0)}
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-red-600 mb-1">CV Detractors (-2 pt)</label>
+                      <Input
+                        type="number"
+                        value={formData.cv_detractors}
+                        onChange={(e) => handleFormChange('cv_detractors', parseInt(e.target.value) || 0)}
+                        placeholder="0"
+                        className="border-red-200 focus:border-red-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-blue-600 mb-1">Review Mentions (0.2 pt)</label>
+                      <Input
+                        type="number"
+                        value={formData.review_mentions}
+                        onChange={(e) => handleFormChange('review_mentions', parseInt(e.target.value) || 0)}
+                        placeholder="0"
+                        className="border-blue-200 focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Preview */}
+                <div className="p-4 bg-gray-50 rounded-lg border">
+                  <h4 className="font-medium text-gray-700 mb-2">CV Preview</h4>
+                  <div className="text-sm text-gray-600">
+                    <span>CV Points: </span>
+                    <span className="font-bold">
+                      {(formData.cv_promoters * 1) + (formData.review_mentions * 0.2) - (formData.cv_detractors * 2)}
+                    </span>
+                    <span className="text-gray-400 ml-2">
+                      ({formData.cv_promoters}×1 + {formData.review_mentions}×0.2 - {formData.cv_detractors}×2)
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="p-6 border-t bg-gray-50 flex gap-3 justify-end">
+                <Button variant="outline" onClick={() => setShowEditModal(false)}>
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={saveEmployee} 
+                  disabled={saving}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  {saving ? (
+                    <>Saving...</>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4 mr-2" />
+                      {editingEmployee ? 'Update Employee' : 'Create Employee'}
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
