@@ -243,6 +243,7 @@ export default function ReviewGeneration() {
               <ul className="text-sm text-gray-500 space-y-1">
                 <li>• AI-powered content generation using GPT-5.2</li>
                 <li>• Human-like, HR-defensible review language</li>
+                <li>• <strong>Auto-generated trend charts</strong> from snapshot data</li>
                 <li>• Professional PDF with Bubba Gump branding</li>
               </ul>
             </div>
