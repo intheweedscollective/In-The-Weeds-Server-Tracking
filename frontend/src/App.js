@@ -9,6 +9,7 @@ import QuarterSettings from "./pages/QuarterSettings";
 import FullRankings from "./pages/FullRankings";
 import YodeckSlides from "./pages/YodeckSlides";
 import Snapshots from "./pages/Snapshots";
+import OnboardingGuide from "./components/OnboardingGuide";
 import "./App.css";
 
 function App() {
@@ -26,6 +27,7 @@ function App() {
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/settings" element={<QuarterSettings />} />
         </Routes>
+        <OnboardingGuide />
       </BrowserRouter>
       <Toaster position="top-right" richColors />
     </div>
