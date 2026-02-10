@@ -32,6 +32,7 @@ from yodeck_slides import (
     THEMES
 )
 from snapshot_slides import generate_snapshot_slide, get_available_backgrounds, BACKGROUNDS
+from trend_charts import get_previous_quarter, generate_employee_comparison_chart
 
 # Import new scoring engine
 from scoring_engine import (
