@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Trophy, Calendar, Filter, ChevronDown, ChevronUp, Download, FileText, Medal, Award, Star } from "lucide-react";
+import { Trophy, Calendar, Filter, ChevronDown, ChevronUp, Download, FileText, Medal, Award, Star, Users } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import Navigation from "../components/Navigation";
 import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { formatNumber } from "../utils/formatters";
+import { formatNumber, formatCurrency } from "../utils/formatters";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -19,13 +19,14 @@ const TIER_STYLES = {
   "C-Server": { bg: "bg-red-100", text: "text-red-800", border: "border-red-200" }
 };
 
-// Top 10 metrics configuration
-const TOP_METRICS = {
-  ppa: { label: 'PPA', format: '$', icon: '💰' },
-  lbw_per_guest: { label: 'LBW/Guest', format: '$', icon: '🍷' },
-  glassware_per_guest: { label: 'Glassware/Guest', format: '$', icon: '🥂' },
-  guests_per_lsc: { label: 'LSC Ratio', format: '', icon: '⚡', lowerBetter: true },
-  cv_score: { label: 'Customer Voice', format: '+', icon: '⭐' }
+// V2 Metrics Configuration for Top 10 sections
+const V2_METRICS = {
+  ppa: { label: 'PPA', format: 'currency', higherBetter: true },
+  lbw_per_guest: { label: 'LBW/Guest', format: 'currency', higherBetter: true },
+  glassware_per_guest: { label: 'Glass/Guest', format: 'currency', higherBetter: true },
+  guests_per_lsc: { label: 'Guests/LSC', format: 'number', higherBetter: false },
+  cv_score: { label: 'CV Score', format: 'number', higherBetter: true },
+  pre_dar_score: { label: 'Total Score', format: 'number', higherBetter: true },
 };
 
 export default function FullRankings() {
