@@ -1228,46 +1228,46 @@ async def generate_employee_review_v2(employee_id: str, review_data: ReviewCreat
                 
                 # Generate multi-panel chart if we have data points
                 if snapshot_history:
-                        logging.info(f"Generating multi-panel chart for {employee.name} with {len(snapshot_history)} snapshots")
-                        # Get benchmarks from settings
-                        benchmarks = {
-                            'ppa': settings.benchmark_ppa,
-                            'lbw_per_guest': settings.benchmark_lbw,
-                            'glassware_per_guest': settings.benchmark_glass,
-                            'guests_per_lsc': settings.benchmark_lsc,
-                            'cv_score': settings.benchmark_cv,
-                            'pre_dar_score': settings.a_server_min_score
-                        }
-                        
-                        # Get previous quarter data for fallback
-                        prev_quarter, prev_year = get_previous_quarter(review_data.quarter, review_data.year)
-                        previous_doc = await db.employees_v2.find_one(
-                            {"year": prev_year, "quarter": prev_quarter, "name": employee.name},
-                            {"_id": 0}
-                        )
-                        
-                        # Calculate current restaurant averages
-                        all_employees = await db.employees_v2.find(
-                            {"year": review_data.year, "quarter": review_data.quarter.upper()},
-                            {"_id": 0}
-                        ).to_list(1000)
-                        
-                        restaurant_averages = {}
-                        for metric in metrics:
-                            values = [e.get(metric, 0) for e in all_employees if e.get(metric) is not None]
-                            restaurant_averages[metric] = sum(values) / len(values) if values else 0
-                        
-                        trend_chart_bytes = generate_employee_comparison_chart(
-                            employee_name=employee.name,
-                            current_data=employee_doc,
-                            previous_data=previous_doc,
-                            current_quarter=review_data.quarter.upper(),
-                            current_year=review_data.year,
-                            benchmarks=benchmarks,
-                            restaurant_averages=restaurant_averages,
-                            snapshot_history=snapshot_history,
-                            restaurant_avg_history=restaurant_avg_history
-                        )
+                    logging.info(f"Generating multi-panel chart for {employee.name} with {len(snapshot_history)} snapshots")
+                    # Get benchmarks from settings
+                    benchmarks = {
+                        'ppa': settings.benchmark_ppa,
+                        'lbw_per_guest': settings.benchmark_lbw,
+                        'glassware_per_guest': settings.benchmark_glass,
+                        'guests_per_lsc': settings.benchmark_lsc,
+                        'cv_score': settings.benchmark_cv,
+                        'pre_dar_score': settings.a_server_min_score
+                    }
+                    
+                    # Get previous quarter data for fallback
+                    prev_quarter, prev_year = get_previous_quarter(review_data.quarter, review_data.year)
+                    previous_doc = await db.employees_v2.find_one(
+                        {"year": prev_year, "quarter": prev_quarter, "name": employee.name},
+                        {"_id": 0}
+                    )
+                    
+                    # Calculate current restaurant averages
+                    all_employees = await db.employees_v2.find(
+                        {"year": review_data.year, "quarter": review_data.quarter.upper()},
+                        {"_id": 0}
+                    ).to_list(1000)
+                    
+                    restaurant_averages = {}
+                    for metric in metrics:
+                        values = [e.get(metric, 0) for e in all_employees if e.get(metric) is not None]
+                        restaurant_averages[metric] = sum(values) / len(values) if values else 0
+                    
+                    trend_chart_bytes = generate_employee_comparison_chart(
+                        employee_name=employee.name,
+                        current_data=employee_doc,
+                        previous_data=previous_doc,
+                        current_quarter=review_data.quarter.upper(),
+                        current_year=review_data.year,
+                        benchmarks=benchmarks,
+                        restaurant_averages=restaurant_averages,
+                        snapshot_history=snapshot_history,
+                        restaurant_avg_history=restaurant_avg_history
+                    )
             except Exception as chart_err:
                 logging.warning(f"Could not generate multi-panel trend chart: {chart_err}")
         
