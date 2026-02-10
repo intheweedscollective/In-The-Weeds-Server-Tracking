@@ -91,6 +91,30 @@ class ReviewResponseV2(BaseModel):
 
 
 # ============================================================================
+# DAR (Disciplinary Action Report) MODELS
+# ============================================================================
+
+class DAREntry(BaseModel):
+    employee_id: str
+    employee_name: str
+    written_warnings: int = 0  # Each deducts 3 pts
+    suspensions: int = 0  # Each deducts 5 pts
+
+class DARSubmission(BaseModel):
+    quarter: str
+    year: int
+    entries: List[DAREntry]
+
+class QuarterFinalization(BaseModel):
+    quarter: str
+    year: int
+    finalized_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    finalized_by: str = "admin"
+    dar_entries: List[DAREntry] = []
+    final_rankings: List[Dict[str, Any]] = []
+
+
+# ============================================================================
 # PDF HELPER FUNCTIONS
 # ============================================================================
 
