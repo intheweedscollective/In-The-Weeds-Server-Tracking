@@ -100,7 +100,7 @@ def generate_employee_comparison_chart(
     
     for idx, metric in enumerate(metrics):
         ax = axes[idx]
-        ax.set_facecolor(COLORS['background'])
+        ax.set_facecolor('#FAFAFA')  # Slight off-white for contrast
         
         config = METRICS_CONFIG.get(metric, {'label': metric, 'format': '{:.1f}', 'benchmark': 0})
         metric_label = config['label']
@@ -159,39 +159,52 @@ def generate_employee_comparison_chart(
                            ha='center', va='bottom', fontsize=9, fontweight='bold',
                            color=COLORS['primary'])
         
-        # Styling
-        ax.set_title(metric_label, fontsize=12, fontweight='bold', color=COLORS['text'], pad=8)
+        # Styling - Add box/border around each subplot
+        ax.set_title(metric_label, fontsize=12, fontweight='bold', color=COLORS['text'], pad=10)
         ax.set_xticks(x)
         ax.set_xticklabels(date_labels, fontsize=9, rotation=45 if len(dates) > 4 else 0, 
                           ha='right' if len(dates) > 4 else 'center')
         
-        # Set y-axis range with padding
-        all_vals = emp_values + rest_values + [benchmark_val]
-        all_vals = [v for v in all_vals if v > 0]
+        # Calculate y-axis range to fit ALL lines (employee, benchmark, restaurant avg)
+        all_vals = []
+        all_vals.extend([v for v in emp_values if v > 0])
+        all_vals.extend([v for v in rest_values if v > 0])
+        if benchmark_val > 0:
+            all_vals.append(benchmark_val)
+        
         if all_vals:
-            min_val = max(0, min(all_vals) * 0.7)
-            max_val = max(all_vals) * 1.25
-            ax.set_ylim(min_val, max_val)
+            min_val = min(all_vals)
+            max_val = max(all_vals)
+            # Add 15% padding on both sides to ensure no line is cut off
+            padding = (max_val - min_val) * 0.20 if max_val != min_val else max_val * 0.20
+            y_min = max(0, min_val - padding)
+            y_max = max_val + padding
+            ax.set_ylim(y_min, y_max)
         
         # Grid
         ax.yaxis.grid(True, linestyle='--', alpha=0.5, color=COLORS['grid'])
         ax.set_axisbelow(True)
         
-        # Remove top/right spines
-        for spine in ['top', 'right']:
-            ax.spines[spine].set_visible(False)
-        ax.spines['left'].set_color(COLORS['grid'])
-        ax.spines['bottom'].set_color(COLORS['grid'])
+        # Add visible border/box around each graph
+        for spine in ax.spines.values():
+            spine.set_visible(True)
+            spine.set_color('#CCCCCC')
+            spine.set_linewidth(1.5)
+        
+        # Add a subtle shadow effect with a rectangle patch
+        ax.patch.set_edgecolor('#AAAAAA')
+        ax.patch.set_linewidth(2)
         
         # Legend only on first chart
         if idx == 0:
-            ax.legend(loc='upper left', framealpha=0.9, fontsize=8)
+            ax.legend(loc='upper left', framealpha=0.95, fontsize=8, 
+                     fancybox=True, shadow=True, borderpad=0.8)
     
     # Main title
     fig.suptitle(f'{employee_name} - {current_quarter} {current_year} Performance Trends', 
                 fontsize=16, fontweight='bold', color=COLORS['primary'], y=0.98)
     
-    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    plt.tight_layout(rect=[0, 0, 1, 0.95], h_pad=2.5, w_pad=2.0)
     
     # Save to bytes
     buffer = io.BytesIO()
