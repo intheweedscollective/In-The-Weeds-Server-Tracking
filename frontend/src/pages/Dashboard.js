@@ -868,6 +868,19 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Finalize Quarter Modal */}
+      <FinalizeQuarterModal
+        isOpen={showFinalizeModal}
+        onClose={() => setShowFinalizeModal(false)}
+        quarter={selectedQuarter}
+        year={selectedYear}
+        employees={employees}
+        onFinalized={() => {
+          setIsQuarterFinalized(true);
+          setShowFinalizeModal(false);
+        }}
+      />
     </div>
   );
 }
