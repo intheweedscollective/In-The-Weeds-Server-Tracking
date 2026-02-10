@@ -2201,7 +2201,7 @@ async def update_employee(employee_id: str, data: EmployeeUpdate):
     from scoring_engine import (
         EmployeeV2, calculate_derived_metrics, calculate_customer_voice_score,
         calculate_review_tracker_bonus, calculate_normalized_scores,
-        calculate_metric_bonuses, calculate_total_score, QuarterSettings
+        calculate_bonus_points, calculate_total_score, QuarterSettings
     )
     
     # Get existing employee
