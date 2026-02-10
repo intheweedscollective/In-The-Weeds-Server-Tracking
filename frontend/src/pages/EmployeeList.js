@@ -205,11 +205,21 @@ export default function EmployeeList() {
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <Users className="w-8 h-8 text-secondary" />
-            <h1 className="text-3xl font-serif font-black text-foreground" data-testid="page-title">
-              Crew Management
-            </h1>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3 mb-2">
+              <Users className="w-8 h-8 text-secondary" />
+              <h1 className="text-3xl font-serif font-black text-foreground" data-testid="page-title">
+                Crew Management
+              </h1>
+            </div>
+            <Button
+              onClick={openNewEmployeeModal}
+              className="bg-green-600 hover:bg-green-700 text-white"
+              data-testid="add-employee-btn"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              New Employee
+            </Button>
           </div>
           <p className="text-gray-500" data-testid="page-subtitle">
             View and manage all crew performance data
