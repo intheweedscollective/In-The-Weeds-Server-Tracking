@@ -2655,9 +2655,9 @@ from trend_charts import (
 @api_router.get("/v2/trends/{year}/{quarter}/employee/{employee_id}")
 async def get_employee_trend_chart(year: int, quarter: str, employee_id: str, chart_type: str = "comparison"):
     """
-    Generate trend chart for an individual employee comparing current vs previous quarter.
+    Generate trend chart for an individual employee.
     
-    chart_type: "comparison" (bar chart) or "change" (% change chart)
+    chart_type: "comparison" (line chart with employee, benchmark, restaurant avg) or "change" (% change chart)
     """
     # Get current quarter data
     current_doc = await db.employees_v2.find_one(
@@ -2682,10 +2682,38 @@ async def get_employee_trend_chart(year: int, quarter: str, employee_id: str, ch
             quarter.upper(), year
         )
     else:
+        # Get benchmarks from quarter settings
+        settings = await db.quarter_settings.find_one(
+            {"year": year, "quarter": quarter.upper()},
+            {"_id": 0}
+        )
+        benchmarks = {
+            'ppa': settings.get('benchmark_ppa', 55.0) if settings else 55.0,
+            'lbw_per_guest': settings.get('benchmark_lbw', 8.0) if settings else 8.0,
+            'glassware_per_guest': settings.get('benchmark_glass', 1.0) if settings else 1.0,
+            'guests_per_lsc': settings.get('benchmark_lsc', 100.0) if settings else 100.0,
+            'cv_score': settings.get('benchmark_cv', 5.0) if settings else 5.0,
+            'pre_dar_score': 85.0  # Standard benchmark for total score
+        }
+        
+        # Calculate restaurant averages for this quarter
+        all_employees = await db.employees_v2.find(
+            {"year": year, "quarter": quarter.upper()},
+            {"_id": 0}
+        ).to_list(1000)
+        
+        restaurant_averages = {}
+        metrics = ['ppa', 'lbw_per_guest', 'glassware_per_guest', 'guests_per_lsc', 'cv_score', 'pre_dar_score']
+        for metric in metrics:
+            values = [e.get(metric, 0) for e in all_employees if e.get(metric) is not None]
+            restaurant_averages[metric] = sum(values) / len(values) if values else 0
+        
         chart_bytes = generate_employee_comparison_chart(
             current_doc.get("name", "Employee"),
             current_doc, previous_doc,
-            quarter.upper(), year
+            quarter.upper(), year,
+            benchmarks=benchmarks,
+            restaurant_averages=restaurant_averages
         )
     
     return Response(
