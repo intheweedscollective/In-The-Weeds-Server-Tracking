@@ -454,6 +454,148 @@ export default function Dashboard() {
             </Link>
           </div>
         )}
+
+        {/* ROI Calculator & Training Insights */}
+        {employees.length > 0 && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+            {/* ROI Calculator */}
+            <div className="bubba-card" data-testid="roi-calculator">
+              <div className="tape tape-blue" style={{ top: '-8px', left: '50%', transform: 'translateX(-50%) rotate(1deg)' }} />
+              <div className="p-6 pt-8">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                    <TrendingUp className="w-5 h-5 text-green-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-serif font-bold text-foreground">Revenue Impact Calculator</h2>
+                    <p className="text-sm text-gray-500">See the financial impact of improvement</p>
+                  </div>
+                </div>
+                
+                {(() => {
+                  const avgPPA = employees.reduce((sum, e) => sum + (e.ppa || 0), 0) / employees.length;
+                  const avgLBW = employees.reduce((sum, e) => sum + (e.lbw_per_guest || 0), 0) / employees.length;
+                  const totalGuests = employees.reduce((sum, e) => sum + (e.guests || 0), 0);
+                  const ppaBenchmark = quarterSettings?.benchmark_ppa || 55;
+                  const lbwBenchmark = quarterSettings?.benchmark_lbw || 8;
+                  
+                  // Project annual impact if everyone hit benchmarks
+                  const ppaGap = Math.max(0, ppaBenchmark - avgPPA);
+                  const lbwGap = Math.max(0, lbwBenchmark - avgLBW);
+                  const annualGuests = totalGuests * 26; // 26 bi-weekly periods
+                  const potentialPPARevenue = ppaGap * annualGuests;
+                  const potentialLBWRevenue = lbwGap * annualGuests;
+                  
+                  return (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="p-3 bg-gray-50 rounded-lg">
+                          <p className="text-xs text-gray-500 uppercase font-semibold">Current Avg PPA</p>
+                          <p className="text-xl font-bold text-foreground">${avgPPA.toFixed(2)}</p>
+                          <p className="text-xs text-gray-400">Benchmark: ${ppaBenchmark}</p>
+                        </div>
+                        <div className="p-3 bg-gray-50 rounded-lg">
+                          <p className="text-xs text-gray-500 uppercase font-semibold">Current Avg LBW</p>
+                          <p className="text-xl font-bold text-foreground">${avgLBW.toFixed(2)}</p>
+                          <p className="text-xs text-gray-400">Benchmark: ${lbwBenchmark}</p>
+                        </div>
+                      </div>
+                      
+                      {(ppaGap > 0 || lbwGap > 0) && (
+                        <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                          <p className="text-sm font-bold text-green-800 mb-2">💰 Potential Annual Revenue Increase</p>
+                          <div className="space-y-1 text-sm">
+                            {ppaGap > 0 && (
+                              <p className="text-green-700">
+                                +${ppaGap.toFixed(2)} PPA × {annualGuests.toLocaleString()} guests = <strong>${potentialPPARevenue.toLocaleString()}</strong>
+                              </p>
+                            )}
+                            {lbwGap > 0 && (
+                              <p className="text-green-700">
+                                +${lbwGap.toFixed(2)} LBW × {annualGuests.toLocaleString()} guests = <strong>${potentialLBWRevenue.toLocaleString()}</strong>
+                              </p>
+                            )}
+                            <p className="text-green-900 font-bold pt-2 border-t border-green-300">
+                              Total Opportunity: ${(potentialPPARevenue + potentialLBWRevenue).toLocaleString()}/year
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {ppaGap === 0 && lbwGap === 0 && (
+                        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-center">
+                          <p className="text-blue-800 font-semibold">🎉 Team is meeting or exceeding all benchmarks!</p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* Training Insights */}
+            <div className="bubba-card" data-testid="training-insights">
+              <div className="tape tape-red" style={{ top: '-8px', left: '50%', transform: 'translateX(-50%) rotate(-1deg)' }} />
+              <div className="p-6 pt-8">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
+                    <Target className="w-5 h-5 text-orange-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-serif font-bold text-foreground">Training Priorities</h2>
+                    <p className="text-sm text-gray-500">Focus areas based on team gaps</p>
+                  </div>
+                </div>
+                
+                {(() => {
+                  const ppaBenchmark = quarterSettings?.benchmark_ppa || 55;
+                  const lbwBenchmark = quarterSettings?.benchmark_lbw || 8;
+                  const glassBenchmark = quarterSettings?.benchmark_glass || 1;
+                  const lscBenchmark = quarterSettings?.benchmark_lsc || 100;
+                  
+                  const belowPPA = employees.filter(e => (e.ppa || 0) < ppaBenchmark);
+                  const belowLBW = employees.filter(e => (e.lbw_per_guest || 0) < lbwBenchmark);
+                  const belowGlass = employees.filter(e => (e.glassware_per_guest || 0) < glassBenchmark);
+                  const aboveLSC = employees.filter(e => (e.guests_per_lsc || 0) > lscBenchmark);
+                  
+                  const priorities = [
+                    { metric: 'PPA', count: belowPPA.length, pct: (belowPPA.length / employees.length * 100), tip: 'Focus on menu knowledge and upselling appetizers/desserts', employees: belowPPA.slice(0, 3) },
+                    { metric: 'LBW', count: belowLBW.length, pct: (belowLBW.length / employees.length * 100), tip: 'Train on wine pairings and signature cocktail suggestions', employees: belowLBW.slice(0, 3) },
+                    { metric: 'Glassware', count: belowGlass.length, pct: (belowGlass.length / employees.length * 100), tip: 'Emphasize premium glassware and souvenir opportunities', employees: belowGlass.slice(0, 3) },
+                    { metric: 'LSC Ratio', count: aboveLSC.length, pct: (aboveLSC.length / employees.length * 100), tip: 'Improve table turnover and efficiency', employees: aboveLSC.slice(0, 3) },
+                  ].filter(p => p.count > 0).sort((a, b) => b.pct - a.pct);
+                  
+                  return (
+                    <div className="space-y-3">
+                      {priorities.length === 0 ? (
+                        <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-center">
+                          <p className="text-green-800 font-semibold">✨ No critical training gaps identified!</p>
+                        </div>
+                      ) : (
+                        priorities.slice(0, 3).map((p, idx) => (
+                          <div key={p.metric} className={`p-3 rounded-lg border ${idx === 0 ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-200'}`}>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className={`text-sm font-bold ${idx === 0 ? 'text-red-800' : 'text-orange-800'}`}>
+                                {idx === 0 ? '🔥' : '⚠️'} {p.metric}
+                              </span>
+                              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${idx === 0 ? 'bg-red-200 text-red-800' : 'bg-orange-200 text-orange-800'}`}>
+                                {p.count} below benchmark ({p.pct.toFixed(0)}%)
+                              </span>
+                            </div>
+                            <p className="text-xs text-gray-600 mb-2">{p.tip}</p>
+                            <p className="text-xs text-gray-500">
+                              Priority: {p.employees.map(e => e.name).join(', ')}
+                            </p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Top Performers Modal */}
