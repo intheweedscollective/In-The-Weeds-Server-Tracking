@@ -182,6 +182,31 @@ export default function Dashboard() {
               <option value="Q4">Q4</option>
             </select>
           </div>
+          
+          {/* Finalize Quarter Button */}
+          {employees.length > 0 && (
+            <button
+              onClick={() => setShowFinalizeModal(true)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all ${
+                isQuarterFinalized 
+                  ? 'bg-green-100 text-green-700 border border-green-300 hover:bg-green-200'
+                  : 'bg-primary text-white hover:bg-primary/90 shadow-md'
+              }`}
+              data-testid="finalize-quarter-btn"
+            >
+              {isQuarterFinalized ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4" />
+                  Quarter Finalized
+                </>
+              ) : (
+                <>
+                  <Lock className="w-4 h-4" />
+                  Finalize Quarter
+                </>
+              )}
+            </button>
+          )}
         </div>
 
         {/* Stats Dashboard */}
