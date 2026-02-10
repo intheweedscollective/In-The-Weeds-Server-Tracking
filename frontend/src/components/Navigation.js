@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Home, Users, FileText, BarChart3, Trophy, Settings, ListOrdered, Monitor, Camera } from "lucide-react";
+import { Home, Users, FileText, BarChart3, Settings, ListOrdered, Monitor, Camera } from "lucide-react";
 
 export default function Navigation() {
   const location = useLocation();
