@@ -3505,34 +3505,56 @@ async def recalculate_snapshot(snapshot_id: str):
     
     # ============================================================
     # SYNC TO MAIN EMPLOYEES_V2 COLLECTION
-    # This makes the recalculated snapshot data the "current" data
+    # Only sync if this snapshot has the LATEST snapshot_date
+    # (not the most recently uploaded, but the actual data date)
     # ============================================================
     
-    # Clear existing employees for this quarter/year
-    await db.employees_v2.delete_many({
-        "year": snapshot["year"],
-        "quarter": snapshot["quarter"]
-    })
+    # Find the latest snapshot by snapshot_date for this quarter/year
+    latest_snapshot = await db.snapshots.find_one(
+        {"year": snapshot["year"], "quarter": snapshot["quarter"]},
+        {"_id": 0, "snapshot_date": 1, "id": 1},
+        sort=[("snapshot_date", -1)]  # Sort by snapshot_date descending
+    )
     
-    # Insert the recalculated employee data
-    if recalculated_employees:
-        main_employees = []
-        for emp in recalculated_employees:
-            main_emp = emp.copy()
-            if isinstance(main_emp.get('created_at'), datetime):
-                main_emp['created_at'] = main_emp['created_at'].isoformat()
-            elif not main_emp.get('created_at'):
-                main_emp['created_at'] = datetime.now(timezone.utc).isoformat()
-            main_employees.append(main_emp)
+    current_snapshot_date = snapshot.get("snapshot_date", "")
+    latest_snapshot_date = latest_snapshot.get("snapshot_date", "") if latest_snapshot else ""
+    
+    should_sync = current_snapshot_date >= latest_snapshot_date
+    
+    if should_sync:
+        # Clear existing employees for this quarter/year
+        await db.employees_v2.delete_many({
+            "year": snapshot["year"],
+            "quarter": snapshot["quarter"]
+        })
         
-        await db.employees_v2.insert_many(main_employees)
-        logging.info(f"Synced {len(main_employees)} recalculated employees to employees_v2")
-    
-    return {
-        "message": "Scores recalculated and synced to Dashboard",
-        "employee_count": len(recalculated_employees),
-        "synced_to_dashboard": True
-    }
+        # Insert the recalculated employee data
+        if recalculated_employees:
+            main_employees = []
+            for emp in recalculated_employees:
+                main_emp = emp.copy()
+                if isinstance(main_emp.get('created_at'), datetime):
+                    main_emp['created_at'] = main_emp['created_at'].isoformat()
+                elif not main_emp.get('created_at'):
+                    main_emp['created_at'] = datetime.now(timezone.utc).isoformat()
+                main_employees.append(main_emp)
+            
+            await db.employees_v2.insert_many(main_employees)
+            logging.info(f"Synced {len(main_employees)} recalculated employees to employees_v2 (snapshot_date: {current_snapshot_date})")
+        
+        return {
+            "message": "Scores recalculated and synced to Dashboard",
+            "employee_count": len(recalculated_employees),
+            "synced_to_dashboard": True
+        }
+    else:
+        logging.info(f"Skipped sync - snapshot {current_snapshot_date} is not the latest (latest is {latest_snapshot_date})")
+        return {
+            "message": f"Scores recalculated. Dashboard NOT updated (this snapshot date {current_snapshot_date} is older than {latest_snapshot_date})",
+            "employee_count": len(recalculated_employees),
+            "synced_to_dashboard": False,
+            "reason": f"Snapshot date {current_snapshot_date} is not the latest. Latest is {latest_snapshot_date}."
+        }
 
 
 @api_router.delete("/v2/snapshots/{snapshot_id}")
