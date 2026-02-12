@@ -1646,7 +1646,8 @@ async def get_yodeck_complete_rankings_slide(year: int, quarter: str, format: st
         theme=theme,
         custom_colors=custom_colors,
         seasonal_theme=seasonal_theme,
-        output_format=format
+        output_format=format,
+        background=background
     )
     
     format_suffix = "letter" if format == "letter" else "16x9"
