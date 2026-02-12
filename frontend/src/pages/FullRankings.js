@@ -256,25 +256,50 @@ export default function FullRankings() {
             </p>
           </div>
           
-          {/* Download PDF Button */}
-          <Button
-            onClick={handleDownloadPdf}
-            disabled={downloadingPdf || rankings.length === 0}
-            className="bg-primary hover:bg-primary/90 text-white flex items-center gap-2"
-            data-testid="download-pdf-btn"
-          >
-            {downloadingPdf ? (
-              <>
-                <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
-                Generating...
-              </>
-            ) : (
-              <>
-                <Download className="w-4 h-4" />
-                Download PDF
-              </>
+          {/* Download Slide with Background Selector */}
+          <div className="flex items-center gap-3">
+            {/* Background selector */}
+            {backgrounds.length > 0 && (
+              <Select value={selectedBackground} onValueChange={setSelectedBackground}>
+                <SelectTrigger className="w-44" data-testid="background-select">
+                  <SelectValue placeholder="Background" />
+                </SelectTrigger>
+                <SelectContent>
+                  {backgrounds.map((bg) => (
+                    <SelectItem key={bg.key} value={bg.key}>
+                      <div className="flex items-center gap-2">
+                        {bg.preview ? (
+                          <img src={bg.preview} alt="" className="w-6 h-4 rounded object-cover" />
+                        ) : (
+                          <div className="w-6 h-4 rounded bg-[#0f172a]" />
+                        )}
+                        <span>{bg.name}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
-          </Button>
+            
+            <Button
+              onClick={handleDownloadSlide}
+              disabled={downloading || rankings.length === 0}
+              className="bg-primary hover:bg-primary/90 text-white flex items-center gap-2"
+              data-testid="download-slide-btn"
+            >
+              {downloading ? (
+                <>
+                  <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  Download Slide
+                </>
+              )}
+            </Button>
+          </div>
         </div>
 
         {/* Filters Card */}
