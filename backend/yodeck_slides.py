@@ -804,9 +804,9 @@ def generate_top_10_slide(
         
         # Medal for top 3
         if rank <= 3:
-            img = draw_premium_medal(img, left_margin + 50, y + row_height//2 - 4, rank, colors, size=60)
+            img = draw_premium_medal(img, left_margin + int(50 * font_scale), y + row_height//2 - 4, rank, colors, size=int(60 * font_scale))
             draw = ImageDraw.Draw(img)
-            name_x = left_margin + 110
+            name_x = left_margin + int(110 * font_scale)
         else:
             # Rank number for others
             rank_text = f"#{rank}"
