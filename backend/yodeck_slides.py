@@ -1313,9 +1313,9 @@ def generate_complete_rankings_slide(
         
         row_cy = y + row_h // 2
         
-        # Draw outlined rank text
+        # Draw outlined rank text with thick black stroke
         draw_outlined_text(draw, (col_x[0] + columns[0]["width"] // 2, row_cy), 
-                          rank_text, font_rank, tier_color, "#000000", 1)
+                          rank_text, font_rank, tier_color, "#000000", 2)
         
         # Name (left aligned, no outline needed)
         name = emp.get("name", "Unknown")[:18]
