@@ -109,8 +109,40 @@ def generate_snapshot_slide(
 ) -> bytes:
     """Generate snapshot matching reference image exactly."""
     
-    # Dark navy background
-    img = Image.new('RGB', (SLIDE_WIDTH, SLIDE_HEIGHT), COLORS["bg_navy"])
+    # Get background configuration
+    bg_config = BACKGROUNDS.get(background, BACKGROUNDS["dark"])
+    
+    # Create base image based on background type
+    if bg_config.get("type") == "image" and bg_config.get("url"):
+        try:
+            # Download and load image background
+            response = requests.get(bg_config["url"], timeout=10)
+            bg_img = Image.open(io.BytesIO(response.content))
+            
+            # Convert to RGB if necessary
+            if bg_img.mode != 'RGB':
+                bg_img = bg_img.convert('RGB')
+            
+            # Resize to fit slide dimensions
+            bg_img = bg_img.resize((SLIDE_WIDTH, SLIDE_HEIGHT), Image.Resampling.LANCZOS)
+            
+            # Darken the image to ensure text readability
+            enhancer = ImageEnhance.Brightness(bg_img)
+            bg_img = enhancer.enhance(0.4)  # Darken to 40% brightness
+            
+            # Add slight blur for a softer look
+            bg_img = bg_img.filter(ImageFilter.GaussianBlur(radius=2))
+            
+            img = bg_img
+        except Exception as e:
+            print(f"Error loading background image: {e}")
+            # Fallback to solid color
+            img = Image.new('RGB', (SLIDE_WIDTH, SLIDE_HEIGHT), COLORS["bg_navy"])
+    else:
+        # Solid color background
+        color = bg_config.get("color", COLORS["bg_navy"])
+        img = Image.new('RGB', (SLIDE_WIDTH, SLIDE_HEIGHT), color)
+    
     draw = ImageDraw.Draw(img)
     
     # Sort employees
