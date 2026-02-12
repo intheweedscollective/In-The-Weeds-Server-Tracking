@@ -824,8 +824,8 @@ def generate_top_10_slide(
         # Tier badge (glossy pill)
         tier = emp.get("tier_label", "A-Server")
         tier_config = TIER_CONFIG.get(tier, TIER_CONFIG["A-Server"])
-        tier_x = 500
-        draw_glossy_badge(draw, tier_x, y + row_height//2 - 15, 100, 30, 
+        tier_x = int(500 * font_scale)
+        draw_glossy_badge(draw, tier_x, y + row_height//2 - int(15 * font_scale), int(100 * font_scale), int(30 * font_scale), 
                          tier_config["color"], tier, "#FFFFFF")
         
         # Score visualization - Progress Ring
