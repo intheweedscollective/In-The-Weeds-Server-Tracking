@@ -1358,10 +1358,16 @@ def generate_complete_rankings_slide(
         draw.text((col_x[7] + columns[7]["width"] // 2, row_cy), f"+{bonus:.0f}" if bonus > 0 else "-",
                   font=font_data, fill=bonus_color, anchor="mm")
         
-        # Total Score - OUTLINED with tier color
+        # Total Score - OUTLINED with tier color - INLINE
         total = emp.get("total_score", 0) or 0
-        draw_outlined_text(draw, (col_x[8] + columns[8]["width"] // 2, row_cy),
-                          f"{total:.1f}", font_score, tier_color, "#000000", 2)
+        score_text = f"{total:.1f}"
+        score_x = col_x[8] + columns[8]["width"] // 2
+        outline_width = 2
+        for dx in range(-outline_width, outline_width + 1):
+            for dy in range(-outline_width, outline_width + 1):
+                if dx != 0 or dy != 0:
+                    draw.text((score_x + dx, row_cy + dy), score_text, font=font_score, fill="#000000", anchor="mm")
+        draw.text((score_x, row_cy), score_text, font=font_score, fill=tier_color, anchor="mm")
     
     # Final bottom border
     final_y = data_y + len(sorted_emps) * row_h
