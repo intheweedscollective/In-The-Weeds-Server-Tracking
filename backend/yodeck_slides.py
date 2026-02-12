@@ -1598,11 +1598,24 @@ def generate_at_risk_slide(
     theme: str = "dark_navy",
     custom_colors: Dict = None,
     custom_bg_image: str = None,
-    seasonal_theme: str = None
+    seasonal_theme: str = None,
+    output_format: str = "16:9"
 ) -> bytes:
-    """Generate At Risk / Coaching Focus slide."""
+    """Generate At Risk / Coaching Focus slide.
+    Args:
+        output_format: "16:9" for Yodeck (1920x1080) or "letter" for 8.5x11" print (2550x3300)
+    """
     colors = get_theme_colors(theme, custom_colors, seasonal_theme)
-    img = create_gradient_background(SLIDE_WIDTH, SLIDE_HEIGHT, colors)
+    
+    # Set dimensions based on format
+    if output_format == "letter":
+        width, height = 2550, 3300
+        scale = 1.5
+    else:
+        width, height = SLIDE_WIDTH, SLIDE_HEIGHT
+        scale = 1.0
+    
+    img = create_gradient_background(width, height, colors)
     
     active_seasonal = seasonal_theme if seasonal_theme and seasonal_theme != "none" else (get_current_seasonal_theme() if seasonal_theme == "auto" else None)
     if active_seasonal:
@@ -1610,28 +1623,29 @@ def generate_at_risk_slide(
     
     draw = ImageDraw.Draw(img)
     
-    font_title = get_font(60, bold=True)
-    font_warning = get_font(22, bold=True)
-    font_subtitle = get_font(24)
-    font_rank = get_font(36, bold=True)
-    font_name = get_font(32, bold=True)
-    font_gap = get_font(26)
-    font_score = get_font(28)
+    font_title = get_font(int(60 * scale), bold=True)
+    font_warning = get_font(int(22 * scale), bold=True)
+    font_subtitle = get_font(int(24 * scale))
+    font_rank = get_font(int(36 * scale), bold=True)
+    font_name = get_font(int(32 * scale), bold=True)
+    font_gap = get_font(int(26 * scale))
+    font_score = get_font(int(28 * scale))
     
     # Header
     title = "📋 COACHING FOCUS GROUP 📋"
-    draw.text((SLIDE_WIDTH//2 + 2, 37), title, font=font_title, fill=(0, 0, 0, 80), anchor="mt")
-    draw.text((SLIDE_WIDTH//2, 35), title, font=font_title, fill=TIER_CONFIG["C-Server"]["color"], anchor="mt")
+    draw.text((width//2 + 2, int(37 * scale)), title, font=font_title, fill=(0, 0, 0, 80), anchor="mt")
+    draw.text((width//2, int(35 * scale)), title, font=font_title, fill=TIER_CONFIG["C-Server"]["color"], anchor="mt")
     
     subtitle = f"{quarter} {year} • Development Priority (B-Server: {b_server_threshold})"
-    draw.text((SLIDE_WIDTH//2, 100), subtitle, font=font_subtitle, fill=colors["text_muted"], anchor="mt")
+    draw.text((width//2, int(100 * scale)), subtitle, font=font_subtitle, fill=colors["text_muted"], anchor="mt")
     
     # Warning banner
     warning = "⚠️ MANAGER ONLY - CONFIDENTIAL ⚠️"
-    draw.rounded_rectangle([SLIDE_WIDTH//2 - 220, 130, SLIDE_WIDTH//2 + 220, 160], radius=8, fill=TIER_CONFIG["C-Server"]["bg"])
-    draw.text((SLIDE_WIDTH//2, 138), warning, font=font_warning, fill=TIER_CONFIG["C-Server"]["color"], anchor="mt")
+    banner_half_width = int(220 * scale)
+    draw.rounded_rectangle([width//2 - banner_half_width, int(130 * scale), width//2 + banner_half_width, int(160 * scale)], radius=8, fill=TIER_CONFIG["C-Server"]["bg"])
+    draw.text((width//2, int(138 * scale)), warning, font=font_warning, fill=TIER_CONFIG["C-Server"]["color"], anchor="mt")
     
-    draw.line([(100, 175), (SLIDE_WIDTH - 100, 175)], fill=TIER_CONFIG["C-Server"]["color"], width=3)
+    draw.line([(int(100 * scale), int(175 * scale)), (width - int(100 * scale), int(175 * scale))], fill=TIER_CONFIG["C-Server"]["color"], width=int(3 * scale))
     
     # Find C-Servers
     at_risk = []
@@ -1643,25 +1657,25 @@ def generate_at_risk_slide(
     
     at_risk.sort(key=lambda x: x["score"], reverse=True)
     
-    start_y = 200
-    row_height = 90
+    start_y = int(200 * scale)
+    row_height = int(90 * scale)
     
     for idx, emp in enumerate(at_risk[:8]):
         y = start_y + idx * row_height
         
-        draw_card(draw, (100, y - 5, SLIDE_WIDTH - 100, y + row_height - 15), colors)
+        draw_card(draw, (int(100 * scale), y - 5, width - int(100 * scale), y + row_height - 15), colors)
         
-        draw.text((140, y + 18), emp["position_label"], font=font_rank, fill=TIER_CONFIG["C-Server"]["color"])
-        draw.text((250, y + 22), emp["name"][:18], font=font_name, fill=colors["text_white"])
-        draw.text((700, y + 24), f"{emp['gap']:.1f} pts needed", font=font_gap, fill=TIER_CONFIG["B-Server"]["color"])
-        draw.text((SLIDE_WIDTH - 150, y + 22), f"{emp['score']:.1f}", font=font_score, fill=colors["text_white"], anchor="rt")
+        draw.text((int(140 * scale), y + int(18 * scale)), emp["position_label"], font=font_rank, fill=TIER_CONFIG["C-Server"]["color"])
+        draw.text((int(250 * scale), y + int(22 * scale)), emp["name"][:18], font=font_name, fill=colors["text_white"])
+        draw.text((int(700 * scale), y + int(24 * scale)), f"{emp['gap']:.1f} pts needed", font=font_gap, fill=TIER_CONFIG["B-Server"]["color"])
+        draw.text((width - int(150 * scale), y + int(22 * scale)), f"{emp['score']:.1f}", font=font_score, fill=colors["text_white"], anchor="rt")
     
     if not at_risk:
-        font_no_data = get_font(28)
-        draw.text((SLIDE_WIDTH//2, 450), "No C-Servers - Great job team! 🎉", font=font_no_data, fill=colors["text_muted"], anchor="mt")
+        font_no_data = get_font(int(28 * scale))
+        draw.text((width//2, int(450 * scale)), "No C-Servers - Great job team! 🎉", font=font_no_data, fill=colors["text_muted"], anchor="mt")
     
-    font_footer = get_font(18)
-    draw.text((SLIDE_WIDTH//2, SLIDE_HEIGHT - 40), "Confidential Management Document", font=font_footer, fill=colors["text_muted"], anchor="mt")
+    font_footer = get_font(int(18 * scale))
+    draw.text((width//2, height - int(40 * scale)), "Confidential Management Document", font=font_footer, fill=colors["text_muted"], anchor="mt")
     
     buffer = io.BytesIO()
     img.save(buffer, format='PNG', optimize=True)
