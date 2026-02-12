@@ -70,6 +70,9 @@ Build a comprehensive performance review application for restaurant employees (B
 - ✅ **Top 10 by Metric**: Added PPA, LBW/Guest, Glass/Guest, Guests/LSC, CV Score sections
 - ✅ **2-Column Grid Layout**: Top 10 metric sections displayed in responsive grid
 - ✅ **Deleted TopPerformers.js**: Removed redundant page component
+- ✅ **Yodeck Slide Cleanup**: Removed tier-specific slides (A/B/C-Server), only Complete Rankings remains
+- ✅ **Format Selection**: Added 16:9 (Yodeck) and 8.5×11" (Letter) format options for Complete Rankings
+- ✅ **Letter Format**: 2550x3300 at 300 DPI for high-quality printing
 
 ## Backlog
 
