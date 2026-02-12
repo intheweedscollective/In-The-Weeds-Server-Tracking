@@ -1277,10 +1277,10 @@ def generate_complete_rankings_slide(
     tier_counts = {}
     prev_tier = None
     
-    # Fonts - BOLDER and larger for better outline visibility
+    # Fonts - BOLDER with subtle outline visibility
     font_data = get_font(14, bold=True)
-    font_rank = get_font(18, bold=True)  # Larger for visible outlines
-    font_score = get_font(18, bold=True)  # Larger for visible outlines
+    font_rank = get_font(16, bold=True)  # Slightly larger for readability
+    font_score = get_font(16, bold=True)  # Slightly larger for readability
     
     for row_idx, emp in enumerate(sorted_emps):
         tier = emp.get("tier_label", "C-Server")
