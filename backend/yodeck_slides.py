@@ -810,9 +810,9 @@ def generate_top_10_slide(
         else:
             # Rank number for others
             rank_text = f"#{rank}"
-            draw.text((left_margin + 30, y + row_height//2 - 5), rank_text, 
+            draw.text((left_margin + int(30 * font_scale), y + row_height//2 - 5), rank_text, 
                       font=font_rank, fill=colors.get("text_muted", "#888"), anchor="lm")
-            name_x = left_margin + 100
+            name_x = left_margin + int(100 * font_scale)
         
         # Employee name
         name = emp.get("name", "Unknown")
