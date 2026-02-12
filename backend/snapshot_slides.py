@@ -126,12 +126,22 @@ def generate_snapshot_slide(
             # Resize to fit slide dimensions
             bg_img = bg_img.resize((SLIDE_WIDTH, SLIDE_HEIGHT), Image.Resampling.LANCZOS)
             
-            # Darken the image to ensure text readability
+            # Darken the image significantly for text readability
             enhancer = ImageEnhance.Brightness(bg_img)
-            bg_img = enhancer.enhance(0.4)  # Darken to 40% brightness
+            bg_img = enhancer.enhance(0.3)  # Darken to 30% brightness
+            
+            # Reduce saturation for more subtle look
+            sat_enhancer = ImageEnhance.Color(bg_img)
+            bg_img = sat_enhancer.enhance(0.6)  # Reduce saturation
             
             # Add slight blur for a softer look
-            bg_img = bg_img.filter(ImageFilter.GaussianBlur(radius=2))
+            bg_img = bg_img.filter(ImageFilter.GaussianBlur(radius=3))
+            
+            # Create a dark overlay for even better readability
+            overlay = Image.new('RGBA', (SLIDE_WIDTH, SLIDE_HEIGHT), (10, 20, 40, 150))
+            bg_img = bg_img.convert('RGBA')
+            bg_img = Image.alpha_composite(bg_img, overlay)
+            bg_img = bg_img.convert('RGB')
             
             img = bg_img
         except Exception as e:
