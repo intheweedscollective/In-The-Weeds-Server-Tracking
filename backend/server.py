@@ -1849,7 +1849,7 @@ async def get_all_yodeck_slides(year: int, quarter: str):
         "category": "primary"
     })
     
-    # Complete Rankings (all employees on one slide)
+    # Complete Rankings (all employees on one slide) - available in both formats
     slides.append({
         "id": "complete-rankings",
         "name": "Complete Rankings",
@@ -1857,28 +1857,9 @@ async def get_all_yodeck_slides(year: int, quarter: str):
         "endpoint": f"/api/v2/yodeck/{year}/{quarter}/complete-rankings",
         "employee_count": len(rankings),
         "pages": 1,
-        "category": "primary"
+        "category": "primary",
+        "formats": ["16:9", "letter"]
     })
-    
-    # Tier slides
-    for tier_key, tier_label in [
-        ("trainers", "Trainer"),
-        ("bartenders", "Bartender"),
-        ("a-servers", "A-Server"),
-        ("b-servers", "B-Server"),
-        ("c-servers", "C-Server"),
-    ]:
-        count = tier_counts[tier_label]
-        if count > 0:
-            total_pages = (count + max_per_page - 1) // max_per_page
-            slides.append({
-                "id": tier_key,
-                "name": f"{tier_label} Rankings",
-                "endpoint": f"/api/v2/yodeck/{year}/{quarter}/tier/{tier_key}",
-                "employee_count": count,
-                "pages": total_pages,
-                "category": "tier"
-            })
     
     # Special slides
     slides.append({
