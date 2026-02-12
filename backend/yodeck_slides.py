@@ -839,7 +839,7 @@ def generate_top_10_slide(
         # Score number
         score_text = f"{score:.1f}"
         score_color = colors.get("gold", "#FFD700") if rank <= 3 else colors.get("text_white", "#FFFFFF")
-        draw.text((SLIDE_WIDTH - right_margin - 40, y + row_height//2 - 5), 
+        draw.text((width - right_margin - int(40 * font_scale), y + row_height//2 - 5), 
                   score_text, font=font_score, fill=score_color, anchor="rm")
     
     # === FOOTER ===
