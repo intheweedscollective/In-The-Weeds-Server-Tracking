@@ -586,15 +586,15 @@ export default function YodeckSlides() {
               <h3 className="font-serif font-bold text-foreground mb-3">Slide Specifications</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                 <div>
-                  <span className="text-gray-500">Resolution:</span>
-                  <span className="ml-2 font-semibold">1920×1080</span>
+                  <span className="text-gray-500">16:9 Format:</span>
+                  <span className="ml-2 font-semibold">1920×1080px</span>
                 </div>
                 <div>
-                  <span className="text-gray-500">Aspect Ratio:</span>
-                  <span className="ml-2 font-semibold">16:9</span>
+                  <span className="text-gray-500">Letter Format:</span>
+                  <span className="ml-2 font-semibold">8.5×11" (300 DPI)</span>
                 </div>
                 <div>
-                  <span className="text-gray-500">Format:</span>
+                  <span className="text-gray-500">File Type:</span>
                   <span className="ml-2 font-semibold">PNG</span>
                 </div>
                 <div>
