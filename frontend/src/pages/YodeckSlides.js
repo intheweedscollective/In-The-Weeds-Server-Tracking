@@ -553,7 +553,7 @@ export default function YodeckSlides() {
                 </h2>
                 <div className="space-y-3">
                   {slideManifest.slides.filter(s => s.category === "primary").map((slide) => (
-                    <SlideCard key={slide.id} slide={slide} downloading={downloading} downloadSlide={downloadSlide} selectedQuarter={selectedQuarter} selectedYear={selectedYear} />
+                    <SlideCard key={slide.id} slide={slide} downloading={downloading} downloadSlide={downloadSlide} selectedQuarter={selectedQuarter} selectedYear={selectedYear} backgrounds={backgrounds} selectedBackground={selectedBackground} setSelectedBackground={setSelectedBackground} />
                   ))}
                 </div>
               </div>
@@ -566,7 +566,7 @@ export default function YodeckSlides() {
                 </h2>
                 <div className="space-y-3">
                   {slideManifest.slides.filter(s => s.category === "special").map((slide) => (
-                    <SlideCard key={slide.id} slide={slide} downloading={downloading} downloadSlide={downloadSlide} selectedQuarter={selectedQuarter} selectedYear={selectedYear} />
+                    <SlideCard key={slide.id} slide={slide} downloading={downloading} downloadSlide={downloadSlide} selectedQuarter={selectedQuarter} selectedYear={selectedYear} backgrounds={backgrounds} selectedBackground={selectedBackground} setSelectedBackground={setSelectedBackground} />
                   ))}
                 </div>
               </div>
@@ -580,7 +580,7 @@ export default function YodeckSlides() {
                   </h2>
                   <div className="space-y-3">
                     {slideManifest.slides.filter(s => s.category === "manager").map((slide) => (
-                      <SlideCard key={slide.id} slide={slide} downloading={downloading} downloadSlide={downloadSlide} selectedQuarter={selectedQuarter} selectedYear={selectedYear} />
+                      <SlideCard key={slide.id} slide={slide} downloading={downloading} downloadSlide={downloadSlide} selectedQuarter={selectedQuarter} selectedYear={selectedYear} backgrounds={backgrounds} selectedBackground={selectedBackground} setSelectedBackground={setSelectedBackground} />
                     ))}
                   </div>
                 </div>
