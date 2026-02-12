@@ -790,7 +790,7 @@ def generate_top_10_slide(
     start_y = int(170 * font_scale)
     row_height = int(85 * font_scale)
     left_margin = int(80 * font_scale)
-    right_margin = 80
+    right_margin = int(80 * font_scale)
     card_width = SLIDE_WIDTH - left_margin - right_margin
     
     for idx, emp in enumerate(rankings[:10]):
