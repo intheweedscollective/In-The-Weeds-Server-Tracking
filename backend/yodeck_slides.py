@@ -1356,7 +1356,7 @@ def generate_complete_rankings_slide(
         # Total Score - OUTLINED with tier color
         total = emp.get("total_score", 0) or 0
         draw_outlined_text(draw, (col_x[8] + columns[8]["width"] // 2, row_cy),
-                          f"{total:.1f}", font_score, tier_color, "#000000", 1)
+                          f"{total:.1f}", font_score, tier_color, "#000000", 2)
     
     # Final bottom border
     final_y = data_y + len(sorted_emps) * row_h
