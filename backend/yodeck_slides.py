@@ -882,8 +882,13 @@ def generate_complete_rankings_slide(
     total_employees = len(rankings)
     
     # Data is already sorted by hierarchy from the API
-    left_employees = rankings[:14]
-    right_employees = rankings[14:28]
+    if output_format == "letter":
+        # Letter format: all employees in single column
+        left_employees = rankings[:max_rows_per_column]
+        right_employees = rankings[max_rows_per_column:max_rows_per_column*2] if len(rankings) > max_rows_per_column else []
+    else:
+        left_employees = rankings[:14]
+        right_employees = rankings[14:28]
     
     # Tier badge colors (matching the app exactly)
     tier_badge_colors = {
