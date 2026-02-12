@@ -1207,21 +1207,23 @@ def generate_complete_rankings_slide(
             
             y += row_height
     
-    # Draw left table (rows 1-14)
-    draw_table(left_employees, left_x, table_width, start_row_num=1)
+    # Draw left table
+    draw_table(left_employees, left_x, table_width, start_row_num=1, max_rows=max_rows_per_column)
     
-    # Draw right table (rows 15-28)
-    draw_table(right_employees, right_x, table_width, start_row_num=15)
+    # Draw right table only if we have more employees and using 2-column layout
+    if right_employees and num_columns == 2:
+        draw_table(right_employees, right_x, table_width, start_row_num=len(left_employees)+1, max_rows=max_rows_per_column)
     
-    # === VERTICAL LIGHT BLUE DIVIDER LINE ===
-    divider_x = margin_x + table_width + (divider_width // 2)
-    draw.rectangle([divider_x - 2, table_top, divider_x + 2, SLIDE_HEIGHT - footer_height - margin_y],
-                   fill=divider_blue)
+    # === VERTICAL DIVIDER LINE (only for 2-column layout) ===
+    if num_columns == 2 and right_employees:
+        divider_x = margin_x + table_width + (divider_width // 2)
+        draw.rectangle([divider_x - 2, table_top, divider_x + 2, height - footer_height - margin_y],
+                       fill=divider_blue)
     
     # === FOOTER ===
-    footer_y = SLIDE_HEIGHT - footer_height + 2
+    footer_y = height - footer_height + 2
     footer_text = f"Generated {datetime.now().strftime('%m/%d/%Y')}  •  Bubba Gump Shrimp Co. Las Vegas"
-    draw.text((SLIDE_WIDTH//2, footer_y), footer_text, font=font_footer, 
+    draw.text((width//2, footer_y), footer_text, font=font_footer, 
               fill=colors.get("text_muted", "#778DA9"), anchor="mt")
     
     buffer = io.BytesIO()
