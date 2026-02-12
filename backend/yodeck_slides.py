@@ -7,12 +7,17 @@ Bubba Gump Brand + Sports Leaderboard Style
 - Geometric patterns, glow effects, card-based layouts
 """
 import io
+import os
+import requests
 from typing import List, Dict, Any, Tuple, Optional
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
 from datetime import datetime, date
 import base64
 import math
 import random
+
+# Import backgrounds from snapshot_slides
+from snapshot_slides import BACKGROUNDS as SNAPSHOT_BACKGROUNDS
 
 # ============================================================================
 # DESIGN CONSTANTS
