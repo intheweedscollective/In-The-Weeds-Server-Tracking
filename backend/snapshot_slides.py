@@ -11,7 +11,39 @@ from datetime import datetime
 SLIDE_WIDTH = 1920
 SLIDE_HEIGHT = 1080
 
-BACKGROUNDS = {"dark": {"name": "Dark Navy"}}
+# Background options including Las Vegas themed images
+BACKGROUNDS = {
+    "dark": {
+        "name": "Dark Navy",
+        "type": "solid",
+        "color": (15, 23, 42)
+    },
+    "vegas_strip": {
+        "name": "Las Vegas Strip (Night)",
+        "type": "image",
+        "url": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/9b9vq4kg_1098701.jpg"
+    },
+    "vegas_fountains": {
+        "name": "Bellagio Fountains",
+        "type": "image",
+        "url": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/u97tnl4k_OIP%20%2824%29.webp"
+    },
+    "vegas_skyline": {
+        "name": "Vegas Skyline",
+        "type": "image",
+        "url": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/6p3k24w5_OIP%20%2823%29.webp"
+    },
+    "vegas_sign": {
+        "name": "Welcome to Vegas Sign",
+        "type": "image",
+        "url": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/ea66r7od_OIP%20%2822%29.webp"
+    },
+    "vegas_sunset": {
+        "name": "Vegas Sunset",
+        "type": "image",
+        "url": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/d30yvryo_Phoenix-to-Las-Vegas-Distance-Drive-Time-Costs-Explained.webp"
+    }
+}
 
 # Exact colors from reference
 COLORS = {
