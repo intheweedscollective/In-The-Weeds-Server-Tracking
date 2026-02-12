@@ -1577,10 +1577,13 @@ async def get_yodeck_top10_slide(year: int, quarter: str):
 
 
 @api_router.get("/v2/yodeck/{year}/{quarter}/complete-rankings")
-async def get_yodeck_complete_rankings_slide(year: int, quarter: str):
+async def get_yodeck_complete_rankings_slide(year: int, quarter: str, format: str = "16:9"):
     """
     Generate a complete rankings slide showing ALL employees top to bottom on one slide.
     Uses a compact multi-column layout with proper tier labels and circular progress.
+    
+    Args:
+        format: "16:9" for Yodeck/digital signage (1920x1080) or "letter" for 8.5x11" print (2550x3300)
     """
     # Get all rankings using the full-rankings format for proper tier labels
     employees = await db.employees_v2.find(
