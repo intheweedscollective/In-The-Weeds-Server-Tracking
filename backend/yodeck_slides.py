@@ -1032,15 +1032,15 @@ def generate_complete_rankings_slide(
             return position_badge_colors["C"]
         return "#6B7280"
     
-    def draw_table(employees, start_x, t_width, start_row_num=1):
+    def draw_table(employees, start_x, t_width, start_row_num=1, max_rows=14):
         """Draw a complete table matching the Rankings tab exactly."""
         
         # Column widths (proportional)
         # POSITION(50) | NAME(85) | TIER(55) | SCORE(45) | BONUS(40) | PPA(55) | LBW(55) | LSC(55) | GLASS(55)
         col_widths_raw = [50, 85, 55, 45, 40, 55, 55, 55, 55]
         total_raw = sum(col_widths_raw)
-        scale = t_width / total_raw
-        col_widths = [int(w * scale) for w in col_widths_raw]
+        col_scale = t_width / total_raw
+        col_widths = [int(w * col_scale) for w in col_widths_raw]
         
         # Calculate column x positions
         col_x = []
