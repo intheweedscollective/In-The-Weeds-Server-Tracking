@@ -1432,9 +1432,9 @@ def generate_most_improved_slide(
     draw.text((width//2, int(40 * scale)), title, font=font_title, fill="#22C55E", anchor="mt")
     
     subtitle = f"{quarter} {year} • Rising Stars"
-    draw.text((SLIDE_WIDTH//2, 115), subtitle, font=font_subtitle, fill=colors["text_muted"], anchor="mt")
+    draw.text((width//2, int(115 * scale)), subtitle, font=font_subtitle, fill=colors["text_muted"], anchor="mt")
     
-    draw.line([(100, 155), (SLIDE_WIDTH - 100, 155)], fill="#22C55E", width=3)
+    draw.line([(int(100 * scale), int(155 * scale)), (width - int(100 * scale), int(155 * scale))], fill="#22C55E", width=int(3 * scale))
     
     # Calculate improvements
     prev_scores = {r.get("name"): r.get("total_score", 0) for r in previous_rankings}
@@ -1456,37 +1456,37 @@ def generate_most_improved_slide(
     
     improvements.sort(key=lambda x: x["change"], reverse=True)
     
-    start_y = 185
-    row_height = 100
+    start_y = int(185 * scale)
+    row_height = int(100 * scale)
     
     for idx, emp in enumerate(improvements[:8]):
         y = start_y + idx * row_height
         
         # Card background
-        draw_card(draw, (100, y - 5, SLIDE_WIDTH - 100, y + row_height - 15), colors, highlight=(idx < 3))
+        draw_card(draw, (int(100 * scale), y - 5, width - int(100 * scale), y + row_height - 15), colors, highlight=(idx < 3))
         
         # Rank
         rank_color = colors["gold"] if idx == 0 else colors["silver"] if idx == 1 else colors["bronze"] if idx == 2 else colors["text_light"]
-        draw.text((140, y + 22), f"#{idx + 1}", font=font_rank, fill=rank_color)
+        draw.text((int(140 * scale), y + int(22 * scale)), f"#{idx + 1}", font=font_rank, fill=rank_color)
         
         # Name
-        draw.text((230, y + 25), emp["name"][:18], font=font_name, fill=colors["text_white"])
+        draw.text((int(230 * scale), y + int(25 * scale)), emp["name"][:18], font=font_name, fill=colors["text_white"])
         
         # Change with arrow
         change_text = f"↑ +{emp['change']:.1f}"
-        draw.text((700, y + 28), change_text, font=font_change, fill="#22C55E")
+        draw.text((int(700 * scale), y + int(28 * scale)), change_text, font=font_change, fill="#22C55E")
         
         # Score progression
         progression = f"{emp['prev_score']:.1f} → {emp['current_score']:.1f}"
-        draw.text((SLIDE_WIDTH - 200, y + 30), progression, font=font_score, fill=colors["text_muted"], anchor="rt")
+        draw.text((width - int(200 * scale), y + int(30 * scale)), progression, font=font_score, fill=colors["text_muted"], anchor="rt")
     
     if not improvements:
-        font_no_data = get_font(28)
-        draw.text((SLIDE_WIDTH//2, 450), "No improvement data available", font=font_no_data, fill=colors["text_muted"], anchor="mt")
-        draw.text((SLIDE_WIDTH//2, 490), "(Requires previous quarter data)", font=font_subtitle, fill=colors["text_muted"], anchor="mt")
+        font_no_data = get_font(int(28 * scale))
+        draw.text((width//2, int(450 * scale)), "No improvement data available", font=font_no_data, fill=colors["text_muted"], anchor="mt")
+        draw.text((width//2, int(490 * scale)), "(Requires previous quarter data)", font=font_subtitle, fill=colors["text_muted"], anchor="mt")
     
-    font_footer = get_font(18)
-    draw.text((SLIDE_WIDTH//2, SLIDE_HEIGHT - 40), "Keep Up The Great Work! 💪", font=font_footer, fill=colors["text_muted"], anchor="mt")
+    font_footer = get_font(int(18 * scale))
+    draw.text((width//2, height - int(40 * scale)), "Keep Up The Great Work! 💪", font=font_footer, fill=colors["text_muted"], anchor="mt")
     
     buffer = io.BytesIO()
     img.save(buffer, format='PNG', optimize=True)
