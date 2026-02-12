@@ -1502,11 +1502,24 @@ def generate_promotion_watchlist_slide(
     theme: str = "dark_navy",
     custom_colors: Dict = None,
     custom_bg_image: str = None,
-    seasonal_theme: str = None
+    seasonal_theme: str = None,
+    output_format: str = "16:9"
 ) -> bytes:
-    """Generate Promotion Watchlist slide."""
+    """Generate Promotion Watchlist slide.
+    Args:
+        output_format: "16:9" for Yodeck (1920x1080) or "letter" for 8.5x11" print (2550x3300)
+    """
     colors = get_theme_colors(theme, custom_colors, seasonal_theme)
-    img = create_gradient_background(SLIDE_WIDTH, SLIDE_HEIGHT, colors)
+    
+    # Set dimensions based on format
+    if output_format == "letter":
+        width, height = 2550, 3300
+        scale = 1.5
+    else:
+        width, height = SLIDE_WIDTH, SLIDE_HEIGHT
+        scale = 1.0
+    
+    img = create_gradient_background(width, height, colors)
     
     active_seasonal = seasonal_theme if seasonal_theme and seasonal_theme != "none" else (get_current_seasonal_theme() if seasonal_theme == "auto" else None)
     if active_seasonal:
@@ -1514,22 +1527,22 @@ def generate_promotion_watchlist_slide(
     
     draw = ImageDraw.Draw(img)
     
-    font_title = get_font(64, bold=True)
-    font_subtitle = get_font(24)
-    font_rank = get_font(38, bold=True)
-    font_name = get_font(34, bold=True)
-    font_gap = get_font(28, bold=True)
-    font_score = get_font(28)
+    font_title = get_font(int(64 * scale), bold=True)
+    font_subtitle = get_font(int(24 * scale))
+    font_rank = get_font(int(38 * scale), bold=True)
+    font_name = get_font(int(34 * scale), bold=True)
+    font_gap = get_font(int(28 * scale), bold=True)
+    font_score = get_font(int(28 * scale))
     
     # Header
     title = "⭐ PROMOTION WATCHLIST ⭐"
-    draw.text((SLIDE_WIDTH//2 + 2, 42), title, font=font_title, fill=(0, 0, 0, 80), anchor="mt")
-    draw.text((SLIDE_WIDTH//2, 40), title, font=font_title, fill=TIER_CONFIG["A-Server"]["color"], anchor="mt")
+    draw.text((width//2 + 2, int(42 * scale)), title, font=font_title, fill=(0, 0, 0, 80), anchor="mt")
+    draw.text((width//2, int(40 * scale)), title, font=font_title, fill=TIER_CONFIG["A-Server"]["color"], anchor="mt")
     
     subtitle = f"{quarter} {year} • Almost A-Server! (threshold: {a_server_threshold})"
-    draw.text((SLIDE_WIDTH//2, 115), subtitle, font=font_subtitle, fill=colors["text_muted"], anchor="mt")
+    draw.text((width//2, int(115 * scale)), subtitle, font=font_subtitle, fill=colors["text_muted"], anchor="mt")
     
-    draw.line([(100, 155), (SLIDE_WIDTH - 100, 155)], fill=TIER_CONFIG["A-Server"]["color"], width=3)
+    draw.line([(int(100 * scale), int(155 * scale)), (width - int(100 * scale), int(155 * scale))], fill=TIER_CONFIG["A-Server"]["color"], width=int(3 * scale))
     
     # Find B-Servers close to A threshold
     watchlist = []
@@ -1542,34 +1555,34 @@ def generate_promotion_watchlist_slide(
     
     watchlist.sort(key=lambda x: x["gap"])
     
-    start_y = 185
-    row_height = 100
+    start_y = int(185 * scale)
+    row_height = int(100 * scale)
     
     for idx, emp in enumerate(watchlist[:8]):
         y = start_y + idx * row_height
         
-        draw_card(draw, (100, y - 5, SLIDE_WIDTH - 100, y + row_height - 15), colors, highlight=(idx < 3))
+        draw_card(draw, (int(100 * scale), y - 5, width - int(100 * scale), y + row_height - 15), colors, highlight=(idx < 3))
         
-        draw.text((140, y + 22), emp["position_label"], font=font_rank, fill=TIER_CONFIG["B-Server"]["color"])
-        draw.text((250, y + 25), emp["name"][:18], font=font_name, fill=colors["text_white"])
+        draw.text((int(140 * scale), y + int(22 * scale)), emp["position_label"], font=font_rank, fill=TIER_CONFIG["B-Server"]["color"])
+        draw.text((int(250 * scale), y + int(25 * scale)), emp["name"][:18], font=font_name, fill=colors["text_white"])
         
         # Gap indicator with progress bar
         gap_pct = 1 - (emp["gap"] / 10)
-        bar_width = 150
-        bar_x = 680
+        bar_width = int(150 * scale)
+        bar_x = int(680 * scale)
         bar_bg = hex_to_rgb(colors["text_muted"])
-        draw.rounded_rectangle([bar_x, y + 35, bar_x + bar_width, y + 45], radius=5, fill=bar_bg)
-        draw.rounded_rectangle([bar_x, y + 35, bar_x + int(bar_width * gap_pct), y + 45], radius=5, fill=hex_to_rgb(TIER_CONFIG["A-Server"]["color"]))
+        draw.rounded_rectangle([bar_x, y + int(35 * scale), bar_x + bar_width, y + int(45 * scale)], radius=5, fill=bar_bg)
+        draw.rounded_rectangle([bar_x, y + int(35 * scale), bar_x + int(bar_width * gap_pct), y + int(45 * scale)], radius=5, fill=hex_to_rgb(TIER_CONFIG["A-Server"]["color"]))
         
-        draw.text((bar_x + bar_width + 15, y + 28), f"{emp['gap']:.1f} pts to go", font=font_gap, fill=colors["gold"])
-        draw.text((SLIDE_WIDTH - 150, y + 28), f"{emp['score']:.1f}", font=font_score, fill=colors["text_white"], anchor="rt")
+        draw.text((bar_x + bar_width + int(15 * scale), y + int(28 * scale)), f"{emp['gap']:.1f} pts to go", font=font_gap, fill=colors["gold"])
+        draw.text((width - int(150 * scale), y + int(28 * scale)), f"{emp['score']:.1f}", font=font_score, fill=colors["text_white"], anchor="rt")
     
     if not watchlist:
-        font_no_data = get_font(28)
-        draw.text((SLIDE_WIDTH//2, 450), "No B-Servers within 10 points of A-Server", font=font_no_data, fill=colors["text_muted"], anchor="mt")
+        font_no_data = get_font(int(28 * scale))
+        draw.text((width//2, int(450 * scale)), "No B-Servers within 10 points of A-Server", font=font_no_data, fill=colors["text_muted"], anchor="mt")
     
-    font_footer = get_font(18)
-    draw.text((SLIDE_WIDTH//2, SLIDE_HEIGHT - 40), "Keep Pushing! You're Almost There! 🎯", font=font_footer, fill=colors["text_muted"], anchor="mt")
+    font_footer = get_font(int(18 * scale))
+    draw.text((width//2, height - int(40 * scale)), "Keep Pushing! You're Almost There! 🎯", font=font_footer, fill=colors["text_muted"], anchor="mt")
     
     buffer = io.BytesIO()
     img.save(buffer, format='PNG', optimize=True)
