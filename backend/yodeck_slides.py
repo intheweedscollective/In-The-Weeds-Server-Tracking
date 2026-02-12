@@ -1314,8 +1314,8 @@ def generate_complete_rankings_slide(
         row_cy = y + row_h // 2
         rank_x = col_x[0] + columns[0]["width"] // 2
         
-        # Draw outlined rank text with thick black stroke - INLINE
-        outline_width = 2
+        # Draw outlined rank text with thick black stroke - 3px for visibility
+        outline_width = 3
         for dx in range(-outline_width, outline_width + 1):
             for dy in range(-outline_width, outline_width + 1):
                 if dx != 0 or dy != 0:
