@@ -1692,10 +1692,12 @@ async def get_yodeck_complete_rankings_slide(year: int, quarter: str, format: st
         year=year,
         theme=theme,
         custom_colors=custom_colors,
-        seasonal_theme=seasonal_theme
+        seasonal_theme=seasonal_theme,
+        output_format=format
     )
     
-    filename = f"yodeck_complete_rankings_{quarter}_{year}.png"
+    format_suffix = "letter" if format == "letter" else "16x9"
+    filename = f"complete_rankings_{quarter}_{year}_{format_suffix}.png"
     return Response(
         content=slide_bytes,
         media_type="image/png",
