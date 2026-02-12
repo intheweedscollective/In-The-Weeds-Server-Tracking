@@ -552,19 +552,6 @@ export default function YodeckSlides() {
                 </div>
               </div>
               
-              {/* Tier Slides */}
-              <div>
-                <h2 className="text-lg font-serif font-bold text-foreground mb-3 flex items-center gap-2">
-                  <FileImage className="w-5 h-5 text-secondary" />
-                  Tier Rankings
-                </h2>
-                <div className="space-y-3">
-                  {slideManifest.slides.filter(s => s.category === "tier").map((slide) => (
-                    <SlideCard key={slide.id} slide={slide} downloading={downloading} downloadSlide={downloadSlide} selectedQuarter={selectedQuarter} selectedYear={selectedYear} />
-                  ))}
-                </div>
-              </div>
-              
               {/* Special Slides */}
               <div>
                 <h2 className="text-lg font-serif font-bold text-foreground mb-3 flex items-center gap-2">
