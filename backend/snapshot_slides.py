@@ -19,30 +19,30 @@ BACKGROUNDS = {
         "type": "solid",
         "color": (15, 23, 42)
     },
-    "vegas_strip": {
-        "name": "Las Vegas Strip (Night)",
+    "vegas_1": {
+        "name": "Bubba Gump Vegas 1",
         "type": "image",
-        "url": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/9b9vq4kg_1098701.jpg"
+        "url": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/0dpcbmve_IMG_2080.jpeg"
     },
-    "vegas_fountains": {
-        "name": "Bellagio Fountains",
+    "vegas_2": {
+        "name": "Bubba Gump Vegas 2",
         "type": "image",
-        "url": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/u97tnl4k_OIP%20%2824%29.webp"
+        "url": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/kj7dry1p_IMG_2081.jpeg"
     },
-    "vegas_skyline": {
-        "name": "Vegas Skyline",
+    "vegas_3": {
+        "name": "Bubba Gump Vegas 3",
         "type": "image",
-        "url": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/6p3k24w5_OIP%20%2823%29.webp"
+        "url": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/7ejr8e4h_IMG_2078.jpeg"
     },
-    "vegas_sign": {
-        "name": "Welcome to Vegas Sign",
+    "vegas_4": {
+        "name": "Bubba Gump Vegas 4",
         "type": "image",
-        "url": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/ea66r7od_OIP%20%2822%29.webp"
+        "url": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/2uyjx6bg_IMG_2076.jpeg"
     },
-    "vegas_sunset": {
-        "name": "Vegas Sunset",
+    "vegas_5": {
+        "name": "Bubba Gump Vegas 5",
         "type": "image",
-        "url": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/d30yvryo_Phoenix-to-Las-Vegas-Distance-Drive-Time-Costs-Explained.webp"
+        "url": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/zlo7kss4_IMG_2077.jpeg"
     }
 }
 
