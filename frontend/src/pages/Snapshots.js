@@ -280,22 +280,41 @@ export default function Snapshots() {
             <Image className="w-5 h-5" />
             Slide Background
           </CardTitle>
-          <CardDescription>Choose a fun background for your snapshot slides</CardDescription>
+          <CardDescription>Choose a background for your snapshot slides</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {backgrounds.map((bg) => (
               <button
                 key={bg.key}
                 onClick={() => setSelectedBackground(bg.key)}
-                className={`p-3 rounded-lg border-2 transition-all text-sm font-medium ${
+                className={`relative overflow-hidden rounded-xl border-2 transition-all ${
                   selectedBackground === bg.key
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-muted bg-card text-foreground hover:border-primary/50"
+                    ? "border-primary ring-2 ring-primary ring-offset-2"
+                    : "border-muted hover:border-primary/50"
                 }`}
                 data-testid={`bg-option-${bg.key}`}
               >
-                {bg.name}
+                {/* Preview Image or Solid Color */}
+                <div className="aspect-video w-full">
+                  {bg.preview ? (
+                    <img 
+                      src={bg.preview} 
+                      alt={bg.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-[#0f172a]" />
+                  )}
+                </div>
+                {/* Label overlay */}
+                <div className={`absolute bottom-0 left-0 right-0 py-2 px-2 text-xs font-medium text-center ${
+                  selectedBackground === bg.key
+                    ? "bg-primary text-white"
+                    : "bg-black/60 text-white"
+                }`}>
+                  {bg.name}
+                </div>
               </button>
             ))}
           </div>
