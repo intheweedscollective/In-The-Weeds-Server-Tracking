@@ -964,12 +964,13 @@ def generate_complete_rankings_slide(
     row_height = available_height // max(rows_to_show, 1)
     
     # === TITLE ===
+    format_label = "PRINTABLE" if output_format == "letter" else ""
     title = f"COMPLETE TEAM RANKINGS  •  {quarter} {year}"
-    draw.text((SLIDE_WIDTH//2, margin_y + 3), title, font=font_title,
+    draw.text((width//2, margin_y + 3), title, font=font_title,
               fill=colors.get("primary", "#E63946"), anchor="mt")
     
     subtitle = f"{total_employees} Team Members  •  Trainers → Bartenders → A/B/C Servers"
-    draw.text((SLIDE_WIDTH//2, margin_y + 22), subtitle, font=font_subtitle, 
+    draw.text((width//2, margin_y + int(22 * font_scale)), subtitle, font=font_subtitle, 
               fill=colors.get("text_muted", "#778DA9"), anchor="mt")
     
     # Column positions
