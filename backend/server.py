@@ -1837,7 +1837,6 @@ async def get_all_yodeck_slides(year: int, quarter: str):
             tier_counts[tier] += 1
     
     # Build slide manifest
-    max_per_page = 10
     slides = []
     
     # Top 10
