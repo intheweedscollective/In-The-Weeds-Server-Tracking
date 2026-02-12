@@ -831,9 +831,9 @@ def generate_top_10_slide(
         # Score visualization - Progress Ring
         score = emp.get("total_score", 0)
         max_score = 130
-        ring_x = SLIDE_WIDTH - right_margin - 180
+        ring_x = width - right_margin - int(180 * font_scale)
         ring_y = y + row_height//2 - 4
-        img = draw_progress_ring(img, ring_x, ring_y, 28, score, max_score, colors, thickness=8)
+        img = draw_progress_ring(img, ring_x, ring_y, int(28 * font_scale), score, max_score, colors, thickness=int(8 * font_scale))
         draw = ImageDraw.Draw(img)
         
         # Score number
