@@ -721,6 +721,222 @@ def draw_premium_medal(img: Image.Image, x: int, y: int, rank: int,
 # SLIDE GENERATORS (v3.0 - Premium Styling)
 # ============================================================================
 
+def generate_top_10_by_metric_slide(
+    employees: List[Dict[str, Any]],
+    quarter: str,
+    year: int,
+    output_format: str = "16:9"
+) -> bytes:
+    """
+    Generate Top 10 Performers By Metric slide matching the user's professional design.
+    Shows 4 metric columns: PPA, Glass/Guest, Guests/LSC, LBW/Guest
+    
+    Args:
+        employees: List of employee dicts with metrics
+        quarter: Quarter string (e.g., "Q1")
+        year: Year integer
+        output_format: "16:9" for Yodeck (1920x1080) or "letter" for 8.5x11" print (2550x3300)
+    """
+    # Set dimensions based on format
+    if output_format == "letter":
+        width, height = 2550, 3300
+        scale = 1.33
+    else:
+        width, height = SLIDE_WIDTH, SLIDE_HEIGHT
+        scale = 1.0
+    
+    # Colors matching the design
+    header_dark = "#0D3B66"  # Dark blue header
+    header_gradient = "#1A5276"  # Slightly lighter blue
+    metric_header_bg = "#4A4A4A"  # Dark gray for metric titles
+    col_header_bg = "#507EA9"  # Light blue for column headers
+    row_light = "#F8F9FA"  # Light gray alternating row
+    row_white = "#FFFFFF"  # White alternating row
+    rank_badge_bg = "#C41E3A"  # Red for rank badges
+    text_dark = "#333333"  # Dark text for data
+    
+    # Create image with gradient header
+    img = Image.new('RGB', (width, height), row_white)
+    draw = ImageDraw.Draw(img)
+    
+    # Header height (scaled)
+    header_height = int(180 * scale)
+    
+    # Draw gradient header background
+    for y in range(header_height):
+        ratio = y / header_height
+        r = int(13 + (26 - 13) * ratio)
+        g = int(59 + (82 - 59) * ratio)
+        b = int(102 + (118 - 102) * ratio)
+        draw.line([(0, y), (width, y)], fill=(r, g, b))
+    
+    # Fonts (scaled)
+    try:
+        font_title_top = get_font(int(52 * scale), bold=True)
+        font_title_main = get_font(int(72 * scale), bold=True)
+        font_quarter = get_font(int(28 * scale), bold=True)
+        font_year = get_font(int(56 * scale), bold=True)
+        font_metric_header = get_font(int(22 * scale), bold=True)
+        font_col_header = get_font(int(18 * scale), bold=True)
+        font_rank = get_font(int(16 * scale), bold=True)
+        font_name = get_font(int(18 * scale))
+        font_value = get_font(int(18 * scale), bold=True)
+    except:
+        font_title_top = ImageFont.load_default()
+        font_title_main = ImageFont.load_default()
+        font_quarter = ImageFont.load_default()
+        font_year = ImageFont.load_default()
+        font_metric_header = ImageFont.load_default()
+        font_col_header = ImageFont.load_default()
+        font_rank = ImageFont.load_default()
+        font_name = ImageFont.load_default()
+        font_value = ImageFont.load_default()
+    
+    # === HEADER SECTION ===
+    
+    # Logo placeholder area (left side) - draw a circle with text as placeholder
+    logo_x = int(90 * scale)
+    logo_y = int(90 * scale)
+    logo_radius = int(70 * scale)
+    
+    # Draw logo circle background
+    draw.ellipse([logo_x - logo_radius, logo_y - logo_radius, 
+                  logo_x + logo_radius, logo_y + logo_radius], 
+                 fill="#1A5276", outline="#E63946", width=3)
+    
+    # Add "BUBBA GUMP" text in circle
+    logo_font = get_font(int(14 * scale), bold=True)
+    draw.text((logo_x, logo_y - int(15 * scale)), "BUBBA", font=logo_font, fill="#FFFFFF", anchor="mm")
+    draw.text((logo_x, logo_y + int(5 * scale)), "GUMP", font=logo_font, fill="#E63946", anchor="mm")
+    logo_font_small = get_font(int(10 * scale))
+    draw.text((logo_x, logo_y + int(22 * scale)), "SHRIMP CO.", font=logo_font_small, fill="#FFFFFF", anchor="mm")
+    
+    # Title - "TOP 10 PERFORMERS" on first line
+    title_x = int(220 * scale)
+    draw.text((title_x, int(55 * scale)), "TOP 10 PERFORMERS", font=font_title_top, fill="#FFFFFF", anchor="lm")
+    
+    # "BY METRIC" on second line (larger, bolder)
+    draw.text((title_x, int(120 * scale)), "BY METRIC", font=font_title_main, fill="#FFFFFF", anchor="lm")
+    
+    # Quarter and Year on right side
+    quarter_x = width - int(150 * scale)
+    quarter_num = quarter.replace("Q", "")
+    draw.text((quarter_x, int(55 * scale)), f"QUARTER {quarter_num}", font=font_quarter, fill="#FFFFFF", anchor="mm")
+    draw.text((quarter_x, int(110 * scale)), str(year), font=font_year, fill="#FFFFFF", anchor="mm")
+    
+    # === METRICS SECTION ===
+    
+    # Define the 4 metrics to display
+    metrics = [
+        {"key": "ppa", "label": "PPA - Top 10", "format": "currency", "higher_better": True},
+        {"key": "glassware_per_guest", "label": "Glass/Guest - Top 10", "format": "currency", "higher_better": True},
+        {"key": "guests_per_lsc", "label": "Guests/LSC - Top 10", "format": "number", "higher_better": False},
+        {"key": "lbw_per_guest", "label": "LBW/Guest - Top 10", "format": "currency", "higher_better": True},
+    ]
+    
+    # Calculate column widths
+    margin = int(20 * scale)
+    table_area_width = width - (margin * 2)
+    col_width = table_area_width // 4
+    table_start_y = header_height + int(10 * scale)
+    
+    # Process employee data for each metric
+    for col_idx, metric in enumerate(metrics):
+        col_x = margin + (col_idx * col_width)
+        
+        # Sort employees by this metric
+        metric_key = metric["key"]
+        valid_employees = [e for e in employees if e.get(metric_key) is not None]
+        
+        if metric["higher_better"]:
+            sorted_emps = sorted(valid_employees, key=lambda e: float(e.get(metric_key, 0) or 0), reverse=True)
+        else:
+            sorted_emps = sorted(valid_employees, key=lambda e: float(e.get(metric_key, 999999) or 999999))
+        
+        top_10 = sorted_emps[:10]
+        
+        # Draw metric header (dark gray bar)
+        metric_header_y = table_start_y
+        metric_header_height = int(40 * scale)
+        draw.rectangle([col_x, metric_header_y, col_x + col_width - int(5 * scale), metric_header_y + metric_header_height],
+                       fill=metric_header_bg)
+        draw.text((col_x + col_width // 2, metric_header_y + metric_header_height // 2), 
+                  metric["label"], font=font_metric_header, fill="#FFFFFF", anchor="mm")
+        
+        # Draw column headers (light blue bar)
+        col_header_y = metric_header_y + metric_header_height
+        col_header_height = int(35 * scale)
+        draw.rectangle([col_x, col_header_y, col_x + col_width - int(5 * scale), col_header_y + col_header_height],
+                       fill=col_header_bg)
+        
+        # Column header text positions
+        rank_col_w = int(60 * scale)
+        name_col_w = int(150 * scale)
+        value_col_w = col_width - rank_col_w - name_col_w - int(20 * scale)
+        
+        draw.text((col_x + rank_col_w // 2, col_header_y + col_header_height // 2), 
+                  "Rank", font=font_col_header, fill="#FFFFFF", anchor="mm")
+        draw.text((col_x + rank_col_w + int(10 * scale), col_header_y + col_header_height // 2), 
+                  "Employee", font=font_col_header, fill="#FFFFFF", anchor="lm")
+        draw.text((col_x + col_width - int(40 * scale), col_header_y + col_header_height // 2), 
+                  "Value", font=font_col_header, fill="#FFFFFF", anchor="rm")
+        
+        # Draw data rows
+        row_y = col_header_y + col_header_height
+        row_height = int(70 * scale)  # Taller rows for letter format
+        
+        if output_format != "letter":
+            row_height = int(76 * scale)  # Adjust for 16:9 to fill space
+        
+        for rank, emp in enumerate(top_10, 1):
+            # Alternating row colors
+            row_bg = row_light if rank % 2 == 0 else row_white
+            draw.rectangle([col_x, row_y, col_x + col_width - int(5 * scale), row_y + row_height],
+                           fill=row_bg)
+            
+            # Rank badge (red circle with white text)
+            badge_x = col_x + rank_col_w // 2
+            badge_y = row_y + row_height // 2
+            badge_radius = int(14 * scale)
+            draw.ellipse([badge_x - badge_radius, badge_y - badge_radius,
+                         badge_x + badge_radius, badge_y + badge_radius],
+                        fill=rank_badge_bg)
+            draw.text((badge_x, badge_y), f"#{rank}", font=font_rank, fill="#FFFFFF", anchor="mm")
+            
+            # Employee name (truncate if needed)
+            name = emp.get("name", "Unknown")
+            if len(name) > 12:
+                name = name[:11] + ".."
+            draw.text((col_x + rank_col_w + int(15 * scale), badge_y), 
+                      name, font=font_name, fill=text_dark, anchor="lm")
+            
+            # Value (formatted)
+            value = emp.get(metric_key, 0)
+            if metric["format"] == "currency":
+                value_text = f"${float(value or 0):.2f}"
+            else:
+                value_text = f"{float(value or 0):.1f}"
+            
+            draw.text((col_x + col_width - int(15 * scale), badge_y), 
+                      value_text, font=font_value, fill=text_dark, anchor="rm")
+            
+            row_y += row_height
+        
+        # Fill remaining rows if less than 10 employees
+        while rank < 10:
+            rank += 1
+            row_bg = row_light if rank % 2 == 0 else row_white
+            draw.rectangle([col_x, row_y, col_x + col_width - int(5 * scale), row_y + row_height],
+                           fill=row_bg)
+            row_y += row_height
+    
+    # Save to buffer
+    buffer = io.BytesIO()
+    img.save(buffer, format='PNG', optimize=True)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
 def generate_top_10_slide(
     rankings: List[Dict[str, Any]], 
     quarter: str, 
