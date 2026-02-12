@@ -658,6 +658,29 @@ function SlideCard({ slide, downloading, downloadSlide, selectedQuarter, selecte
           </div>
           
           <div className="flex items-center gap-3">
+            {/* Background selector for complete-rankings slide */}
+            {hasBackgroundOptions && (
+              <Select value={selectedBackground} onValueChange={setSelectedBackground}>
+                <SelectTrigger className="w-40 h-9" data-testid={`background-select-${slide.id}`}>
+                  <SelectValue placeholder="Background" />
+                </SelectTrigger>
+                <SelectContent>
+                  {backgrounds.map((bg) => (
+                    <SelectItem key={bg.key} value={bg.key}>
+                      <div className="flex items-center gap-2">
+                        {bg.preview ? (
+                          <img src={bg.preview} alt="" className="w-6 h-4 rounded object-cover" />
+                        ) : (
+                          <div className="w-6 h-4 rounded bg-[#0f172a]" />
+                        )}
+                        <span>{bg.name}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            
             {/* Format selector for slides that support it */}
             {hasFormatOptions && (
               <Select value={selectedFormat} onValueChange={setSelectedFormat}>
