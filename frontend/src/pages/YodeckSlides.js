@@ -58,6 +58,8 @@ export default function YodeckSlides() {
   const [selectedQuarter, setSelectedQuarter] = useState("Q1");
   const [showThemeSettings, setShowThemeSettings] = useState(false);
   const [savingTheme, setSavingTheme] = useState(false);
+  const [backgrounds, setBackgrounds] = useState([]);
+  const [selectedBackground, setSelectedBackground] = useState("dark");
   
   // Theme settings
   const [themeSettings, setThemeSettings] = useState({
@@ -77,6 +79,10 @@ export default function YodeckSlides() {
         `${API}/v2/yodeck/${selectedYear}/${selectedQuarter}/all`
       );
       setSlideManifest(response.data);
+      
+      // Fetch backgrounds
+      const bgResponse = await axios.get(`${API}/v2/snapshots/backgrounds`);
+      setBackgrounds(bgResponse.data || []);
       
       // Also fetch current theme settings
       const settingsResponse = await axios.get(
