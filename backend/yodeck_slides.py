@@ -1073,7 +1073,7 @@ def generate_complete_rankings_slide(
         y = header_y + header_height
         
         for idx, emp in enumerate(employees):
-            if idx >= 14:
+            if idx >= max_rows:
                 break
             
             row_num = start_row_num + idx  # Use the passed start number
