@@ -71,7 +71,12 @@ Build a comprehensive performance review application for restaurant employees (B
 - ✅ **2-Column Grid Layout**: Top 10 metric sections displayed in responsive grid
 - ✅ **Deleted TopPerformers.js**: Removed redundant page component
 - ✅ **Yodeck Slide Cleanup**: Removed tier-specific slides (A/B/C-Server), only Complete Rankings remains
-- ✅ **Format Selection**: Added 16:9 (Yodeck) and 8.5×11" (Letter) format options for Complete Rankings
+- ✅ **Format Selection on ALL Slides**: Added 16:9 (Yodeck) and 8.5×11" (Letter) format dropdown on every slide:
+  - Top 10 Performers
+  - Complete Rankings
+  - Most Improved
+  - Promotion Watchlist
+  - Coaching Focus (Manager Only)
 - ✅ **Letter Format**: 2550x3300 at 300 DPI for high-quality printing
 
 ## Backlog
