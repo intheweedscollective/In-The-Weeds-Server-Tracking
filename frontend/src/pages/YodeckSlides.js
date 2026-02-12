@@ -110,13 +110,17 @@ export default function YodeckSlides() {
     fetchSlideManifest();
   }, [fetchSlideManifest]);
 
-  const downloadSlide = async (slideId, endpoint, page = 1) => {
+  const downloadSlide = async (slideId, endpoint, page = 1, format = "16:9") => {
     const key = `${slideId}-${page}`;
     setDownloading(prev => ({ ...prev, [key]: true }));
     
     try {
-      // endpoint already includes /api prefix, so use BACKEND_URL directly
-      const url = page > 1 ? `${BACKEND_URL}${endpoint}?page=${page}` : `${BACKEND_URL}${endpoint}`;
+      // Build the URL with page and format parameters
+      let url = `${BACKEND_URL}${endpoint}`;
+      // Check if endpoint already has query params
+      if (!url.includes('?')) {
+        url += page > 1 ? `?page=${page}` : '';
+      }
       
       // Use fetch to get the blob directly - more reliable than anchor download
       const response = await fetch(url, {
@@ -133,10 +137,11 @@ export default function YodeckSlides() {
       const blob = await response.blob();
       const objectUrl = URL.createObjectURL(blob);
       
-      // Create download link
+      // Create download link with format in filename
+      const formatSuffix = format === "letter" ? "_letter" : "_16x9";
       const link = document.createElement('a');
       link.href = objectUrl;
-      link.download = `${slideId}_${selectedQuarter}_${selectedYear}${page > 1 ? `_p${page}` : ''}.png`;
+      link.download = `${slideId}_${selectedQuarter}_${selectedYear}${page > 1 ? `_p${page}` : ''}${formatSuffix}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -148,8 +153,7 @@ export default function YodeckSlides() {
     } catch (error) {
       console.error("Error downloading slide:", error);
       // Fallback: open in new tab
-      const url = page > 1 ? `${BACKEND_URL}${endpoint}?page=${page}` : `${BACKEND_URL}${endpoint}`;
-      window.open(url, '_blank');
+      window.open(`${BACKEND_URL}${endpoint}`, '_blank');
       toast.info("Opening slide in new tab - right-click to save");
     } finally {
       setDownloading(prev => ({ ...prev, [key]: false }));
