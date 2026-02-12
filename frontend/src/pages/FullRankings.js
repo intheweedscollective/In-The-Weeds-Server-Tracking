@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Trophy, Calendar, Filter, ChevronDown, ChevronUp, Download, FileText, Medal, Award, Star, Users } from "lucide-react";
+import { Trophy, Calendar, Filter, ChevronDown, ChevronUp, Download, FileText, Medal, Award, Star, Users, Image } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import Navigation from "../components/Navigation";
@@ -34,22 +34,25 @@ export default function FullRankings() {
   const [employees, setEmployees] = useState([]);
   const [quarterSettings, setQuarterSettings] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [selectedYear, setSelectedYear] = useState(2026);
   const [selectedQuarter, setSelectedQuarter] = useState("Q1");
   const [tierFilter, setTierFilter] = useState("all");
   const [thresholds, setThresholds] = useState({ a_server_min: 85.1, b_server_min: 70.1 });
   const [totalEmployees, setTotalEmployees] = useState(0);
   const [expandedRow, setExpandedRow] = useState(null);
+  const [backgrounds, setBackgrounds] = useState([]);
+  const [selectedBackground, setSelectedBackground] = useState("dark");
 
   const fetchRankings = useCallback(async () => {
     setLoading(true);
     try {
       const tierParam = tierFilter !== "all" ? `&tier_filter=${tierFilter}` : "";
-      const [rankingsRes, employeesRes, settingsRes] = await Promise.all([
+      const [rankingsRes, employeesRes, settingsRes, bgRes] = await Promise.all([
         axios.get(`${API}/v2/full-rankings/${selectedYear}/${selectedQuarter}?${tierParam}`),
         axios.get(`${API}/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`),
-        axios.get(`${API}/v2/quarter-settings/${selectedYear}/${selectedQuarter}`).catch(() => null)
+        axios.get(`${API}/v2/quarter-settings/${selectedYear}/${selectedQuarter}`).catch(() => null),
+        axios.get(`${API}/v2/snapshots/backgrounds`).catch(() => ({ data: [] }))
       ]);
       
       setRankings(rankingsRes.data.rankings || []);
@@ -57,6 +60,7 @@ export default function FullRankings() {
       setQuarterSettings(settingsRes?.data || null);
       setTotalEmployees(rankingsRes.data.total_employees || 0);
       setThresholds(rankingsRes.data.tier_thresholds || { a_server_min: 85.1, b_server_min: 70.1 });
+      setBackgrounds(bgRes.data || []);
     } catch (error) {
       console.error("Error fetching rankings:", error);
       if (error.response?.status === 404) {
