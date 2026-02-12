@@ -1495,11 +1495,11 @@ async def download_full_rankings_pdf(year: int, quarter: str):
 # ============================================================================
 
 @api_router.get("/v2/yodeck/{year}/{quarter}/top10")
-async def get_yodeck_top10_slide(year: int, quarter: str):
+async def get_yodeck_top10_slide(year: int, quarter: str, format: str = "16:9"):
     """
-    Generate Top 10 Performers slide (1920x1080 PNG).
-    Shows the 10 highest scores OVERALL regardless of tier.
-    Uses per-quarter theme settings.
+    Generate Top 10 Performers slide.
+    Args:
+        format: "16:9" for Yodeck (1920x1080) or "letter" for 8.5x11" print (2550x3300)
     """
     # Get settings and rankings
     settings_doc = await db.quarter_settings.find_one(
@@ -1559,16 +1559,18 @@ async def get_yodeck_top10_slide(year: int, quarter: str):
     # Get seasonal theme setting
     seasonal_theme = getattr(settings, 'slide_seasonal_theme', 'auto')
     
-    # Generate slide with theme
+    # Generate slide with theme and format
     slide_bytes = generate_top_10_slide(
         rankings, quarter.upper(), year,
         theme=theme,
         custom_colors=custom_colors,
         custom_bg_image=settings.slide_custom_bg_image,
-        seasonal_theme=seasonal_theme
+        seasonal_theme=seasonal_theme,
+        output_format=format
     )
     
-    filename = f"yodeck_top10_{quarter}_{year}.png"
+    format_suffix = "letter" if format == "letter" else "16x9"
+    filename = f"top10_{quarter}_{year}_{format_suffix}.png"
     return Response(
         content=slide_bytes,
         media_type="image/png",
