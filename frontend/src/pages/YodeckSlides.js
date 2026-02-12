@@ -617,17 +617,22 @@ export default function YodeckSlides() {
 }
 
 // Slide Card Component
-function SlideCard({ slide, downloading, downloadSlide, selectedQuarter, selectedYear }) {
+function SlideCard({ slide, downloading, downloadSlide, selectedQuarter, selectedYear, backgrounds, selectedBackground, setSelectedBackground }) {
   const CategoryIcon = CATEGORY_ICONS[slide.category] || FileImage;
   const categoryColor = CATEGORY_COLORS[slide.category] || "bg-gray-600";
   const [selectedFormat, setSelectedFormat] = useState("16:9");
   
   const hasFormatOptions = slide.formats && slide.formats.length > 1;
+  const hasBackgroundOptions = slide.id === "complete-rankings" && backgrounds && backgrounds.length > 0;
   
   const handleDownload = (page = 1) => {
-    // Append format parameter for slides that support it
-    const formatParam = hasFormatOptions ? `?format=${selectedFormat}` : "";
-    const endpoint = slide.endpoint + (page > 1 ? `?page=${page}${formatParam ? '&format=' + selectedFormat : ''}` : formatParam);
+    // Build query params
+    let params = [];
+    if (hasFormatOptions) params.push(`format=${selectedFormat}`);
+    if (hasBackgroundOptions && selectedBackground) params.push(`background=${selectedBackground}`);
+    
+    const queryString = params.length > 0 ? `?${params.join('&')}` : "";
+    const endpoint = slide.endpoint + (page > 1 ? `?page=${page}${queryString ? '&' + params.join('&') : ''}` : queryString);
     downloadSlide(slide.id, endpoint, page, selectedFormat);
   };
   
