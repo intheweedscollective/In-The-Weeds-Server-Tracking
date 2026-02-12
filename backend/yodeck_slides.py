@@ -798,7 +798,7 @@ def generate_top_10_slide(
         y = start_y + idx * row_height
         
         # Draw card with shadow (glow for top 3)
-        card_bbox = (left_margin, y, SLIDE_WIDTH - right_margin, y + row_height - 8)
+        card_bbox = (left_margin, y, width - right_margin, y + row_height - int(8 * font_scale))
         img = draw_card_with_shadow(img, card_bbox, colors, glow=(rank <= 3))
         draw = ImageDraw.Draw(img)  # Refresh draw object
         
