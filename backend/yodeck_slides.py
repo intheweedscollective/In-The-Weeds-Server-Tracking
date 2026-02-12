@@ -1302,9 +1302,9 @@ def generate_complete_rankings_slide(
         
         prev_tier = tier
         
-        # Vertical divider lines
+        # Vertical divider lines in data rows
         for i in range(1, len(columns)):
-            draw.line([(col_x[i], y), (col_x[i], y + row_h)], fill=COLORS["divider"], width=1)
+            draw.line([(col_x[i], y), (col_x[i], y + row_h)], fill=(120, 120, 120), width=2)
         
         # Rank with tier prefix - OUTLINED
         prefix = {"Trainer": "T", "Bartender": "BAR", "A-Server": "A", "B-Server": "B", "C-Server": "C"}.get(tier, "")
