@@ -449,4 +449,4 @@ def generate_snapshot_slide(
 
 
 def get_available_backgrounds():
-    return [{"key": k, "name": v["name"]} for k, v in BACKGROUNDS.items()]
+    return [{"key": k, "name": v["name"], "preview": v.get("preview")} for k, v in BACKGROUNDS.items()]
