@@ -843,9 +843,9 @@ def generate_top_10_slide(
                   score_text, font=font_score, fill=score_color, anchor="rm")
     
     # === FOOTER ===
-    footer_y = SLIDE_HEIGHT - 40
+    footer_y = height - int(40 * font_scale)
     footer_text = f"Generated {datetime.now().strftime('%m/%d/%Y')}  •  Performance Rankings  •  Max Score: 130"
-    draw.text((SLIDE_WIDTH//2, footer_y), footer_text, font=font_footer, 
+    draw.text((width//2, footer_y), footer_text, font=font_footer, 
               fill=colors.get("text_muted", "#778DA9"), anchor="mm")
     
     buffer = io.BytesIO()
