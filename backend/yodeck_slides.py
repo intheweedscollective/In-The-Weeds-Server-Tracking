@@ -1391,32 +1391,45 @@ def generate_most_improved_slide(
     theme: str = "dark_navy",
     custom_colors: Dict = None,
     custom_bg_image: str = None,
-    seasonal_theme: str = None
+    seasonal_theme: str = None,
+    output_format: str = "16:9"
 ) -> bytes:
-    """Generate Most Improved slide with visual impact."""
+    """Generate Most Improved slide with visual impact.
+    Args:
+        output_format: "16:9" for Yodeck (1920x1080) or "letter" for 8.5x11" print (2550x3300)
+    """
     colors = get_theme_colors(theme, custom_colors, seasonal_theme)
-    img = create_gradient_background(SLIDE_WIDTH, SLIDE_HEIGHT, colors)
+    
+    # Set dimensions based on format
+    if output_format == "letter":
+        width, height = 2550, 3300
+        scale = 1.5
+    else:
+        width, height = SLIDE_WIDTH, SLIDE_HEIGHT
+        scale = 1.0
+    
+    img = create_gradient_background(width, height, colors)
     
     active_seasonal = seasonal_theme if seasonal_theme and seasonal_theme != "none" else (get_current_seasonal_theme() if seasonal_theme == "auto" else None)
     if active_seasonal:
         img = add_decorations(img, active_seasonal, colors)
     
     # Add celebratory glow
-    img = draw_glow_circle(img, SLIDE_WIDTH//2, 200, 150, hex_to_rgb("#22C55E"), 25)
+    img = draw_glow_circle(img, width//2, int(200 * scale), int(150 * scale), hex_to_rgb("#22C55E"), 25)
     
     draw = ImageDraw.Draw(img)
     
-    font_title = get_font(64, bold=True)
-    font_subtitle = get_font(24)
-    font_rank = get_font(42, bold=True)
-    font_name = get_font(36, bold=True)
-    font_change = get_font(32, bold=True)
-    font_score = get_font(30)
+    font_title = get_font(int(64 * scale), bold=True)
+    font_subtitle = get_font(int(24 * scale))
+    font_rank = get_font(int(42 * scale), bold=True)
+    font_name = get_font(int(36 * scale), bold=True)
+    font_change = get_font(int(32 * scale), bold=True)
+    font_score = get_font(int(30 * scale))
     
     # Header
     title = "🚀 MOST IMPROVED 🚀"
-    draw.text((SLIDE_WIDTH//2 + 2, 42), title, font=font_title, fill=(0, 0, 0, 80), anchor="mt")
-    draw.text((SLIDE_WIDTH//2, 40), title, font=font_title, fill="#22C55E", anchor="mt")
+    draw.text((width//2 + 2, int(42 * scale)), title, font=font_title, fill=(0, 0, 0, 80), anchor="mt")
+    draw.text((width//2, int(40 * scale)), title, font=font_title, fill="#22C55E", anchor="mt")
     
     subtitle = f"{quarter} {year} • Rising Stars"
     draw.text((SLIDE_WIDTH//2, 115), subtitle, font=font_subtitle, fill=colors["text_muted"], anchor="mt")
