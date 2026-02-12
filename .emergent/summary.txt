@@ -5,8 +5,8 @@ PRODUCT REQUIREMENTS:
 1.  **Data Ingestion**: A simplified Excel/CSV template for uploading employee performance data. Evolved to include direct data entry and a primary workflow through bi-weekly Snapshots.
 2.  **Quarter Settings**: A UI for admins to configure metric weights, benchmarks, and bonus rules.
 3.  **Scoring Engine**: A backend engine that calculates a final score based on a weighted formula, applies bonuses/penalties, and assigns performance tiers. This now includes a DAR Calculator for end-of-quarter finalization.
-4.  **Rankings Tab**: A display of all employees sorted by score and hierarchy. This will absorb the Top Performers page.
-5.  **PDF & Slide Generation**: Generate individual review PDFs (with auto-generated trend charts) and themed leaderboard slides.
+4.  **Rankings Tab**: A display of all employees sorted by score and hierarchy. This has absorbed the Top Performers page.
+5.  **PDF & Slide Generation**: Generate individual review PDFs and themed leaderboard slides for digital signage (Yodeck).
 6.  **Time-Series Analytics**: Display quarter-over-quarter trend graphs for team and individual performance.
 7.  **User Manual**: An in-app Quick Start Guide to onboard new users.
 8.  **Financial & Growth Features**: Implement features suggested by the agent to improve financial wellness, including an ROI calculator, training recommendations, and goal setting.
@@ -15,89 +15,84 @@ PRODUCT REQUIREMENTS:
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack React + FastAPI application with a MongoDB database. The core features for scoring, rankings, PDF/slide generation, and settings are in place. The data workflow is now centralized around the **Snapshots** page, which acts as the single source of truth for performance data. The dashboard and analytics are read-only views of this synchronized data.
-
-The last session focused heavily on user-driven enhancements to achieve a 10/10 app, which included:
--   **Advanced Charting**: Individual employee trend charts were changed from a single bar graph to a multi-panel line graph (one for each of the 6 key metrics), comparing the employee (solid line) against a flat benchmark (dashed line) and the restaurant average (dotted line).
--   **Data Accuracy Fixes**: Resolved major issues with data syncing, ensuring the dashboard always reflects data from the snapshot with the latest *date*, not the latest *upload time*. Also fixed chart generation logic to handle employees with few data points.
--   **Concept President Features**: Implemented several high-impact features on the dashboard, including a **Revenue Impact Calculator**, a **Training Priorities** panel that identifies employees needing help, and an **Onboarding Guide** for new users. Peer comparison percentile badges were also added to the Rankings page.
--   **DAR Calculator**: A new Finalize Quarter feature was added to the Dashboard. It opens a modal where managers can input Disciplinary Action Reports (DARs) for write-ups (-3 pts) and suspensions (-5 pts), which are deducted from the final score at the end of a quarter.
--   **UI/UX Refinements**: Redefined Top Performers to be 10% above restaurant average and made the justifications more data-driven. Reordered charts on the Analytics page for better readability.
+A full-stack React + FastAPI application with a MongoDB database. The core features for scoring, rankings, PDF/slide generation, and settings are implemented. The UI has been significantly enhanced with custom slide designs, background selectors with image previews for snapshot and rankings slides, and a redesigned Top 10 by Metric slide based on user-provided designs. The Top Performers tab has been merged into the Rankings tab to streamline navigation.
 
 **Last working item**:
--   Last item agent was working: The user requested to combine the  and  tabs to reduce navigation clutter. The agent was in the process of moving the Top 10 sections from the  page to the bottom of the  page.
--   Status: **IN PROGRESS**
--   Agent Testing Done: N
--   Which testing method agent to use? frontend testing agent
+-   Last item agent was working: The user requested several cosmetic improvements to the downloaded Complete Rankings slide to make it a polished, single-page report. The agent successfully implemented equitable column spacing, PPA formatting, vertical/horizontal dividers, and bolder fonts. However, the agent is currently blocked on implementing the final request: adding a black outline to the multi-colored text for rank and tier labels.
+-   Status: **BLOCKED**
+-   Agent Testing Done: Y (Agent generated images and used , but the analysis and visual inspection confirm the outline is not rendering).
+-   Which testing method agent to use? The agent should visually inspect the generated PNG file after each attempt. Using  is also an option, but manual verification is more reliable for this subtle visual detail.
 -   User Testing Done: N
 
 **All Pending/In progress Issue list**:
--   **Issue 1: Combine 'Rankings' and 'Top Performers' Pages (P0)**
--   **Issue 2: Redesign Top 10 Yodeck slides (P1)**
--   **Issue 3: Inconsistent Slide Aesthetics (P2)**
+-   **Issue 1: Black outlines not rendering on Rankings slide text (P0)**
+-   **Issue 2: Inconsistent Slide Aesthetics (P2)**
+-   **Issue 3: Backend CV Weight Logic needs cleanup (P2)**
 -   **Issue 4: Production deployment needs user verification (P2)**
 
 Issues Detail:
--   **Issue 1: Combine 'Rankings' and 'Top Performers' Pages (P0)**
-    -   Attempted fixes: The agent has viewed  and  to understand their structure but has not yet performed the merge.
+-   **Issue 1: Black outlines not rendering on Rankings slide text (P0)**
+    -   Attempted fixes:
+        1.  Created a helper function . Failed.
+        2.  Increased the outline width parameter. Failed.
+        3.  Tested the outline function in isolation, which worked, proving the function itself is correct.
+        4.  Rewrote the drawing logic to be inline (e.g.,  for stroke, then  for fill) instead of using a helper function. This also failed.
     -   Next debug checklist:
-        1.  Copy the JSX and logic for the Top 10 by Metric sections from .
-        2.  Paste this content at the bottom of .
-        3.  Ensure all necessary state and helper functions are also moved or imported.
-        4.  Remove the Top Performers link from the main navigation in .
-        5.  Delete the now-redundant  file.
-    -   Why fix this issue and what will be achieved with the fix? To simplify the navigation and consolidate related information onto a single, powerful Rankings page, as requested by the user.
+        1.  The issue is specific to the  function in .
+        2.  Hypothesis: The font being used might not support outlines correctly, or the  draw object's state is being reset unexpectedly.
+        3.  Check the order of operations: Is the background image paste () interfering with the  object's ability to render strokes?
+        4.  Try creating the outline by drawing the text multiple times with slight offsets (e.g., top-left, top-right, etc.) in black before drawing the final colored text on top. This is a common workaround for font outline issues.
+    -   Why fix this issue and what will be achieved with the fix? This is the last remaining styling request from the user to finalize the Complete Rankings slide design, making it more professional and readable.
     -   Status: **IN PROGRESS**
-    -   Is recurring issue? N
-    -   Should Test frontend/backend/both after fix? frontend
+    -   Is recurring issue? Y (within this session)
+    -   Should Test frontend/backend/both after fix? backend (by generating and inspecting the slide image).
     -   Blocked on other issue: None.
 
--   **Issue 2: Redesign Top 10 Yodeck slides (P1)**
-    -   Attempted fixes: None. Deferred.
+-   **Issue 2: Inconsistent Slide Aesthetics (P2)**
+    -   Attempted fixes: None.
+    -   Next debug checklist: After the Complete Rankings slide is perfected and approved, apply the same professional design (backgrounds, layout, fonts, colors) to the other slides (, , ).
+    -   Why fix this issue and what will be achieved with the fix? To create a cohesive and professional brand identity across all generated materials.
+    -   Status: **NOT STARTED**
+    -   Is recurring issue? N
+    -   Should Test frontend/backend/both after fix? backend
+    -   Blocked on other issue: Issue 1.
+
+-   **Issue 3: Backend CV Weight Logic needs cleanup (P2)**
+    -   Attempted fixes: None. This is a carry-over from a previous session.
     -   Next debug checklist:
-        1.  Analyze the user-provided design in the artifact .
-        2.  Create a new slide generation function in .
-        3.  Update the  endpoint in  to call the new function.
-    -   Why fix this issue and what will be achieved with the fix? To align the Top 10 slide with the user's new, more professional design standard.
+        1.  Search for and remove  from the backend data model in .
+        2.  Search for and remove any logic related to  in .
+    -   Why fix this issue and what will be achieved with the fix? To remove dead code and prevent potential calculation errors from an obsolete metric.
     -   Status: **NOT STARTED**
     -   Is recurring issue? Y
     -   Should Test frontend/backend/both after fix? backend
     -   Blocked on other issue: None.
 
--   **Issue 3: Inconsistent Slide Aesthetics (P2)**
-    -   Attempted fixes: N/A
-    -   Next debug checklist: After the Top 10 slide is approved, apply the same design principles to other slides.
-    -   Why fix this issue and what will be achieved with the fix? To create a cohesive and professional set of slides.
-    -   Status: **NOT STARTED**
-    -   Is recurring issue? N
-    -   Should Test frontend/backend/both after fix? backend
-    -   Blocked on other issue: Issue 2.
-
 -   **Issue 4: Production deployment needs user verification (P2)**
-    -   Attempted fixes: N/A. The user continues to prioritize feature development and testing in the preview environment.
+    -   Attempted fixes: N/A. The user continues to prioritize feature development.
     -   Next debug checklist: Await user confirmation to deploy.
     -   Why fix this issue and what will be achieved with the fix? To push all recent feature updates and fixes to the live production environment.
     -   Status: **USER VERIFICATION PENDING**
     -   Is recurring issue? Y
     -   Should Test frontend/backend/both after fix? N/A
-    -   Blocked on other issue: None
+    -   Blocked on other issue: None.
 
 **In progress Task List**:
 -   **Task 1: Complete Concept President Recommendations (P1)**
-    -   Where to resume: The agent has already implemented the Onboarding Guide, ROI Calculator, Training Priorities, and Peer Comparison. The remaining high-impact recommendations are not yet started.
+    -   Where to resume: The agent has implemented several recommendations. The remaining items have not been started.
     -   Next steps:
-        1.  **Goal Setting & Gamification**: Add a UI for employees/managers to set personal goals (e.g., Hit 0 PPA) and display progress bars.
-        2.  **Real-Time Alerts**: Implement a notification system (e.g., via toasts or a dedicated panel) for milestones.
-        3.  **Incentive Tracking Integration**: Connect bonus calculations to the dashboard to show progress towards bonuses.
-    -   What will be achieved with this? To transform the app from a reporting tool into a proactive coaching and motivation platform, directly driving financial growth.
+        1.  **Goal Setting & Gamification**: Add a UI for employees/managers to set personal goals.
+        2.  **Real-Time Alerts**: Implement a notification system for milestones.
+        3.  **Incentive Tracking Integration**: Connect bonus calculations to the dashboard.
+    -   What will be achieved with this? To transform the app from a reporting tool into a proactive coaching and motivation platform.
     -   Status: **IN PROGRESS**
     -   Should Test frontend/backend/both after fix? both
     -   Blocked on something: None.
 
 **Upcoming and Future Tasks**
 Upcoming Tasks:
--   **Multi-Store Architecture (P1)**: Implement a multi-tenant system. The user has approved a phased approach.
--   **Download All Slides as ZIP (P2)**: A proposed feature to make it easier for the user to get all generated slides.
+-   **Multi-Store Architecture (P1)**: Implement a multi-tenant system.
+-   **Download All Slides as ZIP (P2)**: A proposed feature to download all Yodeck slides in one click.
 
 Future Tasks:
 -   Automated daily/weekly slide pack generation for Yodeck playlists.
@@ -105,95 +100,80 @@ Future Tasks:
 -   Yodeck Embed Link feature.
 
 **Completed work in this session**
--   **Chart Overhaul**: Refactored employee trend charts into multi-panel line graphs (one per metric) with correct data handling, scaling, and formatting (e.g., PPA as ). The team comparison chart was also converted to a multi-panel layout.
--   **Data Sync Logic Fixed**: Corrected the core data synchronization logic to use the  instead of the upload timestamp, ensuring the dashboard always shows data from the latest calendar date, preventing historical uploads from overwriting current data.
--   **Concept President Features Implemented**:
-    -   **Revenue Impact Calculator**: Added to the Dashboard to show potential annual revenue gain from closing metric gaps.
-    -   **Training Priorities Panel**: Added to the Dashboard to auto-identify high-priority training areas and specific employees who need help.
-    -   **Peer Comparison Badges**: Added percentile badges (Top 10%, Top 25%) to the Rankings page.
-    -   **Onboarding Guide**: Created a 7-step Quick Start Guide modal for new users.
--   **DAR Calculator & Finalization**: Implemented a Finalize Quarter feature on the Dashboard with a modal to input Disciplinary Action Report (DAR) counts, which deduct points from the final score.
--   **UI/UX and Definition Alignment**:
-    -   Removed the obsolete manual graph upload section from the Reviews page.
-    -   Aligned Top Performers definition across the Dashboard and Top Performers page to a consistent 10% above restaurant average.
-    -   Made Top Performer justifications more data-driven by highlighting the top 2 metrics driving success.
-    -   Removed the obsolete CV Weight slider from the Settings page and added an explanatory note.
+-   **Rankings & Top Performers Page Merge**: Consolidated the Top Performers content into the Rankings page and removed the old page/navigation link. Verified with the testing agent.
+-   **Yodeck Slide Format Selection**: Added a dropdown to all slides (Top 10, Complete Rankings, etc.) allowing users to download them in either 16:9 (for screens) or Letter (for printing) formats.
+-   **Top 10 By Metric Slide Redesign**: Implemented a new, professional slide design based on a user-provided image, featuring a dark gradient header, multi-column layout, and improved typography.
+-   **Custom Slide Backgrounds**:
+    -   Added user-provided Bubba Gump images as background options for Snapshot slides.
+    -   Updated the UI to show descriptive names and preview thumbnails for each background.
+    -   Extended this background selection functionality to the Complete Rankings slide download.
+-   **Rankings Download Overhaul**: Replaced the old multi-page PDF download on the Rankings page with a new single-page PNG slide download that matches the snapshot's style, incorporates background selection, and includes numerous user-requested styling improvements.
 
 **Earlier issues found/mentioned but not fixed**
--   **Issue 1: Backend CV Weight Logic**: The UI slider for CV Weight on the Settings page was removed, but the agent noted the total weight sum was still showing  instead of the correct . This suggests the backend  or frontend state management in  may still be saving/loading the obsolete  value. This needs to be fully purged from the data flow.
+-   **Issue 1: Backend CV Weight Logic**: The UI for this was removed in a prior session, but the backend logic and data model in  and  may still contain references to the obsolete , which should be purged.
 
 **Known issue recurrence from previous fork**
--   The production deployment status is still pending user verification.
+-   Production deployment is still pending user verification.
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
--   **Proactive Analytics**: Moving beyond reporting to provide actionable insights, such as the Revenue Impact Calculator and Training Priorities, which translate data into business strategy.
--   **Stateful Quarter Finalization**: Implementing a process to lock a quarter's data by applying final, non-reversible deductions (DARs), changing the state of the data for end-of-quarter reporting.
--   **Data-Driven Justifications**: An engine that dynamically analyzes an employee's performance metrics against team averages to generate specific, insightful text explaining their success.
--   **Robust Data Synchronization**: Ensuring data integrity by basing the source of truth on the logical date of the data () rather than the technical timestamp of an action ().
+-   **Dynamic Image Generation (Pillow)**: Heavily used to create complex, data-driven slides with dynamic layouts, custom fonts, selectable aspect ratios (16:9 vs. Letter), and image backgrounds with semi-transparent overlays.
+-   **API Parameterization**: Added  and  query parameters to multiple FastAPI endpoints to drive the dynamic image generation logic.
+-   **Frontend State Management & UI**: Updated React components to fetch available background options, manage selection state, and render dynamic UI elements like preview thumbnails and dropdowns.
 
 **key DB schema**
--   **employees_v2**: 
--   **snapshots**: 
--   **quarter_settings**: 
--   **dars (NEW)**: 
-
-**changes in tech stack**
--   None.
+-   No changes to the DB schema in this session.
 
 **All files of reference**
--    (DAR endpoints, data sync logic)
--    (All new chart generation logic)
--    (New panels, Finalize button)
--    (Target for page merge)
--    (Source for page merge)
--    (New DAR UI)
+-    (Location of the blocked slide generation function)
+-    (Contains all the endpoints for the slides)
+-    (Frontend for the rankings download)
+-    (Frontend for all Yodeck slides)
+-    (Reference for working background implementation)
 
 **Areas that need refactoring**:
--    continues to grow and should be broken into separate FastAPI routers (e.g., , , ).
--   Once  is merged into , the navigation bar in  and associated routes must be cleaned up to remove the Top Performers entry.
+-   The  function in  has become very large and difficult to debug. It should be broken down into smaller, single-purpose helper functions (e.g., , , ).
+-    continues to grow and should be broken into separate FastAPI routers.
 
 **key api endpoints**
--    (MODIFIED: Now uses  for sync logic)
--    (MODIFIED: Now uses  for sync logic)
--    (MODIFIED: Generates multi-panel line chart)
--    (MODIFIED: Generates multi-panel bar chart)
--    (NEW: Gets DAR entries for the quarter)
--    (NEW: Saves or finalizes DAR entries and recalculates final scores)
+-   : (MODIFIED) Now accepts  and  query parameters. This is the endpoint for the current issue.
+-   : (NEW/REPLACED) Uses the new professional slide generator.
+-   : (NEW) Provides the list of available backgrounds with names and preview URLs.
+-   : (MODIFIED) Now accepts a  query parameter.
 
 **Critical Info for New Agent**
--   **PRIORITY**: The immediate task is to combine the  and  pages. This involves moving code from  to , then deleting the old file and updating navigation.
--   **DAR Calculator is Critical**: The new Finalize Quarter feature is a core part of the user's workflow. Ensure its calculations are correct and that it properly locks the quarter.
--   **Data Sync is Sensitive**: The logic to sync the latest snapshot based on  is crucial. Be careful not to regress this behavior. Uploading a historical snapshot should add data for trends but NOT overwrite the main dashboard.
--   **10/10 App Vision**: The user has high expectations and wants to see the Concept President recommendations fully implemented to turn the app into a proactive coaching tool.
+-   **BLOCKER**: Your immediate task is to solve the text outlining issue in the  function in . The user wants a black outline on the multi-colored rank and tier text. All previous attempts have failed to render the outline, despite the core logic being proven correct in isolation. Suspect a font, scope, or drawing context issue. Try a workaround by drawing the text multiple times with 1-2px offsets before drawing the final fill.
+-   **User's Design Focus**: The user is highly focused on achieving a specific, professional aesthetic for all downloadable assets. Pay close attention to visual details. Manually inspecting generated images is more reliable than automated analysis for subtle changes.
+-   **Code Complexity**: The  file is becoming complex. Be careful when modifying it. The  function is the one causing issues.
 
 **documents and test reports created in this job**
--   None.
+-   
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User**: Requested to switch the Performance distribution chart on Analytics to be ordered from low to high. (COMPLETED)
-2.  **User**: Requested the Team Average Comparison chart be split into one graph per metric with the legend moved to the top. (COMPLETED)
-3.  **User**: Asked for a comprehensive sanity check of the app's cohesion and usability, and for Concept President recommendations. (COMPLETED - Agent provided analysis and suggestions).
-4.  **User**: implement all recommendations. I want to see a 10/10 app. (IN PROGRESS - Agent implemented several key recommendations).
-5.  **User**: Requested a Finalize Quarter button with a DAR Calculator to apply deductions for disciplinary actions. (COMPLETED)
-6.  **User**: Provided details for DAR calculations: Written Warning = -3 pts, Suspension = -5 pts. (COMPLETED)
-7.  **User**: Specified that DARs should not be on printable materials and are for end-of-quarter display only. (COMPLETED)
-8.  **User**: Tested the DAR calculator and verified its functionality. (COMPLETED)
-9.  **User**: can we combine the rankings and top performers tab, adding the top tens to the bottom of that page?. (IN PROGRESS - Agent started working on this).
-10. **User**: Generate the summary now. (PENDING - This request).
+1.  **User**: Requested to add format dropdowns to *all* Yodeck slides, not just the complete rankings. (COMPLETED)
+2.  **User**: Provided a new, professional design for the Top 10 slide. (COMPLETED)
+3.  **User**: Provided Las Vegas images to use as backgrounds for the snapshot slides. (COMPLETED, then superseded)
+4.  **User**: Provided new Bubba Gump restaurant images to replace the Las Vegas ones. (COMPLETED)
+5.  **User**: Reported a network error on their mobile device. (RESOLVED - Agent identified it as a client-side network issue and the app was working).
+6.  **User**: Requested to rename the generic background image names and show preview thumbnails instead of buttons. (COMPLETED)
+7.  **User**: Stated the Rankings download is not right; it should be a single page with backgrounds, similar to the snapshot slide. (COMPLETED)
+8.  **User**: Clarified that the Download PDF button on the Rankings page is the one that needs fixing. (COMPLETED - Agent replaced PDF with slide download).
+9.  **User**: Provided a detailed list of 6 specific styling improvements for the new Rankings slide download (equitable columns, PPA format, dividers, font, outlines). (IN PROGRESS - blocked on outlines)
+10. **User**: Provided another new design for the Top 10 slide (), which the agent then implemented. (This appears to be the same as message #2, just repeated in the log. Marked as COMPLETED).
 
 **Project Health Check:**
 -   **Broken**: None
 -   **Mocked**: None
 
 **3rd Party Integrations**
--   **Matplotlib**: Used for all backend chart generation ().
--   **Playwright**: Used by the backend to take screenshots for PDF reports.
+-   **Pillow**: Used for all backend image and slide generation.
+-   **Matplotlib**: Used for backend chart generation.
+-   **Playwright**: Used by the backend for PDF reports.
 
 **Testing status**
--   Testing agent used after significant changes: NO
+-   Testing agent used after significant changes: YES (for the page merge task)
 -   Troubleshoot agent used after agent stuck in loop: NO
 -   Test files created: None
 -   Known regressions: None
@@ -202,5 +182,5 @@ Future Tasks:
 N/A
 
 **What agent forgot to execute**
--   After merging the  page, the agent will need to delete the file and remove its corresponding route and navigation link in  to complete the task.
--   The backend logic for the obsolete CV Weight setting was not fully addressed. The value might still be saved in  and processed in . This should be removed from the backend data models and logic.</analysis>
+-   The Backend CV Weight Logic cleanup from the previous handoff is still pending.
+-   The agent has not yet started on the remaining Concept President recommendations (Goal Setting, Alerts, etc.).</analysis>
