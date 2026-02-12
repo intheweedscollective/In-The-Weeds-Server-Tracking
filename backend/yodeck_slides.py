@@ -1312,10 +1312,15 @@ def generate_complete_rankings_slide(
         tier_color = TIER_COLORS.get(tier, "#666666")
         
         row_cy = y + row_h // 2
+        rank_x = col_x[0] + columns[0]["width"] // 2
         
-        # Draw outlined rank text with thick black stroke
-        draw_outlined_text(draw, (col_x[0] + columns[0]["width"] // 2, row_cy), 
-                          rank_text, font_rank, tier_color, "#000000", 2)
+        # Draw outlined rank text with thick black stroke - INLINE
+        outline_width = 2
+        for dx in range(-outline_width, outline_width + 1):
+            for dy in range(-outline_width, outline_width + 1):
+                if dx != 0 or dy != 0:
+                    draw.text((rank_x + dx, row_cy + dy), rank_text, font=font_rank, fill="#000000", anchor="mm")
+        draw.text((rank_x, row_cy), rank_text, font=font_rank, fill=tier_color, anchor="mm")
         
         # Name (left aligned, no outline needed)
         name = emp.get("name", "Unknown")[:18]
