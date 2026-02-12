@@ -728,56 +728,68 @@ def generate_top_10_slide(
     theme: str = "bubba_gump",
     custom_colors: Dict = None,
     custom_bg_image: str = None,
-    seasonal_theme: str = None
+    seasonal_theme: str = None,
+    output_format: str = "16:9"
 ) -> bytes:
     """
     Generate premium Top 10 Performers slide.
     Sports leaderboard style with Bubba Gump branding.
+    Args:
+        output_format: "16:9" for Yodeck (1920x1080) or "letter" for 8.5x11" print (2550x3300)
     """
     colors = get_theme_colors(theme, custom_colors, seasonal_theme)
-    img = create_gradient_background(SLIDE_WIDTH, SLIDE_HEIGHT, colors)
+    
+    # Set dimensions based on format
+    if output_format == "letter":
+        width, height = 2550, 3300
+        font_scale = 1.5
+    else:
+        width, height = SLIDE_WIDTH, SLIDE_HEIGHT
+        font_scale = 1.0
+    
+    img = create_gradient_background(width, height, colors)
     
     # Add geometric decorations
     img = draw_geometric_decorations(img, colors)
     
     draw = ImageDraw.Draw(img)
     
-    # Fonts
-    font_title = get_font(72, bold=True)
-    font_subtitle = get_font(24)
-    font_rank = get_font(32, bold=True)
-    font_name = get_font(30, bold=True)
-    font_score = get_font(36, bold=True)
-    font_tier = get_font(16, bold=True)
-    font_footer = get_font(16)
+    # Fonts - scaled for format
+    font_title = get_font(int(72 * font_scale), bold=True)
+    font_subtitle = get_font(int(24 * font_scale))
+    font_rank = get_font(int(32 * font_scale), bold=True)
+    font_name = get_font(int(30 * font_scale), bold=True)
+    font_score = get_font(int(36 * font_scale), bold=True)
+    font_tier = get_font(int(16 * font_scale), bold=True)
+    font_footer = get_font(int(16 * font_scale))
     
     # === HEADER SECTION ===
     # Title with shadow effect
     title = "TOP 10 PERFORMERS"
-    title_y = 45
-    draw.text((SLIDE_WIDTH//2 + 3, title_y + 3), title, font=font_title, 
+    title_y = int(45 * font_scale)
+    draw.text((width//2 + 3, title_y + 3), title, font=font_title, 
               fill=(0, 0, 0, 150), anchor="mt")
-    draw.text((SLIDE_WIDTH//2, title_y), title, font=font_title, 
+    draw.text((width//2, title_y), title, font=font_title, 
               fill=colors.get("primary", "#E63946"), anchor="mt")
     
     # Decorative underline
-    line_y = 115
+    line_y = int(115 * font_scale)
     primary_rgb = hex_to_rgb(colors.get("primary", "#E63946"))
     secondary_rgb = hex_to_rgb(colors.get("secondary", "#1D8CC7"))
-    draw.rectangle([SLIDE_WIDTH//2 - 250, line_y, SLIDE_WIDTH//2 + 250, line_y + 4], 
+    draw.rectangle([width//2 - int(250 * font_scale), line_y, width//2 + int(250 * font_scale), line_y + int(4 * font_scale)], 
                    fill=primary_rgb)
-    draw.rectangle([SLIDE_WIDTH//2 - 150, line_y + 6, SLIDE_WIDTH//2 + 150, line_y + 8], 
+    draw.rectangle([width//2 - int(150 * font_scale), line_y + int(6 * font_scale), width//2 + int(150 * font_scale), line_y + int(8 * font_scale)], 
                    fill=secondary_rgb)
     
     # Subtitle
     subtitle = f"{quarter} {year}  •  BUBBA GUMP SHRIMP CO.  •  LAS VEGAS"
-    draw.text((SLIDE_WIDTH//2, line_y + 25), subtitle, font=font_subtitle, 
+    draw.text((width//2, line_y + int(25 * font_scale)), subtitle, font=font_subtitle, 
               fill=colors.get("text_muted", "#778DA9"), anchor="mt")
     
     # === LEADERBOARD SECTION ===
-    start_y = 170
-    row_height = 85
-    left_margin = 80
+    start_y = int(170 * font_scale)
+    row_height = int(85 * font_scale)
+    left_margin = int(80 * font_scale)
     right_margin = 80
     card_width = SLIDE_WIDTH - left_margin - right_margin
     
