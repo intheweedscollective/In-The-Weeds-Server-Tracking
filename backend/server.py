@@ -1793,10 +1793,11 @@ async def get_all_yodeck_slides(year: int, quarter: str):
     format_options = ["16:9", "letter"]
     slides = []
     
-    # Top 10
+    # Top 10 By Metric (new design)
     slides.append({
         "id": "top10",
-        "name": "Top 10 Performers",
+        "name": "Top 10 Performers By Metric",
+        "description": "PPA, Glass/Guest, LSC, LBW leaders",
         "endpoint": f"/api/v2/yodeck/{year}/{quarter}/top10",
         "pages": 1,
         "category": "primary",
