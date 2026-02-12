@@ -71,12 +71,14 @@ Build a comprehensive performance review application for restaurant employees (B
 - ✅ **2-Column Grid Layout**: Top 10 metric sections displayed in responsive grid
 - ✅ **Deleted TopPerformers.js**: Removed redundant page component
 - ✅ **Yodeck Slide Cleanup**: Removed tier-specific slides (A/B/C-Server), only Complete Rankings remains
-- ✅ **Format Selection on ALL Slides**: Added 16:9 (Yodeck) and 8.5×11" (Letter) format dropdown on every slide:
-  - Top 10 Performers
-  - Complete Rankings
-  - Most Improved
-  - Promotion Watchlist
-  - Coaching Focus (Manager Only)
+- ✅ **Format Selection on ALL Slides**: Added 16:9 (Yodeck) and 8.5×11" (Letter) format dropdown on every slide
+- ✅ **NEW Top 10 By Metric Slide**: Redesigned to match professional 4-column layout:
+  - Dark blue gradient header with Bubba Gump logo
+  - "TOP 10 PERFORMERS BY METRIC" title with Quarter/Year
+  - 4 metric columns: PPA, Glass/Guest, Guests/LSC, LBW/Guest
+  - Dark gray metric headers, light blue column headers
+  - Red circular rank badges (#1-#10)
+  - Alternating row colors for readability
 - ✅ **Letter Format**: 2550x3300 at 300 DPI for high-quality printing
 
 ## Backlog
