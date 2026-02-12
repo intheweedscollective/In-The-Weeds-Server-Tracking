@@ -1120,15 +1120,15 @@ def generate_complete_rankings_slide(
         "C-Server": "#EF4444"
     }
     
-    # Helper function to draw outlined text
-    def draw_outlined_text(draw, pos, text, font, fill_color, outline_color="#000000", outline_width=1):
+    # Helper function to draw outlined text with thick black stroke
+    def draw_outlined_text(draw, pos, text, font, fill_color, outline_color="#000000", outline_width=2):
         x, y = pos
-        # Draw outline by drawing text in all 8 directions
+        # Draw thick outline by drawing text in multiple positions
         for dx in range(-outline_width, outline_width + 1):
             for dy in range(-outline_width, outline_width + 1):
                 if dx != 0 or dy != 0:
                     draw.text((x + dx, y + dy), text, font=font, fill=outline_color, anchor="mm")
-        # Draw main text
+        # Draw main text on top
         draw.text((x, y), text, font=font, fill=fill_color, anchor="mm")
     
     # Get background configuration
