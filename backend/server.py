@@ -1911,8 +1911,11 @@ async def get_all_yodeck_slides(year: int, quarter: str):
 
 
 @api_router.get("/v2/yodeck/{year}/{quarter}/most-improved")
-async def get_yodeck_most_improved_slide(year: int, quarter: str):
-    """Generate Most Improved slide - employees with biggest score increase."""
+async def get_yodeck_most_improved_slide(year: int, quarter: str, format: str = "16:9"):
+    """Generate Most Improved slide - employees with biggest score increase.
+    Args:
+        format: "16:9" for Yodeck (1920x1080) or "letter" for 8.5x11" print (2550x3300)
+    """
     settings_doc = await db.quarter_settings.find_one(
         {"year": year, "quarter": quarter.upper()},
         {"_id": 0}
@@ -1973,10 +1976,11 @@ async def get_yodeck_most_improved_slide(year: int, quarter: str):
     slide_bytes = generate_most_improved_slide(
         current_rankings, prev_rankings, quarter.upper(), year,
         theme=theme, custom_colors=custom_colors, custom_bg_image=settings.slide_custom_bg_image,
-        seasonal_theme=seasonal_theme
+        seasonal_theme=seasonal_theme, output_format=format
     )
     
-    filename = f"yodeck_most_improved_{quarter}_{year}.png"
+    format_suffix = "letter" if format == "letter" else "16x9"
+    filename = f"most_improved_{quarter}_{year}_{format_suffix}.png"
     return Response(
         content=slide_bytes,
         media_type="image/png",
