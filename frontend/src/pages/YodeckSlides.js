@@ -623,6 +623,16 @@ export default function YodeckSlides() {
 function SlideCard({ slide, downloading, downloadSlide, selectedQuarter, selectedYear }) {
   const CategoryIcon = CATEGORY_ICONS[slide.category] || FileImage;
   const categoryColor = CATEGORY_COLORS[slide.category] || "bg-gray-600";
+  const [selectedFormat, setSelectedFormat] = useState("16:9");
+  
+  const hasFormatOptions = slide.formats && slide.formats.length > 1;
+  
+  const handleDownload = (page = 1) => {
+    // Append format parameter for slides that support it
+    const formatParam = hasFormatOptions ? `?format=${selectedFormat}` : "";
+    const endpoint = slide.endpoint + (page > 1 ? `?page=${page}${formatParam ? '&format=' + selectedFormat : ''}` : formatParam);
+    downloadSlide(slide.id, endpoint, page, selectedFormat);
+  };
   
   return (
     <div className="bubba-card" data-testid={`slide-card-${slide.id}`}>
@@ -645,10 +655,23 @@ function SlideCard({ slide, downloading, downloadSlide, selectedQuarter, selecte
             </div>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            {/* Format selector for slides that support it */}
+            {hasFormatOptions && (
+              <Select value={selectedFormat} onValueChange={setSelectedFormat}>
+                <SelectTrigger className="w-32 h-9" data-testid={`format-select-${slide.id}`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="16:9">16:9 (Yodeck)</SelectItem>
+                  <SelectItem value="letter">8.5×11" (Print)</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+            
             {slide.pages === 1 ? (
               <Button
-                onClick={() => downloadSlide(slide.id, slide.endpoint)}
+                onClick={() => handleDownload()}
                 disabled={downloading[`${slide.id}-1`]}
                 variant="outline"
                 className="flex items-center gap-2"
@@ -666,7 +689,7 @@ function SlideCard({ slide, downloading, downloadSlide, selectedQuarter, selecte
                 {Array.from({ length: slide.pages }, (_, i) => i + 1).map((page) => (
                   <Button
                     key={page}
-                    onClick={() => downloadSlide(slide.id, slide.endpoint, page)}
+                    onClick={() => handleDownload(page)}
                     disabled={downloading[`${slide.id}-${page}`]}
                     variant="outline"
                     size="sm"
