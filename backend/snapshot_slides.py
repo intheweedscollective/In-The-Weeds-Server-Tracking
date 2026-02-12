@@ -4,8 +4,9 @@ Matching the reference image precisely
 """
 import io
 import os
+import requests
 from typing import List, Dict, Any, Tuple
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageFilter
 from datetime import datetime
 
 SLIDE_WIDTH = 1920
