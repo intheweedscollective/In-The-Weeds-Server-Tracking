@@ -112,7 +112,7 @@ Build a comprehensive performance review application for restaurant employees (B
 - [ ] Automated daily/weekly slide pack generation
 - [ ] Batch uploads of line graph PDFs
 - [ ] Yodeck Embed Link feature
-- [ ] Remove obsolete "CV Weight" backend logic
+- Note: "CV Weight" backend logic is NOT dead code - it's the active 15% weight for Customer Voice metric
 
 ## Key API Endpoints
 - `GET /api/v2/snapshots` - List all snapshots
