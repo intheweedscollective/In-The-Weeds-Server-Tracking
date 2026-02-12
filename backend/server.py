@@ -1497,20 +1497,13 @@ async def download_full_rankings_pdf(year: int, quarter: str):
 @api_router.get("/v2/yodeck/{year}/{quarter}/top10")
 async def get_yodeck_top10_slide(year: int, quarter: str, format: str = "16:9"):
     """
-    Generate Top 10 Performers slide.
+    Generate Top 10 Performers By Metric slide.
+    Shows 4 metric columns: PPA, Glass/Guest, Guests/LSC, LBW/Guest
+    
     Args:
         format: "16:9" for Yodeck (1920x1080) or "letter" for 8.5x11" print (2550x3300)
     """
-    # Get settings and rankings
-    settings_doc = await db.quarter_settings.find_one(
-        {"year": year, "quarter": quarter.upper()},
-        {"_id": 0}
-    )
-    if not settings_doc:
-        raise HTTPException(status_code=404, detail=f"Settings not found for {quarter} {year}")
-    
-    settings = QuarterSettings(**settings_doc)
-    
+    # Get all employees for the quarter
     employees_docs = await db.employees_v2.find(
         {"year": year, "quarter": quarter.upper()},
         {"_id": 0}
@@ -1519,58 +1512,16 @@ async def get_yodeck_top10_slide(year: int, quarter: str, format: str = "16:9"):
     if not employees_docs:
         raise HTTPException(status_code=404, detail=f"No employee data for {quarter} {year}")
     
-    # Sort by total_score descending to get TOP 10 overall (not by tier)
-    employees_docs.sort(key=lambda e: float(e.get("total_score", 0) or 0), reverse=True)
-    
-    # Add tier_label based on job_title and score for display
-    a_server_min = settings.a_server_min_score or 80.1
-    b_server_min = settings.b_server_min_score or 70.1
-    
-    for emp in employees_docs[:10]:
-        job = str(emp.get("job_title", "server")).lower()
-        score = float(emp.get("total_score", 0) or 0)
-        
-        if job == "trainer":
-            emp["tier_label"] = "Trainer"
-        elif job == "bartender":
-            emp["tier_label"] = "Bartender"
-        else:
-            if score >= a_server_min:
-                emp["tier_label"] = "A-Server"
-            elif score >= b_server_min:
-                emp["tier_label"] = "B-Server"
-            else:
-                emp["tier_label"] = "C-Server"
-    
-    rankings = employees_docs[:10]
-    
-    # Get theme settings
-    theme = settings.slide_theme or "dark_navy"
-    custom_colors = None
-    if theme == "custom":
-        custom_colors = {
-            "background": settings.slide_bg_color,
-            "background_gradient": settings.slide_bg_gradient,
-            "primary": settings.slide_accent_color,
-            "secondary": settings.slide_secondary_color,
-            "text_white": settings.slide_text_color,
-        }
-    
-    # Get seasonal theme setting
-    seasonal_theme = getattr(settings, 'slide_seasonal_theme', 'auto')
-    
-    # Generate slide with theme and format
-    slide_bytes = generate_top_10_slide(
-        rankings, quarter.upper(), year,
-        theme=theme,
-        custom_colors=custom_colors,
-        custom_bg_image=settings.slide_custom_bg_image,
-        seasonal_theme=seasonal_theme,
+    # Generate slide with the new design
+    slide_bytes = generate_top_10_by_metric_slide(
+        employees=employees_docs,
+        quarter=quarter.upper(),
+        year=year,
         output_format=format
     )
     
     format_suffix = "letter" if format == "letter" else "16x9"
-    filename = f"top10_{quarter}_{year}_{format_suffix}.png"
+    filename = f"top10_by_metric_{quarter}_{year}_{format_suffix}.png"
     return Response(
         content=slide_bytes,
         media_type="image/png",
