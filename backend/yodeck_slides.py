@@ -923,34 +923,45 @@ def generate_complete_rankings_slide(
     progress_red = "#EF4444"
     progress_bg = "#E5E7EB"
     
-    # Fonts - increased by 2-3pts for better readability
-    font_title = get_font(26, bold=True)
-    font_subtitle = get_font(12)
-    font_header = get_font(12, bold=True)
-    font_position = get_font(18, bold=True)
-    font_badge = get_font(9, bold=True)
-    font_name = get_font(12, bold=True)
-    font_job = get_font(9)
-    font_tier = get_font(9, bold=True)
-    font_score = get_font(13, bold=True)
-    font_metric_val = get_font(11)
-    font_metric_max = get_font(9)
-    font_bonus = get_font(11, bold=True)
-    font_footer = get_font(10)
+    # Fonts - scaled based on output format
+    font_title = get_font(int(26 * font_scale), bold=True)
+    font_subtitle = get_font(int(12 * font_scale))
+    font_header = get_font(int(12 * font_scale), bold=True)
+    font_position = get_font(int(18 * font_scale), bold=True)
+    font_badge = get_font(int(9 * font_scale), bold=True)
+    font_name = get_font(int(12 * font_scale), bold=True)
+    font_job = get_font(int(9 * font_scale))
+    font_tier = get_font(int(9 * font_scale), bold=True)
+    font_score = get_font(int(13 * font_scale), bold=True)
+    font_metric_val = get_font(int(11 * font_scale))
+    font_metric_max = get_font(int(9 * font_scale))
+    font_bonus = get_font(int(11 * font_scale), bold=True)
+    font_footer = get_font(int(10 * font_scale))
     
-    # Layout
-    margin_x = 10
-    margin_y = 5
-    divider_width = 4
-    table_width = (SLIDE_WIDTH - (margin_x * 2) - divider_width) // 2
+    # Layout - adjusted for format
+    margin_x = int(10 * font_scale)
+    margin_y = int(5 * font_scale)
+    divider_width = int(4 * font_scale)
     
-    title_height = 32
-    header_height = 30  # Slightly increased for larger header font
-    footer_height = 16
+    if output_format == "letter":
+        # Single column for letter, or two columns if many employees
+        if len(rankings) <= max_rows_per_column:
+            table_width = width - (margin_x * 2)
+            num_columns = 1
+        else:
+            table_width = (width - (margin_x * 2) - divider_width) // 2
+            num_columns = 2
+    else:
+        table_width = (width - (margin_x * 2) - divider_width) // 2
     
-    # Calculate row height for 14 rows
-    available_height = SLIDE_HEIGHT - margin_y - title_height - header_height - footer_height - margin_y
-    row_height = available_height // 14
+    title_height = int(32 * font_scale)
+    header_height = int(30 * font_scale)
+    footer_height = int(16 * font_scale)
+    
+    # Calculate row height
+    available_height = height - margin_y - title_height - header_height - footer_height - margin_y
+    rows_to_show = min(len(left_employees), max_rows_per_column)
+    row_height = available_height // max(rows_to_show, 1)
     
     # === TITLE ===
     title = f"COMPLETE TEAM RANKINGS  •  {quarter} {year}"
