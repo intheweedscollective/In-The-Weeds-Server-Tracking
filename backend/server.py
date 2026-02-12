@@ -1836,7 +1836,8 @@ async def get_all_yodeck_slides(year: int, quarter: str):
         if tier in tier_counts:
             tier_counts[tier] += 1
     
-    # Build slide manifest
+    # Build slide manifest - all slides support both formats
+    format_options = ["16:9", "letter"]
     slides = []
     
     # Top 10
@@ -1845,10 +1846,11 @@ async def get_all_yodeck_slides(year: int, quarter: str):
         "name": "Top 10 Performers",
         "endpoint": f"/api/v2/yodeck/{year}/{quarter}/top10",
         "pages": 1,
-        "category": "primary"
+        "category": "primary",
+        "formats": format_options
     })
     
-    # Complete Rankings (all employees on one slide) - available in both formats
+    # Complete Rankings (all employees on one slide)
     slides.append({
         "id": "complete-rankings",
         "name": "Complete Rankings",
@@ -1857,7 +1859,7 @@ async def get_all_yodeck_slides(year: int, quarter: str):
         "employee_count": len(rankings),
         "pages": 1,
         "category": "primary",
-        "formats": ["16:9", "letter"]
+        "formats": format_options
     })
     
     # Special slides
@@ -1866,7 +1868,8 @@ async def get_all_yodeck_slides(year: int, quarter: str):
         "name": "Most Improved",
         "endpoint": f"/api/v2/yodeck/{year}/{quarter}/most-improved",
         "pages": 1,
-        "category": "special"
+        "category": "special",
+        "formats": format_options
     })
     
     # Promotion watchlist (B-Servers close to A)
@@ -1878,7 +1881,8 @@ async def get_all_yodeck_slides(year: int, quarter: str):
             "endpoint": f"/api/v2/yodeck/{year}/{quarter}/promotion-watchlist",
             "employee_count": b_servers_close,
             "pages": 1,
-            "category": "special"
+            "category": "special",
+            "formats": format_options
         })
     
     # At Risk (C-Servers) - manager only
@@ -1889,7 +1893,8 @@ async def get_all_yodeck_slides(year: int, quarter: str):
             "endpoint": f"/api/v2/yodeck/{year}/{quarter}/at-risk",
             "employee_count": tier_counts["C-Server"],
             "pages": 1,
-            "category": "manager"
+            "category": "manager",
+            "formats": format_options
         })
     
     return {
