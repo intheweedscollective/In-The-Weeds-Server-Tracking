@@ -162,42 +162,40 @@ export default function FullRankings() {
     fetchRankings();
   }, [fetchRankings]);
 
-  const handleDownloadPdf = async () => {
-    setDownloadingPdf(true);
+  const handleDownloadSlide = async () => {
+    setDownloading(true);
     try {
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-      const filename = `full_rankings_${selectedQuarter}_${selectedYear}.pdf`;
+      const filename = `rankings_${selectedQuarter}_${selectedYear}.png`;
+      const url = `${API}/v2/yodeck/${selectedYear}/${selectedQuarter}/complete-rankings?format=16:9&background=${selectedBackground}`;
       
       if (isIOS) {
         // For iOS, open in new tab
-        window.open(`${API}/v2/full-rankings/${selectedYear}/${selectedQuarter}/pdf`, '_blank');
-        toast.success("Rankings PDF opened. Tap share to save.");
-        setDownloadingPdf(false);
+        window.open(url, '_blank');
+        toast.success("Rankings slide opened. Tap share to save.");
+        setDownloading(false);
         return;
       }
       
-      const response = await axios.get(
-        `${API}/v2/full-rankings/${selectedYear}/${selectedQuarter}/pdf`,
-        { responseType: 'blob' }
-      );
+      const response = await axios.get(url, { responseType: 'blob' });
       
       // Create download link
-      const blob = new Blob([response.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
+      const blob = new Blob([response.data], { type: 'image/png' });
+      const objectUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = url;
+      link.href = objectUrl;
       link.setAttribute('download', filename);
       document.body.appendChild(link);
       link.click();
       link.remove();
-      setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+      setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1000);
       
-      toast.success("Rankings PDF downloaded successfully!");
+      toast.success("Rankings slide downloaded!");
     } catch (error) {
-      console.error("Error downloading PDF:", error);
-      toast.error("Failed to download PDF");
+      console.error("Error downloading slide:", error);
+      toast.error("Failed to download slide");
     } finally {
-      setDownloadingPdf(false);
+      setDownloading(false);
     }
   };
 
