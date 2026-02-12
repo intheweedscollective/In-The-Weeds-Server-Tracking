@@ -1270,7 +1270,7 @@ def generate_complete_rankings_slide(
                   font=header_font, fill=COLORS["white"], anchor="mm")
         # Vertical divider lines in header
         if i > 0:
-            draw.line([(col_x[i], table_top), (col_x[i], table_top + header_h)], fill=(50, 80, 120), width=1)
+            draw.line([(col_x[i], table_top), (col_x[i], table_top + header_h)], fill=(80, 100, 140), width=2)
     
     # Data rows
     data_y = table_top + header_h
