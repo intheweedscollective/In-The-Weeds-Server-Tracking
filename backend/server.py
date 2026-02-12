@@ -2044,8 +2044,11 @@ async def get_yodeck_promotion_watchlist_slide(year: int, quarter: str, format: 
 
 
 @api_router.get("/v2/yodeck/{year}/{quarter}/at-risk")
-async def get_yodeck_at_risk_slide(year: int, quarter: str):
-    """Generate At Risk / Coaching Focus slide - C-Servers needing attention. Manager only."""
+async def get_yodeck_at_risk_slide(year: int, quarter: str, format: str = "16:9"):
+    """Generate At Risk / Coaching Focus slide - C-Servers needing attention. Manager only.
+    Args:
+        format: "16:9" for Yodeck (1920x1080) or "letter" for 8.5x11" print (2550x3300)
+    """
     settings_doc = await db.quarter_settings.find_one(
         {"year": year, "quarter": quarter.upper()},
         {"_id": 0}
@@ -2083,10 +2086,11 @@ async def get_yodeck_at_risk_slide(year: int, quarter: str):
     slide_bytes = generate_at_risk_slide(
         rankings, settings.b_server_min_score, quarter.upper(), year,
         theme=theme, custom_colors=custom_colors, custom_bg_image=settings.slide_custom_bg_image,
-        seasonal_theme=seasonal_theme
+        seasonal_theme=seasonal_theme, output_format=format
     )
     
-    filename = f"yodeck_at_risk_{quarter}_{year}.png"
+    format_suffix = "letter" if format == "letter" else "16x9"
+    filename = f"coaching_focus_{quarter}_{year}_{format_suffix}.png"
     return Response(
         content=slide_bytes,
         media_type="image/png",
