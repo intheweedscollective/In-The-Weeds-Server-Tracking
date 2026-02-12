@@ -849,16 +849,34 @@ def generate_complete_rankings_slide(
     theme: str = "bubba_gump",
     custom_colors: Dict = None,
     custom_bg_image: str = None,
-    seasonal_theme: str = None
+    seasonal_theme: str = None,
+    output_format: str = "16:9"
 ) -> bytes:
     """
-    Generate two side-by-side tables matching the Rankings tab design.
-    14 employees on left, 14 on right, with vertical red divider.
-    Uses circular progress indicators for metrics.
-    Proper A-Server/B-Server/C-Server tier labels.
+    Generate complete rankings slide showing ALL employees.
+    
+    Args:
+        output_format: "16:9" for Yodeck (1920x1080) or "letter" for 8.5x11" print (2550x3300 @300dpi)
     """
     colors = get_theme_colors(theme, custom_colors, seasonal_theme)
-    img = create_gradient_background(SLIDE_WIDTH, SLIDE_HEIGHT, colors)
+    
+    # Set dimensions based on format
+    if output_format == "letter":
+        # 8.5x11" at 300 DPI
+        width = 2550
+        height = 3300
+        max_rows_per_column = 28  # More rows fit on letter
+        num_columns = 1  # Single column for letter
+        font_scale = 1.3  # Larger fonts for print
+    else:
+        # Default 16:9 for Yodeck
+        width = SLIDE_WIDTH  # 1920
+        height = SLIDE_HEIGHT  # 1080
+        max_rows_per_column = 14
+        num_columns = 2
+        font_scale = 1.0
+    
+    img = create_gradient_background(width, height, colors)
     draw = ImageDraw.Draw(img)
     
     total_employees = len(rankings)
