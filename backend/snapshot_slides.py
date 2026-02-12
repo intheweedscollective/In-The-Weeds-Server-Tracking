@@ -12,37 +12,43 @@ from datetime import datetime
 SLIDE_WIDTH = 1920
 SLIDE_HEIGHT = 1080
 
-# Background options including Las Vegas themed images
+# Background options with descriptive names and preview URLs
 BACKGROUNDS = {
     "dark": {
         "name": "Dark Navy",
         "type": "solid",
-        "color": (15, 23, 42)
+        "color": (15, 23, 42),
+        "preview": None
     },
-    "vegas_1": {
-        "name": "Bubba Gump Vegas 1",
+    "rainbow_bokeh": {
+        "name": "Rainbow Bokeh",
         "type": "image",
-        "url": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/0dpcbmve_IMG_2080.jpeg"
+        "url": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/0dpcbmve_IMG_2080.jpeg",
+        "preview": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/0dpcbmve_IMG_2080.jpeg"
     },
-    "vegas_2": {
-        "name": "Bubba Gump Vegas 2",
+    "cosmic_lights": {
+        "name": "Cosmic Lights",
         "type": "image",
-        "url": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/kj7dry1p_IMG_2081.jpeg"
+        "url": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/kj7dry1p_IMG_2081.jpeg",
+        "preview": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/kj7dry1p_IMG_2081.jpeg"
     },
-    "vegas_3": {
-        "name": "Bubba Gump Vegas 3",
+    "neon_grid": {
+        "name": "Neon Grid",
         "type": "image",
-        "url": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/7ejr8e4h_IMG_2078.jpeg"
+        "url": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/7ejr8e4h_IMG_2078.jpeg",
+        "preview": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/7ejr8e4h_IMG_2078.jpeg"
     },
-    "vegas_4": {
-        "name": "Bubba Gump Vegas 4",
+    "synthwave_sunset": {
+        "name": "Synthwave Sunset",
         "type": "image",
-        "url": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/2uyjx6bg_IMG_2076.jpeg"
+        "url": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/2uyjx6bg_IMG_2076.jpeg",
+        "preview": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/2uyjx6bg_IMG_2076.jpeg"
     },
-    "vegas_5": {
-        "name": "Bubba Gump Vegas 5",
+    "electric_mesh": {
+        "name": "Electric Mesh",
         "type": "image",
-        "url": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/zlo7kss4_IMG_2077.jpeg"
+        "url": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/zlo7kss4_IMG_2077.jpeg",
+        "preview": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/zlo7kss4_IMG_2077.jpeg"
     }
 }
 
