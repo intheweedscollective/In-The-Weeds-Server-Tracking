@@ -1347,9 +1347,9 @@ def generate_complete_rankings_slide(
         draw.text((col_x[5] + columns[5]["width"] // 2, row_cy), f"{lsc:.1f}" if lsc else "-",
                   font=font_data, fill="#222222", anchor="mm")
         
-        # CV
+        # CV - format as xx.x (one decimal)
         cv = emp.get("cv_score") or emp.get("score_cv", 0) or 0
-        draw.text((col_x[6] + columns[6]["width"] // 2, row_cy), f"{cv:.0f}" if cv else "-",
+        draw.text((col_x[6] + columns[6]["width"] // 2, row_cy), f"{cv:.1f}" if cv else "-",
                   font=font_data, fill="#222222", anchor="mm")
         
         # Bonus
