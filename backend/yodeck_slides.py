@@ -914,27 +914,26 @@ def generate_top_10_by_metric_slide(
         draw.text((col_x + col_width - int(35 * scale), col_header_y + col_header_height // 2), 
                   "Value", font=font_col_header, fill="#FFFFFF", anchor="rm")
         
-        # Draw data rows
+        # Draw data rows - using calculated row_height for full space usage
         row_y = col_header_y + col_header_height
-        row_height = int(70 * scale)  # Taller rows for letter format
-        
-        if output_format != "letter":
-            row_height = int(76 * scale)  # Adjust for 16:9 to fill space
         
         for rank, emp in enumerate(top_10, 1):
-            # Alternating row colors
-            row_bg = row_light if rank % 2 == 0 else row_white
-            draw.rectangle([col_x, row_y, col_x + col_width - int(5 * scale), row_y + row_height],
-                           fill=row_bg)
+            # Alternating row colors with semi-transparency
+            if rank % 2 == 0:
+                draw.rectangle([col_x, row_y, col_x + col_width, row_y + row_height],
+                               fill=(248, 249, 250))
+            else:
+                draw.rectangle([col_x, row_y, col_x + col_width, row_y + row_height],
+                               fill=(255, 255, 255))
             
-            # Horizontal divider line after each row (darker, more visible)
-            draw.line([(col_x, row_y + row_height), (col_x + col_width - int(5 * scale), row_y + row_height)], 
-                     fill="#999999", width=1)
+            # Horizontal divider line after each row
+            draw.line([(col_x, row_y + row_height), (col_x + col_width, row_y + row_height)], 
+                     fill="#888888", width=1)
             
             # Rank badge (red circle with white text)
             badge_x = col_x + rank_col_w // 2
             badge_y = row_y + row_height // 2
-            badge_radius = int(14 * scale)
+            badge_radius = int(12 * scale)
             draw.ellipse([badge_x - badge_radius, badge_y - badge_radius,
                          badge_x + badge_radius, badge_y + badge_radius],
                         fill=rank_badge_bg)
@@ -942,9 +941,9 @@ def generate_top_10_by_metric_slide(
             
             # Employee name (truncate if needed)
             name = emp.get("name", "Unknown")
-            if len(name) > 12:
-                name = name[:11] + ".."
-            draw.text((col_x + rank_col_w + int(15 * scale), badge_y), 
+            if len(name) > 11:
+                name = name[:10] + ".."
+            draw.text((col_x + rank_col_w + int(10 * scale), badge_y), 
                       name, font=font_name, fill=text_dark, anchor="lm")
             
             # Value (formatted)
@@ -954,20 +953,24 @@ def generate_top_10_by_metric_slide(
             else:
                 value_text = f"{float(value or 0):.1f}"
             
-            draw.text((col_x + col_width - int(15 * scale), badge_y), 
+            draw.text((col_x + col_width - int(12 * scale), badge_y), 
                       value_text, font=font_value, fill=text_dark, anchor="rm")
             
             row_y += row_height
         
         # Fill remaining rows if less than 10 employees
-        while rank < 10:
-            rank += 1
-            row_bg = row_light if rank % 2 == 0 else row_white
-            draw.rectangle([col_x, row_y, col_x + col_width - int(5 * scale), row_y + row_height],
-                           fill=row_bg)
-            # Horizontal divider line (darker, more visible)
-            draw.line([(col_x, row_y + row_height), (col_x + col_width - int(5 * scale), row_y + row_height)], 
-                     fill="#999999", width=1)
+        remaining_rank = len(top_10)
+        while remaining_rank < 10:
+            remaining_rank += 1
+            if remaining_rank % 2 == 0:
+                draw.rectangle([col_x, row_y, col_x + col_width, row_y + row_height],
+                               fill=(248, 249, 250))
+            else:
+                draw.rectangle([col_x, row_y, col_x + col_width, row_y + row_height],
+                               fill=(255, 255, 255))
+            # Horizontal divider line
+            draw.line([(col_x, row_y + row_height), (col_x + col_width, row_y + row_height)], 
+                     fill="#888888", width=1)
             row_y += row_height
         
         # Store column boundaries for vertical dividers
@@ -975,7 +978,7 @@ def generate_top_10_by_metric_slide(
         col_table_bottom = row_y
         
         # Draw thick outer border for this column (BLACK, 4px width)
-        draw.rectangle([col_x, col_table_top, col_x + col_width - int(5 * scale), col_table_bottom],
+        draw.rectangle([col_x, col_table_top, col_x + col_width, col_table_bottom],
                       outline="#000000", width=4)
         
         # Draw internal vertical dividers (between rank/name and name/value)
