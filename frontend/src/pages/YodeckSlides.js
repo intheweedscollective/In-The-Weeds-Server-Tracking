@@ -272,11 +272,11 @@ export default function YodeckSlides() {
             <div className="flex items-center gap-3 mb-2">
               <Monitor className="w-8 h-8 text-secondary" />
               <h1 className="text-3xl font-serif font-black text-foreground" data-testid="page-title">
-                Yodeck Slides
+                Reports & Downloads
               </h1>
             </div>
             <p className="text-gray-500" data-testid="page-subtitle">
-              16:9 digital signage slides for TV displays
+              Digital signage slides and printable reports
             </p>
           </div>
           
