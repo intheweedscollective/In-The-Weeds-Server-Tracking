@@ -773,17 +773,17 @@ def generate_top_10_by_metric_slide(
     # Draw solid header bar
     draw.rectangle([0, 0, width, header_height], fill=(13, 59, 102))
     
-    # Fonts (scaled)
+    # Fonts (scaled) - MAXIMIZED for readability
     try:
-        font_title_top = get_font(int(48 * scale), bold=True)
-        font_title_main = get_font(int(64 * scale), bold=True)
-        font_quarter = get_font(int(26 * scale), bold=True)
-        font_year = get_font(int(48 * scale), bold=True)
-        font_metric_header = get_font(int(20 * scale), bold=True)
-        font_col_header = get_font(int(16 * scale), bold=True)
-        font_rank = get_font(int(14 * scale), bold=True)
-        font_name = get_font(int(16 * scale))
-        font_value = get_font(int(16 * scale), bold=True)
+        font_title_top = get_font(int(42 * scale), bold=True)
+        font_title_main = get_font(int(56 * scale), bold=True)
+        font_quarter = get_font(int(24 * scale), bold=True)
+        font_year = get_font(int(44 * scale), bold=True)
+        font_metric_header = get_font(int(24 * scale), bold=True)  # Increased
+        font_col_header = get_font(int(20 * scale), bold=True)     # Increased
+        font_rank = get_font(int(18 * scale), bold=True)           # Increased
+        font_name = get_font(int(22 * scale), bold=True)           # Increased & bold
+        font_value = get_font(int(22 * scale), bold=True)          # Increased
     except:
         font_title_top = ImageFont.load_default()
         font_title_main = ImageFont.load_default()
@@ -798,9 +798,9 @@ def generate_top_10_by_metric_slide(
     # === HEADER SECTION ===
     
     # Logo placeholder area (left side) - draw a circle with text as placeholder
-    logo_x = int(80 * scale)
-    logo_y = int(70 * scale)
-    logo_radius = int(55 * scale)
+    logo_x = int(70 * scale)
+    logo_y = int(60 * scale)
+    logo_radius = int(50 * scale)
     
     # Draw logo circle background
     draw.ellipse([logo_x - logo_radius, logo_y - logo_radius, 
@@ -808,11 +808,11 @@ def generate_top_10_by_metric_slide(
                  fill="#1A5276", outline="#E63946", width=3)
     
     # Add "BUBBA GUMP" text in circle
-    logo_font = get_font(int(12 * scale), bold=True)
-    draw.text((logo_x, logo_y - int(12 * scale)), "BUBBA", font=logo_font, fill="#FFFFFF", anchor="mm")
+    logo_font = get_font(int(11 * scale), bold=True)
+    draw.text((logo_x, logo_y - int(10 * scale)), "BUBBA", font=logo_font, fill="#FFFFFF", anchor="mm")
     draw.text((logo_x, logo_y + int(5 * scale)), "GUMP", font=logo_font, fill="#E63946", anchor="mm")
-    logo_font_small = get_font(int(9 * scale))
-    draw.text((logo_x, logo_y + int(18 * scale)), "SHRIMP CO.", font=logo_font_small, fill="#FFFFFF", anchor="mm")
+    logo_font_small = get_font(int(8 * scale))
+    draw.text((logo_x, logo_y + int(16 * scale)), "SHRIMP CO.", font=logo_font_small, fill="#FFFFFF", anchor="mm")
     
     # Title - "TOP 10 PERFORMERS" on first line
     title_x = int(180 * scale)
