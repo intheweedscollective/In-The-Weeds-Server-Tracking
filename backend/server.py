@@ -1661,6 +1661,52 @@ async def get_yodeck_complete_rankings_slide(year: int, quarter: str, format: st
     )
 
 
+@api_router.get("/v2/yodeck/{year}/{quarter}/printable-rankings")
+async def get_yodeck_printable_rankings_slide(year: int, quarter: str, format: str = "16:9"):
+    """
+    Generate a stylized printable rankings slide with word art headers.
+    Groups employees by tier (Red Hats, A, B, C, Bar, Unranked) - NO metrics, just rank and name.
+    
+    format: "16:9" for screens (1920x1080) or "letter" for printing (2550x3300)
+    """
+    # Get all employees for the quarter
+    employees = await db.employees_v2.find({"quarter": quarter, "year": year}).to_list(1000)
+    
+    if not employees:
+        raise HTTPException(status_code=404, detail=f"No employees found for {quarter} {year}")
+    
+    # Sort by tier and score
+    tier_order = {"Trainer": 0, "Bartender": 1, "A-Server": 2, "B-Server": 3, "C-Server": 4}
+    employees.sort(key=lambda x: (
+        tier_order.get(x.get("tier_label", "C-Server"), 5),
+        -(x.get("total_score", 0) or 0)
+    ))
+    
+    # Clean employee data
+    clean_employees = []
+    for emp in employees:
+        clean_employees.append({
+            "name": emp.get("name", "Unknown"),
+            "tier_label": emp.get("tier_label", ""),
+            "total_score": emp.get("total_score", 0)
+        })
+    
+    slide_bytes = generate_printable_rankings_slide(
+        rankings=clean_employees,
+        quarter=quarter,
+        year=year,
+        output_format=format
+    )
+    
+    format_suffix = "letter" if format == "letter" else "16x9"
+    filename = f"printable_rankings_{quarter}_{year}_{format_suffix}.png"
+    return Response(
+        content=slide_bytes,
+        media_type="image/png",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
 @api_router.get("/v2/yodeck/{year}/{quarter}/tier/{tier_name}")
 async def get_yodeck_tier_slide(year: int, quarter: str, tier_name: str, page: int = 1):
     """
