@@ -899,6 +899,10 @@ def generate_top_10_by_metric_slide(
             draw.rectangle([col_x, row_y, col_x + col_width - int(5 * scale), row_y + row_height],
                            fill=row_bg)
             
+            # Horizontal divider line after each row
+            draw.line([(col_x, row_y + row_height), (col_x + col_width - int(5 * scale), row_y + row_height)], 
+                     fill="#CCCCCC", width=1)
+            
             # Rank badge (red circle with white text)
             badge_x = col_x + rank_col_w // 2
             badge_y = row_y + row_height // 2
@@ -933,7 +937,28 @@ def generate_top_10_by_metric_slide(
             row_bg = row_light if rank % 2 == 0 else row_white
             draw.rectangle([col_x, row_y, col_x + col_width - int(5 * scale), row_y + row_height],
                            fill=row_bg)
+            # Horizontal divider line
+            draw.line([(col_x, row_y + row_height), (col_x + col_width - int(5 * scale), row_y + row_height)], 
+                     fill="#CCCCCC", width=1)
             row_y += row_height
+        
+        # Store column boundaries for vertical dividers
+        col_table_top = metric_header_y
+        col_table_bottom = row_y
+        
+        # Draw thick outer border for this column
+        draw.rectangle([col_x, col_table_top, col_x + col_width - int(5 * scale), col_table_bottom],
+                      outline="#333333", width=3)
+        
+        # Draw internal vertical dividers (between rank/name and name/value)
+        # Vertical line after rank column
+        rank_divider_x = col_x + rank_col_w
+        draw.line([(rank_divider_x, col_header_y), (rank_divider_x, col_table_bottom)], 
+                 fill="#AAAAAA", width=1)
+        # Vertical line before value column
+        value_divider_x = col_x + col_width - int(80 * scale)
+        draw.line([(value_divider_x, col_header_y), (value_divider_x, col_table_bottom)], 
+                 fill="#AAAAAA", width=1)
     
     # Save to buffer
     buffer = io.BytesIO()
