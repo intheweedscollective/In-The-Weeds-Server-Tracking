@@ -89,10 +89,15 @@ Build a comprehensive performance review application for restaurant employees (B
 - ✅ **Letter Format**: 2550x3300 at 300 DPI for high-quality printing
 
 ### Recent Changes (Feb 12, 2026)
-- ✅ **Fixed Black Outline Issue on Rankings Slide**: The colored rank labels (T1, T2, A1, A2, B1, C1) and total score now have clearly visible black outlines
-  - Increased font size from 15px to 18px for Rank and Score columns
-  - Increased outline width from 2px to 3px for better visibility
-  - The multi-colored text now has proper contrast and readability
+- ✅ **Fixed Black Outline Issue on Rankings Slide**: The colored rank labels (T1, T2, A1, A2, B1, C1) and total score now have subtle visible black outlines
+  - Font size adjusted to 16px for Rank and Score columns
+  - Outline width set to 1px for a clean, professional look
+- ✅ **NEW Printable Rankings Slide**: Added stylized word-art rankings slide for printing
+  - Dark background with gold confetti, ribbons, and star decorations
+  - Word art headers: "RED HATS", "A", "B", "C", "BAR", "UNRANKED"
+  - Simple rank/name tables grouped by tier (no metrics)
+  - New API endpoint: `GET /api/v2/yodeck/{year}/{quarter}/printable-rankings`
+  - New "Printable" button on Rankings page (amber/gold outline with star icon)
 
 ## Backlog
 
