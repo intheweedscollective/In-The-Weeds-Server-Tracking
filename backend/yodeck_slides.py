@@ -2085,10 +2085,20 @@ def generate_printable_rankings_slide(
             sy = random.randint(int(height * 0.7), int(height * 0.9))
             draw_star(draw, sx, sy, int(25 * scale * zoom), (200, 180, 100))
     
-    # Quarter/Year label (subtle, bottom right)
-    font_footer = get_font(int(16 * scale), bold=True)
-    draw.text((width - int(30 * scale), height - int(30 * scale)), f"{quarter} {year}", 
-             font=font_footer, fill=(150, 150, 150), anchor="rb")
+    # Store Name and Quarter/Year Header - TOP CENTER
+    store_name = "BUBBA GUMP SHRIMP CO."
+    font_store = get_font(int(36 * scale * zoom), bold=True)
+    font_quarter = get_font(int(28 * scale * zoom), bold=True)
+    
+    # Draw store name with gold outline at top center
+    store_y = int(25 * scale)
+    draw_word_art(draw, (width // 2, store_y), store_name, font_store, 
+                 (255, 255, 255), gold_outline, int(3 * scale * zoom))
+    
+    # Draw Quarter/Year below store name
+    quarter_y = store_y + int(45 * scale * zoom)
+    draw_word_art(draw, (width // 2, quarter_y), f"{quarter} {year} RANKINGS", font_quarter, 
+                 gold_outline, black_outline, int(2 * scale * zoom))
     
     buffer = io.BytesIO()
     img.save(buffer, format='PNG', optimize=True)
