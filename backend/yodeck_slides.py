@@ -899,9 +899,9 @@ def generate_top_10_by_metric_slide(
             draw.rectangle([col_x, row_y, col_x + col_width - int(5 * scale), row_y + row_height],
                            fill=row_bg)
             
-            # Horizontal divider line after each row
+            # Horizontal divider line after each row (darker, more visible)
             draw.line([(col_x, row_y + row_height), (col_x + col_width - int(5 * scale), row_y + row_height)], 
-                     fill="#CCCCCC", width=1)
+                     fill="#999999", width=1)
             
             # Rank badge (red circle with white text)
             badge_x = col_x + rank_col_w // 2
