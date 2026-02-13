@@ -959,12 +959,10 @@ def generate_top_10_by_metric_slide(
         remaining_rank = len(top_10)
         while remaining_rank < 10:
             remaining_rank += 1
-            if remaining_rank % 2 == 0:
-                draw.rectangle([col_x, row_y, col_x + col_width, row_y + row_height],
-                               fill=(248, 249, 250))
-            else:
-                draw.rectangle([col_x, row_y, col_x + col_width, row_y + row_height],
-                               fill=(255, 255, 255))
+            # Semi-transparent row overlay
+            row_overlay = Image.new('RGBA', (col_width, row_height), 
+                                   (248, 249, 250, 200) if remaining_rank % 2 == 0 else (255, 255, 255, 200))
+            img.paste(row_overlay, (col_x, row_y), row_overlay)
             # Horizontal divider line
             draw.line([(col_x, row_y + row_height), (col_x + col_width, row_y + row_height)], 
                      fill="#888888", width=1)
