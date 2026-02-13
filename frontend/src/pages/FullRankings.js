@@ -200,6 +200,41 @@ export default function FullRankings() {
     }
   };
 
+  const handleDownloadPrintable = async () => {
+    setDownloadingPrintable(true);
+    try {
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      const filename = `printable_rankings_${selectedQuarter}_${selectedYear}.png`;
+      const url = `${API}/v2/yodeck/${selectedYear}/${selectedQuarter}/printable-rankings?format=16:9`;
+      
+      if (isIOS) {
+        window.open(url, '_blank');
+        toast.success("Printable rankings opened. Tap share to save.");
+        setDownloadingPrintable(false);
+        return;
+      }
+      
+      const response = await axios.get(url, { responseType: 'blob' });
+      
+      const blob = new Blob([response.data], { type: 'image/png' });
+      const objectUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1000);
+      
+      toast.success("Printable rankings downloaded!");
+    } catch (error) {
+      console.error("Error downloading printable rankings:", error);
+      toast.error("Failed to download printable rankings");
+    } finally {
+      setDownloadingPrintable(false);
+    }
+  };
+
   const getTierStyle = (tier) => {
     return TIER_STYLES[tier] || { bg: "bg-gray-100", text: "text-gray-800", border: "border-gray-200" };
   };
