@@ -987,7 +987,7 @@ def generate_top_10_by_metric_slide(
         draw.line([(rank_divider_x, col_header_y), (rank_divider_x, col_table_bottom)], 
                  fill="#666666", width=2)
         # Vertical line before value column
-        value_divider_x = col_x + col_width - int(80 * scale)
+        value_divider_x = col_x + col_width - int(70 * scale)
         draw.line([(value_divider_x, col_header_y), (value_divider_x, col_table_bottom)], 
                  fill="#666666", width=2)
     
