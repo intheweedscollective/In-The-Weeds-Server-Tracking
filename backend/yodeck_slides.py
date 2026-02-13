@@ -1950,8 +1950,7 @@ def generate_printable_rankings_slide(
         else:
             tier_groups["unranked"].append(emp)
     
-    # Fonts for word art headers - 20% ZOOM increase
-    zoom = 1.2  # 20% zoom
+    # Fonts for word art headers (zoom already defined above)
     font_header_large = get_font(int(80 * scale * zoom), bold=True)
     font_header_medium = get_font(int(60 * scale * zoom), bold=True)
     font_header_small = get_font(int(45 * scale * zoom), bold=True)
