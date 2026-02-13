@@ -937,9 +937,9 @@ def generate_top_10_by_metric_slide(
             row_bg = row_light if rank % 2 == 0 else row_white
             draw.rectangle([col_x, row_y, col_x + col_width - int(5 * scale), row_y + row_height],
                            fill=row_bg)
-            # Horizontal divider line
+            # Horizontal divider line (darker, more visible)
             draw.line([(col_x, row_y + row_height), (col_x + col_width - int(5 * scale), row_y + row_height)], 
-                     fill="#CCCCCC", width=1)
+                     fill="#999999", width=1)
             row_y += row_height
         
         # Store column boundaries for vertical dividers
