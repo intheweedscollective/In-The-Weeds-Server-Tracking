@@ -1877,18 +1877,18 @@ def generate_printable_rankings_slide(
         # Draw fill
         draw.text((x, y), text, font=font, fill=fill_color)
     
-    # Helper function to draw a tier table
+    # Helper function to draw a tier table - with zoom factor
     def draw_tier_table(draw, x, y, employees, rank_prefix="", table_width=None, row_height=None):
         if not employees:
             return 0
         
-        tw = table_width or int(200 * scale)
-        rh = row_height or int(38 * scale)
+        tw = table_width or int(200 * scale * zoom)
+        rh = row_height or int(38 * scale * zoom)
         rank_col_w = int(tw * 0.35)
         name_col_w = int(tw * 0.65)
         
-        font_rank = get_font(int(18 * scale), bold=True)
-        font_name = get_font(int(18 * scale), bold=True)
+        font_rank = get_font(int(18 * scale * zoom), bold=True)
+        font_name = get_font(int(18 * scale * zoom), bold=True)
         
         border_color = (255, 255, 255)
         
