@@ -1519,7 +1519,8 @@ async def get_yodeck_top10_slide(year: int, quarter: str, format: str = "16:9", 
         employees=employees_docs,
         quarter=quarter.upper(),
         year=year,
-        output_format=format
+        output_format=format,
+        background=background
     )
     
     format_suffix = "letter" if format == "letter" else "16x9"
