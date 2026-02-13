@@ -1947,10 +1947,11 @@ def generate_printable_rankings_slide(
         else:
             tier_groups["unranked"].append(emp)
     
-    # Fonts for word art headers
-    font_header_large = get_font(int(80 * scale), bold=True)
-    font_header_medium = get_font(int(60 * scale), bold=True)
-    font_header_small = get_font(int(45 * scale), bold=True)
+    # Fonts for word art headers - 20% ZOOM increase
+    zoom = 1.2  # 20% zoom
+    font_header_large = get_font(int(80 * scale * zoom), bold=True)
+    font_header_medium = get_font(int(60 * scale * zoom), bold=True)
+    font_header_small = get_font(int(45 * scale * zoom), bold=True)
     
     # Colors
     red_color = (200, 50, 50)
@@ -1958,79 +1959,112 @@ def generate_printable_rankings_slide(
     white_color = (255, 255, 255)
     black_outline = (30, 30, 30)
     
-    # Layout positions (scaled)
-    table_width = int(220 * scale)
-    row_height = int(40 * scale)
+    # Layout - FULL WIDTH with 20% zoom and alternating vertical offsets
+    table_width = int(220 * scale * zoom)
+    row_height = int(40 * scale * zoom)
     
-    # ===== RED HATS (Trainers) - Top Left =====
+    # Collect active tiers (only those with employees)
+    active_tiers = []
     if tier_groups["trainers"]:
-        # Draw "RED" word art
-        draw_word_art(draw, (int(40 * scale), int(20 * scale)), "RED", font_header_large, 
-                     red_color, gold_outline, int(4 * scale))
-        # Draw "HATS" word art
-        draw_word_art(draw, (int(40 * scale), int(90 * scale)), "HATS", font_header_large, 
-                     white_color, gold_outline, int(4 * scale))
-        draw_tier_table(draw, int(50 * scale), int(180 * scale), tier_groups["trainers"], 
-                       "T", table_width, row_height)
-    
-    # ===== A-SERVERS - Top Center =====
+        active_tiers.append(("trainers", "RED\nHATS", "T", red_color, white_color))
     if tier_groups["a_servers"]:
-        # Draw large "A" word art
-        a_x = int(420 * scale)
-        draw_word_art(draw, (a_x, int(20 * scale)), "A", font_header_large, 
-                     gold_outline, black_outline, int(4 * scale))
-        draw_tier_table(draw, int(350 * scale), int(130 * scale), tier_groups["a_servers"], 
-                       "A", table_width, row_height)
-    
-    # ===== B-SERVERS - Top Right Center =====
+        active_tiers.append(("a_servers", "A", "A", gold_outline, None))
     if tier_groups["b_servers"]:
-        # Draw large "B" word art
-        b_x = int(680 * scale)
-        draw_word_art(draw, (b_x, int(20 * scale)), "B", font_header_large, 
-                     white_color, gold_outline, int(4 * scale))
-        draw_tier_table(draw, int(620 * scale), int(130 * scale), tier_groups["b_servers"], 
-                       "B", table_width, row_height)
-    
-    # ===== C-SERVERS - Far Right =====
+        active_tiers.append(("b_servers", "B", "B", white_color, None))
     if tier_groups["c_servers"]:
-        # Draw large "C" word art
-        c_x = int(920 * scale)
-        draw_word_art(draw, (c_x, int(20 * scale)), "C", font_header_large, 
-                     (180, 140, 100), gold_outline, int(4 * scale))
-        draw_tier_table(draw, int(870 * scale), int(130 * scale), tier_groups["c_servers"], 
-                       "C", table_width, row_height)
-    
-    # ===== BARTENDERS - Bottom Left =====
+        active_tiers.append(("c_servers", "C", "C", (180, 140, 100), None))
     if tier_groups["bartenders"]:
-        bar_y = int(620 * scale) if output_format != "letter" else int(1800 * scale)
-        # Draw "BAR" word art
-        draw_word_art(draw, (int(40 * scale), bar_y), "BAR", font_header_medium, 
-                     red_color, gold_outline, int(3 * scale))
-        draw_tier_table(draw, int(50 * scale), bar_y + int(70 * scale), tier_groups["bartenders"], 
-                       "Bar ", table_width, row_height)
-    
-    # ===== UNRANKED - Bottom Center =====
+        active_tiers.append(("bartenders", "BAR", "Bar ", red_color, None))
     if tier_groups["unranked"]:
-        unranked_y = int(680 * scale) if output_format != "letter" else int(1900 * scale)
-        # Draw "UNRANKED" word art
-        draw_word_art(draw, (int(450 * scale), unranked_y), "UNRANKED", font_header_small, 
-                     gold_outline, black_outline, int(3 * scale))
-        # Draw unranked table (use "NR" for rank)
-        unranked_x = int(420 * scale)
-        for idx, emp in enumerate(tier_groups["unranked"][:5]):
-            row_y = unranked_y + int(60 * scale) + idx * row_height
-            draw.rectangle([unranked_x, row_y, unranked_x + int(80 * scale), row_y + row_height], 
-                          outline=white_color, width=2)
-            draw.rectangle([unranked_x + int(80 * scale), row_y, unranked_x + int(230 * scale), row_y + row_height], 
-                          outline=white_color, width=2)
-            font_nr = get_font(int(18 * scale), bold=True)
-            draw.text((unranked_x + int(40 * scale), row_y + row_height // 2), "NR", 
-                     font=font_nr, fill=white_color, anchor="mm")
-            name = emp.get("name", "Unknown")[:12].upper()
-            draw.text((unranked_x + int(155 * scale), row_y + row_height // 2), name, 
-                     font=font_nr, fill=white_color, anchor="mm")
+        active_tiers.append(("unranked", "UNRANKED", "NR", gold_outline, None))
     
-    # Add decorative stars
+    num_tiers = len(active_tiers)
+    if num_tiers == 0:
+        # No data - just return empty slide
+        buffer = io.BytesIO()
+        img.save(buffer, format='PNG', optimize=True)
+        buffer.seek(0)
+        return buffer.getvalue()
+    
+    # Calculate column positions - spread full width
+    margin = int(40 * scale)
+    usable_width = width - (margin * 2)
+    col_width = usable_width // num_tiers
+    
+    # Center vertical position
+    center_y = height // 2
+    vertical_offset = int(height * 0.10)  # 10% offset
+    
+    # Draw each tier column
+    for col_idx, (tier_key, header_text, rank_prefix, header_color, header_color2) in enumerate(active_tiers):
+        employees = tier_groups[tier_key]
+        
+        # Column X position (centered in column)
+        col_center_x = margin + (col_idx * col_width) + (col_width // 2)
+        table_x = col_center_x - (table_width // 2)
+        
+        # Alternating vertical offset: even columns up, odd columns down
+        if col_idx % 2 == 0:
+            y_offset = -vertical_offset  # 10% up
+        else:
+            y_offset = vertical_offset   # 10% down
+        
+        # Calculate total height of this tier (header + table)
+        if "\n" in header_text:
+            header_height = int(160 * scale * zoom)  # Two-line header
+        elif header_text == "UNRANKED":
+            header_height = int(70 * scale * zoom)
+        else:
+            header_height = int(100 * scale * zoom)
+        
+        table_height = len(employees) * row_height
+        total_content_height = header_height + table_height
+        
+        # Center content vertically with offset
+        content_start_y = center_y - (total_content_height // 2) + y_offset
+        
+        # Draw header
+        if header_text == "RED\nHATS":
+            # Two-line header for RED HATS
+            draw_word_art(draw, (col_center_x, content_start_y), "RED", font_header_large, 
+                         header_color, gold_outline, int(4 * scale * zoom))
+            draw_word_art(draw, (col_center_x, content_start_y + int(70 * scale * zoom)), "HATS", font_header_large, 
+                         header_color2 or white_color, gold_outline, int(4 * scale * zoom))
+            table_y = content_start_y + header_height
+        elif header_text == "UNRANKED":
+            draw_word_art(draw, (col_center_x, content_start_y), header_text, font_header_small, 
+                         header_color, black_outline, int(3 * scale * zoom))
+            table_y = content_start_y + header_height
+        elif header_text == "BAR":
+            draw_word_art(draw, (col_center_x, content_start_y), header_text, font_header_medium, 
+                         header_color, gold_outline, int(3 * scale * zoom))
+            table_y = content_start_y + header_height
+        else:
+            # Single letter headers (A, B, C)
+            draw_word_art(draw, (col_center_x, content_start_y), header_text, font_header_large, 
+                         header_color, gold_outline if header_text != "A" else black_outline, int(4 * scale * zoom))
+            table_y = content_start_y + header_height
+        
+        # Draw table
+        if tier_key == "unranked":
+            # Special handling for unranked (NR prefix)
+            font_table = get_font(int(18 * scale * zoom), bold=True)
+            for idx, emp in enumerate(employees[:10]):
+                row_y = table_y + idx * row_height
+                rank_col_w = int(table_width * 0.35)
+                draw.rectangle([table_x, row_y, table_x + rank_col_w, row_y + row_height], 
+                              outline=white_color, width=2)
+                draw.rectangle([table_x + rank_col_w, row_y, table_x + table_width, row_y + row_height], 
+                              outline=white_color, width=2)
+                draw.text((table_x + rank_col_w // 2, row_y + row_height // 2), "NR", 
+                         font=font_table, fill=white_color, anchor="mm")
+                name = emp.get("name", "Unknown")[:12].upper()
+                draw.text((table_x + rank_col_w + (table_width - rank_col_w) // 2, row_y + row_height // 2), 
+                         name, font=font_table, fill=white_color, anchor="mm")
+        else:
+            draw_tier_table(draw, table_x, table_y, employees[:15], rank_prefix, table_width, row_height)
+    
+    # Add decorative stars scattered around
     def draw_star(draw, cx, cy, size, color):
         points = []
         for i in range(10):
@@ -2039,14 +2073,15 @@ def generate_printable_rankings_slide(
             points.append((cx + int(r * math.cos(angle)), cy + int(r * math.sin(angle))))
         draw.polygon(points, fill=color)
     
-    # Draw some gold stars
-    star_positions = [
-        (int(300 * scale), int(700 * scale)),
-        (int(380 * scale), int(750 * scale)),
-        (int(800 * scale), int(650 * scale)),
-    ]
-    for sx, sy in star_positions:
-        draw_star(draw, sx, sy, int(25 * scale), (200, 180, 100))
+    # Draw gold stars in gaps between columns
+    random.seed(123)
+    for col_idx in range(num_tiers - 1):
+        col_center_x = margin + (col_idx * col_width) + col_width
+        # Add a few stars near column boundaries
+        for _ in range(2):
+            sx = col_center_x + random.randint(-30, 30)
+            sy = random.randint(int(height * 0.7), int(height * 0.9))
+            draw_star(draw, sx, sy, int(25 * scale * zoom), (200, 180, 100))
     
     # Quarter/Year label (subtle, bottom right)
     font_footer = get_font(int(16 * scale), bold=True)
