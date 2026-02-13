@@ -918,13 +918,10 @@ def generate_top_10_by_metric_slide(
         row_y = col_header_y + col_header_height
         
         for rank, emp in enumerate(top_10, 1):
-            # Alternating row colors with semi-transparency
-            if rank % 2 == 0:
-                draw.rectangle([col_x, row_y, col_x + col_width, row_y + row_height],
-                               fill=(248, 249, 250))
-            else:
-                draw.rectangle([col_x, row_y, col_x + col_width, row_y + row_height],
-                               fill=(255, 255, 255))
+            # Create semi-transparent row overlay
+            row_overlay = Image.new('RGBA', (col_width, row_height), 
+                                   (248, 249, 250, 200) if rank % 2 == 0 else (255, 255, 255, 200))
+            img.paste(row_overlay, (col_x, row_y), row_overlay)
             
             # Horizontal divider line after each row
             draw.line([(col_x, row_y + row_height), (col_x + col_width, row_y + row_height)], 
