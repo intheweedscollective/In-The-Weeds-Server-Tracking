@@ -1496,13 +1496,14 @@ async def download_full_rankings_pdf(year: int, quarter: str):
 # ============================================================================
 
 @api_router.get("/v2/yodeck/{year}/{quarter}/top10")
-async def get_yodeck_top10_slide(year: int, quarter: str, format: str = "16:9"):
+async def get_yodeck_top10_slide(year: int, quarter: str, format: str = "16:9", background: str = "dark"):
     """
     Generate Top 10 Performers By Metric slide.
     Shows 4 metric columns: PPA, Glass/Guest, Guests/LSC, LBW/Guest
     
     Args:
         format: "16:9" for Yodeck (1920x1080) or "letter" for 8.5x11" print (2550x3300)
+        background: Background key from available backgrounds
     """
     # Get all employees for the quarter
     employees_docs = await db.employees_v2.find(
