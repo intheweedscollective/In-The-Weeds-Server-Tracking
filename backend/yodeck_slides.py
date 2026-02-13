@@ -893,19 +893,18 @@ def generate_top_10_by_metric_slide(
         row_y = col_header_y + col_header_height
         
         for rank, emp in enumerate(top_10, 1):
-            # Create semi-transparent row overlay
-            row_overlay = Image.new('RGBA', (col_width, row_height), 
-                                   (248, 249, 250, 200) if rank % 2 == 0 else (255, 255, 255, 200))
-            img.paste(row_overlay, (col_x, row_y), row_overlay)
+            # Solid alternating row colors (white and light grey)
+            row_color = row_light if rank % 2 == 0 else row_white
+            draw.rectangle([col_x, row_y, col_x + col_width, row_y + row_height], fill=row_color)
             
             # Horizontal divider line after each row
             draw.line([(col_x, row_y + row_height), (col_x + col_width, row_y + row_height)], 
-                     fill="#888888", width=1)
+                     fill="#AAAAAA", width=1)
             
-            # Rank badge (red circle with white text)
+            # Rank badge (red circle with white text) - larger
             badge_x = col_x + rank_col_w // 2
             badge_y = row_y + row_height // 2
-            badge_radius = int(12 * scale)
+            badge_radius = int(16 * scale)
             draw.ellipse([badge_x - badge_radius, badge_y - badge_radius,
                          badge_x + badge_radius, badge_y + badge_radius],
                         fill=rank_badge_bg)
