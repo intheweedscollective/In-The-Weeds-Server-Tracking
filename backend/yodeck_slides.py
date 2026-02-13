@@ -946,19 +946,19 @@ def generate_top_10_by_metric_slide(
         col_table_top = metric_header_y
         col_table_bottom = row_y
         
-        # Draw thick outer border for this column
+        # Draw thick outer border for this column (BLACK, 4px width)
         draw.rectangle([col_x, col_table_top, col_x + col_width - int(5 * scale), col_table_bottom],
-                      outline="#333333", width=3)
+                      outline="#000000", width=4)
         
         # Draw internal vertical dividers (between rank/name and name/value)
         # Vertical line after rank column
         rank_divider_x = col_x + rank_col_w
         draw.line([(rank_divider_x, col_header_y), (rank_divider_x, col_table_bottom)], 
-                 fill="#AAAAAA", width=1)
+                 fill="#666666", width=2)
         # Vertical line before value column
         value_divider_x = col_x + col_width - int(80 * scale)
         draw.line([(value_divider_x, col_header_y), (value_divider_x, col_table_bottom)], 
-                 fill="#AAAAAA", width=1)
+                 fill="#666666", width=2)
     
     # Save to buffer
     buffer = io.BytesIO()
