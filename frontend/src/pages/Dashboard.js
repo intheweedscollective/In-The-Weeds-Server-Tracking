@@ -219,6 +219,49 @@ export default function Dashboard() {
           />
         </div>
 
+        {/* Finalize Quarter Section */}
+        {employees.length > 0 && (
+          <div className="mb-8 flex justify-center">
+            <div className={`flex items-center gap-4 px-6 py-4 rounded-xl shadow-lg transition-all ${
+              isQuarterFinalized 
+                ? 'bg-green-50 border-2 border-green-300'
+                : 'bg-white border-2 border-gray-200 hover:border-primary'
+            }`}>
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                isQuarterFinalized ? 'bg-green-100' : 'bg-primary/10'
+              }`}>
+                {isQuarterFinalized ? (
+                  <CheckCircle2 className="w-6 h-6 text-green-600" />
+                ) : (
+                  <Lock className="w-6 h-6 text-primary" />
+                )}
+              </div>
+              <div className="text-left">
+                <h3 className="font-serif font-bold text-lg">
+                  {isQuarterFinalized ? 'Quarter Finalized' : 'Finalize Rankings'}
+                </h3>
+                <p className="text-sm text-gray-500">
+                  {isQuarterFinalized 
+                    ? `${selectedQuarter} ${selectedYear} rankings are locked`
+                    : 'Lock in final scores and tiers for the quarter'
+                  }
+                </p>
+              </div>
+              <button
+                onClick={() => setShowFinalizeModal(true)}
+                className={`ml-4 px-5 py-2 rounded-lg font-semibold transition-all ${
+                  isQuarterFinalized 
+                    ? 'bg-green-600 text-white hover:bg-green-700'
+                    : 'bg-primary text-white hover:bg-primary/90'
+                }`}
+                data-testid="finalize-quarter-btn"
+              >
+                {isQuarterFinalized ? 'View Details' : 'Finalize Now'}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Main Actions */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
           {/* Upload CTA - Points to Snapshots */}
