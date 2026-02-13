@@ -1866,6 +1866,9 @@ def generate_printable_rankings_slide(
         alpha = random.randint(80, 200)
         draw.ellipse([x-size, y-size, x+size, y+size], fill=(255, 255, 200))
     
+    # 20% ZOOM increase
+    zoom = 1.2
+    
     # Helper function for word art text (text with outline)
     def draw_word_art(draw, pos, text, font, fill_color, outline_color, outline_width=3):
         x, y = pos
