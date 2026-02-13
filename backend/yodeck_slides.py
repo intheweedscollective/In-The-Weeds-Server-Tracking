@@ -862,15 +862,23 @@ def generate_top_10_by_metric_slide(
         {"key": "lbw_per_guest", "label": "LBW/Guest - Top 10", "format": "currency", "higher_better": True},
     ]
     
-    # Calculate column widths
-    margin = int(20 * scale)
+    # Calculate column widths - FULL WIDTH with no margins
+    margin = int(5 * scale)  # Minimal margin
+    gap = int(8 * scale)  # Small gap between columns
     table_area_width = width - (margin * 2)
-    col_width = table_area_width // 4
-    table_start_y = header_height + int(10 * scale)
+    col_width = (table_area_width - (gap * 3)) // 4  # 4 columns with 3 gaps
+    table_start_y = header_height + int(8 * scale)
+    
+    # Calculate available height for rows
+    available_height = height - table_start_y - int(10 * scale)
+    metric_header_height = int(36 * scale)
+    col_header_height = int(30 * scale)
+    row_area_height = available_height - metric_header_height - col_header_height
+    row_height = row_area_height // 10  # Exactly 10 rows
     
     # Process employee data for each metric
     for col_idx, metric in enumerate(metrics):
-        col_x = margin + (col_idx * col_width)
+        col_x = margin + (col_idx * (col_width + gap))
         
         # Sort employees by this metric
         metric_key = metric["key"]
@@ -883,30 +891,27 @@ def generate_top_10_by_metric_slide(
         
         top_10 = sorted_emps[:10]
         
-        # Draw metric header (dark gray bar)
+        # Draw metric header (dark gray bar with semi-transparency)
         metric_header_y = table_start_y
-        metric_header_height = int(40 * scale)
-        draw.rectangle([col_x, metric_header_y, col_x + col_width - int(5 * scale), metric_header_y + metric_header_height],
+        draw.rectangle([col_x, metric_header_y, col_x + col_width, metric_header_y + metric_header_height],
                        fill=metric_header_bg)
         draw.text((col_x + col_width // 2, metric_header_y + metric_header_height // 2), 
                   metric["label"], font=font_metric_header, fill="#FFFFFF", anchor="mm")
         
         # Draw column headers (light blue bar)
         col_header_y = metric_header_y + metric_header_height
-        col_header_height = int(35 * scale)
-        draw.rectangle([col_x, col_header_y, col_x + col_width - int(5 * scale), col_header_y + col_header_height],
+        draw.rectangle([col_x, col_header_y, col_x + col_width, col_header_y + col_header_height],
                        fill=col_header_bg)
         
         # Column header text positions
-        rank_col_w = int(60 * scale)
-        name_col_w = int(150 * scale)
-        value_col_w = col_width - rank_col_w - name_col_w - int(20 * scale)
+        rank_col_w = int(55 * scale)
+        name_col_w = int(140 * scale)
         
         draw.text((col_x + rank_col_w // 2, col_header_y + col_header_height // 2), 
                   "Rank", font=font_col_header, fill="#FFFFFF", anchor="mm")
-        draw.text((col_x + rank_col_w + int(10 * scale), col_header_y + col_header_height // 2), 
+        draw.text((col_x + rank_col_w + int(8 * scale), col_header_y + col_header_height // 2), 
                   "Employee", font=font_col_header, fill="#FFFFFF", anchor="lm")
-        draw.text((col_x + col_width - int(40 * scale), col_header_y + col_header_height // 2), 
+        draw.text((col_x + col_width - int(35 * scale), col_header_y + col_header_height // 2), 
                   "Value", font=font_col_header, fill="#FFFFFF", anchor="rm")
         
         # Draw data rows
