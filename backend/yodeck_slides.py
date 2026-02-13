@@ -1993,9 +1993,9 @@ def generate_printable_rankings_slide(
     usable_width = width - (margin * 2)
     col_width = usable_width // num_tiers
     
-    # Vertical positioning - use fixed base positions with alternating offsets
-    base_y = int(height * 0.15)  # Start 15% from top
-    vertical_offset = int(height * 0.12)  # 12% alternating offset (more pronounced)
+    # Vertical positioning - alternating up/down from center
+    center_y = height // 2
+    vertical_offset = int(height * 0.10)  # 10% alternating offset
     
     # Draw each tier column
     for col_idx, (tier_key, header_text, rank_prefix, header_color, header_color2) in enumerate(active_tiers):
@@ -2005,12 +2005,6 @@ def generate_printable_rankings_slide(
         col_center_x = margin + (col_idx * col_width) + (col_width // 2)
         table_x = col_center_x - (table_width // 2)
         
-        # Alternating vertical offset: even columns higher, odd columns lower
-        if col_idx % 2 == 0:
-            content_start_y = base_y  # Higher position
-        else:
-            content_start_y = base_y + vertical_offset  # Lower position (12% down)
-        
         # Calculate header height for positioning table
         if "\n" in header_text:
             header_height = int(160 * scale * zoom)  # Two-line header
@@ -2018,6 +2012,18 @@ def generate_printable_rankings_slide(
             header_height = int(70 * scale * zoom)
         else:
             header_height = int(100 * scale * zoom)
+        
+        # Calculate total content height
+        table_height = len(employees[:15]) * row_height
+        total_content_height = header_height + table_height
+        
+        # Alternating vertical offset: even columns (0,2,4) UP, odd columns (1,3,5) DOWN
+        if col_idx % 2 == 0:
+            # Even index columns go UP (10% above center)
+            content_start_y = center_y - (total_content_height // 2) - vertical_offset
+        else:
+            # Odd index columns go DOWN (10% below center)
+            content_start_y = center_y - (total_content_height // 2) + vertical_offset
         
         # Draw header
         if header_text == "RED\nHATS":
