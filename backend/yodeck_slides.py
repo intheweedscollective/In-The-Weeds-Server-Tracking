@@ -1866,19 +1866,19 @@ def generate_printable_rankings_slide(
         alpha = random.randint(80, 200)
         draw.ellipse([x-size, y-size, x+size, y+size], fill=(255, 255, 200))
     
-    # 20% ZOOM increase
-    zoom = 1.2
+    # 40% ZOOM increase (more zoomed in)
+    zoom = 1.4
     
-    # Helper function for word art text (text with outline)
+    # Helper function for word art text (text with outline) - CENTERED with anchor
     def draw_word_art(draw, pos, text, font, fill_color, outline_color, outline_width=3):
         x, y = pos
         # Draw outline
         for dx in range(-outline_width, outline_width + 1):
             for dy in range(-outline_width, outline_width + 1):
                 if dx != 0 or dy != 0:
-                    draw.text((x + dx, y + dy), text, font=font, fill=outline_color)
-        # Draw fill
-        draw.text((x, y), text, font=font, fill=fill_color)
+                    draw.text((x + dx, y + dy), text, font=font, fill=outline_color, anchor="mt")
+        # Draw fill - anchor="mt" means middle-top (horizontally centered)
+        draw.text((x, y), text, font=font, fill=fill_color, anchor="mt")
     
     # Helper function to draw a tier table - with zoom factor
     def draw_tier_table(draw, x, y, employees, rank_prefix="", table_width=None, row_height=None):
