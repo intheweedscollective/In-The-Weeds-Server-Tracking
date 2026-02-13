@@ -29,6 +29,7 @@ from yodeck_slides import (
     generate_top_10_slide, generate_tier_slide,
     generate_most_improved_slide, generate_promotion_watchlist_slide, generate_at_risk_slide,
     generate_complete_rankings_slide, generate_top_10_by_metric_slide,
+    generate_printable_rankings_slide,
     THEMES
 )
 from snapshot_slides import generate_snapshot_slide, get_available_backgrounds, BACKGROUNDS
