@@ -1965,18 +1965,18 @@ def generate_printable_rankings_slide(
     table_width = int(220 * scale * zoom)
     row_height = int(40 * scale * zoom)
     
-    # Collect active tiers (only those with employees)
+    # Collect active tiers in order: Red Hats, Bar, A, B, C, Unranked
     active_tiers = []
     if tier_groups["trainers"]:
         active_tiers.append(("trainers", "RED\nHATS", "T", red_color, white_color))
+    if tier_groups["bartenders"]:
+        active_tiers.append(("bartenders", "BAR", "Bar ", red_color, None))
     if tier_groups["a_servers"]:
         active_tiers.append(("a_servers", "A", "A", gold_outline, None))
     if tier_groups["b_servers"]:
         active_tiers.append(("b_servers", "B", "B", white_color, None))
     if tier_groups["c_servers"]:
         active_tiers.append(("c_servers", "C", "C", (180, 140, 100), None))
-    if tier_groups["bartenders"]:
-        active_tiers.append(("bartenders", "BAR", "Bar ", red_color, None))
     if tier_groups["unranked"]:
         active_tiers.append(("unranked", "UNRANKED", "NR", gold_outline, None))
     
