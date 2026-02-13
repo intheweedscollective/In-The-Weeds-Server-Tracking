@@ -730,7 +730,8 @@ def generate_top_10_by_metric_slide(
     employees: List[Dict[str, Any]],
     quarter: str,
     year: int,
-    output_format: str = "16:9"
+    output_format: str = "16:9",
+    background: str = "dark"
 ) -> bytes:
     """
     Generate Top 10 Performers By Metric slide matching the user's professional design.
@@ -741,7 +742,11 @@ def generate_top_10_by_metric_slide(
         quarter: Quarter string (e.g., "Q1")
         year: Year integer
         output_format: "16:9" for Yodeck (1920x1080) or "letter" for 8.5x11" print (2550x3300)
+        background: Background key from BACKGROUNDS dict
     """
+    from snapshot_slides import BACKGROUNDS
+    import requests
+    
     # Set dimensions based on format
     if output_format == "letter":
         width, height = 2550, 3300
@@ -751,21 +756,40 @@ def generate_top_10_by_metric_slide(
         scale = 1.0
     
     # Colors matching the design
-    header_dark = "#0D3B66"  # Dark blue header
-    header_gradient = "#1A5276"  # Slightly lighter blue
     metric_header_bg = "#4A4A4A"  # Dark gray for metric titles
     col_header_bg = "#507EA9"  # Light blue for column headers
-    row_light = "#F8F9FA"  # Light gray alternating row
-    row_white = "#FFFFFF"  # White alternating row
+    row_light = (248, 249, 250, 220)  # Light gray alternating row (semi-transparent)
+    row_white = (255, 255, 255, 220)  # White alternating row (semi-transparent)
     rank_badge_bg = "#C41E3A"  # Red for rank badges
     text_dark = "#333333"  # Dark text for data
     
-    # Create image with gradient header
-    img = Image.new('RGB', (width, height), row_white)
+    # Get background configuration
+    bg_config = BACKGROUNDS.get(background, BACKGROUNDS["dark"])
+    
+    # Create base image based on background type
+    if bg_config.get("type") == "image":
+        try:
+            # Download and load image background
+            response = requests.get(bg_config["url"], timeout=10)
+            bg_img = Image.open(io.BytesIO(response.content))
+            bg_img = bg_img.convert('RGB')
+            bg_img = bg_img.resize((width, height), Image.LANCZOS)
+            img = bg_img.copy()
+            # Add semi-transparent overlay for readability
+            overlay = Image.new('RGBA', (width, height), (0, 0, 0, 100))
+            img = Image.alpha_composite(img.convert('RGBA'), overlay).convert('RGB')
+        except Exception as e:
+            print(f"Error loading background image: {e}")
+            img = Image.new('RGB', (width, height), (15, 23, 42))
+    else:
+        # Solid color background
+        color = bg_config.get("color", (15, 23, 42))
+        img = Image.new('RGB', (width, height), color)
+    
     draw = ImageDraw.Draw(img)
     
     # Header height (scaled)
-    header_height = int(180 * scale)
+    header_height = int(140 * scale)
     
     # Draw gradient header background
     for y in range(header_height):
