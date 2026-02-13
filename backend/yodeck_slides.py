@@ -755,48 +755,23 @@ def generate_top_10_by_metric_slide(
         width, height = SLIDE_WIDTH, SLIDE_HEIGHT
         scale = 1.0
     
-    # Colors matching the design
+    # Colors matching the design - WHITE background with alternating rows
     metric_header_bg = "#4A4A4A"  # Dark gray for metric titles
     col_header_bg = "#507EA9"  # Light blue for column headers
-    row_light = (248, 249, 250, 220)  # Light gray alternating row (semi-transparent)
-    row_white = (255, 255, 255, 220)  # White alternating row (semi-transparent)
+    row_light = (235, 235, 235)  # Light gray alternating row
+    row_white = (255, 255, 255)  # White alternating row
     rank_badge_bg = "#C41E3A"  # Red for rank badges
-    text_dark = "#333333"  # Dark text for data
+    text_dark = "#222222"  # Dark text for data
     
-    # Get background configuration
-    bg_config = BACKGROUNDS.get(background, BACKGROUNDS["dark"])
-    
-    # Create base image based on background type
-    if bg_config.get("type") == "image":
-        try:
-            # Download and load image background
-            response = requests.get(bg_config["url"], timeout=10)
-            bg_img = Image.open(io.BytesIO(response.content))
-            bg_img = bg_img.convert('RGBA')
-            bg_img = bg_img.resize((width, height), Image.LANCZOS)
-            img = bg_img.copy()
-            # Add semi-transparent overlay for readability
-            overlay = Image.new('RGBA', (width, height), (0, 0, 0, 80))
-            img = Image.alpha_composite(img, overlay)
-        except Exception as e:
-            print(f"Error loading background image: {e}")
-            img = Image.new('RGBA', (width, height), (15, 23, 42, 255))
-    else:
-        # Solid color background
-        color = bg_config.get("color", (15, 23, 42))
-        img = Image.new('RGBA', (width, height), (*color, 255))
-    
+    # Create WHITE background image (ignore background parameter for cleaner look)
+    img = Image.new('RGB', (width, height), (255, 255, 255))
     draw = ImageDraw.Draw(img)
     
     # Header height (scaled)
-    header_height = int(140 * scale)
+    header_height = int(120 * scale)
     
-    # Draw semi-transparent header bar
-    header_overlay = Image.new('RGBA', (width, header_height), (13, 59, 102, 200))
-    img_rgba = img.convert('RGBA')
-    img_rgba.paste(header_overlay, (0, 0), header_overlay)
-    img = img_rgba.convert('RGB')
-    draw = ImageDraw.Draw(img)
+    # Draw solid header bar
+    draw.rectangle([0, 0, width, header_height], fill=(13, 59, 102))
     
     # Fonts (scaled)
     try:
