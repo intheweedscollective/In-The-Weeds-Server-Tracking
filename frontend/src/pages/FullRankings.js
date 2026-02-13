@@ -293,7 +293,7 @@ export default function FullRankings() {
           </div>
           
           {/* Download Slide with Background Selector */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             {/* Background selector */}
             {backgrounds.length > 0 && (
               <Select value={selectedBackground} onValueChange={setSelectedBackground}>
@@ -331,7 +331,27 @@ export default function FullRankings() {
               ) : (
                 <>
                   <Download className="w-4 h-4" />
-                  Download Slide
+                  Full Slide
+                </>
+              )}
+            </Button>
+            
+            <Button
+              onClick={handleDownloadPrintable}
+              disabled={downloadingPrintable || rankings.length === 0}
+              variant="outline"
+              className="border-amber-500 text-amber-600 hover:bg-amber-50 flex items-center gap-2"
+              data-testid="download-printable-btn"
+            >
+              {downloadingPrintable ? (
+                <>
+                  <div className="animate-spin h-4 w-4 border-2 border-amber-500 border-t-transparent rounded-full" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Star className="w-4 h-4" />
+                  Printable
                 </>
               )}
             </Button>
