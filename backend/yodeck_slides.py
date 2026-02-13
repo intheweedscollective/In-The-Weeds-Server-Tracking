@@ -933,13 +933,12 @@ def generate_top_10_by_metric_slide(
         remaining_rank = len(top_10)
         while remaining_rank < 10:
             remaining_rank += 1
-            # Semi-transparent row overlay
-            row_overlay = Image.new('RGBA', (col_width, row_height), 
-                                   (248, 249, 250, 200) if remaining_rank % 2 == 0 else (255, 255, 255, 200))
-            img.paste(row_overlay, (col_x, row_y), row_overlay)
+            # Solid alternating row colors
+            row_color = row_light if remaining_rank % 2 == 0 else row_white
+            draw.rectangle([col_x, row_y, col_x + col_width, row_y + row_height], fill=row_color)
             # Horizontal divider line
             draw.line([(col_x, row_y + row_height), (col_x + col_width, row_y + row_height)], 
-                     fill="#888888", width=1)
+                     fill="#AAAAAA", width=1)
             row_y += row_height
         
         # Store column boundaries for vertical dividers
