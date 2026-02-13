@@ -772,19 +772,19 @@ def generate_top_10_by_metric_slide(
             # Download and load image background
             response = requests.get(bg_config["url"], timeout=10)
             bg_img = Image.open(io.BytesIO(response.content))
-            bg_img = bg_img.convert('RGB')
+            bg_img = bg_img.convert('RGBA')
             bg_img = bg_img.resize((width, height), Image.LANCZOS)
             img = bg_img.copy()
             # Add semi-transparent overlay for readability
-            overlay = Image.new('RGBA', (width, height), (0, 0, 0, 100))
-            img = Image.alpha_composite(img.convert('RGBA'), overlay).convert('RGB')
+            overlay = Image.new('RGBA', (width, height), (0, 0, 0, 80))
+            img = Image.alpha_composite(img, overlay)
         except Exception as e:
             print(f"Error loading background image: {e}")
-            img = Image.new('RGB', (width, height), (15, 23, 42))
+            img = Image.new('RGBA', (width, height), (15, 23, 42, 255))
     else:
         # Solid color background
         color = bg_config.get("color", (15, 23, 42))
-        img = Image.new('RGB', (width, height), color)
+        img = Image.new('RGBA', (width, height), (*color, 255))
     
     draw = ImageDraw.Draw(img)
     
