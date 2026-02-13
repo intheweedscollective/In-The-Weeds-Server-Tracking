@@ -1993,9 +1993,9 @@ def generate_printable_rankings_slide(
     usable_width = width - (margin * 2)
     col_width = usable_width // num_tiers
     
-    # Center vertical position
-    center_y = height // 2
-    vertical_offset = int(height * 0.10)  # 10% offset
+    # Vertical positioning - use fixed base positions with alternating offsets
+    base_y = int(height * 0.15)  # Start 15% from top
+    vertical_offset = int(height * 0.12)  # 12% alternating offset (more pronounced)
     
     # Draw each tier column
     for col_idx, (tier_key, header_text, rank_prefix, header_color, header_color2) in enumerate(active_tiers):
@@ -2005,25 +2005,19 @@ def generate_printable_rankings_slide(
         col_center_x = margin + (col_idx * col_width) + (col_width // 2)
         table_x = col_center_x - (table_width // 2)
         
-        # Alternating vertical offset: even columns up, odd columns down
+        # Alternating vertical offset: even columns higher, odd columns lower
         if col_idx % 2 == 0:
-            y_offset = -vertical_offset  # 10% up
+            content_start_y = base_y  # Higher position
         else:
-            y_offset = vertical_offset   # 10% down
+            content_start_y = base_y + vertical_offset  # Lower position (12% down)
         
-        # Calculate total height of this tier (header + table)
+        # Calculate header height for positioning table
         if "\n" in header_text:
             header_height = int(160 * scale * zoom)  # Two-line header
         elif header_text == "UNRANKED":
             header_height = int(70 * scale * zoom)
         else:
             header_height = int(100 * scale * zoom)
-        
-        table_height = len(employees) * row_height
-        total_content_height = header_height + table_height
-        
-        # Center content vertically with offset
-        content_start_y = center_y - (total_content_height // 2) + y_offset
         
         # Draw header
         if header_text == "RED\nHATS":
