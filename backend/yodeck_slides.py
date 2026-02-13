@@ -1811,6 +1811,254 @@ def generate_at_risk_slide(
     return buffer.getvalue()
 
 
+def generate_printable_rankings_slide(
+    rankings: List[Dict[str, Any]], 
+    quarter: str, 
+    year: int,
+    output_format: str = "16:9"
+) -> bytes:
+    """
+    Generate a stylized printable rankings slide with word art headers.
+    Groups employees by tier with decorative elements - no metrics, just rank and name.
+    
+    Tiers: RED HATS (Trainers), A, B, C, BAR (Bartenders), UNRANKED
+    """
+    # Set dimensions based on format
+    if output_format == "letter":
+        width, height = 2550, 3300
+        scale = 1.5
+    else:
+        width, height = SLIDE_WIDTH, SLIDE_HEIGHT
+        scale = 1.0
+    
+    # Create dark background
+    img = Image.new('RGB', (width, height), (15, 20, 30))
+    draw = ImageDraw.Draw(img)
+    
+    # Add subtle gradient
+    for y in range(height):
+        ratio = y / height
+        darkness = int(15 + ratio * 10)
+        draw.line([(0, y), (width, y)], fill=(darkness, darkness + 5, darkness + 15))
+    
+    # Add sparkle/confetti effects
+    random.seed(42)  # Consistent random
+    gold_color = (255, 215, 0)
+    
+    # Draw confetti ribbons
+    for _ in range(30):
+        x = random.randint(0, width)
+        y = random.randint(0, height)
+        ribbon_len = random.randint(20, 60)
+        angle = random.randint(-45, 45)
+        alpha = random.randint(40, 120)
+        ribbon_color = random.choice([gold_color, (200, 180, 100), (255, 230, 150)])
+        # Draw diagonal ribbon
+        end_x = x + int(ribbon_len * math.cos(math.radians(angle)))
+        end_y = y + int(ribbon_len * math.sin(math.radians(angle)))
+        draw.line([(x, y), (end_x, end_y)], fill=ribbon_color, width=random.randint(2, 4))
+    
+    # Draw sparkle dots
+    for _ in range(50):
+        x = random.randint(0, width)
+        y = random.randint(0, height)
+        size = random.randint(2, 6)
+        alpha = random.randint(80, 200)
+        draw.ellipse([x-size, y-size, x+size, y+size], fill=(255, 255, 200))
+    
+    # Helper function for word art text (text with outline)
+    def draw_word_art(draw, pos, text, font, fill_color, outline_color, outline_width=3):
+        x, y = pos
+        # Draw outline
+        for dx in range(-outline_width, outline_width + 1):
+            for dy in range(-outline_width, outline_width + 1):
+                if dx != 0 or dy != 0:
+                    draw.text((x + dx, y + dy), text, font=font, fill=outline_color)
+        # Draw fill
+        draw.text((x, y), text, font=font, fill=fill_color)
+    
+    # Helper function to draw a tier table
+    def draw_tier_table(draw, x, y, employees, rank_prefix="", table_width=None, row_height=None):
+        if not employees:
+            return 0
+        
+        tw = table_width or int(200 * scale)
+        rh = row_height or int(38 * scale)
+        rank_col_w = int(tw * 0.35)
+        name_col_w = int(tw * 0.65)
+        
+        font_rank = get_font(int(18 * scale), bold=True)
+        font_name = get_font(int(18 * scale), bold=True)
+        
+        border_color = (255, 255, 255)
+        
+        for idx, emp in enumerate(employees):
+            row_y = y + idx * rh
+            
+            # Draw cell borders
+            # Rank cell
+            draw.rectangle([x, row_y, x + rank_col_w, row_y + rh], outline=border_color, width=2)
+            # Name cell
+            draw.rectangle([x + rank_col_w, row_y, x + tw, row_y + rh], outline=border_color, width=2)
+            
+            # Draw rank text
+            rank_text = f"{rank_prefix}{idx + 1}" if rank_prefix else str(idx + 1)
+            draw.text((x + rank_col_w // 2, row_y + rh // 2), rank_text, 
+                     font=font_rank, fill=(255, 255, 255), anchor="mm")
+            
+            # Draw name text
+            name = emp.get("name", "Unknown")
+            if len(name) > 12:
+                name = name[:11] + "."
+            draw.text((x + rank_col_w + name_col_w // 2, row_y + rh // 2), name.upper(), 
+                     font=font_name, fill=(255, 255, 255), anchor="mm")
+        
+        return len(employees) * rh
+    
+    # Sort employees into tiers
+    tier_groups = {
+        "trainers": [],
+        "a_servers": [],
+        "b_servers": [],
+        "c_servers": [],
+        "bartenders": [],
+        "unranked": []
+    }
+    
+    tier_counters = {"Trainer": 0, "A-Server": 0, "B-Server": 0, "C-Server": 0, "Bartender": 0}
+    
+    for emp in rankings:
+        tier = emp.get("tier_label", "")
+        if tier == "Trainer":
+            tier_counters["Trainer"] += 1
+            tier_groups["trainers"].append(emp)
+        elif tier == "A-Server":
+            tier_counters["A-Server"] += 1
+            tier_groups["a_servers"].append(emp)
+        elif tier == "B-Server":
+            tier_counters["B-Server"] += 1
+            tier_groups["b_servers"].append(emp)
+        elif tier == "C-Server":
+            tier_counters["C-Server"] += 1
+            tier_groups["c_servers"].append(emp)
+        elif tier == "Bartender":
+            tier_counters["Bartender"] += 1
+            tier_groups["bartenders"].append(emp)
+        else:
+            tier_groups["unranked"].append(emp)
+    
+    # Fonts for word art headers
+    font_header_large = get_font(int(80 * scale), bold=True)
+    font_header_medium = get_font(int(60 * scale), bold=True)
+    font_header_small = get_font(int(45 * scale), bold=True)
+    
+    # Colors
+    red_color = (200, 50, 50)
+    gold_outline = (200, 170, 50)
+    white_color = (255, 255, 255)
+    black_outline = (30, 30, 30)
+    
+    # Layout positions (scaled)
+    table_width = int(220 * scale)
+    row_height = int(40 * scale)
+    
+    # ===== RED HATS (Trainers) - Top Left =====
+    if tier_groups["trainers"]:
+        # Draw "RED" word art
+        draw_word_art(draw, (int(40 * scale), int(20 * scale)), "RED", font_header_large, 
+                     red_color, gold_outline, int(4 * scale))
+        # Draw "HATS" word art
+        draw_word_art(draw, (int(40 * scale), int(90 * scale)), "HATS", font_header_large, 
+                     white_color, gold_outline, int(4 * scale))
+        draw_tier_table(draw, int(50 * scale), int(180 * scale), tier_groups["trainers"], 
+                       "T", table_width, row_height)
+    
+    # ===== A-SERVERS - Top Center =====
+    if tier_groups["a_servers"]:
+        # Draw large "A" word art
+        a_x = int(420 * scale)
+        draw_word_art(draw, (a_x, int(20 * scale)), "A", font_header_large, 
+                     gold_outline, black_outline, int(4 * scale))
+        draw_tier_table(draw, int(350 * scale), int(130 * scale), tier_groups["a_servers"], 
+                       "A", table_width, row_height)
+    
+    # ===== B-SERVERS - Top Right Center =====
+    if tier_groups["b_servers"]:
+        # Draw large "B" word art
+        b_x = int(680 * scale)
+        draw_word_art(draw, (b_x, int(20 * scale)), "B", font_header_large, 
+                     white_color, gold_outline, int(4 * scale))
+        draw_tier_table(draw, int(620 * scale), int(130 * scale), tier_groups["b_servers"], 
+                       "B", table_width, row_height)
+    
+    # ===== C-SERVERS - Far Right =====
+    if tier_groups["c_servers"]:
+        # Draw large "C" word art
+        c_x = int(920 * scale)
+        draw_word_art(draw, (c_x, int(20 * scale)), "C", font_header_large, 
+                     (180, 140, 100), gold_outline, int(4 * scale))
+        draw_tier_table(draw, int(870 * scale), int(130 * scale), tier_groups["c_servers"], 
+                       "C", table_width, row_height)
+    
+    # ===== BARTENDERS - Bottom Left =====
+    if tier_groups["bartenders"]:
+        bar_y = int(620 * scale) if output_format != "letter" else int(1800 * scale)
+        # Draw "BAR" word art
+        draw_word_art(draw, (int(40 * scale), bar_y), "BAR", font_header_medium, 
+                     red_color, gold_outline, int(3 * scale))
+        draw_tier_table(draw, int(50 * scale), bar_y + int(70 * scale), tier_groups["bartenders"], 
+                       "Bar ", table_width, row_height)
+    
+    # ===== UNRANKED - Bottom Center =====
+    if tier_groups["unranked"]:
+        unranked_y = int(680 * scale) if output_format != "letter" else int(1900 * scale)
+        # Draw "UNRANKED" word art
+        draw_word_art(draw, (int(450 * scale), unranked_y), "UNRANKED", font_header_small, 
+                     gold_outline, black_outline, int(3 * scale))
+        # Draw unranked table (use "NR" for rank)
+        unranked_x = int(420 * scale)
+        for idx, emp in enumerate(tier_groups["unranked"][:5]):
+            row_y = unranked_y + int(60 * scale) + idx * row_height
+            draw.rectangle([unranked_x, row_y, unranked_x + int(80 * scale), row_y + row_height], 
+                          outline=white_color, width=2)
+            draw.rectangle([unranked_x + int(80 * scale), row_y, unranked_x + int(230 * scale), row_y + row_height], 
+                          outline=white_color, width=2)
+            font_nr = get_font(int(18 * scale), bold=True)
+            draw.text((unranked_x + int(40 * scale), row_y + row_height // 2), "NR", 
+                     font=font_nr, fill=white_color, anchor="mm")
+            name = emp.get("name", "Unknown")[:12].upper()
+            draw.text((unranked_x + int(155 * scale), row_y + row_height // 2), name, 
+                     font=font_nr, fill=white_color, anchor="mm")
+    
+    # Add decorative stars
+    def draw_star(draw, cx, cy, size, color):
+        points = []
+        for i in range(10):
+            angle = math.radians(i * 36 - 90)
+            r = size if i % 2 == 0 else size * 0.4
+            points.append((cx + int(r * math.cos(angle)), cy + int(r * math.sin(angle))))
+        draw.polygon(points, fill=color)
+    
+    # Draw some gold stars
+    star_positions = [
+        (int(300 * scale), int(700 * scale)),
+        (int(380 * scale), int(750 * scale)),
+        (int(800 * scale), int(650 * scale)),
+    ]
+    for sx, sy in star_positions:
+        draw_star(draw, sx, sy, int(25 * scale), (200, 180, 100))
+    
+    # Quarter/Year label (subtle, bottom right)
+    font_footer = get_font(int(16 * scale), bold=True)
+    draw.text((width - int(30 * scale), height - int(30 * scale)), f"{quarter} {year}", 
+             font=font_footer, fill=(150, 150, 150), anchor="rb")
+    
+    buffer = io.BytesIO()
+    img.save(buffer, format='PNG', optimize=True)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
 def generate_all_slides(rankings: List[Dict[str, Any]], quarter: str, year: int, theme: str = "dark_navy", custom_colors: Dict = None, seasonal_theme: str = None) -> Dict[str, List[bytes]]:
     """Generate all Yodeck slides for a quarter."""
     slides = {"top_10": [], "trainers": [], "bartenders": [], "a_servers": [], "b_servers": [], "c_servers": []}
