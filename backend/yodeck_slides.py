@@ -791,25 +791,24 @@ def generate_top_10_by_metric_slide(
     # Header height (scaled)
     header_height = int(140 * scale)
     
-    # Draw gradient header background
-    for y in range(header_height):
-        ratio = y / header_height
-        r = int(13 + (26 - 13) * ratio)
-        g = int(59 + (82 - 59) * ratio)
-        b = int(102 + (118 - 102) * ratio)
-        draw.line([(0, y), (width, y)], fill=(r, g, b))
+    # Draw semi-transparent header bar
+    header_overlay = Image.new('RGBA', (width, header_height), (13, 59, 102, 200))
+    img_rgba = img.convert('RGBA')
+    img_rgba.paste(header_overlay, (0, 0), header_overlay)
+    img = img_rgba.convert('RGB')
+    draw = ImageDraw.Draw(img)
     
     # Fonts (scaled)
     try:
-        font_title_top = get_font(int(52 * scale), bold=True)
-        font_title_main = get_font(int(72 * scale), bold=True)
-        font_quarter = get_font(int(28 * scale), bold=True)
-        font_year = get_font(int(56 * scale), bold=True)
-        font_metric_header = get_font(int(22 * scale), bold=True)
-        font_col_header = get_font(int(18 * scale), bold=True)
-        font_rank = get_font(int(16 * scale), bold=True)
-        font_name = get_font(int(18 * scale))
-        font_value = get_font(int(18 * scale), bold=True)
+        font_title_top = get_font(int(48 * scale), bold=True)
+        font_title_main = get_font(int(64 * scale), bold=True)
+        font_quarter = get_font(int(26 * scale), bold=True)
+        font_year = get_font(int(48 * scale), bold=True)
+        font_metric_header = get_font(int(20 * scale), bold=True)
+        font_col_header = get_font(int(16 * scale), bold=True)
+        font_rank = get_font(int(14 * scale), bold=True)
+        font_name = get_font(int(16 * scale))
+        font_value = get_font(int(16 * scale), bold=True)
     except:
         font_title_top = ImageFont.load_default()
         font_title_main = ImageFont.load_default()
@@ -824,9 +823,9 @@ def generate_top_10_by_metric_slide(
     # === HEADER SECTION ===
     
     # Logo placeholder area (left side) - draw a circle with text as placeholder
-    logo_x = int(90 * scale)
-    logo_y = int(90 * scale)
-    logo_radius = int(70 * scale)
+    logo_x = int(80 * scale)
+    logo_y = int(70 * scale)
+    logo_radius = int(55 * scale)
     
     # Draw logo circle background
     draw.ellipse([logo_x - logo_radius, logo_y - logo_radius, 
@@ -834,26 +833,26 @@ def generate_top_10_by_metric_slide(
                  fill="#1A5276", outline="#E63946", width=3)
     
     # Add "BUBBA GUMP" text in circle
-    logo_font = get_font(int(14 * scale), bold=True)
-    draw.text((logo_x, logo_y - int(15 * scale)), "BUBBA", font=logo_font, fill="#FFFFFF", anchor="mm")
+    logo_font = get_font(int(12 * scale), bold=True)
+    draw.text((logo_x, logo_y - int(12 * scale)), "BUBBA", font=logo_font, fill="#FFFFFF", anchor="mm")
     draw.text((logo_x, logo_y + int(5 * scale)), "GUMP", font=logo_font, fill="#E63946", anchor="mm")
-    logo_font_small = get_font(int(10 * scale))
-    draw.text((logo_x, logo_y + int(22 * scale)), "SHRIMP CO.", font=logo_font_small, fill="#FFFFFF", anchor="mm")
+    logo_font_small = get_font(int(9 * scale))
+    draw.text((logo_x, logo_y + int(18 * scale)), "SHRIMP CO.", font=logo_font_small, fill="#FFFFFF", anchor="mm")
     
     # Title - "TOP 10 PERFORMERS" on first line
-    title_x = int(220 * scale)
-    draw.text((title_x, int(55 * scale)), "TOP 10 PERFORMERS", font=font_title_top, fill="#FFFFFF", anchor="lm")
+    title_x = int(180 * scale)
+    draw.text((title_x, int(45 * scale)), "TOP 10 PERFORMERS", font=font_title_top, fill="#FFFFFF", anchor="lm")
     
     # "BY METRIC" on second line (larger, bolder)
-    draw.text((title_x, int(120 * scale)), "BY METRIC", font=font_title_main, fill="#FFFFFF", anchor="lm")
+    draw.text((title_x, int(100 * scale)), "BY METRIC", font=font_title_main, fill="#FFFFFF", anchor="lm")
     
     # Quarter and Year on right side
-    quarter_x = width - int(150 * scale)
+    quarter_x = width - int(120 * scale)
     quarter_num = quarter.replace("Q", "")
-    draw.text((quarter_x, int(55 * scale)), f"QUARTER {quarter_num}", font=font_quarter, fill="#FFFFFF", anchor="mm")
-    draw.text((quarter_x, int(110 * scale)), str(year), font=font_year, fill="#FFFFFF", anchor="mm")
+    draw.text((quarter_x, int(45 * scale)), f"QUARTER {quarter_num}", font=font_quarter, fill="#FFFFFF", anchor="mm")
+    draw.text((quarter_x, int(95 * scale)), str(year), font=font_year, fill="#FFFFFF", anchor="mm")
     
-    # === METRICS SECTION ===
+    # === METRICS SECTION - FULL WIDTH ===
     
     # Define the 4 metrics to display
     metrics = [
