@@ -942,15 +942,15 @@ def generate_top_10_by_metric_slide(
             draw.text((col_x + rank_col_w + int(10 * scale), badge_y), 
                       name, font=font_name, fill=text_dark, anchor="lm")
             
-            # Value (formatted)
+            # Value (formatted) - centered in value column
             value = emp.get(metric_key, 0)
             if metric["format"] == "currency":
                 value_text = f"${float(value or 0):.2f}"
             else:
                 value_text = f"{float(value or 0):.1f}"
             
-            draw.text((col_x + col_width - int(12 * scale), badge_y), 
-                      value_text, font=font_value, fill=text_dark, anchor="rm")
+            draw.text((value_divider_x + value_col_w // 2, badge_y), 
+                      value_text, font=font_value, fill=text_dark, anchor="mm")
             
             row_y += row_height
         
@@ -960,29 +960,24 @@ def generate_top_10_by_metric_slide(
             remaining_rank += 1
             # Solid alternating row colors
             row_color = row_light if remaining_rank % 2 == 0 else row_white
-            draw.rectangle([col_x, row_y, col_x + col_width, row_y + row_height], fill=row_color)
+            draw.rectangle([col_x, row_y, col_right, row_y + row_height], fill=row_color)
             # Horizontal divider line
-            draw.line([(col_x, row_y + row_height), (col_x + col_width, row_y + row_height)], 
-                     fill="#AAAAAA", width=1)
+            draw.line([(col_x, row_y + row_height), (col_right, row_y + row_height)], 
+                     fill="#CCCCCC", width=1)
+            # Vertical dividers
+            draw.line([(rank_divider_x, row_y), (rank_divider_x, row_y + row_height)], 
+                     fill="#CCCCCC", width=1)
+            draw.line([(value_divider_x, row_y), (value_divider_x, row_y + row_height)], 
+                     fill="#CCCCCC", width=1)
             row_y += row_height
         
-        # Store column boundaries for vertical dividers
+        # Store column boundaries
         col_table_top = metric_header_y
         col_table_bottom = row_y
         
-        # Draw thick outer border for this column (BLACK, 4px width)
-        draw.rectangle([col_x, col_table_top, col_x + col_width, col_table_bottom],
-                      outline="#000000", width=4)
-        
-        # Draw internal vertical dividers (between rank/name and name/value)
-        # Vertical line after rank column
-        rank_divider_x = col_x + rank_col_w
-        draw.line([(rank_divider_x, col_header_y), (rank_divider_x, col_table_bottom)], 
-                 fill="#666666", width=2)
-        # Vertical line before value column
-        value_divider_x = col_x + col_width - int(70 * scale)
-        draw.line([(value_divider_x, col_header_y), (value_divider_x, col_table_bottom)], 
-                 fill="#666666", width=2)
+        # Draw thick outer border for this column (BLACK, 3px width)
+        draw.rectangle([col_x, col_table_top, col_right, col_table_bottom],
+                      outline="#000000", width=3)
     
     # Save to buffer
     buffer = io.BytesIO()
