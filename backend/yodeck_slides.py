@@ -797,35 +797,40 @@ def generate_top_10_by_metric_slide(
     
     # === HEADER SECTION ===
     
-    # Logo placeholder area (left side) - draw a circle with text as placeholder
-    logo_x = int(70 * scale)
-    logo_y = int(60 * scale)
-    logo_radius = int(50 * scale)
+    # Load Bubba Gump Las Vegas logo from URL
+    logo_url = "https://customer-assets.emergentagent.com/job_staffscore-2/artifacts/jjw8q29z_EECEF688-A651-4972-B5CC-DCF2258EFB6F.png"
+    logo_height = int(100 * scale)
+    logo_x = int(10 * scale)
+    logo_y = int(10 * scale)
     
-    # Draw logo circle background
-    draw.ellipse([logo_x - logo_radius, logo_y - logo_radius, 
-                  logo_x + logo_radius, logo_y + logo_radius], 
-                 fill="#1A5276", outline="#E63946", width=3)
+    try:
+        logo_response = requests.get(logo_url, timeout=10)
+        logo_img = Image.open(io.BytesIO(logo_response.content))
+        logo_img = logo_img.convert('RGBA')
+        # Calculate width maintaining aspect ratio
+        aspect_ratio = logo_img.width / logo_img.height
+        logo_width = int(logo_height * aspect_ratio)
+        logo_img = logo_img.resize((logo_width, logo_height), Image.LANCZOS)
+        # Paste logo onto header
+        img.paste(logo_img, (logo_x, logo_y), logo_img)
+    except Exception as e:
+        print(f"Error loading logo: {e}")
+        # Fallback - draw placeholder text
+        logo_font = get_font(int(14 * scale), bold=True)
+        draw.text((int(80 * scale), int(60 * scale)), "BUBBA GUMP", font=logo_font, fill="#FFFFFF", anchor="mm")
     
-    # Add "BUBBA GUMP" text in circle
-    logo_font = get_font(int(11 * scale), bold=True)
-    draw.text((logo_x, logo_y - int(10 * scale)), "BUBBA", font=logo_font, fill="#FFFFFF", anchor="mm")
-    draw.text((logo_x, logo_y + int(5 * scale)), "GUMP", font=logo_font, fill="#E63946", anchor="mm")
-    logo_font_small = get_font(int(8 * scale))
-    draw.text((logo_x, logo_y + int(16 * scale)), "SHRIMP CO.", font=logo_font_small, fill="#FFFFFF", anchor="mm")
-    
-    # Title - "TOP 10 PERFORMERS" on first line
-    title_x = int(180 * scale)
-    draw.text((title_x, int(45 * scale)), "TOP 10 PERFORMERS", font=font_title_top, fill="#FFFFFF", anchor="lm")
+    # Title - "TOP 10 PERFORMERS" on first line (adjusted x position for logo)
+    title_x = int(220 * scale)
+    draw.text((title_x, int(40 * scale)), "TOP 10 PERFORMERS", font=font_title_top, fill="#FFFFFF", anchor="lm")
     
     # "BY METRIC" on second line (larger, bolder)
-    draw.text((title_x, int(100 * scale)), "BY METRIC", font=font_title_main, fill="#FFFFFF", anchor="lm")
+    draw.text((title_x, int(85 * scale)), "BY METRIC", font=font_title_main, fill="#FFFFFF", anchor="lm")
     
     # Quarter and Year on right side
     quarter_x = width - int(120 * scale)
     quarter_num = quarter.replace("Q", "")
-    draw.text((quarter_x, int(45 * scale)), f"QUARTER {quarter_num}", font=font_quarter, fill="#FFFFFF", anchor="mm")
-    draw.text((quarter_x, int(95 * scale)), str(year), font=font_year, fill="#FFFFFF", anchor="mm")
+    draw.text((quarter_x, int(40 * scale)), f"QUARTER {quarter_num}", font=font_quarter, fill="#FFFFFF", anchor="mm")
+    draw.text((quarter_x, int(85 * scale)), str(year), font=font_year, fill="#FFFFFF", anchor="mm")
     
     # === METRICS SECTION - FULL WIDTH ===
     
