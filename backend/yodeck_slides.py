@@ -933,14 +933,12 @@ def generate_top_10_by_metric_slide(
                         fill=rank_badge_bg)
             draw.text((badge_x, badge_y), f"#{rank}", font=font_rank, fill="#FFFFFF", anchor="mm")
             
-            # Employee name - centered in name column
+            # Employee name - centered in name column (SINGLE draw call)
             name = emp.get("name", "Unknown")
             if len(name) > 10:
                 name = name[:9] + ".."
             draw.text((rank_divider_x + name_col_w // 2, badge_y), 
                       name, font=font_name, fill=text_dark, anchor="mm")
-            draw.text((col_x + rank_col_w + int(10 * scale), badge_y), 
-                      name, font=font_name, fill=text_dark, anchor="lm")
             
             # Value (formatted) - centered in value column
             value = emp.get(metric_key, 0)
