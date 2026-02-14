@@ -797,15 +797,14 @@ def generate_top_10_by_metric_slide(
     
     # === HEADER SECTION ===
     
-    # Load Bubba Gump Las Vegas logo from URL
-    logo_url = "https://customer-assets.emergentagent.com/job_staffscore-2/artifacts/jjw8q29z_EECEF688-A651-4972-B5CC-DCF2258EFB6F.png"
+    # Load classic Bubba Gump logo from local file
+    logo_path = "/app/backend/assets/bubba_gump_logo.png"
     logo_height = int(100 * scale)
     logo_x = int(10 * scale)
     logo_y = int(10 * scale)
     
     try:
-        logo_response = requests.get(logo_url, timeout=10)
-        logo_img = Image.open(io.BytesIO(logo_response.content))
+        logo_img = Image.open(logo_path)
         logo_img = logo_img.convert('RGBA')
         # Calculate width maintaining aspect ratio
         aspect_ratio = logo_img.width / logo_img.height
@@ -813,14 +812,15 @@ def generate_top_10_by_metric_slide(
         logo_img = logo_img.resize((logo_width, logo_height), Image.LANCZOS)
         # Paste logo onto header
         img.paste(logo_img, (logo_x, logo_y), logo_img)
+        title_x = logo_x + logo_width + int(20 * scale)
     except Exception as e:
         print(f"Error loading logo: {e}")
         # Fallback - draw placeholder text
         logo_font = get_font(int(14 * scale), bold=True)
         draw.text((int(80 * scale), int(60 * scale)), "BUBBA GUMP", font=logo_font, fill="#FFFFFF", anchor="mm")
+        title_x = int(180 * scale)
     
-    # Title - "TOP 10 PERFORMERS" on first line (adjusted x position for logo)
-    title_x = int(220 * scale)
+    # Title - "TOP 10 PERFORMERS" on first line
     draw.text((title_x, int(40 * scale)), "TOP 10 PERFORMERS", font=font_title_top, fill="#FFFFFF", anchor="lm")
     
     # "BY METRIC" on second line (larger, bolder)
