@@ -837,23 +837,37 @@ def generate_top_10_by_metric_slide(
         {"key": "lbw_per_guest", "label": "LBW/Guest - Top 10", "format": "currency", "higher_better": True},
     ]
     
-    # Calculate column widths - FULL WIDTH with no margins
-    margin = int(5 * scale)  # Minimal margin
-    gap = int(8 * scale)  # Small gap between columns
-    table_area_width = width - (margin * 2)
-    col_width = (table_area_width - (gap * 3)) // 4  # 4 columns with 3 gaps
-    table_start_y = header_height + int(8 * scale)
+    # Calculate column widths - TRUE FULL WIDTH
+    num_cols = 4
+    col_gap = int(4 * scale)  # Tiny gap between columns
+    total_gap = col_gap * (num_cols - 1)
+    col_width = (width - total_gap) // num_cols
+    table_start_y = header_height + int(5 * scale)
     
     # Calculate available height for rows
-    available_height = height - table_start_y - int(10 * scale)
-    metric_header_height = int(36 * scale)
-    col_header_height = int(30 * scale)
+    available_height = height - table_start_y - int(5 * scale)
+    metric_header_height = int(40 * scale)
+    col_header_height = int(35 * scale)
     row_area_height = available_height - metric_header_height - col_header_height
     row_height = row_area_height // 10  # Exactly 10 rows
     
+    # Column internal layout - proportional widths
+    rank_col_pct = 0.18  # 18% for rank
+    value_col_pct = 0.25  # 25% for value
+    name_col_pct = 1.0 - rank_col_pct - value_col_pct  # Rest for name
+    
     # Process employee data for each metric
     for col_idx, metric in enumerate(metrics):
-        col_x = margin + (col_idx * (col_width + gap))
+        col_x = col_idx * (col_width + col_gap)
+        col_right = col_x + col_width
+        
+        # Internal column positions
+        rank_col_w = int(col_width * rank_col_pct)
+        value_col_w = int(col_width * value_col_pct)
+        name_col_w = col_width - rank_col_w - value_col_w
+        
+        rank_divider_x = col_x + rank_col_w
+        value_divider_x = col_right - value_col_w
         
         # Sort employees by this metric
         metric_key = metric["key"]
