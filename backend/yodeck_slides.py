@@ -880,54 +880,65 @@ def generate_top_10_by_metric_slide(
         
         top_10 = sorted_emps[:10]
         
-        # Draw metric header (dark gray bar with semi-transparency)
+        # === DRAW METRIC HEADER (dark gray bar) ===
         metric_header_y = table_start_y
-        draw.rectangle([col_x, metric_header_y, col_x + col_width, metric_header_y + metric_header_height],
+        draw.rectangle([col_x, metric_header_y, col_right, metric_header_y + metric_header_height],
                        fill=metric_header_bg)
         draw.text((col_x + col_width // 2, metric_header_y + metric_header_height // 2), 
                   metric["label"], font=font_metric_header, fill="#FFFFFF", anchor="mm")
         
-        # Draw column headers (light blue bar)
+        # === DRAW COLUMN SUB-HEADERS (light blue bar) ===
         col_header_y = metric_header_y + metric_header_height
-        draw.rectangle([col_x, col_header_y, col_x + col_width, col_header_y + col_header_height],
+        draw.rectangle([col_x, col_header_y, col_right, col_header_y + col_header_height],
                        fill=col_header_bg)
         
-        # Column header text positions
-        rank_col_w = int(55 * scale)
-        name_col_w = int(140 * scale)
-        
+        # Column header text - centered in each sub-column
         draw.text((col_x + rank_col_w // 2, col_header_y + col_header_height // 2), 
                   "Rank", font=font_col_header, fill="#FFFFFF", anchor="mm")
-        draw.text((col_x + rank_col_w + int(8 * scale), col_header_y + col_header_height // 2), 
-                  "Employee", font=font_col_header, fill="#FFFFFF", anchor="lm")
-        draw.text((col_x + col_width - int(35 * scale), col_header_y + col_header_height // 2), 
-                  "Value", font=font_col_header, fill="#FFFFFF", anchor="rm")
+        draw.text((rank_divider_x + name_col_w // 2, col_header_y + col_header_height // 2), 
+                  "Employee", font=font_col_header, fill="#FFFFFF", anchor="mm")
+        draw.text((value_divider_x + value_col_w // 2, col_header_y + col_header_height // 2), 
+                  "Value", font=font_col_header, fill="#FFFFFF", anchor="mm")
         
-        # Draw data rows - using calculated row_height for full space usage
+        # Draw vertical dividers in header
+        draw.line([(rank_divider_x, col_header_y), (rank_divider_x, col_header_y + col_header_height)], 
+                 fill="#3A6A8A", width=2)
+        draw.line([(value_divider_x, col_header_y), (value_divider_x, col_header_y + col_header_height)], 
+                 fill="#3A6A8A", width=2)
+        
+        # === DRAW DATA ROWS ===
         row_y = col_header_y + col_header_height
         
         for rank, emp in enumerate(top_10, 1):
             # Solid alternating row colors (white and light grey)
             row_color = row_light if rank % 2 == 0 else row_white
-            draw.rectangle([col_x, row_y, col_x + col_width, row_y + row_height], fill=row_color)
+            draw.rectangle([col_x, row_y, col_right, row_y + row_height], fill=row_color)
             
             # Horizontal divider line after each row
-            draw.line([(col_x, row_y + row_height), (col_x + col_width, row_y + row_height)], 
-                     fill="#AAAAAA", width=1)
+            draw.line([(col_x, row_y + row_height), (col_right, row_y + row_height)], 
+                     fill="#CCCCCC", width=1)
             
-            # Rank badge (red circle with white text) - larger
+            # Vertical dividers in data rows
+            draw.line([(rank_divider_x, row_y), (rank_divider_x, row_y + row_height)], 
+                     fill="#CCCCCC", width=1)
+            draw.line([(value_divider_x, row_y), (value_divider_x, row_y + row_height)], 
+                     fill="#CCCCCC", width=1)
+            
+            # Rank badge (red circle with white text) - centered in rank column
             badge_x = col_x + rank_col_w // 2
             badge_y = row_y + row_height // 2
-            badge_radius = int(16 * scale)
+            badge_radius = int(18 * scale)
             draw.ellipse([badge_x - badge_radius, badge_y - badge_radius,
                          badge_x + badge_radius, badge_y + badge_radius],
                         fill=rank_badge_bg)
             draw.text((badge_x, badge_y), f"#{rank}", font=font_rank, fill="#FFFFFF", anchor="mm")
             
-            # Employee name (truncate if needed)
+            # Employee name - centered in name column
             name = emp.get("name", "Unknown")
-            if len(name) > 11:
-                name = name[:10] + ".."
+            if len(name) > 10:
+                name = name[:9] + ".."
+            draw.text((rank_divider_x + name_col_w // 2, badge_y), 
+                      name, font=font_name, fill=text_dark, anchor="mm")
             draw.text((col_x + rank_col_w + int(10 * scale), badge_y), 
                       name, font=font_name, fill=text_dark, anchor="lm")
             
