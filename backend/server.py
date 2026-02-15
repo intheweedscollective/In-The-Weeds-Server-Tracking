@@ -1514,13 +1514,25 @@ async def get_yodeck_top10_slide(year: int, quarter: str, format: str = "16:9", 
     if not employees_docs:
         raise HTTPException(status_code=404, detail=f"No employee data for {quarter} {year}")
     
+    # Get the most recent snapshot date for this quarter
+    most_recent_snapshot = await db.snapshots.find_one(
+        {"year": year, "quarter": quarter.upper()},
+        {"snapshot_date": 1},
+        sort=[("snapshot_date", -1)]
+    )
+    
+    data_date = None
+    if most_recent_snapshot and most_recent_snapshot.get("snapshot_date"):
+        data_date = most_recent_snapshot["snapshot_date"]
+    
     # Generate slide with the new design
     slide_bytes = generate_top_10_by_metric_slide(
         employees=employees_docs,
         quarter=quarter.upper(),
         year=year,
         output_format=format,
-        background=background
+        background=background,
+        data_date=data_date
     )
     
     format_suffix = "letter" if format == "letter" else "16x9"
