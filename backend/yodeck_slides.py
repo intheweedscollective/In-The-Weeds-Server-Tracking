@@ -817,20 +817,20 @@ def generate_top_10_by_metric_slide(
         print(f"Error loading logo: {e}")
         # Fallback - draw placeholder text
         logo_font = get_font(int(14 * scale), bold=True)
-        draw.text((int(80 * scale), int(60 * scale)), "BUBBA GUMP", font=logo_font, fill="#FFFFFF", anchor="mm")
+        draw.text((int(80 * scale), int(70 * scale)), "BUBBA GUMP", font=logo_font, fill="#FFFFFF", anchor="mm")
         title_x = int(180 * scale)
     
-    # Title - "TOP 10 PERFORMERS" on first line
-    draw.text((title_x, int(40 * scale)), "TOP 10 PERFORMERS", font=font_title_top, fill="#FFFFFF", anchor="lm")
+    # Title - "TOP 10 PERFORMERS" on first line - positioned for larger header
+    draw.text((title_x, int(45 * scale)), "TOP 10 PERFORMERS", font=font_title_top, fill="#FFFFFF", anchor="lm")
     
-    # "BY METRIC" on second line (larger, bolder)
-    draw.text((title_x, int(85 * scale)), "BY METRIC", font=font_title_main, fill="#FFFFFF", anchor="lm")
+    # "BY METRIC" on second line (larger, bolder) - more spacing
+    draw.text((title_x, int(100 * scale)), "BY METRIC", font=font_title_main, fill="#FFFFFF", anchor="lm")
     
-    # Quarter and Year on right side
-    quarter_x = width - int(120 * scale)
+    # Quarter and Year on right side - adjusted for larger header
+    quarter_x = width - int(130 * scale)
     quarter_num = quarter.replace("Q", "")
-    draw.text((quarter_x, int(40 * scale)), f"QUARTER {quarter_num}", font=font_quarter, fill="#FFFFFF", anchor="mm")
-    draw.text((quarter_x, int(85 * scale)), str(year), font=font_year, fill="#FFFFFF", anchor="mm")
+    draw.text((quarter_x, int(45 * scale)), f"QUARTER {quarter_num}", font=font_quarter, fill="#FFFFFF", anchor="mm")
+    draw.text((quarter_x, int(100 * scale)), str(year), font=font_year, fill="#FFFFFF", anchor="mm")
     
     # === METRICS SECTION - FULL WIDTH ===
     
