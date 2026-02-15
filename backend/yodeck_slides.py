@@ -731,7 +731,8 @@ def generate_top_10_by_metric_slide(
     quarter: str,
     year: int,
     output_format: str = "16:9",
-    background: str = "dark"
+    background: str = "dark",
+    data_date: str = None
 ) -> bytes:
     """
     Generate Top 10 Performers By Metric slide matching the user's professional design.
@@ -743,6 +744,7 @@ def generate_top_10_by_metric_slide(
         year: Year integer
         output_format: "16:9" for Yodeck (1920x1080) or "letter" for 8.5x11" print (2550x3300)
         background: Background key from BACKGROUNDS dict
+        data_date: Date string of most recent data (e.g., "2026-01-15")
     """
     from snapshot_slides import BACKGROUNDS
     import requests
