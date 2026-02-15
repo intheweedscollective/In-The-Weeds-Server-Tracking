@@ -831,8 +831,23 @@ def generate_top_10_by_metric_slide(
     # Quarter and Year on right side - adjusted for larger header
     quarter_x = width - int(130 * scale)
     quarter_num = quarter.replace("Q", "")
-    draw.text((quarter_x, int(45 * scale)), f"QUARTER {quarter_num}", font=font_quarter, fill="#FFFFFF", anchor="mm")
-    draw.text((quarter_x, int(100 * scale)), str(year), font=font_year, fill="#FFFFFF", anchor="mm")
+    draw.text((quarter_x, int(35 * scale)), f"QUARTER {quarter_num}", font=font_quarter, fill="#FFFFFF", anchor="mm")
+    draw.text((quarter_x, int(80 * scale)), str(year), font=font_year, fill="#FFFFFF", anchor="mm")
+    
+    # Data date below year (if provided)
+    if data_date:
+        font_date = get_font(int(16 * scale), bold=False)
+        # Format date nicely (e.g., "2026-01-15" -> "Data as of Jan 15")
+        try:
+            from datetime import datetime
+            if isinstance(data_date, str):
+                dt = datetime.fromisoformat(data_date.replace('Z', '+00:00'))
+            else:
+                dt = data_date
+            date_str = f"Data as of {dt.strftime('%b %d')}"
+        except:
+            date_str = f"Data as of {data_date}"
+        draw.text((quarter_x, int(115 * scale)), date_str, font=font_date, fill="#AACCFF", anchor="mm")
     
     # === METRICS SECTION - FULL WIDTH ===
     
