@@ -760,24 +760,24 @@ def generate_top_10_by_metric_slide(
     col_header_bg = "#507EA9"  # Light blue for column headers
     row_light = (235, 235, 235)  # Light gray alternating row
     row_white = (255, 255, 255)  # White alternating row
-    rank_badge_bg = "#C41E3A"  # Red for rank badges
+    rank_badge_bg = "#1E5FA8"  # BLUE for rank badges (was red)
     text_dark = "#222222"  # Dark text for data
     
     # Create WHITE background image (ignore background parameter for cleaner look)
     img = Image.new('RGB', (width, height), (255, 255, 255))
     draw = ImageDraw.Draw(img)
     
-    # Header height (scaled)
-    header_height = int(120 * scale)
+    # Header height (scaled) - LARGER for more impact
+    header_height = int(145 * scale)
     
     # Draw solid header bar
     draw.rectangle([0, 0, width, header_height], fill=(13, 59, 102))
     
-    # Fonts (scaled) - MAXIMIZED for readability
+    # Fonts (scaled) - LARGER TITLES for TV impact
     try:
-        font_title_top = get_font(int(42 * scale), bold=True)
-        font_title_main = get_font(int(56 * scale), bold=True)
-        font_quarter = get_font(int(24 * scale), bold=True)
+        font_title_top = get_font(int(52 * scale), bold=True)  # Larger
+        font_title_main = get_font(int(72 * scale), bold=True)  # Much larger
+        font_quarter = get_font(int(28 * scale), bold=True)
         font_year = get_font(int(44 * scale), bold=True)
         font_metric_header = get_font(int(24 * scale), bold=True)  # Increased
         font_col_header = get_font(int(20 * scale), bold=True)     # Increased
