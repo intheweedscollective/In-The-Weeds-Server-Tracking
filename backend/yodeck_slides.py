@@ -799,7 +799,7 @@ def generate_top_10_by_metric_slide(
     
     # Load classic Bubba Gump logo from local file
     logo_path = "/app/backend/assets/bubba_gump_logo.png"
-    logo_height = int(100 * scale)
+    logo_height = int(125 * scale)  # Larger logo for bigger header
     logo_x = int(10 * scale)
     logo_y = int(10 * scale)
     
@@ -812,7 +812,7 @@ def generate_top_10_by_metric_slide(
         logo_img = logo_img.resize((logo_width, logo_height), Image.LANCZOS)
         # Paste logo onto header
         img.paste(logo_img, (logo_x, logo_y), logo_img)
-        title_x = logo_x + logo_width + int(20 * scale)
+        title_x = logo_x + logo_width + int(25 * scale)
     except Exception as e:
         print(f"Error loading logo: {e}")
         # Fallback - draw placeholder text
