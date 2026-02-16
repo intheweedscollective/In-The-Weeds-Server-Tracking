@@ -949,12 +949,12 @@ def generate_top_10_by_metric_slide(
             # Rank badge (blue circle with white text) - consistent size for all ranks
             badge_x = col_x + rank_col_w // 2
             badge_y = row_y + row_height // 2
-            badge_radius = int(28 * scale)  # Large enough for #10 with padding
+            badge_radius = int(22 * scale)  # Optimized size for readable "#10"
             draw.ellipse([badge_x - badge_radius, badge_y - badge_radius,
                          badge_x + badge_radius, badge_y + badge_radius],
                         fill=rank_badge_bg)
-            # Font sized to fit #10 comfortably with padding
-            font_badge = get_font(int(11 * scale), bold=True)
+            # Font sized to fit #10 comfortably - larger font for better readability
+            font_badge = get_font(int(14 * scale), bold=True)
             rank_text = f"#{rank}"
             draw.text((badge_x, badge_y), rank_text, font=font_badge, fill="#FFFFFF", anchor="mm")
             
