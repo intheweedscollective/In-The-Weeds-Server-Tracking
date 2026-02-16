@@ -946,16 +946,17 @@ def generate_top_10_by_metric_slide(
             draw.line([(value_divider_x, row_y), (value_divider_x, row_y + row_height)], 
                      fill="#CCCCCC", width=1)
             
-            # Rank badge (blue circle with white text) - sized to fit #10 with padding
+            # Rank badge (blue circle with white text) - consistent size for all ranks
             badge_x = col_x + rank_col_w // 2
             badge_y = row_y + row_height // 2
-            badge_radius = int(26 * scale)  # Large radius for comfortable #10 fit
+            badge_radius = int(28 * scale)  # Large enough for #10 with padding
             draw.ellipse([badge_x - badge_radius, badge_y - badge_radius,
                          badge_x + badge_radius, badge_y + badge_radius],
                         fill=rank_badge_bg)
-            # Smaller font to ensure #10 fits with clear padding
-            font_badge = get_font(int(12 * scale), bold=True)
-            draw.text((badge_x, badge_y), f"#{rank}", font=font_badge, fill="#FFFFFF", anchor="mm")
+            # Font sized to fit #10 comfortably with padding
+            font_badge = get_font(int(11 * scale), bold=True)
+            rank_text = f"#{rank}"
+            draw.text((badge_x, badge_y), rank_text, font=font_badge, fill="#FFFFFF", anchor="mm")
             
             # Employee name - centered in name column (SINGLE draw call)
             name = emp.get("name", "Unknown")
