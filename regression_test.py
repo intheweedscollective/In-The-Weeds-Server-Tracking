@@ -20,7 +20,7 @@ def test_generate_review_regression():
     4) Decode pdf_base64 and confirm it is readable by pypdf and has at least 1 page
     """
     
-    base_url = "https://staffscore-2.preview.emergentagent.com"
+    base_url = "https://team-leaderboard-5.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     
     print("🔍 Starting generate-review regression test...")
