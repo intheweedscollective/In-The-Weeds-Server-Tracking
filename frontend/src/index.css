@@ -56,11 +56,11 @@ code {
     }
     
     h1 {
-        font-size: 1.75rem !important;
+        font-size: 1.5rem !important;
     }
     
     h2 {
-        font-size: 1.25rem !important;
+        font-size: 1.125rem !important;
     }
     
     /* Better touch targets on mobile */
@@ -71,6 +71,25 @@ code {
     /* Stack cards on mobile */
     .grid {
         gap: 0.75rem;
+    }
+    
+    /* Hide decorative splashes on small screens */
+    .splash-red, .splash-blue {
+        display: none;
+    }
+    
+    /* Reduce card padding on mobile */
+    .bubba-card {
+        border-radius: 1rem;
+    }
+    
+    /* Smaller KPI values on mobile */
+    .kpi-value {
+        font-size: 2rem !important;
+    }
+    
+    .kpi-label {
+        font-size: 0.6rem !important;
     }
 }
 
