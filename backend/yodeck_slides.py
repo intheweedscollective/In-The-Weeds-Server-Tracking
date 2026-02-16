@@ -1750,22 +1750,12 @@ def generate_promotion_watchlist_slide(
     font_title = get_font(int(48 * scale), bold=True)
     font_subtitle = get_font(int(28 * scale))
     draw.text((title_x, int(35 * scale)), "PROMOTION WATCHLIST", font=font_title, fill="#FFFFFF", anchor="lm")
-    draw.text((title_x, int(85 * scale)), f"{quarter} {year}", font=font_subtitle, fill="#AACCFF", anchor="lm")
+    draw.text((title_x, int(85 * scale)), f"{quarter} {year} • Almost A-Server! (threshold: {a_server_threshold})", font=font_subtitle, fill="#AACCFF", anchor="lm")
     
     font_rank = get_font(int(38 * scale), bold=True)
     font_name = get_font(int(34 * scale), bold=True)
     font_gap = get_font(int(28 * scale), bold=True)
     font_score = get_font(int(28 * scale))
-    
-    # Header
-    title = "⭐ PROMOTION WATCHLIST ⭐"
-    draw.text((width//2 + 2, int(42 * scale)), title, font=font_title, fill=(0, 0, 0, 80), anchor="mt")
-    draw.text((width//2, int(40 * scale)), title, font=font_title, fill=TIER_CONFIG["A-Server"]["color"], anchor="mt")
-    
-    subtitle = f"{quarter} {year} • Almost A-Server! (threshold: {a_server_threshold})"
-    draw.text((width//2, int(115 * scale)), subtitle, font=font_subtitle, fill=colors["text_muted"], anchor="mt")
-    
-    draw.line([(int(100 * scale), int(155 * scale)), (width - int(100 * scale), int(155 * scale))], fill=TIER_CONFIG["A-Server"]["color"], width=int(3 * scale))
     
     # Find B-Servers close to A threshold
     watchlist = []
@@ -1778,34 +1768,31 @@ def generate_promotion_watchlist_slide(
     
     watchlist.sort(key=lambda x: x["gap"])
     
-    start_y = int(185 * scale)
-    row_height = int(100 * scale)
+    # Content area starts after header
+    start_y = int(150 * scale)
+    row_height = int(90 * scale)
     
     for idx, emp in enumerate(watchlist[:8]):
         y = start_y + idx * row_height
+        row_color = (235, 235, 235) if idx % 2 == 0 else (255, 255, 255)
+        draw.rectangle([int(50 * scale), y, width - int(50 * scale), y + row_height - 5], fill=row_color)
         
-        draw_card(draw, (int(100 * scale), y - 5, width - int(100 * scale), y + row_height - 15), colors, highlight=(idx < 3))
-        
-        draw.text((int(140 * scale), y + int(22 * scale)), emp["position_label"], font=font_rank, fill=TIER_CONFIG["B-Server"]["color"])
-        draw.text((int(250 * scale), y + int(25 * scale)), emp["name"][:18], font=font_name, fill=colors["text_white"])
+        draw.text((int(140 * scale), y + int(35 * scale)), emp["position_label"], font=font_rank, fill=TIER_CONFIG["B-Server"]["color"])
+        draw.text((int(280 * scale), y + int(38 * scale)), emp["name"][:18], font=font_name, fill="#222222")
         
         # Gap indicator with progress bar
         gap_pct = 1 - (emp["gap"] / 10)
         bar_width = int(150 * scale)
         bar_x = int(680 * scale)
-        bar_bg = hex_to_rgb(colors["text_muted"])
-        draw.rounded_rectangle([bar_x, y + int(35 * scale), bar_x + bar_width, y + int(45 * scale)], radius=5, fill=bar_bg)
-        draw.rounded_rectangle([bar_x, y + int(35 * scale), bar_x + int(bar_width * gap_pct), y + int(45 * scale)], radius=5, fill=hex_to_rgb(TIER_CONFIG["A-Server"]["color"]))
+        draw.rounded_rectangle([bar_x, y + int(35 * scale), bar_x + bar_width, y + int(45 * scale)], radius=5, fill="#CCCCCC")
+        draw.rounded_rectangle([bar_x, y + int(35 * scale), bar_x + int(bar_width * gap_pct), y + int(45 * scale)], radius=5, fill=TIER_CONFIG["A-Server"]["color"])
         
-        draw.text((bar_x + bar_width + int(15 * scale), y + int(28 * scale)), f"{emp['gap']:.1f} pts to go", font=font_gap, fill=colors["gold"])
-        draw.text((width - int(150 * scale), y + int(28 * scale)), f"{emp['score']:.1f}", font=font_score, fill=colors["text_white"], anchor="rt")
+        draw.text((bar_x + bar_width + int(15 * scale), y + int(38 * scale)), f"{emp['gap']:.1f} pts to go", font=font_gap, fill="#D4A017")
+        draw.text((width - int(150 * scale), y + int(38 * scale)), f"{emp['score']:.1f}", font=font_score, fill="#666666", anchor="rt")
     
     if not watchlist:
         font_no_data = get_font(int(28 * scale))
-        draw.text((width//2, int(450 * scale)), "No B-Servers within 10 points of A-Server", font=font_no_data, fill=colors["text_muted"], anchor="mt")
-    
-    font_footer = get_font(int(18 * scale))
-    draw.text((width//2, height - int(40 * scale)), "Keep Pushing! You're Almost There! 🎯", font=font_footer, fill=colors["text_muted"], anchor="mt")
+        draw.text((width//2, int(450 * scale)), "No B-Servers within 10 points of A-Server", font=font_no_data, fill="#22C55E", anchor="mm")
     
     buffer = io.BytesIO()
     img.save(buffer, format='PNG', optimize=True)
