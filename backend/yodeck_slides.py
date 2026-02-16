@@ -1589,12 +1589,7 @@ def generate_most_improved_slide(
     seasonal_theme: str = None,
     output_format: str = "16:9"
 ) -> bytes:
-    """Generate Most Improved slide with visual impact.
-    Args:
-        output_format: "16:9" for Yodeck (1920x1080) or "letter" for 8.5x11" print (2550x3300)
-    """
-    colors = get_theme_colors(theme, custom_colors, seasonal_theme)
-    
+    """Generate Most Improved slide - consistent with Top 10 design."""
     # Set dimensions based on format
     if output_format == "letter":
         width, height = 2550, 3300
@@ -1603,19 +1598,32 @@ def generate_most_improved_slide(
         width, height = SLIDE_WIDTH, SLIDE_HEIGHT
         scale = 1.0
     
-    img = create_gradient_background(width, height, colors)
-    
-    active_seasonal = seasonal_theme if seasonal_theme and seasonal_theme != "none" else (get_current_seasonal_theme() if seasonal_theme == "auto" else None)
-    if active_seasonal:
-        img = add_decorations(img, active_seasonal, colors)
-    
-    # Add celebratory glow
-    img = draw_glow_circle(img, width//2, int(200 * scale), int(150 * scale), hex_to_rgb("#22C55E"), 25)
-    
+    # White background like Top 10
+    img = Image.new('RGB', (width, height), (255, 255, 255))
     draw = ImageDraw.Draw(img)
     
-    font_title = get_font(int(64 * scale), bold=True)
-    font_subtitle = get_font(int(24 * scale))
+    # Header - consistent with Top 10
+    header_height = int(120 * scale)
+    draw.rectangle([0, 0, width, header_height], fill=(13, 59, 102))
+    
+    # Load logo
+    logo_path = "/app/backend/assets/bubba_gump_logo.png"
+    try:
+        logo_img = Image.open(logo_path).convert('RGBA')
+        logo_h = int(100 * scale)
+        aspect = logo_img.width / logo_img.height
+        logo_w = int(logo_h * aspect)
+        logo_img = logo_img.resize((logo_w, logo_h), Image.LANCZOS)
+        img.paste(logo_img, (int(10 * scale), int(10 * scale)), logo_img)
+        title_x = int(10 * scale) + logo_w + int(20 * scale)
+    except:
+        title_x = int(30 * scale)
+    
+    font_title = get_font(int(52 * scale), bold=True)
+    font_subtitle = get_font(int(28 * scale))
+    draw.text((title_x, int(35 * scale)), "MOST IMPROVED", font=font_title, fill="#FFFFFF", anchor="lm")
+    draw.text((title_x, int(85 * scale)), f"{quarter} {year}", font=font_subtitle, fill="#AACCFF", anchor="lm")
+    
     font_rank = get_font(int(42 * scale), bold=True)
     font_name = get_font(int(36 * scale), bold=True)
     font_change = get_font(int(32 * scale), bold=True)
@@ -1700,12 +1708,7 @@ def generate_promotion_watchlist_slide(
     seasonal_theme: str = None,
     output_format: str = "16:9"
 ) -> bytes:
-    """Generate Promotion Watchlist slide.
-    Args:
-        output_format: "16:9" for Yodeck (1920x1080) or "letter" for 8.5x11" print (2550x3300)
-    """
-    colors = get_theme_colors(theme, custom_colors, seasonal_theme)
-    
+    """Generate Promotion Watchlist slide - consistent with Top 10 design."""
     # Set dimensions based on format
     if output_format == "letter":
         width, height = 2550, 3300
@@ -1714,16 +1717,32 @@ def generate_promotion_watchlist_slide(
         width, height = SLIDE_WIDTH, SLIDE_HEIGHT
         scale = 1.0
     
-    img = create_gradient_background(width, height, colors)
-    
-    active_seasonal = seasonal_theme if seasonal_theme and seasonal_theme != "none" else (get_current_seasonal_theme() if seasonal_theme == "auto" else None)
-    if active_seasonal:
-        img = add_decorations(img, active_seasonal, colors)
-    
+    # White background like Top 10
+    img = Image.new('RGB', (width, height), (255, 255, 255))
     draw = ImageDraw.Draw(img)
     
-    font_title = get_font(int(64 * scale), bold=True)
-    font_subtitle = get_font(int(24 * scale))
+    # Header - consistent with Top 10
+    header_height = int(120 * scale)
+    draw.rectangle([0, 0, width, header_height], fill=(13, 59, 102))
+    
+    # Load logo
+    logo_path = "/app/backend/assets/bubba_gump_logo.png"
+    try:
+        logo_img = Image.open(logo_path).convert('RGBA')
+        logo_h = int(100 * scale)
+        aspect = logo_img.width / logo_img.height
+        logo_w = int(logo_h * aspect)
+        logo_img = logo_img.resize((logo_w, logo_h), Image.LANCZOS)
+        img.paste(logo_img, (int(10 * scale), int(10 * scale)), logo_img)
+        title_x = int(10 * scale) + logo_w + int(20 * scale)
+    except:
+        title_x = int(30 * scale)
+    
+    font_title = get_font(int(48 * scale), bold=True)
+    font_subtitle = get_font(int(28 * scale))
+    draw.text((title_x, int(35 * scale)), "PROMOTION WATCHLIST", font=font_title, fill="#FFFFFF", anchor="lm")
+    draw.text((title_x, int(85 * scale)), f"{quarter} {year}", font=font_subtitle, fill="#AACCFF", anchor="lm")
+    
     font_rank = get_font(int(38 * scale), bold=True)
     font_name = get_font(int(34 * scale), bold=True)
     font_gap = get_font(int(28 * scale), bold=True)
@@ -1796,12 +1815,7 @@ def generate_at_risk_slide(
     seasonal_theme: str = None,
     output_format: str = "16:9"
 ) -> bytes:
-    """Generate At Risk / Coaching Focus slide.
-    Args:
-        output_format: "16:9" for Yodeck (1920x1080) or "letter" for 8.5x11" print (2550x3300)
-    """
-    colors = get_theme_colors(theme, custom_colors, seasonal_theme)
-    
+    """Generate At Risk / Coaching Focus slide - consistent with Top 10 design."""
     # Set dimensions based on format
     if output_format == "letter":
         width, height = 2550, 3300
@@ -1810,24 +1824,40 @@ def generate_at_risk_slide(
         width, height = SLIDE_WIDTH, SLIDE_HEIGHT
         scale = 1.0
     
-    img = create_gradient_background(width, height, colors)
-    
-    active_seasonal = seasonal_theme if seasonal_theme and seasonal_theme != "none" else (get_current_seasonal_theme() if seasonal_theme == "auto" else None)
-    if active_seasonal:
-        img = add_decorations(img, active_seasonal, colors)
-    
+    # White background like Top 10
+    img = Image.new('RGB', (width, height), (255, 255, 255))
     draw = ImageDraw.Draw(img)
     
-    font_title = get_font(int(60 * scale), bold=True)
+    # Header - consistent with Top 10
+    header_height = int(120 * scale)
+    draw.rectangle([0, 0, width, header_height], fill=(13, 59, 102))
+    
+    # Load logo
+    logo_path = "/app/backend/assets/bubba_gump_logo.png"
+    try:
+        logo_img = Image.open(logo_path).convert('RGBA')
+        logo_h = int(100 * scale)
+        aspect = logo_img.width / logo_img.height
+        logo_w = int(logo_h * aspect)
+        logo_img = logo_img.resize((logo_w, logo_h), Image.LANCZOS)
+        img.paste(logo_img, (int(10 * scale), int(10 * scale)), logo_img)
+        title_x = int(10 * scale) + logo_w + int(20 * scale)
+    except:
+        title_x = int(30 * scale)
+    
+    font_title = get_font(int(48 * scale), bold=True)
+    font_subtitle = get_font(int(28 * scale))
+    draw.text((title_x, int(35 * scale)), "COACHING FOCUS", font=font_title, fill="#FFFFFF", anchor="lm")
+    draw.text((title_x, int(85 * scale)), f"{quarter} {year}", font=font_subtitle, fill="#AACCFF", anchor="lm")
+    
     font_warning = get_font(int(22 * scale), bold=True)
-    font_subtitle = get_font(int(24 * scale))
     font_rank = get_font(int(36 * scale), bold=True)
     font_name = get_font(int(32 * scale), bold=True)
     font_gap = get_font(int(26 * scale))
     font_score = get_font(int(28 * scale))
     
-    # Header
-    title = "📋 COACHING FOCUS GROUP 📋"
+    # Content area starts after header
+    content_y = header_height + int(20 * scale)
     draw.text((width//2 + 2, int(37 * scale)), title, font=font_title, fill=(0, 0, 0, 80), anchor="mt")
     draw.text((width//2, int(35 * scale)), title, font=font_title, fill=TIER_CONFIG["C-Server"]["color"], anchor="mt")
     

@@ -48,6 +48,32 @@ code {
     }
 }
 
+/* Mobile-first responsive improvements */
+@media (max-width: 640px) {
+    .container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+    
+    h1 {
+        font-size: 1.75rem !important;
+    }
+    
+    h2 {
+        font-size: 1.25rem !important;
+    }
+    
+    /* Better touch targets on mobile */
+    button, a {
+        min-height: 44px;
+    }
+    
+    /* Stack cards on mobile */
+    .grid {
+        gap: 0.75rem;
+    }
+}
+
 @layer base {
     * {
         @apply border-border;
