@@ -1629,15 +1629,8 @@ def generate_most_improved_slide(
     font_change = get_font(int(32 * scale), bold=True)
     font_score = get_font(int(30 * scale))
     
-    # Header
-    title = "🚀 MOST IMPROVED 🚀"
-    draw.text((width//2 + 2, int(42 * scale)), title, font=font_title, fill=(0, 0, 0, 80), anchor="mt")
-    draw.text((width//2, int(40 * scale)), title, font=font_title, fill="#22C55E", anchor="mt")
-    
-    subtitle = f"{quarter} {year} • Rising Stars"
-    draw.text((width//2, int(115 * scale)), subtitle, font=font_subtitle, fill=colors["text_muted"], anchor="mt")
-    
-    draw.line([(int(100 * scale), int(155 * scale)), (width - int(100 * scale), int(155 * scale))], fill="#22C55E", width=int(3 * scale))
+    # Content starts below header
+    content_y = header_height + int(20 * scale)
     
     # Calculate improvements
     prev_scores = {r.get("name"): r.get("total_score", 0) for r in previous_rankings}
@@ -1659,37 +1652,36 @@ def generate_most_improved_slide(
     
     improvements.sort(key=lambda x: x["change"], reverse=True)
     
-    start_y = int(185 * scale)
-    row_height = int(100 * scale)
+    start_y = content_y + int(20 * scale)
+    row_height = int(80 * scale)
     
+    # Draw improvements list
     for idx, emp in enumerate(improvements[:8]):
         y = start_y + idx * row_height
+        row_color = (235, 235, 235) if idx % 2 == 0 else (255, 255, 255)
+        draw.rectangle([int(50 * scale), y, width - int(50 * scale), y + row_height - 5], fill=row_color)
         
-        # Card background
-        draw_card(draw, (int(100 * scale), y - 5, width - int(100 * scale), y + row_height - 15), colors, highlight=(idx < 3))
-        
-        # Rank
-        rank_color = colors["gold"] if idx == 0 else colors["silver"] if idx == 1 else colors["bronze"] if idx == 2 else colors["text_light"]
-        draw.text((int(140 * scale), y + int(22 * scale)), f"#{idx + 1}", font=font_rank, fill=rank_color)
+        # Rank badge
+        badge_x = int(100 * scale)
+        badge_y = y + row_height // 2
+        badge_color = "#FFD700" if idx == 0 else "#C0C0C0" if idx == 1 else "#CD7F32" if idx == 2 else "#1E5FA8"
+        draw.ellipse([badge_x - 25, badge_y - 25, badge_x + 25, badge_y + 25], fill=badge_color)
+        draw.text((badge_x, badge_y), f"#{idx + 1}", font=get_font(int(14 * scale), bold=True), fill="#FFFFFF", anchor="mm")
         
         # Name
-        draw.text((int(230 * scale), y + int(25 * scale)), emp["name"][:18], font=font_name, fill=colors["text_white"])
+        draw.text((int(180 * scale), badge_y), emp["name"][:18], font=font_name, fill="#222222", anchor="lm")
         
         # Change with arrow
-        change_text = f"↑ +{emp['change']:.1f}"
-        draw.text((int(700 * scale), y + int(28 * scale)), change_text, font=font_change, fill="#22C55E")
+        change_text = f"+{emp['change']:.1f}"
+        draw.text((int(600 * scale), badge_y), change_text, font=font_change, fill="#22C55E", anchor="mm")
         
         # Score progression
         progression = f"{emp['prev_score']:.1f} → {emp['current_score']:.1f}"
-        draw.text((width - int(200 * scale), y + int(30 * scale)), progression, font=font_score, fill=colors["text_muted"], anchor="rt")
+        draw.text((width - int(100 * scale), badge_y), progression, font=font_score, fill="#666666", anchor="rm")
     
     if not improvements:
         font_no_data = get_font(int(28 * scale))
-        draw.text((width//2, int(450 * scale)), "No improvement data available", font=font_no_data, fill=colors["text_muted"], anchor="mt")
-        draw.text((width//2, int(490 * scale)), "(Requires previous quarter data)", font=font_subtitle, fill=colors["text_muted"], anchor="mt")
-    
-    font_footer = get_font(int(18 * scale))
-    draw.text((width//2, height - int(40 * scale)), "Keep Up The Great Work! 💪", font=font_footer, fill=colors["text_muted"], anchor="mt")
+        draw.text((width//2, int(450 * scale)), "No improvement data available", font=font_no_data, fill="#666666", anchor="mm")
     
     buffer = io.BytesIO()
     img.save(buffer, format='PNG', optimize=True)
@@ -1858,19 +1850,6 @@ def generate_at_risk_slide(
     
     # Content area starts after header
     content_y = header_height + int(20 * scale)
-    draw.text((width//2 + 2, int(37 * scale)), title, font=font_title, fill=(0, 0, 0, 80), anchor="mt")
-    draw.text((width//2, int(35 * scale)), title, font=font_title, fill=TIER_CONFIG["C-Server"]["color"], anchor="mt")
-    
-    subtitle = f"{quarter} {year} • Development Priority (B-Server: {b_server_threshold})"
-    draw.text((width//2, int(100 * scale)), subtitle, font=font_subtitle, fill=colors["text_muted"], anchor="mt")
-    
-    # Warning banner
-    warning = "⚠️ MANAGER ONLY - CONFIDENTIAL ⚠️"
-    banner_half_width = int(220 * scale)
-    draw.rounded_rectangle([width//2 - banner_half_width, int(130 * scale), width//2 + banner_half_width, int(160 * scale)], radius=8, fill=TIER_CONFIG["C-Server"]["bg"])
-    draw.text((width//2, int(138 * scale)), warning, font=font_warning, fill=TIER_CONFIG["C-Server"]["color"], anchor="mt")
-    
-    draw.line([(int(100 * scale), int(175 * scale)), (width - int(100 * scale), int(175 * scale))], fill=TIER_CONFIG["C-Server"]["color"], width=int(3 * scale))
     
     # Find C-Servers
     at_risk = []
