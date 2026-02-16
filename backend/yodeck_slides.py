@@ -1866,20 +1866,17 @@ def generate_at_risk_slide(
     
     for idx, emp in enumerate(at_risk[:8]):
         y = start_y + idx * row_height
+        row_color = (235, 235, 235) if idx % 2 == 0 else (255, 255, 255)
+        draw.rectangle([int(50 * scale), y, width - int(50 * scale), y + row_height - 5], fill=row_color)
         
-        draw_card(draw, (int(100 * scale), y - 5, width - int(100 * scale), y + row_height - 15), colors)
-        
-        draw.text((int(140 * scale), y + int(18 * scale)), emp["position_label"], font=font_rank, fill=TIER_CONFIG["C-Server"]["color"])
-        draw.text((int(250 * scale), y + int(22 * scale)), emp["name"][:18], font=font_name, fill=colors["text_white"])
-        draw.text((int(700 * scale), y + int(24 * scale)), f"{emp['gap']:.1f} pts needed", font=font_gap, fill=TIER_CONFIG["B-Server"]["color"])
-        draw.text((width - int(150 * scale), y + int(22 * scale)), f"{emp['score']:.1f}", font=font_score, fill=colors["text_white"], anchor="rt")
+        draw.text((int(140 * scale), y + int(35 * scale)), emp.get("position_label", "C"), font=font_rank, fill="#DC2626")
+        draw.text((int(250 * scale), y + int(38 * scale)), emp["name"][:18], font=font_name, fill="#222222")
+        draw.text((int(700 * scale), y + int(40 * scale)), f"{emp['gap']:.1f} pts needed", font=font_gap, fill="#F59E0B")
+        draw.text((width - int(150 * scale), y + int(38 * scale)), f"{emp['score']:.1f}", font=font_score, fill="#666666", anchor="rt")
     
     if not at_risk:
         font_no_data = get_font(int(28 * scale))
-        draw.text((width//2, int(450 * scale)), "No C-Servers - Great job team! 🎉", font=font_no_data, fill=colors["text_muted"], anchor="mt")
-    
-    font_footer = get_font(int(18 * scale))
-    draw.text((width//2, height - int(40 * scale)), "Confidential Management Document", font=font_footer, fill=colors["text_muted"], anchor="mt")
+        draw.text((width//2, int(450 * scale)), "No C-Servers - Great job team!", font=font_no_data, fill="#22C55E", anchor="mm")
     
     buffer = io.BytesIO()
     img.save(buffer, format='PNG', optimize=True)
