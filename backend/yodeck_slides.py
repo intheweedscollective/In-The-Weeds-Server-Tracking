@@ -1603,26 +1603,43 @@ def generate_most_improved_slide(
     draw = ImageDraw.Draw(img)
     
     # Header - consistent with Top 10
-    header_height = int(120 * scale)
+    header_height = int(145 * scale)
     draw.rectangle([0, 0, width, header_height], fill=(13, 59, 102))
     
     # Load logo
     logo_path = "/app/backend/assets/bubba_gump_logo.png"
     try:
         logo_img = Image.open(logo_path).convert('RGBA')
-        logo_h = int(100 * scale)
+        logo_h = int(125 * scale)
         aspect = logo_img.width / logo_img.height
         logo_w = int(logo_h * aspect)
         logo_img = logo_img.resize((logo_w, logo_h), Image.LANCZOS)
         img.paste(logo_img, (int(10 * scale), int(10 * scale)), logo_img)
-        title_x = int(10 * scale) + logo_w + int(20 * scale)
+        title_x = int(10 * scale) + logo_w + int(25 * scale)
     except:
         title_x = int(30 * scale)
     
-    font_title = get_font(int(52 * scale), bold=True)
-    font_subtitle = get_font(int(28 * scale))
-    draw.text((title_x, int(35 * scale)), "MOST IMPROVED", font=font_title, fill="#FFFFFF", anchor="lm")
-    draw.text((title_x, int(85 * scale)), f"{quarter} {year}", font=font_subtitle, fill="#AACCFF", anchor="lm")
+    # Bold title fonts - matching Top 10 style
+    font_title_top = get_font(int(52 * scale), bold=True)
+    font_title_main = get_font(int(72 * scale), bold=True)
+    font_quarter = get_font(int(28 * scale), bold=True)
+    font_year = get_font(int(48 * scale), bold=True)
+    font_explanation = get_font(int(16 * scale), bold=False)
+    
+    # Title - "MOST IMPROVED" with bold styling
+    draw.text((title_x, int(45 * scale)), "MOST IMPROVED", font=font_title_top, fill="#FFFFFF", anchor="lm")
+    draw.text((title_x, int(100 * scale)), "PERFORMERS", font=font_title_main, fill="#FFFFFF", anchor="lm")
+    
+    # Quarter and Year on RIGHT side
+    quarter_x = width - int(130 * scale)
+    quarter_num = quarter.replace("Q", "")
+    draw.text((quarter_x, int(35 * scale)), f"QUARTER {quarter_num}", font=font_quarter, fill="#FFFFFF", anchor="mm")
+    draw.text((quarter_x, int(80 * scale)), str(year), font=font_year, fill="#FFFFFF", anchor="mm")
+    
+    # Explanation text - compared to previous quarter
+    prev_quarter = f"Q{int(quarter_num) - 1}" if int(quarter_num) > 1 else "Q4"
+    prev_year = year if int(quarter_num) > 1 else year - 1
+    draw.text((quarter_x, int(115 * scale)), f"vs {prev_quarter} {prev_year} Final", font=font_explanation, fill="#AACCFF", anchor="mm")
     
     font_rank = get_font(int(42 * scale), bold=True)
     font_name = get_font(int(36 * scale), bold=True)
