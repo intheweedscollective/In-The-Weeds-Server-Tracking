@@ -113,14 +113,13 @@ Build a comprehensive performance review application for restaurant employees (B
 ## Backlog
 
 ### P0 - Critical
-- None (Black outline issue fixed Feb 12, 2026)
+- [ ] **Data Import from POS Reports**: Extract data from scanned/uploaded reports (e.g., Aloha POS) - User's top priority
+- [ ] **Multi-Store Architecture**: Support for 22 locations with global reporting
 
 ### P1 - High Priority  
 - [ ] Complete "Concept President" features (Goal Setting, Real-Time Alerts, Incentive Tracking)
-- [ ] Multi-Store Architecture (phased approach)
 
 ### P2 - Medium Priority
-- [ ] Apply consistent aesthetics across all Yodeck slides
 - [ ] "Download All Slides" as ZIP feature
 - [ ] Production deployment verification
 
