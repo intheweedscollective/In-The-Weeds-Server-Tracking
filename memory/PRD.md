@@ -99,6 +99,17 @@ Build a comprehensive performance review application for restaurant employees (B
   - New API endpoint: `GET /api/v2/yodeck/{year}/{quarter}/printable-rankings`
   - New "Printable" button on Rankings page (amber/gold outline with star icon)
 
+### Recent Changes (Feb 16, 2026)
+- ✅ **Fixed Rank Badge Sizing on Top 10 Slide (#8)**: Adjusted badge radius to 22px and font to 14px so "#10" fits cleanly
+- ✅ **Fixed Promotion Watchlist Slide Error (#9)**: Removed undefined `colors` references causing NameError
+- ✅ **Consistent Slide Design (#9)**: All slides now use consistent white background with professional header
+- ✅ **Mobile Responsiveness Improvements (#10)**: 
+  - Added smaller logo/title on mobile screens
+  - Navigation tabs show abbreviated labels on very small screens
+  - Hidden decorative splashes on mobile for cleaner layout
+  - Smaller KPI values and labels on mobile
+- ✅ **All 6 Slide Endpoints Working**: top10, complete-rankings, most-improved, promotion-watchlist, at-risk, printable-rankings
+
 ## Backlog
 
 ### P0 - Critical
