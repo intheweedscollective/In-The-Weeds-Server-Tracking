@@ -67,72 +67,58 @@ async def scrape_loyalty_voice_feedback(
             await page.goto(f"{LV_URL}/feedback", wait_until="networkidle", timeout=30000)
             await page.wait_for_timeout(5000)
             
-            # The page uses a grid/div layout, not a table
-            # Find all feedback rows by looking for the rating pattern
-            page_text = await page.inner_text('body')
+            # The page uses role="row" for data rows
+            rows = await page.locator('[role="row"]').all()
             
-            # Parse the structured text - feedback items follow a pattern
-            # Rating -> Customer Name -> Date -> Shift -> Comment -> Store -> Date of Business -> Can Contact
-            lines = page_text.split('\n')
-            
-            current_item = {}
-            i = 0
-            while i < len(lines):
-                line = lines[i].strip()
-                
-                # Look for rating pattern "X / 10"
-                if '/ 10' in line:
-                    # Save previous item if exists
-                    if current_item.get('rating'):
-                        feedback_items.append(current_item)
+            for row in rows:
+                try:
+                    # Get the text content of the row
+                    row_text = await row.inner_text()
                     
-                    # Start new item
-                    rating_text = line
+                    # Skip header rows
+                    if "Customer Name" in row_text or "Response Date" in row_text:
+                        continue
+                    
+                    # Skip rows without rating
+                    if "/ 10" not in row_text:
+                        continue
+                    
+                    # Parse the row text - it follows the pattern:
+                    # [icon] Rating \n Customer Name \n Date \n Shift \n Comment \n Store \n Date \n Yes/No
+                    lines = [l.strip() for l in row_text.split('\n') if l.strip()]
+                    
+                    # Find rating line (contains "/ 10")
+                    rating_idx = -1
+                    for i, line in enumerate(lines):
+                        if "/ 10" in line:
+                            rating_idx = i
+                            break
+                    
+                    if rating_idx == -1:
+                        continue
+                    
+                    rating_text = lines[rating_idx]
                     rating = parse_rating(rating_text)
                     
-                    current_item = {
+                    # Extract other fields relative to rating position
+                    item = {
                         "rating": rating,
                         "rating_text": rating_text,
-                        "customer_name": "",
-                        "response_date": "",
-                        "shift": "",
-                        "comment": "",
-                        "store": "",
+                        "customer_name": lines[rating_idx + 1] if rating_idx + 1 < len(lines) else "",
+                        "response_date": lines[rating_idx + 2] if rating_idx + 2 < len(lines) else "",
+                        "shift": lines[rating_idx + 3] if rating_idx + 3 < len(lines) else "",
+                        "comment": lines[rating_idx + 4] if rating_idx + 4 < len(lines) else "",
+                        "store": lines[rating_idx + 5] if rating_idx + 5 < len(lines) else "",
                         "source": "loyalty_voice"
                     }
                     
-                    # Next lines should be: Customer Name, Date, Shift, Comment, Store, Date, Yes/No
-                    if i + 1 < len(lines):
-                        current_item["customer_name"] = lines[i + 1].strip()
-                    if i + 2 < len(lines):
-                        current_item["response_date"] = lines[i + 2].strip()
-                    if i + 3 < len(lines):
-                        current_item["shift"] = lines[i + 3].strip()
-                    if i + 4 < len(lines):
-                        current_item["comment"] = lines[i + 4].strip()
-                    if i + 5 < len(lines):
-                        current_item["store"] = lines[i + 5].strip()
-                    
-                    i += 6  # Skip the processed lines
-                else:
-                    i += 1
-            
-            # Don't forget the last item
-            if current_item.get('rating'):
-                feedback_items.append(current_item)
-            
-            # Filter out any invalid items (e.g., from header text)
-            valid_items = []
-            for item in feedback_items:
-                # Valid items should have a customer name and store with "Bubba Gump" 
-                if item.get("store") and "Bubba Gump" in item.get("store", ""):
-                    valid_items.append(item)
-                elif item.get("customer_name") and len(item.get("customer_name", "")) > 2:
-                    # Check if this looks like a real entry
-                    if item.get("response_date") and "/" in item.get("response_date", ""):
-                        valid_items.append(item)
-            
-            feedback_items = valid_items
+                    # Validate - must have a customer name and store should reference Bubba Gump
+                    if item["customer_name"] and len(item["customer_name"]) > 1:
+                        feedback_items.append(item)
+                        
+                except Exception as e:
+                    print(f"Error parsing row: {e}")
+                    continue
             
         except Exception as e:
             print(f"Scraping error: {e}")
