@@ -138,29 +138,65 @@ export default function ReviewTracker() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8" data-testid="review-tracker-page">
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 flex items-center gap-2">
-              <MessageSquare className="w-8 h-8 text-primary" />
-              Review Tracker
-            </h1>
-            <p className="text-gray-600 mt-1">
-              Track customer reviews and employee mentions across platforms
-            </p>
+    <>
+      <Navigation />
+      <div className="min-h-screen bg-gray-50 p-4 md:p-8" data-testid="review-tracker-page">
+        {/* Header */}
+        <div className="mb-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 flex items-center gap-2">
+                <MessageSquare className="w-8 h-8 text-primary" />
+                Review Tracker
+              </h1>
+              <p className="text-gray-600 mt-1">
+                Track customer reviews and employee mentions across platforms
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {/* ReviewTrackers Sync Button */}
+              {syncStatus?.configured && (
+                <Button
+                  onClick={handleSync}
+                  disabled={syncing}
+                  variant="outline"
+                  className="border-green-500 text-green-600 hover:bg-green-50"
+                  data-testid="sync-reviewtrackers-btn"
+                >
+                  {syncing ? (
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Cloud className="w-4 h-4 mr-2" />
+                  )}
+                  {syncing ? "Syncing..." : "Sync ReviewTrackers"}
+                </Button>
+              )}
+              <Button
+                onClick={() => setShowAddModal(true)}
+                className="bg-primary hover:bg-primary/90 text-white"
+                data-testid="add-review-btn"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Manual
+              </Button>
+            </div>
           </div>
-          <Button
-            onClick={() => setShowAddModal(true)}
-            className="bg-primary hover:bg-primary/90 text-white"
-            data-testid="add-review-btn"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add Review
-          </Button>
+          
+          {/* Sync Status Banner */}
+          {syncStatus?.configured && (
+            <div className="mt-3 flex items-center gap-2 text-sm text-green-600 bg-green-50 px-3 py-2 rounded-lg">
+              <CheckCircle className="w-4 h-4" />
+              <span>
+                ReviewTrackers connected • {syncStatus.total_synced_reviews || 0} reviews synced
+                {syncStatus.last_sync_time && (
+                  <span className="text-gray-500 ml-2">
+                    • Last sync: {new Date(syncStatus.last_sync_time).toLocaleString()}
+                  </span>
+                )}
+              </span>
+            </div>
+          )}
         </div>
-      </div>
 
       {/* Stats Cards */}
       {stats && (
