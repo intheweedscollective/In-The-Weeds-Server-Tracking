@@ -36,6 +36,7 @@ export default function FullRankings() {
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
   const [downloadingPrintable, setDownloadingPrintable] = useState(false);
+  const [downloadingReview, setDownloadingReview] = useState(null);
   const [selectedYear, setSelectedYear] = useState(2026);
   const [selectedQuarter, setSelectedQuarter] = useState("Q1");
   const [tierFilter, setTierFilter] = useState("all");
