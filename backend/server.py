@@ -3838,6 +3838,292 @@ async def unfinalize_quarter(year: int, quarter: str):
     return {"message": f"Quarter {quarter} {year} reopened for edits"}
 
 
+# ============================================================================
+# REVIEW TRACKER - Customer Review Aggregation & Employee Attribution
+# ============================================================================
+
+from review_tracker import (
+    PLATFORMS, POINTS_PER_POSITIVE_MENTION,
+    generate_review_hash, detect_employees_in_review,
+    calculate_review_points_for_employee, get_review_stats
+)
+
+
+class CustomerReviewCreate(BaseModel):
+    """Model for creating a new customer review."""
+    platform: str  # Google, Yelp, Facebook, TripAdvisor, OpenTable
+    review_date: str  # YYYY-MM-DD format
+    rating: int = Field(ge=1, le=5)  # 1-5 stars
+    review_text: str
+    reviewer_name: Optional[str] = None
+    quarter: str = "Q1"
+    year: int = 2026
+
+
+class CustomerReviewResponse(BaseModel):
+    """Response model for customer review."""
+    id: str
+    platform: str
+    review_date: str
+    rating: int
+    review_text: str
+    reviewer_name: Optional[str]
+    employee_mentions: List[Dict[str, Any]]
+    total_points: float
+    review_hash: str
+    created_at: str
+    quarter: str
+    year: int
+
+
+class EmployeeMentionUpdate(BaseModel):
+    """Model for updating employee mentions in a review."""
+    employee_mentions: List[Dict[str, Any]]
+
+
+@api_router.get("/v2/reviews/platforms")
+async def get_review_platforms():
+    """Get list of supported review platforms."""
+    return {
+        "platforms": PLATFORMS,
+        "points_per_mention": POINTS_PER_POSITIVE_MENTION
+    }
+
+
+@api_router.get("/v2/reviews")
+async def get_reviews(
+    quarter: str = "Q1",
+    year: int = 2026,
+    platform: Optional[str] = None,
+    employee_name: Optional[str] = None
+):
+    """Get all reviews with optional filters."""
+    query = {"quarter": quarter.upper(), "year": year}
+    
+    if platform:
+        query["platform"] = platform
+    
+    reviews = await db.customer_reviews.find(query, {"_id": 0}).to_list(1000)
+    
+    # Filter by employee name if specified
+    if employee_name:
+        reviews = [
+            r for r in reviews 
+            if any(m.get("name", "").lower() == employee_name.lower() 
+                   for m in r.get("employee_mentions", []))
+        ]
+    
+    # Sort by date descending
+    reviews.sort(key=lambda x: x.get("review_date", ""), reverse=True)
+    
+    return {"reviews": reviews, "total": len(reviews)}
+
+
+@api_router.get("/v2/reviews/stats")
+async def get_review_stats_endpoint(quarter: str = "Q1", year: int = 2026):
+    """Get review statistics including employee mention counts and points."""
+    reviews = await db.customer_reviews.find(
+        {"quarter": quarter.upper(), "year": year},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    # Get employee names from the database
+    employees = await db.employees_v2.find(
+        {"quarter": quarter.upper(), "year": year},
+        {"name": 1, "_id": 0}
+    ).to_list(500)
+    employee_names = [e["name"] for e in employees]
+    
+    stats = get_review_stats(reviews, employee_names)
+    
+    # Add top mentioned employees
+    sorted_employees = sorted(
+        stats["by_employee"].items(),
+        key=lambda x: x[1]["points"],
+        reverse=True
+    )
+    stats["top_mentioned"] = [
+        {"name": name, **data} 
+        for name, data in sorted_employees[:10] 
+        if data["mentions"] > 0
+    ]
+    
+    return stats
+
+
+@api_router.post("/v2/reviews")
+async def create_review(review: CustomerReviewCreate):
+    """Create a new customer review with AI-powered employee detection."""
+    # Validate platform
+    if review.platform not in PLATFORMS:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid platform. Must be one of: {', '.join(PLATFORMS)}"
+        )
+    
+    # Generate hash for duplicate detection
+    review_hash = generate_review_hash(
+        review.review_text, 
+        review.platform, 
+        review.review_date
+    )
+    
+    # Check for duplicate
+    existing = await db.customer_reviews.find_one({"review_hash": review_hash})
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail="This review appears to be a duplicate (same content, platform, and date)"
+        )
+    
+    # Get employee names for AI detection
+    employees = await db.employees_v2.find(
+        {"quarter": review.quarter.upper(), "year": review.year},
+        {"name": 1, "_id": 0}
+    ).to_list(500)
+    employee_names = [e["name"] for e in employees]
+    
+    # Detect employee mentions using AI
+    employee_mentions = await detect_employees_in_review(
+        review.review_text,
+        employee_names
+    )
+    
+    # Calculate total points
+    total_points = sum(m.get("points", 0) for m in employee_mentions)
+    
+    # Create review document
+    review_id = str(uuid.uuid4())
+    review_doc = {
+        "id": review_id,
+        "platform": review.platform,
+        "review_date": review.review_date,
+        "rating": review.rating,
+        "review_text": review.review_text,
+        "reviewer_name": review.reviewer_name,
+        "employee_mentions": employee_mentions,
+        "total_points": round(total_points, 2),
+        "review_hash": review_hash,
+        "quarter": review.quarter.upper(),
+        "year": review.year,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.customer_reviews.insert_one(review_doc)
+    
+    # Remove MongoDB _id before returning
+    review_doc.pop("_id", None)
+    
+    return {
+        "success": True,
+        "review": review_doc,
+        "detected_employees": len(employee_mentions),
+        "message": f"Review added. Detected {len(employee_mentions)} employee mention(s)."
+    }
+
+
+@api_router.post("/v2/reviews/detect")
+async def detect_employees_endpoint(
+    review_text: str,
+    quarter: str = "Q1",
+    year: int = 2026
+):
+    """Preview employee detection without saving the review."""
+    # Get employee names
+    employees = await db.employees_v2.find(
+        {"quarter": quarter.upper(), "year": year},
+        {"name": 1, "_id": 0}
+    ).to_list(500)
+    employee_names = [e["name"] for e in employees]
+    
+    # Detect employees
+    mentions = await detect_employees_in_review(review_text, employee_names)
+    
+    return {
+        "mentions": mentions,
+        "total_points": round(sum(m.get("points", 0) for m in mentions), 2)
+    }
+
+
+@api_router.get("/v2/reviews/{review_id}")
+async def get_review(review_id: str):
+    """Get a specific review by ID."""
+    review = await db.customer_reviews.find_one({"id": review_id}, {"_id": 0})
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found")
+    return review
+
+
+@api_router.put("/v2/reviews/{review_id}/mentions")
+async def update_review_mentions(review_id: str, update: EmployeeMentionUpdate):
+    """Update employee mentions for a review (manual correction)."""
+    # Recalculate points
+    total_points = sum(m.get("points", 0) for m in update.employee_mentions)
+    
+    result = await db.customer_reviews.update_one(
+        {"id": review_id},
+        {
+            "$set": {
+                "employee_mentions": update.employee_mentions,
+                "total_points": round(total_points, 2),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Review not found")
+    
+    return {"success": True, "message": "Employee mentions updated"}
+
+
+@api_router.delete("/v2/reviews/{review_id}")
+async def delete_review(review_id: str):
+    """Delete a review."""
+    result = await db.customer_reviews.delete_one({"id": review_id})
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Review not found")
+    
+    return {"success": True, "message": "Review deleted"}
+
+
+@api_router.get("/v2/reviews/employee/{employee_name}/points")
+async def get_employee_review_points(
+    employee_name: str,
+    quarter: str = "Q1",
+    year: int = 2026
+):
+    """Get total review points for a specific employee."""
+    reviews = await db.customer_reviews.find(
+        {"quarter": quarter.upper(), "year": year},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    total_points = calculate_review_points_for_employee(reviews, employee_name)
+    
+    # Count mentions
+    mentions = []
+    for review in reviews:
+        for mention in review.get("employee_mentions", []):
+            if mention.get("name", "").lower() == employee_name.lower():
+                mentions.append({
+                    "review_id": review.get("id"),
+                    "platform": review.get("platform"),
+                    "review_date": review.get("review_date"),
+                    "sentiment": mention.get("sentiment"),
+                    "points": mention.get("points", 0)
+                })
+    
+    return {
+        "employee_name": employee_name,
+        "total_points": total_points,
+        "mention_count": len(mentions),
+        "mentions_for_1_point": 5,
+        "mentions": mentions
+    }
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
