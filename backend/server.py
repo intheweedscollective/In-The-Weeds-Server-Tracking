@@ -3730,13 +3730,14 @@ async def save_dar_entries(year: int, quarter: str, submission: DARSubmission):
 
 
 @api_router.post("/v2/finalize/{year}/{quarter}")
-async def finalize_quarter(year: int, quarter: str, submission: DARSubmission):
+async def finalize_quarter(year: int, quarter: str, submission: DARSubmission, generate_reviews: bool = True):
     """
     Finalize a quarter by applying DAR deductions and locking final rankings.
     - Written Warning DAR: -3 points each
     - Suspension DAR: -5 points each
     
     This creates the final rankings for end-of-quarter reviews.
+    If generate_reviews=True, automatically generates AI reviews for all employees.
     """
     # Get current employees
     employees = await db.employees_v2.find(
@@ -3794,7 +3795,8 @@ async def finalize_quarter(year: int, quarter: str, submission: DARSubmission):
         "dar_entries": [entry.model_dump() for entry in submission.entries],
         "final_rankings": final_rankings,
         "total_employees": len(final_rankings),
-        "total_dar_deductions": sum(e["total_deduction"] for e in final_rankings)
+        "total_dar_deductions": sum(e["total_deduction"] for e in final_rankings),
+        "reviews_generated": False
     }
     
     await db.quarter_finalizations.update_one(
@@ -3817,12 +3819,98 @@ async def finalize_quarter(year: int, quarter: str, submission: DARSubmission):
         upsert=True
     )
     
+    # Auto-generate reviews for all employees if requested
+    reviews_queued = 0
+    if generate_reviews:
+        # Queue review generation (runs in background)
+        asyncio.create_task(generate_all_quarterly_reviews(year, quarter.upper(), employees))
+        reviews_queued = len(employees)
+    
     return {
         "message": f"Quarter {quarter} {year} finalized successfully",
         "total_employees": len(final_rankings),
         "total_dar_deductions": sum(e["total_deduction"] for e in final_rankings),
-        "final_rankings": final_rankings
+        "final_rankings": final_rankings,
+        "reviews_queued": reviews_queued
     }
+
+
+async def generate_all_quarterly_reviews(year: int, quarter: str, employees: List[Dict]):
+    """Background task to generate AI reviews for all employees in a quarter."""
+    try:
+        # Get quarter settings
+        settings_doc = await db.quarter_settings.find_one(
+            {"year": year, "quarter": quarter},
+            {"_id": 0}
+        )
+        settings = QuarterSettings(**settings_doc) if settings_doc else None
+        
+        generated_count = 0
+        error_count = 0
+        
+        for emp_data in employees:
+            try:
+                # Check if review already exists
+                existing = await db.reviews_v2.find_one({
+                    "employee_id": emp_data.get("id"),
+                    "quarter": quarter,
+                    "year": year
+                })
+                
+                if existing:
+                    continue  # Skip if already has a review
+                
+                # Convert to EmployeeV2 model
+                employee = EmployeeV2(**emp_data)
+                
+                # Generate review content
+                review_content = await generate_review_content_v2(employee, settings, quarter, year)
+                
+                # Generate PDF
+                pdf_bytes = generate_pdf_v2(employee, settings, review_content, quarter, year)
+                pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+                
+                # Save review to database
+                review_doc = {
+                    "id": str(uuid.uuid4()),
+                    "employee_id": employee.id,
+                    "employee_name": employee.name,
+                    "review_content": review_content,
+                    "quarter": quarter,
+                    "year": year,
+                    "pdf_base64": pdf_base64,
+                    "auto_generated": True,
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
+                    "created_at": datetime.now(timezone.utc).isoformat()
+                }
+                
+                await db.reviews_v2.insert_one(review_doc)
+                generated_count += 1
+                
+                # Small delay to avoid rate limiting
+                await asyncio.sleep(0.5)
+                
+            except Exception as e:
+                logging.error(f"Error generating review for {emp_data.get('name')}: {str(e)}")
+                error_count += 1
+        
+        # Update finalization record with review status
+        await db.quarter_finalizations.update_one(
+            {"year": year, "quarter": quarter},
+            {
+                "$set": {
+                    "reviews_generated": True,
+                    "reviews_count": generated_count,
+                    "reviews_errors": error_count,
+                    "reviews_completed_at": datetime.now(timezone.utc).isoformat()
+                }
+            }
+        )
+        
+        logging.info(f"Generated {generated_count} reviews for {quarter} {year} ({error_count} errors)")
+        
+    except Exception as e:
+        logging.error(f"Error in batch review generation: {str(e)}")
 
 
 @api_router.delete("/v2/finalize/{year}/{quarter}")
