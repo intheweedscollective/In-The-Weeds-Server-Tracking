@@ -77,6 +77,32 @@ export default function ReviewTracker() {
     fetchData();
   }, [fetchData]);
 
+  // Sync from ReviewTrackers
+  const handleSync = async () => {
+    setSyncing(true);
+    toast.info("Syncing from ReviewTrackers... This may take a few minutes.");
+    
+    try {
+      const res = await fetch(
+        `${API_URL}/api/v2/reviews/sync?quarter=${selectedQuarter}&year=${selectedYear}`,
+        { method: "POST" }
+      );
+      
+      const data = await res.json();
+      
+      if (data.success) {
+        toast.success(`Synced ${data.new_reviews} new reviews!`);
+        fetchData(); // Refresh the data
+      } else {
+        toast.error(data.message || "Sync failed");
+      }
+    } catch (error) {
+      toast.error("Sync request failed - it may still be processing in the background");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   // Delete review
   const handleDeleteReview = async (reviewId) => {
     if (!window.confirm("Are you sure you want to delete this review?")) return;
