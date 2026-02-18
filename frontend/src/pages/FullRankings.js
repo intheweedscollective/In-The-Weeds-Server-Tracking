@@ -236,6 +236,34 @@ export default function FullRankings() {
     }
   };
 
+  const handleDownloadReview = async (employeeId, employeeName) => {
+    setDownloadingReview(employeeId);
+    try {
+      const response = await axios.post(
+        `${API}/v2/generate-review/${employeeId}?quarter=${selectedQuarter}&year=${selectedYear}`,
+        {},
+        { responseType: 'blob' }
+      );
+      
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const objectUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.setAttribute('download', `${employeeName.replace(/\s+/g, '_')}_Review_${selectedQuarter}_${selectedYear}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1000);
+      
+      toast.success(`Review downloaded for ${employeeName}`);
+    } catch (error) {
+      console.error("Error downloading review:", error);
+      toast.error(`Failed to download review for ${employeeName}`);
+    } finally {
+      setDownloadingReview(null);
+    }
+  };
+
   const getTierStyle = (tier) => {
     return TIER_STYLES[tier] || { bg: "bg-gray-100", text: "text-gray-800", border: "border-gray-200" };
   };
