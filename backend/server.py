@@ -4393,6 +4393,138 @@ async def test_reviewtrackers_connection():
         }
 
 
+# ============================================================================
+# LOYALTY VOICE (CV) INTEGRATION - Customer Voice Feedback
+# ============================================================================
+
+from loyalty_voice_integration import (
+    sync_loyalty_voice_to_db,
+    detect_server_in_comment,
+    get_cv_points_for_employee,
+    POSITIVE_RATING_MIN, NEGATIVE_RATING_MAX,
+    POSITIVE_POINTS, NEGATIVE_POINTS
+)
+
+
+@api_router.post("/v2/cv/sync")
+async def sync_loyalty_voice(quarter: str = "Q1", year: int = 2026):
+    """
+    Sync Customer Voice feedback from Loyalty Voice platform.
+    Scrapes feedback data and calculates CV points for employees.
+    """
+    try:
+        results = await sync_loyalty_voice_to_db(
+            db=db,
+            quarter=quarter,
+            year=year,
+            detect_employees_func=detect_server_in_comment
+        )
+        
+        return {
+            "success": results.get("success", False),
+            "message": f"Synced {results.get('new_count', 0)} new feedback items",
+            "new_feedback": results.get("new_count", 0),
+            "skipped_duplicates": results.get("skipped_count", 0),
+            "total_scraped": results.get("total_scraped", 0),
+            "errors": results.get("errors", [])[:5]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"CV sync failed: {str(e)}")
+
+
+@api_router.get("/v2/cv/feedback")
+async def get_cv_feedback(quarter: str = "Q1", year: int = 2026):
+    """Get all CV feedback for a quarter."""
+    feedback = await db.cv_feedback.find(
+        {"quarter": quarter.upper(), "year": year},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    return {
+        "feedback": feedback,
+        "total": len(feedback),
+        "scoring_rules": {
+            "positive_min_rating": POSITIVE_RATING_MIN,
+            "positive_points": POSITIVE_POINTS,
+            "negative_max_rating": NEGATIVE_RATING_MAX,
+            "negative_points": NEGATIVE_POINTS
+        }
+    }
+
+
+@api_router.get("/v2/cv/stats")
+async def get_cv_stats(quarter: str = "Q1", year: int = 2026):
+    """Get CV statistics including employee points breakdown."""
+    feedback = await db.cv_feedback.find(
+        {"quarter": quarter.upper(), "year": year},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    # Get employees
+    employees = await db.employees_v2.find(
+        {"quarter": quarter.upper(), "year": year},
+        {"name": 1, "_id": 0}
+    ).to_list(500)
+    
+    # Calculate stats per employee
+    employee_stats = []
+    for emp in employees:
+        stats = get_cv_points_for_employee(feedback, emp["name"])
+        if stats["mention_count"] > 0:
+            employee_stats.append(stats)
+    
+    # Sort by total points
+    employee_stats.sort(key=lambda x: x["total_cv_points"], reverse=True)
+    
+    # Overall stats
+    total_feedback = len(feedback)
+    positive_count = len([f for f in feedback if f.get("sentiment") == "positive"])
+    negative_count = len([f for f in feedback if f.get("sentiment") == "negative"])
+    neutral_count = len([f for f in feedback if f.get("sentiment") == "neutral"])
+    
+    return {
+        "total_feedback": total_feedback,
+        "positive_count": positive_count,
+        "negative_count": negative_count,
+        "neutral_count": neutral_count,
+        "employee_stats": employee_stats,
+        "last_sync": feedback[0].get("synced_at") if feedback else None
+    }
+
+
+@api_router.get("/v2/cv/employee/{employee_name}/points")
+async def get_employee_cv_points(employee_name: str, quarter: str = "Q1", year: int = 2026):
+    """Get CV points breakdown for a specific employee."""
+    feedback = await db.cv_feedback.find(
+        {"quarter": quarter.upper(), "year": year},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    stats = get_cv_points_for_employee(feedback, employee_name)
+    return stats
+
+
+@api_router.get("/v2/cv/sync/status")
+async def get_cv_sync_status():
+    """Get Loyalty Voice sync status."""
+    username = os.environ.get("LOYALTY_VOICE_USERNAME")
+    configured = bool(username)
+    
+    # Get last sync
+    last_feedback = await db.cv_feedback.find_one(
+        {"source": "loyalty_voice"},
+        sort=[("synced_at", -1)]
+    )
+    
+    synced_count = await db.cv_feedback.count_documents({"source": "loyalty_voice"})
+    
+    return {
+        "configured": configured,
+        "last_sync_time": last_feedback.get("synced_at") if last_feedback else None,
+        "total_synced_feedback": synced_count
+    }
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
