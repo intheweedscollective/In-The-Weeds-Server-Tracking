@@ -3926,6 +3926,84 @@ async def unfinalize_quarter(year: int, quarter: str):
     return {"message": f"Quarter {quarter} {year} reopened for edits"}
 
 
+@api_router.get("/v2/reviews/quarterly/{year}/{quarter}")
+async def get_quarterly_reviews(year: int, quarter: str):
+    """Get all generated quarterly reviews for a quarter."""
+    reviews = await db.reviews_v2.find(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0, "pdf_base64": 0}  # Exclude PDF data for listing
+    ).to_list(1000)
+    
+    # Get finalization status
+    finalization = await db.quarter_finalizations.find_one(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    )
+    
+    return {
+        "reviews": reviews,
+        "total": len(reviews),
+        "finalization_status": {
+            "is_finalized": finalization.get("is_finalized", False) if finalization else False,
+            "reviews_generated": finalization.get("reviews_generated", False) if finalization else False,
+            "reviews_count": finalization.get("reviews_count", 0) if finalization else 0,
+            "reviews_completed_at": finalization.get("reviews_completed_at") if finalization else None
+        }
+    }
+
+
+@api_router.get("/v2/reviews/quarterly/{year}/{quarter}/{employee_id}")
+async def get_employee_quarterly_review(year: int, quarter: str, employee_id: str):
+    """Get a specific employee's quarterly review with PDF."""
+    review = await db.reviews_v2.find_one(
+        {"year": year, "quarter": quarter.upper(), "employee_id": employee_id},
+        {"_id": 0}
+    )
+    
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found for this employee")
+    
+    return review
+
+
+@api_router.post("/v2/reviews/quarterly/{year}/{quarter}/regenerate")
+async def regenerate_quarterly_reviews(year: int, quarter: str, employee_ids: List[str] = None):
+    """
+    Regenerate quarterly reviews for specific employees or all employees.
+    If employee_ids is provided, only regenerate for those employees.
+    """
+    # Get employees
+    query = {"year": year, "quarter": quarter.upper()}
+    if employee_ids:
+        query["id"] = {"$in": employee_ids}
+    
+    employees = await db.employees_v2.find(query, {"_id": 0}).to_list(1000)
+    
+    if not employees:
+        raise HTTPException(status_code=404, detail="No employees found")
+    
+    # Delete existing reviews for these employees
+    if employee_ids:
+        await db.reviews_v2.delete_many({
+            "year": year,
+            "quarter": quarter.upper(),
+            "employee_id": {"$in": employee_ids}
+        })
+    else:
+        await db.reviews_v2.delete_many({
+            "year": year,
+            "quarter": quarter.upper()
+        })
+    
+    # Queue regeneration
+    asyncio.create_task(generate_all_quarterly_reviews(year, quarter.upper(), employees))
+    
+    return {
+        "message": f"Regenerating reviews for {len(employees)} employees",
+        "employees_queued": len(employees)
+    }
+
+
 # ============================================================================
 # REVIEW TRACKER - Customer Review Aggregation & Employee Attribution
 # ============================================================================
