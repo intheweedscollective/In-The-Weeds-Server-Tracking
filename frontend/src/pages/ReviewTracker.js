@@ -60,6 +60,11 @@ export default function ReviewTracker() {
       const statsData = await statsRes.json();
       setStats(statsData);
       
+      // Fetch sync status
+      const syncRes = await fetch(`${API_URL}/api/v2/reviews/sync/status`);
+      const syncData = await syncRes.json();
+      setSyncStatus(syncData);
+      
     } catch (error) {
       console.error("Error fetching review data:", error);
       toast.error("Failed to load reviews");
