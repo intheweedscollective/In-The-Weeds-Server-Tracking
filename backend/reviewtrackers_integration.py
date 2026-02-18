@@ -57,7 +57,7 @@ class ReviewTrackersClient:
         async with httpx.AsyncClient() as client:
             response = await client.post(RT_AUTH_URL, headers=headers, timeout=30.0)
             
-            if response.status_code == 200:
+            if response.status_code in [200, 201]:
                 data = response.json()
                 self.auth_token = data.get("token")
                 self.account_id = data.get("account_id")
