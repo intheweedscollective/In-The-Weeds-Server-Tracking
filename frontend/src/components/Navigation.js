@@ -56,8 +56,7 @@ export default function Navigation() {
                     data-testid={`nav-link-${path.replace("/", "") || "dashboard"}`}
                   >
                     <Icon className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 flex-shrink-0" />
-                    <span className="hidden sm:inline">{label}</span>
-                    <span className="sm:hidden">{label.slice(0, 4)}</span>
+                    <span>{label}</span>
                   </Link>
                 );
               })}
