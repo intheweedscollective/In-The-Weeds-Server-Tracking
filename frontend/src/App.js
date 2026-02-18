@@ -3,6 +3,7 @@ import { Toaster } from "sonner";
 import Dashboard from "./pages/Dashboard";
 import EmployeeList from "./pages/EmployeeList";
 import ReviewGeneration from "./pages/ReviewGeneration";
+import ReviewTracker from "./pages/ReviewTracker";
 import Analytics from "./pages/Analytics";
 import QuarterSettings from "./pages/QuarterSettings";
 import FullRankings from "./pages/FullRankings";
@@ -20,6 +21,7 @@ function App() {
           <Route path="/rankings" element={<FullRankings />} />
           <Route path="/employees" element={<EmployeeList />} />
           <Route path="/reviews" element={<ReviewGeneration />} />
+          <Route path="/review-tracker" element={<ReviewTracker />} />
           <Route path="/yodeck" element={<YodeckSlides />} />
           <Route path="/snapshots" element={<Snapshots />} />
           <Route path="/analytics" element={<Analytics />} />
