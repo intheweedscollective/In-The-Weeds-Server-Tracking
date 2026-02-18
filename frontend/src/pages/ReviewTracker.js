@@ -33,6 +33,8 @@ export default function ReviewTracker() {
   const [selectedYear, setSelectedYear] = useState(2026);
   const [filterPlatform, setFilterPlatform] = useState("");
   const [filterEmployee, setFilterEmployee] = useState("");
+  const [syncStatus, setSyncStatus] = useState(null);
+  const [syncing, setSyncing] = useState(false);
 
   // Fetch data
   const fetchData = useCallback(async () => {
