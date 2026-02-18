@@ -65,65 +65,74 @@ async def scrape_loyalty_voice_feedback(
             
             # Navigate to feedback page
             await page.goto(f"{LV_URL}/feedback", wait_until="networkidle", timeout=30000)
-            await page.wait_for_timeout(3000)
+            await page.wait_for_timeout(5000)
             
-            # Scrape feedback table
-            page_num = 1
-            max_pages = 10  # Safety limit
+            # The page uses a grid/div layout, not a table
+            # Find all feedback rows by looking for the rating pattern
+            page_text = await page.inner_text('body')
             
-            while page_num <= max_pages:
-                # Get all rows in the feedback table
-                rows = await page.locator('table tbody tr').all()
+            # Parse the structured text - feedback items follow a pattern
+            # Rating -> Customer Name -> Date -> Shift -> Comment -> Store -> Date of Business -> Can Contact
+            lines = page_text.split('\n')
+            
+            current_item = {}
+            i = 0
+            while i < len(lines):
+                line = lines[i].strip()
                 
-                if not rows:
-                    break
-                
-                for row in rows:
-                    try:
-                        # Extract data from each row
-                        cells = await row.locator('td').all()
-                        if len(cells) >= 7:
-                            # Rating is in format "10 / 10" with an icon
-                            rating_text = await cells[1].inner_text()
-                            rating = parse_rating(rating_text)
-                            
-                            customer_name = await cells[2].inner_text()
-                            response_date = await cells[3].inner_text()
-                            shift = await cells[4].inner_text()
-                            comment = await cells[5].inner_text()
-                            store = await cells[6].inner_text()
-                            
-                            feedback_items.append({
-                                "rating": rating,
-                                "rating_text": rating_text.strip(),
-                                "customer_name": customer_name.strip(),
-                                "response_date": response_date.strip(),
-                                "shift": shift.strip(),
-                                "comment": comment.strip(),
-                                "store": store.strip(),
-                                "source": "loyalty_voice"
-                            })
-                    except Exception as e:
-                        print(f"Error parsing row: {e}")
-                        continue
-                
-                # Check for next page
-                next_btn = page.locator('text=">>"').first
-                if await next_btn.is_visible(timeout=1000):
-                    # Check if we're on the last page
-                    page_info = await page.locator('text=/Page \\d+ of \\d+/').inner_text()
-                    if "of" in page_info:
-                        parts = page_info.split("of")
-                        current = int(parts[0].replace("Page", "").strip())
-                        total = int(parts[1].strip())
-                        if current >= total:
-                            break
+                # Look for rating pattern "X / 10"
+                if '/ 10' in line:
+                    # Save previous item if exists
+                    if current_item.get('rating'):
+                        feedback_items.append(current_item)
                     
-                    await next_btn.click()
-                    await page.wait_for_timeout(2000)
-                    page_num += 1
+                    # Start new item
+                    rating_text = line
+                    rating = parse_rating(rating_text)
+                    
+                    current_item = {
+                        "rating": rating,
+                        "rating_text": rating_text,
+                        "customer_name": "",
+                        "response_date": "",
+                        "shift": "",
+                        "comment": "",
+                        "store": "",
+                        "source": "loyalty_voice"
+                    }
+                    
+                    # Next lines should be: Customer Name, Date, Shift, Comment, Store, Date, Yes/No
+                    if i + 1 < len(lines):
+                        current_item["customer_name"] = lines[i + 1].strip()
+                    if i + 2 < len(lines):
+                        current_item["response_date"] = lines[i + 2].strip()
+                    if i + 3 < len(lines):
+                        current_item["shift"] = lines[i + 3].strip()
+                    if i + 4 < len(lines):
+                        current_item["comment"] = lines[i + 4].strip()
+                    if i + 5 < len(lines):
+                        current_item["store"] = lines[i + 5].strip()
+                    
+                    i += 6  # Skip the processed lines
                 else:
-                    break
+                    i += 1
+            
+            # Don't forget the last item
+            if current_item.get('rating'):
+                feedback_items.append(current_item)
+            
+            # Filter out any invalid items (e.g., from header text)
+            valid_items = []
+            for item in feedback_items:
+                # Valid items should have a customer name and store with "Bubba Gump" 
+                if item.get("store") and "Bubba Gump" in item.get("store", ""):
+                    valid_items.append(item)
+                elif item.get("customer_name") and len(item.get("customer_name", "")) > 2:
+                    # Check if this looks like a real entry
+                    if item.get("response_date") and "/" in item.get("response_date", ""):
+                        valid_items.append(item)
+            
+            feedback_items = valid_items
             
         except Exception as e:
             print(f"Scraping error: {e}")
