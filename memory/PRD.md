@@ -151,23 +151,26 @@ Build a comprehensive performance review application for restaurant employees (B
 ## Backlog
 
 ### P0 - Critical
-- [ ] **Data Import from POS Reports (Aloha)**: Extract data from scanned/uploaded reports - User's next priority after Review Tracker
-- [ ] **Multi-Store Architecture**: Support for 22 locations with global reporting
+- [ ] **Loyalty Voice CV Integration (IN PROGRESS)**: 
+  - Credentials configured: Bglv@ldry.com / EZMoney2026
+  - **NEW APPROACH**: Use Server Performance Report with NPS % per server (not individual feedback scraping)
+  - Backend scaffolding created: `/app/backend/loyalty_voice_integration.py`
+  - API endpoints created: `/api/v2/cv/sync`, `/api/v2/cv/stats`, etc.
+  - **NEXT**: Pivot to scrape Server Performance Report under Reports tab for NPS scores
+- [ ] **Aloha Data Import**: Extract data from scanned/uploaded POS reports
 
 ### P1 - High Priority  
-- [ ] Complete "Concept President" features (Goal Setting, Real-Time Alerts, Incentive Tracking)
-- [ ] Integrate Review Tracker points into main employee rankings/scoring
+- [ ] **Multi-Store Architecture**: Support for 22 locations with global reporting
+- [ ] Integrate Review Tracker bonus points into main rankings display
 
 ### P2 - Medium Priority
 - [ ] "Download All Slides" as ZIP feature
-- [ ] Production deployment verification
-- [ ] Upload screenshot/image of review for OCR extraction
+- [ ] Scheduled auto-sync for ReviewTrackers (daily/hourly)
 
 ### P3 - Low Priority
 - [ ] Automated daily/weekly slide pack generation
 - [ ] Batch uploads of line graph PDFs
 - [ ] Yodeck Embed Link feature
-- Note: "CV Weight" backend logic is NOT dead code - it's the active 15% weight for Customer Voice metric
 
 ## Key API Endpoints
 - `GET /api/v2/snapshots` - List all snapshots
