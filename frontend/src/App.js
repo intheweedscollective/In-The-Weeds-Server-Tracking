@@ -21,7 +21,6 @@ function App() {
           <Route path="/rankings" element={<FullRankings />} />
           <Route path="/employees" element={<EmployeeList />} />
           <Route path="/reviews" element={<ReviewGeneration />} />
-          <Route path="/feedback" element={<ReviewTracker />} />
           <Route path="/review-tracker" element={<ReviewTracker />} />
           <Route path="/yodeck" element={<YodeckSlides />} />
           <Route path="/snapshots" element={<Snapshots />} />
