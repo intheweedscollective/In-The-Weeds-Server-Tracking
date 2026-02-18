@@ -110,6 +110,25 @@ Build a comprehensive performance review application for restaurant employees (B
   - Smaller KPI values and labels on mobile
 - ✅ **All 6 Slide Endpoints Working**: top10, complete-rankings, most-improved, promotion-watchlist, at-risk, printable-rankings
 
+### Recent Changes (Feb 18, 2026) - Review Tracker
+- ✅ **NEW Review Tracker Feature**: Full customer review aggregation system (like ReviewTrackers.com)
+  - Manual entry of reviews from Google, Yelp, Facebook, TripAdvisor, OpenTable
+  - AI-powered employee name detection using GPT-4.1-mini
+  - Sentiment analysis (positive/negative/neutral)
+  - Points system: +0.2 pts per positive mention (5 mentions = 1 full point)
+  - Duplicate review detection via content hash
+  - Dashboard with stats, top mentioned employees, platform breakdown
+  - Filters by year, quarter, platform, and employee name
+- ✅ **New API Endpoints**:
+  - `GET /api/v2/reviews` - List reviews with filters
+  - `POST /api/v2/reviews` - Add review with AI detection
+  - `POST /api/v2/reviews/detect` - Preview employee detection
+  - `GET /api/v2/reviews/stats` - Get review statistics
+  - `GET /api/v2/reviews/employee/{name}/points` - Get employee's review points
+  - `DELETE /api/v2/reviews/{id}` - Delete review
+- ✅ **New Frontend Page**: `/review-tracker` with full CRUD and AI detection UI
+- ✅ **New MongoDB Collection**: `customer_reviews`
+
 ## Backlog
 
 ### P0 - Critical
