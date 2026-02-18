@@ -3847,6 +3847,9 @@ from review_tracker import (
     generate_review_hash, detect_employees_in_review,
     calculate_review_points_for_employee, get_review_stats
 )
+from reviewtrackers_integration import (
+    ReviewTrackersClient, sync_reviews_from_reviewtrackers
+)
 
 
 class CustomerReviewCreate(BaseModel):
