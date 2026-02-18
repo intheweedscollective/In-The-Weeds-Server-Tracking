@@ -4127,6 +4127,106 @@ async def get_employee_review_points(
     }
 
 
+# ============================================================================
+# REVIEWTRACKERS SYNC - Automatic review import
+# ============================================================================
+
+@api_router.post("/v2/reviews/sync")
+async def sync_from_reviewtrackers(
+    quarter: str = "Q1",
+    year: int = 2026,
+    since_date: Optional[str] = None
+):
+    """
+    Sync reviews from ReviewTrackers API.
+    
+    Args:
+        quarter: Quarter to assign reviews to
+        year: Year to assign reviews to
+        since_date: Only sync reviews published after this date (YYYY-MM-DD)
+    """
+    try:
+        results = await sync_reviews_from_reviewtrackers(
+            db=db,
+            quarter=quarter,
+            year=year,
+            since_date=since_date,
+            detect_employees_func=detect_employees_in_review
+        )
+        
+        return {
+            "success": results.get("success", False),
+            "message": f"Synced {results.get('new_count', 0)} new reviews from ReviewTrackers",
+            "new_reviews": results.get("new_count", 0),
+            "skipped_duplicates": results.get("skipped_count", 0),
+            "total_fetched": results.get("total_fetched", 0),
+            "errors": results.get("errors", [])[:5]  # Limit errors shown
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+
+
+@api_router.get("/v2/reviews/sync/status")
+async def get_sync_status():
+    """Get ReviewTrackers sync configuration status."""
+    username = os.environ.get("REVIEWTRACKERS_USERNAME")
+    password = os.environ.get("REVIEWTRACKERS_PASSWORD")
+    
+    configured = bool(username and password)
+    
+    # Get last sync info
+    last_synced_review = await db.customer_reviews.find_one(
+        {"source": "reviewtrackers"},
+        sort=[("synced_at", -1)]
+    )
+    
+    last_sync_time = None
+    if last_synced_review:
+        last_sync_time = last_synced_review.get("synced_at")
+    
+    # Count synced reviews
+    synced_count = await db.customer_reviews.count_documents({"source": "reviewtrackers"})
+    
+    return {
+        "configured": configured,
+        "username": username[:3] + "***" if username else None,
+        "last_sync_time": last_sync_time,
+        "total_synced_reviews": synced_count
+    }
+
+
+@api_router.post("/v2/reviews/sync/test")
+async def test_reviewtrackers_connection():
+    """Test connection to ReviewTrackers API."""
+    try:
+        client = ReviewTrackersClient()
+        success = await client.authenticate()
+        
+        if success:
+            # Try to get a few reviews to verify full access
+            result = await client.get_reviews(per_page=5)
+            review_count = len(result.get("reviews", []))
+            
+            return {
+                "success": True,
+                "message": "Successfully connected to ReviewTrackers",
+                "account_id": client.account_id,
+                "sample_reviews_found": review_count
+            }
+        else:
+            return {
+                "success": False,
+                "message": "Authentication failed - check credentials"
+            }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Connection error: {str(e)}"
+        }
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
