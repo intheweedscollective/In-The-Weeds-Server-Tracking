@@ -588,20 +588,37 @@ export default function FullRankings() {
                             {renderPointsCell(employee.glassware_points)}
                           </td>
                           
-                          {/* Expand Toggle */}
+                          {/* Actions: Download Review + Expand */}
                           <td className="px-2 py-4">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setExpandedRow(isExpanded ? null : employee.employee_id)}
-                              className="p-1"
-                            >
-                              {isExpanded ? (
-                                <ChevronUp className="w-4 h-4" />
-                              ) : (
-                                <ChevronDown className="w-4 h-4" />
-                              )}
-                            </Button>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDownloadReview(employee.employee_id, employee.name)}
+                                disabled={downloadingReview === employee.employee_id}
+                                className="p-1 text-primary hover:bg-primary/10"
+                                title="Download Review PDF"
+                                data-testid={`download-review-${employee.position}`}
+                              >
+                                {downloadingReview === employee.employee_id ? (
+                                  <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                  <FileText className="w-4 h-4" />
+                                )}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setExpandedRow(isExpanded ? null : employee.employee_id)}
+                                className="p-1"
+                              >
+                                {isExpanded ? (
+                                  <ChevronUp className="w-4 h-4" />
+                                ) : (
+                                  <ChevronDown className="w-4 h-4" />
+                                )}
+                              </Button>
+                            </div>
                           </td>
                         </tr>
                         
