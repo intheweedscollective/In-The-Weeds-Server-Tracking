@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { Star, Plus, Search, Filter, Trash2, Edit2, MessageSquare, TrendingUp, Award, X, Check, AlertCircle } from "lucide-react";
+import { Star, Plus, Search, Filter, Trash2, Edit2, MessageSquare, TrendingUp, Award, X, Check, AlertCircle, RefreshCw, Cloud, CheckCircle } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { toast } from "sonner";
+import Navigation from "../components/Navigation";
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
