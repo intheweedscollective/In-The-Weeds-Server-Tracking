@@ -125,6 +125,13 @@ Build a comprehensive performance review application for restaurant employees (B
   - Successfully synced 237 reviews in first sync
   - Shows sync status and last sync time in UI
   - AI automatically detects employee mentions in synced reviews
+- ✅ **Navigation Restructured**:
+  - **Reviews** tab → Quarterly Performance Reviews (AI-generated employee reviews)
+  - **Feedback** tab → Customer Review Tracker (Google/Yelp/ReviewTrackers)
+- ✅ **Auto-Generate Reviews on Finalize Quarter**:
+  - When "Finalize Quarter" is clicked, system auto-generates AI reviews for ALL employees
+  - Reviews generated in background (non-blocking)
+  - New endpoints for quarterly review management
 - ✅ **New API Endpoints**:
   - `GET /api/v2/reviews` - List reviews with filters
   - `POST /api/v2/reviews` - Add review with AI detection
@@ -134,9 +141,11 @@ Build a comprehensive performance review application for restaurant employees (B
   - `POST /api/v2/reviews/sync` - Sync from ReviewTrackers
   - `GET /api/v2/reviews/sync/status` - Get sync status
   - `POST /api/v2/reviews/sync/test` - Test ReviewTrackers connection
+  - `GET /api/v2/reviews/quarterly/{year}/{quarter}` - Get all quarterly reviews
+  - `POST /api/v2/reviews/quarterly/{year}/{quarter}/regenerate` - Regenerate reviews
   - `DELETE /api/v2/reviews/{id}` - Delete review
-- ✅ **New Frontend Page**: `/review-tracker` with full CRUD, AI detection, and ReviewTrackers sync
-- ✅ **New MongoDB Collection**: `customer_reviews`
+- ✅ **New Frontend Pages**: `/reviews` (restored), `/feedback` (Review Tracker)
+- ✅ **New MongoDB Collections**: `customer_reviews`, `reviews_v2`
 - ✅ **New Backend Files**: `review_tracker.py`, `reviewtrackers_integration.py`
 
 ## Backlog
