@@ -9,7 +9,7 @@ export default function Navigation() {
     { path: "/rankings", label: "Rankings", icon: ListOrdered },
     { path: "/employees", label: "Employees", icon: Users },
     { path: "/reviews", label: "Reviews", icon: FileText },
-    { path: "/feedback", label: "Feedback", icon: Star },
+    { path: "/review-tracker", label: "Review Tracker", icon: Star },
     { path: "/snapshots", label: "Snapshots", icon: Camera },
     { path: "/yodeck", label: "Reports", icon: Monitor },
     { path: "/analytics", label: "Analytics", icon: BarChart3 },
