@@ -132,15 +132,17 @@ Build a comprehensive performance review application for restaurant employees (B
 ## Backlog
 
 ### P0 - Critical
-- [ ] **Data Import from POS Reports**: Extract data from scanned/uploaded reports (e.g., Aloha POS) - User's top priority
+- [ ] **Data Import from POS Reports (Aloha)**: Extract data from scanned/uploaded reports - User's next priority after Review Tracker
 - [ ] **Multi-Store Architecture**: Support for 22 locations with global reporting
 
 ### P1 - High Priority  
 - [ ] Complete "Concept President" features (Goal Setting, Real-Time Alerts, Incentive Tracking)
+- [ ] Integrate Review Tracker points into main employee rankings/scoring
 
 ### P2 - Medium Priority
 - [ ] "Download All Slides" as ZIP feature
 - [ ] Production deployment verification
+- [ ] Upload screenshot/image of review for OCR extraction
 
 ### P3 - Low Priority
 - [ ] Automated daily/weekly slide pack generation
