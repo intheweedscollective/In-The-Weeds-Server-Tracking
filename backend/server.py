@@ -4441,63 +4441,55 @@ async def sync_loyalty_voice(quarter: str = "Q1", year: int = 2026):
         raise HTTPException(status_code=500, detail=f"CV sync failed: {str(e)}")
 
 
-@api_router.get("/v2/cv/feedback")
-async def get_cv_feedback(quarter: str = "Q1", year: int = 2026):
-    """Get all CV feedback for a quarter."""
-    feedback = await db.cv_feedback.find(
+@api_router.get("/v2/cv/nps")
+async def get_cv_nps_scores(quarter: str = "Q1", year: int = 2026):
+    """Get all NPS scores for a quarter from Loyalty Voice sync."""
+    nps_records = await db.cv_nps.find(
         {"quarter": quarter.upper(), "year": year},
         {"_id": 0}
-    ).to_list(1000)
+    ).to_list(500)
     
     return {
-        "feedback": feedback,
-        "total": len(feedback),
-        "scoring_rules": {
-            "positive_min_rating": POSITIVE_RATING_MIN,
-            "positive_points": POSITIVE_POINTS,
-            "negative_max_rating": NEGATIVE_RATING_MAX,
-            "negative_points": NEGATIVE_POINTS
-        }
+        "nps_records": nps_records,
+        "total": len(nps_records),
+        "quarter": quarter.upper(),
+        "year": year
     }
 
 
 @api_router.get("/v2/cv/stats")
 async def get_cv_stats(quarter: str = "Q1", year: int = 2026):
-    """Get CV statistics including employee points breakdown."""
-    feedback = await db.cv_feedback.find(
+    """Get NPS statistics from Loyalty Voice sync."""
+    # Get NPS records
+    nps_records = await db.cv_nps.find(
         {"quarter": quarter.upper(), "year": year},
         {"_id": 0}
-    ).to_list(1000)
-    
-    # Get employees
-    employees = await db.employees_v2.find(
-        {"quarter": quarter.upper(), "year": year},
-        {"name": 1, "_id": 0}
     ).to_list(500)
     
-    # Calculate stats per employee
-    employee_stats = []
-    for emp in employees:
-        stats = get_cv_points_for_employee(feedback, emp["name"])
-        if stats["mention_count"] > 0:
-            employee_stats.append(stats)
+    if not nps_records:
+        return {
+            "total_servers": 0,
+            "avg_nps": 0,
+            "highest_nps": None,
+            "lowest_nps": None,
+            "nps_breakdown": [],
+            "last_sync": None
+        }
     
-    # Sort by total points
-    employee_stats.sort(key=lambda x: x["total_cv_points"], reverse=True)
+    # Calculate stats
+    nps_scores = [r.get("nps_score", 0) for r in nps_records]
+    avg_nps = sum(nps_scores) / len(nps_scores) if nps_scores else 0
     
-    # Overall stats
-    total_feedback = len(feedback)
-    positive_count = len([f for f in feedback if f.get("sentiment") == "positive"])
-    negative_count = len([f for f in feedback if f.get("sentiment") == "negative"])
-    neutral_count = len([f for f in feedback if f.get("sentiment") == "neutral"])
+    # Sort by NPS
+    sorted_records = sorted(nps_records, key=lambda x: x.get("nps_score", 0), reverse=True)
     
     return {
-        "total_feedback": total_feedback,
-        "positive_count": positive_count,
-        "negative_count": negative_count,
-        "neutral_count": neutral_count,
-        "employee_stats": employee_stats,
-        "last_sync": feedback[0].get("synced_at") if feedback else None
+        "total_servers": len(nps_records),
+        "avg_nps": round(avg_nps, 1),
+        "highest_nps": sorted_records[0] if sorted_records else None,
+        "lowest_nps": sorted_records[-1] if sorted_records else None,
+        "nps_breakdown": sorted_records[:20],  # Top 20
+        "last_sync": nps_records[0].get("synced_at") if nps_records else None
     }
 
 
