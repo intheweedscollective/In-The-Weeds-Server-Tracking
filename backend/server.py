@@ -4493,16 +4493,33 @@ async def get_cv_stats(quarter: str = "Q1", year: int = 2026):
     }
 
 
-@api_router.get("/v2/cv/employee/{employee_name}/points")
-async def get_employee_cv_points(employee_name: str, quarter: str = "Q1", year: int = 2026):
-    """Get CV points breakdown for a specific employee."""
-    feedback = await db.cv_feedback.find(
-        {"quarter": quarter.upper(), "year": year},
+@api_router.get("/v2/cv/employee/{employee_name}/nps")
+async def get_employee_nps(employee_name: str, quarter: str = "Q1", year: int = 2026):
+    """Get NPS score for a specific employee."""
+    # Find by employee name (case-insensitive)
+    nps_record = await db.cv_nps.find_one(
+        {
+            "quarter": quarter.upper(),
+            "year": year,
+            "employee_name": {"$regex": f"^{employee_name}$", "$options": "i"}
+        },
         {"_id": 0}
-    ).to_list(1000)
+    )
     
-    stats = get_cv_points_for_employee(feedback, employee_name)
-    return stats
+    if nps_record:
+        return {
+            "found": True,
+            "employee_name": nps_record.get("employee_name"),
+            "nps_score": nps_record.get("nps_score", 0),
+            "synced_at": nps_record.get("synced_at")
+        }
+    
+    return {
+        "found": False,
+        "employee_name": employee_name,
+        "nps_score": 0,
+        "synced_at": None
+    }
 
 
 @api_router.get("/v2/cv/sync/status")
@@ -4511,18 +4528,19 @@ async def get_cv_sync_status():
     username = os.environ.get("LOYALTY_VOICE_USERNAME")
     configured = bool(username)
     
-    # Get last sync
-    last_feedback = await db.cv_feedback.find_one(
+    # Get last sync from cv_nps collection
+    last_nps = await db.cv_nps.find_one(
         {"source": "loyalty_voice"},
         sort=[("synced_at", -1)]
     )
     
-    synced_count = await db.cv_feedback.count_documents({"source": "loyalty_voice"})
+    synced_count = await db.cv_nps.count_documents({"source": "loyalty_voice"})
     
     return {
         "configured": configured,
-        "last_sync_time": last_feedback.get("synced_at") if last_feedback else None,
-        "total_synced_feedback": synced_count
+        "last_sync_time": last_nps.get("synced_at") if last_nps else None,
+        "total_synced_servers": synced_count,
+        "data_type": "NPS scores from Server Performance Report"
     }
 
 
