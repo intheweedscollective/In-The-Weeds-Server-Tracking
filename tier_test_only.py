@@ -9,7 +9,7 @@ from pypdf import PdfReader
 
 def test_per_metric_tier_mapping():
     """Test per-metric Tier mapping behavior with exact tier headers from user request"""
-    base_url = "https://team-leaderboard-5.preview.emergentagent.com"
+    base_url = "https://loyalty-voice-sync.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     
     try:
