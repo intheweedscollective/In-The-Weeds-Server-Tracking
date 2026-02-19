@@ -4394,41 +4394,50 @@ async def test_reviewtrackers_connection():
 
 
 # ============================================================================
-# LOYALTY VOICE (CV) INTEGRATION - Customer Voice Feedback
+# LOYALTY VOICE (CV) INTEGRATION - Server Performance NPS Scores
 # ============================================================================
 
 from loyalty_voice_integration import (
     sync_loyalty_voice_to_db,
-    detect_server_in_comment,
-    get_cv_points_for_employee,
-    POSITIVE_RATING_MIN, NEGATIVE_RATING_MAX,
-    POSITIVE_POINTS, NEGATIVE_POINTS
+    scrape_server_performance_report,
+    get_nps_score_for_employee,
+    get_quarter_date_range
 )
 
 
 @api_router.post("/v2/cv/sync")
 async def sync_loyalty_voice(quarter: str = "Q1", year: int = 2026):
     """
-    Sync Customer Voice feedback from Loyalty Voice platform.
-    Scrapes feedback data and calculates CV points for employees.
+    Sync NPS scores from Loyalty Voice Server Performance Report.
+    
+    This scrapes the Server Performance Report which contains NPS %
+    for each server, then matches them to employees in the database.
     """
     try:
         results = await sync_loyalty_voice_to_db(
             db=db,
             quarter=quarter,
-            year=year,
-            detect_employees_func=detect_server_in_comment
+            year=year
         )
         
+        if not results.get("success"):
+            return {
+                "success": False,
+                "message": results.get("error", "Sync failed"),
+                "error": results.get("error"),
+                "debug_screenshot": results.get("debug_screenshot")
+            }
+        
         return {
-            "success": results.get("success", False),
-            "message": f"Synced {results.get('new_count', 0)} new feedback items",
-            "new_feedback": results.get("new_count", 0),
-            "skipped_duplicates": results.get("skipped_count", 0),
-            "total_scraped": results.get("total_scraped", 0),
-            "errors": results.get("errors", [])[:5]
+            "success": True,
+            "message": f"Synced NPS scores for {results.get('matched_count', 0)} employees",
+            "matched_count": results.get("matched_count", 0),
+            "matched_servers": results.get("matched_servers", []),
+            "unmatched_servers": results.get("unmatched_servers", []),
+            "total_scraped": results.get("total_scraped", 0)
         }
     except Exception as e:
+        logging.error(f"CV sync error: {e}")
         raise HTTPException(status_code=500, detail=f"CV sync failed: {str(e)}")
 
 
