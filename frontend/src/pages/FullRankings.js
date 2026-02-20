@@ -617,7 +617,7 @@ export default function FullRankings() {
                           <td className="px-4 py-4">
                             <div className="flex items-center gap-2">
                               <span className="text-2xl font-serif font-black text-gray-300">{employee.position}</span>
-                              <span className={`px-2 py-1 rounded text-xs font-bold ${tierStyle.bg} ${tierStyle.text} ${tierStyle.border} border`}>
+                              <span className={`inline-block w-10 text-center px-2 py-1 rounded text-xs font-bold ${tierStyle.bg} ${tierStyle.text} ${tierStyle.border} border`}>
                                 {employee.position_label}
                               </span>
                             </div>
