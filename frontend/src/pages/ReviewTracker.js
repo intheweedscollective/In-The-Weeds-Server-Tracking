@@ -41,6 +41,8 @@ export default function ReviewTracker() {
   const [syncing, setSyncing] = useState(false);
   const [syncingCV, setSyncingCV] = useState(false);
   const [activeTab, setActiveTab] = useState("all"); // "all", "cv", "reviews"
+  const [showExcluded, setShowExcluded] = useState(false);
+  const [excludedCount, setExcludedCount] = useState(0);
 
   // Fetch data
   const fetchData = useCallback(async () => {
