@@ -723,7 +723,7 @@ export default function FullRankings() {
                         {/* Expanded Details Row */}
                         {isExpanded && (
                           <tr key={`${employee.employee_id}-details`} className="bg-gradient-to-r from-blue-50 to-indigo-50">
-                            <td colSpan={11} className="px-6 py-5">
+                            <td colSpan={12} className="px-6 py-5">
                               {(() => {
                                 const emp = getEmployeeDetails(employee.employee_id);
                                 const ranks = metricRankings[employee.employee_id] || {};
