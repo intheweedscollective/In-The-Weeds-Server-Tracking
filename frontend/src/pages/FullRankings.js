@@ -738,6 +738,9 @@ export default function FullRankings() {
                                   }
                                 ];
                                 
+                                // Get NPS score for this employee
+                                const empNps = getEmployeeNps(employee.employee_id);
+                                
                                 return (
                                   <div className="space-y-4">
                                     <div className="flex items-center gap-2 mb-3">
@@ -745,7 +748,7 @@ export default function FullRankings() {
                                       <span className="text-sm text-gray-500">• {employee.name}</span>
                                     </div>
                                     
-                                    <div className="grid grid-cols-5 gap-4">
+                                    <div className="grid grid-cols-6 gap-4">
                                       {metrics.map((m, i) => (
                                         <div key={i} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
                                           <div className="text-xs font-semibold text-gray-500 uppercase mb-2">{m.label}</div>
@@ -758,6 +761,27 @@ export default function FullRankings() {
                                           </div>
                                         </div>
                                       ))}
+                                      
+                                      {/* NPS Card */}
+                                      <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                                        <div className="text-xs font-semibold text-gray-500 uppercase mb-2 flex items-center gap-1">
+                                          <MessageCircle className="w-3 h-3" />
+                                          NPS Score
+                                        </div>
+                                        <div className={`text-2xl font-bold ${empNps !== null ? (empNps >= 50 ? 'text-green-600' : empNps >= 0 ? 'text-yellow-600' : 'text-red-600') : 'text-gray-400'}`}>
+                                          {empNps !== null ? `${empNps}%` : '—'}
+                                        </div>
+                                        <div className="text-xs text-gray-400 mt-1">Customer Voice</div>
+                                        <div className="mt-2 pt-2 border-t border-gray-100">
+                                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${
+                                            empNps !== null 
+                                              ? (empNps >= 50 ? 'bg-green-100 text-green-800' : empNps >= 0 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800')
+                                              : 'bg-gray-100 text-gray-500'
+                                          }`}>
+                                            {empNps !== null ? (empNps >= 50 ? 'Promoter' : empNps >= 0 ? 'Passive' : 'Detractor') : 'No Data'}
+                                          </span>
+                                        </div>
+                                      </div>
                                     </div>
                                     
                                     {/* Summary Row */}
