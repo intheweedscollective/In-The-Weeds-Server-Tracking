@@ -149,7 +149,7 @@ export default function Dashboard() {
                 Performance Hub
               </h1>
               <p className="text-lg text-secondary font-medium italic" data-testid="main-subtitle">
-                {selectedQuarter} {selectedYear} • Quarterly Crew Reviews
+                {selectedQuarter} {selectedYear} • Team Performance Reviews
               </p>
             </div>
           </div>
