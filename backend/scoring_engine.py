@@ -390,40 +390,43 @@ def calculate_derived_metrics(employee: EmployeeV2) -> EmployeeV2:
 
 def calculate_customer_voice_score(employee: EmployeeV2) -> EmployeeV2:
     """
-    Calculate Customer Voice score using NPS-style logic.
+    Calculate Customer Voice score using NPS percentage directly.
     
-    - Promoters (9-10): +1 point each
-    - Passives (7-8): 0 points
-    - Detractors (0-6): -2 points each
-    - Review Mentions: 0.2 points each (5 mentions = 1 point)
+    NEW MODEL (Simplified):
+    - Use NPS% directly from Loyalty Voice sync
+    - NPS_points = NPS% × 0.15 (capped at 0 minimum)
+    - This gives 15% weight in total score
     
-    Quarterly Cap: +10 / -6 points
+    Scale:
+    - 0% NPS = 0 points (minimum)
+    - 50% NPS = 7.5 points
+    - 75% NPS = 11.25 points
+    - 100% NPS = 15 points
+    
+    Review Tracker mentions are handled separately as Review Bonus.
     """
-    # Calculate raw CV points
-    # Review mentions: 0.2 points each (5 mentions = 1 point)
-    review_points = employee.review_mentions * 0.2
+    # Get NPS score from Loyalty Voice sync (ranges -100 to +100)
+    nps = employee.nps_score or 0
     
-    promoter_points = employee.cv_promoters * CV_PROMOTER_POINTS
-    passive_points = employee.cv_passives * CV_PASSIVE_POINTS
-    detractor_points = employee.cv_detractors * CV_DETRACTOR_POINTS
+    # Calculate CV score: NPS% × 0.15, minimum 0
+    # NPS of 100% = 15 points, 50% = 7.5 points, 0% = 0 points
+    nps_points = max(0, nps * 0.15)
     
-    raw_points = promoter_points + passive_points + detractor_points + review_points
-    employee.cv_raw_points = round(raw_points, 2)
-    
-    # Apply quarterly cap: +10 max, -6 min
-    capped_score = max(CV_MIN_POINTS, min(CV_MAX_POINTS, raw_points))
-    employee.cv_score = round(capped_score, 2)
+    employee.cv_score = round(nps_points, 2)
+    employee.cv_raw_points = round(nps_points, 2)
     
     return employee
 
 
 def calculate_review_tracker_bonus(employee: EmployeeV2) -> EmployeeV2:
     """
-    Review Tracker bonus is now combined into CV score directly.
-    This function is kept for backwards compatibility but sets bonus to 0.
+    Calculate Review Tracker bonus from external review mentions.
+    
+    Formula: RT mentions × 0.2 points each
+    This is a SEPARATE bonus on top of base score.
     """
-    # Review mentions are now added to CV score directly
-    employee.review_tracker_bonus = 0
+    review_bonus = (employee.review_mentions or 0) * 0.2
+    employee.review_tracker_bonus = round(review_bonus, 2)
     
     return employee
 
@@ -432,16 +435,16 @@ def calculate_combined_cv_rt(employee: EmployeeV2) -> EmployeeV2:
     """
     Store combined CV + Review Tracker for reference.
     
-    Note: CV is part of base score (15% weight), 
-    Review Tracker is a separate bonus (max 5 pts).
-    No combined cap - they are independent.
+    CV (NPS-based) is part of base score (15% weight).
+    Review Tracker is a separate bonus.
     """
-    # Store combined score for reference (no capping needed)
+    # Store combined score for reference
     employee.cv_rt_combined = round(
         (employee.cv_score or 0) + (employee.review_tracker_bonus or 0), 2
     )
     
     return employee
+
 
 
 def calculate_dar_penalty(employee: EmployeeV2) -> EmployeeV2:
