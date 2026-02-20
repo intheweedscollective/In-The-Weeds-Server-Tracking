@@ -54,7 +54,7 @@ export default function ReviewTracker() {
       
       // Fetch reviews
       let reviewsUrl = `${API_URL}/api/v2/reviews?quarter=${selectedQuarter}&year=${selectedYear}`;
-      if (filterPlatform) reviewsUrl += `&platform=${filterPlatform}`;
+      if (filterPlatform && filterPlatform !== "CustomerVoice") reviewsUrl += `&platform=${filterPlatform}`;
       if (filterEmployee) reviewsUrl += `&employee_name=${filterEmployee}`;
       
       const reviewsRes = await fetch(reviewsUrl);
@@ -70,6 +70,21 @@ export default function ReviewTracker() {
       const syncRes = await fetch(`${API_URL}/api/v2/reviews/sync/status`);
       const syncData = await syncRes.json();
       setSyncStatus(syncData);
+      
+      // Fetch CV feedback
+      try {
+        const cvRes = await fetch(`${API_URL}/api/v2/cv/feedback?quarter=${selectedQuarter}&year=${selectedYear}&limit=100`);
+        const cvData = await cvRes.json();
+        setCvFeedback(cvData.feedback || []);
+        
+        // Fetch CV stats
+        const cvStatsRes = await fetch(`${API_URL}/api/v2/cv/feedback/stats?quarter=${selectedQuarter}&year=${selectedYear}`);
+        const cvStatsData = await cvStatsRes.json();
+        setCvStats(cvStatsData);
+      } catch {
+        setCvFeedback([]);
+        setCvStats(null);
+      }
       
     } catch (error) {
       console.error("Error fetching review data:", error);
