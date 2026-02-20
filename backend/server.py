@@ -788,23 +788,27 @@ async def get_benchmark_suggestions(year: int, quarter: str):
 @api_router.get("/v2/template")
 async def download_template():
     """
-    Download a sample CSV template with Q1 2026 column format.
+    Download a sample CSV template for employee performance data.
     
-    IMPORTANT: LBW must NOT be a column. Use individual Liquor, Beer, Wine columns.
-    LBW Total is calculated automatically: LBW = Liquor + Beer + Wine
+    IMPORTANT: 
+    - LBW must NOT be a column. Use individual Liquor, Beer, Wine columns.
+    - LBW Total is calculated automatically: LBW = Liquor + Beer + Wine
+    - Job Title column for hierarchy-based rankings (Trainer > Bartender > Server)
     
-    NEW: Job Title column for hierarchy-based rankings (Trainer > Bartender > Server)
-    NOTE: CV Passives removed - they contribute 0 points to score
+    CV and Review data is NO LONGER included in the spreadsheet.
+    These are automatically synced from:
+    - Customer Voice: Loyalty Voice platform (/api/v2/cv/sync)
+    - Review Tracker: ReviewTrackers platform (/api/v2/reviews/sync)
     """
-    template_content = """Employee Name,Job Title,Guests,Net Sales,Liquor Sales,Beer Sales,Wine Sales,Glassware Sales,LSC Count,CV Promoters,CV Detractors,Review Mentions
-John Smith,Server,450,24750,1500,1350,1200,540,5,3,1,8
-Jane Doe,Bartender,520,28600,1800,1500,1380,624,9,5,0,12
-Sarah Johnson,Trainer,400,22000,1200,1200,1200,480,4,2,2,5"""
+    template_content = """Employee Name,Job Title,Guests,Net Sales,Liquor Sales,Beer Sales,Wine Sales,Glassware Sales,LSC Count
+John Smith,Server,450,24750,1500,1350,1200,540,5
+Jane Doe,Bartender,520,28600,1800,1500,1380,624,9
+Sarah Johnson,Trainer,400,22000,1200,1200,1200,480,4"""
     
     return Response(
         content=template_content,
         media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=employee_template_q1_2026.csv"}
+        headers={"Content-Disposition": "attachment; filename=employee_template.csv"}
     )
 
 
