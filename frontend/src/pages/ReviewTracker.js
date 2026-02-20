@@ -124,6 +124,32 @@ export default function ReviewTracker() {
     }
   };
 
+  // Sync Customer Voice feedback
+  const handleSyncCV = async () => {
+    setSyncingCV(true);
+    toast.info("Syncing Customer Voice feedback... This may take a minute.");
+    
+    try {
+      const res = await fetch(
+        `${API_URL}/api/v2/cv/feedback/sync?quarter=${selectedQuarter}&year=${selectedYear}`,
+        { method: "POST" }
+      );
+      
+      const data = await res.json();
+      
+      if (data.success) {
+        toast.success(`Synced ${data.new_count} new CV feedback items!`);
+        fetchData();
+      } else {
+        toast.error(data.message || "CV sync failed");
+      }
+    } catch (error) {
+      toast.error("CV sync request failed");
+    } finally {
+      setSyncingCV(false);
+    }
+  };
+
   // Delete review
   const handleDeleteReview = async (reviewId) => {
     if (!window.confirm("Are you sure you want to delete this review?")) return;
