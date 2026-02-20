@@ -215,11 +215,43 @@ async def sync_reviews_from_reviewtrackers(
     """
     Sync reviews from ReviewTrackers to our database.
     
+    Uses quarter-based date filtering:
+    - Q1: Jan 1 - Mar 31
+    - Q2: Apr 1 - Jun 30
+    - Q3: Jul 1 - Sep 30
+    - Q4: Oct 1 - Dec 31
+    
     Returns:
         Dict with sync results (new_count, updated_count, skipped_count, errors)
     """
     from review_tracker import generate_review_hash, POINTS_PER_POSITIVE_MENTION
+    from datetime import datetime, date
     import uuid
+    
+    # Calculate quarter date range
+    quarter_ranges = {
+        "Q1": ("01-01", "03-31"),
+        "Q2": ("04-01", "06-30"),
+        "Q3": ("07-01", "09-30"),
+        "Q4": ("10-01", "12-31"),
+    }
+    q = quarter.upper()
+    if q not in quarter_ranges:
+        return {"success": False, "error": f"Invalid quarter: {quarter}"}
+    
+    start_mmdd, end_mmdd = quarter_ranges[q]
+    quarter_start = f"{year}-{start_mmdd}"  # YYYY-MM-DD format
+    quarter_end = f"{year}-{end_mmdd}"
+    
+    # For current quarter, use today as end date if it's earlier than quarter end
+    today_str = date.today().strftime("%Y-%m-%d")
+    if today_str < quarter_end:
+        quarter_end = today_str
+    
+    # Use provided since_date or default to quarter start
+    effective_since = since_date or quarter_start
+    
+    print(f"[RT] Syncing reviews from {effective_since} to {quarter_end}")
     
     client = ReviewTrackersClient()
     
@@ -234,8 +266,18 @@ async def sync_reviews_from_reviewtrackers(
             "skipped_count": 0
         }
     
-    # Get reviews
-    rt_reviews = await client.get_all_reviews(since_date=since_date)
+    # Get reviews with date filter
+    rt_reviews = await client.get_all_reviews(since_date=effective_since)
+    
+    # Filter to only include reviews within the quarter date range
+    filtered_reviews = []
+    for review in rt_reviews:
+        review_date = review.get("published_at", "")[:10]  # Get YYYY-MM-DD part
+        if review_date and quarter_start <= review_date <= quarter_end:
+            filtered_reviews.append(review)
+    
+    print(f"[RT] Filtered {len(filtered_reviews)} reviews within {q} {year} (from {len(rt_reviews)} total)")
+    rt_reviews = filtered_reviews
     
     # Get employee names for detection
     employees = await db.employees_v2.find(
