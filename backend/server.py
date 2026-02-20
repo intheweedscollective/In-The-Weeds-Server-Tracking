@@ -4647,16 +4647,30 @@ async def sync_cv_feedback(quarter: str = "Q1", year: int = 2026):
 
 
 @api_router.get("/v2/cv/feedback")
-async def get_cv_feedback(quarter: str = "Q1", year: int = 2026, limit: int = 100):
+async def get_cv_feedback(quarter: str = "Q1", year: int = 2026, limit: int = 100, include_excluded: bool = False):
     """Get CV feedback items for a quarter."""
+    query = {"quarter": quarter.upper(), "year": year}
+    
+    # By default, don't show excluded feedback unless requested
+    if not include_excluded:
+        query["$or"] = [{"excluded": {"$exists": False}}, {"excluded": False}]
+    
     feedback = await db.cv_feedback.find(
-        {"quarter": quarter.upper(), "year": year},
+        query,
         {"_id": 0}
     ).sort("date", -1).to_list(limit)
+    
+    # Also get excluded count
+    excluded_count = await db.cv_feedback.count_documents({
+        "quarter": quarter.upper(), 
+        "year": year,
+        "excluded": True
+    })
     
     return {
         "feedback": feedback,
         "total": len(feedback),
+        "excluded_count": excluded_count,
         "quarter": quarter.upper(),
         "year": year
     }
