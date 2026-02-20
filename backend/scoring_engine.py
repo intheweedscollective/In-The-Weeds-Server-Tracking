@@ -82,9 +82,12 @@ class EmployeeV2(BaseModel):
     cv_promoters: int = 0       # Count of 9-10 scores (service-related only)
     cv_passives: int = 0        # Count of 7-8 scores
     cv_detractors: int = 0      # Count of 6 or below scores
+    nps_score: Optional[float] = None  # NPS % from Loyalty Voice sync
+    cv_source: Optional[str] = None    # "loyalty_voice_sync" or "spreadsheet"
     
     # === REVIEW TRACKER FIELDS (from upload) ===
     review_mentions: int = 0    # Named positive mentions from external platforms
+    review_source: Optional[str] = None  # "reviewtrackers_sync" or "spreadsheet"
     
     # === DAR FIELDS (admin-only, not in upload) ===
     dar_written_warnings: int = 0
