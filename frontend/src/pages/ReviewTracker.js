@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Star, Plus, Search, Filter, Trash2, Edit2, MessageSquare, TrendingUp, Award, X, Check, AlertCircle, RefreshCw, Cloud, CheckCircle } from "lucide-react";
+import { Star, Plus, Search, Filter, Trash2, Edit2, MessageSquare, TrendingUp, Award, X, Check, AlertCircle, RefreshCw, Cloud, CheckCircle, Sparkles } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { toast } from "sonner";
@@ -12,7 +12,8 @@ const PLATFORM_COLORS = {
   Yelp: "bg-red-500",
   Facebook: "bg-indigo-600",
   TripAdvisor: "bg-green-500",
-  OpenTable: "bg-orange-500"
+  OpenTable: "bg-orange-500",
+  CustomerVoice: "bg-gradient-to-r from-yellow-400 to-orange-500"
 };
 
 const PLATFORM_ICONS = {
@@ -20,7 +21,8 @@ const PLATFORM_ICONS = {
   Yelp: "📍",
   Facebook: "📘",
   TripAdvisor: "🦉",
-  OpenTable: "🍽️"
+  OpenTable: "🍽️",
+  CustomerVoice: "⭐"
 };
 
 export default function ReviewTracker() {
