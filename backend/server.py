@@ -4544,6 +4544,122 @@ async def get_cv_sync_status():
     }
 
 
+# ============================================================================
+# CV FEEDBACK (Customer Voice Comments) INTEGRATION
+# ============================================================================
+
+from cv_feedback_scraper import sync_cv_feedback_to_db, scrape_cv_feedback
+
+
+@api_router.post("/v2/cv/feedback/sync")
+async def sync_cv_feedback(quarter: str = "Q1", year: int = 2026):
+    """
+    Sync Customer Voice feedback comments from Loyalty Voice.
+    
+    This scrapes individual feedback items with ratings and comments,
+    detects employee mentions, and awards CV points.
+    """
+    try:
+        results = await sync_cv_feedback_to_db(
+            db=db,
+            quarter=quarter,
+            year=year
+        )
+        
+        if not results.get("success"):
+            return {
+                "success": False,
+                "message": results.get("error", "Sync failed"),
+                "error": results.get("error")
+            }
+        
+        return {
+            "success": True,
+            "message": f"Synced {results.get('new_count', 0)} new CV feedback items",
+            "new_count": results.get("new_count", 0),
+            "skipped_count": results.get("skipped_count", 0),
+            "total_scraped": results.get("total_scraped", 0),
+            "employees_with_mentions": results.get("employees_with_mentions", 0)
+        }
+    except Exception as e:
+        logging.error(f"CV feedback sync error: {e}")
+        raise HTTPException(status_code=500, detail=f"CV feedback sync failed: {str(e)}")
+
+
+@api_router.get("/v2/cv/feedback")
+async def get_cv_feedback(quarter: str = "Q1", year: int = 2026, limit: int = 100):
+    """Get CV feedback items for a quarter."""
+    feedback = await db.cv_feedback.find(
+        {"quarter": quarter.upper(), "year": year},
+        {"_id": 0}
+    ).sort("date", -1).to_list(limit)
+    
+    return {
+        "feedback": feedback,
+        "total": len(feedback),
+        "quarter": quarter.upper(),
+        "year": year
+    }
+
+
+@api_router.get("/v2/cv/feedback/stats")
+async def get_cv_feedback_stats(quarter: str = "Q1", year: int = 2026):
+    """Get CV feedback statistics including points per employee."""
+    # Get all feedback
+    feedback = await db.cv_feedback.find(
+        {"quarter": quarter.upper(), "year": year},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    # Get CV points per employee
+    cv_points = await db.cv_points.find(
+        {"quarter": quarter.upper(), "year": year},
+        {"_id": 0}
+    ).sort("total_cv_points", -1).to_list(100)
+    
+    # Calculate totals
+    total_feedback = len(feedback)
+    promoter_count = len([f for f in feedback if f.get("sentiment") == "promoter"])
+    passive_count = len([f for f in feedback if f.get("sentiment") == "passive"])
+    detractor_count = len([f for f in feedback if f.get("sentiment") == "detractor"])
+    
+    # Get last sync
+    last_feedback = await db.cv_feedback.find_one(
+        {"quarter": quarter.upper(), "year": year},
+        sort=[("synced_at", -1)]
+    )
+    
+    return {
+        "total_feedback": total_feedback,
+        "promoter_count": promoter_count,
+        "passive_count": passive_count,
+        "detractor_count": detractor_count,
+        "employee_points": cv_points,
+        "last_sync": last_feedback.get("synced_at") if last_feedback else None
+    }
+
+
+@api_router.get("/v2/cv/points/{employee_id}")
+async def get_employee_cv_points(employee_id: str, quarter: str = "Q1", year: int = 2026):
+    """Get CV points for a specific employee."""
+    points = await db.cv_points.find_one(
+        {"employee_id": employee_id, "quarter": quarter.upper(), "year": year},
+        {"_id": 0}
+    )
+    
+    if points:
+        return points
+    
+    return {
+        "employee_id": employee_id,
+        "total_cv_points": 0,
+        "mention_count": 0,
+        "promoter_count": 0,
+        "passive_count": 0,
+        "detractor_count": 0
+    }
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
