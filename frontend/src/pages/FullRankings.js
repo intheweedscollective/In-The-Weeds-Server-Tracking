@@ -183,6 +183,44 @@ export default function FullRankings() {
     fetchRankings();
   }, [fetchRankings]);
 
+  // Sync NPS from Loyalty Voice
+  const handleSyncNps = async () => {
+    setSyncingNps(true);
+    try {
+      const response = await axios.post(`${API}/v2/cv/sync?quarter=${selectedQuarter}&year=${selectedYear}`);
+      if (response.data.success) {
+        toast.success(`Synced NPS for ${response.data.matched_count} employees`);
+        // Refresh data
+        fetchRankings();
+      } else {
+        toast.error(response.data.message || "NPS sync failed");
+      }
+    } catch (error) {
+      console.error("Error syncing NPS:", error);
+      toast.error("Failed to sync NPS from Loyalty Voice");
+    } finally {
+      setSyncingNps(false);
+    }
+  };
+
+  // Get NPS for an employee
+  const getEmployeeNps = (employeeId) => {
+    const record = npsData[employeeId];
+    return record ? record.nps_score : null;
+  };
+
+  // Format NPS with color coding
+  const formatNps = (nps) => {
+    if (nps === null || nps === undefined) return <span className="text-gray-400">—</span>;
+    
+    let colorClass = "text-gray-600";
+    if (nps >= 50) colorClass = "text-green-600";
+    else if (nps >= 0) colorClass = "text-yellow-600";
+    else colorClass = "text-red-600";
+    
+    return <span className={`font-semibold ${colorClass}`}>{nps}%</span>;
+  };
+
   const handleDownloadSlide = async () => {
     setDownloading(true);
     try {
