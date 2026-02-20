@@ -303,10 +303,11 @@ def validate_upload_columns(df_columns: List[str]) -> Dict[str, Any]:
         "glassware_sales", "lsc_count"
     ]
     optional_fields = [
-        "job_title",  # NEW: Job Title for hierarchy-based rankings
-        "cv_promoters", "cv_passives", "cv_detractors",  # Customer Voice
-        "review_mentions",  # Review Tracker
-        "review_tracker", "cv_positive", "cv_negative"   # Legacy text fields
+        "job_title",  # Job Title for hierarchy-based rankings
+        # CV and Review data now comes from automated sync - removed from spreadsheet
+        # "cv_promoters", "cv_passives", "cv_detractors",  # Customer Voice - AUTO SYNCED
+        # "review_mentions",  # Review Tracker - AUTO SYNCED
+        "review_tracker", "cv_positive", "cv_negative"   # Legacy text fields (deprecated)
     ]
     
     # Handle None column names safely
