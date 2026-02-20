@@ -542,12 +542,16 @@ async def sync_loyalty_voice_to_db(
             matched_servers.append({
                 "scraped_name": server_name,
                 "matched_name": matched_employee["name"],
-                "nps_score": nps_score
+                "nps_score": nps_score,
+                "cv_points": server.get("cv_points", 0),
+                "promoters": server.get("promoters", 0),
+                "detractors": server.get("detractors", 0)
             })
         else:
             unmatched_servers.append({
                 "scraped_name": server_name,
-                "nps_score": nps_score
+                "nps_score": nps_score,
+                "cv_points": server.get("cv_points", 0)
             })
     
     result["success"] = True
