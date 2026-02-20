@@ -53,11 +53,12 @@ export default function FullRankings() {
     setLoading(true);
     try {
       const tierParam = tierFilter !== "all" ? `&tier_filter=${tierFilter}` : "";
-      const [rankingsRes, employeesRes, settingsRes, bgRes] = await Promise.all([
+      const [rankingsRes, employeesRes, settingsRes, bgRes, npsRes] = await Promise.all([
         axios.get(`${API}/v2/full-rankings/${selectedYear}/${selectedQuarter}?${tierParam}`),
         axios.get(`${API}/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`),
         axios.get(`${API}/v2/quarter-settings/${selectedYear}/${selectedQuarter}`).catch(() => null),
-        axios.get(`${API}/v2/snapshots/backgrounds`).catch(() => ({ data: [] }))
+        axios.get(`${API}/v2/snapshots/backgrounds`).catch(() => ({ data: [] })),
+        axios.get(`${API}/v2/cv/nps?year=${selectedYear}&quarter=${selectedQuarter}`).catch(() => ({ data: { nps_records: [] } }))
       ]);
       
       setRankings(rankingsRes.data.rankings || []);
@@ -66,6 +67,21 @@ export default function FullRankings() {
       setTotalEmployees(rankingsRes.data.total_employees || 0);
       setThresholds(rankingsRes.data.tier_thresholds || { a_server_min: 85.1, b_server_min: 70.1 });
       setBackgrounds(bgRes.data || []);
+      
+      // Build NPS lookup by employee_id
+      const npsLookup = {};
+      (npsRes.data.nps_records || []).forEach(record => {
+        npsLookup[record.employee_id] = record;
+      });
+      setNpsData(npsLookup);
+      
+      // Also get NPS stats
+      try {
+        const statsRes = await axios.get(`${API}/v2/cv/stats?year=${selectedYear}&quarter=${selectedQuarter}`);
+        setNpsStats(statsRes.data);
+      } catch {
+        setNpsStats(null);
+      }
     } catch (error) {
       console.error("Error fetching rankings:", error);
       if (error.response?.status === 404) {
