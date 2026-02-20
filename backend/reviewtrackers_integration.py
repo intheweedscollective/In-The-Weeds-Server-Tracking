@@ -225,10 +225,9 @@ async def sync_reviews_from_reviewtrackers(
         Dict with sync results (new_count, updated_count, skipped_count, errors)
     """
     from review_tracker import generate_review_hash, POINTS_PER_POSITIVE_MENTION
-    from datetime import datetime, date
     import uuid
     
-    # Calculate quarter date range
+    # Calculate quarter date range (always full quarter)
     quarter_ranges = {
         "Q1": ("01-01", "03-31"),
         "Q2": ("04-01", "06-30"),
@@ -243,15 +242,10 @@ async def sync_reviews_from_reviewtrackers(
     quarter_start = f"{year}-{start_mmdd}"  # YYYY-MM-DD format
     quarter_end = f"{year}-{end_mmdd}"
     
-    # For current quarter, use today as end date if it's earlier than quarter end
-    today_str = date.today().strftime("%Y-%m-%d")
-    if today_str < quarter_end:
-        quarter_end = today_str
-    
     # Use provided since_date or default to quarter start
     effective_since = since_date or quarter_start
     
-    print(f"[RT] Syncing reviews from {effective_since} to {quarter_end}")
+    print(f"[RT] Syncing reviews for {q} {year}: {quarter_start} to {quarter_end}")
     
     client = ReviewTrackersClient()
     
