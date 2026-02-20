@@ -95,7 +95,7 @@ export default function ReviewTracker() {
     } finally {
       setLoading(false);
     }
-  }, [selectedQuarter, selectedYear, filterPlatform, filterEmployee]);
+  }, [selectedQuarter, selectedYear, filterPlatform, filterEmployee, showExcluded]);
 
   useEffect(() => {
     fetchData();
