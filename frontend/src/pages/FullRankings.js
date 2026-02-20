@@ -306,8 +306,8 @@ export default function FullRankings() {
     setDownloadingReview(employeeId);
     try {
       const response = await axios.post(
-        `${API}/v2/generate-review/${employeeId}?quarter=${selectedQuarter}&year=${selectedYear}`,
-        {},
+        `${API}/v2/employees/${employeeId}/generate-review`,
+        { quarter: selectedQuarter, year: selectedYear },
         { responseType: 'blob' }
       );
       
