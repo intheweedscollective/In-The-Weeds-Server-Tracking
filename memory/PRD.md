@@ -81,12 +81,17 @@ Build a comprehensive performance review application for restaurant employees (B
   - `GET /api/v2/cv/stats` - Get NPS statistics (avg, highest, lowest)
   - `GET /api/v2/cv/employee/{name}/nps` - Get NPS for specific employee
   - `GET /api/v2/cv/sync/status` - Get sync status and configuration
-- ✅ **NPS Column in Rankings Page**:
-  - Added NPS column to rankings table showing each employee's Customer Voice score
-  - Color-coded display: Green (≥50% Promoter), Yellow (0-49% Passive), Red (<0 Detractor)
-  - "Sync NPS" button to refresh data from Loyalty Voice
-  - NPS summary in results header showing total records and average
-  - NPS card in expanded employee details with Promoter/Passive/Detractor label
+- ✅ **Rankings Page Columns Update (Feb 20, 2026)**:
+  - **Review Bonus column**: Displays bonus from external reviews and Customer Voice
+    - Formula: `(ReviewTracker Mentions × 0.2) + (CV Promoters × 1) + (CV Detractors × -2)`
+    - Color-coded: Green for positive, Red for negative
+  - **Metric Bonus column**: Displays bonus from exceeding metric benchmarks (PPA, LBW, LSC, Glass)
+  - **NPS column**: Shows Employee's NPS score with color coding
+    - Green (≥50%): Promoter zone
+    - Yellow (0-49%): Passive zone  
+    - Red (<0): Detractor zone
+  - **Sync NPS button**: 3-minute timeout, loading spinner, proper error handling
+  - **Full table headers**: Position, Employee, Tier, Total Score, NPS, Review Bonus, Metric Bonus, PPA (25%), LBW (20%), LSC (25%), Glass (15%)
 - ✅ **Customer Voice Feedback Scraper** (cv_feedback_scraper.py):
   - Scrapes individual customer feedback from Loyalty Voice /Feedback page
   - Extracts rating (1-10), customer name, date, shift, and full comment
