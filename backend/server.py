@@ -2664,7 +2664,7 @@ async def get_analytics_pdf_v2(year: int, quarter: str):
     # Get frontend URL from environment
     frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
     # Use the preview URL for capturing
-    preview_url = os.environ.get("REACT_APP_BACKEND_URL", "https://loyalty-voice-sync.preview.emergentagent.com")
+    preview_url = os.environ.get("REACT_APP_BACKEND_URL", "https://perf-review-hub-2.preview.emergentagent.com")
     if "preview.emergentagent.com" in preview_url:
         frontend_url = preview_url.replace("/api", "").rstrip("/")
     
