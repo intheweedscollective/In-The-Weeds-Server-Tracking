@@ -447,13 +447,176 @@ export default function ReviewTracker() {
       <div className="space-y-4" data-testid="reviews-list">
         {loading ? (
           <div className="text-center py-12 text-gray-500">Loading reviews...</div>
-        ) : reviews.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-xl border">
-            <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500">No reviews yet</p>
-            <p className="text-sm text-gray-400 mt-1">Add your first review to start tracking</p>
-          </div>
-        ) : (
+        ) : (activeTab === "cv" || activeTab === "all") && cvFeedback.length > 0 ? (
+          <>
+            {/* Customer Voice Section - Always on top with stars */}
+            {(activeTab === "cv" || activeTab === "all") && cvFeedback.length > 0 && (
+              <div className="mb-6">
+                {activeTab === "all" && (
+                  <div className="flex items-center gap-2 mb-4">
+                    <Star className="w-5 h-5 fill-yellow-400 text-yellow-400" />
+                    <h2 className="text-lg font-bold text-gray-900">Customer Voice Feedback</h2>
+                    <span className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-xs px-2 py-0.5 rounded-full font-semibold">
+                      PRIORITY
+                    </span>
+                  </div>
+                )}
+                <div className="space-y-3">
+                  {cvFeedback.map((item) => (
+                    <div
+                      key={item.id}
+                      className="bg-white rounded-xl p-4 shadow-sm border-2 border-yellow-200 hover:shadow-md transition-shadow relative overflow-hidden"
+                      data-testid={`cv-feedback-${item.id}`}
+                    >
+                      {/* Star Badge */}
+                      <div className="absolute top-0 right-0">
+                        <div className="bg-gradient-to-br from-yellow-400 to-orange-500 text-white px-3 py-1 rounded-bl-xl flex items-center gap-1">
+                          <Star className="w-3 h-3 fill-white" />
+                          <span className="text-xs font-bold">CV</span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-start gap-4">
+                        <div className="flex-1 pr-12">
+                          {/* Rating & Date */}
+                          <div className="flex items-center gap-3 mb-2">
+                            <span className={`px-3 py-1 rounded-full text-sm font-bold ${
+                              item.sentiment === "promoter" 
+                                ? "bg-green-100 text-green-700" 
+                                : item.sentiment === "passive"
+                                ? "bg-yellow-100 text-yellow-700"
+                                : "bg-red-100 text-red-700"
+                            }`}>
+                              {item.rating}/10 {item.sentiment === "promoter" ? "★" : item.sentiment === "detractor" ? "✗" : "○"}
+                            </span>
+                            <span className="text-sm text-gray-500">{item.date}</span>
+                            <span className="text-sm text-gray-400">by {item.customer_name}</span>
+                          </div>
+                          
+                          {/* Comment */}
+                          <p className="text-gray-700 text-sm leading-relaxed mb-3">
+                            "{item.comment}"
+                          </p>
+                          
+                          {/* Employee Mentions with Points */}
+                          {item.mentions?.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                              {item.mentions.map((mention, idx) => (
+                                <span
+                                  key={idx}
+                                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${
+                                    item.sentiment === "promoter"
+                                      ? "bg-green-100 text-green-700 border border-green-300"
+                                      : item.sentiment === "detractor"
+                                      ? "bg-red-100 text-red-700 border border-red-300"
+                                      : "bg-yellow-100 text-yellow-700 border border-yellow-300"
+                                  }`}
+                                >
+                                  <Star className="w-3 h-3 fill-current" />
+                                  {mention.employee_name}
+                                  <span className="font-bold">
+                                    {item.cv_points > 0 ? `+${item.cv_points}` : item.cv_points}
+                                  </span>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          
+                          {/* Meta info */}
+                          <div className="mt-2 flex items-center gap-3 text-xs text-gray-400">
+                            <span>{item.shift || "No shift"}</span>
+                            <span>•</span>
+                            <span>{item.store}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* External Reviews Section */}
+            {(activeTab === "reviews" || activeTab === "all") && reviews.length > 0 && (
+              <div>
+                {activeTab === "all" && (
+                  <div className="flex items-center gap-2 mb-4 mt-8">
+                    <MessageSquare className="w-5 h-5 text-primary" />
+                    <h2 className="text-lg font-bold text-gray-900">External Reviews</h2>
+                  </div>
+                )}
+                <div className="space-y-3">
+                  {reviews.map((review) => (
+                    <div
+                      key={review.id}
+                      className="bg-white rounded-xl p-4 shadow-sm border hover:shadow-md transition-shadow"
+                      data-testid={`review-card-${review.id}`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          {/* Platform & Date */}
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className={`px-2 py-0.5 rounded-full text-xs text-white ${PLATFORM_COLORS[review.platform]}`}>
+                              {PLATFORM_ICONS[review.platform]} {review.platform}
+                            </span>
+                            <span className="text-sm text-gray-500">{review.review_date}</span>
+                            {renderStars(review.rating)}
+                            {review.reviewer_name && (
+                              <span className="text-sm text-gray-400">by {review.reviewer_name}</span>
+                            )}
+                          </div>
+                          
+                          {/* Review Text */}
+                          <p className="text-gray-700 text-sm leading-relaxed mb-3">
+                            "{review.review_text}"
+                          </p>
+                          
+                          {/* Employee Mentions */}
+                          {review.employee_mentions?.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                              {review.employee_mentions.map((mention, idx) => (
+                                <span
+                                  key={idx}
+                                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs ${
+                                    mention.sentiment === "positive"
+                                      ? "bg-green-100 text-green-700"
+                                      : mention.sentiment === "negative"
+                                      ? "bg-red-100 text-red-700"
+                                      : "bg-gray-100 text-gray-700"
+                                  }`}
+                                >
+                                  {mention.sentiment === "positive" && <Check className="w-3 h-3" />}
+                                  {mention.sentiment === "negative" && <X className="w-3 h-3" />}
+                                  {mention.name}
+                                  {mention.points > 0 && (
+                                    <span className="font-medium">+{mention.points}</span>
+                                  )}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Actions */}
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteReview(review.id)}
+                            className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                            data-testid={`delete-review-${review.id}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        ) : activeTab === "reviews" && reviews.length > 0 ? (
           reviews.map((review) => (
             <div
               key={review.id}
@@ -520,6 +683,17 @@ export default function ReviewTracker() {
               </div>
             </div>
           ))
+        ) : (
+          <div className="text-center py-12 bg-white rounded-xl border">
+            <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-500">No reviews yet</p>
+            <p className="text-sm text-gray-400 mt-1">
+              {activeTab === "cv" 
+                ? "Click 'Sync Customer Voice' to import feedback from Loyalty Voice"
+                : "Add your first review to start tracking"
+              }
+            </p>
+          </div>
         )}
       </div>
 
