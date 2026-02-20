@@ -3557,13 +3557,49 @@ async def recalculate_snapshot(snapshot_id: str):
     )
     settings = QuarterSettings(**(settings_doc or {}))
     
+    # Fetch NPS data from cv_nps collection for this quarter
+    nps_records = await db.cv_nps.find(
+        {"quarter": snapshot["quarter"], "year": snapshot["year"]},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    # Create lookup by employee name (lowercase for matching)
+    nps_lookup = {}
+    for nps in nps_records:
+        name = (nps.get("employee_name") or "").strip().lower()
+        if name:
+            nps_lookup[name] = nps
+    
+    # Fetch review mentions from reviews collection
+    review_pipeline = [
+        {"$match": {"quarter": snapshot["quarter"], "year": snapshot["year"]}},
+        {"$unwind": {"path": "$employee_mentions", "preserveNullAndEmptyArrays": False}},
+        {"$group": {
+            "_id": "$employee_mentions.name",
+            "mentions": {"$sum": 1}
+        }}
+    ]
+    review_mentions_cursor = db.reviews.aggregate(review_pipeline)
+    review_mentions_data = await review_mentions_cursor.to_list(1000)
+    review_lookup = {r["_id"].lower(): r["mentions"] for r in review_mentions_data if r.get("_id")}
+    
     recalculated_employees = []
     for emp_data in employees_data:
         try:
+            emp_name = emp_data.get("name", "Unknown")
+            emp_name_lower = emp_name.strip().lower()
+            
+            # Get NPS score for this employee
+            nps_data = nps_lookup.get(emp_name_lower, {})
+            nps_score = nps_data.get("nps_score", 0) or 0
+            
+            # Get review mentions for this employee
+            review_mentions = review_lookup.get(emp_name_lower, 0)
+            
             # Create EmployeeV2 from existing data
             emp = EmployeeV2(
                 id=emp_data.get("id", str(uuid.uuid4())),
-                name=emp_data.get("name", "Unknown"),
+                name=emp_name,
                 job_title=emp_data.get("job_title", "Server"),
                 guests=emp_data.get("guests", 0),
                 net_sales=emp_data.get("net_sales", 0),
@@ -3575,7 +3611,8 @@ async def recalculate_snapshot(snapshot_id: str):
                 cv_promoters=emp_data.get("cv_promoters", 0),
                 cv_passives=emp_data.get("cv_passives", 0),
                 cv_detractors=emp_data.get("cv_detractors", 0),
-                review_mentions=emp_data.get("review_mentions", 0),
+                review_mentions=review_mentions,
+                nps_score=nps_score,  # Add NPS score from cv_nps collection
                 year=snapshot["year"],
                 quarter=snapshot["quarter"],
             )
@@ -3605,6 +3642,7 @@ async def recalculate_snapshot(snapshot_id: str):
             
             emp_dict = emp.model_dump()
             emp_dict["tier_label"] = tier_label
+            emp_dict["nps_score"] = nps_score  # Ensure NPS is in the output
             recalculated_employees.append(emp_dict)
         except Exception as e:
             logging.warning(f"Error recalculating employee {emp_data.get('name')}: {e}")
