@@ -19,28 +19,29 @@ Build a comprehensive performance review application for restaurant employees (B
 - **Database**: MongoDB
 - **PDF Generation**: ReportLab, Playwright (for screenshot-based charts)
 - **Image Generation**: Pillow (PIL), Matplotlib
+- **Web Scraping**: Playwright (for Loyalty Voice integration)
 
 ## Architecture
 ```
 /app/
 ├── backend/
-│   ├── server.py         # Main API server
-│   ├── scoring_engine.py # Scoring calculations
-│   ├── snapshot_slides.py # Snapshot slide generator
-│   ├── trend_charts.py   # Multi-panel line/bar charts
-│   └── yodeck_slides.py  # Yodeck slide generator
+│   ├── server.py                    # Main API server
+│   ├── scoring_engine.py            # Scoring calculations
+│   ├── snapshot_slides.py           # Snapshot slide generator
+│   ├── trend_charts.py              # Multi-panel line/bar charts
+│   ├── yodeck_slides.py             # Yodeck slide generator
+│   ├── loyalty_voice_integration.py # Loyalty Voice NPS scraper (NEW)
+│   ├── reviewtrackers_integration.py # ReviewTrackers API client
+│   └── review_tracker.py            # Customer review tracking
 └── frontend/
     └── src/
         ├── components/
-        │   ├── FinalizeQuarterModal.js # DAR calculator
-        │   └── OnboardingGuide.js      # Quick start guide
+        │   ├── FinalizeQuarterModal.js
+        │   └── OnboardingGuide.js
         └── pages/
-            ├── Dashboard.js    # Main dashboard with ROI calc, Training priorities
-            ├── FullRankings.js # Rankings + Top 10 sections (merged)
-            ├── EmployeeList.js
-            ├── ReviewGeneration.js
-            ├── Snapshots.js
-            ├── Analytics.js
+            ├── Dashboard.js
+            ├── FullRankings.js
+            ├── ReviewTracker.js
             ├── YodeckSlides.js
             └── QuarterSettings.js
 ```
@@ -57,115 +58,45 @@ Build a comprehensive performance review application for restaurant employees (B
 - ✅ Analytics PDF with Playwright-based screenshot capture
 - ✅ Yodeck slide generation (Complete Rankings, Top 10)
 - ✅ Bi-Weekly Snapshots feature
-- ✅ Multi-panel line charts for employee trends (one per metric)
+- ✅ Multi-panel line charts for employee trends
 - ✅ Revenue Impact Calculator (Dashboard)
 - ✅ Training Priorities Panel (Dashboard)
 - ✅ Onboarding Guide (7-step quick start modal)
 - ✅ DAR Calculator (Finalize Quarter with deductions)
 - ✅ Peer Comparison Badges (Top 10%, Top 25%, Top 50%)
+- ✅ Review Tracker with AI-powered employee detection
+- ✅ ReviewTrackers.com API integration
 
-### Recent Changes (Feb 10, 2026)
-- ✅ **Merged Rankings + Top Performers**: Combined into single page at `/rankings`
-- ✅ **Removed "Top" Navigation**: Simplified nav bar (8 items instead of 9)
-- ✅ **Top 10 by Metric**: Added PPA, LBW/Guest, Glass/Guest, Guests/LSC, CV Score sections
-- ✅ **2-Column Grid Layout**: Top 10 metric sections displayed in responsive grid
-- ✅ **Deleted TopPerformers.js**: Removed redundant page component
-- ✅ **Yodeck Slide Cleanup**: Removed tier-specific slides (A/B/C-Server), only Complete Rankings remains
-- ✅ **Format Selection on ALL Slides**: Added 16:9 (Yodeck) and 8.5×11" (Letter) format dropdown on every slide
-- ✅ **NEW Top 10 By Metric Slide**: Redesigned to match professional 4-column layout:
-  - Dark blue gradient header with Bubba Gump logo
-  - "TOP 10 PERFORMERS BY METRIC" title with Quarter/Year
-  - 4 metric columns: PPA, Glass/Guest, Guests/LSC, LBW/Guest
-  - Dark gray metric headers, light blue column headers
-  - Red circular rank badges (#1-#10)
-  - Alternating row colors for readability
-- ✅ **Las Vegas Themed Snapshot Backgrounds**: Added 6 background options:
-  - Dark Navy (default)
-  - Las Vegas Strip (Night)
-  - Bellagio Fountains
-  - Vegas Skyline
-  - Welcome to Vegas Sign
-  - Vegas Sunset
-- ✅ **Letter Format**: 2550x3300 at 300 DPI for high-quality printing
-
-### Recent Changes (Feb 12, 2026)
-- ✅ **Fixed Black Outline Issue on Rankings Slide**: The colored rank labels (T1, T2, A1, A2, B1, C1) and total score now have subtle visible black outlines
-  - Font size adjusted to 16px for Rank and Score columns
-  - Outline width set to 1px for a clean, professional look
-- ✅ **NEW Printable Rankings Slide**: Added stylized word-art rankings slide for printing
-  - Dark background with gold confetti, ribbons, and star decorations
-  - Word art headers: "RED HATS", "A", "B", "C", "BAR", "UNRANKED"
-  - Simple rank/name tables grouped by tier (no metrics)
-  - New API endpoint: `GET /api/v2/yodeck/{year}/{quarter}/printable-rankings`
-  - New "Printable" button on Rankings page (amber/gold outline with star icon)
-
-### Recent Changes (Feb 16, 2026)
-- ✅ **Fixed Rank Badge Sizing on Top 10 Slide (#8)**: Adjusted badge radius to 22px and font to 14px so "#10" fits cleanly
-- ✅ **Fixed Promotion Watchlist Slide Error (#9)**: Removed undefined `colors` references causing NameError
-- ✅ **Consistent Slide Design (#9)**: All slides now use consistent white background with professional header
-- ✅ **Mobile Responsiveness Improvements (#10)**: 
-  - Added smaller logo/title on mobile screens
-  - Navigation tabs show abbreviated labels on very small screens
-  - Hidden decorative splashes on mobile for cleaner layout
-  - Smaller KPI values and labels on mobile
-- ✅ **All 6 Slide Endpoints Working**: top10, complete-rankings, most-improved, promotion-watchlist, at-risk, printable-rankings
-
-### Recent Changes (Feb 18, 2026) - Review Tracker
-- ✅ **NEW Review Tracker Feature**: Full customer review aggregation system (like ReviewTrackers.com)
-  - Manual entry of reviews from Google, Yelp, Facebook, TripAdvisor, OpenTable
-  - AI-powered employee name detection using GPT-4.1-mini
-  - Sentiment analysis (positive/negative/neutral)
-  - Points system: +0.2 pts per positive mention (5 mentions = 1 full point)
-  - Duplicate review detection via content hash
-  - Dashboard with stats, top mentioned employees, platform breakdown
-  - Filters by year, quarter, platform, and employee name
-- ✅ **ReviewTrackers API Integration (AUTOMATED SYNC)**:
-  - Connected to user's ReviewTrackers corporate account
-  - One-click sync pulls all reviews from all platforms
-  - Successfully synced 237 reviews in first sync
-  - Shows sync status and last sync time in UI
-  - AI automatically detects employee mentions in synced reviews
-- ✅ **Navigation Restructured**:
-  - **Reviews** tab → Quarterly Performance Reviews (AI-generated employee reviews)
-  - **Feedback** tab → Customer Review Tracker (Google/Yelp/ReviewTrackers)
-- ✅ **Auto-Generate Reviews on Finalize Quarter**:
-  - When "Finalize Quarter" is clicked, system auto-generates AI reviews for ALL employees
-  - Reviews generated in background (non-blocking)
-  - New endpoints for quarterly review management
+### Recent Changes (Feb 20, 2026) - Loyalty Voice NPS Integration
+- ✅ **Loyalty Voice Server Performance Report Scraper**: Complete rewrite to scrape NPS scores
+  - Logs into Landry's Loyalty Voice via Microsoft SSO
+  - Navigates to Reports → Server Performance
+  - Supports custom date ranges by quarter (Q1-Q4)
+  - Extracts NPS % for each server from ag-grid table
+  - Matches server names to employees in database
+  - Stores NPS scores in `cv_nps` collection
 - ✅ **New API Endpoints**:
-  - `GET /api/v2/reviews` - List reviews with filters
-  - `POST /api/v2/reviews` - Add review with AI detection
-  - `POST /api/v2/reviews/detect` - Preview employee detection
-  - `GET /api/v2/reviews/stats` - Get review statistics
-  - `GET /api/v2/reviews/employee/{name}/points` - Get employee's review points
-  - `POST /api/v2/reviews/sync` - Sync from ReviewTrackers
-  - `GET /api/v2/reviews/sync/status` - Get sync status
-  - `POST /api/v2/reviews/sync/test` - Test ReviewTrackers connection
-  - `GET /api/v2/reviews/quarterly/{year}/{quarter}` - Get all quarterly reviews
-  - `POST /api/v2/reviews/quarterly/{year}/{quarter}/regenerate` - Regenerate reviews
-  - `DELETE /api/v2/reviews/{id}` - Delete review
-- ✅ **New Frontend Pages**: `/reviews` (restored), `/feedback` (Review Tracker)
-- ✅ **New MongoDB Collections**: `customer_reviews`, `reviews_v2`
-- ✅ **New Backend Files**: `review_tracker.py`, `reviewtrackers_integration.py`
+  - `POST /api/v2/cv/sync?quarter=Q4&year=2025` - Sync NPS scores from Loyalty Voice
+  - `GET /api/v2/cv/nps` - Get all NPS scores for a quarter
+  - `GET /api/v2/cv/stats` - Get NPS statistics (avg, highest, lowest)
+  - `GET /api/v2/cv/employee/{name}/nps` - Get NPS for specific employee
+  - `GET /api/v2/cv/sync/status` - Get sync status and configuration
 
 ## Backlog
 
 ### P0 - Critical
-- [ ] **Loyalty Voice CV Integration (IN PROGRESS)**: 
-  - Credentials configured: Bglv@ldry.com / EZMoney2026
-  - **NEW APPROACH**: Use Server Performance Report with NPS % per server (not individual feedback scraping)
-  - Backend scaffolding created: `/app/backend/loyalty_voice_integration.py`
-  - API endpoints created: `/api/v2/cv/sync`, `/api/v2/cv/stats`, etc.
-  - **NEXT**: Pivot to scrape Server Performance Report under Reports tab for NPS scores
-- [ ] **Aloha Data Import**: Extract data from scanned/uploaded POS reports
+- ✅ **Loyalty Voice NPS Integration (COMPLETED)**
+- [ ] **Integrate NPS into Rankings**: Add NPS scores to employee ranking calculation
 
 ### P1 - High Priority  
 - [ ] **Multi-Store Architecture**: Support for 22 locations with global reporting
+- [ ] **Aloha POS Data Import**: Extract data from scanned/uploaded POS reports
 - [ ] Integrate Review Tracker bonus points into main rankings display
 
 ### P2 - Medium Priority
 - [ ] "Download All Slides" as ZIP feature
-- [ ] Scheduled auto-sync for ReviewTrackers (daily/hourly)
+- [ ] Scheduled auto-sync for ReviewTrackers and Loyalty Voice (daily/hourly)
+- [ ] Mobile responsiveness audit
 
 ### P3 - Low Priority
 - [ ] Automated daily/weekly slide pack generation
@@ -173,28 +104,25 @@ Build a comprehensive performance review application for restaurant employees (B
 - [ ] Yodeck Embed Link feature
 
 ## Key API Endpoints
+- `POST /api/v2/cv/sync` - Sync Loyalty Voice NPS scores
+- `GET /api/v2/cv/nps` - List NPS scores
+- `GET /api/v2/cv/stats` - NPS statistics
 - `GET /api/v2/snapshots` - List all snapshots
 - `POST /api/v2/snapshots` - Create new snapshot
-- `POST /api/v2/snapshots/{id}/upload` - Upload employee data
-- `POST /api/v2/snapshots/{id}/recalculate` - Recalculate snapshot scores
-- `GET /api/v2/snapshots/{id}/slide` - Generate snapshot PNG slide
-- `GET /api/v2/analytics/{year}/{quarter}/pdf` - Generate analytics PDF
 - `GET /api/v2/yodeck/{year}/{quarter}/complete-rankings` - Rankings slide
-- `GET /api/v2/yodeck/{year}/{quarter}/top-10` - Top 10 slide
 - `GET /api/v2/full-rankings/{year}/{quarter}` - Full rankings data
-- `GET /api/v2/trends/{year}/{quarter}/employee/{id}` - Employee trend chart
-- `GET /api/v2/dars/{year}/{quarter}` - Get DAR entries
-- `POST /api/v2/dars/{year}/{quarter}` - Save/finalize DAR entries
+- `POST /api/v2/reviews/sync-reviewtrackers` - Sync customer reviews
 
 ## Database Collections
 - `employees_v2`: Employee records with scores
-- `quarter_settings`: Quarter configuration (includes `is_finalized` flag)
+- `quarter_settings`: Quarter configuration
 - `snapshots`: Bi-weekly snapshot data
 - `dars`: Disciplinary Action Reports
+- `cv_nps`: Customer Voice NPS scores from Loyalty Voice (NEW)
+- `customer_reviews`: Customer reviews from ReviewTrackers
 
 ## Notes
-- Yodeck API integration not possible on free plan
-- Analytics PDF uses Playwright to screenshot frontend charts
-- Server tier thresholds are configurable in quarter settings
-- "Top Performers" definition: 10% above restaurant average
-- DAR deductions: Written Warning = -3 pts, Suspension = -5 pts
+- Loyalty Voice scraper uses Playwright to automate login and data extraction
+- NPS scores range from -100 to +100
+- Employee name matching supports partial/first-name matches
+- Date range presets: Quarter-To-Date (current quarter), Custom Range (past quarters)
