@@ -112,6 +112,13 @@ async def scrape_cv_feedback(
     year = year or date.today().year
     start_date, end_date = get_quarter_date_range(quarter, year)
     
+    # For current quarter, use today as end date if it's earlier than quarter end
+    today = date.today()
+    today_str = today.strftime("%m/%d/%Y")
+    quarter_end_date = datetime.strptime(end_date, "%m/%d/%Y").date()
+    if today < quarter_end_date:
+        end_date = today_str
+    
     print(f"[CV] Scraping feedback for {quarter} {year} ({start_date} - {end_date})")
     
     result = {
