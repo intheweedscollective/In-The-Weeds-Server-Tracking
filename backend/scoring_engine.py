@@ -401,11 +401,13 @@ def calculate_customer_voice_score(employee: EmployeeV2) -> EmployeeV2:
     
     NEW MODEL (Simplified):
     - Use NPS% directly from Loyalty Voice sync
-    - NPS_points = NPS% × 0.15 (capped at 0 minimum)
+    - NPS_points = NPS% × 0.15
     - This gives 15% weight in total score
     
     Scale:
-    - 0% NPS = 0 points (minimum)
+    - -100% NPS = -15 points
+    - -50% NPS = -7.5 points
+    - 0% NPS = 0 points
     - 50% NPS = 7.5 points
     - 75% NPS = 11.25 points
     - 100% NPS = 15 points
@@ -415,9 +417,9 @@ def calculate_customer_voice_score(employee: EmployeeV2) -> EmployeeV2:
     # Get NPS score from Loyalty Voice sync (ranges -100 to +100)
     nps = employee.nps_score or 0
     
-    # Calculate CV score: NPS% × 0.15, minimum 0
-    # NPS of 100% = 15 points, 50% = 7.5 points, 0% = 0 points
-    nps_points = max(0, nps * 0.15)
+    # Calculate CV score: NPS% × 0.15
+    # Negative NPS = negative points, Positive NPS = positive points
+    nps_points = nps * 0.15
     
     employee.cv_score = round(nps_points, 2)
     employee.cv_raw_points = round(nps_points, 2)
