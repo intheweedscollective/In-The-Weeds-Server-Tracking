@@ -264,13 +264,14 @@ async def scrape_nps_from_aggrid(page: Page) -> List[Dict[str, Any]]:
                 nps_match = re.match(r'(-?\d+(?:\.\d+)?)', nps_str.replace('%', ''))
                 nps_score = float(nps_match.group(1)) if nps_match else 0
                 
-                # Calculate promoters and detractors from NPS and response count
-                # NPS = (% Promoters) - (% Detractors)
-                # If NPS=100, all are promoters. If NPS=0, could be all passive or equal promoters/detractors.
-                # We can estimate based on avg rating:
-                # - If avg >= 9 and NPS > 0, likely all promoters
-                # - If avg >= 7 and NPS == 0, likely all passive
-                # - If avg < 7, has detractors
+                # Calculate promoters and detractors from NPS, response count, and avg rating
+                # NPS = ((Promoters - Detractors) / Total) * 100
+                # Rating buckets: Promoters (9-10), Passives (7-8), Detractors (1-6)
+                # 
+                # Use avg_rating to estimate distribution:
+                # - Avg 9-10: Mostly promoters
+                # - Avg 7-8.9: Mix of promoters and passives
+                # - Avg < 7: Has detractors (ratings 1-6)
                 
                 if received == 0:
                     promoters = 0
@@ -281,31 +282,52 @@ async def scrape_nps_from_aggrid(page: Page) -> List[Dict[str, Any]]:
                     promoters = received
                     detractors = 0
                     passives = 0
+                elif nps_score == -100:
+                    # All responses were detractors (1-6)
+                    promoters = 0
+                    detractors = received
+                    passives = 0
+                elif avg_rating < 7:
+                    # Average rating below 7 means there ARE detractors
+                    # Estimate: lower avg = more detractors
+                    # NPS = (P - D) / Total * 100
+                    # With avg < 7, estimate detractor weight
+                    detractor_weight = (7 - avg_rating) / 6  # 0 to 1 scale
+                    detractors = max(1, round(received * detractor_weight))
+                    
+                    if nps_score > 0:
+                        # Some promoters too
+                        # P - D = NPS * Total / 100
+                        net = round(nps_score * received / 100)
+                        promoters = max(0, detractors + net)
+                    else:
+                        promoters = 0
+                    
+                    passives = max(0, received - promoters - detractors)
+                elif nps_score > 0:
+                    # Positive NPS with avg >= 7: mostly promoters, possibly some passives
+                    # NPS = P% - D%, so P% = NPS + D%. If D=0, P% = NPS
+                    promoter_pct = nps_score / 100
+                    promoters = max(1, round(received * promoter_pct))
+                    detractors = 0
+                    passives = received - promoters
                 elif nps_score == 0:
                     if avg_rating >= 7:
-                        # All responses were 7-8 (passive)
+                        # All responses were 7-8 (passive) or equal P/D
                         promoters = 0
                         detractors = 0
                         passives = received
                     else:
-                        # Mixed or detractors - estimate based on avg rating
-                        detractors = received
-                        promoters = 0
-                        passives = 0
-                elif nps_score > 0:
-                    # More promoters than detractors
-                    # NPS = P - D, where P + D + Passive = received
-                    # If NPS = 50% with 2 responses: could be 1 promoter, 0 detractor, 1 passive
-                    promoter_pct = (nps_score + 100) / 200  # Rough estimate
-                    promoters = max(1, round(received * promoter_pct))
-                    detractors = 0
-                    passives = received - promoters
+                        # NPS=0 but low avg - equal promoters and detractors
+                        detractors = received // 2
+                        promoters = received // 2
+                        passives = received - promoters - detractors
                 else:
-                    # More detractors than promoters (negative NPS)
-                    detractor_pct = (-nps_score) / 100
+                    # Negative NPS: more detractors than promoters
+                    detractor_pct = min(1.0, (-nps_score) / 100 + 0.5)  # At least 50% detractors
                     detractors = max(1, round(received * detractor_pct))
                     promoters = 0
-                    passives = received - detractors
+                    passives = max(0, received - detractors)
                 
                 # Calculate CV points
                 cv_points = (promoters * CV_PROMOTER_POINTS) + (detractors * CV_DETRACTOR_POINTS)
