@@ -1090,6 +1090,59 @@ async def upload_employees_v2(
             doc['created_at'] = doc['created_at'].isoformat()
             await db.employees_v2.insert_one(doc)
         
+        # Populate CV data from synced Loyalty Voice data
+        cv_records = await db.cv_nps.find(
+            {"quarter": quarter, "year": year},
+            {"_id": 0}
+        ).to_list(500)
+        
+        cv_updated = 0
+        for cv in cv_records:
+            emp_name = cv.get("employee_name", "")
+            if emp_name:
+                result = await db.employees_v2.update_one(
+                    {"name": emp_name, "quarter": quarter, "year": year},
+                    {"$set": {
+                        "cv_promoters": cv.get("promoters", 0),
+                        "cv_passives": cv.get("passives", 0),
+                        "cv_detractors": cv.get("detractors", 0),
+                        "cv_score": cv.get("cv_points", 0),
+                        "nps_score": cv.get("nps_score", 0),
+                        "cv_source": "loyalty_voice_sync"
+                    }}
+                )
+                if result.modified_count > 0:
+                    cv_updated += 1
+        
+        # Populate Review data from synced ReviewTrackers data
+        review_stats = await db.customer_reviews.aggregate([
+            {"$match": {"quarter": quarter, "year": year}},
+            {"$unwind": "$employee_mentions"},
+            {"$group": {
+                "_id": "$employee_mentions.name",
+                "mention_count": {"$sum": 1},
+                "positive_mentions": {"$sum": {"$cond": [{"$eq": ["$employee_mentions.sentiment", "positive"]}, 1, 0]}},
+                "negative_mentions": {"$sum": {"$cond": [{"$eq": ["$employee_mentions.sentiment", "negative"]}, 1, 0]}},
+                "total_points": {"$sum": "$employee_mentions.points"}
+            }}
+        ]).to_list(500)
+        
+        review_updated = 0
+        for stat in review_stats:
+            emp_name = stat.get("_id", "")
+            if emp_name:
+                result = await db.employees_v2.update_one(
+                    {"name": emp_name, "quarter": quarter, "year": year},
+                    {"$set": {
+                        "review_mentions": stat.get("mention_count", 0),
+                        "review_source": "reviewtrackers_sync"
+                    }}
+                )
+                if result.modified_count > 0:
+                    review_updated += 1
+        
+        logging.info(f"Updated {cv_updated} employees with CV data, {review_updated} with Review data")
+        
         # Lock the quarter settings
         await db.quarter_settings.update_one(
             {"year": year, "quarter": quarter},
@@ -1103,6 +1156,8 @@ async def upload_employees_v2(
             "success": True,
             "message": f"Imported and scored {len(scored_employees)} employees for {quarter} {year}",
             "employees_count": len(scored_employees),
+            "cv_data_updated": cv_updated,
+            "review_data_updated": review_updated,
             "quarter": quarter,
             "year": year,
             "settings_locked": True
