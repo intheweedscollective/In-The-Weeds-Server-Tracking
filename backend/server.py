@@ -4720,6 +4720,173 @@ async def get_employee_cv_points(employee_id: str, quarter: str = "Q1", year: in
     }
 
 
+@api_router.post("/v2/cv/feedback/{feedback_id}/exclude")
+async def exclude_cv_feedback(feedback_id: str):
+    """
+    Exclude a CV feedback item from NPS calculations.
+    When excluded, recalculate the employee's NPS score without this feedback.
+    """
+    # Find the feedback item
+    feedback = await db.cv_feedback.find_one({"id": feedback_id})
+    if not feedback:
+        raise HTTPException(status_code=404, detail="Feedback not found")
+    
+    if feedback.get("excluded"):
+        return {"success": False, "message": "Already excluded"}
+    
+    # Mark as excluded
+    await db.cv_feedback.update_one(
+        {"id": feedback_id},
+        {"$set": {"excluded": True, "excluded_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    # Recalculate NPS for the affected employee(s)
+    quarter = feedback.get("quarter", "Q1")
+    year = feedback.get("year", 2026)
+    
+    # Get all mentions from this feedback
+    mentions = feedback.get("mentions", [])
+    affected_employees = [m.get("employee_name") for m in mentions if m.get("employee_name")]
+    
+    # Get the sentiment/rating of the excluded feedback
+    sentiment = feedback.get("sentiment", "passive")
+    
+    # Update NPS for each affected employee
+    for emp_name in affected_employees:
+        # Find the NPS record for this employee
+        nps_record = await db.cv_nps.find_one({
+            "employee_name": emp_name,
+            "quarter": quarter,
+            "year": year
+        })
+        
+        if nps_record:
+            # Calculate new NPS excluding this feedback
+            promoters = nps_record.get("promoters", 0)
+            detractors = nps_record.get("detractors", 0)
+            passives = nps_record.get("passives", 0)
+            received = nps_record.get("received", 0)
+            
+            # Adjust counts based on excluded feedback sentiment
+            if sentiment == "promoter":
+                promoters = max(0, promoters - 1)
+            elif sentiment == "detractor":
+                detractors = max(0, detractors - 1)
+            else:
+                passives = max(0, passives - 1)
+            
+            received = max(0, received - 1)
+            
+            # Calculate new NPS
+            if received > 0:
+                new_nps = ((promoters - detractors) / received) * 100
+            else:
+                new_nps = 0
+            
+            # Update the NPS record
+            await db.cv_nps.update_one(
+                {"id": nps_record.get("id")},
+                {"$set": {
+                    "promoters": promoters,
+                    "detractors": detractors,
+                    "passives": passives,
+                    "received": received,
+                    "nps_score": round(new_nps, 2),
+                    "last_adjusted": datetime.now(timezone.utc).isoformat()
+                }}
+            )
+    
+    return {
+        "success": True,
+        "message": "Feedback excluded from rankings",
+        "feedback_id": feedback_id,
+        "affected_employees": affected_employees
+    }
+
+
+@api_router.post("/v2/cv/feedback/{feedback_id}/include")
+async def include_cv_feedback(feedback_id: str):
+    """
+    Undo exclusion - restore a CV feedback item to NPS calculations.
+    """
+    # Find the feedback item
+    feedback = await db.cv_feedback.find_one({"id": feedback_id})
+    if not feedback:
+        raise HTTPException(status_code=404, detail="Feedback not found")
+    
+    if not feedback.get("excluded"):
+        return {"success": False, "message": "Not excluded"}
+    
+    # Remove exclusion
+    await db.cv_feedback.update_one(
+        {"id": feedback_id},
+        {"$set": {"excluded": False}, "$unset": {"excluded_at": ""}}
+    )
+    
+    # Recalculate NPS for the affected employee(s)
+    quarter = feedback.get("quarter", "Q1")
+    year = feedback.get("year", 2026)
+    
+    # Get all mentions from this feedback
+    mentions = feedback.get("mentions", [])
+    affected_employees = [m.get("employee_name") for m in mentions if m.get("employee_name")]
+    
+    # Get the sentiment/rating of the included feedback
+    sentiment = feedback.get("sentiment", "passive")
+    
+    # Update NPS for each affected employee
+    for emp_name in affected_employees:
+        # Find the NPS record for this employee
+        nps_record = await db.cv_nps.find_one({
+            "employee_name": emp_name,
+            "quarter": quarter,
+            "year": year
+        })
+        
+        if nps_record:
+            # Calculate new NPS including this feedback
+            promoters = nps_record.get("promoters", 0)
+            detractors = nps_record.get("detractors", 0)
+            passives = nps_record.get("passives", 0)
+            received = nps_record.get("received", 0)
+            
+            # Adjust counts based on restored feedback sentiment
+            if sentiment == "promoter":
+                promoters += 1
+            elif sentiment == "detractor":
+                detractors += 1
+            else:
+                passives += 1
+            
+            received += 1
+            
+            # Calculate new NPS
+            if received > 0:
+                new_nps = ((promoters - detractors) / received) * 100
+            else:
+                new_nps = 0
+            
+            # Update the NPS record
+            await db.cv_nps.update_one(
+                {"id": nps_record.get("id")},
+                {"$set": {
+                    "promoters": promoters,
+                    "detractors": detractors,
+                    "passives": passives,
+                    "received": received,
+                    "nps_score": round(new_nps, 2),
+                    "last_adjusted": datetime.now(timezone.utc).isoformat()
+                }}
+            )
+    
+    return {
+        "success": True,
+        "message": "Feedback restored to rankings",
+        "feedback_id": feedback_id,
+        "affected_employees": affected_employees
+    }
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
