@@ -619,6 +619,11 @@ export default function FullRankings() {
                             </span>
                           </td>
                           
+                          {/* NPS Score */}
+                          <td className="px-4 py-4 text-center" data-testid={`nps-score-${employee.position}`}>
+                            {formatNps(getEmployeeNps(employee.employee_id))}
+                          </td>
+                          
                           {/* Bonus Points */}
                           <td className="px-4 py-4 text-center">
                             <span className="text-sm font-semibold text-green-600">
