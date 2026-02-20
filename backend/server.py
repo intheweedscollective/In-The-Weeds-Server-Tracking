@@ -1018,15 +1018,16 @@ async def upload_employees_v2(
                     logging.warning(f"Row {idx + 2}: Skipping {name} - guests must be > 0")
                     continue
                 
-                # Customer Voice fields (optional)
-                cv_promoters = safe_int(row.get(mapping.get("cv_promoters", ""))) if mapping.get("cv_promoters") else 0
-                cv_passives = safe_int(row.get(mapping.get("cv_passives", ""))) if mapping.get("cv_passives") else 0
-                cv_detractors = safe_int(row.get(mapping.get("cv_detractors", ""))) if mapping.get("cv_detractors") else 0
+                # Customer Voice and Review data now comes from automated sync
+                # These fields are NO LONGER read from spreadsheet
+                # CV: Synced from Loyalty Voice via /api/v2/cv/sync
+                # Reviews: Synced from ReviewTrackers via /api/v2/reviews/sync
+                cv_promoters = 0
+                cv_passives = 0
+                cv_detractors = 0
+                review_mentions = 0
                 
-                # Review Tracker field (optional)
-                review_mentions = safe_int(row.get(mapping.get("review_mentions", ""))) if mapping.get("review_mentions") else 0
-                
-                # Legacy optional text fields
+                # Legacy optional text fields (deprecated)
                 review_tracker = None
                 cv_positive = None
                 cv_negative = None
@@ -1048,15 +1049,15 @@ async def upload_employees_v2(
                 
                 # Create employee with individual alcohol fields
                 # LBW is calculated automatically in run_full_scoring
+                # CV/Review data will be populated from automated sync
                 emp = EmployeeV2(
                     name=name,
-                    job_title=job_title,  # NEW: Job Title for hierarchy rankings
+                    job_title=job_title,
                     guests=guests,
                     net_sales=net_sales,
-                    liquor_sales=liquor_sales,  # Individual input
-                    beer_sales=beer_sales,      # Individual input
-                    wine_sales=wine_sales,      # Individual input
-                    # lbw is calculated automatically from liquor+beer+wine
+                    liquor_sales=liquor_sales,
+                    beer_sales=beer_sales,
+                    wine_sales=wine_sales,
                     glassware_sales=glassware_sales,
                     lsc_count=lsc_count,
                     cv_promoters=cv_promoters,
