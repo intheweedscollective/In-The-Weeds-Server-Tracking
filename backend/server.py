@@ -3570,7 +3570,7 @@ async def recalculate_snapshot(snapshot_id: str):
         if name:
             nps_lookup[name] = nps
     
-    # Fetch review mentions from reviews collection
+    # Fetch review mentions from customer_reviews collection
     review_pipeline = [
         {"$match": {"quarter": snapshot["quarter"], "year": snapshot["year"]}},
         {"$unwind": {"path": "$employee_mentions", "preserveNullAndEmptyArrays": False}},
@@ -3579,7 +3579,7 @@ async def recalculate_snapshot(snapshot_id: str):
             "mentions": {"$sum": 1}
         }}
     ]
-    review_mentions_cursor = db.reviews.aggregate(review_pipeline)
+    review_mentions_cursor = db.customer_reviews.aggregate(review_pipeline)
     review_mentions_data = await review_mentions_cursor.to_list(1000)
     review_lookup = {r["_id"].lower(): r["mentions"] for r in review_mentions_data if r.get("_id")}
     
