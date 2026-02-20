@@ -555,6 +555,7 @@ export default function FullRankings() {
                     <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider">Employee</th>
                     <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider">Tier</th>
                     <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider">Total Score</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider">NPS</th>
                     <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider">Bonus</th>
                     <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider">PPA (25%)</th>
                     <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider">LBW (20%)</th>
