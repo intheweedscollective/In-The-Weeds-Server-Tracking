@@ -995,14 +995,16 @@ def generate_hierarchy_rankings(employees: List[EmployeeV2], settings: QuarterSe
         
         emp = item["employee"]
         
-        # Calculate Review Bonus: RT mentions * 0.2 + CV promoters * 1 + CV detractors * -2
+        # Review Bonus: RT mentions × 0.2 (separate from NPS)
         review_mentions = emp.review_mentions or 0
-        cv_promoters = emp.cv_promoters or 0
-        cv_detractors = emp.cv_detractors or 0
-        review_bonus = (review_mentions * 0.2) + (cv_promoters * 1) + (cv_detractors * -2)
+        review_bonus = review_mentions * 0.2
         
         # Metric Bonus: bonuses from exceeding benchmarks in metrics (PPA, LBW, LSC, Glass)
         metric_bonus = emp.total_metric_bonus or 0
+        
+        # NPS Score: Already weighted (NPS% × 0.15, max 15 pts) - part of base score
+        nps_score = emp.nps_score or 0
+        nps_points = emp.cv_score or 0  # cv_score now contains NPS points
         
         results.append({
             "position": idx,  # Overall position (1 to N)
@@ -1015,12 +1017,11 @@ def generate_hierarchy_rankings(employees: List[EmployeeV2], settings: QuarterSe
             "bonus_points": round(metric_bonus + review_bonus, 2),
             "review_bonus": round(review_bonus, 2),
             "metric_bonus": round(metric_bonus, 2),
-            # CV/Review raw data
-            "cv_promoters": cv_promoters,
-            "cv_detractors": cv_detractors,
-            "cv_score": emp.cv_score or 0,
+            # NPS data
+            "nps_score": nps_score,
+            "nps_points": round(nps_points, 2),
+            # Review data
             "review_mentions": review_mentions,
-            "nps_score": emp.nps_score or 0,
             "ppa_points": {
                 "earned": round(min((emp.score_ppa or 0), 100) * 0.25 + (emp.bonus_ppa or 0), 2),
                 "possible": 30
