@@ -87,6 +87,17 @@ Build a comprehensive performance review application for restaurant employees (B
   - "Sync NPS" button to refresh data from Loyalty Voice
   - NPS summary in results header showing total records and average
   - NPS card in expanded employee details with Promoter/Passive/Detractor label
+- ✅ **Customer Voice Feedback Scraper** (cv_feedback_scraper.py):
+  - Scrapes individual customer feedback from Loyalty Voice /Feedback page
+  - Extracts rating (1-10), customer name, date, shift, and full comment
+  - Detects employee mentions in comments
+  - Awards CV points: +1 for promoters (9-10), 0 for passive (7-8), -2 for detractors (1-6)
+- ✅ **Customer Voice in Review Tracker Page**:
+  - "Sync Customer Voice" button (highlighted yellow/orange gradient)
+  - CV status banner showing promoter/passive/detractor counts
+  - Tabs: "All Reviews", "Customer Voice", "External Reviews"
+  - CV feedback cards with ⭐ star badges and "PRIORITY" label
+  - Employee credits shown with points (⭐ Eddie +1)
 
 ## Backlog
 
