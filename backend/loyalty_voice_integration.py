@@ -196,21 +196,22 @@ async def navigate_and_set_date_range(page: Page, quarter: str, year: int) -> bo
 
 async def scrape_nps_from_aggrid(page: Page) -> List[Dict[str, Any]]:
     """
-    Scrape NPS scores from the ag-grid table on the Server Performance Report.
+    Scrape data from the ag-grid table on the Server Performance Report.
     
     Expected columns: Name, Location, Sent, Received, Response Rate, Avg. Rating, NPS
     
-    Returns list of dicts with server_name, nps_score, and other metrics.
+    Returns list of dicts with server_name, received count, avg_rating, nps_score,
+    and calculated CV points (promoters * 1 + detractors * -2).
     """
     server_data = []
     
     try:
-        # Wait for ag-grid to be present (not necessarily visible)
+        # Wait for ag-grid to be present
         print("[LV] Waiting for data grid to load...")
         await page.wait_for_selector('.ag-row', timeout=15000, state='attached')
         await page.wait_for_timeout(3000)
         
-        # Check for pagination - try to set page size to maximum (100)
+        # Try to set page size to maximum (100)
         try:
             page_size_select = page.locator('select').first
             if await page_size_select.count() > 0:
@@ -220,7 +221,7 @@ async def scrape_nps_from_aggrid(page: Page) -> List[Dict[str, Any]]:
         except:
             pass
         
-        # Get all rows - use state='attached' as rows might be virtually rendered
+        # Get all rows
         rows = await page.locator('.ag-row').all()
         print(f"[LV] Found {len(rows)} rows in grid")
         
@@ -235,12 +236,13 @@ async def scrape_nps_from_aggrid(page: Page) -> List[Dict[str, Any]]:
                     text = await cell.inner_text()
                     cell_values.append(text.strip())
                 
-                # Column mapping based on observed structure:
+                # Column mapping:
                 # 0: Name, 1: Location, 2: Sent, 3: Received, 4: Response Rate, 5: Avg. Rating, 6: NPS
                 server_name = cell_values[0] if len(cell_values) > 0 else ""
                 location = cell_values[1] if len(cell_values) > 1 else ""
-                nps_str = cell_values[6] if len(cell_values) > 6 else "0%"
+                received_str = cell_values[3] if len(cell_values) > 3 else "0"
                 avg_rating_str = cell_values[5] if len(cell_values) > 5 else "0"
+                nps_str = cell_values[6] if len(cell_values) > 6 else "0%"
                 
                 # Skip empty rows, header rows, or store-only rows
                 if not server_name or server_name.startswith('Bubba') or len(server_name) < 3:
@@ -248,21 +250,76 @@ async def scrape_nps_from_aggrid(page: Page) -> List[Dict[str, Any]]:
                 if any(header in server_name.lower() for header in ['name', 'server', 'total']):
                     continue
                 
-                # Parse NPS percentage
-                nps_match = re.match(r'(-?\d+(?:\.\d+)?)', nps_str.replace('%', ''))
-                nps_score = float(nps_match.group(1)) if nps_match else 0
+                # Parse values
+                try:
+                    received = int(received_str) if received_str else 0
+                except ValueError:
+                    received = 0
                 
-                # Parse average rating
                 try:
                     avg_rating = float(avg_rating_str) if avg_rating_str else 0
                 except ValueError:
                     avg_rating = 0
                 
+                nps_match = re.match(r'(-?\d+(?:\.\d+)?)', nps_str.replace('%', ''))
+                nps_score = float(nps_match.group(1)) if nps_match else 0
+                
+                # Calculate promoters and detractors from NPS and response count
+                # NPS = (% Promoters) - (% Detractors)
+                # If NPS=100, all are promoters. If NPS=0, could be all passive or equal promoters/detractors.
+                # We can estimate based on avg rating:
+                # - If avg >= 9 and NPS > 0, likely all promoters
+                # - If avg >= 7 and NPS == 0, likely all passive
+                # - If avg < 7, has detractors
+                
+                if received == 0:
+                    promoters = 0
+                    detractors = 0
+                    passives = 0
+                elif nps_score == 100:
+                    # All responses were 9-10 (promoters)
+                    promoters = received
+                    detractors = 0
+                    passives = 0
+                elif nps_score == 0:
+                    if avg_rating >= 7:
+                        # All responses were 7-8 (passive)
+                        promoters = 0
+                        detractors = 0
+                        passives = received
+                    else:
+                        # Mixed or detractors - estimate based on avg rating
+                        detractors = received
+                        promoters = 0
+                        passives = 0
+                elif nps_score > 0:
+                    # More promoters than detractors
+                    # NPS = P - D, where P + D + Passive = received
+                    # If NPS = 50% with 2 responses: could be 1 promoter, 0 detractor, 1 passive
+                    promoter_pct = (nps_score + 100) / 200  # Rough estimate
+                    promoters = max(1, round(received * promoter_pct))
+                    detractors = 0
+                    passives = received - promoters
+                else:
+                    # More detractors than promoters (negative NPS)
+                    detractor_pct = (-nps_score) / 100
+                    detractors = max(1, round(received * detractor_pct))
+                    promoters = 0
+                    passives = received - detractors
+                
+                # Calculate CV points
+                cv_points = (promoters * CV_PROMOTER_POINTS) + (detractors * CV_DETRACTOR_POINTS)
+                
                 server_data.append({
                     "server_name": server_name,
                     "location": location,
-                    "nps_score": nps_score,
+                    "received": received,
                     "avg_rating": avg_rating,
+                    "nps_score": nps_score,
+                    "promoters": promoters,
+                    "passives": passives,
+                    "detractors": detractors,
+                    "cv_points": cv_points,
                     "raw_data": cell_values
                 })
                 
