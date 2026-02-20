@@ -981,6 +981,16 @@ def generate_hierarchy_rankings(employees: List[EmployeeV2], settings: QuarterSe
         position_label = f"{tier_prefixes[tier]}{tier_counters[tier]}"
         
         emp = item["employee"]
+        
+        # Calculate Review Bonus: RT mentions * 0.2 + CV promoters * 1 + CV detractors * -2
+        review_mentions = emp.review_mentions or 0
+        cv_promoters = emp.cv_promoters or 0
+        cv_detractors = emp.cv_detractors or 0
+        review_bonus = (review_mentions * 0.2) + (cv_promoters * 1) + (cv_detractors * -2)
+        
+        # Metric Bonus: bonuses from exceeding benchmarks in metrics (PPA, LBW, LSC, Glass)
+        metric_bonus = emp.total_metric_bonus or 0
+        
         results.append({
             "position": idx,  # Overall position (1 to N)
             "position_label": position_label,  # Bar1, A1, etc.
@@ -989,7 +999,15 @@ def generate_hierarchy_rankings(employees: List[EmployeeV2], settings: QuarterSe
             "name": emp.name,
             "job_title": emp.job_title or "Server",
             "total_score": round(item["score"], 2),
-            "bonus_points": round((emp.total_metric_bonus or 0) + (emp.review_tracker_bonus or 0), 2),
+            "bonus_points": round(metric_bonus + review_bonus, 2),
+            "review_bonus": round(review_bonus, 2),
+            "metric_bonus": round(metric_bonus, 2),
+            # CV/Review raw data
+            "cv_promoters": cv_promoters,
+            "cv_detractors": cv_detractors,
+            "cv_score": emp.cv_score or 0,
+            "review_mentions": review_mentions,
+            "nps_score": emp.nps_score or 0,
             "ppa_points": {
                 "earned": round(min((emp.score_ppa or 0), 100) * 0.25 + (emp.bonus_ppa or 0), 2),
                 "possible": 30
