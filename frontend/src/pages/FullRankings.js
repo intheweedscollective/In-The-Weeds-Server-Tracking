@@ -632,9 +632,9 @@ export default function FullRankings() {
                                 </span>
                                 {(() => {
                                   const percentile = Math.round((1 - (employee.position - 1) / totalEmployees) * 100);
-                                  if (percentile >= 90) return <span className="px-1.5 py-0.5 bg-green-100 text-green-700 text-xs font-bold rounded">Top 10%</span>;
-                                  if (percentile >= 75) return <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs font-bold rounded">Top 25%</span>;
-                                  if (percentile >= 50) return <span className="px-1.5 py-0.5 bg-yellow-100 text-yellow-700 text-xs font-bold rounded">Top 50%</span>;
+                                  if (percentile >= 90) return <span className="inline-block w-14 text-center px-1.5 py-0.5 bg-green-100 text-green-700 text-xs font-bold rounded">Top 10%</span>;
+                                  if (percentile >= 75) return <span className="inline-block w-14 text-center px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs font-bold rounded">Top 25%</span>;
+                                  if (percentile >= 50) return <span className="inline-block w-14 text-center px-1.5 py-0.5 bg-yellow-100 text-yellow-700 text-xs font-bold rounded">Top 50%</span>;
                                   return null;
                                 })()}
                               </div>
