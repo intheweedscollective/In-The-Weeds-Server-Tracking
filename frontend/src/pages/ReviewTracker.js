@@ -150,6 +150,46 @@ export default function ReviewTracker() {
     }
   };
 
+  // Exclude CV feedback from rankings
+  const handleExcludeFeedback = async (feedbackId) => {
+    try {
+      const res = await fetch(`${API_URL}/api/v2/cv/feedback/${feedbackId}/exclude`, {
+        method: "POST"
+      });
+      
+      const data = await res.json();
+      
+      if (data.success) {
+        toast.success("Feedback excluded from rankings. NPS recalculated.");
+        fetchData();
+      } else {
+        toast.error(data.message || "Failed to exclude feedback");
+      }
+    } catch (error) {
+      toast.error("Error excluding feedback");
+    }
+  };
+
+  // Include (undo exclude) CV feedback back into rankings
+  const handleIncludeFeedback = async (feedbackId) => {
+    try {
+      const res = await fetch(`${API_URL}/api/v2/cv/feedback/${feedbackId}/include`, {
+        method: "POST"
+      });
+      
+      const data = await res.json();
+      
+      if (data.success) {
+        toast.success("Feedback restored to rankings. NPS recalculated.");
+        fetchData();
+      } else {
+        toast.error(data.message || "Failed to restore feedback");
+      }
+    } catch (error) {
+      toast.error("Error restoring feedback");
+    }
+  };
+
   // Delete review
   const handleDeleteReview = async (reviewId) => {
     if (!window.confirm("Are you sure you want to delete this review?")) return;
