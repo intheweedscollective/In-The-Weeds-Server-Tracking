@@ -201,23 +201,22 @@ async def scrape_nps_from_aggrid(page: Page) -> List[Dict[str, Any]]:
     server_data = []
     
     try:
-        # Wait for ag-grid to load
+        # Wait for ag-grid to be present (not necessarily visible)
         print("[LV] Waiting for data grid to load...")
-        await page.wait_for_selector('.ag-row', timeout=15000)
-        await page.wait_for_timeout(2000)
+        await page.wait_for_selector('.ag-row', timeout=15000, state='attached')
+        await page.wait_for_timeout(3000)
         
-        # Check for pagination - we may need to get all data
-        # First, try to set page size to maximum (100)
+        # Check for pagination - try to set page size to maximum (100)
         try:
             page_size_select = page.locator('select').first
-            if await page_size_select.is_visible(timeout=2000):
+            if await page_size_select.count() > 0:
                 await page_size_select.select_option('100')
                 await page.wait_for_timeout(3000)
                 print("[LV] Set page size to 100")
         except:
             pass
         
-        # Get all rows
+        # Get all rows - use state='attached' as rows might be virtually rendered
         rows = await page.locator('.ag-row').all()
         print(f"[LV] Found {len(rows)} rows in grid")
         
@@ -265,60 +264,6 @@ async def scrape_nps_from_aggrid(page: Page) -> List[Dict[str, Any]]:
                 
             except Exception as row_err:
                 continue
-        
-        # Check if there are more pages
-        # Look for pagination controls
-        try:
-            next_btn = page.locator('.ag-paging-button[ref="btNext"]:not([disabled])').first
-            page_num = 1
-            max_pages = 10  # Safety limit
-            
-            while page_num < max_pages:
-                if await next_btn.is_visible(timeout=1000):
-                    # There might be more pages
-                    has_more = await next_btn.is_enabled()
-                    if not has_more:
-                        break
-                    
-                    await next_btn.click()
-                    await page.wait_for_timeout(2000)
-                    page_num += 1
-                    
-                    # Get rows from this page
-                    more_rows = await page.locator('.ag-row').all()
-                    for row in more_rows:
-                        try:
-                            cells = await row.locator('.ag-cell').all()
-                            if len(cells) < 7:
-                                continue
-                            
-                            cell_values = [await c.inner_text() for c in cells]
-                            cell_values = [v.strip() for v in cell_values]
-                            
-                            server_name = cell_values[0]
-                            if not server_name or server_name.startswith('Bubba') or len(server_name) < 3:
-                                continue
-                            
-                            nps_str = cell_values[6] if len(cell_values) > 6 else "0%"
-                            nps_match = re.match(r'(-?\d+(?:\.\d+)?)', nps_str.replace('%', ''))
-                            nps_score = float(nps_match.group(1)) if nps_match else 0
-                            
-                            # Check if we already have this server
-                            existing = [s for s in server_data if s['server_name'] == server_name]
-                            if not existing:
-                                server_data.append({
-                                    "server_name": server_name,
-                                    "location": cell_values[1] if len(cell_values) > 1 else "",
-                                    "nps_score": nps_score,
-                                    "avg_rating": float(cell_values[5]) if len(cell_values) > 5 and cell_values[5] else 0,
-                                    "raw_data": cell_values
-                                })
-                        except:
-                            continue
-                else:
-                    break
-        except Exception as page_err:
-            print(f"[LV] Pagination handling: {page_err}")
         
         print(f"[LV] Successfully scraped {len(server_data)} servers")
         
