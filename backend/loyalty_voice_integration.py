@@ -1,16 +1,16 @@
 """
-Loyalty Voice Integration - Scrape Server Performance Report for NPS scores
+Loyalty Voice Integration - Scrape Server Performance Report for CV scores
 
 This module navigates to Landry's Loyalty Voice platform and extracts the
 Server Performance Report which contains NPS (Net Promoter Score) percentages
 for each server.
 
-Flow:
-1. Log into Landry's Loyalty Voice (Microsoft SSO)
-2. Navigate to Reports → Server Performance
-3. Select date range based on quarter
-4. Scrape NPS % for each server from the ag-grid table
-5. Store in database and integrate with employee scoring
+CV Scoring Logic:
+- Each survey response where the server received a 9-10 rating = +1 point (Promoter)
+- Each survey response where the server received a 1-6 rating = -2 points (Detractor)
+- Passive (7-8 rating) = 0 points
+
+We extract: Received (# responses), Avg Rating, NPS% to calculate promoter/detractor counts.
 """
 import os
 import asyncio
@@ -26,6 +26,10 @@ load_dotenv()
 LV_URL = "https://landrys.loyalty-voice.com"
 LV_USERNAME = os.environ.get("LOYALTY_VOICE_USERNAME", "Bglv@ldry.com")
 LV_PASSWORD = os.environ.get("LOYALTY_VOICE_PASSWORD", "EZMoney2026")
+
+# CV Point values
+CV_PROMOTER_POINTS = 1   # Rating 9-10
+CV_DETRACTOR_POINTS = -2  # Rating 1-6
 
 
 def get_quarter_date_range(quarter: str, year: int) -> Tuple[str, str]:
