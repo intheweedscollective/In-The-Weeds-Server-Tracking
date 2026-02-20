@@ -81,6 +81,12 @@ Build a comprehensive performance review application for restaurant employees (B
   - `GET /api/v2/cv/stats` - Get NPS statistics (avg, highest, lowest)
   - `GET /api/v2/cv/employee/{name}/nps` - Get NPS for specific employee
   - `GET /api/v2/cv/sync/status` - Get sync status and configuration
+- ✅ **NPS Column in Rankings Page**:
+  - Added NPS column to rankings table showing each employee's Customer Voice score
+  - Color-coded display: Green (≥50% Promoter), Yellow (0-49% Passive), Red (<0 Detractor)
+  - "Sync NPS" button to refresh data from Loyalty Voice
+  - NPS summary in results header showing total records and average
+  - NPS card in expanded employee details with Promoter/Passive/Detractor label
 
 ## Backlog
 
