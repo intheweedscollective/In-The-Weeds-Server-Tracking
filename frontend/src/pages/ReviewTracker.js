@@ -483,6 +483,21 @@ export default function ReviewTracker() {
             className="w-48 text-sm"
             data-testid="filter-employee"
           />
+          
+          {/* Show Excluded Toggle */}
+          {excludedCount > 0 && (
+            <label className="flex items-center gap-2 ml-4 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showExcluded}
+                onChange={(e) => setShowExcluded(e.target.checked)}
+                className="rounded border-gray-300"
+              />
+              <span className="text-sm text-gray-600">
+                Show excluded ({excludedCount})
+              </span>
+            </label>
+          )}
         </div>
       </div>
 
