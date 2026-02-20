@@ -33,6 +33,9 @@ export default function FullRankings() {
   const [rankings, setRankings] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [quarterSettings, setQuarterSettings] = useState(null);
+  const [npsData, setNpsData] = useState({});
+  const [npsStats, setNpsStats] = useState(null);
+  const [syncingNps, setSyncingNps] = useState(false);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
   const [downloadingPrintable, setDownloadingPrintable] = useState(false);
