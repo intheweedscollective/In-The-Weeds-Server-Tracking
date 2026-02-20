@@ -108,7 +108,7 @@ Build a comprehensive performance review application for restaurant employees (B
 
 ### P0 - Critical
 - ✅ **Loyalty Voice NPS Integration (COMPLETED)**
-- [ ] **Integrate NPS into Rankings**: Add NPS scores to employee ranking calculation
+- ✅ **Rankings Page Column Update (COMPLETED)**: Review Bonus, Metric Bonus, NPS columns with proper calculations and UI
 
 ### P1 - High Priority  
 - [ ] **Multi-Store Architecture**: Support for 22 locations with global reporting
