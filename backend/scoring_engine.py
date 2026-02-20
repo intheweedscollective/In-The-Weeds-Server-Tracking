@@ -229,15 +229,11 @@ CANONICAL_COLUMN_MAPPING = {
     "glassware_sales": ["glassware sales", "glassware", "souvenir glass", "glass sales"],
     "lsc_count": ["lsc count", "lsc", "loyalty", "loyalty sign ups", "enrollments", "memberships"],
     
-    # Customer Voice (NPS-style)
-    "cv_promoters": ["cv promoters", "promoters", "cv 9-10", "nps promoters"],
-    "cv_passives": ["cv passives", "passives", "cv 7-8", "nps passives"],
-    "cv_detractors": ["cv detractors", "detractors", "cv 0-6", "nps detractors"],
+    # Customer Voice and Review data now comes from automated sync
+    # These columns are NO LONGER NEEDED in the spreadsheet upload
+    # CV data synced from Loyalty Voice, Review data synced from ReviewTrackers
     
-    # Review Tracker
-    "review_mentions": ["review mentions", "mentions", "positive mentions", "named mentions", "review tracker count"],
-    
-    # Legacy optional (text fields)
+    # Legacy optional (text fields - deprecated)
     "review_tracker": ["review tracker text", "reviews text"],
     "cv_positive": ["cv positive", "cv+", "positive feedback"],
     "cv_negative": ["cv negative", "cv-", "negative feedback"],
