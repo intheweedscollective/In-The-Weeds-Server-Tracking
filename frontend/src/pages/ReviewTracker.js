@@ -200,7 +200,22 @@ export default function ReviewTracker() {
                 Track customer reviews and employee mentions across platforms
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Customer Voice Sync Button - Most Important */}
+              <Button
+                onClick={handleSyncCV}
+                disabled={syncingCV}
+                className="bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white font-semibold shadow-lg"
+                data-testid="sync-cv-btn"
+              >
+                {syncingCV ? (
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Sparkles className="w-4 h-4 mr-2" />
+                )}
+                {syncingCV ? "Syncing..." : "Sync Customer Voice"}
+              </Button>
+              
               {/* ReviewTrackers Sync Button */}
               {syncStatus?.configured && (
                 <Button
@@ -229,21 +244,77 @@ export default function ReviewTracker() {
             </div>
           </div>
           
-          {/* Sync Status Banner */}
-          {syncStatus?.configured && (
-            <div className="mt-3 flex items-center gap-2 text-sm text-green-600 bg-green-50 px-3 py-2 rounded-lg">
-              <CheckCircle className="w-4 h-4" />
-              <span>
-                ReviewTrackers connected • {syncStatus.total_synced_reviews || 0} reviews synced
-                {syncStatus.last_sync_time && (
-                  <span className="text-gray-500 ml-2">
-                    • Last sync: {new Date(syncStatus.last_sync_time).toLocaleString()}
-                  </span>
-                )}
-              </span>
-            </div>
-          )}
+          {/* Sync Status Banners */}
+          <div className="mt-3 space-y-2">
+            {/* CV Status - Highlighted */}
+            {cvStats && cvStats.total_feedback > 0 && (
+              <div className="flex items-center gap-2 text-sm text-orange-700 bg-gradient-to-r from-yellow-50 to-orange-50 px-3 py-2 rounded-lg border border-orange-200">
+                <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                <span className="font-semibold">
+                  Customer Voice: {cvStats.total_feedback} feedback items
+                  <span className="mx-2">•</span>
+                  <span className="text-green-600">{cvStats.promoter_count} promoters</span>
+                  <span className="mx-1">|</span>
+                  <span className="text-yellow-600">{cvStats.passive_count} passive</span>
+                  <span className="mx-1">|</span>
+                  <span className="text-red-600">{cvStats.detractor_count} detractors</span>
+                </span>
+              </div>
+            )}
+            
+            {syncStatus?.configured && (
+              <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 px-3 py-2 rounded-lg">
+                <CheckCircle className="w-4 h-4" />
+                <span>
+                  ReviewTrackers connected • {syncStatus.total_synced_reviews || 0} reviews synced
+                  {syncStatus.last_sync_time && (
+                    <span className="text-gray-500 ml-2">
+                      • Last sync: {new Date(syncStatus.last_sync_time).toLocaleString()}
+                    </span>
+                  )}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
+
+      {/* Tabs */}
+      <div className="flex gap-2 mb-6">
+        <button
+          onClick={() => setActiveTab("all")}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            activeTab === "all"
+              ? "bg-primary text-white"
+              : "bg-white text-gray-600 hover:bg-gray-100 border"
+          }`}
+          data-testid="tab-all"
+        >
+          All Reviews
+        </button>
+        <button
+          onClick={() => setActiveTab("cv")}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+            activeTab === "cv"
+              ? "bg-gradient-to-r from-yellow-400 to-orange-500 text-white"
+              : "bg-white text-gray-600 hover:bg-gray-100 border"
+          }`}
+          data-testid="tab-cv"
+        >
+          <Star className={`w-4 h-4 ${activeTab === "cv" ? "fill-white" : "fill-yellow-400 text-yellow-400"}`} />
+          Customer Voice ({cvFeedback.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("reviews")}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            activeTab === "reviews"
+              ? "bg-primary text-white"
+              : "bg-white text-gray-600 hover:bg-gray-100 border"
+          }`}
+          data-testid="tab-reviews"
+        >
+          External Reviews ({reviews.length})
+        </button>
+      </div>
 
       {/* Stats Cards */}
       {stats && (
