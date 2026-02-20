@@ -533,15 +533,17 @@ def calculate_total_score(employee: EmployeeV2, settings: QuarterSettings) -> Em
     """
     Calculate weighted score + total score.
     
-    Q1 2026 Official Formula:
-    Final Score = Weighted(PPA + LSC + LBW + Glass + CV) 
-                  + Review Tracker Bonus 
-                  + Metric Bonuses
-                  + CV Raw Points (direct addition)
-                  - DAR Penalties
+    NEW MODEL (Simplified):
+    Base Score = Weighted(PPA + LSC + LBW + Glass) + NPS Points
+               = (PPA×25% + LSC×25% + LBW×20% + Glass×15%) + (NPS%×0.15)
+               = 85 pts max + 15 pts max = 100 pts base max
     
-    Weights: PPA 25%, LSC 25%, LBW 20%, Glass 15% = 85% base
-    CV: Raw points added directly (not weighted)
+    Total Score = Base Score + Metric Bonuses + Review Tracker Bonus - DAR
+    
+    Weights: PPA 25%, LSC 25%, LBW 20%, Glass 15% = 85 pts
+    NPS: NPS% × 0.15 = 15 pts max
+    Metric Bonuses: Up to 5 pts each (PPA, LBW, LSC, Glass) = 20 pts max
+    Review Tracker Bonus: Mentions × 0.2 pts
     """
     # Cap each metric score at 100 before applying weight
     # Base weighted score: PPA + LSC + LBW + Glass = 85 pts max
@@ -550,8 +552,8 @@ def calculate_total_score(employee: EmployeeV2, settings: QuarterSettings) -> Em
     capped_glass = min((employee.score_glass or 0), 100)
     capped_lsc = min((employee.score_lsc or 0), 100)
     
-    # Calculate weighted score from capped metrics (no CV weight - it's added raw)
-    employee.weighted_score = round(
+    # Calculate weighted score from capped metrics (85 pts max)
+    metric_weighted = round(
         capped_ppa * settings.weight_ppa +
         capped_lbw * settings.weight_lbw +
         capped_glass * settings.weight_glass +
@@ -559,12 +561,18 @@ def calculate_total_score(employee: EmployeeV2, settings: QuarterSettings) -> Em
         2
     )
     
+    # Add NPS points (already calculated as NPS% × 0.15, max 15 pts)
+    nps_points = employee.cv_score or 0
+    
+    # Total weighted score (base 100 pts max)
+    employee.weighted_score = round(metric_weighted + nps_points, 2)
+    
     # Pre-DAR score (shown in rankings)
-    # CV is added as raw points (score_cv already contains raw value)
+    # Add Metric Bonuses and Review Tracker Bonus
     employee.pre_dar_score = round(
         employee.weighted_score + 
         (employee.total_metric_bonus or 0) +
-        (employee.score_cv or 0),  # CV raw points added directly
+        (employee.review_tracker_bonus or 0),
         2
     )
     
