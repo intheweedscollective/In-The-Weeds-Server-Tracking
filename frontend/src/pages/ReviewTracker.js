@@ -75,9 +75,10 @@ export default function ReviewTracker() {
       
       // Fetch CV feedback
       try {
-        const cvRes = await fetch(`${API_URL}/api/v2/cv/feedback?quarter=${selectedQuarter}&year=${selectedYear}&limit=100`);
+        const cvRes = await fetch(`${API_URL}/api/v2/cv/feedback?quarter=${selectedQuarter}&year=${selectedYear}&limit=100&include_excluded=${showExcluded}`);
         const cvData = await cvRes.json();
         setCvFeedback(cvData.feedback || []);
+        setExcludedCount(cvData.excluded_count || 0);
         
         // Fetch CV stats
         const cvStatsRes = await fetch(`${API_URL}/api/v2/cv/feedback/stats?quarter=${selectedQuarter}&year=${selectedYear}`);
