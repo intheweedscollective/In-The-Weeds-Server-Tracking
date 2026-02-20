@@ -1,12 +1,19 @@
 """
-Restaurant Performance Engine v2.1
+Restaurant Performance Engine v2.2
 Q1 2026 Official Scoring Model - Bubba Gump Shrimp Co.
 
 Scoring Logic:
-- PPA (25%), LSC (25%), LBW (20%), Glassware (15%), Customer Voice (15%)
-- Customer Voice: NPS-style internal feedback scoring
-- Review Tracker: External platform bonus points
+- PPA (25%), LSC (25%), LBW (20%), Glassware (15%) = 85 pts base
+- NPS (15%): NPS% × 0.15 = 0-15 pts (from Loyalty Voice)
+- Review Tracker Bonus: Mentions × 0.2 pts (separate bonus)
+- Metric Bonuses: Up to 5 pts each for exceeding benchmarks
 - DAR: Disciplinary penalties (admin-only, applied at final stage)
+
+NPS Scoring Scale:
+- 0% NPS = 0 points
+- 50% NPS = 7.5 points
+- 75% NPS = 11.25 points
+- 100% NPS = 15 points
 """
 
 from typing import Optional, Dict, Any, List, Tuple
@@ -18,22 +25,22 @@ import pandas as pd
 
 
 # ============================================================================
-# CUSTOMER VOICE & REVIEW TRACKER CONSTANTS
+# SCORING CONSTANTS
 # ============================================================================
 
-# Customer Voice NPS-style scoring
-CV_PROMOTER_POINTS = 1      # Score 9-10
-CV_PASSIVE_POINTS = 0       # Score 7-8
-CV_DETRACTOR_POINTS = -2    # Score 6 or below
-CV_MIN_POINTS = -6          # Quarterly floor for negative
-CV_MAX_POINTS = 10          # Quarterly cap for positive
+# NPS-based scoring (simplified)
+# NPS_points = NPS% × 0.15 (max 15 points)
+NPS_WEIGHT = 0.15
 
-# Review Tracker
-RT_MENTIONS_PER_POINT = 5   # Every 5 positive mentions = +1 point
-RT_BONUS_MAX = 10           # Review Tracker bonus capped at 10 pts
+# Review Tracker Bonus
+RT_POINTS_PER_MENTION = 0.2  # Each mention = 0.2 points
 
-# CV is part of the base 100 weighted score (15% weight)
-# Review Tracker is a SEPARATE bonus on top (max 5 pts)
+# Legacy constants (kept for backwards compatibility)
+CV_PROMOTER_POINTS = 1
+CV_PASSIVE_POINTS = 0
+CV_DETRACTOR_POINTS = -2
+CV_MIN_POINTS = -6
+CV_MAX_POINTS = 10
 
 # DAR Penalties
 DAR_WRITTEN_WARNING = -3
@@ -41,10 +48,10 @@ DAR_SUSPENSION = -5
 
 
 # MAX SCORE BREAKDOWN:
-# Base Weighted: 100 pts (PPA 25 + LSC 25 + LBW 20 + Glass 15 + CV 15)
+# Base Weighted: 100 pts (PPA 25 + LSC 25 + LBW 20 + Glass 15 + NPS 15)
 # Metric Bonuses: 20 pts (PPA 5 + LSC 5 + LBW 5 + Glass 5)
-# Review Tracker Bonus: 10 pts (1 pt per 5 mentions, max 10)
-# TOTAL MAX: 130 pts
+# Review Tracker Bonus: Mentions × 0.2 pts (uncapped)
+# TOTAL: 120+ pts possible
 
 
 # ============================================================================
