@@ -652,10 +652,17 @@ export default function FullRankings() {
                             {formatNps(getEmployeeNps(employee.employee_id))}
                           </td>
                           
-                          {/* Bonus Points */}
+                          {/* Review Bonus: RT mentions * 0.2 + CV promoters * 1 + CV detractors * -2 */}
                           <td className="px-4 py-4 text-center">
-                            <span className="text-sm font-semibold text-green-600">
-                              +{formatNumber(employee.bonus_points)}
+                            <span className={`text-sm font-semibold ${employee.review_bonus >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {employee.review_bonus >= 0 ? '+' : ''}{formatNumber(employee.review_bonus || 0)}
+                            </span>
+                          </td>
+                          
+                          {/* Metric Bonus: exceeding benchmarks */}
+                          <td className="px-4 py-4 text-center">
+                            <span className="text-sm font-semibold text-blue-600">
+                              +{formatNumber(employee.metric_bonus || 0)}
                             </span>
                           </td>
                           
