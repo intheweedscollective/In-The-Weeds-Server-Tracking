@@ -186,8 +186,13 @@ export default function FullRankings() {
   // Sync NPS from Loyalty Voice
   const handleSyncNps = async () => {
     setSyncingNps(true);
+    toast.info("Syncing NPS from Loyalty Voice... This may take a minute.");
     try {
-      const response = await axios.post(`${API}/v2/cv/sync?quarter=${selectedQuarter}&year=${selectedYear}`);
+      const response = await axios.post(
+        `${API}/v2/cv/sync?quarter=${selectedQuarter}&year=${selectedYear}`,
+        {},
+        { timeout: 180000 }  // 3 minute timeout for scraping
+      );
       if (response.data.success) {
         toast.success(`Synced NPS for ${response.data.matched_count} employees`);
         // Refresh data
@@ -197,7 +202,11 @@ export default function FullRankings() {
       }
     } catch (error) {
       console.error("Error syncing NPS:", error);
-      toast.error("Failed to sync NPS from Loyalty Voice");
+      if (error.code === 'ECONNABORTED') {
+        toast.warning("NPS sync is taking longer than expected. It may still complete in the background.");
+      } else {
+        toast.error("Failed to sync NPS from Loyalty Voice");
+      }
     } finally {
       setSyncingNps(false);
     }
