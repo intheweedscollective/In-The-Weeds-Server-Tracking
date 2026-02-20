@@ -27,6 +27,8 @@ const PLATFORM_ICONS = {
 
 export default function ReviewTracker() {
   const [reviews, setReviews] = useState([]);
+  const [cvFeedback, setCvFeedback] = useState([]);
+  const [cvStats, setCvStats] = useState(null);
   const [stats, setStats] = useState(null);
   const [platforms, setPlatforms] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -37,6 +39,8 @@ export default function ReviewTracker() {
   const [filterEmployee, setFilterEmployee] = useState("");
   const [syncStatus, setSyncStatus] = useState(null);
   const [syncing, setSyncing] = useState(false);
+  const [syncingCV, setSyncingCV] = useState(false);
+  const [activeTab, setActiveTab] = useState("all"); // "all", "cv", "reviews"
 
   // Fetch data
   const fetchData = useCallback(async () => {
