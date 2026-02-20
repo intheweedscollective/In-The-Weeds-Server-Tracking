@@ -470,7 +470,7 @@ def calculate_normalized_scores(employee: EmployeeV2, settings: QuarterSettings)
     Score = (Employee Metric / Benchmark) * 100
     
     For LSC (inverse): Score = (Benchmark / Employee Metric) * 100
-    For CV: Normalize to 0-100 scale based on benchmark
+    For CV/NPS: Already calculated as points in calculate_customer_voice_score
     """
     # PPA Score
     if employee.ppa and settings.benchmark_ppa > 0:
@@ -496,19 +496,11 @@ def calculate_normalized_scores(employee: EmployeeV2, settings: QuarterSettings)
     else:
         employee.score_lsc = 0
     
-    # Customer Voice Score - Raw Points (no normalization)
-    # CV raw points add/subtract directly from total score
-    # Positive CV → direct addition
-    # Negative CV → direct subtraction (penalty)
-    cv_raw = employee.cv_score or 0  # Already capped at +10/-6
-    
-    # Store for reference (no normalization needed)
-    employee.score_cv = cv_raw  # Raw points, not percentage
-    
-    if cv_raw < 0:
-        employee.cv_penalty = cv_raw  # Negative value for penalty tracking
-    else:
-        employee.cv_penalty = 0
+    # Customer Voice Score - NPS-based (already calculated as points)
+    # cv_score contains: NPS% × 0.15 (0-15 points)
+    # This is the actual weighted contribution to total score
+    employee.score_cv = employee.cv_score or 0
+    employee.cv_penalty = 0  # No penalty in new model
     
     return employee
 
