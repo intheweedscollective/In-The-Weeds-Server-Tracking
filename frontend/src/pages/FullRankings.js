@@ -644,7 +644,7 @@ export default function FullRankings() {
                           
                           {/* Tier Badge */}
                           <td className="px-4 py-4 text-center">
-                            <span className={`px-3 py-1 rounded-full text-xs font-bold ${tierStyle.bg} ${tierStyle.text}`}>
+                            <span className={`inline-block w-20 text-center px-3 py-1 rounded-full text-xs font-bold ${tierStyle.bg} ${tierStyle.text}`}>
                               {employee.tier_label}
                             </span>
                           </td>
