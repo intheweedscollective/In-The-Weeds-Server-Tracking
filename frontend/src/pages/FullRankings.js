@@ -529,10 +529,37 @@ export default function FullRankings() {
         <div className="mb-4 flex items-center justify-between" data-testid="results-summary">
           <p className="text-gray-500 font-medium">
             Showing <span className="text-primary font-bold">{rankings.length}</span> of {totalEmployees} team members
+            {npsStats && npsStats.total_servers > 0 && (
+              <span className="ml-3 text-sm">
+                • <MessageCircle className="w-3 h-3 inline" /> {npsStats.total_servers} NPS records (avg: {npsStats.avg_nps}%)
+              </span>
+            )}
           </p>
-          <p className="text-sm text-gray-400">
-            {selectedQuarter} {selectedYear} • Rank is final
-          </p>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSyncNps}
+              disabled={syncingNps}
+              className="flex items-center gap-2 text-xs border-blue-300 text-blue-600 hover:bg-blue-50"
+              data-testid="sync-nps-btn"
+            >
+              {syncingNps ? (
+                <>
+                  <div className="animate-spin h-3 w-3 border-2 border-blue-500 border-t-transparent rounded-full" />
+                  Syncing...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-3 h-3" />
+                  Sync NPS
+                </>
+              )}
+            </Button>
+            <p className="text-sm text-gray-400">
+              {selectedQuarter} {selectedYear} • Rank is final
+            </p>
+          </div>
         </div>
 
         {/* Rankings Table */}
