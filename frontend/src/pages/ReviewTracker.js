@@ -566,13 +566,52 @@ export default function ReviewTracker() {
                           )}
                           
                           {/* Meta info */}
-                          <div className="mt-2 flex items-center gap-3 text-xs text-gray-400">
-                            <span>{item.shift || "No shift"}</span>
-                            <span>•</span>
-                            <span>{item.store}</span>
+                          <div className="mt-2 flex items-center justify-between">
+                            <div className="flex items-center gap-3 text-xs text-gray-400">
+                              <span>{item.shift || "No shift"}</span>
+                              <span>•</span>
+                              <span>{item.store}</span>
+                            </div>
+                            
+                            {/* Exclude/Undo Buttons */}
+                            <div className="flex items-center gap-2">
+                              {item.excluded ? (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleIncludeFeedback(item.id)}
+                                  className="text-green-600 hover:text-green-700 hover:bg-green-50 border-green-300"
+                                  data-testid={`undo-exclude-${item.id}`}
+                                >
+                                  <Undo2 className="w-3 h-3 mr-1" />
+                                  Undo
+                                </Button>
+                              ) : (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleExcludeFeedback(item.id)}
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-300"
+                                  data-testid={`exclude-${item.id}`}
+                                >
+                                  <Ban className="w-3 h-3 mr-1" />
+                                  Exclude from Rankings
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
+                      
+                      {/* Excluded Overlay */}
+                      {item.excluded && (
+                        <div className="absolute inset-0 bg-gray-100/80 flex items-center justify-center rounded-xl">
+                          <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-red-200 flex items-center gap-2">
+                            <Ban className="w-4 h-4 text-red-500" />
+                            <span className="text-sm font-medium text-red-600">Excluded from Rankings</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
