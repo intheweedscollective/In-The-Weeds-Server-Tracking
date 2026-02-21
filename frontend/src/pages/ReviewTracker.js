@@ -81,13 +81,22 @@ export default function ReviewTracker() {
         setCvFeedback(cvData.feedback || []);
         setExcludedCount(cvData.excluded_count || 0);
         
-        // Fetch CV stats
-        const cvStatsRes = await fetch(`${API_URL}/api/v2/cv/feedback/stats?quarter=${selectedQuarter}&year=${selectedYear}`);
+        // Fetch CV stats (NPS data)
+        const cvStatsRes = await fetch(`${API_URL}/api/v2/cv/stats?quarter=${selectedQuarter}&year=${selectedYear}`);
         const cvStatsData = await cvStatsRes.json();
         setCvStats(cvStatsData);
       } catch {
         setCvFeedback([]);
         setCvStats(null);
+      }
+      
+      // Fetch platform stats for QTD scores
+      try {
+        const platformStatsRes = await fetch(`${API_URL}/api/v2/reviews/platform-stats?quarter=${selectedQuarter}&year=${selectedYear}`);
+        const platformStatsData = await platformStatsRes.json();
+        setPlatformStats(platformStatsData);
+      } catch {
+        setPlatformStats(null);
       }
       
     } catch (error) {
