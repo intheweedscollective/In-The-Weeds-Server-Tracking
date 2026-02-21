@@ -743,7 +743,7 @@ export default function FullRankings() {
                                   {
                                     label: 'PPA',
                                     value: `$${(emp.ppa || 0).toFixed(2)}`,
-                                    benchmark: `$${benchmarks.benchmark_ppa || 55}`,
+                                    benchmark: `Benchmark: $${benchmarks.benchmark_ppa || 55}`,
                                     rank: ranks.ppa,
                                     total,
                                     color: (emp.ppa || 0) >= (benchmarks.benchmark_ppa || 55) ? 'text-green-600' : 'text-red-600'
@@ -751,7 +751,7 @@ export default function FullRankings() {
                                   {
                                     label: 'LBW/Guest',
                                     value: `$${(emp.lbw_per_guest || 0).toFixed(2)}`,
-                                    benchmark: `$${benchmarks.benchmark_lbw || 8}`,
+                                    benchmark: `Benchmark: $${benchmarks.benchmark_lbw || 8}`,
                                     rank: ranks.lbw,
                                     total,
                                     color: (emp.lbw_per_guest || 0) >= (benchmarks.benchmark_lbw || 8) ? 'text-green-600' : 'text-red-600'
@@ -759,7 +759,7 @@ export default function FullRankings() {
                                   {
                                     label: 'Glassware/Guest',
                                     value: `$${(emp.glassware_per_guest || 0).toFixed(2)}`,
-                                    benchmark: `$${benchmarks.benchmark_glass || 1.25}`,
+                                    benchmark: `Benchmark: $${benchmarks.benchmark_glass || 1.25}`,
                                     rank: ranks.glass,
                                     total,
                                     color: (emp.glassware_per_guest || 0) >= (benchmarks.benchmark_glass || 1.25) ? 'text-green-600' : 'text-red-600'
@@ -767,7 +767,7 @@ export default function FullRankings() {
                                   {
                                     label: 'Guests/LSC',
                                     value: (emp.guests_per_lsc || 0).toFixed(1),
-                                    benchmark: `≤${benchmarks.benchmark_lsc || 100}`,
+                                    benchmark: `Benchmark: ≤${benchmarks.benchmark_lsc || 100}`,
                                     rank: ranks.lsc,
                                     total,
                                     color: (emp.guests_per_lsc || 999) <= (benchmarks.benchmark_lsc || 100) ? 'text-green-600' : 'text-red-600'
@@ -775,7 +775,7 @@ export default function FullRankings() {
                                   {
                                     label: 'Review Tracker',
                                     value: `+${(emp.review_tracker_bonus || 0).toFixed(1)}`,
-                                    benchmark: `${emp.review_mentions || 0} mentions`,
+                                    benchmark: `${emp.review_mentions || 0} mentions × 0.2`,
                                     rank: null,
                                     total: null,
                                     color: 'text-green-600'
