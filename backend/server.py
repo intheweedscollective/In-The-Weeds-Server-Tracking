@@ -4644,6 +4644,7 @@ async def get_cv_stats(quarter: str = "Q1", year: int = 2026):
         return {
             "total_servers": 0,
             "avg_nps": 0,
+            "store_nps": 0,
             "highest_nps": None,
             "lowest_nps": None,
             "nps_breakdown": [],
@@ -4654,22 +4655,31 @@ async def get_cv_stats(quarter: str = "Q1", year: int = 2026):
             "total_surveys": 0
         }
     
-    # Calculate stats
-    nps_scores = [r.get("nps_score", 0) for r in nps_records]
-    avg_nps = sum(nps_scores) / len(nps_scores) if nps_scores else 0
-    
     # Sum up promoters, passives, detractors from all NPS records
     total_promoters = sum(r.get("promoters", 0) for r in nps_records)
     total_passives = sum(r.get("passives", 0) for r in nps_records)
     total_detractors = sum(r.get("detractors", 0) for r in nps_records)
     total_surveys = sum(r.get("received", 0) for r in nps_records)
     
+    # Calculate STORE-LEVEL NPS (correct formula)
+    # NPS = ((Promoters - Detractors) / Total Surveys) × 100
+    if total_surveys > 0:
+        store_nps = ((total_promoters - total_detractors) / total_surveys) * 100
+    else:
+        store_nps = 0
+    
+    # Also calculate average of individual NPS scores (for reference)
+    nps_scores = [r.get("nps_score", 0) for r in nps_records if r.get("received", 0) > 0]
+    avg_individual_nps = sum(nps_scores) / len(nps_scores) if nps_scores else 0
+    
     # Sort by NPS
     sorted_records = sorted(nps_records, key=lambda x: x.get("nps_score", 0), reverse=True)
     
     return {
         "total_servers": len(nps_records),
-        "avg_nps": round(avg_nps, 1),
+        "avg_nps": round(store_nps, 2),  # Use store-level NPS as the main metric
+        "store_nps": round(store_nps, 2),
+        "avg_individual_nps": round(avg_individual_nps, 2),
         "highest_nps": sorted_records[0] if sorted_records else None,
         "lowest_nps": sorted_records[-1] if sorted_records else None,
         "nps_breakdown": sorted_records[:20],  # Top 20
