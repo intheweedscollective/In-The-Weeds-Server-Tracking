@@ -3571,8 +3571,26 @@ async def recalculate_snapshot(snapshot_id: str):
             nps_lookup[name] = nps
     
     # Fetch review mentions from customer_reviews collection
+    # Filter by actual review_date within the quarter, not just the quarter label
+    quarter_dates = {
+        "Q1": ("01-01", "03-31"),
+        "Q2": ("04-01", "06-30"),
+        "Q3": ("07-01", "09-30"),
+        "Q4": ("10-01", "12-31")
+    }
+    q_start, q_end = quarter_dates.get(snapshot["quarter"], ("01-01", "12-31"))
+    date_start = f"{snapshot['year']}-{q_start}"
+    date_end = f"{snapshot['year']}-{q_end}"
+    
     review_pipeline = [
-        {"$match": {"quarter": snapshot["quarter"], "year": snapshot["year"]}},
+        {"$match": {
+            "$or": [
+                # Match by actual review_date within quarter
+                {"review_date": {"$gte": date_start, "$lte": date_end}},
+                # Fallback: if no review_date, use quarter/year labels
+                {"review_date": None, "quarter": snapshot["quarter"], "year": snapshot["year"]}
+            ]
+        }},
         {"$unwind": {"path": "$employee_mentions", "preserveNullAndEmptyArrays": False}},
         {"$group": {
             "_id": "$employee_mentions.name",
