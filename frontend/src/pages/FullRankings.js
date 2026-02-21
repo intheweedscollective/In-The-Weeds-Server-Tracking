@@ -774,11 +774,11 @@ export default function FullRankings() {
                                   },
                                   {
                                     label: 'Review Tracker',
-                                    value: emp.cv_score || 0,
-                                    benchmark: benchmarks.benchmark_cv || 5,
-                                    rank: ranks.cv,
-                                    total,
-                                    color: (emp.cv_score || 0) >= 0 ? 'text-green-600' : 'text-red-600'
+                                    value: `+${(emp.review_tracker_bonus || 0).toFixed(1)}`,
+                                    benchmark: `${emp.review_mentions || 0} mentions`,
+                                    rank: null,
+                                    total: null,
+                                    color: 'text-green-600'
                                   }
                                 ];
                                 
