@@ -4175,6 +4175,64 @@ async def get_review_platforms():
     }
 
 
+@api_router.get("/v2/reviews/platform-stats")
+async def get_platform_stats(quarter: str = "Q1", year: int = 2026):
+    """Get QTD stats for each review platform."""
+    # Define quarter date range
+    quarter_dates = {
+        "Q1": ("01-01", "03-31"),
+        "Q2": ("04-01", "06-30"),
+        "Q3": ("07-01", "09-30"),
+        "Q4": ("10-01", "12-31")
+    }
+    q_start, q_end = quarter_dates.get(quarter.upper(), ("01-01", "12-31"))
+    date_start = f"{year}-{q_start}"
+    date_end = f"{year}-{q_end}"
+    
+    # Aggregate stats by platform
+    pipeline = [
+        {"$match": {
+            "$or": [
+                {"review_date": {"$gte": date_start, "$lte": date_end}},
+                {"review_date": None, "quarter": quarter.upper(), "year": year}
+            ]
+        }},
+        {"$group": {
+            "_id": {"$toLower": "$platform"},
+            "count": {"$sum": 1},
+            "total_rating": {"$sum": {"$ifNull": ["$rating", 0]}},
+            "rated_count": {"$sum": {"$cond": [{"$gt": ["$rating", 0]}, 1, 0]}}
+        }}
+    ]
+    
+    results = await db.customer_reviews.aggregate(pipeline).to_list(20)
+    
+    # Format response
+    platform_stats = {}
+    for r in results:
+        platform = r["_id"] or "unknown"
+        count = r["count"]
+        rated_count = r["rated_count"]
+        avg_rating = r["total_rating"] / rated_count if rated_count > 0 else 0
+        
+        platform_stats[platform] = {
+            "count": count,
+            "avg_rating": round(avg_rating, 2),
+            "rated_count": rated_count
+        }
+    
+    return {
+        "quarter": quarter.upper(),
+        "year": year,
+        "google": platform_stats.get("google", {"count": 0, "avg_rating": 0}),
+        "yelp": platform_stats.get("yelp", {"count": 0, "avg_rating": 0}),
+        "facebook": platform_stats.get("facebook", {"count": 0, "avg_rating": 0}),
+        "tripadvisor": platform_stats.get("tripadvisor", {"count": 0, "avg_rating": 0}),
+        "opentable": platform_stats.get("opentable", {"count": 0, "avg_rating": 0}),
+        "all_platforms": platform_stats
+    }
+
+
 @api_router.get("/v2/reviews")
 async def get_reviews(
     quarter: str = "Q1",
