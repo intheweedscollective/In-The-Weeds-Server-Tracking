@@ -4589,12 +4589,22 @@ async def get_cv_stats(quarter: str = "Q1", year: int = 2026):
             "highest_nps": None,
             "lowest_nps": None,
             "nps_breakdown": [],
-            "last_sync": None
+            "last_sync": None,
+            "promoter_count": 0,
+            "passive_count": 0,
+            "detractor_count": 0,
+            "total_surveys": 0
         }
     
     # Calculate stats
     nps_scores = [r.get("nps_score", 0) for r in nps_records]
     avg_nps = sum(nps_scores) / len(nps_scores) if nps_scores else 0
+    
+    # Sum up promoters, passives, detractors from all NPS records
+    total_promoters = sum(r.get("promoters", 0) for r in nps_records)
+    total_passives = sum(r.get("passives", 0) for r in nps_records)
+    total_detractors = sum(r.get("detractors", 0) for r in nps_records)
+    total_surveys = sum(r.get("received", 0) for r in nps_records)
     
     # Sort by NPS
     sorted_records = sorted(nps_records, key=lambda x: x.get("nps_score", 0), reverse=True)
@@ -4605,7 +4615,11 @@ async def get_cv_stats(quarter: str = "Q1", year: int = 2026):
         "highest_nps": sorted_records[0] if sorted_records else None,
         "lowest_nps": sorted_records[-1] if sorted_records else None,
         "nps_breakdown": sorted_records[:20],  # Top 20
-        "last_sync": nps_records[0].get("synced_at") if nps_records else None
+        "last_sync": nps_records[0].get("synced_at") if nps_records else None,
+        "promoter_count": total_promoters,
+        "passive_count": total_passives,
+        "detractor_count": total_detractors,
+        "total_surveys": total_surveys
     }
 
 
