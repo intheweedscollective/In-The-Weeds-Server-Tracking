@@ -43,6 +43,7 @@ export default function ReviewTracker() {
   const [activeTab, setActiveTab] = useState("all"); // "all", "cv", "reviews"
   const [showExcluded, setShowExcluded] = useState(false);
   const [excludedCount, setExcludedCount] = useState(0);
+  const [platformStats, setPlatformStats] = useState(null);
 
   // Fetch data
   const fetchData = useCallback(async () => {
