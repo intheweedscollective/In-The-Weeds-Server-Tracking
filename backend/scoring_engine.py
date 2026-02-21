@@ -9,13 +9,14 @@ Scoring Logic:
 - Metric Bonuses: Up to 5 pts each for exceeding benchmarks
 - DAR: Disciplinary penalties (admin-only, applied at final stage)
 
-NPS Scoring Scale:
-- -100% NPS = -10 points (× 0.10)
+NPS Scoring Scale (2.5 pts per 25%):
+- -100% NPS = -10 points
 - -50% NPS = -5 points
 - 0% NPS = 0 points
-- 50% NPS = 7.5 points
-- 75% NPS = 11.25 points
-- 100% NPS = 15 points (× 0.15)
+- 25% NPS = 2.5 points
+- 50% NPS = 5 points
+- 75% NPS = 7.5 points
+- 100% NPS = 10 points (cap)
 """
 
 from typing import Optional, Dict, Any, List, Tuple
