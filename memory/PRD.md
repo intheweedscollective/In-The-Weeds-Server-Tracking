@@ -67,7 +67,10 @@ Build a comprehensive performance review application for restaurant employees (B
 - ✅ Review Tracker with AI-powered employee detection
 - ✅ ReviewTrackers.com API integration
 
-### Recent Changes (Feb 20, 2026) - Scoring Model Overhaul
+### Recent Changes (Feb 21, 2026) - UI Label Fix
+- ✅ Fixed "CV SCORE" label in Rankings page expanded view → Now shows "Review Tracker" to match column headers
+
+### Changes (Feb 20, 2026) - Scoring Model Overhaul
 
 #### NPS Scoring Simplified
 - **NEW Formula**: `NPS% × 0.10` (2.5 pts per 25%, max ±10 pts)
