@@ -67,7 +67,36 @@ Build a comprehensive performance review application for restaurant employees (B
 - ✅ Review Tracker with AI-powered employee detection
 - ✅ ReviewTrackers.com API integration
 
-### Recent Changes (Feb 20, 2026) - Loyalty Voice NPS Integration
+### Recent Changes (Feb 20, 2026) - Scoring Model Overhaul
+
+#### NPS Scoring Simplified
+- **NEW Formula**: `NPS% × 0.10` (2.5 pts per 25%, max ±10 pts)
+- **Scale**:
+  - -100% = -10 pts | -50% = -5 pts | 0% = 0 pts
+  - 25% = 2.5 pts | 50% = 5 pts | 75% = 7.5 pts | 100% = 10 pts
+- **OLD Formula** (removed): Estimated promoter/detractor counts which were often inaccurate
+
+#### Review Bonus
+- **Formula**: ReviewTracker mentions × 0.2 pts each (separate bonus, uncapped)
+- Now correctly fetched from `customer_reviews` collection
+
+#### CV Feedback Exclusion Feature
+- "Exclude from Rankings" button on each CV feedback card
+- "Undo" button to restore excluded feedback
+- NPS automatically recalculated when feedback is excluded/included
+- "Show excluded" toggle in filters
+
+#### Rankings Page Updates
+- Review Bonus column: RT mentions × 0.2 (green, always positive)
+- Metric Bonus column: Points from exceeding benchmarks
+- NPS column: Color-coded (green ≥50%, yellow 0-49%, red <0%)
+- Uniform badge sizes for Top 10%/25%/50% and tier labels
+
+#### Other Updates
+- Dashboard text changed: "Quarterly Crew Reviews" → "Team Performance Reviews"
+- Recalculate endpoint now fetches NPS from cv_nps and mentions from customer_reviews
+
+### Previous Changes - Loyalty Voice NPS Integration
 - ✅ **Loyalty Voice Server Performance Report Scraper**: Complete rewrite to scrape NPS scores
   - Logs into Landry's Loyalty Voice via Microsoft SSO
   - Navigates to Reports → Server Performance
