@@ -797,11 +797,17 @@ export default function FullRankings() {
                                         <div key={i} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
                                           <div className="text-xs font-semibold text-gray-500 uppercase mb-2">{m.label}</div>
                                           <div className={`text-2xl font-bold ${m.color}`}>{m.value}</div>
-                                          <div className="text-xs text-gray-400 mt-1">Benchmark: {m.benchmark}</div>
+                                          <div className="text-xs text-gray-400 mt-1">{m.benchmark}</div>
                                           <div className="mt-2 pt-2 border-t border-gray-100">
-                                            <span className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-semibold">
-                                              {m.rank}{m.rank === 1 ? 'st' : m.rank === 2 ? 'nd' : m.rank === 3 ? 'rd' : 'th'} of {m.total}
-                                            </span>
+                                            {m.rank !== null ? (
+                                              <span className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-semibold">
+                                                {m.rank}{m.rank === 1 ? 'st' : m.rank === 2 ? 'nd' : m.rank === 3 ? 'rd' : 'th'} of {m.total}
+                                              </span>
+                                            ) : (
+                                              <span className="inline-flex items-center px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-semibold">
+                                                Bonus Points
+                                              </span>
+                                            )}
                                           </div>
                                         </div>
                                       ))}
