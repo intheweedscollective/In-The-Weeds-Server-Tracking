@@ -331,6 +331,100 @@ export default function ReviewTracker() {
           </div>
         </div>
 
+      {/* QTD Platform Scores */}
+      <div className="bg-white rounded-xl p-4 shadow-sm border mb-6" data-testid="qtd-platform-scores">
+        <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+          <TrendingUp className="w-4 h-4 text-primary" />
+          {selectedQuarter} {selectedYear} Platform Scores (QTD)
+        </h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+          {/* Customer Voice */}
+          <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-lg p-3 border border-orange-200">
+            <div className="flex items-center gap-2 mb-1">
+              <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+              <span className="text-xs font-semibold text-orange-700">Customer Voice</span>
+            </div>
+            <div className="text-2xl font-bold text-orange-600">{cvStats?.avg_nps || 0}%</div>
+            <div className="text-xs text-gray-500">NPS • {cvStats?.total_surveys || 0} surveys</div>
+            <div className="mt-1 flex gap-2 text-xs">
+              <span className="text-green-600">{cvStats?.promoter_count || 0}P</span>
+              <span className="text-yellow-600">{cvStats?.passive_count || 0}Pa</span>
+              <span className="text-red-600">{cvStats?.detractor_count || 0}D</span>
+            </div>
+          </div>
+          
+          {/* Google */}
+          <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-sm">🔍</span>
+              <span className="text-xs font-semibold text-blue-700">Google</span>
+            </div>
+            <div className="text-2xl font-bold text-blue-600">
+              {platformStats?.google?.avg_rating?.toFixed(1) || "—"}
+            </div>
+            <div className="text-xs text-gray-500">
+              Avg Rating • {platformStats?.google?.count || 0} reviews
+            </div>
+          </div>
+          
+          {/* Yelp */}
+          <div className="bg-red-50 rounded-lg p-3 border border-red-200">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-sm">📍</span>
+              <span className="text-xs font-semibold text-red-700">Yelp</span>
+            </div>
+            <div className="text-2xl font-bold text-red-600">
+              {platformStats?.yelp?.avg_rating?.toFixed(1) || "—"}
+            </div>
+            <div className="text-xs text-gray-500">
+              Avg Rating • {platformStats?.yelp?.count || 0} reviews
+            </div>
+          </div>
+          
+          {/* Facebook */}
+          <div className="bg-indigo-50 rounded-lg p-3 border border-indigo-200">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-sm">📘</span>
+              <span className="text-xs font-semibold text-indigo-700">Facebook</span>
+            </div>
+            <div className="text-2xl font-bold text-indigo-600">
+              {platformStats?.facebook?.avg_rating?.toFixed(1) || "—"}
+            </div>
+            <div className="text-xs text-gray-500">
+              Avg Rating • {platformStats?.facebook?.count || 0} reviews
+            </div>
+          </div>
+          
+          {/* TripAdvisor */}
+          <div className="bg-green-50 rounded-lg p-3 border border-green-200">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-sm">🦉</span>
+              <span className="text-xs font-semibold text-green-700">TripAdvisor</span>
+            </div>
+            <div className="text-2xl font-bold text-green-600">
+              {platformStats?.tripadvisor?.avg_rating?.toFixed(1) || "—"}
+            </div>
+            <div className="text-xs text-gray-500">
+              Avg Rating • {platformStats?.tripadvisor?.count || 0} reviews
+            </div>
+          </div>
+          
+          {/* OpenTable */}
+          <div className="bg-purple-50 rounded-lg p-3 border border-purple-200">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-sm">🍽️</span>
+              <span className="text-xs font-semibold text-purple-700">OpenTable</span>
+            </div>
+            <div className="text-2xl font-bold text-purple-600">
+              {platformStats?.opentable?.avg_rating?.toFixed(1) || "—"}
+            </div>
+            <div className="text-xs text-gray-500">
+              Avg Rating • {platformStats?.opentable?.count || 0} reviews
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Tabs */}
       <div className="flex gap-2 mb-6">
         <button
