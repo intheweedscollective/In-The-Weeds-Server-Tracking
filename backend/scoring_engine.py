@@ -32,8 +32,9 @@ import pandas as pd
 # ============================================================================
 
 # NPS-based scoring (simplified)
-# NPS_points = NPS% × 0.15 (max 15 points)
-NPS_WEIGHT = 0.15
+# NPS_points = NPS% × 0.10 (max 10 points, 2.5 pts per 25%)
+NPS_WEIGHT = 0.10
+NPS_MAX_POINTS = 10
 
 # Review Tracker Bonus
 RT_POINTS_PER_MENTION = 0.2  # Each mention = 0.2 points
