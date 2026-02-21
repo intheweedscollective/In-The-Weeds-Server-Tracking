@@ -67,8 +67,12 @@ Build a comprehensive performance review application for restaurant employees (B
 - ✅ Review Tracker with AI-powered employee detection
 - ✅ ReviewTrackers.com API integration
 
-### Recent Changes (Feb 21, 2026) - UI Label Fix
-- ✅ Fixed "CV SCORE" label in Rankings page expanded view → Now shows "Review Tracker" to match column headers
+### Recent Changes (Feb 21, 2026) - UI Label & Data Fix
+- ✅ Fixed "CV SCORE" label in Rankings page expanded view → Now shows "Review Tracker"
+- ✅ Fixed Review Tracker value displaying wrong data (was showing NPS points, now shows mentions × 0.2)
+  - Before: Showed `cv_score` (NPS points) = 10 for Diane
+  - After: Shows `review_tracker_bonus` = +0.6 (3 mentions × 0.2)
+  - Now displays calculation breakdown: "3 mentions × 0.2"
 
 ### Changes (Feb 20, 2026) - Scoring Model Overhaul
 
