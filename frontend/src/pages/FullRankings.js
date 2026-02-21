@@ -773,7 +773,7 @@ export default function FullRankings() {
                                     color: (emp.guests_per_lsc || 999) <= (benchmarks.benchmark_lsc || 100) ? 'text-green-600' : 'text-red-600'
                                   },
                                   {
-                                    label: 'CV Score',
+                                    label: 'Review Tracker',
                                     value: emp.cv_score || 0,
                                     benchmark: benchmarks.benchmark_cv || 5,
                                     rank: ranks.cv,
