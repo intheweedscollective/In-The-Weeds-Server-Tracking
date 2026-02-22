@@ -90,33 +90,12 @@ code {
         font-size: 1.125rem !important;
     }
     
-    /* Better touch targets on mobile */
     button, a {
         min-height: 44px;
     }
     
-    /* Stack cards on mobile */
     .grid {
         gap: 0.75rem;
-    }
-    
-    /* Hide decorative splashes on small screens */
-    .splash-red, .splash-blue {
-        display: none;
-    }
-    
-    /* Reduce card padding on mobile */
-    .bubba-card {
-        border-radius: 1rem;
-    }
-    
-    /* Smaller KPI values on mobile */
-    .kpi-value {
-        font-size: 2rem !important;
-    }
-    
-    .kpi-label {
-        font-size: 0.6rem !important;
     }
 }
 
@@ -130,19 +109,39 @@ code {
 }
 
 /* ========================================
-   UTILITY CLASSES
+   BOLD CORPORATE UTILITY CLASSES
    ======================================== */
 
-/* Typography */
-.font-serif {
-    font-family: 'Merriweather', Georgia, serif;
+/* Remove old theme classes, add new ones */
+.bg-paper { background-color: hsl(var(--background)); }
+.bg-card-dark { background-color: hsl(var(--card)); }
+.border-subtle { border-color: hsl(var(--border)); }
+.text-muted { color: hsl(var(--muted-foreground)); }
+
+/* High contrast button styles */
+.btn-primary {
+    @apply bg-primary text-white font-semibold px-4 py-2 rounded-lg;
+    @apply hover:opacity-90 transition-all;
 }
 
-/* Custom Colors */
-.bg-paper { background-color: var(--paper); }
-.bg-sand { background-color: var(--sand); }
-.border-sand { border-color: var(--sand); }
-.text-driftwood { color: var(--driftwood); }
+.btn-secondary {
+    @apply border-2 border-primary text-primary font-semibold px-4 py-2 rounded-lg;
+    @apply hover:bg-primary hover:text-white transition-all;
+}
+
+/* Card styling */
+.card-dark {
+    @apply bg-card rounded-xl border border-border;
+}
+
+/* Success/Danger badges */
+.badge-success {
+    @apply bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded-full text-xs font-semibold;
+}
+
+.badge-danger {
+    @apply bg-red-500/20 text-red-400 px-2 py-1 rounded-full text-xs font-semibold;
+}
 
 /* Bento Grid Layout */
 .bento-grid {
@@ -165,7 +164,6 @@ code {
     }
 }
 
-/* Bento Card Spans */
 .bento-span-2 { grid-column: span 2; }
 .bento-span-3 { grid-column: span 3; }
 .bento-span-full { grid-column: 1 / -1; }
