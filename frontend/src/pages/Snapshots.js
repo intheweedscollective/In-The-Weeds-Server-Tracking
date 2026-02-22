@@ -520,17 +520,16 @@ export default function Snapshots() {
       {/* Info Card */}
       <Card className="mt-8 bg-blue-50 border-blue-200" data-testid="info-card">
         <CardContent className="p-6">
-          <h3 className="font-semibold text-blue-900 mb-2">📊 How Snapshots Work</h3>
+          <h3 className="font-semibold text-blue-900 mb-2">How Snapshots Work</h3>
           <ul className="text-sm text-blue-800 space-y-1">
             <li>• <strong>Auto-Sync:</strong> Uploading here automatically updates Dashboard, Rankings, Reviews & Yodeck</li>
             <li>• <strong>Trend Tracking:</strong> Each snapshot is saved for quarter-end line graphs in PDF reviews</li>
             <li>• <strong>Grid Layout:</strong> All employees on one slide, sorted by tier (Trainers → Bartenders → A/B/C-Servers)</li>
-            <li>• <strong>Color Coding:</strong> 🔵 ≥100%, 🟢 ≥80%, 🟡 70-79%, 🔴 &lt;70%</li>
+            <li>• <strong>Color Coding:</strong> Blue ≥100%, Green ≥80%, Yellow 70-79%, Red &lt;70%</li>
             <li>• <strong>Recommended Schedule:</strong> Upload cumulative quarter data on the 1st and 15th of each month</li>
           </ul>
         </CardContent>
       </Card>
     </div>
-    </>
   );
 }
