@@ -248,7 +248,7 @@ export default function Snapshots() {
 
   return (
     <>
-      <Navigation />
+      <>
       <div className="container mx-auto py-8 px-4" data-testid="snapshots-page">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
