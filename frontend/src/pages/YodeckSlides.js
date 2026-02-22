@@ -263,20 +263,18 @@ export default function YodeckSlides() {
       
       <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="mb-8 flex items-start justify-between">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <Monitor className="w-8 h-8 text-secondary" />
-              <h1 className="text-3xl font-serif font-black text-foreground" data-testid="page-title">
-                Reports & Downloads
-              </h1>
-            </div>
-            <p className="text-slate-400" data-testid="page-subtitle">
-              Digital signage slides and printable reports
-            </p>
+        <div className="mb-8">
+          <div className="flex items-center gap-3 mb-2">
+            <Monitor className="w-8 h-8 text-secondary" />
+            <h1 className="text-3xl font-serif font-black text-foreground" data-testid="page-title">
+              Reports & Downloads
+            </h1>
           </div>
+          <p className="text-slate-400 mb-4" data-testid="page-subtitle">
+            Digital signage slides and printable reports
+          </p>
           
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               onClick={() => setShowThemeSettings(!showThemeSettings)}
               variant="outline"
@@ -634,17 +632,18 @@ function SlideCard({ slide, downloading, downloadSlide, selectedQuarter, selecte
   
   return (
     <div className="bubba-card" data-testid={`slide-card-${slide.id}`}>
-      <div className="p-5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${categoryColor}`}>
-              <CategoryIcon className="w-6 h-6 text-white" />
+      <div className="p-4 sm:p-5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          {/* Slide Info */}
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+            <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center flex-shrink-0 ${categoryColor}`}>
+              <CategoryIcon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
-            <div>
-              <h3 className="text-lg font-serif font-bold text-foreground">
+            <div className="min-w-0">
+              <h3 className="text-base sm:text-lg font-serif font-bold text-foreground truncate">
                 {slide.name}
               </h3>
-              <p className="text-sm text-slate-400">
+              <p className="text-xs sm:text-sm text-slate-400">
                 {slide.employee_count !== undefined 
                   ? `${slide.employee_count} employees • ${slide.pages} slide${slide.pages > 1 ? 's' : ''}`
                   : `${slide.pages} slide`
@@ -653,11 +652,12 @@ function SlideCard({ slide, downloading, downloadSlide, selectedQuarter, selecte
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
+          {/* Actions - stacks on mobile */}
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {/* Background selector for complete-rankings slide */}
             {hasBackgroundOptions && (
               <Select value={selectedBackground} onValueChange={setSelectedBackground}>
-                <SelectTrigger className="w-40 h-9" data-testid={`background-select-${slide.id}`}>
+                <SelectTrigger className="w-full sm:w-40 h-9" data-testid={`background-select-${slide.id}`}>
                   <SelectValue placeholder="Background" />
                 </SelectTrigger>
                 <SelectContent>
@@ -680,7 +680,7 @@ function SlideCard({ slide, downloading, downloadSlide, selectedQuarter, selecte
             {/* Format selector for slides that support it */}
             {hasFormatOptions && (
               <Select value={selectedFormat} onValueChange={setSelectedFormat}>
-                <SelectTrigger className="w-32 h-9" data-testid={`format-select-${slide.id}`}>
+                <SelectTrigger className="w-full sm:w-32 h-9" data-testid={`format-select-${slide.id}`}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -695,7 +695,7 @@ function SlideCard({ slide, downloading, downloadSlide, selectedQuarter, selecte
                 onClick={() => handleDownload()}
                 disabled={downloading[`${slide.id}-1`]}
                 variant="outline"
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 w-full sm:w-auto"
                 data-testid={`download-${slide.id}`}
               >
                 {downloading[`${slide.id}-1`] ? (
@@ -706,7 +706,7 @@ function SlideCard({ slide, downloading, downloadSlide, selectedQuarter, selecte
                 Download
               </Button>
             ) : (
-              <div className="flex items-center gap-1">
+              <div className="flex flex-wrap items-center gap-1 w-full sm:w-auto">
                 {Array.from({ length: slide.pages }, (_, i) => i + 1).map((page) => (
                   <Button
                     key={page}
@@ -714,7 +714,7 @@ function SlideCard({ slide, downloading, downloadSlide, selectedQuarter, selecte
                     disabled={downloading[`${slide.id}-${page}`]}
                     variant="outline"
                     size="sm"
-                    className="px-3"
+                    className="px-3 flex-1 sm:flex-none"
                     data-testid={`download-${slide.id}-p${page}`}
                   >
                     {downloading[`${slide.id}-${page}`] ? (
