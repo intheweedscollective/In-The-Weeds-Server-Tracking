@@ -123,16 +123,16 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-paper">
+    <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Page Header */}
         <div className="mb-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl md:text-3xl font-serif font-bold text-slate-800" data-testid="main-title">
+              <h1 className="text-2xl md:text-3xl font-bold text-white" data-testid="main-title">
                 Performance Dashboard
               </h1>
-              <p className="text-slate-500 mt-1" data-testid="main-subtitle">
+              <p className="text-slate-400 mt-1" data-testid="main-subtitle">
                 {selectedQuarter} {selectedYear} Overview
               </p>
             </div>
@@ -140,7 +140,7 @@ export default function Dashboard() {
             {/* Quarter Selector */}
             <div className="flex items-center gap-2">
               <select
-                className="px-3 py-2 bg-white border border-sand rounded-lg text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                className="px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-primary/50"
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(parseInt(e.target.value))}
               >
@@ -149,7 +149,7 @@ export default function Dashboard() {
                 <option value={2027}>2027</option>
               </select>
               <select
-                className="px-3 py-2 bg-white border border-sand rounded-lg text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                className="px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-primary/50"
                 value={selectedQuarter}
                 onChange={(e) => setSelectedQuarter(e.target.value)}
               >
@@ -165,30 +165,30 @@ export default function Dashboard() {
         {/* Bento Grid Layout */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {/* Hero Stat - Crew Count */}
-          <div className="bg-white rounded-2xl border border-sand p-6 hover:shadow-lg transition-shadow" data-testid="total-employees-card">
+          <div className="bg-slate-800 rounded-2xl border border-slate-700 p-6 hover:border-slate-600 transition-colors" data-testid="total-employees-card">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm font-medium text-slate-500 uppercase tracking-wide">Crew Members</p>
-                <p className="text-4xl font-serif font-bold text-slate-800 mt-2">{stats.totalEmployees}</p>
-                <p className="text-xs text-slate-400 mt-1">Active this quarter</p>
+                <p className="text-sm font-medium text-slate-400 uppercase tracking-wide">Crew Members</p>
+                <p className="text-4xl font-bold text-white mt-2">{stats.totalEmployees}</p>
+                <p className="text-xs text-slate-500 mt-1">Active this quarter</p>
               </div>
-              <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center">
-                <Users className="w-6 h-6 text-blue-600" />
+              <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                <Users className="w-6 h-6 text-blue-400" />
               </div>
             </div>
           </div>
 
           {/* Avg Score */}
           <Link to="/analytics" className="block">
-            <div className="bg-white rounded-2xl border border-sand p-6 hover:shadow-lg hover:border-primary/30 transition-all cursor-pointer" data-testid="avg-score-card">
+            <div className="bg-slate-800 rounded-2xl border border-slate-700 p-6 hover:border-primary/50 transition-all cursor-pointer" data-testid="avg-score-card">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-sm font-medium text-slate-500 uppercase tracking-wide">Avg Score</p>
-                  <p className="text-4xl font-serif font-bold text-slate-800 mt-2">{stats.avgTotalScore}</p>
-                  <p className="text-xs text-slate-400 mt-1">Team average</p>
+                  <p className="text-sm font-medium text-slate-400 uppercase tracking-wide">Avg Score</p>
+                  <p className="text-4xl font-bold text-white mt-2">{stats.avgTotalScore}</p>
+                  <p className="text-xs text-slate-500 mt-1">Team average</p>
                 </div>
-                <div className="w-12 h-12 rounded-xl bg-yellow-100 flex items-center justify-center">
-                  <BarChart3 className="w-6 h-6 text-yellow-600" />
+                <div className="w-12 h-12 rounded-xl bg-cyan-500/20 flex items-center justify-center">
+                  <BarChart3 className="w-6 h-6 text-cyan-400" />
                 </div>
               </div>
             </div>
@@ -196,36 +196,36 @@ export default function Dashboard() {
 
           {/* Top Performers */}
           <div 
-            className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl border border-green-200 p-6 hover:shadow-lg transition-shadow cursor-pointer" 
+            className="bg-emerald-900/30 rounded-2xl border border-emerald-700/50 p-6 hover:border-emerald-500/50 transition-colors cursor-pointer" 
             onClick={() => setShowTopPerformers(true)}
             data-testid="top-performers-card"
           >
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm font-medium text-green-700 uppercase tracking-wide">Top Performers</p>
-                <p className="text-4xl font-serif font-bold text-green-800 mt-2">{stats.topPerformers}</p>
-                <p className="text-xs text-green-600 mt-1">10% above average</p>
+                <p className="text-sm font-medium text-emerald-400 uppercase tracking-wide">Top Performers</p>
+                <p className="text-4xl font-bold text-emerald-300 mt-2">{stats.topPerformers}</p>
+                <p className="text-xs text-emerald-500 mt-1">10% above average</p>
               </div>
-              <div className="w-12 h-12 rounded-xl bg-green-200 flex items-center justify-center">
-                <Trophy className="w-6 h-6 text-green-700" />
+              <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center">
+                <Trophy className="w-6 h-6 text-emerald-400" />
               </div>
             </div>
           </div>
 
           {/* Under Performers */}
           <div 
-            className="bg-gradient-to-br from-red-50 to-orange-50 rounded-2xl border border-red-200 p-6 hover:shadow-lg transition-shadow cursor-pointer" 
+            className="bg-red-900/30 rounded-2xl border border-red-700/50 p-6 hover:border-red-500/50 transition-colors cursor-pointer" 
             onClick={() => setShowUnderPerformers(true)}
             data-testid="under-performers-card"
           >
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm font-medium text-red-700 uppercase tracking-wide">Needs Coaching</p>
-                <p className="text-4xl font-serif font-bold text-red-800 mt-2">{stats.underPerformers}</p>
-                <p className="text-xs text-red-600 mt-1">Below B-Server threshold</p>
+                <p className="text-sm font-medium text-red-400 uppercase tracking-wide">Needs Coaching</p>
+                <p className="text-4xl font-bold text-red-300 mt-2">{stats.underPerformers}</p>
+                <p className="text-xs text-red-500 mt-1">Below B-Server threshold</p>
               </div>
-              <div className="w-12 h-12 rounded-xl bg-red-200 flex items-center justify-center">
-                <AlertTriangle className="w-6 h-6 text-red-700" />
+              <div className="w-12 h-12 rounded-xl bg-red-500/20 flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-red-400" />
               </div>
             </div>
           </div>
@@ -233,43 +233,43 @@ export default function Dashboard() {
 
         {/* Quick Actions Row */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-          <Link to="/snapshots" className="flex items-center gap-3 p-4 bg-white rounded-xl border border-sand hover:border-primary/30 hover:shadow-md transition-all">
-            <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-              <Camera className="w-5 h-5 text-blue-600" />
+          <Link to="/snapshots" className="flex items-center gap-3 p-4 bg-slate-800 rounded-xl border border-slate-700 hover:border-primary/50 hover:bg-slate-750 transition-all">
+            <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+              <Camera className="w-5 h-5 text-blue-400" />
             </div>
             <div>
-              <p className="font-medium text-slate-800 text-sm">Upload Data</p>
-              <p className="text-xs text-slate-400">New snapshot</p>
+              <p className="font-medium text-white text-sm">Upload Data</p>
+              <p className="text-xs text-slate-500">New snapshot</p>
             </div>
           </Link>
           
-          <Link to="/rankings" className="flex items-center gap-3 p-4 bg-white rounded-xl border border-sand hover:border-primary/30 hover:shadow-md transition-all">
-            <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-              <Trophy className="w-5 h-5 text-green-600" />
+          <Link to="/rankings" className="flex items-center gap-3 p-4 bg-slate-800 rounded-xl border border-slate-700 hover:border-primary/50 hover:bg-slate-750 transition-all">
+            <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+              <Trophy className="w-5 h-5 text-emerald-400" />
             </div>
             <div>
-              <p className="font-medium text-slate-800 text-sm">Rankings</p>
-              <p className="text-xs text-slate-400">Full leaderboard</p>
+              <p className="font-medium text-white text-sm">Rankings</p>
+              <p className="text-xs text-slate-500">Full leaderboard</p>
             </div>
           </Link>
           
-          <Link to="/review-tracker" className="flex items-center gap-3 p-4 bg-white rounded-xl border border-sand hover:border-primary/30 hover:shadow-md transition-all">
-            <div className="w-10 h-10 rounded-lg bg-yellow-100 flex items-center justify-center">
-              <Star className="w-5 h-5 text-yellow-600" />
+          <Link to="/review-tracker" className="flex items-center gap-3 p-4 bg-slate-800 rounded-xl border border-slate-700 hover:border-primary/50 hover:bg-slate-750 transition-all">
+            <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
+              <Star className="w-5 h-5 text-purple-400" />
             </div>
             <div>
-              <p className="font-medium text-slate-800 text-sm">Reviews</p>
-              <p className="text-xs text-slate-400">Customer feedback</p>
+              <p className="font-medium text-white text-sm">Reviews</p>
+              <p className="text-xs text-slate-500">Customer feedback</p>
             </div>
           </Link>
           
-          <Link to="/yodeck" className="flex items-center gap-3 p-4 bg-white rounded-xl border border-sand hover:border-primary/30 hover:shadow-md transition-all">
-            <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
-              <FileText className="w-5 h-5 text-purple-600" />
+          <Link to="/yodeck" className="flex items-center gap-3 p-4 bg-slate-800 rounded-xl border border-slate-700 hover:border-primary/50 hover:bg-slate-750 transition-all">
+            <div className="w-10 h-10 rounded-lg bg-cyan-500/20 flex items-center justify-center">
+              <FileText className="w-5 h-5 text-cyan-400" />
             </div>
             <div>
-              <p className="font-medium text-slate-800 text-sm">Reports</p>
-              <p className="text-xs text-slate-400">PDFs & slides</p>
+              <p className="font-medium text-white text-sm">Reports</p>
+              <p className="text-xs text-slate-500">PDFs & slides</p>
             </div>
           </Link>
         </div>
@@ -278,24 +278,24 @@ export default function Dashboard() {
         {employees.length > 0 && (
           <div className={`mb-6 p-4 rounded-xl flex items-center justify-between ${
             isQuarterFinalized 
-              ? 'bg-green-50 border border-green-200'
-              : 'bg-white border border-sand'
+              ? 'bg-emerald-900/30 border border-emerald-700/50'
+              : 'bg-slate-800 border border-slate-700'
           }`}>
             <div className="flex items-center gap-4">
               <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                isQuarterFinalized ? 'bg-green-100' : 'bg-slate-100'
+                isQuarterFinalized ? 'bg-emerald-500/20' : 'bg-slate-700'
               }`}>
                 {isQuarterFinalized ? (
-                  <CheckCircle2 className="w-5 h-5 text-green-600" />
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400" />
                 ) : (
-                  <Lock className="w-5 h-5 text-slate-500" />
+                  <Lock className="w-5 h-5 text-slate-400" />
                 )}
               </div>
               <div>
-                <h3 className="font-medium text-slate-800">
+                <h3 className="font-medium text-white">
                   {isQuarterFinalized ? 'Quarter Finalized' : 'Ready to Finalize?'}
                 </h3>
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-slate-400">
                   {isQuarterFinalized 
                     ? `${selectedQuarter} ${selectedYear} rankings are locked`
                     : 'Lock in final scores and prepare for next quarter'
@@ -307,7 +307,7 @@ export default function Dashboard() {
               onClick={() => setShowFinalizeModal(true)}
               className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
                 isQuarterFinalized 
-                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  ? 'bg-emerald-600 text-white hover:bg-emerald-500'
                   : 'bg-primary text-white hover:bg-primary/90'
               }`}
               data-testid="finalize-quarter-btn"
@@ -320,15 +320,15 @@ export default function Dashboard() {
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Top Performers List - Takes 2 columns */}
-          <div className="lg:col-span-2 bg-white rounded-2xl border border-sand overflow-hidden">
-            <div className="p-5 border-b border-sand flex items-center justify-between">
+          <div className="lg:col-span-2 bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden">
+            <div className="p-5 border-b border-slate-700 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-yellow-100 flex items-center justify-center">
-                  <Award className="w-5 h-5 text-yellow-600" />
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center">
+                  <Award className="w-5 h-5 text-amber-400" />
                 </div>
                 <div>
-                  <h2 className="font-serif font-bold text-slate-800">Top 5 Performers</h2>
-                  <p className="text-xs text-slate-400">{selectedQuarter} {selectedYear}</p>
+                  <h2 className="font-bold text-white">Top 5 Performers</h2>
+                  <p className="text-xs text-slate-500">{selectedQuarter} {selectedYear}</p>
                 </div>
               </div>
               <Link to="/rankings" className="text-sm text-primary font-medium hover:underline">
@@ -336,7 +336,7 @@ export default function Dashboard() {
               </Link>
             </div>
             
-            <div className="divide-y divide-sand">
+            <div className="divide-y divide-slate-700">
               {employees.length > 0 ? (
                 employees.slice(0, 5).map((employee, idx) => {
                   const score = employee.total_score || 0;
@@ -347,35 +347,35 @@ export default function Dashboard() {
                   let tierLabel, colorClass;
                   if (jobTitle.includes('trainer')) {
                     tierLabel = 'Trainer';
-                    colorClass = 'bg-purple-100 text-purple-700';
+                    colorClass = 'bg-purple-500/20 text-purple-400';
                   } else if (jobTitle.includes('bartender')) {
                     tierLabel = 'Bartender';
-                    colorClass = 'bg-blue-100 text-blue-700';
+                    colorClass = 'bg-blue-500/20 text-blue-400';
                   } else if (score >= aMin) {
                     tierLabel = 'A-Server';
-                    colorClass = 'bg-green-100 text-green-700';
+                    colorClass = 'bg-emerald-500/20 text-emerald-400';
                   } else if (score >= bMin) {
                     tierLabel = 'B-Server';
-                    colorClass = 'bg-yellow-100 text-yellow-700';
+                    colorClass = 'bg-cyan-500/20 text-cyan-400';
                   } else {
                     tierLabel = 'C-Server';
-                    colorClass = 'bg-red-100 text-red-700';
+                    colorClass = 'bg-red-500/20 text-red-400';
                   }
                   
                   return (
                     <div 
                       key={employee.id} 
-                      className="flex items-center justify-between p-4 hover:bg-slate-50 transition-colors"
+                      className="flex items-center justify-between p-4 hover:bg-slate-750 transition-colors"
                     >
                       <div className="flex items-center gap-4">
                         <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm text-white ${
-                          idx === 0 ? 'bg-yellow-500' : idx === 1 ? 'bg-slate-400' : idx === 2 ? 'bg-amber-600' : 'bg-slate-300'
+                          idx === 0 ? 'bg-amber-500' : idx === 1 ? 'bg-slate-400' : idx === 2 ? 'bg-amber-700' : 'bg-slate-600'
                         }`}>
                           {idx + 1}
                         </div>
                         <div>
-                          <h3 className="font-medium text-slate-800">{employee.name}</h3>
-                          <p className="text-xs text-slate-400 capitalize">{employee.job_title || 'Server'}</p>
+                          <h3 className="font-medium text-white">{employee.name}</h3>
+                          <p className="text-xs text-slate-500 capitalize">{employee.job_title || 'Server'}</p>
                         </div>
                       </div>
                       
@@ -383,7 +383,7 @@ export default function Dashboard() {
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${colorClass}`}>
                           {tierLabel}
                         </span>
-                        <span className="text-lg font-serif font-bold text-primary">
+                        <span className="text-lg font-bold text-primary">
                           {formatNumber(score)}
                         </span>
                       </div>
@@ -392,8 +392,8 @@ export default function Dashboard() {
                 })
               ) : (
                 <div className="p-8 text-center">
-                  <Fish className="w-12 h-12 text-slate-200 mx-auto mb-3" />
-                  <p className="text-slate-500">No data for {selectedQuarter} {selectedYear}</p>
+                  <Fish className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+                  <p className="text-slate-400">No data for {selectedQuarter} {selectedYear}</p>
                   <Link to="/snapshots" className="text-sm text-primary font-medium hover:underline mt-2 inline-block">
                     Upload your first snapshot →
                   </Link>
@@ -405,31 +405,31 @@ export default function Dashboard() {
           {/* Right Column - Status & Actions */}
           <div className="space-y-4">
             {/* Latest Snapshot Status */}
-            <div className="bg-white rounded-2xl border border-sand p-5">
+            <div className="bg-slate-800 rounded-2xl border border-slate-700 p-5">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
-                  <Camera className="w-5 h-5 text-blue-600" />
+                <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                  <Camera className="w-5 h-5 text-blue-400" />
                 </div>
                 <div>
-                  <h3 className="font-medium text-slate-800">Latest Snapshot</h3>
-                  <p className="text-xs text-slate-400">Bi-weekly data</p>
+                  <h3 className="font-medium text-white">Latest Snapshot</h3>
+                  <p className="text-xs text-slate-500">Bi-weekly data</p>
                 </div>
               </div>
               
               {latestSnapshot ? (
-                <div className="p-3 bg-green-50 border border-green-200 rounded-lg mb-4">
-                  <div className="flex items-center gap-2 text-green-700 mb-1">
+                <div className="p-3 bg-emerald-900/30 border border-emerald-700/50 rounded-lg mb-4">
+                  <div className="flex items-center gap-2 text-emerald-400 mb-1">
                     <CheckCircle2 className="w-4 h-4" />
                     <span className="font-medium text-sm">{latestSnapshot.snapshot_date}</span>
                   </div>
-                  <p className="text-green-600 text-xs">
+                  <p className="text-emerald-500 text-xs">
                     {latestSnapshot.employee_count} employees • {latestSnapshot.title || 'Snapshot'}
                   </p>
                 </div>
               ) : (
-                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg mb-4">
-                  <p className="text-yellow-700 text-sm font-medium">No snapshots yet</p>
-                  <p className="text-yellow-600 text-xs">Upload data to get started</p>
+                <div className="p-3 bg-amber-900/30 border border-amber-700/50 rounded-lg mb-4">
+                  <p className="text-amber-400 text-sm font-medium">No snapshots yet</p>
+                  <p className="text-amber-500 text-xs">Upload data to get started</p>
                 </div>
               )}
               
@@ -442,7 +442,7 @@ export default function Dashboard() {
               
               <button
                 onClick={downloadTemplate}
-                className="w-full mt-2 px-4 py-2 text-sm font-medium text-slate-600 hover:text-primary hover:bg-slate-50 rounded-lg transition-colors flex items-center justify-center gap-2"
+                className="w-full mt-2 px-4 py-2 text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors flex items-center justify-center gap-2"
               >
                 <Download className="w-4 h-4" />
                 Download Template
@@ -450,45 +450,45 @@ export default function Dashboard() {
             </div>
 
             {/* Quarter Settings Status */}
-            <div className="bg-white rounded-2xl border border-sand p-5">
+            <div className="bg-slate-800 rounded-2xl border border-slate-700 p-5">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center">
-                  <Settings className="w-5 h-5 text-slate-600" />
+                <div className="w-10 h-10 rounded-xl bg-slate-700 flex items-center justify-center">
+                  <Settings className="w-5 h-5 text-slate-400" />
                 </div>
                 <div>
-                  <h3 className="font-medium text-slate-800">{selectedQuarter} {selectedYear} Settings</h3>
-                  <p className="text-xs text-slate-400">Benchmarks & thresholds</p>
+                  <h3 className="font-medium text-white">{selectedQuarter} {selectedYear} Settings</h3>
+                  <p className="text-xs text-slate-500">Benchmarks & thresholds</p>
                 </div>
               </div>
               
               {quarterSettings ? (
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-slate-500">PPA Benchmark</span>
-                    <span className="font-medium text-slate-800">${quarterSettings.benchmark_ppa}</span>
+                    <span className="text-slate-400">PPA Benchmark</span>
+                    <span className="font-medium text-white">${quarterSettings.benchmark_ppa}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">LBW Benchmark</span>
-                    <span className="font-medium text-slate-800">${quarterSettings.benchmark_lbw}</span>
+                    <span className="text-slate-400">LBW Benchmark</span>
+                    <span className="font-medium text-white">${quarterSettings.benchmark_lbw}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">A-Server Min</span>
-                    <span className="font-medium text-green-600">≥{quarterSettings.a_server_min_score}</span>
+                    <span className="text-slate-400">A-Server Min</span>
+                    <span className="font-medium text-emerald-400">≥{quarterSettings.a_server_min_score}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">B-Server Min</span>
-                    <span className="font-medium text-yellow-600">≥{quarterSettings.b_server_min_score}</span>
+                    <span className="text-slate-400">B-Server Min</span>
+                    <span className="font-medium text-cyan-400">≥{quarterSettings.b_server_min_score}</span>
                   </div>
                 </div>
               ) : (
-                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <p className="text-yellow-700 text-sm font-medium">Not configured</p>
-                  <p className="text-yellow-600 text-xs">Set up benchmarks for this quarter</p>
+                <div className="p-3 bg-amber-900/30 border border-amber-700/50 rounded-lg">
+                  <p className="text-amber-400 text-sm font-medium">Not configured</p>
+                  <p className="text-amber-500 text-xs">Set up benchmarks for this quarter</p>
                 </div>
               )}
               
               <Link to="/settings" className="block mt-4">
-                <button className="w-full px-4 py-2 border border-slate-200 text-slate-700 rounded-lg font-medium text-sm hover:bg-slate-50 transition-colors">
+                <button className="w-full px-4 py-2 border border-slate-600 text-slate-300 rounded-lg font-medium text-sm hover:bg-slate-700 transition-colors">
                   {quarterSettings ? 'Edit Settings' : 'Configure Now'}
                 </button>
               </Link>
@@ -500,14 +500,14 @@ export default function Dashboard() {
         {employees.length > 0 && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
             {/* ROI Calculator */}
-            <div className="bg-white rounded-2xl border border-sand p-5" data-testid="roi-calculator">
+            <div className="bg-slate-800 rounded-2xl border border-slate-700 p-5" data-testid="roi-calculator">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
-                  <TrendingUp className="w-5 h-5 text-green-600" />
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
+                  <TrendingUp className="w-5 h-5 text-emerald-400" />
                 </div>
                 <div>
-                  <h3 className="font-serif font-bold text-slate-800">Revenue Impact</h3>
-                  <p className="text-xs text-slate-400">Potential improvement opportunity</p>
+                  <h3 className="font-bold text-white">Revenue Impact</h3>
+                  <p className="text-xs text-slate-500">Potential improvement opportunity</p>
                 </div>
               </div>
               
@@ -526,27 +526,27 @@ export default function Dashboard() {
                 return (
                   <div className="space-y-3">
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="p-3 bg-slate-50 rounded-lg">
-                        <p className="text-xs text-slate-500 uppercase">Avg PPA</p>
-                        <p className="text-lg font-bold text-slate-800">${avgPPA.toFixed(2)}</p>
-                        <p className="text-xs text-slate-400">Target: ${ppaBenchmark}</p>
+                      <div className="p-3 bg-slate-700/50 rounded-lg">
+                        <p className="text-xs text-slate-400 uppercase">Avg PPA</p>
+                        <p className="text-lg font-bold text-white">${avgPPA.toFixed(2)}</p>
+                        <p className="text-xs text-slate-500">Target: ${ppaBenchmark}</p>
                       </div>
-                      <div className="p-3 bg-slate-50 rounded-lg">
-                        <p className="text-xs text-slate-500 uppercase">Avg LBW</p>
-                        <p className="text-lg font-bold text-slate-800">${avgLBW.toFixed(2)}</p>
-                        <p className="text-xs text-slate-400">Target: ${lbwBenchmark}</p>
+                      <div className="p-3 bg-slate-700/50 rounded-lg">
+                        <p className="text-xs text-slate-400 uppercase">Avg LBW</p>
+                        <p className="text-lg font-bold text-white">${avgLBW.toFixed(2)}</p>
+                        <p className="text-xs text-slate-500">Target: ${lbwBenchmark}</p>
                       </div>
                     </div>
                     
                     {potentialRevenue > 0 ? (
-                      <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                        <p className="text-sm font-medium text-green-800">Potential Annual Revenue</p>
-                        <p className="text-2xl font-bold text-green-700">${potentialRevenue.toLocaleString()}</p>
-                        <p className="text-xs text-green-600">If all staff hit benchmarks</p>
+                      <div className="p-3 bg-emerald-900/30 border border-emerald-700/50 rounded-lg">
+                        <p className="text-sm font-medium text-emerald-400">Potential Annual Revenue</p>
+                        <p className="text-2xl font-bold text-emerald-300">${potentialRevenue.toLocaleString()}</p>
+                        <p className="text-xs text-emerald-500">If all staff hit benchmarks</p>
                       </div>
                     ) : (
-                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-center">
-                        <p className="text-blue-800 font-medium">Team is meeting all benchmarks!</p>
+                      <div className="p-3 bg-blue-900/30 border border-blue-700/50 rounded-lg text-center">
+                        <p className="text-blue-300 font-medium">Team is meeting all benchmarks!</p>
                       </div>
                     )}
                   </div>
@@ -555,14 +555,14 @@ export default function Dashboard() {
             </div>
 
             {/* Training Priorities */}
-            <div className="bg-white rounded-2xl border border-sand p-5" data-testid="training-insights">
+            <div className="bg-slate-800 rounded-2xl border border-slate-700 p-5" data-testid="training-insights">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
-                  <Target className="w-5 h-5 text-orange-600" />
+                <div className="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center">
+                  <Target className="w-5 h-5 text-cyan-400" />
                 </div>
                 <div>
-                  <h3 className="font-serif font-bold text-slate-800">Training Priorities</h3>
-                  <p className="text-xs text-slate-400">Focus areas for improvement</p>
+                  <h3 className="font-bold text-white">Training Priorities</h3>
+                  <p className="text-xs text-slate-500">Focus areas for improvement</p>
                 </div>
               </div>
               
@@ -584,23 +584,23 @@ export default function Dashboard() {
                 return priorities.length > 0 ? (
                   <div className="space-y-2">
                     {priorities.slice(0, 3).map((p, idx) => (
-                      <div key={p.metric} className={`p-3 rounded-lg ${idx === 0 ? 'bg-red-50 border border-red-200' : 'bg-orange-50 border border-orange-200'}`}>
+                      <div key={p.metric} className={`p-3 rounded-lg ${idx === 0 ? 'bg-red-900/30 border border-red-700/50' : 'bg-amber-900/20 border border-amber-700/30'}`}>
                         <div className="flex items-center justify-between mb-1">
-                          <span className={`font-medium text-sm ${idx === 0 ? 'text-red-700' : 'text-orange-700'}`}>
+                          <span className={`font-medium text-sm ${idx === 0 ? 'text-red-400' : 'text-amber-400'}`}>
                             {p.metric}
                           </span>
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${idx === 0 ? 'bg-red-200 text-red-800' : 'bg-orange-200 text-orange-800'}`}>
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${idx === 0 ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'}`}>
                             {p.count} below ({p.pct}%)
                           </span>
                         </div>
-                        <p className="text-xs text-slate-600">{p.tip}</p>
+                        <p className="text-xs text-slate-400">{p.tip}</p>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-center">
-                    <p className="text-green-800 font-medium">No critical gaps!</p>
-                    <p className="text-xs text-green-600">Team is performing well</p>
+                  <div className="p-4 bg-emerald-900/30 border border-emerald-700/50 rounded-lg text-center">
+                    <p className="text-emerald-400 font-medium">No critical gaps!</p>
+                    <p className="text-xs text-emerald-500">Team is performing well</p>
                   </div>
                 );
               })()}
