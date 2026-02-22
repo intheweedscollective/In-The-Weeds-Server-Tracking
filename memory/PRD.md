@@ -30,19 +30,21 @@ Build a comprehensive performance review application for restaurant employees (B
 │   ├── snapshot_slides.py           # Snapshot slide generator
 │   ├── trend_charts.py              # Multi-panel line/bar charts
 │   ├── yodeck_slides.py             # Yodeck slide generator
-│   ├── loyalty_voice_integration.py # Loyalty Voice NPS scraper (NEW)
+│   ├── loyalty_voice_integration.py # Loyalty Voice NPS scraper
 │   ├── reviewtrackers_integration.py # ReviewTrackers API client
 │   └── review_tracker.py            # Customer review tracking
 └── frontend/
     └── src/
         ├── components/
+        │   ├── SidebarLayout.jsx     # NEW: Main layout with sidebar nav
         │   ├── FinalizeQuarterModal.js
         │   └── OnboardingGuide.js
         └── pages/
-            ├── Dashboard.js
+            ├── Dashboard.js          # REDESIGNED: Bento grid layout
             ├── FullRankings.js
             ├── ReviewTracker.js
             ├── YodeckSlides.js
+            ├── HelpCenter.js         # NEW: FAQ & documentation
             └── QuarterSettings.js
 ```
 
