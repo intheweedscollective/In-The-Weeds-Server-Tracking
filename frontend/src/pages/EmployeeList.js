@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from "react";
 import { Trash2, Eye, FileText, Search, Filter, Users, X, Calendar, Target, Plus, Pencil, Save } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
-import Navigation from "../components/Navigation";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";

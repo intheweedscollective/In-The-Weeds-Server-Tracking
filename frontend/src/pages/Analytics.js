@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { BarChart3, TrendingUp, Target, Download, Calendar, Info, ArrowUp, ArrowDown, Minus, X, Users, Filter } from "lucide-react";
 import axios from "axios";
-import Navigation from "../components/Navigation";
 import { Button } from "../components/ui/button";
 import { formatCurrency, formatNumber } from "../utils/formatters";
 import { toast } from "sonner";

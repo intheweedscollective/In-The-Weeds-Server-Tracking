@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from "react";
 import { FileText, Download, Clock, User, Ship, TrendingUp, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
-import Navigation from "../components/Navigation";
 import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { formatNumber } from "../utils/formatters";

@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { Settings, Lock, Unlock, Save, RefreshCw, AlertTriangle, Palette, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
-import Navigation from "../components/Navigation";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 
