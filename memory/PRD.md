@@ -69,7 +69,29 @@ Build a comprehensive performance review application for restaurant employees (B
 - ✅ Review Tracker with AI-powered employee detection
 - ✅ ReviewTrackers.com API integration
 
-### Recent Changes (Feb 21, 2026) - UI Label & Data Fix
+### Recent Changes (Feb 22, 2026) - Full UX/UI Redesign
+- ✅ **Sidebar Navigation**: Replaced 8 horizontal tabs with collapsible sidebar
+  - Grouped sections: Performance, Feedback, Exports, Team
+  - Store selector dropdown (multi-store ready)
+  - Collapse toggle for desktop
+  - Mobile-responsive with hamburger menu
+- ✅ **Dashboard Redesign**: New "Bento Grid" layout
+  - Hero KPI cards with clear visual hierarchy
+  - Quick action buttons row
+  - Top 5 Performers list with tier badges
+  - Right column: Latest Snapshot + Quarter Settings cards
+  - Responsive design for mobile
+- ✅ **Help Center**: New FAQ page with categorized questions
+  - Quick action links
+  - Collapsible FAQ sections (Getting Started, Scoring, Reviews, etc.)
+- ✅ **Design System Updates**:
+  - New color palette: Paper White (#F9F7F2), Sand (#E8DCCA), warm tones
+  - Merriweather serif font for headings
+  - Improved dark mode support
+- ✅ **PWA Icons**: Added Bubba Gump logo for mobile home screen
+- ✅ **Review Tracker Label Fix**: Corrected "CV SCORE" → "Review Tracker" in expanded view
+
+### Changes (Feb 21, 2026) - UI Label & Data Fix
 - ✅ Fixed "CV SCORE" label in Rankings page expanded view → Now shows "Review Tracker"
 - ✅ Fixed Review Tracker value displaying wrong data (was showing NPS points, now shows mentions × 0.2)
   - Before: Showed `cv_score` (NPS points) = 10 for Diane
