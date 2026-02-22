@@ -267,7 +267,7 @@ export default function QuarterSettings() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-paper">
+      <div className="min-h-screen bg-background">
         <div className="flex items-center justify-center h-96">
           <div className="loading-spinner"></div>
         </div>
@@ -276,7 +276,7 @@ export default function QuarterSettings() {
   }
 
   return (
-    <div className="min-h-screen bg-paper relative overflow-hidden">
+    <div className="min-h-screen bg-background relative overflow-hidden">
       <div className="splash-red" style={{ top: '10%', right: '5%' }} />
       <div className="splash-blue" style={{ bottom: '15%', left: '3%', opacity: 0.5 }} />
       
@@ -289,7 +289,7 @@ export default function QuarterSettings() {
               Quarter Settings
             </h1>
           </div>
-          <p className="text-gray-500">
+          <p className="text-slate-400">
             Configure benchmarks and weights for scoring
           </p>
         </div>
@@ -303,7 +303,7 @@ export default function QuarterSettings() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Year</label>
                 <select
-                  className="w-full h-10 rounded-lg border-2 border-gray-200 bg-white px-3 text-sm"
+                  className="w-full h-10 rounded-lg border-2 border-gray-200 bg-slate-800 px-3 text-sm"
                   value={selectedYear}
                   onChange={(e) => setSelectedYear(parseInt(e.target.value))}
                 >
@@ -315,7 +315,7 @@ export default function QuarterSettings() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Quarter</label>
                 <select
-                  className="w-full h-10 rounded-lg border-2 border-gray-200 bg-white px-3 text-sm"
+                  className="w-full h-10 rounded-lg border-2 border-gray-200 bg-slate-800 px-3 text-sm"
                   value={selectedQuarter}
                   onChange={(e) => setSelectedQuarter(e.target.value)}
                 >
@@ -364,8 +364,8 @@ export default function QuarterSettings() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {suggestions.suggestions?.ppa && (
                   <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
-                    <div className="text-xs text-gray-500 uppercase font-semibold mb-1">PPA</div>
-                    <div className="text-sm text-gray-600 mb-2">Avg: ${suggestions.previous_averages.avg_ppa}</div>
+                    <div className="text-xs text-slate-400 uppercase font-semibold mb-1">PPA</div>
+                    <div className="text-sm text-slate-300 mb-2">Avg: ${suggestions.previous_averages.avg_ppa}</div>
                     <div className="space-y-1">
                       <button 
                         onClick={() => applySuggestion('ppa', suggestions.suggestions.ppa.default)}
@@ -378,8 +378,8 @@ export default function QuarterSettings() {
                 )}
                 {suggestions.suggestions?.lbw && (
                   <div className="p-3 bg-purple-50 rounded-lg border border-purple-100">
-                    <div className="text-xs text-gray-500 uppercase font-semibold mb-1">LBW/Guest</div>
-                    <div className="text-sm text-gray-600 mb-2">Avg: ${suggestions.previous_averages.avg_lbw}</div>
+                    <div className="text-xs text-slate-400 uppercase font-semibold mb-1">LBW/Guest</div>
+                    <div className="text-sm text-slate-300 mb-2">Avg: ${suggestions.previous_averages.avg_lbw}</div>
                     <div className="space-y-1">
                       <button 
                         onClick={() => applySuggestion('lbw', suggestions.suggestions.lbw.default)}
@@ -391,9 +391,9 @@ export default function QuarterSettings() {
                   </div>
                 )}
                 {suggestions.suggestions?.glass && (
-                  <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                    <div className="text-xs text-gray-500 uppercase font-semibold mb-1">Glass/Guest</div>
-                    <div className="text-sm text-gray-600 mb-2">Avg: ${suggestions.previous_averages.avg_glass}</div>
+                  <div className="p-3 bg-background rounded-lg border border-gray-200">
+                    <div className="text-xs text-slate-400 uppercase font-semibold mb-1">Glass/Guest</div>
+                    <div className="text-sm text-slate-300 mb-2">Avg: ${suggestions.previous_averages.avg_glass}</div>
                     <div className="space-y-1">
                       <button 
                         onClick={() => applySuggestion('glass', suggestions.suggestions.glass.default)}
@@ -406,8 +406,8 @@ export default function QuarterSettings() {
                 )}
                 {suggestions.suggestions?.lsc && (
                   <div className="p-3 bg-green-50 rounded-lg border border-green-100">
-                    <div className="text-xs text-gray-500 uppercase font-semibold mb-1">Guests/LSC</div>
-                    <div className="text-sm text-gray-600 mb-2">Avg: {suggestions.previous_averages.avg_lsc}</div>
+                    <div className="text-xs text-slate-400 uppercase font-semibold mb-1">Guests/LSC</div>
+                    <div className="text-sm text-slate-300 mb-2">Avg: {suggestions.previous_averages.avg_lsc}</div>
                     <div className="space-y-1">
                       <button 
                         onClick={() => applySuggestion('lsc', suggestions.suggestions.lsc.default)}
@@ -428,7 +428,7 @@ export default function QuarterSettings() {
           <div className="tape tape-red" style={{ top: '-8px', left: '50%', transform: 'translateX(-50%) rotate(-2deg)' }} />
           <div className="p-6 pt-8">
             <h2 className="text-lg font-serif font-bold text-foreground mb-4">Benchmarks</h2>
-            <p className="text-sm text-gray-500 mb-4">
+            <p className="text-sm text-slate-400 mb-4">
               Score = (Employee Metric / Benchmark) × 100. For LSC, lower guests per signup is better.
             </p>
             
@@ -487,7 +487,7 @@ export default function QuarterSettings() {
           <div className="tape tape-blue" style={{ top: '-8px', left: '50%', transform: 'translateX(-50%) rotate(1deg)' }} />
           <div className="p-6 pt-8">
             <h2 className="text-lg font-serif font-bold text-foreground mb-4">Metric Weights (Q1 2026 Model)</h2>
-            <p className="text-sm text-gray-500 mb-4">
+            <p className="text-sm text-slate-400 mb-4">
               Weights must sum to 1.0. Current sum: 
               <span className={`ml-2 font-bold ${weightsValid ? 'text-green-600' : 'text-red-600'}`}>
                 {weightSum.toFixed(2)}
@@ -564,7 +564,7 @@ export default function QuarterSettings() {
           <div className="tape" style={{ top: '-8px', left: '50%', transform: 'translateX(-50%) rotate(-1deg)' }} />
           <div className="p-6 pt-8">
             <h2 className="text-lg font-serif font-bold text-foreground mb-4">Bonus Settings</h2>
-            <p className="text-sm text-gray-500 mb-4">
+            <p className="text-sm text-slate-400 mb-4">
               Bonus = MIN((Score - 100) × Rate, Cap) for each metric where Score &gt; 100
             </p>
             
@@ -600,7 +600,7 @@ export default function QuarterSettings() {
           <div className="tape tape-red" style={{ top: '-8px', left: '50%', transform: 'translateX(-50%) rotate(1deg)' }} />
           <div className="p-6 pt-8">
             <h2 className="text-lg font-serif font-bold text-foreground mb-4">Server Tier Thresholds</h2>
-            <p className="text-sm text-gray-500 mb-4">
+            <p className="text-sm text-slate-400 mb-4">
               Rankings hierarchy: Trainers → Bartenders → A-Servers → B-Servers → C-Servers.
               Server tiers are determined by Total Score thresholds (adjustable).
             </p>
@@ -641,7 +641,7 @@ export default function QuarterSettings() {
                   <span className="w-3 h-3 rounded-full bg-red-500"></span>
                   C-Server (Auto)
                 </label>
-                <div className="h-10 flex items-center px-3 bg-gray-100 border-2 border-gray-200 rounded-lg text-gray-500">
+                <div className="h-10 flex items-center px-3 bg-slate-700 border-2 border-gray-200 rounded-lg text-slate-400">
                   Score &lt; {formData.b_server_min_score}
                 </div>
                 <p className="text-xs text-gray-400">Automatically calculated</p>
@@ -657,9 +657,9 @@ export default function QuarterSettings() {
             <div className="flex items-center gap-3 mb-4">
               <Palette className="w-6 h-6 text-purple-500" />
               <h2 className="text-lg font-serif font-bold text-foreground">Yodeck Slide Theme</h2>
-              <span className="text-sm text-gray-500">(Per-Quarter)</span>
+              <span className="text-sm text-slate-400">(Per-Quarter)</span>
             </div>
-            <p className="text-sm text-gray-500 mb-6">
+            <p className="text-sm text-slate-400 mb-6">
               Customize the visual theme for all Yodeck slides generated for this quarter.
             </p>
             
@@ -690,11 +690,11 @@ export default function QuarterSettings() {
             
             {/* Custom Colors (only shown when custom theme selected) */}
             {formData.slide_theme === "custom" && (
-              <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <div className="mb-6 p-4 bg-background rounded-lg border border-gray-200">
                 <label className="text-sm font-medium mb-4 block">Custom Color Settings</label>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                   <div className="space-y-2">
-                    <label className="text-xs text-gray-500 block">Background</label>
+                    <label className="text-xs text-slate-400 block">Background</label>
                     <div className="flex items-center gap-2">
                       <input
                         type="color"
@@ -710,7 +710,7 @@ export default function QuarterSettings() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs text-gray-500 block">Gradient End</label>
+                    <label className="text-xs text-slate-400 block">Gradient End</label>
                     <div className="flex items-center gap-2">
                       <input
                         type="color"
@@ -726,7 +726,7 @@ export default function QuarterSettings() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs text-gray-500 block">Text Color</label>
+                    <label className="text-xs text-slate-400 block">Text Color</label>
                     <div className="flex items-center gap-2">
                       <input
                         type="color"
@@ -742,7 +742,7 @@ export default function QuarterSettings() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs text-gray-500 block">Accent (Primary)</label>
+                    <label className="text-xs text-slate-400 block">Accent (Primary)</label>
                     <div className="flex items-center gap-2">
                       <input
                         type="color"
@@ -758,7 +758,7 @@ export default function QuarterSettings() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs text-gray-500 block">Secondary</label>
+                    <label className="text-xs text-slate-400 block">Secondary</label>
                     <div className="flex items-center gap-2">
                       <input
                         type="color"
@@ -812,9 +812,9 @@ export default function QuarterSettings() {
             <div className="flex items-center gap-3 mb-4">
               <Sparkles className="w-6 h-6 text-pink-500" />
               <h2 className="text-lg font-serif font-bold text-foreground">Seasonal Decorations</h2>
-              <span className="text-sm text-gray-500">(Holiday Themes)</span>
+              <span className="text-sm text-slate-400">(Holiday Themes)</span>
             </div>
-            <p className="text-sm text-gray-500 mb-6">
+            <p className="text-sm text-slate-400 mb-6">
               Add festive decorations to your Yodeck slides based on the time of year.
             </p>
             
@@ -827,32 +827,32 @@ export default function QuarterSettings() {
                   className={`p-3 rounded-lg border-2 transition-all ${
                     formData.slide_seasonal_theme === key 
                       ? 'border-pink-500 ring-2 ring-pink-500/20 bg-pink-50' 
-                      : 'border-gray-200 hover:border-gray-300 bg-white'
+                      : 'border-gray-200 hover:border-gray-300 bg-slate-800'
                   }`}
                   data-testid={`seasonal-theme-${key}`}
                 >
                   <div className="text-center">
                     <div className="text-2xl mb-1">{theme.emoji}</div>
-                    <span className="text-xs font-medium text-gray-700">{theme.name}</span>
+                    <span className="text-xs font-medium text-slate-200">{theme.name}</span>
                   </div>
                 </button>
               ))}
             </div>
             
             {/* Current Selection Info */}
-            <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="mt-4 p-3 bg-background rounded-lg border border-gray-200">
               <div className="flex items-center gap-2">
                 <span className="text-xl">{SEASONAL_THEMES[formData.slide_seasonal_theme]?.emoji}</span>
                 <div>
                   <span className="font-medium text-gray-800">{SEASONAL_THEMES[formData.slide_seasonal_theme]?.name}</span>
                   {formData.slide_seasonal_theme === 'auto' && (
-                    <p className="text-xs text-gray-500">Slides will automatically show decorations for Valentine&apos;s Day, St. Patrick&apos;s Day, Easter, 4th of July, Halloween, Thanksgiving, Christmas, and New Year based on the current date.</p>
+                    <p className="text-xs text-slate-400">Slides will automatically show decorations for Valentine&apos;s Day, St. Patrick&apos;s Day, Easter, 4th of July, Halloween, Thanksgiving, Christmas, and New Year based on the current date.</p>
                   )}
                   {formData.slide_seasonal_theme === 'none' && (
-                    <p className="text-xs text-gray-500">No seasonal decorations will be added to slides.</p>
+                    <p className="text-xs text-slate-400">No seasonal decorations will be added to slides.</p>
                   )}
                   {formData.slide_seasonal_theme !== 'auto' && formData.slide_seasonal_theme !== 'none' && (
-                    <p className="text-xs text-gray-500">Slides will always show {SEASONAL_THEMES[formData.slide_seasonal_theme]?.name} decorations regardless of the current date.</p>
+                    <p className="text-xs text-slate-400">Slides will always show {SEASONAL_THEMES[formData.slide_seasonal_theme]?.name} decorations regardless of the current date.</p>
                   )}
                 </div>
               </div>
@@ -904,7 +904,7 @@ export default function QuarterSettings() {
             <div className="tape" style={{ top: '-8px', left: '20%', transform: 'rotate(-2deg)' }} />
             <div className="p-6 pt-8">
               <h3 className="text-xl font-bold text-primary mb-4">🚀 Quick Start Guide</h3>
-              <ol className="space-y-3 text-gray-700">
+              <ol className="space-y-3 text-slate-200">
                 <li className="flex gap-3">
                   <span className="font-bold text-primary">1.</span>
                   <div>
@@ -936,13 +936,13 @@ export default function QuarterSettings() {
           {/* Page-by-Page Guide */}
           <div className="grid gap-4">
             {/* Dashboard */}
-            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+            <div className="bg-slate-800 border border-gray-200 rounded-xl p-5 shadow-sm">
               <h4 className="font-bold text-lg mb-2 flex items-center gap-2">
                 <span className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-primary">🏠</span>
                 Dashboard
               </h4>
-              <p className="text-gray-600 mb-3">Your home base for uploading and managing employee data.</p>
-              <ul className="text-sm text-gray-600 space-y-1 ml-10">
+              <p className="text-slate-300 mb-3">Your home base for uploading and managing employee data.</p>
+              <ul className="text-sm text-slate-300 space-y-1 ml-10">
                 <li>• <strong>Download Template</strong> - Get the Excel/CSV template with the correct columns</li>
                 <li>• <strong>Upload Data</strong> - Upload your filled template to calculate scores</li>
                 <li>• <strong>View Stats</strong> - See quick summary of team performance</li>
@@ -953,13 +953,13 @@ export default function QuarterSettings() {
             </div>
 
             {/* Rankings */}
-            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+            <div className="bg-slate-800 border border-gray-200 rounded-xl p-5 shadow-sm">
               <h4 className="font-bold text-lg mb-2 flex items-center gap-2">
                 <span className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center text-purple-600">📊</span>
                 Rankings
               </h4>
-              <p className="text-gray-600 mb-3">Full team rankings sorted by hierarchy and score.</p>
-              <ul className="text-sm text-gray-600 space-y-1 ml-10">
+              <p className="text-slate-300 mb-3">Full team rankings sorted by hierarchy and score.</p>
+              <ul className="text-sm text-slate-300 space-y-1 ml-10">
                 <li>• <strong>Tier Order</strong> - Trainers → Bartenders → A-Servers → B-Servers → C-Servers</li>
                 <li>• <strong>Position Labels</strong> - T1, T2 for Trainers; Bar1, Bar2 for Bartenders; A1, B1, C1, etc.</li>
                 <li>• <strong>Download PDF</strong> - Export the full rankings table</li>
@@ -967,13 +967,13 @@ export default function QuarterSettings() {
             </div>
 
             {/* Reviews */}
-            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+            <div className="bg-slate-800 border border-gray-200 rounded-xl p-5 shadow-sm">
               <h4 className="font-bold text-lg mb-2 flex items-center gap-2">
                 <span className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center text-green-600">📝</span>
                 Reviews
               </h4>
-              <p className="text-gray-600 mb-3">Generate individual employee performance reviews with AI.</p>
-              <ul className="text-sm text-gray-600 space-y-1 ml-10">
+              <p className="text-slate-300 mb-3">Generate individual employee performance reviews with AI.</p>
+              <ul className="text-sm text-slate-300 space-y-1 ml-10">
                 <li>• <strong>Generate Review</strong> - AI creates personalized feedback based on metrics</li>
                 <li>• <strong>Download PDF</strong> - Print-ready review document</li>
                 <li>• <strong>View Trends</strong> - See quarter-over-quarter performance graphs</li>
@@ -981,13 +981,13 @@ export default function QuarterSettings() {
             </div>
 
             {/* Snapshots */}
-            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+            <div className="bg-slate-800 border border-gray-200 rounded-xl p-5 shadow-sm">
               <h4 className="font-bold text-lg mb-2 flex items-center gap-2">
                 <span className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center text-orange-600">📸</span>
                 Snapshots (Bi-Weekly)
               </h4>
-              <p className="text-gray-600 mb-3">Create mid-month check-in slides showing everyone on one page.</p>
-              <ul className="text-sm text-gray-600 space-y-1 ml-10">
+              <p className="text-slate-300 mb-3">Create mid-month check-in slides showing everyone on one page.</p>
+              <ul className="text-sm text-slate-300 space-y-1 ml-10">
                 <li>• <strong>Schedule</strong> - Upload on the 1st and 15th of each month</li>
                 <li>• <strong>Grid Layout</strong> - All employees visible on one slide, sorted by tier</li>
                 <li>• <strong>Color Coding</strong> - 🟢 ≥80%, 🟡 70-79%, 🔴 &lt;70% of benchmark</li>
@@ -999,13 +999,13 @@ export default function QuarterSettings() {
             </div>
 
             {/* Yodeck Slides */}
-            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+            <div className="bg-slate-800 border border-gray-200 rounded-xl p-5 shadow-sm">
               <h4 className="font-bold text-lg mb-2 flex items-center gap-2">
                 <span className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">🖥️</span>
                 Yodeck Slides
               </h4>
-              <p className="text-gray-600 mb-3">Generate 1920x1080 PNG slides for digital signage displays.</p>
-              <ul className="text-sm text-gray-600 space-y-1 ml-10">
+              <p className="text-slate-300 mb-3">Generate 1920x1080 PNG slides for digital signage displays.</p>
+              <ul className="text-sm text-slate-300 space-y-1 ml-10">
                 <li>• <strong>Top 10</strong> - Leaderboard of best performers</li>
                 <li>• <strong>Tier Slides</strong> - Separate slides for each tier (Trainers, Bartenders, A/B/C)</li>
                 <li>• <strong>Most Improved</strong> - Employees with biggest score increases</li>
@@ -1018,13 +1018,13 @@ export default function QuarterSettings() {
             </div>
 
             {/* Analytics */}
-            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+            <div className="bg-slate-800 border border-gray-200 rounded-xl p-5 shadow-sm">
               <h4 className="font-bold text-lg mb-2 flex items-center gap-2">
                 <span className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600">📈</span>
                 Analytics
               </h4>
-              <p className="text-gray-600 mb-3">Deep dive into team metrics and trends.</p>
-              <ul className="text-sm text-gray-600 space-y-1 ml-10">
+              <p className="text-slate-300 mb-3">Deep dive into team metrics and trends.</p>
+              <ul className="text-sm text-slate-300 space-y-1 ml-10">
                 <li>• <strong>Overview Tab</strong> - Average metrics with visual range charts vs benchmarks</li>
                 <li>• <strong>Trends Tab</strong> - Quarter-over-quarter comparisons</li>
                 <li>• <strong>Tier Distribution</strong> - Pie charts showing team composition</li>
@@ -1033,13 +1033,13 @@ export default function QuarterSettings() {
             </div>
 
             {/* Settings */}
-            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+            <div className="bg-slate-800 border border-gray-200 rounded-xl p-5 shadow-sm">
               <h4 className="font-bold text-lg mb-2 flex items-center gap-2">
-                <span className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-gray-600">⚙️</span>
+                <span className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-slate-300">⚙️</span>
                 Settings (This Page)
               </h4>
-              <p className="text-gray-600 mb-3">Configure how scores are calculated and how slides look.</p>
-              <ul className="text-sm text-gray-600 space-y-1 ml-10">
+              <p className="text-slate-300 mb-3">Configure how scores are calculated and how slides look.</p>
+              <ul className="text-sm text-slate-300 space-y-1 ml-10">
                 <li>• <strong>Benchmarks</strong> - Target values for PPA, LBW, Glassware, LSC, CV</li>
                 <li>• <strong>Weights</strong> - How much each metric (PPA, LBW, Glass, LSC) contributes to base score (must = 85%). CV points are added separately.</li>
                 <li>• <strong>Tier Thresholds</strong> - Score cutoffs for A-Server (≥80) and B-Server (≥70)</li>
@@ -1056,16 +1056,16 @@ export default function QuarterSettings() {
             <div className="tape tape-red" style={{ top: '-8px', right: '20%', transform: 'rotate(2deg)' }} />
             <div className="p-6 pt-8">
               <h3 className="text-xl font-bold text-primary mb-4">🧮 How Scoring Works</h3>
-              <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm mb-4">
-                <p className="text-gray-700 mb-2"><strong>Normalized Score</strong> = (Actual Value / Benchmark) × 100</p>
-                <p className="text-gray-700 mb-2"><strong>Metric Points</strong> = Normalized Score × Weight × Max Points</p>
-                <p className="text-gray-700 mb-2"><strong>Bonus</strong> = MIN((Score - 100) × 0.2, 5) if Score &gt; 100</p>
-                <p className="text-gray-700"><strong>Total Score</strong> = Sum of all Metric Points + Bonuses</p>
+              <div className="bg-background rounded-lg p-4 font-mono text-sm mb-4">
+                <p className="text-slate-200 mb-2"><strong>Normalized Score</strong> = (Actual Value / Benchmark) × 100</p>
+                <p className="text-slate-200 mb-2"><strong>Metric Points</strong> = Normalized Score × Weight × Max Points</p>
+                <p className="text-slate-200 mb-2"><strong>Bonus</strong> = MIN((Score - 100) × 0.2, 5) if Score &gt; 100</p>
+                <p className="text-slate-200"><strong>Total Score</strong> = Sum of all Metric Points + Bonuses</p>
               </div>
               <div className="grid md:grid-cols-2 gap-4 text-sm">
                 <div>
                   <h5 className="font-semibold mb-2">Server Tiers:</h5>
-                  <ul className="space-y-1 text-gray-600">
+                  <ul className="space-y-1 text-slate-300">
                     <li>🟢 <strong>A-Server</strong>: Score ≥ 80.0</li>
                     <li>🟡 <strong>B-Server</strong>: Score ≥ 70</li>
                     <li>🔴 <strong>C-Server</strong>: Score &lt; 70</li>
@@ -1073,7 +1073,7 @@ export default function QuarterSettings() {
                 </div>
                 <div>
                   <h5 className="font-semibold mb-2">Special Roles:</h5>
-                  <ul className="space-y-1 text-gray-600">
+                  <ul className="space-y-1 text-slate-300">
                     <li>👑 <strong>Trainer</strong>: Always ranked first</li>
                     <li>🍸 <strong>Bartender</strong>: Ranked after Trainers</li>
                   </ul>
@@ -1096,7 +1096,7 @@ export default function QuarterSettings() {
                       <th className="text-left py-2 px-3">Description</th>
                     </tr>
                   </thead>
-                  <tbody className="text-gray-600">
+                  <tbody className="text-slate-300">
                     <tr className="border-b"><td className="py-2 px-3 font-medium">Employee Name</td><td className="py-2 px-3">✅ Yes</td><td className="py-2 px-3">Full name</td></tr>
                     <tr className="border-b"><td className="py-2 px-3 font-medium">Job Title</td><td className="py-2 px-3">✅ Yes</td><td className="py-2 px-3">Server, Bartender, or Trainer</td></tr>
                     <tr className="border-b"><td className="py-2 px-3 font-medium">Guests</td><td className="py-2 px-3">✅ Yes</td><td className="py-2 px-3">Total guests served</td></tr>
@@ -1123,23 +1123,23 @@ export default function QuarterSettings() {
               <div className="space-y-4">
                 <div>
                   <h5 className="font-semibold text-gray-800">Why can't I change benchmarks after uploading data?</h5>
-                  <p className="text-gray-600 text-sm">Once scores are generated, benchmarks are locked to maintain consistency. Create a new quarter if you need different settings.</p>
+                  <p className="text-slate-300 text-sm">Once scores are generated, benchmarks are locked to maintain consistency. Create a new quarter if you need different settings.</p>
                 </div>
                 <div>
                   <h5 className="font-semibold text-gray-800">What's the difference between Quarterly Data and Snapshots?</h5>
-                  <p className="text-gray-600 text-sm">Quarterly data (Dashboard) is your main scoring - one upload per quarter. Snapshots are bi-weekly check-ins (1st & 15th) that create standalone visual reports.</p>
+                  <p className="text-slate-300 text-sm">Quarterly data (Dashboard) is your main scoring - one upload per quarter. Snapshots are bi-weekly check-ins (1st & 15th) that create standalone visual reports.</p>
                 </div>
                 <div>
                   <h5 className="font-semibold text-gray-800">How do I fix a mistake in uploaded data?</h5>
-                  <p className="text-gray-600 text-sm">Go to Employees page, find the employee, and use Edit to correct values. Or delete all and re-upload a corrected file.</p>
+                  <p className="text-slate-300 text-sm">Go to Employees page, find the employee, and use Edit to correct values. Or delete all and re-upload a corrected file.</p>
                 </div>
                 <div>
                   <h5 className="font-semibold text-gray-800">What's LBW?</h5>
-                  <p className="text-gray-600 text-sm">LBW = Liquor + Beer + Wine sales combined. It's automatically calculated from the three separate columns.</p>
+                  <p className="text-slate-300 text-sm">LBW = Liquor + Beer + Wine sales combined. It's automatically calculated from the three separate columns.</p>
                 </div>
                 <div>
                   <h5 className="font-semibold text-gray-800">What does "Guests/LSC" mean?</h5>
-                  <p className="text-gray-600 text-sm">Guests per Landry's Select Card enrollment. Lower is better - it means the employee is signing up more cards relative to their guest count.</p>
+                  <p className="text-slate-300 text-sm">Guests per Landry's Select Card enrollment. Lower is better - it means the employee is signing up more cards relative to their guest count.</p>
                 </div>
               </div>
             </div>

@@ -248,7 +248,7 @@ export default function YodeckSlides() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-paper">
+      <div className="min-h-screen bg-background">
         <div className="flex items-center justify-center h-96">
           <div className="loading-spinner"></div>
         </div>
@@ -257,7 +257,7 @@ export default function YodeckSlides() {
   }
 
   return (
-    <div className="min-h-screen bg-paper relative overflow-hidden">
+    <div className="min-h-screen bg-background relative overflow-hidden">
       <div className="splash-red" style={{ top: '10%', right: '5%' }} />
       <div className="splash-blue" style={{ bottom: '15%', left: '3%', opacity: 0.5 }} />
       
@@ -271,7 +271,7 @@ export default function YodeckSlides() {
                 Reports & Downloads
               </h1>
             </div>
-            <p className="text-gray-500" data-testid="page-subtitle">
+            <p className="text-slate-400" data-testid="page-subtitle">
               Digital signage slides and printable reports
             </p>
           </div>
@@ -309,7 +309,7 @@ export default function YodeckSlides() {
                   <Palette className="w-5 h-5 text-purple-600" />
                 </div>
                 <h2 className="text-lg font-serif font-bold text-foreground">Slide Theme Settings</h2>
-                <span className="text-sm text-gray-500 ml-2">(Per-Quarter)</span>
+                <span className="text-sm text-slate-400 ml-2">(Per-Quarter)</span>
               </div>
               
               {/* Pre-built Themes */}
@@ -339,7 +339,7 @@ export default function YodeckSlides() {
               {/* Seasonal Theme Overlay */}
               <div className="mb-6">
                 <label className="text-sm font-medium mb-3 block">Seasonal Theme (Optional Overlay)</label>
-                <p className="text-xs text-gray-500 mb-3">Adds festive decorations and colors to your slides</p>
+                <p className="text-xs text-slate-400 mb-3">Adds festive decorations and colors to your slides</p>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                   {Object.entries(SEASONAL_THEMES).map(([key, theme]) => (
                     <button
@@ -366,7 +366,7 @@ export default function YodeckSlides() {
                 <label className="text-sm font-medium mb-3 block">Custom Colors (for &quot;custom&quot; theme)</label>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                   <div>
-                    <label className="text-xs text-gray-500 block mb-1">Background</label>
+                    <label className="text-xs text-slate-400 block mb-1">Background</label>
                     <div className="flex items-center gap-2">
                       <input
                         type="color"
@@ -382,7 +382,7 @@ export default function YodeckSlides() {
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs text-gray-500 block mb-1">Gradient End</label>
+                    <label className="text-xs text-slate-400 block mb-1">Gradient End</label>
                     <div className="flex items-center gap-2">
                       <input
                         type="color"
@@ -398,7 +398,7 @@ export default function YodeckSlides() {
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs text-gray-500 block mb-1">Text Color</label>
+                    <label className="text-xs text-slate-400 block mb-1">Text Color</label>
                     <div className="flex items-center gap-2">
                       <input
                         type="color"
@@ -414,7 +414,7 @@ export default function YodeckSlides() {
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs text-gray-500 block mb-1">Accent (Primary)</label>
+                    <label className="text-xs text-slate-400 block mb-1">Accent (Primary)</label>
                     <div className="flex items-center gap-2">
                       <input
                         type="color"
@@ -430,7 +430,7 @@ export default function YodeckSlides() {
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs text-gray-500 block mb-1">Secondary</label>
+                    <label className="text-xs text-slate-400 block mb-1">Secondary</label>
                     <div className="flex items-center gap-2">
                       <input
                         type="color"
@@ -501,9 +501,9 @@ export default function YodeckSlides() {
               </select>
               
               {slideManifest && (
-                <div className="ml-4 flex items-center gap-2 text-sm text-gray-500">
+                <div className="ml-4 flex items-center gap-2 text-sm text-slate-400">
                   <span>Current theme:</span>
-                  <span className="px-2 py-1 bg-gray-100 rounded font-medium">
+                  <span className="px-2 py-1 bg-slate-700 rounded font-medium">
                     {THEME_PREVIEWS[slideManifest.theme]?.name || slideManifest.theme}
                   </span>
                 </div>
@@ -517,7 +517,7 @@ export default function YodeckSlides() {
           <div className="bubba-card p-12 text-center" data-testid="no-data">
             <Monitor className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-serif font-bold mb-2">No slides available</h3>
-            <p className="text-gray-500">
+            <p className="text-slate-400">
               No data for {selectedQuarter} {selectedYear}. Upload employee data on the Dashboard first.
             </p>
           </div>
@@ -527,14 +527,14 @@ export default function YodeckSlides() {
             <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8">
               <div className="bubba-card p-4 text-center">
                 <div className="text-2xl font-serif font-black text-primary">{slideManifest.total_employees}</div>
-                <div className="text-xs text-gray-500 uppercase">Total</div>
+                <div className="text-xs text-slate-400 uppercase">Total</div>
               </div>
               {Object.entries(slideManifest.tier_counts).map(([tier, count]) => (
                 <div key={tier} className="bubba-card p-4 text-center">
                   <div className={`text-2xl font-serif font-black ${tier === "A-Server" ? "text-green-600" : tier === "B-Server" ? "text-yellow-600" : tier === "C-Server" ? "text-red-600" : tier === "Trainer" ? "text-purple-600" : "text-blue-600"}`}>
                     {count}
                   </div>
-                  <div className="text-xs text-gray-500 uppercase">{tier.replace("-Server", "")}</div>
+                  <div className="text-xs text-slate-400 uppercase">{tier.replace("-Server", "")}</div>
                 </div>
               ))}
             </div>
@@ -588,19 +588,19 @@ export default function YodeckSlides() {
               <h3 className="font-serif font-bold text-foreground mb-3">Slide Specifications</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                 <div>
-                  <span className="text-gray-500">16:9 Format:</span>
+                  <span className="text-slate-400">16:9 Format:</span>
                   <span className="ml-2 font-semibold">1920×1080px</span>
                 </div>
                 <div>
-                  <span className="text-gray-500">Letter Format:</span>
+                  <span className="text-slate-400">Letter Format:</span>
                   <span className="ml-2 font-semibold">8.5×11" (300 DPI)</span>
                 </div>
                 <div>
-                  <span className="text-gray-500">File Type:</span>
+                  <span className="text-slate-400">File Type:</span>
                   <span className="ml-2 font-semibold">PNG</span>
                 </div>
                 <div>
-                  <span className="text-gray-500">Yodeck Ready:</span>
+                  <span className="text-slate-400">Yodeck Ready:</span>
                   <span className="ml-2 font-semibold text-green-600">✓ Yes</span>
                 </div>
               </div>
@@ -644,7 +644,7 @@ function SlideCard({ slide, downloading, downloadSlide, selectedQuarter, selecte
               <h3 className="text-lg font-serif font-bold text-foreground">
                 {slide.name}
               </h3>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-slate-400">
                 {slide.employee_count !== undefined 
                   ? `${slide.employee_count} employees • ${slide.pages} slide${slide.pages > 1 ? 's' : ''}`
                   : `${slide.pages} slide`

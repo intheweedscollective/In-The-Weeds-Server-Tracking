@@ -175,7 +175,7 @@ export default function EmployeeList() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-paper">
+      <div className="min-h-screen bg-background">
         <div className="flex items-center justify-center h-96">
           <div className="loading-spinner"></div>
         </div>
@@ -184,7 +184,7 @@ export default function EmployeeList() {
   }
 
   return (
-    <div className="min-h-screen bg-paper relative overflow-hidden">
+    <div className="min-h-screen bg-background relative overflow-hidden">
       <div className="splash-blue" style={{ top: '15%', right: '5%' }} />
       <div className="splash-red" style={{ bottom: '20%', left: '3%', opacity: 0.5 }} />
       
@@ -218,7 +218,7 @@ export default function EmployeeList() {
               New Employee
             </Button>
           </div>
-          <p className="text-gray-500" data-testid="page-subtitle">
+          <p className="text-slate-400" data-testid="page-subtitle">
             View and manage all crew performance data
           </p>
         </div>
@@ -300,7 +300,7 @@ export default function EmployeeList() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">&nbsp;</label>
                 <div className="h-10 flex items-center">
-                  <span className="text-sm text-gray-500">
+                  <span className="text-sm text-slate-400">
                     {selectedQuarter} {selectedYear}
                   </span>
                 </div>
@@ -311,7 +311,7 @@ export default function EmployeeList() {
 
         {/* Results Summary */}
         <div className="mb-6" data-testid="results-summary">
-          <p className="text-gray-500 font-medium">
+          <p className="text-slate-400 font-medium">
             Showing <span className="text-primary font-bold">{filteredEmployees.length}</span> of {employees.length} crew members
           </p>
         </div>
@@ -321,7 +321,7 @@ export default function EmployeeList() {
           <div className="bubba-card p-12 text-center" data-testid="no-results">
             <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-serif font-bold mb-2">No crew members found</h3>
-            <p className="text-gray-500">
+            <p className="text-slate-400">
               {employees.length === 0 
                 ? `No data for ${selectedQuarter} ${selectedYear}. Upload a file on the Dashboard.` 
                 : "Try adjusting your search or filters"}
@@ -348,7 +348,7 @@ export default function EmployeeList() {
                         <h3 className="text-lg font-serif font-bold text-foreground" data-testid={`employee-name-${employee.id}`}>
                           {employee.name}
                         </h3>
-                        <p className="text-gray-500 text-sm" data-testid={`employee-rank-${employee.id}`}>
+                        <p className="text-slate-400 text-sm" data-testid={`employee-rank-${employee.id}`}>
                           Rank: #{employee.peer_rank || '-'} of {employees.length}
                         </p>
                       </div>
@@ -361,27 +361,27 @@ export default function EmployeeList() {
                     <div className="grid grid-cols-3 gap-2 mb-4">
                       <div className="text-center p-2 bg-red-50 rounded-lg border border-red-100">
                         <div className="text-lg font-serif font-bold text-primary">{formatNumber(score)}</div>
-                        <div className="text-[10px] text-gray-500 font-semibold uppercase">Score</div>
+                        <div className="text-[10px] text-slate-400 font-semibold uppercase">Score</div>
                       </div>
                       <div className="text-center p-2 bg-blue-50 rounded-lg border border-blue-100">
                         <div className="text-sm font-serif font-bold text-secondary">{formatCurrency(ppa)}</div>
-                        <div className="text-[10px] text-gray-500 font-semibold uppercase">PPA</div>
+                        <div className="text-[10px] text-slate-400 font-semibold uppercase">PPA</div>
                       </div>
                       <div className="text-center p-2 bg-purple-50 rounded-lg border border-purple-100">
                         <div className="text-sm font-serif font-bold text-purple-700">{formatCurrency(lbwPerGuest)}</div>
-                        <div className="text-[10px] text-gray-500 font-semibold uppercase">LBW/G</div>
+                        <div className="text-[10px] text-slate-400 font-semibold uppercase">LBW/G</div>
                       </div>
-                      <div className="text-center p-2 bg-gray-50 rounded-lg border border-gray-200">
-                        <div className="text-sm font-serif font-bold text-gray-700">{formatCurrency(glassPerGuest)}</div>
-                        <div className="text-[10px] text-gray-500 font-semibold uppercase">Glass/G</div>
+                      <div className="text-center p-2 bg-background rounded-lg border border-gray-200">
+                        <div className="text-sm font-serif font-bold text-slate-200">{formatCurrency(glassPerGuest)}</div>
+                        <div className="text-[10px] text-slate-400 font-semibold uppercase">Glass/G</div>
                       </div>
                       <div className="text-center p-2 bg-green-50 rounded-lg border border-green-100">
                         <div className="text-sm font-serif font-bold text-green-700">{guestsPerLsc ? formatNumber(guestsPerLsc) : 'N/A'}</div>
-                        <div className="text-[10px] text-gray-500 font-semibold uppercase">G/LSC</div>
+                        <div className="text-[10px] text-slate-400 font-semibold uppercase">G/LSC</div>
                       </div>
                       <div className="text-center p-2 bg-yellow-50 rounded-lg border border-yellow-100">
                         <div className="text-sm font-serif font-bold text-yellow-700">{cvScore > 0 ? '+' : ''}{formatNumber(cvScore)}</div>
-                        <div className="text-[10px] text-gray-500 font-semibold uppercase">CV</div>
+                        <div className="text-[10px] text-slate-400 font-semibold uppercase">CV</div>
                       </div>
                     </div>
                     
@@ -433,12 +433,12 @@ export default function EmployeeList() {
         {/* Employee Details Modal */}
         {showDetails && selectedEmployee && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" data-testid="employee-details-modal">
-            <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-auto shadow-2xl">
-              <div className="p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
+            <div className="bg-slate-800 rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-auto shadow-2xl">
+              <div className="p-6 border-b border-gray-200 sticky top-0 bg-slate-800 z-10">
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-2xl font-serif font-black text-primary">{selectedEmployee.name}</h2>
-                    <p className="text-gray-500">
+                    <p className="text-slate-400">
                       Rank #{selectedEmployee.peer_rank || '-'} of {employees.length} • {selectedEmployee.performance_tier || 'Not Assessed'}
                     </p>
                   </div>
@@ -460,13 +460,13 @@ export default function EmployeeList() {
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="text-lg font-serif font-bold text-foreground">Total Score</h3>
-                      <p className="text-sm text-gray-500">Weighted score + bonuses</p>
+                      <p className="text-sm text-slate-400">Weighted score + bonuses</p>
                     </div>
                     <div className="text-right">
                       <div className="text-4xl font-serif font-black text-primary">
                         {formatNumber(selectedEmployee.pre_dar_score || selectedEmployee.total_score || 0)}
                       </div>
-                      <div className="text-sm text-gray-500">points</div>
+                      <div className="text-sm text-slate-400">points</div>
                     </div>
                   </div>
                 </div>
@@ -488,13 +488,13 @@ export default function EmployeeList() {
                         </div>
                         <div className="text-right">
                           <span className="font-bold text-secondary">{formatNumber(Math.min((selectedEmployee.score_ppa || 0), 100) * 0.25 + (selectedEmployee.bonus_ppa || 0))}</span>
-                          <span className="text-gray-500 text-sm"> / 30 pts</span>
+                          <span className="text-slate-400 text-sm"> / 30 pts</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-4 text-sm">
-                        <span className="text-gray-600">Value: {formatCurrency(selectedEmployee.ppa || 0)}</span>
+                        <span className="text-slate-300">Value: {formatCurrency(selectedEmployee.ppa || 0)}</span>
                         <span className="text-gray-400">|</span>
-                        <span className="text-gray-600">Score: {formatNumber(selectedEmployee.score_ppa || 0)}%</span>
+                        <span className="text-slate-300">Score: {formatNumber(selectedEmployee.score_ppa || 0)}%</span>
                         {(selectedEmployee.bonus_ppa || 0) > 0 && (
                           <>
                             <span className="text-gray-400">|</span>
@@ -519,13 +519,13 @@ export default function EmployeeList() {
                         </div>
                         <div className="text-right">
                           <span className="font-bold text-green-700">{formatNumber(Math.min((selectedEmployee.score_lsc || 0), 100) * 0.25 + (selectedEmployee.bonus_lsc || 0))}</span>
-                          <span className="text-gray-500 text-sm"> / 30 pts</span>
+                          <span className="text-slate-400 text-sm"> / 30 pts</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-4 text-sm">
-                        <span className="text-gray-600">Value: {selectedEmployee.guests_per_lsc ? formatNumber(selectedEmployee.guests_per_lsc) + ' G/LSC' : 'N/A'}</span>
+                        <span className="text-slate-300">Value: {selectedEmployee.guests_per_lsc ? formatNumber(selectedEmployee.guests_per_lsc) + ' G/LSC' : 'N/A'}</span>
                         <span className="text-gray-400">|</span>
-                        <span className="text-gray-600">Score: {formatNumber(selectedEmployee.score_lsc || 0)}%</span>
+                        <span className="text-slate-300">Score: {formatNumber(selectedEmployee.score_lsc || 0)}%</span>
                         {(selectedEmployee.bonus_lsc || 0) > 0 && (
                           <>
                             <span className="text-gray-400">|</span>
@@ -550,13 +550,13 @@ export default function EmployeeList() {
                         </div>
                         <div className="text-right">
                           <span className="font-bold text-purple-700">{formatNumber(Math.min((selectedEmployee.score_lbw || 0), 100) * 0.20 + (selectedEmployee.bonus_lbw || 0))}</span>
-                          <span className="text-gray-500 text-sm"> / 25 pts</span>
+                          <span className="text-slate-400 text-sm"> / 25 pts</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-4 text-sm">
-                        <span className="text-gray-600">Value: {formatCurrency(selectedEmployee.lbw_per_guest || 0)}</span>
+                        <span className="text-slate-300">Value: {formatCurrency(selectedEmployee.lbw_per_guest || 0)}</span>
                         <span className="text-gray-400">|</span>
-                        <span className="text-gray-600">Score: {formatNumber(selectedEmployee.score_lbw || 0)}%</span>
+                        <span className="text-slate-300">Score: {formatNumber(selectedEmployee.score_lbw || 0)}%</span>
                         {(selectedEmployee.bonus_lbw || 0) > 0 && (
                           <>
                             <span className="text-gray-400">|</span>
@@ -573,21 +573,21 @@ export default function EmployeeList() {
                     </div>
 
                     {/* Glassware - 15% weight, max 20 pts */}
-                    <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="p-4 bg-background rounded-lg border border-gray-200">
                       <div className="flex items-center justify-between mb-2">
                         <div>
                           <span className="font-semibold text-foreground">Glassware per Guest</span>
-                          <span className="ml-2 text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">15% weight</span>
+                          <span className="ml-2 text-xs bg-gray-200 text-slate-200 px-2 py-0.5 rounded-full">15% weight</span>
                         </div>
                         <div className="text-right">
-                          <span className="font-bold text-gray-700">{formatNumber(Math.min((selectedEmployee.score_glass || 0), 100) * 0.15 + (selectedEmployee.bonus_glass || 0))}</span>
-                          <span className="text-gray-500 text-sm"> / 20 pts</span>
+                          <span className="font-bold text-slate-200">{formatNumber(Math.min((selectedEmployee.score_glass || 0), 100) * 0.15 + (selectedEmployee.bonus_glass || 0))}</span>
+                          <span className="text-slate-400 text-sm"> / 20 pts</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-4 text-sm">
-                        <span className="text-gray-600">Value: {formatCurrency(selectedEmployee.glassware_per_guest || 0)}</span>
+                        <span className="text-slate-300">Value: {formatCurrency(selectedEmployee.glassware_per_guest || 0)}</span>
                         <span className="text-gray-400">|</span>
-                        <span className="text-gray-600">Score: {formatNumber(selectedEmployee.score_glass || 0)}%</span>
+                        <span className="text-slate-300">Score: {formatNumber(selectedEmployee.score_glass || 0)}%</span>
                         {(selectedEmployee.bonus_glass || 0) > 0 && (
                           <>
                             <span className="text-gray-400">|</span>
@@ -612,13 +612,13 @@ export default function EmployeeList() {
                         </div>
                         <div className="text-right">
                           <span className="font-bold text-yellow-700">{formatNumber(Math.min((selectedEmployee.score_cv || 0), 100) * 0.15)}</span>
-                          <span className="text-gray-500 text-sm"> / 20 pts</span>
+                          <span className="text-slate-400 text-sm"> / 20 pts</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-4 text-sm flex-wrap">
-                        <span className="text-gray-600">CV Score: {selectedEmployee.cv_score > 0 ? '+' : ''}{formatNumber(selectedEmployee.cv_score || 0)}</span>
+                        <span className="text-slate-300">CV Score: {selectedEmployee.cv_score > 0 ? '+' : ''}{formatNumber(selectedEmployee.cv_score || 0)}</span>
                         <span className="text-gray-400">|</span>
-                        <span className="text-gray-600">Normalized: {formatNumber(selectedEmployee.score_cv || 0)}%</span>
+                        <span className="text-slate-300">Normalized: {formatNumber(selectedEmployee.score_cv || 0)}%</span>
                         {(selectedEmployee.review_tracker_bonus || 0) > 0 && (
                           <>
                             <span className="text-gray-400">|</span>
@@ -637,19 +637,19 @@ export default function EmployeeList() {
                 </div>
 
                 {/* Score Summary Table */}
-                <div className="mb-6 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                <div className="mb-6 p-4 bg-background rounded-xl border border-gray-200">
                   <h4 className="font-serif font-bold text-foreground mb-3">Score Summary</h4>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between py-1 border-b border-gray-200">
-                      <span className="text-gray-600">Weighted Score (base)</span>
+                      <span className="text-slate-300">Weighted Score (base)</span>
                       <span className="font-medium">{formatNumber(selectedEmployee.weighted_score || 0)}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-gray-200">
-                      <span className="text-gray-600">Metric Bonuses</span>
+                      <span className="text-slate-300">Metric Bonuses</span>
                       <span className="font-medium text-green-600">+{formatNumber(selectedEmployee.total_metric_bonus || 0)}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-gray-200">
-                      <span className="text-gray-600">Review Tracker Bonus</span>
+                      <span className="text-slate-300">Review Tracker Bonus</span>
                       <span className="font-medium text-green-600">+{formatNumber(selectedEmployee.review_tracker_bonus || 0)}</span>
                     </div>
                     <div className="flex justify-between py-2 font-bold text-base">
@@ -666,17 +666,17 @@ export default function EmployeeList() {
                     <div className="grid grid-cols-3 gap-2">
                       <div className="text-center p-3 bg-green-50 rounded-lg border border-green-100">
                         <div className="text-xl font-bold text-green-700">{selectedEmployee.cv_promoters || 0}</div>
-                        <div className="text-xs text-gray-500">Promoters</div>
+                        <div className="text-xs text-slate-400">Promoters</div>
                         <div className="text-xs text-green-600 font-medium">+{(selectedEmployee.cv_promoters || 0) * 1} pts</div>
                       </div>
-                      <div className="text-center p-3 bg-gray-100 rounded-lg border border-gray-200">
-                        <div className="text-xl font-bold text-gray-600">{selectedEmployee.cv_passives || 0}</div>
-                        <div className="text-xs text-gray-500">Passives</div>
-                        <div className="text-xs text-gray-500">0 pts</div>
+                      <div className="text-center p-3 bg-slate-700 rounded-lg border border-gray-200">
+                        <div className="text-xl font-bold text-slate-300">{selectedEmployee.cv_passives || 0}</div>
+                        <div className="text-xs text-slate-400">Passives</div>
+                        <div className="text-xs text-slate-400">0 pts</div>
                       </div>
                       <div className="text-center p-3 bg-red-50 rounded-lg border border-red-100">
                         <div className="text-xl font-bold text-red-700">{selectedEmployee.cv_detractors || 0}</div>
-                        <div className="text-xs text-gray-500">Detractors</div>
+                        <div className="text-xs text-slate-400">Detractors</div>
                         <div className="text-xs text-red-600 font-medium">{(selectedEmployee.cv_detractors || 0) * -2} pts</div>
                       </div>
                     </div>
@@ -687,28 +687,28 @@ export default function EmployeeList() {
                 <div>
                   <h4 className="font-serif font-bold text-foreground mb-3">Raw Input Data</h4>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                    <div className="flex justify-between py-2 px-3 bg-gray-50 rounded-lg text-sm">
-                      <span className="text-gray-500">Guests</span>
+                    <div className="flex justify-between py-2 px-3 bg-background rounded-lg text-sm">
+                      <span className="text-slate-400">Guests</span>
                       <span className="font-medium">{formatNumber(selectedEmployee.guests || 0)}</span>
                     </div>
-                    <div className="flex justify-between py-2 px-3 bg-gray-50 rounded-lg text-sm">
-                      <span className="text-gray-500">Net Sales</span>
+                    <div className="flex justify-between py-2 px-3 bg-background rounded-lg text-sm">
+                      <span className="text-slate-400">Net Sales</span>
                       <span className="font-medium">{formatCurrency(selectedEmployee.net_sales || 0)}</span>
                     </div>
-                    <div className="flex justify-between py-2 px-3 bg-gray-50 rounded-lg text-sm">
-                      <span className="text-gray-500">LBW Total</span>
+                    <div className="flex justify-between py-2 px-3 bg-background rounded-lg text-sm">
+                      <span className="text-slate-400">LBW Total</span>
                       <span className="font-medium">{formatCurrency(selectedEmployee.lbw || 0)}</span>
                     </div>
-                    <div className="flex justify-between py-2 px-3 bg-gray-50 rounded-lg text-sm">
-                      <span className="text-gray-500">Glassware</span>
+                    <div className="flex justify-between py-2 px-3 bg-background rounded-lg text-sm">
+                      <span className="text-slate-400">Glassware</span>
                       <span className="font-medium">{formatCurrency(selectedEmployee.glassware_sales || 0)}</span>
                     </div>
-                    <div className="flex justify-between py-2 px-3 bg-gray-50 rounded-lg text-sm">
-                      <span className="text-gray-500">LSC Count</span>
+                    <div className="flex justify-between py-2 px-3 bg-background rounded-lg text-sm">
+                      <span className="text-slate-400">LSC Count</span>
                       <span className="font-medium">{formatNumber(selectedEmployee.lsc_count || 0)}</span>
                     </div>
-                    <div className="flex justify-between py-2 px-3 bg-gray-50 rounded-lg text-sm">
-                      <span className="text-gray-500">Review Mentions</span>
+                    <div className="flex justify-between py-2 px-3 bg-background rounded-lg text-sm">
+                      <span className="text-slate-400">Review Mentions</span>
                       <span className="font-medium">{formatNumber(selectedEmployee.review_mentions || 0)}</span>
                     </div>
                   </div>
@@ -721,7 +721,7 @@ export default function EmployeeList() {
         {/* Edit/Add Employee Modal */}
         {showEditModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowEditModal(false)}>
-            <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="bg-slate-800 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
               <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-6 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   {editingEmployee ? <Pencil className="w-6 h-6 text-white" /> : <Plus className="w-6 h-6 text-white" />}
@@ -729,7 +729,7 @@ export default function EmployeeList() {
                     {editingEmployee ? `Edit ${editingEmployee.name}` : 'Add New Employee'}
                   </h2>
                 </div>
-                <button onClick={() => setShowEditModal(false)} className="text-white hover:bg-white/20 rounded-full p-2">
+                <button onClick={() => setShowEditModal(false)} className="text-white hover:bg-slate-800/20 rounded-full p-2">
                   <X className="w-5 h-5" />
                 </button>
               </div>
@@ -737,10 +737,10 @@ export default function EmployeeList() {
               <div className="p-6 overflow-y-auto max-h-[70vh]">
                 {/* Basic Info */}
                 <div className="mb-6">
-                  <h3 className="font-semibold text-gray-700 mb-3">Basic Information</h3>
+                  <h3 className="font-semibold text-slate-200 mb-3">Basic Information</h3>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-600 mb-1">Name *</label>
+                      <label className="block text-sm font-medium text-slate-300 mb-1">Name *</label>
                       <Input
                         value={formData.name}
                         onChange={(e) => handleFormChange('name', e.target.value)}
@@ -749,7 +749,7 @@ export default function EmployeeList() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-600 mb-1">Job Title</label>
+                      <label className="block text-sm font-medium text-slate-300 mb-1">Job Title</label>
                       <select
                         value={formData.job_title}
                         onChange={(e) => handleFormChange('job_title', e.target.value)}
@@ -765,10 +765,10 @@ export default function EmployeeList() {
 
                 {/* Sales Data */}
                 <div className="mb-6">
-                  <h3 className="font-semibold text-gray-700 mb-3">Sales Data</h3>
+                  <h3 className="font-semibold text-slate-200 mb-3">Sales Data</h3>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-600 mb-1">Guests</label>
+                      <label className="block text-sm font-medium text-slate-300 mb-1">Guests</label>
                       <Input
                         type="number"
                         value={formData.guests}
@@ -777,7 +777,7 @@ export default function EmployeeList() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-600 mb-1">Net Sales ($)</label>
+                      <label className="block text-sm font-medium text-slate-300 mb-1">Net Sales ($)</label>
                       <Input
                         type="number"
                         value={formData.net_sales}
@@ -786,7 +786,7 @@ export default function EmployeeList() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-600 mb-1">LBW ($)</label>
+                      <label className="block text-sm font-medium text-slate-300 mb-1">LBW ($)</label>
                       <Input
                         type="number"
                         value={formData.lbw}
@@ -795,7 +795,7 @@ export default function EmployeeList() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-600 mb-1">Glassware ($)</label>
+                      <label className="block text-sm font-medium text-slate-300 mb-1">Glassware ($)</label>
                       <Input
                         type="number"
                         value={formData.glassware_sales}
@@ -808,9 +808,9 @@ export default function EmployeeList() {
 
                 {/* LSC Count */}
                 <div className="mb-6">
-                  <h3 className="font-semibold text-gray-700 mb-3">LSC (Loyalty Signups)</h3>
+                  <h3 className="font-semibold text-slate-200 mb-3">LSC (Loyalty Signups)</h3>
                   <div className="w-1/2">
-                    <label className="block text-sm font-medium text-gray-600 mb-1">LSC Count</label>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">LSC Count</label>
                     <Input
                       type="number"
                       value={formData.lsc_count}
@@ -822,7 +822,7 @@ export default function EmployeeList() {
 
                 {/* Customer Voice */}
                 <div className="mb-6">
-                  <h3 className="font-semibold text-gray-700 mb-3">Customer Voice & Reviews</h3>
+                  <h3 className="font-semibold text-slate-200 mb-3">Customer Voice & Reviews</h3>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-green-600 mb-1">CV Promoters (+1 pt)</label>
@@ -835,7 +835,7 @@ export default function EmployeeList() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-600 mb-1">CV Passives (0 pt)</label>
+                      <label className="block text-sm font-medium text-slate-300 mb-1">CV Passives (0 pt)</label>
                       <Input
                         type="number"
                         value={formData.cv_passives}
@@ -867,9 +867,9 @@ export default function EmployeeList() {
                 </div>
 
                 {/* Preview */}
-                <div className="p-4 bg-gray-50 rounded-lg border">
-                  <h4 className="font-medium text-gray-700 mb-2">CV Preview</h4>
-                  <div className="text-sm text-gray-600">
+                <div className="p-4 bg-background rounded-lg border">
+                  <h4 className="font-medium text-slate-200 mb-2">CV Preview</h4>
+                  <div className="text-sm text-slate-300">
                     <span>CV Points: </span>
                     <span className="font-bold">
                       {(formData.cv_promoters * 1) + (formData.review_mentions * 0.2) - (formData.cv_detractors * 2)}
@@ -881,7 +881,7 @@ export default function EmployeeList() {
                 </div>
               </div>
               
-              <div className="p-6 border-t bg-gray-50 flex gap-3 justify-end">
+              <div className="p-6 border-t bg-background flex gap-3 justify-end">
                 <Button variant="outline" onClick={() => setShowEditModal(false)}>
                   Cancel
                 </Button>

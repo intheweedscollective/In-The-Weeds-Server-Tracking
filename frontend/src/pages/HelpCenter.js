@@ -114,7 +114,7 @@ const quickLinks = [
   { label: "Sync Reviews", path: "/review-tracker", icon: Star, color: "bg-yellow-500" },
   { label: "Generate Reports", path: "/yodeck", icon: FileText, color: "bg-purple-500" },
   { label: "View Analytics", path: "/analytics", icon: BarChart3, color: "bg-orange-500" },
-  { label: "Quarter Settings", path: "/settings", icon: Settings, color: "bg-slate-500" }
+  { label: "Quarter Settings", path: "/settings", icon: Settings, color: "bg-slate-700/500" }
 ];
 
 export default function HelpCenter() {
@@ -122,17 +122,17 @@ export default function HelpCenter() {
   const [expandedQuestion, setExpandedQuestion] = useState(null);
 
   return (
-    <div className="min-h-screen bg-paper">
+    <div className="min-h-screen bg-background">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="text-center mb-10">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
             <HelpCircle className="w-8 h-8 text-primary" />
           </div>
-          <h1 className="text-3xl font-serif font-bold text-slate-800 mb-2">
+          <h1 className="text-3xl font-serif font-bold text-white mb-2">
             Help Center
           </h1>
-          <p className="text-slate-500 max-w-xl mx-auto">
+          <p className="text-slate-400 max-w-xl mx-auto">
             Everything you need to know about the Bubba Gump Performance Hub. 
             Can't find what you're looking for? Contact your regional manager.
           </p>
@@ -140,18 +140,18 @@ export default function HelpCenter() {
 
         {/* Quick Links */}
         <div className="mb-10">
-          <h2 className="text-lg font-serif font-bold text-slate-700 mb-4">Quick Actions</h2>
+          <h2 className="text-lg font-serif font-bold text-slate-200 mb-4">Quick Actions</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             {quickLinks.map((link) => (
               <a
                 key={link.path}
                 href={link.path}
-                className="flex flex-col items-center gap-2 p-4 bg-white rounded-xl border border-sand hover:shadow-md hover:-translate-y-1 transition-all"
+                className="flex flex-col items-center gap-2 p-4 bg-slate-800 rounded-xl border border-slate-700 hover:shadow-md hover:-translate-y-1 transition-all"
               >
                 <div className={`w-10 h-10 rounded-full ${link.color} flex items-center justify-center`}>
                   <link.icon className="w-5 h-5 text-white" />
                 </div>
-                <span className="text-sm font-medium text-slate-700 text-center">{link.label}</span>
+                <span className="text-sm font-medium text-slate-200 text-center">{link.label}</span>
               </a>
             ))}
           </div>
@@ -159,20 +159,20 @@ export default function HelpCenter() {
 
         {/* FAQ Sections */}
         <div className="space-y-4">
-          <h2 className="text-lg font-serif font-bold text-slate-700 mb-4">Frequently Asked Questions</h2>
+          <h2 className="text-lg font-serif font-bold text-slate-200 mb-4">Frequently Asked Questions</h2>
           
           {faqs.map((category) => (
-            <div key={category.category} className="bg-white rounded-xl border border-sand overflow-hidden">
+            <div key={category.category} className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
               {/* Category Header */}
               <button
                 onClick={() => setExpandedCategory(expandedCategory === category.category ? null : category.category)}
-                className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors"
+                className="w-full flex items-center justify-between p-4 hover:bg-slate-700 transition-colors"
               >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                     <category.icon className="w-5 h-5 text-primary" />
                   </div>
-                  <span className="font-serif font-bold text-slate-800">{category.category}</span>
+                  <span className="font-serif font-bold text-white">{category.category}</span>
                   <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
                     {category.questions.length} questions
                   </span>
@@ -186,14 +186,14 @@ export default function HelpCenter() {
 
               {/* Questions */}
               {expandedCategory === category.category && (
-                <div className="border-t border-sand">
+                <div className="border-t border-slate-700">
                   {category.questions.map((qa, idx) => (
-                    <div key={idx} className="border-b border-sand last:border-0">
+                    <div key={idx} className="border-b border-slate-700 last:border-0">
                       <button
                         onClick={() => setExpandedQuestion(expandedQuestion === `${category.category}-${idx}` ? null : `${category.category}-${idx}`)}
-                        className="w-full flex items-center justify-between p-4 text-left hover:bg-slate-50 transition-colors"
+                        className="w-full flex items-center justify-between p-4 text-left hover:bg-slate-700 transition-colors"
                       >
-                        <span className="font-medium text-slate-700 pr-4">{qa.q}</span>
+                        <span className="font-medium text-slate-200 pr-4">{qa.q}</span>
                         {expandedQuestion === `${category.category}-${idx}` ? (
                           <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />
                         ) : (
@@ -201,7 +201,7 @@ export default function HelpCenter() {
                         )}
                       </button>
                       {expandedQuestion === `${category.category}-${idx}` && (
-                        <div className="px-4 pb-4 text-slate-600 text-sm leading-relaxed bg-slate-50">
+                        <div className="px-4 pb-4 text-slate-300 text-sm leading-relaxed bg-slate-700/50">
                           {qa.a}
                         </div>
                       )}
@@ -216,7 +216,7 @@ export default function HelpCenter() {
         {/* Video Tutorials Placeholder */}
         <div className="mt-10 bg-gradient-to-br from-secondary to-primary rounded-xl p-6 text-white">
           <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+            <div className="w-12 h-12 rounded-full bg-slate-800/20 flex items-center justify-center flex-shrink-0">
               <Video className="w-6 h-6" />
             </div>
             <div>
@@ -231,7 +231,7 @@ export default function HelpCenter() {
 
         {/* Contact Support */}
         <div className="mt-6 text-center">
-          <p className="text-slate-500 text-sm">
+          <p className="text-slate-400 text-sm">
             Still need help? Contact{" "}
             <a href="mailto:support@bubbagump.com" className="text-primary font-medium hover:underline">
               support@bubbagump.com

@@ -247,7 +247,7 @@ export default function Snapshots() {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4 bg-paper min-h-screen" data-testid="snapshots-page">
+    <div className="container mx-auto py-8 px-4 bg-background min-h-screen" data-testid="snapshots-page">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>

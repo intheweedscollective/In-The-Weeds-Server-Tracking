@@ -175,7 +175,7 @@ export default function FullRankings() {
     if (rank === 1) return <Trophy className="w-5 h-5 text-yellow-500" />;
     if (rank === 2) return <Medal className="w-5 h-5 text-gray-400" />;
     if (rank === 3) return <Award className="w-5 h-5 text-amber-600" />;
-    return <span className="text-sm font-bold text-gray-500">#{rank}</span>;
+    return <span className="text-sm font-bold text-slate-400">#{rank}</span>;
   };
 
   useEffect(() => {
@@ -221,7 +221,7 @@ export default function FullRankings() {
   const formatNps = (nps) => {
     if (nps === null || nps === undefined) return <span className="text-gray-400">—</span>;
     
-    let colorClass = "text-gray-600";
+    let colorClass = "text-slate-300";
     if (nps >= 50) colorClass = "text-green-600";
     else if (nps >= 0) colorClass = "text-yellow-600";
     else colorClass = "text-red-600";
@@ -330,7 +330,7 @@ export default function FullRankings() {
   };
 
   const getTierStyle = (tier) => {
-    return TIER_STYLES[tier] || { bg: "bg-gray-100", text: "text-gray-800", border: "border-gray-200" };
+    return TIER_STYLES[tier] || { bg: "bg-slate-700", text: "text-gray-800", border: "border-gray-200" };
   };
 
   const renderPointsCell = (points) => {
@@ -355,7 +355,7 @@ export default function FullRankings() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-paper">
+      <div className="min-h-screen bg-background">
         <div className="flex items-center justify-center h-96">
           <div className="loading-spinner"></div>
         </div>
@@ -364,7 +364,7 @@ export default function FullRankings() {
   }
 
   return (
-    <div className="min-h-screen bg-paper relative overflow-hidden">
+    <div className="min-h-screen bg-background relative overflow-hidden">
       <div className="splash-red" style={{ top: '10%', right: '5%' }} />
       <div className="splash-blue" style={{ bottom: '15%', left: '3%', opacity: 0.5 }} />
       
@@ -378,7 +378,7 @@ export default function FullRankings() {
                 Full Rankings
               </h1>
             </div>
-            <p className="text-gray-500" data-testid="page-subtitle">
+            <p className="text-slate-400" data-testid="page-subtitle">
               Complete team standings with hierarchy-based tiering
             </p>
           </div>
@@ -532,7 +532,7 @@ export default function FullRankings() {
 
         {/* Results Summary */}
         <div className="mb-4 flex items-center justify-between" data-testid="results-summary">
-          <p className="text-gray-500 font-medium">
+          <p className="text-slate-400 font-medium">
             Showing <span className="text-primary font-bold">{rankings.length}</span> of {totalEmployees} team members
             {npsStats && npsStats.total_servers > 0 && (
               <span className="ml-3 text-sm">
@@ -572,7 +572,7 @@ export default function FullRankings() {
           <div className="bubba-card p-12 text-center" data-testid="no-results">
             <Trophy className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-serif font-bold mb-2">No rankings found</h3>
-            <p className="text-gray-500">
+            <p className="text-slate-400">
               No data for {selectedQuarter} {selectedYear}. Upload employee data on the Dashboard.
             </p>
           </div>
@@ -606,7 +606,7 @@ export default function FullRankings() {
                       <>
                         <tr 
                           key={employee.employee_id}
-                          className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors`}
+                          className={`${index % 2 === 0 ? 'bg-slate-800' : 'bg-background'} hover:bg-blue-50 transition-colors`}
                           data-testid={`ranking-row-${employee.position}`}
                         >
                           {/* Position */}
@@ -634,7 +634,7 @@ export default function FullRankings() {
                                   return null;
                                 })()}
                               </div>
-                              <div className="text-xs text-gray-500">{employee.job_title}</div>
+                              <div className="text-xs text-slate-400">{employee.job_title}</div>
                             </div>
                           </td>
                           
@@ -784,14 +784,14 @@ export default function FullRankings() {
                                 return (
                                   <div className="space-y-4">
                                     <div className="flex items-center gap-2 mb-3">
-                                      <span className="text-lg font-serif font-bold text-gray-700">Metric Breakdown</span>
-                                      <span className="text-sm text-gray-500">• {employee.name}</span>
+                                      <span className="text-lg font-serif font-bold text-slate-200">Metric Breakdown</span>
+                                      <span className="text-sm text-slate-400">• {employee.name}</span>
                                     </div>
                                     
                                     <div className="grid grid-cols-6 gap-4">
                                       {metrics.map((m, i) => (
-                                        <div key={i} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                                          <div className="text-xs font-semibold text-gray-500 uppercase mb-2">{m.label}</div>
+                                        <div key={i} className="bg-slate-800 rounded-xl p-4 shadow-sm border border-gray-100">
+                                          <div className="text-xs font-semibold text-slate-400 uppercase mb-2">{m.label}</div>
                                           <div className={`text-2xl font-bold ${m.color}`}>{m.value}</div>
                                           <div className="text-xs text-gray-400 mt-1">{m.benchmark}</div>
                                           <div className="mt-2 pt-2 border-t border-gray-100">
@@ -809,8 +809,8 @@ export default function FullRankings() {
                                       ))}
                                       
                                       {/* NPS Card */}
-                                      <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                                        <div className="text-xs font-semibold text-gray-500 uppercase mb-2 flex items-center gap-1">
+                                      <div className="bg-slate-800 rounded-xl p-4 shadow-sm border border-gray-100">
+                                        <div className="text-xs font-semibold text-slate-400 uppercase mb-2 flex items-center gap-1">
                                           <MessageCircle className="w-3 h-3" />
                                           NPS Score
                                         </div>
@@ -822,7 +822,7 @@ export default function FullRankings() {
                                           <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${
                                             empNps !== null 
                                               ? (empNps >= 50 ? 'bg-green-100 text-green-800' : empNps >= 0 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800')
-                                              : 'bg-gray-100 text-gray-500'
+                                              : 'bg-slate-700 text-slate-400'
                                           }`}>
                                             {empNps !== null ? (empNps >= 50 ? 'Promoter' : empNps >= 0 ? 'Passive' : 'Detractor') : 'No Data'}
                                           </span>
@@ -831,19 +831,19 @@ export default function FullRankings() {
                                     </div>
                                     
                                     {/* Summary Row */}
-                                    <div className="flex items-center justify-between bg-white rounded-xl p-4 shadow-sm border border-gray-100 mt-4">
+                                    <div className="flex items-center justify-between bg-slate-800 rounded-xl p-4 shadow-sm border border-gray-100 mt-4">
                                       <div>
-                                        <span className="text-sm text-gray-500">Performance Tier:</span>
+                                        <span className="text-sm text-slate-400">Performance Tier:</span>
                                         <span className={`ml-2 px-3 py-1 rounded-full text-sm font-bold ${tierStyle.bg} ${tierStyle.text}`}>
                                           {employee.performance_tier || employee.tier_label}
                                         </span>
                                       </div>
                                       <div>
-                                        <span className="text-sm text-gray-500">Total Bonus:</span>
+                                        <span className="text-sm text-slate-400">Total Bonus:</span>
                                         <span className="ml-2 text-lg font-bold text-green-600">+{formatNumber(employee.bonus_points)}</span>
                                       </div>
                                       <div>
-                                        <span className="text-sm text-gray-500">Overall Rank:</span>
+                                        <span className="text-sm text-slate-400">Overall Rank:</span>
                                         <span className="ml-2 text-lg font-bold text-primary">#{employee.position} of {totalEmployees}</span>
                                       </div>
                                     </div>
@@ -871,7 +871,7 @@ export default function FullRankings() {
             </div>
             <div>
               <h2 className="text-2xl font-serif font-bold text-foreground">Top 10 Performers</h2>
-              <p className="text-sm text-gray-500">Excellence in each performance category</p>
+              <p className="text-sm text-slate-400">Excellence in each performance category</p>
             </div>
           </div>
 
@@ -885,7 +885,7 @@ export default function FullRankings() {
                 </div>
                 <div>
                   <h3 className="text-xl font-serif font-bold text-foreground">Top 10 Overall</h3>
-                  <p className="text-sm text-gray-500">Highest performers by Total Score</p>
+                  <p className="text-sm text-slate-400">Highest performers by Total Score</p>
                 </div>
               </div>
               
@@ -893,16 +893,16 @@ export default function FullRankings() {
                 {topOverall.map((employee, index) => (
                   <div
                     key={employee.id}
-                    className="flex items-center justify-between p-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+                    className="flex items-center justify-between p-4 border border-gray-200 rounded-xl hover:bg-background transition-colors"
                     data-testid={`top-overall-${index + 1}`}
                   >
                     <div className="flex items-center gap-4">
-                      <div className="flex items-center justify-center w-10 h-10 bg-gray-100 rounded-full">
+                      <div className="flex items-center justify-center w-10 h-10 bg-slate-700 rounded-full">
                         {getMetricIcon(index + 1)}
                       </div>
                       <div>
                         <h4 className="font-semibold text-foreground">{employee.name}</h4>
-                        <p className="text-sm text-gray-500 capitalize">{employee.tier_label || employee.job_title || 'Server'}</p>
+                        <p className="text-sm text-slate-400 capitalize">{employee.tier_label || employee.job_title || 'Server'}</p>
                       </div>
                     </div>
 
@@ -910,7 +910,7 @@ export default function FullRankings() {
                       <div className="text-2xl font-serif font-bold text-primary">
                         {formatNumber(employee.pre_dar_score)}
                       </div>
-                      <div className="text-sm text-gray-500">Total Score</div>
+                      <div className="text-sm text-slate-400">Total Score</div>
                     </div>
                   </div>
                 ))}
@@ -936,7 +936,7 @@ export default function FullRankings() {
                     <h3 className="text-lg font-serif font-bold text-foreground mb-1">
                       Top 10 - {metricInfo.label}
                     </h3>
-                    <p className="text-sm text-gray-500 mb-4">
+                    <p className="text-sm text-slate-400 mb-4">
                       {!metricInfo.higherBetter 
                         ? `Best ${metricInfo.label} performers (lower is better)`
                         : `Highest ${metricInfo.label} performers`
@@ -947,16 +947,16 @@ export default function FullRankings() {
                       {performers.map((employee, index) => (
                         <div 
                           key={employee.id} 
-                          className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                          className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-background transition-colors"
                         >
                           <div className="flex items-center gap-3">
-                            <div className="flex items-center justify-center w-8 h-8 bg-gray-100 rounded-full text-sm font-bold text-primary">
+                            <div className="flex items-center justify-center w-8 h-8 bg-slate-700 rounded-full text-sm font-bold text-primary">
                               {index + 1}
                             </div>
                             
                             <div>
                               <h4 className="font-semibold text-foreground text-sm">{employee.name}</h4>
-                              <p className="text-xs text-gray-500 capitalize">{employee.tier_label || employee.job_title || 'Server'}</p>
+                              <p className="text-xs text-slate-400 capitalize">{employee.tier_label || employee.job_title || 'Server'}</p>
                             </div>
                           </div>
                           
@@ -984,7 +984,7 @@ export default function FullRankings() {
 
         {/* Legend */}
         <div className="mt-6 bubba-card p-4">
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-slate-300">
             <span className="font-semibold">Hierarchy Order:</span> Trainers → Bartenders → A-Servers → B-Servers → C-Servers
             <span className="ml-4">|</span>
             <span className="ml-4">Within each tier, employees are sorted by Total Score (highest first)</span>

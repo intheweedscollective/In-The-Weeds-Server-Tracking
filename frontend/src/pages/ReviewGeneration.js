@@ -152,7 +152,7 @@ export default function ReviewGeneration() {
   // Get change indicator
   const getChangeIndicator = (change, higherBetter = true) => {
     if (change === 0 || change === null || change === undefined) {
-      return { icon: '−', color: 'text-gray-500', bg: 'bg-gray-100' };
+      return { icon: '−', color: 'text-slate-400', bg: 'bg-slate-700' };
     }
     const isPositive = higherBetter ? change > 0 : change < 0;
     return isPositive 
@@ -162,7 +162,7 @@ export default function ReviewGeneration() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-paper">
+      <div className="min-h-screen bg-background">
         <div className="flex items-center justify-center h-96">
           <div className="loading-spinner"></div>
         </div>
@@ -171,7 +171,7 @@ export default function ReviewGeneration() {
   }
 
   return (
-    <div className="min-h-screen bg-paper relative overflow-hidden">
+    <div className="min-h-screen bg-background relative overflow-hidden">
       {/* Decorative splashes */}
       <div className="splash-red" style={{ top: '10%', right: '5%' }} />
       <div className="splash-blue" style={{ bottom: '15%', left: '3%', opacity: 0.5 }} />
@@ -185,7 +185,7 @@ export default function ReviewGeneration() {
               Review Generation
             </h1>
           </div>
-          <p className="text-gray-500 italic" data-testid="page-subtitle">
+          <p className="text-slate-400 italic" data-testid="page-subtitle">
             Generate quarterly performance reviews for your crew
           </p>
         </div>
@@ -200,7 +200,7 @@ export default function ReviewGeneration() {
               </div>
               <div>
                 <h2 className="text-lg font-serif font-bold text-foreground">Review Settings</h2>
-                <p className="text-sm text-gray-500">Configure the review period</p>
+                <p className="text-sm text-slate-400">Configure the review period</p>
               </div>
             </div>
             
@@ -234,9 +234,9 @@ export default function ReviewGeneration() {
               </div>
             </div>
             
-            <div className="mt-6 p-4 bg-gray-50 rounded-xl border border-gray-200">
+            <div className="mt-6 p-4 bg-background rounded-xl border border-gray-200">
               <h4 className="font-serif font-bold text-foreground mb-2">Review Features</h4>
-              <ul className="text-sm text-gray-500 space-y-1">
+              <ul className="text-sm text-slate-400 space-y-1">
                 <li>• AI-powered content generation using GPT-5.2</li>
                 <li>• Human-like, HR-defensible review language</li>
                 <li>• <strong>Auto-generated trend charts</strong> from snapshot data</li>
@@ -251,7 +251,7 @@ export default function ReviewGeneration() {
           <div className="bubba-card p-12 text-center" data-testid="no-employees">
             <User className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-serif font-bold mb-2">No crew members for {selectedQuarter} {selectedYear}</h3>
-            <p className="text-gray-500 mb-6">
+            <p className="text-slate-400 mb-6">
               Upload employee data from the dashboard for this quarter to start generating reviews
             </p>
             <a href="/" className="bubba-btn-primary inline-block" data-testid="go-to-dashboard-btn">
@@ -264,7 +264,7 @@ export default function ReviewGeneration() {
               <h2 className="text-xl font-serif font-bold text-foreground">
                 Reviews for {selectedQuarter} {selectedYear}
               </h2>
-              <span className="px-3 py-1 bg-gray-100 rounded-full text-sm font-semibold text-gray-600">
+              <span className="px-3 py-1 bg-slate-700 rounded-full text-sm font-semibold text-slate-300">
                 {employees.length} crew members
               </span>
             </div>
@@ -291,7 +291,7 @@ export default function ReviewGeneration() {
                               {tier.label}
                             </span>
                           </div>
-                          <p className="text-gray-500 text-sm" data-testid={`employee-position-${employee.id}`}>
+                          <p className="text-slate-400 text-sm" data-testid={`employee-position-${employee.id}`}>
                             {employee.job_title || "Server"} • Rank #{employee.peer_rank || 'N/A'}
                           </p>
                         </div>
@@ -301,14 +301,14 @@ export default function ReviewGeneration() {
                           {[
                             { label: 'Score', value: formatNumber(employee.total_score || 0), color: 'text-primary' },
                             { label: 'PPA', value: `$${(employee.ppa || 0).toFixed(0)}`, color: 'text-secondary' },
-                            { label: 'LBW/G', value: `$${(employee.lbw_per_guest || 0).toFixed(2)}`, color: 'text-gray-600' },
+                            { label: 'LBW/G', value: `$${(employee.lbw_per_guest || 0).toFixed(2)}`, color: 'text-slate-300' },
                             { label: 'Glass', value: `$${(employee.glassware_per_guest || 0).toFixed(2)}`, color: 'text-blue-600' },
                             { label: 'LSC Ratio', value: (employee.guests_per_lsc || 0).toFixed(0), color: 'text-green-600' },
                             { label: 'CV', value: formatNumber(employee.cv_score || 0), color: 'text-purple-600' },
                           ].map((kpi, i) => (
-                            <div key={i} className="text-center px-2 py-1 bg-gray-50 rounded-lg min-w-[50px]">
+                            <div key={i} className="text-center px-2 py-1 bg-background rounded-lg min-w-[50px]">
                               <div className={`text-sm font-serif font-bold ${kpi.color}`}>{kpi.value}</div>
-                              <div className="text-[10px] text-gray-500 uppercase font-semibold">{kpi.label}</div>
+                              <div className="text-[10px] text-slate-400 uppercase font-semibold">{kpi.label}</div>
                             </div>
                           ))}
                         </div>
@@ -363,8 +363,8 @@ export default function ReviewGeneration() {
                       <div className="mt-4 pt-4 border-t border-gray-200" data-testid={`trend-section-${employee.id}`}>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                           {/* Trend Chart */}
-                          <div className="bg-gray-50 rounded-lg p-4">
-                            <h4 className="text-sm font-semibold text-gray-700 mb-3">
+                          <div className="bg-background rounded-lg p-4">
+                            <h4 className="text-sm font-semibold text-slate-200 mb-3">
                               📊 Quarter Comparison Chart
                             </h4>
                             <img 
@@ -376,13 +376,13 @@ export default function ReviewGeneration() {
                           </div>
                           
                           {/* Metric Changes */}
-                          <div className="bg-gray-50 rounded-lg p-4">
-                            <h4 className="text-sm font-semibold text-gray-700 mb-3">
+                          <div className="bg-background rounded-lg p-4">
+                            <h4 className="text-sm font-semibold text-slate-200 mb-3">
                               📈 Metric Changes ({employeeTrend?.previous_quarter || 'Prev'} → {selectedQuarter})
                             </h4>
                             
                             {!employeeTrend?.has_previous_data && (
-                              <div className="text-sm text-gray-500 italic mb-3">
+                              <div className="text-sm text-slate-400 italic mb-3">
                                 No previous quarter data available for comparison
                               </div>
                             )}
@@ -406,7 +406,7 @@ export default function ReviewGeneration() {
                                     key={metric.key}
                                     className={`p-2 rounded-lg border ${indicator.bg} border-gray-200`}
                                   >
-                                    <div className="text-xs text-gray-500 font-medium">{metric.label}</div>
+                                    <div className="text-xs text-slate-400 font-medium">{metric.label}</div>
                                     <div className="flex items-center justify-between">
                                       <span className="text-sm font-bold text-foreground">
                                         {metric.format}{currentVal?.toFixed(2) || '0'}

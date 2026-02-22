@@ -237,7 +237,7 @@ export default function ReviewTracker() {
   };
 
   return (
-    <div className="min-h-screen bg-paper p-4 md:p-8" data-testid="review-tracker-page">
+    <div className="min-h-screen bg-background p-4 md:p-8" data-testid="review-tracker-page">
         {/* Header */}
         <div className="mb-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -246,7 +246,7 @@ export default function ReviewTracker() {
                 <MessageSquare className="w-8 h-8 text-primary" />
                 Review Tracker
               </h1>
-              <p className="text-gray-600 mt-1">
+              <p className="text-slate-300 mt-1">
                 Track customer reviews and employee mentions across platforms
               </p>
             </div>
@@ -318,7 +318,7 @@ export default function ReviewTracker() {
                 <span>
                   ReviewTrackers connected • {syncStatus.total_synced_reviews || 0} reviews synced
                   {syncStatus.last_sync_time && (
-                    <span className="text-gray-500 ml-2">
+                    <span className="text-slate-400 ml-2">
                       • Last sync: {new Date(syncStatus.last_sync_time).toLocaleString()}
                     </span>
                   )}
@@ -329,8 +329,8 @@ export default function ReviewTracker() {
         </div>
 
       {/* QTD Platform Scores */}
-      <div className="bg-white rounded-xl p-4 shadow-sm border mb-6" data-testid="qtd-platform-scores">
-        <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+      <div className="bg-slate-800 rounded-xl p-4 shadow-sm border mb-6" data-testid="qtd-platform-scores">
+        <h3 className="text-sm font-semibold text-slate-200 mb-3 flex items-center gap-2">
           <TrendingUp className="w-4 h-4 text-primary" />
           {selectedQuarter} {selectedYear} Platform Scores (QTD)
         </h3>
@@ -342,7 +342,7 @@ export default function ReviewTracker() {
               <span className="text-xs font-semibold text-orange-700">Customer Voice</span>
             </div>
             <div className="text-2xl font-bold text-orange-600">{cvStats?.avg_nps || 0}%</div>
-            <div className="text-xs text-gray-500">NPS • {cvStats?.total_surveys || 0} surveys</div>
+            <div className="text-xs text-slate-400">NPS • {cvStats?.total_surveys || 0} surveys</div>
             <div className="mt-1 flex gap-2 text-xs">
               <span className="text-green-600">{cvStats?.promoter_count || 0}P</span>
               <span className="text-yellow-600">{cvStats?.passive_count || 0}Pa</span>
@@ -359,7 +359,7 @@ export default function ReviewTracker() {
             <div className="text-2xl font-bold text-blue-600">
               {platformStats?.google?.avg_rating?.toFixed(1) || "—"}
             </div>
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-slate-400">
               Avg Rating • {platformStats?.google?.count || 0} reviews
             </div>
           </div>
@@ -373,7 +373,7 @@ export default function ReviewTracker() {
             <div className="text-2xl font-bold text-red-600">
               {platformStats?.yelp?.avg_rating?.toFixed(1) || "—"}
             </div>
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-slate-400">
               Avg Rating • {platformStats?.yelp?.count || 0} reviews
             </div>
           </div>
@@ -387,7 +387,7 @@ export default function ReviewTracker() {
             <div className="text-2xl font-bold text-indigo-600">
               {platformStats?.facebook?.avg_rating?.toFixed(1) || "—"}
             </div>
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-slate-400">
               Avg Rating • {platformStats?.facebook?.count || 0} reviews
             </div>
           </div>
@@ -401,7 +401,7 @@ export default function ReviewTracker() {
             <div className="text-2xl font-bold text-green-600">
               {platformStats?.tripadvisor?.avg_rating?.toFixed(1) || "—"}
             </div>
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-slate-400">
               Avg Rating • {platformStats?.tripadvisor?.count || 0} reviews
             </div>
           </div>
@@ -415,7 +415,7 @@ export default function ReviewTracker() {
             <div className="text-2xl font-bold text-purple-600">
               {platformStats?.opentable?.avg_rating?.toFixed(1) || "—"}
             </div>
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-slate-400">
               Avg Rating • {platformStats?.opentable?.count || 0} reviews
             </div>
           </div>
@@ -429,7 +429,7 @@ export default function ReviewTracker() {
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
             activeTab === "all"
               ? "bg-primary text-white"
-              : "bg-white text-gray-600 hover:bg-gray-100 border"
+              : "bg-slate-800 text-slate-300 hover:bg-slate-700 border"
           }`}
           data-testid="tab-all"
         >
@@ -440,7 +440,7 @@ export default function ReviewTracker() {
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
             activeTab === "cv"
               ? "bg-gradient-to-r from-yellow-400 to-orange-500 text-white"
-              : "bg-white text-gray-600 hover:bg-gray-100 border"
+              : "bg-slate-800 text-slate-300 hover:bg-slate-700 border"
           }`}
           data-testid="tab-cv"
         >
@@ -452,7 +452,7 @@ export default function ReviewTracker() {
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
             activeTab === "reviews"
               ? "bg-primary text-white"
-              : "bg-white text-gray-600 hover:bg-gray-100 border"
+              : "bg-slate-800 text-slate-300 hover:bg-slate-700 border"
           }`}
           data-testid="tab-reviews"
         >
@@ -463,19 +463,19 @@ export default function ReviewTracker() {
       {/* Stats Cards */}
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-xl p-4 shadow-sm border" data-testid="stat-total-reviews">
+          <div className="bg-slate-800 rounded-xl p-4 shadow-sm border" data-testid="stat-total-reviews">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-blue-100 rounded-lg">
                 <MessageSquare className="w-5 h-5 text-blue-600" />
               </div>
               <div>
                 <p className="text-2xl font-bold text-gray-900">{stats.total_reviews}</p>
-                <p className="text-xs text-gray-500">Total Reviews</p>
+                <p className="text-xs text-slate-400">Total Reviews</p>
               </div>
             </div>
           </div>
           
-          <div className="bg-white rounded-xl p-4 shadow-sm border" data-testid="stat-mentions">
+          <div className="bg-slate-800 rounded-xl p-4 shadow-sm border" data-testid="stat-mentions">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-green-100 rounded-lg">
                 <Award className="w-5 h-5 text-green-600" />
@@ -484,13 +484,13 @@ export default function ReviewTracker() {
                 <p className="text-2xl font-bold text-gray-900">
                   {stats.top_mentioned?.length || 0}
                 </p>
-                <p className="text-xs text-gray-500">Employees Mentioned</p>
+                <p className="text-xs text-slate-400">Employees Mentioned</p>
               </div>
             </div>
           </div>
           
-          <div className="bg-white rounded-xl p-4 shadow-sm border col-span-2" data-testid="stat-platforms">
-            <p className="text-sm font-medium text-gray-700 mb-2">By Platform</p>
+          <div className="bg-slate-800 rounded-xl p-4 shadow-sm border col-span-2" data-testid="stat-platforms">
+            <p className="text-sm font-medium text-slate-200 mb-2">By Platform</p>
             <div className="flex flex-wrap gap-2">
               {platforms.map((platform) => (
                 <span
@@ -507,7 +507,7 @@ export default function ReviewTracker() {
 
       {/* Top Mentioned Employees */}
       {stats?.top_mentioned?.length > 0 && (
-        <div className="bg-white rounded-xl p-4 shadow-sm border mb-6" data-testid="top-mentioned-section">
+        <div className="bg-slate-800 rounded-xl p-4 shadow-sm border mb-6" data-testid="top-mentioned-section">
           <h2 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
             <TrendingUp className="w-5 h-5 text-primary" />
             Top Mentioned Employees
@@ -516,7 +516,7 @@ export default function ReviewTracker() {
             {stats.top_mentioned.slice(0, 5).map((emp, idx) => (
               <div
                 key={emp.name}
-                className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg"
+                className="flex items-center gap-3 p-3 bg-background rounded-lg"
               >
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${
                   idx === 0 ? "bg-yellow-500" : idx === 1 ? "bg-gray-400" : idx === 2 ? "bg-amber-600" : "bg-gray-300"
@@ -525,7 +525,7 @@ export default function ReviewTracker() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-gray-900 truncate">{emp.name}</p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-slate-400">
                     {emp.mentions} mentions • {emp.points.toFixed(1)} pts
                   </p>
                 </div>
@@ -536,11 +536,11 @@ export default function ReviewTracker() {
       )}
 
       {/* Filters */}
-      <div className="bg-white rounded-xl p-4 shadow-sm border mb-6">
+      <div className="bg-slate-800 rounded-xl p-4 shadow-sm border mb-6">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-gray-500" />
-            <span className="text-sm font-medium text-gray-700">Filters:</span>
+            <Filter className="w-4 h-4 text-slate-400" />
+            <span className="text-sm font-medium text-slate-200">Filters:</span>
           </div>
           
           <select
@@ -594,7 +594,7 @@ export default function ReviewTracker() {
                 onChange={(e) => setShowExcluded(e.target.checked)}
                 className="rounded border-gray-300"
               />
-              <span className="text-sm text-gray-600">
+              <span className="text-sm text-slate-300">
                 Show excluded ({excludedCount})
               </span>
             </label>
@@ -605,7 +605,7 @@ export default function ReviewTracker() {
       {/* Reviews List */}
       <div className="space-y-4" data-testid="reviews-list">
         {loading ? (
-          <div className="text-center py-12 text-gray-500">Loading reviews...</div>
+          <div className="text-center py-12 text-slate-400">Loading reviews...</div>
         ) : (activeTab === "cv" || activeTab === "all") && cvFeedback.length > 0 ? (
           <>
             {/* Customer Voice Section - Always on top with stars */}
@@ -624,7 +624,7 @@ export default function ReviewTracker() {
                   {cvFeedback.map((item) => (
                     <div
                       key={item.id}
-                      className="bg-white rounded-xl p-4 shadow-sm border-2 border-yellow-200 hover:shadow-md transition-shadow relative overflow-hidden"
+                      className="bg-slate-800 rounded-xl p-4 shadow-sm border-2 border-yellow-200 hover:shadow-md transition-shadow relative overflow-hidden"
                       data-testid={`cv-feedback-${item.id}`}
                     >
                       {/* Star Badge */}
@@ -648,12 +648,12 @@ export default function ReviewTracker() {
                             }`}>
                               {item.rating}/10 {item.sentiment === "promoter" ? "★" : item.sentiment === "detractor" ? "✗" : "○"}
                             </span>
-                            <span className="text-sm text-gray-500">{item.date}</span>
+                            <span className="text-sm text-slate-400">{item.date}</span>
                             <span className="text-sm text-gray-400">by {item.customer_name}</span>
                           </div>
                           
                           {/* Comment */}
-                          <p className="text-gray-700 text-sm leading-relaxed mb-3">
+                          <p className="text-slate-200 text-sm leading-relaxed mb-3">
                             "{item.comment}"
                           </p>
                           
@@ -721,8 +721,8 @@ export default function ReviewTracker() {
                       
                       {/* Excluded Overlay */}
                       {item.excluded && (
-                        <div className="absolute inset-0 bg-gray-100/80 flex items-center justify-center rounded-xl">
-                          <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-red-200 flex items-center gap-2">
+                        <div className="absolute inset-0 bg-slate-700/80 flex items-center justify-center rounded-xl">
+                          <div className="bg-slate-800 px-4 py-2 rounded-lg shadow-sm border border-red-200 flex items-center gap-2">
                             <Ban className="w-4 h-4 text-red-500" />
                             <span className="text-sm font-medium text-red-600">Excluded from Rankings</span>
                           </div>
@@ -747,7 +747,7 @@ export default function ReviewTracker() {
                   {reviews.map((review) => (
                     <div
                       key={review.id}
-                      className="bg-white rounded-xl p-4 shadow-sm border hover:shadow-md transition-shadow"
+                      className="bg-slate-800 rounded-xl p-4 shadow-sm border hover:shadow-md transition-shadow"
                       data-testid={`review-card-${review.id}`}
                     >
                       <div className="flex items-start justify-between gap-4">
@@ -757,7 +757,7 @@ export default function ReviewTracker() {
                             <span className={`px-2 py-0.5 rounded-full text-xs text-white ${PLATFORM_COLORS[review.platform]}`}>
                               {PLATFORM_ICONS[review.platform]} {review.platform}
                             </span>
-                            <span className="text-sm text-gray-500">{review.review_date}</span>
+                            <span className="text-sm text-slate-400">{review.review_date}</span>
                             {renderStars(review.rating)}
                             {review.reviewer_name && (
                               <span className="text-sm text-gray-400">by {review.reviewer_name}</span>
@@ -765,7 +765,7 @@ export default function ReviewTracker() {
                           </div>
                           
                           {/* Review Text */}
-                          <p className="text-gray-700 text-sm leading-relaxed mb-3">
+                          <p className="text-slate-200 text-sm leading-relaxed mb-3">
                             "{review.review_text}"
                           </p>
                           
@@ -780,7 +780,7 @@ export default function ReviewTracker() {
                                       ? "bg-green-100 text-green-700"
                                       : mention.sentiment === "negative"
                                       ? "bg-red-100 text-red-700"
-                                      : "bg-gray-100 text-gray-700"
+                                      : "bg-slate-700 text-slate-200"
                                   }`}
                                 >
                                   {mention.sentiment === "positive" && <Check className="w-3 h-3" />}
@@ -818,7 +818,7 @@ export default function ReviewTracker() {
           reviews.map((review) => (
             <div
               key={review.id}
-              className="bg-white rounded-xl p-4 shadow-sm border hover:shadow-md transition-shadow"
+              className="bg-slate-800 rounded-xl p-4 shadow-sm border hover:shadow-md transition-shadow"
               data-testid={`review-card-${review.id}`}
             >
               <div className="flex items-start justify-between gap-4">
@@ -828,7 +828,7 @@ export default function ReviewTracker() {
                     <span className={`px-2 py-0.5 rounded-full text-xs text-white ${PLATFORM_COLORS[review.platform]}`}>
                       {PLATFORM_ICONS[review.platform]} {review.platform}
                     </span>
-                    <span className="text-sm text-gray-500">{review.review_date}</span>
+                    <span className="text-sm text-slate-400">{review.review_date}</span>
                     {renderStars(review.rating)}
                     {review.reviewer_name && (
                       <span className="text-sm text-gray-400">by {review.reviewer_name}</span>
@@ -836,7 +836,7 @@ export default function ReviewTracker() {
                   </div>
                   
                   {/* Review Text */}
-                  <p className="text-gray-700 text-sm leading-relaxed mb-3">
+                  <p className="text-slate-200 text-sm leading-relaxed mb-3">
                     "{review.review_text}"
                   </p>
                   
@@ -851,7 +851,7 @@ export default function ReviewTracker() {
                               ? "bg-green-100 text-green-700"
                               : mention.sentiment === "negative"
                               ? "bg-red-100 text-red-700"
-                              : "bg-gray-100 text-gray-700"
+                              : "bg-slate-700 text-slate-200"
                           }`}
                         >
                           {mention.sentiment === "positive" && <Check className="w-3 h-3" />}
@@ -882,9 +882,9 @@ export default function ReviewTracker() {
             </div>
           ))
         ) : (
-          <div className="text-center py-12 bg-white rounded-xl border">
+          <div className="text-center py-12 bg-slate-800 rounded-xl border">
             <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500">No reviews yet</p>
+            <p className="text-slate-400">No reviews yet</p>
             <p className="text-sm text-gray-400 mt-1">
               {activeTab === "cv" 
                 ? "Click 'Sync Customer Voice' to import feedback from Loyalty Voice"
@@ -994,7 +994,7 @@ function AddReviewModal({ onClose, onSuccess, platforms, quarter, year }) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" data-testid="add-review-modal">
-      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-slate-800 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold text-gray-900">Add Customer Review</h2>
@@ -1007,7 +1007,7 @@ function AddReviewModal({ onClose, onSuccess, platforms, quarter, year }) {
             {/* Platform & Date Row */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Platform</label>
+                <label className="block text-sm font-medium text-slate-200 mb-1">Platform</label>
                 <select
                   value={formData.platform}
                   onChange={(e) => setFormData({ ...formData, platform: e.target.value })}
@@ -1020,7 +1020,7 @@ function AddReviewModal({ onClose, onSuccess, platforms, quarter, year }) {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Review Date</label>
+                <label className="block text-sm font-medium text-slate-200 mb-1">Review Date</label>
                 <Input
                   type="date"
                   value={formData.review_date}
@@ -1032,7 +1032,7 @@ function AddReviewModal({ onClose, onSuccess, platforms, quarter, year }) {
             
             {/* Rating */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Rating</label>
+              <label className="block text-sm font-medium text-slate-200 mb-1">Rating</label>
               <div className="flex gap-1">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <button
@@ -1056,7 +1056,7 @@ function AddReviewModal({ onClose, onSuccess, platforms, quarter, year }) {
             
             {/* Review Text */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Review Text</label>
+              <label className="block text-sm font-medium text-slate-200 mb-1">Review Text</label>
               <textarea
                 value={formData.review_text}
                 onChange={(e) => setFormData({ ...formData, review_text: e.target.value })}
@@ -1108,7 +1108,7 @@ function AddReviewModal({ onClose, onSuccess, platforms, quarter, year }) {
             
             {/* Reviewer Name (Optional) */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-slate-200 mb-1">
                 Reviewer Name <span className="text-gray-400">(optional)</span>
               </label>
               <Input

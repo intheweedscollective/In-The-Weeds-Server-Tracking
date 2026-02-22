@@ -288,7 +288,7 @@ export default function Analytics() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-paper">
+      <div className="min-h-screen bg-background">
         <div className="flex items-center justify-center h-96">
           <div className="loading-spinner"></div>
         </div>
@@ -297,7 +297,7 @@ export default function Analytics() {
   }
 
   return (
-    <div className="min-h-screen bg-paper relative overflow-hidden">
+    <div className="min-h-screen bg-background relative overflow-hidden">
       {/* Decorative splashes */}
       <div className="splash-blue" style={{ top: '10%', right: '5%' }} />
       <div className="splash-red" style={{ bottom: '20%', left: '3%', opacity: 0.5 }} />
@@ -312,7 +312,7 @@ export default function Analytics() {
                 Performance Analytics
               </h1>
             </div>
-            <p className="text-gray-500" data-testid="page-subtitle">
+            <p className="text-slate-400" data-testid="page-subtitle">
               Performance distribution and benchmark analysis for all metrics
             </p>
           </div>
@@ -328,9 +328,9 @@ export default function Analytics() {
         </div>
 
         {/* Quarter Selection */}
-        <div className="flex items-center gap-4 mb-8 p-4 bg-gray-50 rounded-lg">
-          <Calendar className="w-5 h-5 text-gray-600" />
-          <span className="font-medium text-gray-700">Period:</span>
+        <div className="flex items-center gap-4 mb-8 p-4 bg-background rounded-lg">
+          <Calendar className="w-5 h-5 text-slate-300" />
+          <span className="font-medium text-slate-200">Period:</span>
           
           <select
             value={selectedYear}
@@ -360,7 +360,7 @@ export default function Analytics() {
             className={`px-6 py-3 rounded-lg font-medium transition-all ${
               activeTab === 'metrics'
                 ? 'bg-primary text-white shadow-md'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                : 'bg-slate-700 text-slate-300 hover:bg-gray-200'
             }`}
             data-testid="metrics-tab"
           >
@@ -372,7 +372,7 @@ export default function Analytics() {
             className={`px-6 py-3 rounded-lg font-medium transition-all ${
               activeTab === 'trends'
                 ? 'bg-primary text-white shadow-md'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                : 'bg-slate-700 text-slate-300 hover:bg-gray-200'
             }`}
             data-testid="trends-tab"
           >
@@ -398,7 +398,7 @@ export default function Analytics() {
                     Object.values(analytics).reduce((sum, metric) => sum + (metric.total || 0), 0)
                   )}%
                 </p>
-                <p className="text-xs text-gray-500 font-semibold uppercase">Above Benchmark</p>
+                <p className="text-xs text-slate-400 font-semibold uppercase">Above Benchmark</p>
               </div>
             </div>
           </div>
@@ -415,7 +415,7 @@ export default function Analytics() {
                     Object.values(analytics).reduce((sum, metric) => sum + (metric.total || 0), 0)
                   )}%
                 </p>
-                <p className="text-xs text-gray-500 font-semibold uppercase">High Performers</p>
+                <p className="text-xs text-slate-400 font-semibold uppercase">High Performers</p>
               </div>
             </div>
           </div>
@@ -432,7 +432,7 @@ export default function Analytics() {
                     Object.values(analytics).reduce((sum, metric) => sum + (metric.total || 0), 0)
                   )}%
                 </p>
-                <p className="text-xs text-gray-500 font-semibold uppercase">Medium Performers</p>
+                <p className="text-xs text-slate-400 font-semibold uppercase">Medium Performers</p>
               </div>
             </div>
           </div>
@@ -449,7 +449,7 @@ export default function Analytics() {
                     Object.values(analytics).reduce((sum, metric) => sum + (metric.total || 0), 0)
                   )}%
                 </p>
-                <p className="text-xs text-gray-500 font-semibold uppercase">Needs Improvement</p>
+                <p className="text-xs text-slate-400 font-semibold uppercase">Needs Improvement</p>
               </div>
             </div>
           </div>
@@ -491,7 +491,7 @@ export default function Analytics() {
                       <h3 className="text-lg font-serif font-bold text-foreground">
                         {metricInfo.label}
                       </h3>
-                      <p className="text-sm text-gray-500">
+                      <p className="text-sm text-slate-400">
                         Weight: {metricInfo.weight ? `${metricInfo.weight * 100}%` : '—'}
                       </p>
                     </div>
@@ -510,10 +510,10 @@ export default function Analytics() {
                 
                   <div className="space-y-4">
                     {/* Contextual Explanation Box */}
-                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-3">
+                    <div className="bg-slate-700/50 border border-slate-200 rounded-lg p-3 mb-3">
                       <div className="flex items-start gap-2">
-                        <Info className="w-4 h-4 text-slate-500 mt-0.5 flex-shrink-0" />
-                        <div className="text-xs text-slate-600">
+                        <Info className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
+                        <div className="text-xs text-slate-300">
                           <span className="font-semibold">How to read this chart:</span> The scale below shows where your team stands. 
                           The <span className="font-bold text-amber-600">orange target line</span> is your benchmark goal ({formatMetricValue(metricKey, benchmark)}). 
                           The <span className="font-bold text-blue-600">blue diamond</span> shows the team's current average ({formatMetricValue(metricKey, data.average)}).
@@ -636,7 +636,7 @@ export default function Analytics() {
                       
                       {/* Legend - more descriptive with click hint */}
                       <div className="flex items-center justify-center gap-6 text-xs pt-4 mt-2 border-t border-dashed border-gray-200">
-                        <div className="flex items-center gap-1 text-slate-500">
+                        <div className="flex items-center gap-1 text-slate-400">
                           <Filter className="w-3 h-3" />
                           <span className="font-medium">Click zones to filter:</span>
                         </div>
@@ -645,21 +645,21 @@ export default function Analytics() {
                           className="flex items-center gap-1.5 hover:opacity-70 transition-opacity cursor-pointer"
                         >
                           <div className="w-3 h-3 bg-green-300 rounded-sm border border-green-400" />
-                          <span className="text-gray-600 font-medium">Exceeds ({data.high})</span>
+                          <span className="text-slate-300 font-medium">Exceeds ({data.high})</span>
                         </button>
                         <button 
                           onClick={() => filterByZone(metricKey, ZONE_TYPES.MEDIUM)}
                           className="flex items-center gap-1.5 hover:opacity-70 transition-opacity cursor-pointer"
                         >
                           <div className="w-3 h-3 bg-yellow-200 rounded-sm border border-yellow-400" />
-                          <span className="text-gray-600 font-medium">Near Target ({data.medium})</span>
+                          <span className="text-slate-300 font-medium">Near Target ({data.medium})</span>
                         </button>
                         <button 
                           onClick={() => filterByZone(metricKey, ZONE_TYPES.LOW)}
                           className="flex items-center gap-1.5 hover:opacity-70 transition-opacity cursor-pointer"
                         >
                           <div className="w-3 h-3 bg-red-300 rounded-sm border border-red-400" />
-                          <span className="text-gray-600 font-medium">Below ({data.low})</span>
+                          <span className="text-slate-300 font-medium">Below ({data.low})</span>
                         </button>
                       </div>
                     </div>
@@ -668,7 +668,7 @@ export default function Analytics() {
                     <div className="space-y-2">
                       <div className="flex justify-between text-sm font-medium">
                         <span>Performance Distribution</span>
-                        <span className="text-gray-500">{total} employees</span>
+                        <span className="text-slate-400">{total} employees</span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-6 overflow-hidden">
                         <div className="h-full flex">
@@ -692,7 +692,7 @@ export default function Analytics() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex justify-between text-xs text-gray-500">
+                      <div className="flex justify-between text-xs text-slate-400">
                         <span className="flex items-center gap-1">
                           <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
                           Low ({data.low})
@@ -710,25 +710,25 @@ export default function Analytics() {
                     
                     {/* Key Metrics */}
                     <div className="grid grid-cols-3 gap-3 pt-4 border-t border-gray-200">
-                      <div className="text-center p-2 bg-gray-50 rounded-lg">
+                      <div className="text-center p-2 bg-background rounded-lg">
                         <div className="text-xl font-serif font-bold text-green-600">
                           {data.benchmark || 0}
                         </div>
-                        <div className="text-xs text-gray-500 uppercase tracking-wider">
+                        <div className="text-xs text-slate-400 uppercase tracking-wider">
                           ≥ Benchmark
                         </div>
                       </div>
                       
-                      <div className="text-center p-2 bg-gray-50 rounded-lg">
+                      <div className="text-center p-2 bg-background rounded-lg">
                         <div className="text-xl font-serif font-bold text-secondary">
                           {formatMetricValue(metricKey, data.average)}
                         </div>
-                        <div className="text-xs text-gray-500 uppercase tracking-wider">
+                        <div className="text-xs text-slate-400 uppercase tracking-wider">
                           Team Avg
                         </div>
                       </div>
                       
-                      <div className="text-center p-2 bg-gray-50 rounded-lg">
+                      <div className="text-center p-2 bg-background rounded-lg">
                         <div className={`text-xl font-serif font-bold ${
                           (isInverse ? data.average < benchmark : data.average > benchmark)
                             ? 'text-green-600' : 'text-orange-600'
@@ -739,7 +739,7 @@ export default function Analytics() {
                           }
                           {Math.abs(((data.average - benchmark) / benchmark) * 100).toFixed(0)}%
                         </div>
-                        <div className="text-xs text-gray-500 uppercase tracking-wider">
+                        <div className="text-xs text-slate-400 uppercase tracking-wider">
                           vs Target
                         </div>
                       </div>
@@ -795,7 +795,7 @@ export default function Analytics() {
                         {activeFilter.zone === ZONE_TYPES.AVERAGE && 'Near Team Average'}
                         {' '}— {V2_METRICS[activeFilter.metric]?.label}
                       </h3>
-                      <p className="text-sm text-gray-500">
+                      <p className="text-sm text-slate-400">
                         {filteredEmployees.length} employee{filteredEmployees.length !== 1 ? 's' : ''} in this zone
                       </p>
                     </div>
@@ -814,7 +814,7 @@ export default function Analytics() {
                 
                 {/* Filtered Employee List */}
                 {filteredEmployees.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
+                  <div className="text-center py-8 text-slate-400">
                     <Users className="w-12 h-12 mx-auto mb-2 text-gray-300" />
                     <p>No employees found in this zone</p>
                   </div>
@@ -847,7 +847,7 @@ export default function Analytics() {
                                 <span className="font-semibold text-foreground truncate">{emp.name}</span>
                               </div>
                               {emp.ranking && (
-                                <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
+                                <span className="text-xs bg-slate-100 text-slate-300 px-2 py-0.5 rounded-full">
                                   {emp.ranking}
                                 </span>
                               )}
@@ -861,7 +861,7 @@ export default function Analytics() {
                               }`}>
                                 {config?.format === 'currency' ? formatCurrency(metricVal) : formatNumber(metricVal)}
                               </div>
-                              <div className="text-xs text-gray-500">
+                              <div className="text-xs text-slate-400">
                                 {config?.label}
                               </div>
                             </div>
@@ -886,7 +886,7 @@ export default function Analytics() {
                   {getTopEmployees("pre_dar_score", 10).map((emp, idx) => (
                     <div
                       key={emp.id}
-                      className="flex items-center justify-between p-3 border border-gray-200 rounded-lg bg-gray-50"
+                      className="flex items-center justify-between p-3 border border-gray-200 rounded-lg bg-background"
                     >
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
@@ -898,7 +898,7 @@ export default function Analytics() {
                             </span>
                           )}
                         </div>
-                        <div className="text-sm text-gray-500 truncate">{emp.performance_tier || 'Not Assessed'}</div>
+                        <div className="text-sm text-slate-400 truncate">{emp.performance_tier || 'Not Assessed'}</div>
                         <div className="text-xs text-gray-400">Rank: #{emp.peer_rank || "N/A"}</div>
                       </div>
 
@@ -928,20 +928,20 @@ export default function Analytics() {
                       <h3 className="text-lg font-serif font-bold text-foreground">
                         {metricInfo.label}
                       </h3>
-                      <p className="text-sm text-gray-500 mb-4">Top 10 employees for this metric</p>
+                      <p className="text-sm text-slate-400 mb-4">Top 10 employees for this metric</p>
                       
                       <div className="space-y-2">
                         {top.map((emp, idx) => (
                           <div
                             key={emp.id}
-                            className="flex items-center justify-between p-3 border border-gray-200 rounded-lg bg-gray-50"
+                            className="flex items-center justify-between p-3 border border-gray-200 rounded-lg bg-background"
                           >
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
                                 <span className="font-bold text-primary">#{idx + 1}</span>
                                 <span className="font-semibold text-foreground truncate">{emp.name}</span>
                               </div>
-                              <div className="text-sm text-gray-500 truncate">{emp.performance_tier || 'Not Assessed'}</div>
+                              <div className="text-sm text-slate-400 truncate">{emp.performance_tier || 'Not Assessed'}</div>
                               <div className="text-xs text-gray-400">Overall Rank: #{emp.peer_rank || "N/A"}</div>
                             </div>
 
@@ -972,7 +972,7 @@ export default function Analytics() {
                   <h2 className="text-xl font-serif font-bold text-foreground">
                     Quarter-over-Quarter Trends
                   </h2>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-slate-400">
                     Comparing {trendData?.previous_quarter || 'Previous'} {trendData?.previous_year || ''} → {selectedQuarter} {selectedYear}
                   </p>
                 </div>
@@ -1038,14 +1038,14 @@ export default function Analytics() {
                           key={metricKey}
                           className={`p-4 rounded-lg border-2 ${
                             isNeutral 
-                              ? 'border-gray-200 bg-gray-50'
+                              ? 'border-gray-200 bg-background'
                               : isPositive 
                                 ? 'border-green-200 bg-green-50' 
                                 : 'border-red-200 bg-red-50'
                           }`}
                           data-testid={`trend-card-${metricKey}`}
                         >
-                          <div className="text-xs text-gray-500 font-medium mb-1">
+                          <div className="text-xs text-slate-400 font-medium mb-1">
                             {metricInfo.label}
                           </div>
                           <div className="flex items-center gap-2">
@@ -1054,7 +1054,7 @@ export default function Analytics() {
                             </span>
                             <span className={`flex items-center text-sm font-semibold ${
                               isNeutral 
-                                ? 'text-gray-500'
+                                ? 'text-slate-400'
                                 : isPositive 
                                   ? 'text-green-600' 
                                   : 'text-red-600'
