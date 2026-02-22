@@ -15,8 +15,11 @@ import {
   ChevronRight,
   Menu,
   X,
-  Building2
+  Building2,
+  Sun,
+  Moon
 } from "lucide-react";
+import { useTheme } from "../context/ThemeContext";
 
 // Navigation structure with grouping
 const navGroups = [
