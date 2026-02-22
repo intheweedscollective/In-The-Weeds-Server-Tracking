@@ -162,7 +162,7 @@ export default function ReviewGeneration() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-paper">
         <>
         <div className="flex items-center justify-center h-96">
           <div className="loading-spinner"></div>
@@ -172,7 +172,7 @@ export default function ReviewGeneration() {
   }
 
   return (
-    <div className="min-h-screen bg-background relative overflow-hidden">
+    <div className="min-h-screen bg-paper relative overflow-hidden">
       {/* Decorative splashes */}
       <div className="splash-red" style={{ top: '10%', right: '5%' }} />
       <div className="splash-blue" style={{ bottom: '15%', left: '3%', opacity: 0.5 }} />
