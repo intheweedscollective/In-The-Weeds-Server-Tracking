@@ -268,7 +268,6 @@ export default function QuarterSettings() {
   if (loading) {
     return (
       <div className="min-h-screen bg-paper">
-        <>
         <div className="flex items-center justify-center h-96">
           <div className="loading-spinner"></div>
         </div>
@@ -280,8 +279,6 @@ export default function QuarterSettings() {
     <div className="min-h-screen bg-paper relative overflow-hidden">
       <div className="splash-red" style={{ top: '10%', right: '5%' }} />
       <div className="splash-blue" style={{ bottom: '15%', left: '3%', opacity: 0.5 }} />
-      
-      <>
       
       <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
