@@ -289,7 +289,6 @@ export default function Analytics() {
   if (loading) {
     return (
       <div className="min-h-screen bg-paper">
-        <>
         <div className="flex items-center justify-center h-96">
           <div className="loading-spinner"></div>
         </div>
