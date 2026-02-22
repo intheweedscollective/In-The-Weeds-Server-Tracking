@@ -193,11 +193,11 @@ export const SidebarLayout = ({ children }) => {
   );
 
   return (
-    <div className="min-h-screen bg-paper flex">
+    <div className="min-h-screen bg-background flex">
       {/* Desktop Sidebar */}
       <aside 
         className={`
-          hidden lg:flex flex-col bg-white border-r border-sand
+          hidden lg:flex flex-col bg-slate-900 border-r border-slate-700
           transition-all duration-300 ease-in-out
           ${isCollapsed ? "w-20" : "w-64"}
         `}
@@ -207,19 +207,19 @@ export const SidebarLayout = ({ children }) => {
       </aside>
 
       {/* Mobile Header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white border-b border-sand">
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-slate-900 border-b border-slate-700">
         <div className="flex items-center justify-between px-4 py-3">
           <Link to="/" className="flex items-center gap-3">
             <img 
               src="https://customer-assets.emergentagent.com/job_eaa669fd-7426-41e2-82fc-765ab916d7f3/artifacts/f0uz68d3_IMG_0599.png" 
               alt="Bubba Gump" 
-              className="w-10 h-10 rounded-full border-2 border-primary/20"
+              className="w-10 h-10 rounded-full border-2 border-primary/30"
             />
-            <span className="font-serif font-bold text-slate-800">Performance Hub</span>
+            <span className="font-bold text-white">Performance Hub</span>
           </Link>
           <button
             onClick={() => setIsMobileOpen(!isMobileOpen)}
-            className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg"
+            className="p-2 text-slate-400 hover:bg-slate-800 rounded-lg"
           >
             {isMobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
@@ -229,11 +229,11 @@ export const SidebarLayout = ({ children }) => {
       {/* Mobile Sidebar Overlay */}
       {isMobileOpen && (
         <div 
-          className="lg:hidden fixed inset-0 z-50 bg-black/50"
+          className="lg:hidden fixed inset-0 z-50 bg-black/60"
           onClick={() => setIsMobileOpen(false)}
         >
           <aside 
-            className="w-72 h-full bg-white shadow-xl"
+            className="w-72 h-full bg-slate-900 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <SidebarContent />
