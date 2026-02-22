@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,400;0,700;0,900;1,400;1,700&family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -20,69 +20,58 @@ code {
 @layer base {
     :root {
         /* ========================================
-           BUBBA GUMP PERFORMANCE HUB
-           "The Captain's Log" Design System
+           BOLD CORPORATE THEME
+           Dark, Professional, High Contrast
            ======================================== */
         
-        /* Core Brand Colors */
-        --primary: 0 72% 50%;           /* Shrimp Red #D12E2E */
+        /* Primary - Vibrant Blue */
+        --primary: 217 91% 60%;           /* #2563EB */
         --primary-foreground: 0 0% 100%;
-        --secondary: 209 100% 30%;      /* Ocean Blue #005B96 */
-        --secondary-foreground: 0 0% 100%;
-        --accent: 47 95% 55%;           /* Sunshine Yellow #F4D03F */
-        --accent-foreground: 215 25% 20%;
         
-        /* Neutral Palette - Warm & Coastal */
-        --background: 40 33% 97%;       /* Paper White #F9F7F2 */
-        --foreground: 210 29% 24%;      /* Slate #2C3E50 */
-        --card: 0 0% 100%;
-        --card-foreground: 210 29% 24%;
-        --popover: 0 0% 100%;
-        --popover-foreground: 210 29% 24%;
+        /* Secondary - Deep Navy */
+        --secondary: 215 28% 17%;         /* #1E293B */
+        --secondary-foreground: 210 40% 98%;
         
-        /* Subtle Tones */
-        --muted: 36 33% 91%;            /* Sand #E8DCCA */
-        --muted-foreground: 215 16% 47%;
-        --border: 36 33% 88%;           /* Sand border */
-        --input: 36 33% 91%;
-        --ring: 209 100% 30%;
+        /* Accent - Bright Blue */
+        --accent: 217 91% 60%;            /* #3B82F6 */
+        --accent-foreground: 0 0% 100%;
+        
+        /* Backgrounds - Dark Mode */
+        --background: 220 26% 14%;        /* #1a1f2e - Slightly blue-tinted dark */
+        --foreground: 210 40% 98%;        /* Near white */
+        
+        /* Cards - Charcoal */
+        --card: 215 28% 17%;              /* #1E293B */
+        --card-foreground: 210 40% 98%;
+        
+        /* Popover */
+        --popover: 215 28% 17%;
+        --popover-foreground: 210 40% 98%;
+        
+        /* Muted */
+        --muted: 215 25% 27%;             /* #334155 */
+        --muted-foreground: 215 20% 65%;  /* #94A3B8 */
+        
+        /* Borders */
+        --border: 215 25% 27%;            /* #374151 */
+        --input: 215 25% 27%;
+        --ring: 217 91% 60%;
         
         /* Semantic Colors */
-        --destructive: 0 84% 60%;
+        --destructive: 0 84% 60%;         /* Red */
         --destructive-foreground: 0 0% 98%;
+        --success: 160 84% 39%;           /* #10B981 Emerald */
+        --warning: 38 92% 50%;            /* Amber (only for warnings, minimal use) */
         
-        /* Chart Colors */
-        --chart-1: 0 72% 50%;           /* Shrimp Red */
-        --chart-2: 209 100% 30%;        /* Ocean Blue */
-        --chart-3: 47 95% 55%;          /* Sunshine Yellow */
-        --chart-4: 145 63% 42%;         /* Sea Green */
-        --chart-5: 27 87% 52%;          /* Coral Orange */
+        /* Chart Colors - Blues and Teals */
+        --chart-1: 217 91% 60%;           /* Primary Blue */
+        --chart-2: 199 89% 48%;           /* Cyan */
+        --chart-3: 160 84% 39%;           /* Emerald */
+        --chart-4: 262 83% 58%;           /* Purple */
+        --chart-5: 0 84% 60%;             /* Red */
         
         /* Design Tokens */
         --radius: 0.75rem;
-        
-        /* Custom Colors (direct access) */
-        --paper: #F9F7F2;
-        --sand: #E8DCCA;
-        --driftwood: #8B5A2B;
-        --slate: #2C3E50;
-        --shrimp-red: #D12E2E;
-        --ocean-blue: #005B96;
-        --sunshine: #F4D03F;
-    }
-    
-    /* Dark Mode - "Night at the Shack" */
-    .dark {
-        --background: 222 47% 11%;      /* Navy Night #0F172A */
-        --foreground: 210 40% 98%;
-        --card: 217 33% 17%;            /* Dark Slate #1E293B */
-        --card-foreground: 210 40% 98%;
-        --popover: 217 33% 17%;
-        --popover-foreground: 210 40% 98%;
-        --muted: 217 33% 25%;
-        --muted-foreground: 215 20% 65%;
-        --border: 217 33% 25%;
-        --input: 217 33% 25%;
     }
 }
 
