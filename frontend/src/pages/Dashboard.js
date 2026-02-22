@@ -1,10 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { Users, FileText, TrendingUp, Award, Target, Fish, Settings, Camera, Download, X, AlertTriangle, Lock, CheckCircle2 } from "lucide-react";
+import { Users, FileText, TrendingUp, Award, Target, Fish, Settings, Camera, Download, X, AlertTriangle, Lock, CheckCircle2, Trophy, Star, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
-import Navigation from "../components/Navigation";
-import StatsCard from "../components/StatsCard";
 import FinalizeQuarterModal from "../components/FinalizeQuarterModal";
 import { formatNumber } from "../utils/formatters";
 
