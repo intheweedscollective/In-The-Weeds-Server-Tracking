@@ -107,21 +107,21 @@ export const SidebarLayout = ({ children }) => {
   );
 
   const SidebarContent = () => (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-slate-900">
       {/* Logo Header */}
-      <div className={`p-4 border-b border-sand ${isCollapsed ? "px-2" : ""}`}>
+      <div className={`p-4 border-b border-slate-700 ${isCollapsed ? "px-2" : ""}`}>
         <Link to="/" className="flex items-center gap-3" onClick={() => setIsMobileOpen(false)}>
           <img 
             src="https://customer-assets.emergentagent.com/job_eaa669fd-7426-41e2-82fc-765ab916d7f3/artifacts/f0uz68d3_IMG_0599.png" 
             alt="Bubba Gump" 
-            className={`rounded-full border-2 border-primary/20 shadow-md flex-shrink-0 transition-all ${isCollapsed ? "w-10 h-10" : "w-14 h-14"}`}
+            className={`rounded-full border-2 border-primary/30 shadow-md flex-shrink-0 transition-all ${isCollapsed ? "w-10 h-10" : "w-14 h-14"}`}
           />
           {!isCollapsed && (
             <div className="min-w-0">
-              <h1 className="font-serif font-bold text-slate-800 text-lg leading-tight truncate">
+              <h1 className="font-bold text-white text-lg leading-tight truncate">
                 Bubba Gump
               </h1>
-              <p className="text-xs text-slate-500 truncate">Performance Hub</p>
+              <p className="text-xs text-slate-400 truncate">Performance Hub</p>
             </div>
           )}
         </Link>
@@ -129,11 +129,11 @@ export const SidebarLayout = ({ children }) => {
 
       {/* Store Selector (for multi-store future) */}
       {!isCollapsed && (
-        <div className="px-3 py-3 border-b border-sand">
-          <button className="w-full flex items-center gap-2 px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium text-slate-700 transition-colors">
-            <Building2 className="w-4 h-4 text-slate-400" />
+        <div className="px-3 py-3 border-b border-slate-700">
+          <button className="w-full flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm font-medium text-slate-300 transition-colors">
+            <Building2 className="w-4 h-4 text-slate-500" />
             <span className="flex-1 text-left truncate">Las Vegas</span>
-            <ChevronDown className="w-4 h-4 text-slate-400" />
+            <ChevronDown className="w-4 h-4 text-slate-500" />
           </button>
         </div>
       )}
@@ -145,7 +145,7 @@ export const SidebarLayout = ({ children }) => {
             {group.label && !isCollapsed && (
               <button
                 onClick={() => toggleGroup(group.id)}
-                className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider hover:text-slate-600"
+                className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider hover:text-slate-300"
               >
                 <span>{group.label}</span>
                 {expandedGroups.includes(group.id) ? (
@@ -167,17 +167,17 @@ export const SidebarLayout = ({ children }) => {
       </nav>
 
       {/* Bottom Navigation */}
-      <div className="border-t border-sand px-3 py-3 space-y-1">
+      <div className="border-t border-slate-700 px-3 py-3 space-y-1">
         {bottomNav.map((item) => (
           <NavLink key={item.path} item={item} showLabel={!isCollapsed} />
         ))}
       </div>
 
       {/* Collapse Toggle (Desktop only) */}
-      <div className="hidden lg:block border-t border-sand p-3">
+      <div className="hidden lg:block border-t border-slate-700 p-3">
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
         >
           {isCollapsed ? (
             <ChevronRight className="w-4 h-4" />
