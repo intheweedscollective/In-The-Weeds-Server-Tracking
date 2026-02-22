@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "sonner";
+import { ThemeProvider } from "./context/ThemeContext";
 import { SidebarLayout } from "./components/SidebarLayout";
 import Dashboard from "./pages/Dashboard";
 import EmployeeList from "./pages/EmployeeList";
@@ -16,26 +17,28 @@ import "./App.css";
 
 function App() {
   return (
-    <div className="min-h-screen bg-background">
-      <BrowserRouter>
-        <SidebarLayout>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/rankings" element={<FullRankings />} />
-            <Route path="/employees" element={<EmployeeList />} />
-            <Route path="/reviews" element={<ReviewGeneration />} />
-            <Route path="/review-tracker" element={<ReviewTracker />} />
-            <Route path="/yodeck" element={<YodeckSlides />} />
-            <Route path="/snapshots" element={<Snapshots />} />
-            <Route path="/analytics" element={<Analytics />} />
-            <Route path="/settings" element={<QuarterSettings />} />
-            <Route path="/help" element={<HelpCenter />} />
-          </Routes>
-        </SidebarLayout>
-        <OnboardingGuide />
-      </BrowserRouter>
-      <Toaster position="top-right" richColors />
-    </div>
+    <ThemeProvider>
+      <div className="min-h-screen bg-background">
+        <BrowserRouter>
+          <SidebarLayout>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/rankings" element={<FullRankings />} />
+              <Route path="/employees" element={<EmployeeList />} />
+              <Route path="/reviews" element={<ReviewGeneration />} />
+              <Route path="/review-tracker" element={<ReviewTracker />} />
+              <Route path="/yodeck" element={<YodeckSlides />} />
+              <Route path="/snapshots" element={<Snapshots />} />
+              <Route path="/analytics" element={<Analytics />} />
+              <Route path="/settings" element={<QuarterSettings />} />
+              <Route path="/help" element={<HelpCenter />} />
+            </Routes>
+          </SidebarLayout>
+          <OnboardingGuide />
+        </BrowserRouter>
+        <Toaster position="top-right" richColors />
+      </div>
+    </ThemeProvider>
   );
 }
 
