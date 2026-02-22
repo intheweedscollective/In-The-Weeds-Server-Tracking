@@ -302,8 +302,6 @@ export default function Analytics() {
       <div className="splash-blue" style={{ top: '10%', right: '5%' }} />
       <div className="splash-red" style={{ bottom: '20%', left: '3%', opacity: 0.5 }} />
       
-      <>
-      
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
