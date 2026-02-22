@@ -795,7 +795,7 @@ export default function Dashboard() {
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center justify-between mb-2">
-                            <h3 className="font-serif font-bold text-lg">{emp.name}</h3>
+                            <h3 className="font-serif font-bold text-lg text-gray-900">{emp.name}</h3>
                             <span className="text-xl font-bold text-red-600">{score.toFixed(1)}</span>
                           </div>
                           
