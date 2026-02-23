@@ -653,7 +653,8 @@ export default function FullRankings() {
                     const isExpanded = expandedRow === employee.employee_id;
                     
                     // Find the employee ranked just above this one for "To Pass" comparison
-                    const employeeAbove = filteredRankings.find(e => e.peer_rank === (employee.peer_rank || 0) - 1);
+                    // Use original rankings to ensure we find them even when filtered
+                    const employeeAbove = rankings.find(e => e.peer_rank === (employee.peer_rank || 0) - 1);
                     
                     return (
                       <>
