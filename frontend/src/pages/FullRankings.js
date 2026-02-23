@@ -47,6 +47,28 @@ export default function FullRankings() {
   const [expandedRow, setExpandedRow] = useState(null);
   const [backgrounds, setBackgrounds] = useState([]);
   const [selectedBackground, setSelectedBackground] = useState("dark");
+  const [editingJobTitle, setEditingJobTitle] = useState(null); // employee_id being edited
+  const [pendingJobTitle, setPendingJobTitle] = useState(""); // new job title value
+  const [savingJobTitle, setSavingJobTitle] = useState(false);
+
+  // Update employee job title
+  const updateEmployeeJobTitle = async (employeeId, newJobTitle) => {
+    setSavingJobTitle(true);
+    try {
+      await axios.put(`${API}/v2/employees/${employeeId}`, {
+        job_title: newJobTitle
+      });
+      toast.success(`Updated to ${newJobTitle}`);
+      setEditingJobTitle(null);
+      // Refresh data to show updated tier
+      fetchRankings();
+    } catch (error) {
+      console.error("Error updating job title:", error);
+      toast.error("Failed to update job title");
+    } finally {
+      setSavingJobTitle(false);
+    }
+  };
 
   const fetchRankings = useCallback(async () => {
     setLoading(true);
