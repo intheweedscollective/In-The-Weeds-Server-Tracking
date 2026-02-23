@@ -788,10 +788,10 @@ export default function Dashboard() {
                   justification += `Coaching focus: ${weakAreas[0] || 'overall upselling techniques'} and guest engagement.`;
                   
                   return (
-                    <div key={emp.id} className="p-4 border-b border-gray-100 last:border-0 hover:bg-red-50 transition-colors rounded-lg">
+                    <div key={emp.id} className="p-4 border-b border-gray-200 last:border-0 hover:bg-gray-50 transition-colors rounded-lg">
                       <div className="flex items-start gap-4">
-                        <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
-                          <span className="text-red-600 font-bold">{emp.name.charAt(0)}</span>
+                        <div className="w-12 h-12 rounded-full bg-red-600 flex items-center justify-center">
+                          <span className="text-white font-bold text-lg">{emp.name.charAt(0)}</span>
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center justify-between mb-2">
@@ -801,25 +801,25 @@ export default function Dashboard() {
                           
                           {/* Mini Profile */}
                           <div className="grid grid-cols-4 gap-2 mb-3 text-center">
-                            <div className="bg-gray-100 rounded p-2">
-                              <div className="text-sm font-bold">${ppa.toFixed(0)}</div>
-                              <div className="text-xs text-gray-500">PPA</div>
+                            <div className="bg-slate-800 rounded p-2">
+                              <div className="text-sm font-bold text-white">${ppa.toFixed(0)}</div>
+                              <div className="text-xs text-slate-300">PPA</div>
                             </div>
-                            <div className="bg-gray-100 rounded p-2">
-                              <div className="text-sm font-bold">${lbw.toFixed(2)}</div>
-                              <div className="text-xs text-gray-500">LBW/G</div>
+                            <div className="bg-slate-800 rounded p-2">
+                              <div className="text-sm font-bold text-white">${lbw.toFixed(2)}</div>
+                              <div className="text-xs text-slate-300">LBW/G</div>
                             </div>
-                            <div className="bg-gray-100 rounded p-2">
-                              <div className="text-sm font-bold">${(emp.glassware_per_guest || 0).toFixed(2)}</div>
-                              <div className="text-xs text-gray-500">Glass</div>
+                            <div className="bg-slate-800 rounded p-2">
+                              <div className="text-sm font-bold text-white">${(emp.glassware_per_guest || 0).toFixed(2)}</div>
+                              <div className="text-xs text-slate-300">Glass</div>
                             </div>
-                            <div className="bg-gray-100 rounded p-2">
-                              <div className="text-sm font-bold">{emp.cv_score || 0}</div>
-                              <div className="text-xs text-gray-500">CV</div>
+                            <div className="bg-slate-800 rounded p-2">
+                              <div className="text-sm font-bold text-white">{emp.cv_score || 0}</div>
+                              <div className="text-xs text-slate-300">CV</div>
                             </div>
                           </div>
                           
-                          <p className="text-sm text-gray-700 italic bg-red-50 p-3 rounded-lg">"{justification}"</p>
+                          <p className="text-sm text-gray-800 italic bg-amber-100 border border-amber-300 p-3 rounded-lg">"{justification}"</p>
                         </div>
                       </div>
                     </div>
