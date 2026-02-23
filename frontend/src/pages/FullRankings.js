@@ -782,7 +782,7 @@ export default function FullRankings() {
                         {/* Expanded Details Row */}
                         {isExpanded && (
                           <tr key={`${employee.employee_id}-details`} className="bg-slate-900">
-                            <td colSpan={12} className="px-6 py-5">
+                            <td colSpan={12} className="px-2 sm:px-6 py-4">
                               {(() => {
                                 const emp = getEmployeeDetails(employee.employee_id);
                                 const ranks = metricRankings[employee.employee_id] || {};
@@ -792,32 +792,32 @@ export default function FullRankings() {
                                 const metrics = [
                                   {
                                     label: 'PPA',
-                                    value: `$${(emp.ppa || 0).toFixed(2)}`,
-                                    benchmark: `Benchmark: $${benchmarks.benchmark_ppa || 55}`,
+                                    value: `$${(emp.ppa || 0).toFixed(0)}`,
+                                    benchmark: `Target: $${benchmarks.benchmark_ppa || 55}`,
                                     rank: ranks.ppa,
                                     total,
-                                    color: (emp.ppa || 0) >= (benchmarks.benchmark_ppa || 55) ? 'text-green-600' : 'text-red-600'
+                                    color: (emp.ppa || 0) >= (benchmarks.benchmark_ppa || 55) ? 'text-green-400' : 'text-red-400'
                                   },
                                   {
-                                    label: 'LBW/Guest',
+                                    label: 'LBW',
                                     value: `$${(emp.lbw_per_guest || 0).toFixed(2)}`,
-                                    benchmark: `Benchmark: $${benchmarks.benchmark_lbw || 8}`,
+                                    benchmark: `Target: $${benchmarks.benchmark_lbw || 8}`,
                                     rank: ranks.lbw,
                                     total,
-                                    color: (emp.lbw_per_guest || 0) >= (benchmarks.benchmark_lbw || 8) ? 'text-green-600' : 'text-red-600'
+                                    color: (emp.lbw_per_guest || 0) >= (benchmarks.benchmark_lbw || 8) ? 'text-green-400' : 'text-red-400'
                                   },
                                   {
-                                    label: 'Glassware/Guest',
+                                    label: 'Glass',
                                     value: `$${(emp.glassware_per_guest || 0).toFixed(2)}`,
-                                    benchmark: `Benchmark: $${benchmarks.benchmark_glass || 1.25}`,
+                                    benchmark: `Target: $${benchmarks.benchmark_glass || 1.25}`,
                                     rank: ranks.glass,
                                     total,
-                                    color: (emp.glassware_per_guest || 0) >= (benchmarks.benchmark_glass || 1.25) ? 'text-green-600' : 'text-red-600'
+                                    color: (emp.glassware_per_guest || 0) >= (benchmarks.benchmark_glass || 1.25) ? 'text-green-400' : 'text-red-400'
                                   },
                                   {
-                                    label: 'Guests/LSC',
-                                    value: (emp.guests_per_lsc || 0).toFixed(1),
-                                    benchmark: `Benchmark: ≤${benchmarks.benchmark_lsc || 100}`,
+                                    label: 'LSC',
+                                    value: (emp.guests_per_lsc || 0).toFixed(0),
+                                    benchmark: `Target: ≤${benchmarks.benchmark_lsc || 100}`,
                                     rank: ranks.lsc,
                                     total,
                                     color: (emp.guests_per_lsc || 999) <= (benchmarks.benchmark_lsc || 100) ? 'text-green-600' : 'text-red-600'
