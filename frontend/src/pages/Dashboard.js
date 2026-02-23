@@ -203,7 +203,7 @@ export default function Dashboard() {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm font-medium text-emerald-400 uppercase tracking-wide">Top Performers</p>
-                <p className="text-4xl font-bold text-emerald-300 mt-2">{stats.topPerformers}</p>
+                <p className="text-4xl font-bold text-white mt-2">{stats.topPerformers}</p>
                 <p className="text-xs text-emerald-500 mt-1">10% above average</p>
               </div>
               <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center">
@@ -221,7 +221,7 @@ export default function Dashboard() {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm font-medium text-red-400 uppercase tracking-wide">Needs Coaching</p>
-                <p className="text-4xl font-bold text-red-300 mt-2">{stats.underPerformers}</p>
+                <p className="text-4xl font-bold text-white mt-2">{stats.underPerformers}</p>
                 <p className="text-xs text-red-500 mt-1">Below B-Server threshold</p>
               </div>
               <div className="w-12 h-12 rounded-xl bg-red-500/20 flex items-center justify-center">
