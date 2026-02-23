@@ -1045,7 +1045,8 @@ def generate_hierarchy_rankings(employees: List[EmployeeV2], settings: QuarterSe
                 "earned": round(min((emp.score_glass or 0), 100) * 0.15 + (emp.bonus_glass or 0), 2),
                 "possible": 20
             },
-            "performance_tier": emp.performance_tier
+            "performance_tier": emp.performance_tier,
+            "peer_rank": emp.peer_rank  # Overall rank by score among ALL peers
         })
     
     return results
