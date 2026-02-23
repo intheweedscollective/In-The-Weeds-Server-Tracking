@@ -961,6 +961,113 @@ export default function FullRankings() {
                                         <span className="ml-2 text-lg font-bold text-primary">#{employee.peer_rank || employee.position} of {totalEmployees}</span>
                                       </div>
                                     </div>
+                                    
+                                    {/* Improvement Plan Section */}
+                                    <div className="mt-6 bg-gradient-to-r from-slate-800 to-slate-800/50 rounded-xl p-5 border border-slate-600">
+                                      <div className="flex items-center gap-2 mb-4">
+                                        <Target className="w-5 h-5 text-primary" />
+                                        <span className="text-lg font-serif font-bold text-white">Improvement Plan</span>
+                                      </div>
+                                      
+                                      {/* Gap Analysis vs Benchmarks */}
+                                      <div className="mb-5">
+                                        <h4 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
+                                          <TrendingUp className="w-4 h-4" />
+                                          Gap Analysis vs Benchmarks
+                                        </h4>
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                          {(() => {
+                                            const gaps = [
+                                              { 
+                                                label: 'PPA', 
+                                                current: emp.ppa || 0, 
+                                                target: benchmarks.benchmark_ppa || 55,
+                                                format: v => `$${v.toFixed(2)}`
+                                              },
+                                              { 
+                                                label: 'LBW', 
+                                                current: emp.lbw_per_guest || 0, 
+                                                target: benchmarks.benchmark_lbw || 8,
+                                                format: v => `$${v.toFixed(2)}`
+                                              },
+                                              { 
+                                                label: 'Glass', 
+                                                current: emp.glassware_per_guest || 0, 
+                                                target: benchmarks.benchmark_glass || 1.25,
+                                                format: v => `$${v.toFixed(2)}`
+                                              },
+                                              { 
+                                                label: 'LSC', 
+                                                current: emp.guests_per_lsc || 999, 
+                                                target: benchmarks.benchmark_lsc || 100,
+                                                format: v => v.toFixed(0),
+                                                inverse: true // Lower is better
+                                              }
+                                            ];
+                                            return gaps.map((g, i) => {
+                                              const diff = g.inverse 
+                                                ? g.target - g.current 
+                                                : g.current - g.target;
+                                              const isGood = diff >= 0;
+                                              return (
+                                                <div key={i} className={`p-3 rounded-lg ${isGood ? 'bg-green-900/30 border border-green-700' : 'bg-red-900/30 border border-red-700'}`}>
+                                                  <div className="text-xs text-slate-400 mb-1">{g.label}</div>
+                                                  <div className={`text-lg font-bold ${isGood ? 'text-green-400' : 'text-red-400'}`}>
+                                                    {isGood ? '+' : ''}{g.format(Math.abs(diff))}
+                                                  </div>
+                                                  <div className="text-xs text-slate-500">
+                                                    {isGood ? 'Above target' : `Need ${g.format(Math.abs(diff))} more`}
+                                                  </div>
+                                                </div>
+                                              );
+                                            });
+                                          })()}
+                                        </div>
+                                      </div>
+                                      
+                                      {/* To Pass Next Employee */}
+                                      {employeeAbove && (employee.peer_rank || 0) > 1 && (
+                                        <div className="border-t border-slate-700 pt-4">
+                                          <h4 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
+                                            <ArrowUp className="w-4 h-4 text-blue-400" />
+                                            To Pass #{(employee.peer_rank || 0) - 1} ({employeeAbove.name})
+                                          </h4>
+                                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                                            <div className="bg-slate-700/50 rounded-lg p-3">
+                                              <div className="text-xs text-slate-400">Score Gap</div>
+                                              <div className="text-lg font-bold text-blue-400">
+                                                +{((employeeAbove.total_score || 0) - (employee.total_score || 0)).toFixed(2)}
+                                              </div>
+                                              <div className="text-xs text-slate-500">points needed</div>
+                                            </div>
+                                            <div className="bg-slate-700/50 rounded-lg p-3">
+                                              <div className="text-xs text-slate-400">Their PPA</div>
+                                              <div className="text-sm font-semibold text-white">
+                                                ${(employeeAbove.ppa || getEmployeeDetails(employeeAbove.employee_id)?.ppa || 0).toFixed(2)}
+                                              </div>
+                                            </div>
+                                            <div className="bg-slate-700/50 rounded-lg p-3">
+                                              <div className="text-xs text-slate-400">Their LBW</div>
+                                              <div className="text-sm font-semibold text-white">
+                                                ${(employeeAbove.lbw_per_guest || getEmployeeDetails(employeeAbove.employee_id)?.lbw_per_guest || 0).toFixed(2)}
+                                              </div>
+                                            </div>
+                                            <div className="bg-slate-700/50 rounded-lg p-3">
+                                              <div className="text-xs text-slate-400">Their Glass</div>
+                                              <div className="text-sm font-semibold text-white">
+                                                ${(employeeAbove.glassware_per_guest || getEmployeeDetails(employeeAbove.employee_id)?.glassware_per_guest || 0).toFixed(2)}
+                                              </div>
+                                            </div>
+                                            <div className="bg-slate-700/50 rounded-lg p-3">
+                                              <div className="text-xs text-slate-400">Their LSC</div>
+                                              <div className="text-sm font-semibold text-white">
+                                                {(employeeAbove.guests_per_lsc || getEmployeeDetails(employeeAbove.employee_id)?.guests_per_lsc || 0).toFixed(0)}
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
                                 );
                               })()}
