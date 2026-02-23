@@ -463,7 +463,7 @@ export default function FullRankings() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               {/* Quarter Selection */}
               <div className="space-y-2">
-                <label className="text-sm font-medium flex items-center gap-2">
+                <label className="text-sm font-medium text-slate-300 flex items-center gap-2">
                   <Calendar className="w-4 h-4" />
                   Quarter
                 </label>
@@ -471,7 +471,7 @@ export default function FullRankings() {
                   <select 
                     value={selectedYear}
                     onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                    className="flex-1 h-10 px-3 border-2 border-gray-200 rounded-lg focus:border-secondary"
+                    className="flex-1 h-10 px-3 border-2 border-slate-600 rounded-lg bg-slate-800 text-white focus:border-secondary"
                     data-testid="year-select"
                   >
                     <option value={2024}>2024</option>
@@ -482,7 +482,7 @@ export default function FullRankings() {
                   <select
                     value={selectedQuarter}
                     onChange={(e) => setSelectedQuarter(e.target.value)}
-                    className="flex-1 h-10 px-3 border-2 border-gray-200 rounded-lg focus:border-secondary"
+                    className="flex-1 h-10 px-3 border-2 border-slate-600 rounded-lg bg-slate-800 text-white focus:border-secondary"
                     data-testid="quarter-select"
                   >
                     <option value="Q1">Q1</option>
@@ -495,9 +495,9 @@ export default function FullRankings() {
               
               {/* Tier Filter */}
               <div className="space-y-2">
-                <label className="text-sm font-medium">Filter by Tier</label>
+                <label className="text-sm font-medium text-slate-300">Filter by Tier</label>
                 <Select value={tierFilter} onValueChange={setTierFilter}>
-                  <SelectTrigger data-testid="tier-filter" className="border-2 border-gray-200">
+                  <SelectTrigger data-testid="tier-filter" className="border-2 border-slate-600 bg-slate-800 text-white">
                     <SelectValue placeholder="All Tiers" />
                   </SelectTrigger>
                   <SelectContent>
@@ -513,16 +513,16 @@ export default function FullRankings() {
 
               {/* Threshold Display */}
               <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-medium">Score Thresholds (from Settings)</label>
+                <label className="text-sm font-medium text-slate-300">Score Thresholds (from Settings)</label>
                 <div className="flex gap-4 text-sm">
-                  <span className="px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
-                    <span className="font-medium text-green-800">A-Server:</span> ≥ {thresholds.a_server_min}
+                  <span className="px-3 py-2 bg-green-600 border border-green-500 rounded-lg">
+                    <span className="font-medium text-white">A-Server:</span> <span className="text-green-100">≥ {thresholds.a_server_min}</span>
                   </span>
-                  <span className="px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-lg">
-                    <span className="font-medium text-yellow-800">B-Server:</span> ≥ {thresholds.b_server_min}
+                  <span className="px-3 py-2 bg-yellow-600 border border-yellow-500 rounded-lg">
+                    <span className="font-medium text-white">B-Server:</span> <span className="text-yellow-100">≥ {thresholds.b_server_min}</span>
                   </span>
-                  <span className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
-                    <span className="font-medium text-red-800">C-Server:</span> &lt; {thresholds.b_server_min}
+                  <span className="px-3 py-2 bg-red-600 border border-red-500 rounded-lg">
+                    <span className="font-medium text-white">C-Server:</span> <span className="text-red-100">&lt; {thresholds.b_server_min}</span>
                   </span>
                 </div>
               </div>
