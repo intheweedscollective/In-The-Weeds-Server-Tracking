@@ -564,50 +564,66 @@ export default function FullRankings() {
           </div>
         </div>
 
-        {/* Results Summary */}
-        <div className="mb-4 flex items-center justify-between" data-testid="results-summary">
-          <p className="text-slate-400 font-medium">
-            Showing <span className="text-primary font-bold">{rankings.length}</span> of {totalEmployees} team members
-            {npsStats && npsStats.total_servers > 0 && (
-              <span className="ml-3 text-sm">
-                • <MessageCircle className="w-3 h-3 inline" /> {npsStats.total_servers} NPS records (avg: {npsStats.avg_nps}%)
-              </span>
+        {/* Search Bar - Mobile Friendly */}
+        <div className="mb-4 flex flex-col sm:flex-row gap-4 items-stretch sm:items-center justify-between" data-testid="search-and-summary">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search employee name..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 bg-slate-800 border-2 border-slate-600 rounded-xl text-white placeholder-slate-400 focus:border-primary focus:outline-none"
+              data-testid="employee-search"
+            />
+            {searchQuery && (
+              <button 
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
             )}
-          </p>
-          <div className="flex items-center gap-3">
+          </div>
+          <div className="flex items-center gap-3 text-sm">
+            <p className="text-slate-400">
+              Showing <span className="text-primary font-bold">{filteredRankings.length}</span> of {totalEmployees}
+              {npsStats && npsStats.total_servers > 0 && (
+                <span className="ml-2 hidden sm:inline">
+                  • <MessageCircle className="w-3 h-3 inline" /> {npsStats.avg_nps}% NPS
+                </span>
+              )}
+            </p>
             <Button
               variant="outline"
               size="sm"
               onClick={handleSyncNps}
               disabled={syncingNps}
-              className="flex items-center gap-2 text-xs border-blue-300 text-blue-600 hover:bg-blue-50"
+              className="flex items-center gap-2 text-xs border-blue-500 text-blue-400 hover:bg-blue-900/30"
               data-testid="sync-nps-btn"
             >
               {syncingNps ? (
-                <>
-                  <div className="animate-spin h-3 w-3 border-2 border-blue-500 border-t-transparent rounded-full" />
-                  Syncing...
-                </>
+                <div className="animate-spin h-3 w-3 border-2 border-blue-400 border-t-transparent rounded-full" />
               ) : (
-                <>
-                  <RefreshCw className="w-3 h-3" />
-                  Sync NPS
-                </>
+                <RefreshCw className="w-3 h-3" />
               )}
+              <span className="hidden sm:inline">Sync</span>
             </Button>
-            <p className="text-sm text-gray-400">
-              {selectedQuarter} {selectedYear} • Rank is final
-            </p>
           </div>
         </div>
 
         {/* Rankings Table */}
-        {rankings.length === 0 ? (
+        {filteredRankings.length === 0 ? (
           <div className="bubba-card p-12 text-center" data-testid="no-results">
             <Trophy className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-serif font-bold mb-2">No rankings found</h3>
+            <h3 className="text-lg font-serif font-bold mb-2">
+              {searchQuery ? "No matches found" : "No rankings found"}
+            </h3>
             <p className="text-slate-400">
-              No data for {selectedQuarter} {selectedYear}. Upload employee data on the Dashboard.
+              {searchQuery 
+                ? `No employees match "${searchQuery}". Try a different search.`
+                : `No data for ${selectedQuarter} ${selectedYear}. Upload employee data on the Dashboard.`
+              }
             </p>
           </div>
         ) : (
