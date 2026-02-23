@@ -606,7 +606,7 @@ export default function FullRankings() {
                       <>
                         <tr 
                           key={employee.employee_id}
-                          className={`${index % 2 === 0 ? 'bg-slate-800' : 'bg-background'} hover:bg-blue-50 transition-colors`}
+                          className={`${index % 2 === 0 ? 'bg-slate-800' : 'bg-background'} hover:bg-slate-700 transition-colors cursor-pointer`}
                           data-testid={`ranking-row-${employee.position}`}
                         >
                           {/* Position */}
