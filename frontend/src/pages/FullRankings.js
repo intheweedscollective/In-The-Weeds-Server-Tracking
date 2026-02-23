@@ -823,12 +823,12 @@ export default function FullRankings() {
                                     color: (emp.guests_per_lsc || 999) <= (benchmarks.benchmark_lsc || 100) ? 'text-green-600' : 'text-red-600'
                                   },
                                   {
-                                    label: 'Review Tracker',
+                                    label: 'RT',
                                     value: `+${(emp.review_tracker_bonus || 0).toFixed(1)}`,
-                                    benchmark: `${emp.review_mentions || 0} mentions × 0.2`,
+                                    benchmark: `${emp.review_mentions || 0} mentions`,
                                     rank: null,
                                     total: null,
-                                    color: 'text-green-600'
+                                    color: 'text-green-400'
                                   }
                                 ];
                                 
