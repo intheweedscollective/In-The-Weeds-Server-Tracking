@@ -1073,6 +1073,7 @@ export default function FullRankings() {
                                   </div>
                                 );
                               })()}
+                              </div>
                             </td>
                           </tr>
                         )}
