@@ -1031,36 +1031,36 @@ export default function FullRankings() {
                                         <div className="border-t border-slate-700 pt-4">
                                           <h4 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
                                             <ArrowUp className="w-4 h-4 text-blue-400" />
-                                            To Pass #{(employee.peer_rank || 0) - 1} ({employeeAbove.name})
+                                            <span className="truncate">To Pass #{(employee.peer_rank || 0) - 1} ({employeeAbove.name})</span>
                                           </h4>
-                                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                                            <div className="bg-slate-700/50 rounded-lg p-3">
-                                              <div className="text-xs text-slate-400">Score Gap</div>
-                                              <div className="text-lg font-bold text-blue-400">
-                                                +{((employeeAbove.total_score || 0) - (employee.total_score || 0)).toFixed(2)}
+                                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
+                                            <div className="bg-slate-700/50 rounded-lg p-2 sm:p-3">
+                                              <div className="text-xs text-slate-400">Gap</div>
+                                              <div className="text-base sm:text-lg font-bold text-blue-400">
+                                                +{((employeeAbove.total_score || 0) - (employee.total_score || 0)).toFixed(1)}
                                               </div>
-                                              <div className="text-xs text-slate-500">points needed</div>
+                                              <div className="text-xs text-slate-500 hidden sm:block">pts needed</div>
                                             </div>
-                                            <div className="bg-slate-700/50 rounded-lg p-3">
-                                              <div className="text-xs text-slate-400">Their PPA</div>
+                                            <div className="bg-slate-700/50 rounded-lg p-2 sm:p-3">
+                                              <div className="text-xs text-slate-400">PPA</div>
                                               <div className="text-sm font-semibold text-white">
-                                                ${(employeeAbove.ppa || getEmployeeDetails(employeeAbove.employee_id)?.ppa || 0).toFixed(2)}
+                                                ${(employeeAbove.ppa || getEmployeeDetails(employeeAbove.employee_id)?.ppa || 0).toFixed(0)}
                                               </div>
                                             </div>
-                                            <div className="bg-slate-700/50 rounded-lg p-3">
-                                              <div className="text-xs text-slate-400">Their LBW</div>
+                                            <div className="bg-slate-700/50 rounded-lg p-2 sm:p-3">
+                                              <div className="text-xs text-slate-400">LBW</div>
                                               <div className="text-sm font-semibold text-white">
                                                 ${(employeeAbove.lbw_per_guest || getEmployeeDetails(employeeAbove.employee_id)?.lbw_per_guest || 0).toFixed(2)}
                                               </div>
                                             </div>
-                                            <div className="bg-slate-700/50 rounded-lg p-3">
-                                              <div className="text-xs text-slate-400">Their Glass</div>
+                                            <div className="bg-slate-700/50 rounded-lg p-2 sm:p-3">
+                                              <div className="text-xs text-slate-400">Glass</div>
                                               <div className="text-sm font-semibold text-white">
                                                 ${(employeeAbove.glassware_per_guest || getEmployeeDetails(employeeAbove.employee_id)?.glassware_per_guest || 0).toFixed(2)}
                                               </div>
                                             </div>
-                                            <div className="bg-slate-700/50 rounded-lg p-3">
-                                              <div className="text-xs text-slate-400">Their LSC</div>
+                                            <div className="bg-slate-700/50 rounded-lg p-2 sm:p-3">
+                                              <div className="text-xs text-slate-400">LSC</div>
                                               <div className="text-sm font-semibold text-white">
                                                 {(employeeAbove.guests_per_lsc || getEmployeeDetails(employeeAbove.employee_id)?.guests_per_lsc || 0).toFixed(0)}
                                               </div>
