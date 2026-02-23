@@ -885,16 +885,16 @@ export default function FullRankings() {
                                     </div>
                                     
                                     {/* Summary Row with Editable Job Title */}
-                                    <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-800 rounded-xl p-4 shadow-sm border border-slate-600 mt-4">
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-sm text-slate-400">Job Title:</span>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-800 rounded-xl p-3 sm:p-4 shadow-sm border border-slate-600 mt-4">
+                                      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                                        <span className="text-xs sm:text-sm text-slate-400">Job Title:</span>
                                         {editingJobTitle === employee.employee_id ? (
-                                          <div className="flex items-center gap-2">
+                                          <div className="flex items-center gap-1">
                                             <Select 
                                               value={pendingJobTitle} 
                                               onValueChange={setPendingJobTitle}
                                             >
-                                              <SelectTrigger className="w-36 h-8 bg-slate-700 border-slate-500 text-white text-sm">
+                                              <SelectTrigger className="w-24 sm:w-32 h-7 sm:h-8 bg-slate-700 border-slate-500 text-white text-xs sm:text-sm">
                                                 <SelectValue />
                                               </SelectTrigger>
                                               <SelectContent>
@@ -908,27 +908,27 @@ export default function FullRankings() {
                                               variant="ghost"
                                               onClick={() => updateEmployeeJobTitle(employee.employee_id, pendingJobTitle)}
                                               disabled={savingJobTitle}
-                                              className="h-8 w-8 p-0 text-green-400 hover:text-green-300 hover:bg-green-900/30"
+                                              className="h-7 w-7 p-0 text-green-400 hover:text-green-300 hover:bg-green-900/30"
                                               data-testid={`save-job-title-${employee.position}`}
                                             >
                                               {savingJobTitle ? (
-                                                <div className="w-4 h-4 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
+                                                <div className="w-3 h-3 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
                                               ) : (
-                                                <Check className="w-4 h-4" />
+                                                <Check className="w-3 h-3" />
                                               )}
                                             </Button>
                                             <Button
                                               size="sm"
                                               variant="ghost"
                                               onClick={() => setEditingJobTitle(null)}
-                                              className="h-8 w-8 p-0 text-red-400 hover:text-red-300 hover:bg-red-900/30"
+                                              className="h-7 w-7 p-0 text-red-400 hover:text-red-300 hover:bg-red-900/30"
                                             >
-                                              <X className="w-4 h-4" />
+                                              <X className="w-3 h-3" />
                                             </Button>
                                           </div>
                                         ) : (
-                                          <div className="flex items-center gap-2">
-                                            <span className={`px-3 py-1 rounded-full text-sm font-bold ${tierStyle.bg} ${tierStyle.text}`}>
+                                          <div className="flex items-center gap-1">
+                                            <span className={`px-2 py-0.5 rounded-full text-xs sm:text-sm font-bold ${tierStyle.bg} ${tierStyle.text}`}>
                                               {emp?.job_title || employee.job_title || 'Server'}
                                             </span>
                                             <Button
@@ -938,28 +938,28 @@ export default function FullRankings() {
                                                 setEditingJobTitle(employee.employee_id);
                                                 setPendingJobTitle(emp?.job_title || employee.job_title || 'Server');
                                               }}
-                                              className="h-7 w-7 p-0 text-slate-400 hover:text-white hover:bg-slate-700"
+                                              className="h-6 w-6 p-0 text-slate-400 hover:text-white hover:bg-slate-700"
                                               title="Edit job title"
                                               data-testid={`edit-job-title-${employee.position}`}
                                             >
-                                              <Edit3 className="w-3.5 h-3.5" />
+                                              <Edit3 className="w-3 h-3" />
                                             </Button>
                                           </div>
                                         )}
                                       </div>
-                                      <div>
-                                        <span className="text-sm text-slate-400">Tier:</span>
-                                        <span className={`ml-2 px-3 py-1 rounded-full text-sm font-bold ${tierStyle.bg} ${tierStyle.text}`}>
+                                      <div className="flex flex-col sm:flex-row sm:items-center gap-1">
+                                        <span className="text-xs sm:text-sm text-slate-400">Tier:</span>
+                                        <span className={`px-2 py-0.5 rounded-full text-xs sm:text-sm font-bold ${tierStyle.bg} ${tierStyle.text}`}>
                                           {employee.tier_label}
                                         </span>
                                       </div>
-                                      <div>
-                                        <span className="text-sm text-slate-400">Total Bonus:</span>
-                                        <span className="ml-2 text-lg font-bold text-green-400">+{formatNumber(employee.bonus_points)}</span>
+                                      <div className="flex flex-col sm:flex-row sm:items-center gap-1">
+                                        <span className="text-xs sm:text-sm text-slate-400">Bonus:</span>
+                                        <span className="text-base sm:text-lg font-bold text-green-400">+{formatNumber(employee.bonus_points)}</span>
                                       </div>
-                                      <div>
-                                        <span className="text-sm text-slate-400">Overall Rank:</span>
-                                        <span className="ml-2 text-lg font-bold text-primary">#{employee.peer_rank || employee.position} of {totalEmployees}</span>
+                                      <div className="flex flex-col sm:flex-row sm:items-center gap-1">
+                                        <span className="text-xs sm:text-sm text-slate-400">Rank:</span>
+                                        <span className="text-base sm:text-lg font-bold text-primary">#{employee.peer_rank || employee.position}/{totalEmployees}</span>
                                       </div>
                                     </div>
                                     
