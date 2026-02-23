@@ -711,36 +711,36 @@ export default function FullRankings() {
                           </td>
                           
                           {/* Review Bonus: RT mentions × 0.2 */}
-                          <td className="px-4 py-4 text-center">
-                            <span className="text-sm font-semibold text-green-600">
+                          <td className="px-4 py-4 text-center hidden lg:table-cell">
+                            <span className="text-sm font-semibold text-green-400">
                               +{formatNumber(employee.review_bonus || 0)}
                             </span>
                           </td>
                           
                           {/* Metric Bonus: exceeding benchmarks */}
-                          <td className="px-4 py-4 text-center">
-                            <span className="text-sm font-semibold text-blue-600">
+                          <td className="px-4 py-4 text-center hidden lg:table-cell">
+                            <span className="text-sm font-semibold text-blue-400">
                               +{formatNumber(employee.metric_bonus || 0)}
                             </span>
                           </td>
                           
                           {/* PPA Points */}
-                          <td className="px-4 py-4">
+                          <td className="px-4 py-4 hidden xl:table-cell">
                             {renderPointsCell(employee.ppa_points)}
                           </td>
                           
                           {/* LBW Points */}
-                          <td className="px-4 py-4">
+                          <td className="px-4 py-4 hidden xl:table-cell">
                             {renderPointsCell(employee.lbw_points)}
                           </td>
                           
                           {/* LSC Points */}
-                          <td className="px-4 py-4">
+                          <td className="px-4 py-4 hidden xl:table-cell">
                             {renderPointsCell(employee.lsc_points)}
                           </td>
                           
                           {/* Glassware Points */}
-                          <td className="px-4 py-4">
+                          <td className="px-4 py-4 hidden xl:table-cell">
                             {renderPointsCell(employee.glassware_points)}
                           </td>
                           
