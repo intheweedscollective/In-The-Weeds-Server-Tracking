@@ -927,7 +927,7 @@ export default function FullRankings() {
                                       </div>
                                       <div>
                                         <span className="text-sm text-slate-400">Overall Rank:</span>
-                                        <span className="ml-2 text-lg font-bold text-primary">#{employee.position} of {totalEmployees}</span>
+                                        <span className="ml-2 text-lg font-bold text-primary">#{employee.peer_rank || employee.position} of {totalEmployees}</span>
                                       </div>
                                     </div>
                                   </div>
