@@ -852,12 +852,73 @@ export default function FullRankings() {
                                       </div>
                                     </div>
                                     
-                                    {/* Summary Row */}
-                                    <div className="flex items-center justify-between bg-slate-800 rounded-xl p-4 shadow-sm border border-slate-600 mt-4">
+                                    {/* Summary Row with Editable Job Title */}
+                                    <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-800 rounded-xl p-4 shadow-sm border border-slate-600 mt-4">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-sm text-slate-400">Job Title:</span>
+                                        {editingJobTitle === employee.employee_id ? (
+                                          <div className="flex items-center gap-2">
+                                            <Select 
+                                              value={pendingJobTitle} 
+                                              onValueChange={setPendingJobTitle}
+                                            >
+                                              <SelectTrigger className="w-36 h-8 bg-slate-700 border-slate-500 text-white text-sm">
+                                                <SelectValue />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                <SelectItem value="Trainer">Trainer</SelectItem>
+                                                <SelectItem value="Bartender">Bartender</SelectItem>
+                                                <SelectItem value="Server">Server</SelectItem>
+                                              </SelectContent>
+                                            </Select>
+                                            <Button
+                                              size="sm"
+                                              variant="ghost"
+                                              onClick={() => updateEmployeeJobTitle(employee.employee_id, pendingJobTitle)}
+                                              disabled={savingJobTitle}
+                                              className="h-8 w-8 p-0 text-green-400 hover:text-green-300 hover:bg-green-900/30"
+                                              data-testid={`save-job-title-${employee.position}`}
+                                            >
+                                              {savingJobTitle ? (
+                                                <div className="w-4 h-4 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
+                                              ) : (
+                                                <Check className="w-4 h-4" />
+                                              )}
+                                            </Button>
+                                            <Button
+                                              size="sm"
+                                              variant="ghost"
+                                              onClick={() => setEditingJobTitle(null)}
+                                              className="h-8 w-8 p-0 text-red-400 hover:text-red-300 hover:bg-red-900/30"
+                                            >
+                                              <X className="w-4 h-4" />
+                                            </Button>
+                                          </div>
+                                        ) : (
+                                          <div className="flex items-center gap-2">
+                                            <span className={`px-3 py-1 rounded-full text-sm font-bold ${tierStyle.bg} ${tierStyle.text}`}>
+                                              {emp?.job_title || employee.job_title || 'Server'}
+                                            </span>
+                                            <Button
+                                              size="sm"
+                                              variant="ghost"
+                                              onClick={() => {
+                                                setEditingJobTitle(employee.employee_id);
+                                                setPendingJobTitle(emp?.job_title || employee.job_title || 'Server');
+                                              }}
+                                              className="h-7 w-7 p-0 text-slate-400 hover:text-white hover:bg-slate-700"
+                                              title="Edit job title"
+                                              data-testid={`edit-job-title-${employee.position}`}
+                                            >
+                                              <Edit3 className="w-3.5 h-3.5" />
+                                            </Button>
+                                          </div>
+                                        )}
+                                      </div>
                                       <div>
-                                        <span className="text-sm text-slate-400">Performance Tier:</span>
+                                        <span className="text-sm text-slate-400">Tier:</span>
                                         <span className={`ml-2 px-3 py-1 rounded-full text-sm font-bold ${tierStyle.bg} ${tierStyle.text}`}>
-                                          {employee.performance_tier || employee.tier_label}
+                                          {employee.tier_label}
                                         </span>
                                       </div>
                                       <div>
