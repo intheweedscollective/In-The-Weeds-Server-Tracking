@@ -831,7 +831,7 @@ export default function FullRankings() {
                                     </div>
                                     
                                     {/* Summary Row */}
-                                    <div className="flex items-center justify-between bg-slate-800 rounded-xl p-4 shadow-sm border border-gray-100 mt-4">
+                                    <div className="flex items-center justify-between bg-slate-800 rounded-xl p-4 shadow-sm border border-slate-600 mt-4">
                                       <div>
                                         <span className="text-sm text-slate-400">Performance Tier:</span>
                                         <span className={`ml-2 px-3 py-1 rounded-full text-sm font-bold ${tierStyle.bg} ${tierStyle.text}`}>
@@ -840,7 +840,7 @@ export default function FullRankings() {
                                       </div>
                                       <div>
                                         <span className="text-sm text-slate-400">Total Bonus:</span>
-                                        <span className="ml-2 text-lg font-bold text-green-600">+{formatNumber(employee.bonus_points)}</span>
+                                        <span className="ml-2 text-lg font-bold text-green-400">+{formatNumber(employee.bonus_points)}</span>
                                       </div>
                                       <div>
                                         <span className="text-sm text-slate-400">Overall Rank:</span>
