@@ -790,17 +790,17 @@ export default function FullRankings() {
                                     
                                     <div className="grid grid-cols-6 gap-4">
                                       {metrics.map((m, i) => (
-                                        <div key={i} className="bg-slate-800 rounded-xl p-4 shadow-sm border border-gray-100">
+                                        <div key={i} className="bg-slate-800 rounded-xl p-4 shadow-sm border border-slate-600">
                                           <div className="text-xs font-semibold text-slate-400 uppercase mb-2">{m.label}</div>
                                           <div className={`text-2xl font-bold ${m.color}`}>{m.value}</div>
-                                          <div className="text-xs text-gray-400 mt-1">{m.benchmark}</div>
-                                          <div className="mt-2 pt-2 border-t border-gray-100">
+                                          <div className="text-xs text-slate-400 mt-1">{m.benchmark}</div>
+                                          <div className="mt-2 pt-2 border-t border-slate-600">
                                             {m.rank !== null ? (
-                                              <span className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-semibold">
+                                              <span className="inline-flex items-center px-2 py-1 bg-blue-600 text-white rounded-full text-xs font-semibold">
                                                 {m.rank}{m.rank === 1 ? 'st' : m.rank === 2 ? 'nd' : m.rank === 3 ? 'rd' : 'th'} of {m.total}
                                               </span>
                                             ) : (
-                                              <span className="inline-flex items-center px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-semibold">
+                                              <span className="inline-flex items-center px-2 py-1 bg-green-600 text-white rounded-full text-xs font-semibold">
                                                 Bonus Points
                                               </span>
                                             )}
@@ -809,19 +809,19 @@ export default function FullRankings() {
                                       ))}
                                       
                                       {/* NPS Card */}
-                                      <div className="bg-slate-800 rounded-xl p-4 shadow-sm border border-gray-100">
+                                      <div className="bg-slate-800 rounded-xl p-4 shadow-sm border border-slate-600">
                                         <div className="text-xs font-semibold text-slate-400 uppercase mb-2 flex items-center gap-1">
                                           <MessageCircle className="w-3 h-3" />
                                           NPS Score
                                         </div>
-                                        <div className={`text-2xl font-bold ${empNps !== null ? (empNps >= 50 ? 'text-green-600' : empNps >= 0 ? 'text-yellow-600' : 'text-red-600') : 'text-gray-400'}`}>
+                                        <div className={`text-2xl font-bold ${empNps !== null ? (empNps >= 50 ? 'text-green-400' : empNps >= 0 ? 'text-yellow-400' : 'text-red-400') : 'text-gray-400'}`}>
                                           {empNps !== null ? `${empNps}%` : '—'}
                                         </div>
-                                        <div className="text-xs text-gray-400 mt-1">Customer Voice</div>
-                                        <div className="mt-2 pt-2 border-t border-gray-100">
+                                        <div className="text-xs text-slate-400 mt-1">Customer Voice</div>
+                                        <div className="mt-2 pt-2 border-t border-slate-600">
                                           <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${
                                             empNps !== null 
-                                              ? (empNps >= 50 ? 'bg-green-100 text-green-800' : empNps >= 0 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800')
+                                              ? (empNps >= 50 ? 'bg-green-600 text-white' : empNps >= 0 ? 'bg-yellow-600 text-white' : 'bg-red-600 text-white')
                                               : 'bg-slate-700 text-slate-400'
                                           }`}>
                                             {empNps !== null ? (empNps >= 50 ? 'Promoter' : empNps >= 0 ? 'Passive' : 'Detractor') : 'No Data'}
