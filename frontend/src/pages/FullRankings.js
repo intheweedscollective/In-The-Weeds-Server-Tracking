@@ -629,28 +629,31 @@ export default function FullRankings() {
         ) : (
           <div className="bubba-card overflow-hidden" data-testid="rankings-table-container">
             <div className="tape" style={{ top: '-8px', left: '50%', transform: 'translateX(-50%) rotate(1deg)' }} />
-            <div className="overflow-x-auto pt-4">
+            <div className="overflow-x-auto pt-4 max-h-[70vh] overflow-y-auto">
               <table className="w-full" data-testid="rankings-table">
-                <thead>
-                  <tr className="bg-gradient-to-r from-secondary to-primary text-white">
+                <thead className="sticky top-0 z-10">
+                  <tr className="bg-gradient-to-r from-secondary to-primary text-white shadow-lg">
                     <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider">Position</th>
                     <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider">Employee</th>
                     <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider">Tier</th>
                     <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider">Total Score</th>
-                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider">Customer Voice</th>
-                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider">Review Tracker</th>
-                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider">Metric Bonus</th>
-                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider">PPA (25%)</th>
-                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider">LBW (20%)</th>
-                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider">LSC (25%)</th>
-                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider">Glass (15%)</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden md:table-cell">Customer Voice</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden lg:table-cell">Review Tracker</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden lg:table-cell">Metric Bonus</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell">PPA (25%)</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell">LBW (20%)</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell">LSC (25%)</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell">Glass (15%)</th>
                     <th className="px-2 py-3 text-center text-xs font-bold uppercase tracking-wider"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {rankings.map((employee, index) => {
+                <tbody className="divide-y divide-gray-700">
+                  {filteredRankings.map((employee, index) => {
                     const tierStyle = getTierStyle(employee.tier_label);
                     const isExpanded = expandedRow === employee.employee_id;
+                    
+                    // Find the employee ranked just above this one for "To Pass" comparison
+                    const employeeAbove = filteredRankings.find(e => e.peer_rank === (employee.peer_rank || 0) - 1);
                     
                     return (
                       <>
