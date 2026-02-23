@@ -1014,7 +1014,7 @@ export default function FullRankings() {
                                                 <div key={i} className={`p-3 rounded-lg ${isGood ? 'bg-green-900/30 border border-green-700' : 'bg-red-900/30 border border-red-700'}`}>
                                                   <div className="text-xs text-slate-400 mb-1">{g.label}</div>
                                                   <div className={`text-lg font-bold ${isGood ? 'text-green-400' : 'text-red-400'}`}>
-                                                    {isGood ? '+' : ''}{g.format(Math.abs(diff))}
+                                                    {isGood ? '+' : '-'}{g.format(Math.abs(diff))}
                                                   </div>
                                                   <div className="text-xs text-slate-500">
                                                     {isGood ? 'Above target' : `Need ${g.format(Math.abs(diff))} more`}
