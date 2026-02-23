@@ -50,6 +50,18 @@ export default function FullRankings() {
   const [editingJobTitle, setEditingJobTitle] = useState(null); // employee_id being edited
   const [pendingJobTitle, setPendingJobTitle] = useState(""); // new job title value
   const [savingJobTitle, setSavingJobTitle] = useState(false);
+  const [searchQuery, setSearchQuery] = useState(""); // Employee search
+
+  // Filter rankings by search query
+  const filteredRankings = useMemo(() => {
+    if (!searchQuery.trim()) return rankings;
+    const query = searchQuery.toLowerCase();
+    return rankings.filter(emp => 
+      emp.name.toLowerCase().includes(query) ||
+      emp.job_title?.toLowerCase().includes(query) ||
+      emp.tier_label?.toLowerCase().includes(query)
+    );
+  }, [rankings, searchQuery]);
 
   // Update employee job title
   const updateEmployeeJobTitle = async (employeeId, newJobTitle) => {
