@@ -706,7 +706,7 @@ export default function FullRankings() {
                           </td>
                           
                           {/* NPS Score */}
-                          <td className="px-4 py-4 text-center" data-testid={`nps-score-${employee.position}`}>
+                          <td className="px-4 py-4 text-center hidden md:table-cell" data-testid={`nps-score-${employee.position}`}>
                             {formatNps(getEmployeeNps(employee.employee_id))}
                           </td>
                           
