@@ -812,6 +812,151 @@ Sarah Johnson,Trainer,400,22000,1200,1200,1200,480,4"""
     )
 
 
+# === POS REPORT OCR ===
+
+class POSOCRRequest(BaseModel):
+    """Request model for POS OCR extraction."""
+    image_base64: str = Field(..., description="Base64 encoded image data")
+    mime_type: str = Field(default="image/jpeg", description="MIME type of the image")
+
+class POSOCRResponse(BaseModel):
+    """Response model for POS OCR extraction."""
+    success: bool
+    report_date: Optional[str] = None
+    report_type: Optional[str] = None
+    employees: List[Dict[str, Any]] = []
+    employee_count: int = 0
+    extraction_notes: Optional[str] = None
+    error: Optional[str] = None
+
+@api_router.post("/v2/pos-ocr/extract", response_model=POSOCRResponse)
+async def extract_pos_report(request: POSOCRRequest):
+    """
+    Extract employee performance data from a POS report image using AI vision.
+    
+    Supported formats: JPEG, PNG, WEBP
+    
+    Returns extracted employee data including:
+    - Employee names
+    - PPA (Per Person Average)
+    - LBW per guest
+    - Glassware per guest
+    - Guest count
+    - Net sales
+    - Guests per LSC
+    """
+    from pos_ocr import extract_pos_data_from_image, validate_extracted_data
+    
+    # Validate image data
+    if not request.image_base64:
+        return POSOCRResponse(
+            success=False,
+            error="No image data provided"
+        )
+    
+    # Validate MIME type
+    valid_mime_types = ["image/jpeg", "image/png", "image/webp"]
+    if request.mime_type not in valid_mime_types:
+        return POSOCRResponse(
+            success=False,
+            error=f"Invalid image type. Supported: {', '.join(valid_mime_types)}"
+        )
+    
+    try:
+        # Extract data from image
+        raw_data = await extract_pos_data_from_image(
+            request.image_base64, 
+            request.mime_type
+        )
+        
+        # Validate and clean extracted data
+        validated_data = validate_extracted_data(raw_data)
+        
+        if "error" in validated_data and not validated_data.get("employees"):
+            return POSOCRResponse(
+                success=False,
+                error=validated_data.get("error"),
+                extraction_notes=validated_data.get("extraction_notes")
+            )
+        
+        return POSOCRResponse(
+            success=True,
+            report_date=validated_data.get("report_date"),
+            report_type=validated_data.get("report_type"),
+            employees=validated_data.get("employees", []),
+            employee_count=validated_data.get("employee_count", 0),
+            extraction_notes=validated_data.get("extraction_notes")
+        )
+        
+    except Exception as e:
+        logging.error(f"POS OCR extraction failed: {str(e)}")
+        return POSOCRResponse(
+            success=False,
+            error=f"Extraction failed: {str(e)}"
+        )
+
+
+@api_router.post("/v2/pos-ocr/upload")
+async def upload_pos_report_image(file: UploadFile = File(...)):
+    """
+    Upload a POS report image file and extract employee data.
+    
+    Accepts: JPEG, PNG, WEBP image files
+    Max size: 10MB
+    """
+    from pos_ocr import extract_pos_data_from_image, validate_extracted_data
+    
+    # Validate file type
+    valid_content_types = ["image/jpeg", "image/png", "image/webp"]
+    if file.content_type not in valid_content_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type '{file.content_type}'. Supported: JPEG, PNG, WEBP"
+        )
+    
+    # Read and validate file size (max 10MB)
+    contents = await file.read()
+    if len(contents) > 10 * 1024 * 1024:
+        raise HTTPException(
+            status_code=400,
+            detail="File too large. Maximum size is 10MB"
+        )
+    
+    # Convert to base64
+    image_base64 = base64.b64encode(contents).decode('utf-8')
+    
+    try:
+        # Extract data from image
+        raw_data = await extract_pos_data_from_image(image_base64, file.content_type)
+        
+        # Validate and clean extracted data
+        validated_data = validate_extracted_data(raw_data)
+        
+        if "error" in validated_data and not validated_data.get("employees"):
+            return {
+                "success": False,
+                "error": validated_data.get("error"),
+                "extraction_notes": validated_data.get("extraction_notes")
+            }
+        
+        return {
+            "success": True,
+            "filename": file.filename,
+            "report_date": validated_data.get("report_date"),
+            "report_type": validated_data.get("report_type"),
+            "employees": validated_data.get("employees", []),
+            "employee_count": validated_data.get("employee_count", 0),
+            "extraction_notes": validated_data.get("extraction_notes")
+        }
+        
+    except Exception as e:
+        logging.error(f"POS OCR upload failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Extraction failed: {str(e)}"
+        )
+
+
 @api_router.post("/v2/upload/validate")
 async def validate_upload_file(file: UploadFile = File(...)):
     """
