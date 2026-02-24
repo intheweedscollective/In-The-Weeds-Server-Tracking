@@ -239,11 +239,11 @@ export const SidebarLayout = ({ children }) => {
               alt="Bubba Gump" 
               className="w-10 h-10 rounded-full border-2 border-primary/30"
             />
-            <span className="font-bold text-white">Performance Hub</span>
+            <span className="font-bold text-foreground">Performance Hub</span>
           </Link>
           <button
             onClick={() => setIsMobileOpen(!isMobileOpen)}
-            className="p-2 text-slate-400 hover:bg-slate-800 rounded-lg"
+            className="p-2 text-muted-foreground hover:bg-muted rounded-lg"
           >
             {isMobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
