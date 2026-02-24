@@ -133,7 +133,7 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
               <div
                 className={`
                   relative border-2 border-dashed rounded-xl p-8 transition-all text-center
-                  ${isDragging ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"}
+                  ${isDragging ? "border-primary bg-primary/10" : "border-slate-600 hover:border-primary/50"}
                   ${isProcessing ? "pointer-events-none opacity-50" : "cursor-pointer"}
                 `}
                 onDragOver={handleDragOver}
@@ -153,8 +153,8 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                   <div className="flex flex-col items-center gap-4">
                     <Loader2 className="w-12 h-12 text-primary animate-spin" />
                     <div>
-                      <p className="text-lg font-semibold text-foreground">Processing POS Report...</p>
-                      <p className="text-sm text-muted-foreground">AI is extracting employee data</p>
+                      <p className="text-lg font-semibold text-white">Processing POS Report...</p>
+                      <p className="text-sm text-slate-400">AI is extracting employee data</p>
                     </div>
                   </div>
                 ) : (
@@ -163,8 +163,8 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                       <Upload className="w-8 h-8 text-primary" />
                     </div>
                     <div>
-                      <p className="text-lg font-semibold text-foreground">Drop POS report image here</p>
-                      <p className="text-sm text-muted-foreground">or click to browse • JPEG, PNG, WEBP up to 10MB</p>
+                      <p className="text-lg font-semibold text-white">Drop POS report image here</p>
+                      <p className="text-sm text-slate-400">or click to browse • JPEG, PNG, WEBP up to 10MB</p>
                     </div>
                   </div>
                 )}
@@ -173,8 +173,8 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
               {/* Preview */}
               {previewUrl && (
                 <div className="space-y-2">
-                  <p className="text-sm font-medium text-muted-foreground">Preview:</p>
-                  <div className="relative rounded-xl overflow-hidden border border-border bg-muted">
+                  <p className="text-sm font-medium text-slate-400">Preview:</p>
+                  <div className="relative rounded-xl overflow-hidden border border-slate-600 bg-slate-900">
                     <img 
                       src={previewUrl} 
                       alt="POS Report Preview" 
@@ -196,9 +196,9 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
               )}
 
               {/* Tips */}
-              <div className="bg-muted/50 rounded-xl p-4">
-                <p className="text-sm font-medium text-foreground mb-2">Tips for best results:</p>
-                <ul className="text-sm text-muted-foreground space-y-1">
+              <div className="bg-slate-700/50 rounded-xl p-4">
+                <p className="text-sm font-medium text-white mb-2">Tips for best results:</p>
+                <ul className="text-sm text-slate-300 space-y-1">
                   <li>• Ensure the report is clearly visible and not blurry</li>
                   <li>• Include all columns: Employee Name, PPA, LBW, Glassware, Guest Count</li>
                   <li>• Screenshot or photo of the full report works best</li>
