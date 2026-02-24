@@ -131,17 +131,6 @@ export const SidebarLayout = ({ children }) => {
         </Link>
       </div>
 
-      {/* Store Selector (for multi-store future) */}
-      {!isCollapsed && (
-        <div className="px-3 py-3 border-b border-border">
-          <button className="w-full flex items-center gap-2 px-3 py-2 bg-muted hover:bg-muted/80 rounded-lg text-sm font-medium text-muted-foreground transition-colors">
-            <Building2 className="w-4 h-4 text-muted-foreground" />
-            <span className="flex-1 text-left truncate">Las Vegas</span>
-            <ChevronDown className="w-4 h-4 text-muted-foreground" />
-          </button>
-        </div>
-      )}
-
       {/* Navigation Groups */}
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
         {navGroups.map((group) => (
