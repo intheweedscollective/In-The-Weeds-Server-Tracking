@@ -93,12 +93,12 @@ export const SidebarLayout = ({ children }) => {
         transition-all duration-200 group relative
         ${isActive(item.path) 
           ? "bg-primary text-white shadow-lg shadow-primary/25" 
-          : "text-slate-400 hover:bg-slate-700/50 hover:text-white"
+          : "text-[hsl(var(--sidebar-text,215_20%_65%))] hover:bg-[hsl(var(--sidebar-hover,220_26%_18%))] hover:text-foreground"
         }
       `}
       data-testid={`nav-${item.path.replace("/", "") || "home"}`}
     >
-      <item.icon className={`w-5 h-5 flex-shrink-0 ${isActive(item.path) ? "" : "text-slate-500 group-hover:text-primary"}`} />
+      <item.icon className={`w-5 h-5 flex-shrink-0 ${isActive(item.path) ? "" : "text-[hsl(var(--sidebar-text,215_20%_65%))] group-hover:text-primary"}`} />
       {showLabel && (
         <span className={`${isCollapsed ? "hidden" : "block"} truncate`}>
           {item.label}
