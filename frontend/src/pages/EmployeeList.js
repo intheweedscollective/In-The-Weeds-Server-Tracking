@@ -53,7 +53,6 @@ export default function EmployeeList() {
       const response = await axios.get(`${API}/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`);
       setEmployees(response.data);
     } catch (error) {
-      console.error("Error fetching employees:", error);
       toast.error("Error loading employees");
     } finally {
       setLoading(false);
@@ -71,7 +70,6 @@ export default function EmployeeList() {
       toast.success("Employee deleted successfully");
       fetchEmployees();
     } catch (error) {
-      console.error("Error deleting employee:", error);
       toast.error("Error deleting employee");
     } finally {
       setConfirmDeleteOpen(false);
@@ -138,7 +136,6 @@ export default function EmployeeList() {
       setShowEditModal(false);
       fetchEmployees();
     } catch (error) {
-      console.error("Error saving employee:", error);
       toast.error(error.response?.data?.detail || "Error saving employee");
     } finally {
       setSaving(false);

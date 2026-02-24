@@ -135,7 +135,6 @@ export default function QuarterSettings() {
             slide_seasonal_theme: "auto"
           });
         } else {
-          console.error("Error fetching settings:", error);
           toast.error("Error loading settings");
         }
       } finally {
@@ -148,7 +147,6 @@ export default function QuarterSettings() {
         const response = await axios.get(`${API}/v2/quarter-settings/${selectedYear}/${selectedQuarter}/benchmark-suggestions`);
         setSuggestions(response.data);
       } catch (error) {
-        console.error("Error fetching suggestions:", error);
         setSuggestions(null);
       }
     };
@@ -162,7 +160,6 @@ export default function QuarterSettings() {
       const response = await axios.get(`${API}/v2/quarter-settings`);
       setAllSettings(response.data);
     } catch (error) {
-      console.error("Error fetching all settings:", error);
     }
   };
 
@@ -198,7 +195,6 @@ export default function QuarterSettings() {
       });
       setIsNew(false);
     } catch (error) {
-      console.error("Error fetching settings:", error);
     } finally {
       setLoading(false);
     }
@@ -228,7 +224,6 @@ export default function QuarterSettings() {
       refetchSettings();
       fetchAllSettings();
     } catch (error) {
-      console.error("Error saving settings:", error);
       toast.error(error.response?.data?.detail || "Error saving settings");
     } finally {
       setSaving(false);

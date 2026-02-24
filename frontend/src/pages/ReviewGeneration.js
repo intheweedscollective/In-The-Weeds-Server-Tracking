@@ -29,7 +29,6 @@ export default function ReviewGeneration() {
       const sorted = (response.data || []).sort((a, b) => (a.peer_rank || 999) - (b.peer_rank || 999));
       setEmployees(sorted);
     } catch (error) {
-      console.error("Error fetching employees:", error);
       toast.error("Error loading employees");
     } finally {
       setLoading(false);
@@ -41,7 +40,6 @@ export default function ReviewGeneration() {
       const response = await axios.get(`${API}/reviews`);
       setReviews(response.data);
     } catch (error) {
-      console.error("Error fetching reviews:", error);
     }
   };
 
@@ -100,7 +98,6 @@ export default function ReviewGeneration() {
       setTimeout(() => window.URL.revokeObjectURL(url), 1000);
       fetchReviews();
     } catch (error) {
-      console.error("Error generating review:", error);
       toast.error("Error generating review: " + (error.response?.data?.message || error.message));
     } finally {
       setGenerating(prev => ({ ...prev, [employeeId]: false }));
@@ -141,7 +138,6 @@ export default function ReviewGeneration() {
         const response = await axios.get(`${API}/v2/trends/${selectedYear}/${selectedQuarter}/employee/${employeeId}/data`);
         setTrendData(prev => ({ ...prev, [employeeId]: response.data }));
       } catch (error) {
-        console.error("Error fetching trend data:", error);
         // Still allow expansion even if data fetch fails
       }
     }

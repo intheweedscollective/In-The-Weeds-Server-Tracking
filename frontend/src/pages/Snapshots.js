@@ -38,7 +38,6 @@ export default function Snapshots() {
       const res = await axios.get(`${API}/v2/snapshots`);
       setSnapshots(res.data);
     } catch (error) {
-      console.error("Error fetching snapshots:", error);
     }
   }, []);
 
@@ -47,7 +46,6 @@ export default function Snapshots() {
       const res = await axios.get(`${API}/v2/snapshots/backgrounds`);
       setBackgrounds(res.data);
     } catch (error) {
-      console.error("Error fetching backgrounds:", error);
       // Fallback backgrounds
       setBackgrounds([
         { key: "midnight_blue", name: "Midnight Blue" },

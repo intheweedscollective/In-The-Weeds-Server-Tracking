@@ -99,7 +99,6 @@ export default function YodeckSlides() {
         });
       }
     } catch (error) {
-      console.error("Error fetching slide manifest:", error);
       if (error.response?.status === 404) {
         toast.error(`No data for ${selectedQuarter} ${selectedYear}`);
         setSlideManifest(null);
@@ -156,7 +155,6 @@ export default function YodeckSlides() {
       
       toast.success("Slide downloaded!");
     } catch (error) {
-      console.error("Error downloading slide:", error);
       // Fallback: open in new tab
       window.open(`${BACKEND_URL}${endpoint}`, '_blank');
       toast.info("Opening slide in new tab - right-click to save");
@@ -226,7 +224,6 @@ export default function YodeckSlides() {
       setShowThemeSettings(false);
       fetchSlideManifest(); // Refresh to show updated theme
     } catch (error) {
-      console.error("Error saving theme:", error);
       toast.error("Failed to save theme settings");
     } finally {
       setSavingTheme(false);

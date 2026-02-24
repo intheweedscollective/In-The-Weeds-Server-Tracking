@@ -75,7 +75,6 @@ export default function FullRankings() {
       // Refresh data to show updated tier
       fetchRankings();
     } catch (error) {
-      console.error("Error updating job title:", error);
       toast.error("Failed to update job title");
     } finally {
       setSavingJobTitle(false);
@@ -116,7 +115,6 @@ export default function FullRankings() {
         setNpsStats(null);
       }
     } catch (error) {
-      console.error("Error fetching rankings:", error);
       if (error.response?.status === 404) {
         toast.error(`No data found for ${selectedQuarter} ${selectedYear}`);
         setRankings([]);
@@ -234,7 +232,6 @@ export default function FullRankings() {
         toast.error(response.data.message || "NPS sync failed");
       }
     } catch (error) {
-      console.error("Error syncing NPS:", error);
       if (error.code === 'ECONNABORTED') {
         toast.warning("NPS sync is taking longer than expected. It may still complete in the background.");
       } else {
@@ -293,7 +290,6 @@ export default function FullRankings() {
       
       toast.success("Rankings slide downloaded!");
     } catch (error) {
-      console.error("Error downloading slide:", error);
       toast.error("Failed to download slide");
     } finally {
       setDownloading(false);
@@ -328,7 +324,6 @@ export default function FullRankings() {
       
       toast.success("Printable rankings downloaded!");
     } catch (error) {
-      console.error("Error downloading printable rankings:", error);
       toast.error("Failed to download printable rankings");
     } finally {
       setDownloadingPrintable(false);
@@ -356,7 +351,6 @@ export default function FullRankings() {
       
       toast.success(`Review downloaded for ${employeeName}`);
     } catch (error) {
-      console.error("Error downloading review:", error);
       toast.error(`Failed to download review for ${employeeName}`);
     } finally {
       setDownloadingReview(null);

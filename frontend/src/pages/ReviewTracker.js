@@ -99,7 +99,6 @@ export default function ReviewTracker() {
       }
       
     } catch (error) {
-      console.error("Error fetching review data:", error);
       toast.error("Failed to load reviews");
     } finally {
       setLoading(false);

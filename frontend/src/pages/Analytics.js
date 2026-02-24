@@ -141,7 +141,6 @@ export default function Analytics() {
         setTrendData(trendResponse.data);
       }
     } catch (error) {
-      console.error("Error fetching employees:", error);
       toast.error("Error loading employees");
     } finally {
       setLoading(false);
@@ -184,7 +183,6 @@ export default function Analytics() {
       window.URL.revokeObjectURL(url);
       toast.success("Analytics PDF downloaded");
     } catch (error) {
-      console.error(error);
       toast.error("Could not download Analytics PDF");
     }
   };
