@@ -149,7 +149,7 @@ export const SidebarLayout = ({ children }) => {
             {group.label && !isCollapsed && (
               <button
                 onClick={() => toggleGroup(group.id)}
-                className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider hover:text-slate-300"
+                className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground"
               >
                 <span>{group.label}</span>
                 {expandedGroups.includes(group.id) ? (
@@ -171,7 +171,7 @@ export const SidebarLayout = ({ children }) => {
       </nav>
 
       {/* Bottom Navigation */}
-      <div className="border-t border-slate-700 px-3 py-3 space-y-1">
+      <div className="border-t border-border px-3 py-3 space-y-1">
         {bottomNav.map((item) => (
           <NavLink key={item.path} item={item} showLabel={!isCollapsed} />
         ))}
@@ -180,7 +180,7 @@ export const SidebarLayout = ({ children }) => {
         <button
           onClick={toggleTheme}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium
-            text-slate-400 hover:bg-slate-700/50 hover:text-white transition-all duration-200"
+            text-muted-foreground hover:bg-[hsl(var(--sidebar-hover,220_26%_18%))] hover:text-foreground transition-all duration-200"
           data-testid="theme-toggle"
         >
           {theme === 'dark' ? (
@@ -198,10 +198,10 @@ export const SidebarLayout = ({ children }) => {
       </div>
 
       {/* Collapse Toggle (Desktop only) */}
-      <div className="hidden lg:block border-t border-slate-700 p-3">
+      <div className="hidden lg:block border-t border-border p-3">
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
         >
           {isCollapsed ? (
             <ChevronRight className="w-4 h-4" />
