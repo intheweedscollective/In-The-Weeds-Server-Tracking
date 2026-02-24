@@ -257,7 +257,7 @@ export const SidebarLayout = ({ children }) => {
           onClick={() => setIsMobileOpen(false)}
         >
           <aside 
-            className="w-72 h-full bg-slate-900 shadow-xl"
+            className="w-72 h-full bg-[hsl(var(--sidebar-bg,220_26%_12%))] shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <SidebarContent />
