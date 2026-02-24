@@ -221,7 +221,7 @@ export const SidebarLayout = ({ children }) => {
       {/* Desktop Sidebar */}
       <aside 
         className={`
-          hidden lg:flex flex-col bg-slate-900 border-r border-slate-700
+          hidden lg:flex flex-col bg-[hsl(var(--sidebar-bg,220_26%_12%))] border-r border-border
           transition-all duration-300 ease-in-out
           ${isCollapsed ? "w-20" : "w-64"}
         `}
@@ -231,7 +231,7 @@ export const SidebarLayout = ({ children }) => {
       </aside>
 
       {/* Mobile Header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-slate-900 border-b border-slate-700">
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-[hsl(var(--sidebar-bg,220_26%_12%))] border-b border-border">
         <div className="flex items-center justify-between px-4 py-3">
           <Link to="/" className="flex items-center gap-3">
             <img 
