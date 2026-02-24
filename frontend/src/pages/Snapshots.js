@@ -541,9 +541,50 @@ export default function Snapshots() {
             <li>• <strong>Grid Layout:</strong> All employees on one slide, sorted by tier (Trainers → Bartenders → A/B/C-Servers)</li>
             <li>• <strong>Color Coding:</strong> Blue ≥100%, Green ≥80%, Yellow 70-79%, Red &lt;70%</li>
             <li>• <strong>Recommended Schedule:</strong> Upload cumulative quarter data on the 1st and 15th of each month</li>
+            <li>• <strong>Scan POS:</strong> Use AI to extract data directly from Aloha POS report screenshots</li>
           </ul>
         </CardContent>
       </Card>
+
+      {/* POS Upload Modal */}
+      <POSUploadModal
+        isOpen={showPOSUpload}
+        onClose={() => {
+          setShowPOSUpload(false);
+          setPosUploadSnapshotId(null);
+        }}
+        onDataExtracted={async (employees) => {
+          if (!posUploadSnapshotId || !employees.length) return;
+          
+          // Convert extracted data to CSV format and upload
+          const csvHeader = "Employee Name,Job Title,Guests,Net Sales,Liquor Sales,Beer Sales,Wine Sales,Glassware Sales,LSC Count";
+          const csvRows = employees.map(emp => {
+            // Estimate LBW breakdown (rough split)
+            const lbwTotal = (emp.lbw_per_guest || 0) * (emp.guest_count || 0);
+            const liquor = lbwTotal * 0.4;
+            const beer = lbwTotal * 0.35;
+            const wine = lbwTotal * 0.25;
+            const glasswareSales = (emp.glassware_per_guest || 0) * (emp.guest_count || 0);
+            const lscCount = emp.guests_per_lsc ? Math.round((emp.guest_count || 0) / emp.guests_per_lsc) : 0;
+            
+            return `${emp.name},Server,${emp.guest_count || 0},${emp.net_sales || 0},${liquor.toFixed(2)},${beer.toFixed(2)},${wine.toFixed(2)},${glasswareSales.toFixed(2)},${lscCount}`;
+          }).join("\n");
+          
+          const csvContent = `${csvHeader}\n${csvRows}`;
+          const blob = new Blob([csvContent], { type: "text/csv" });
+          const file = new File([blob], "pos_extracted_data.csv", { type: "text/csv" });
+          
+          // Upload the generated CSV
+          await uploadData(posUploadSnapshotId, file);
+          
+          toast({
+            title: "POS Data Imported",
+            description: `Successfully imported ${employees.length} employees from POS scan`,
+          });
+        }}
+        year={newSnapshot.year}
+        quarter={newSnapshot.quarter}
+      />
     </div>
   );
 }
