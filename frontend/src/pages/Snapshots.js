@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
-import { Camera, Upload, Download, Trash2, Plus, Calendar, Image, RefreshCw } from "lucide-react";
+import { Camera, Upload, Download, Trash2, Plus, Calendar, Image, RefreshCw, ScanLine } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { useToast } from "../hooks/use-toast";
+import { POSUploadModal } from "../components/POSUploadModal";
 import axios from "axios";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -20,6 +21,8 @@ export default function Snapshots() {
   const [uploading, setUploading] = useState(null);
   const [generating, setGenerating] = useState(null);
   const [recalculating, setRecalculating] = useState(null);
+  const [showPOSUpload, setShowPOSUpload] = useState(false);
+  const [posUploadSnapshotId, setPosUploadSnapshotId] = useState(null);
   
   // New snapshot form
   const [showCreateForm, setShowCreateForm] = useState(false);
