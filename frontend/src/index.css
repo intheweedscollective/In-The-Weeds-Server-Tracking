@@ -18,9 +18,9 @@ code {
 }
 
 @layer base {
-    :root {
+    :root, .dark {
         /* ========================================
-           BOLD CORPORATE THEME
+           BOLD CORPORATE THEME - DARK MODE
            Dark, Professional, High Contrast
            ======================================== */
         
@@ -72,6 +72,71 @@ code {
         
         /* Design Tokens */
         --radius: 0.75rem;
+        
+        /* Sidebar colors */
+        --sidebar-bg: 220 26% 12%;
+        --sidebar-hover: 220 26% 18%;
+        --sidebar-text: 215 20% 65%;
+        --sidebar-active-bg: 217 91% 60%;
+    }
+    
+    .light {
+        /* ========================================
+           BOLD CORPORATE THEME - LIGHT MODE
+           Clean, Professional, Easy on Eyes
+           ======================================== */
+        
+        /* Primary - Vibrant Blue */
+        --primary: 217 91% 50%;           /* Slightly darker for light mode */
+        --primary-foreground: 0 0% 100%;
+        
+        /* Secondary - Slate */
+        --secondary: 215 25% 27%;
+        --secondary-foreground: 0 0% 100%;
+        
+        /* Accent - Bright Blue */
+        --accent: 217 91% 55%;
+        --accent-foreground: 0 0% 100%;
+        
+        /* Backgrounds - Light Mode */
+        --background: 210 20% 98%;        /* Off-white */
+        --foreground: 220 26% 14%;        /* Dark text */
+        
+        /* Cards - White */
+        --card: 0 0% 100%;
+        --card-foreground: 220 26% 14%;
+        
+        /* Popover */
+        --popover: 0 0% 100%;
+        --popover-foreground: 220 26% 14%;
+        
+        /* Muted */
+        --muted: 210 20% 95%;
+        --muted-foreground: 215 25% 40%;
+        
+        /* Borders */
+        --border: 214 32% 91%;
+        --input: 214 32% 91%;
+        --ring: 217 91% 50%;
+        
+        /* Semantic Colors */
+        --destructive: 0 84% 55%;
+        --destructive-foreground: 0 0% 98%;
+        --success: 160 84% 35%;
+        --warning: 38 92% 45%;
+        
+        /* Chart Colors */
+        --chart-1: 217 91% 50%;
+        --chart-2: 199 89% 42%;
+        --chart-3: 160 84% 35%;
+        --chart-4: 262 83% 52%;
+        --chart-5: 0 84% 55%;
+        
+        /* Sidebar colors for light mode */
+        --sidebar-bg: 210 20% 96%;
+        --sidebar-hover: 210 20% 92%;
+        --sidebar-text: 215 25% 40%;
+        --sidebar-active-bg: 217 91% 50%;
     }
 }
 
