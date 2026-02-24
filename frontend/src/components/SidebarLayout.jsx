@@ -113,7 +113,7 @@ export const SidebarLayout = ({ children }) => {
   const SidebarContent = () => (
     <div className="flex flex-col h-full bg-[hsl(var(--sidebar-bg,220_26%_12%))]">
       {/* Logo Header */}
-      <div className={`p-4 border-b border-slate-700 ${isCollapsed ? "px-2" : ""}`}>
+      <div className={`p-4 border-b border-border ${isCollapsed ? "px-2" : ""}`}>
         <Link to="/" className="flex items-center gap-3" onClick={() => setIsMobileOpen(false)}>
           <img 
             src="https://customer-assets.emergentagent.com/job_eaa669fd-7426-41e2-82fc-765ab916d7f3/artifacts/f0uz68d3_IMG_0599.png" 
@@ -122,10 +122,10 @@ export const SidebarLayout = ({ children }) => {
           />
           {!isCollapsed && (
             <div className="min-w-0">
-              <h1 className="font-bold text-white text-lg leading-tight truncate">
+              <h1 className="font-bold text-foreground text-lg leading-tight truncate">
                 Bubba Gump
               </h1>
-              <p className="text-xs text-slate-400 truncate">Performance Hub</p>
+              <p className="text-xs text-muted-foreground truncate">Performance Hub</p>
             </div>
           )}
         </Link>
@@ -133,11 +133,11 @@ export const SidebarLayout = ({ children }) => {
 
       {/* Store Selector (for multi-store future) */}
       {!isCollapsed && (
-        <div className="px-3 py-3 border-b border-slate-700">
-          <button className="w-full flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm font-medium text-slate-300 transition-colors">
-            <Building2 className="w-4 h-4 text-slate-500" />
+        <div className="px-3 py-3 border-b border-border">
+          <button className="w-full flex items-center gap-2 px-3 py-2 bg-muted hover:bg-muted/80 rounded-lg text-sm font-medium text-muted-foreground transition-colors">
+            <Building2 className="w-4 h-4 text-muted-foreground" />
             <span className="flex-1 text-left truncate">Las Vegas</span>
-            <ChevronDown className="w-4 h-4 text-slate-500" />
+            <ChevronDown className="w-4 h-4 text-muted-foreground" />
           </button>
         </div>
       )}
