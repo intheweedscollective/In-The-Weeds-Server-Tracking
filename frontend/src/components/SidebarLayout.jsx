@@ -111,7 +111,7 @@ export const SidebarLayout = ({ children }) => {
   );
 
   const SidebarContent = () => (
-    <div className="flex flex-col h-full bg-slate-900">
+    <div className="flex flex-col h-full bg-[hsl(var(--sidebar-bg,220_26%_12%))]">
       {/* Logo Header */}
       <div className={`p-4 border-b border-slate-700 ${isCollapsed ? "px-2" : ""}`}>
         <Link to="/" className="flex items-center gap-3" onClick={() => setIsMobileOpen(false)}>
