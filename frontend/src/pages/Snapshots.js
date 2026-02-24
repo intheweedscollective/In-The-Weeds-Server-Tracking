@@ -458,7 +458,7 @@ export default function Snapshots() {
                   </div>
                   
                   <div className="flex flex-wrap gap-2">
-                    {/* Upload Data */}
+                    {/* Upload Data (CSV) */}
                     <label className="cursor-pointer">
                       <input
                         type="file"
@@ -477,9 +477,22 @@ export default function Snapshots() {
                         disabled={uploading === snapshot.id}
                       >
                         <Upload className="w-4 h-4 mr-2" />
-                        {uploading === snapshot.id ? "Uploading..." : "Upload Data"}
+                        {uploading === snapshot.id ? "Uploading..." : "Upload CSV"}
                       </Button>
                     </label>
+                    
+                    {/* Scan POS Report (OCR) */}
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setPosUploadSnapshotId(snapshot.id);
+                        setShowPOSUpload(true);
+                      }}
+                      className="border-primary/50 text-primary hover:bg-primary/10"
+                    >
+                      <ScanLine className="w-4 h-4 mr-2" />
+                      Scan POS
+                    </Button>
                     
                     {/* Generate Slide */}
                     <Button
