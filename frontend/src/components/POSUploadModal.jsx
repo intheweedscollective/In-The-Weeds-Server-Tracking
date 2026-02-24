@@ -312,6 +312,7 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                   setExtractedData(null);
                   setPreviewUrl(null);
                 }}
+                className="border-slate-600 text-slate-300 hover:bg-slate-700"
               >
                 <Edit3 className="w-4 h-4 mr-2" />
                 Upload Different Image
@@ -322,7 +323,7 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
               </Button>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-slate-400">
               Upload a POS report image to extract employee data
             </p>
           )}
