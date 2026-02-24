@@ -212,11 +212,11 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
               <div className="flex items-center gap-3 p-4 bg-green-500/10 border border-green-500/30 rounded-xl">
                 <CheckCircle className="w-6 h-6 text-green-500" />
                 <div>
-                  <p className="font-medium text-green-500">
+                  <p className="font-medium text-green-400">
                     Successfully extracted {extractedData.employee_count} employees
                   </p>
                   {extractedData.extraction_notes && (
-                    <p className="text-sm text-green-400">{extractedData.extraction_notes}</p>
+                    <p className="text-sm text-green-400/80">{extractedData.extraction_notes}</p>
                   )}
                 </div>
               </div>
@@ -225,55 +225,55 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
               {(extractedData.report_date || extractedData.report_type) && (
                 <div className="flex gap-4">
                   {extractedData.report_date && (
-                    <div className="px-3 py-2 bg-muted rounded-lg">
-                      <span className="text-xs text-muted-foreground">Date:</span>
-                      <span className="ml-2 text-sm font-medium text-foreground">{extractedData.report_date}</span>
+                    <div className="px-3 py-2 bg-slate-700 rounded-lg">
+                      <span className="text-xs text-slate-400">Date:</span>
+                      <span className="ml-2 text-sm font-medium text-white">{extractedData.report_date}</span>
                     </div>
                   )}
                   {extractedData.report_type && (
-                    <div className="px-3 py-2 bg-muted rounded-lg">
-                      <span className="text-xs text-muted-foreground">Type:</span>
-                      <span className="ml-2 text-sm font-medium text-foreground capitalize">{extractedData.report_type}</span>
+                    <div className="px-3 py-2 bg-slate-700 rounded-lg">
+                      <span className="text-xs text-slate-400">Type:</span>
+                      <span className="ml-2 text-sm font-medium text-white capitalize">{extractedData.report_type}</span>
                     </div>
                   )}
                 </div>
               )}
 
               {/* Extracted Data Table */}
-              <div className="border border-border rounded-xl overflow-hidden">
+              <div className="border border-slate-600 rounded-xl overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead className="bg-muted">
+                    <thead className="bg-slate-700">
                       <tr>
-                        <th className="px-4 py-3 text-left font-semibold text-foreground">Employee</th>
-                        <th className="px-4 py-3 text-right font-semibold text-foreground">PPA</th>
-                        <th className="px-4 py-3 text-right font-semibold text-foreground">LBW/Guest</th>
-                        <th className="px-4 py-3 text-right font-semibold text-foreground">Glass/Guest</th>
-                        <th className="px-4 py-3 text-right font-semibold text-foreground">Guests</th>
-                        <th className="px-4 py-3 text-right font-semibold text-foreground">Net Sales</th>
-                        <th className="px-4 py-3 text-right font-semibold text-foreground">G/LSC</th>
+                        <th className="px-4 py-3 text-left font-semibold text-white">Employee</th>
+                        <th className="px-4 py-3 text-right font-semibold text-white">PPA</th>
+                        <th className="px-4 py-3 text-right font-semibold text-white">LBW/Guest</th>
+                        <th className="px-4 py-3 text-right font-semibold text-white">Glass/Guest</th>
+                        <th className="px-4 py-3 text-right font-semibold text-white">Guests</th>
+                        <th className="px-4 py-3 text-right font-semibold text-white">Net Sales</th>
+                        <th className="px-4 py-3 text-right font-semibold text-white">G/LSC</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-border">
+                    <tbody className="divide-y divide-slate-600">
                       {extractedData.employees.map((emp, idx) => (
-                        <tr key={idx} className="hover:bg-muted/50">
-                          <td className="px-4 py-3 font-medium text-foreground">{emp.name}</td>
-                          <td className="px-4 py-3 text-right text-muted-foreground">
+                        <tr key={idx} className="hover:bg-slate-700/50">
+                          <td className="px-4 py-3 font-medium text-white">{emp.name}</td>
+                          <td className="px-4 py-3 text-right text-slate-300">
                             {emp.ppa ? `$${emp.ppa.toFixed(2)}` : "—"}
                           </td>
-                          <td className="px-4 py-3 text-right text-muted-foreground">
+                          <td className="px-4 py-3 text-right text-slate-300">
                             {emp.lbw_per_guest ? `$${emp.lbw_per_guest.toFixed(2)}` : "—"}
                           </td>
-                          <td className="px-4 py-3 text-right text-muted-foreground">
+                          <td className="px-4 py-3 text-right text-slate-300">
                             {emp.glassware_per_guest ? `$${emp.glassware_per_guest.toFixed(2)}` : "—"}
                           </td>
-                          <td className="px-4 py-3 text-right text-muted-foreground">
+                          <td className="px-4 py-3 text-right text-slate-300">
                             {emp.guest_count || "—"}
                           </td>
-                          <td className="px-4 py-3 text-right text-muted-foreground">
+                          <td className="px-4 py-3 text-right text-slate-300">
                             {emp.net_sales ? `$${emp.net_sales.toLocaleString()}` : "—"}
                           </td>
-                          <td className="px-4 py-3 text-right text-muted-foreground">
+                          <td className="px-4 py-3 text-right text-slate-300">
                             {emp.guests_per_lsc ? emp.guests_per_lsc.toFixed(0) : "—"}
                           </td>
                         </tr>
@@ -286,10 +286,10 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
               {/* Preview (collapsed) */}
               {previewUrl && (
                 <details className="group">
-                  <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
+                  <summary className="cursor-pointer text-sm text-slate-400 hover:text-white">
                     Show original image
                   </summary>
-                  <div className="mt-2 rounded-xl overflow-hidden border border-border">
+                  <div className="mt-2 rounded-xl overflow-hidden border border-slate-600">
                     <img src={previewUrl} alt="Original" className="w-full max-h-48 object-contain" />
                   </div>
                 </details>
@@ -299,8 +299,8 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-muted/30">
-          <Button variant="outline" onClick={handleClose}>
+        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-700 bg-slate-800/50">
+          <Button variant="outline" onClick={handleClose} className="border-slate-600 text-slate-300 hover:bg-slate-700">
             Cancel
           </Button>
           
