@@ -175,6 +175,26 @@ export const SidebarLayout = ({ children }) => {
         {bottomNav.map((item) => (
           <NavLink key={item.path} item={item} showLabel={!isCollapsed} />
         ))}
+        
+        {/* Theme Toggle */}
+        <button
+          onClick={toggleTheme}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium
+            text-slate-400 hover:bg-slate-700/50 hover:text-white transition-all duration-200"
+          data-testid="theme-toggle"
+        >
+          {theme === 'dark' ? (
+            <>
+              <Sun className="w-5 h-5 text-yellow-400" />
+              {!isCollapsed && <span>Light Mode</span>}
+            </>
+          ) : (
+            <>
+              <Moon className="w-5 h-5 text-blue-400" />
+              {!isCollapsed && <span>Dark Mode</span>}
+            </>
+          )}
+        </button>
       </div>
 
       {/* Collapse Toggle (Desktop only) */}
