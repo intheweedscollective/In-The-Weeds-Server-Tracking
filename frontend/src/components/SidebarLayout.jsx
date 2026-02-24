@@ -15,7 +15,6 @@ import {
   ChevronRight,
   Menu,
   X,
-  Building2,
   Sun,
   Moon
 } from "lucide-react";
