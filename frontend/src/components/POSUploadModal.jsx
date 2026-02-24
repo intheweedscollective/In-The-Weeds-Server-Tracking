@@ -105,23 +105,23 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col border border-slate-700">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
               <Camera className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-foreground">POS Report Scanner</h2>
-              <p className="text-sm text-muted-foreground">Upload Aloha POS report image for {quarter} {year}</p>
+              <h2 className="text-lg font-bold text-white">POS Report Scanner</h2>
+              <p className="text-sm text-slate-400">Upload Aloha POS report image for {quarter} {year}</p>
             </div>
           </div>
           <button 
             onClick={handleClose}
-            className="p-2 hover:bg-muted rounded-lg transition-colors"
+            className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
           >
-            <X className="w-5 h-5 text-muted-foreground" />
+            <X className="w-5 h-5 text-slate-400" />
           </button>
         </div>
 
