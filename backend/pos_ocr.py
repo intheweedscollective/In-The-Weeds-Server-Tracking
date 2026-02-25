@@ -325,10 +325,10 @@ async def extract_pos_data_from_pdf(pdf_bytes: bytes, max_pages: int = 20) -> Di
         # If no employees found after processing all pages, include error info
         if not unique_employees:
             return {
-                "error": f"No employee data found in {len(images)} page(s). The PDF may not contain recognizable POS report data.",
+                "error": f"No employee data found in {pages_to_process} page(s). The PDF may not contain recognizable POS report data.",
                 "extraction_notes": "; ".join(extraction_notes) if extraction_notes else "No data extracted",
                 "employees": [],
-                "pages_processed": len(images),
+                "pages_processed": pages_to_process,
                 "total_pages": total_pages
             }
         
@@ -340,8 +340,8 @@ async def extract_pos_data_from_pdf(pdf_bytes: bytes, max_pages: int = 20) -> Di
             "report_date": report_date,
             "report_type": report_type,
             "employees": unique_employees,
-            "extraction_notes": ("; ".join(extraction_notes) if extraction_notes else f"Processed {len(images)} page(s)") + note_suffix,
-            "pages_processed": len(images),
+            "extraction_notes": ("; ".join(extraction_notes) if extraction_notes else f"Processed {pages_to_process} page(s)") + note_suffix,
+            "pages_processed": pages_to_process,
             "total_pages": total_pages
         }
         
