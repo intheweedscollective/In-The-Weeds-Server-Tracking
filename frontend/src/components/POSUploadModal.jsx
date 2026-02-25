@@ -359,7 +359,7 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
             </div>
           ) : (
             <p className="text-sm text-slate-400">
-              Upload a POS report image to extract employee data
+              Upload a POS report (image or PDF) to extract employee data
             </p>
           )}
         </div>
