@@ -248,10 +248,19 @@ async def extract_pos_data_from_pdf(pdf_bytes: bytes) -> Dict[str, Any]:
                 extraction_notes.append(f"Page {page_num}: {page_data['extraction_notes']}")
             
             if page_data.get("error"):
-                extraction_notes.append(f"Page {page_num} error: {page_data['error']}")
+                extraction_notes.append(f"Page {page_num}: {page_data['error']}")
         
         # Deduplicate employees by name (keep the one with more data)
         unique_employees = _deduplicate_employees(all_employees)
+        
+        # If no employees found after processing all pages, include error info
+        if not unique_employees:
+            return {
+                "error": f"No employee data found in {len(images)} page(s). The PDF may not contain recognizable POS report data.",
+                "extraction_notes": "; ".join(extraction_notes) if extraction_notes else "No data extracted",
+                "employees": [],
+                "pages_processed": len(images)
+            }
         
         return {
             "report_date": report_date,
