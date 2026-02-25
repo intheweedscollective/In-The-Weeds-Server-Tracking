@@ -311,10 +311,13 @@ async def extract_pos_data_from_pdf(pdf_bytes: bytes, max_pages: int = 20) -> Di
                 report_type = page_data["report_type"]
                 
             if page_data.get("extraction_notes"):
-                extraction_notes.append(f"Page {page_num}: {page_data['extraction_notes']}")
+                extraction_notes.append(f"Page {page_num + 1}: {page_data['extraction_notes']}")
             
             if page_data.get("error"):
-                extraction_notes.append(f"Page {page_num}: {page_data['error']}")
+                extraction_notes.append(f"Page {page_num + 1}: {page_data['error']}")
+        
+        # Close the PDF document
+        pdf_document.close()
         
         # Deduplicate employees by name (keep the one with more data)
         unique_employees = _deduplicate_employees(all_employees)
