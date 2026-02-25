@@ -88,7 +88,10 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
 
       if (response.data.success) {
         setExtractedData(response.data);
-        toast.success(`Extracted ${response.data.employee_count} employees from POS report`);
+        const fileTypeMsg = response.data.file_type === 'pdf' 
+          ? ` from ${response.data.pages_processed} PDF page(s)` 
+          : '';
+        toast.success(`Extracted ${response.data.employee_count} employees${fileTypeMsg}`);
       } else {
         setError(response.data.error || "Failed to extract data from image");
       }
