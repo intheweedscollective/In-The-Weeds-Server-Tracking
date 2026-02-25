@@ -15,29 +15,40 @@ load_dotenv()
 # System prompt for extracting POS data
 POS_EXTRACTION_PROMPT = """You are an expert at extracting employee performance data from restaurant POS (Point of Sale) reports, specifically Aloha POS reports.
 
-Analyze the uploaded image and extract ALL employee performance metrics you can find. Look for:
+This could be one of several Aloha report types:
+1. **Server Sales Detail Report** - Shows ONE employee per page with sales by category (Food, Liquor, Beer, Wine, etc.) and totals. Employee name appears at top.
+2. **Server Performance Report** - Shows multiple employees in a table with columns for PPA, LBW, Glassware, Guest Count, etc.
+3. **Labor Report** - Shows hours worked, tips, and sales by employee.
 
-1. **Employee Names** - Server/bartender names
-2. **PPA** (Per Person Average) - Dollar amount per guest
-3. **LBW** (Liquor, Beer, Wine) per guest - Dollar amount
-4. **Glassware per guest** - Dollar amount (wine glass sales)
-5. **Guest Count** - Total number of guests served
-6. **Net Sales** - Total sales amount
-7. **LSC** (Labor Sales Check) or Guests per LSC
-8. **Tips** - If available
-9. **Hours Worked** - If available
+Analyze the uploaded image and extract employee performance metrics. Look for:
+
+1. **Employee Names** - Server/bartender names (may be at top of page or in a column)
+2. **Net Sales** - Total sales amount (look for "Net Sls" or "Net Sales" column/total)
+3. **Guest Count** - Total number of guests served (look for "Total Guests" or "Guests")
+4. **PPA** (Per Person Average) - Net Sales divided by Guest Count, OR shown directly
+5. **LBW** (Liquor, Beer, Wine) - Combined or separate amounts
+6. **Food Sales** - Food category net sales
+7. **Tips** - If available
+8. **Hours Worked** - If available
+
+For Server Sales Detail Reports (one employee per page):
+- Employee name is usually at the TOP of the page
+- Look for "Net Sls" totals row at bottom of category table
+- Look for "Total Guests" summary
+- Calculate PPA = Total Net Sales / Total Guests if not shown directly
+- Sum up Liquor + Beer + Wine for LBW total
 
 IMPORTANT INSTRUCTIONS:
 - Extract data for EVERY employee visible in the report
-- Use the exact names as shown (first name or full name)
+- Use the exact names as shown (first name, last name, or full name)
 - If a value is not visible or unclear, use null
-- Numbers should be extracted as floats without $ signs
-- Be thorough - scan the entire image for all data tables
+- Numbers should be extracted as floats without $ signs or commas
+- Be thorough - scan the entire image for all data
 
 Return the data as a JSON object with this exact structure:
 {
   "report_date": "YYYY-MM-DD or null if not visible",
-  "report_type": "daily/weekly/bi-weekly/unknown",
+  "report_type": "server_sales_detail/server_performance/labor/unknown",
   "employees": [
     {
       "name": "Employee Name",
@@ -48,7 +59,11 @@ Return the data as a JSON object with this exact structure:
       "net_sales": 5460.00,
       "guests_per_lsc": 85,
       "tips": 650.00,
-      "hours": 32.5
+      "hours": 32.5,
+      "food_sales": 4500.00,
+      "liquor_sales": 500.00,
+      "beer_sales": 300.00,
+      "wine_sales": 160.00
     }
   ],
   "extraction_notes": "Any notes about data quality or missing information"
