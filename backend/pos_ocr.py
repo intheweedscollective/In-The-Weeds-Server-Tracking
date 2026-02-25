@@ -74,7 +74,7 @@ async def extract_pos_data_from_image(image_base64: str, mime_type: str = "image
     Returns:
         Dictionary containing extracted employee data
     """
-    from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+    from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContent
     
     api_key = os.environ.get("EMERGENT_LLM_KEY")
     if not api_key:
@@ -88,13 +88,13 @@ async def extract_pos_data_from_image(image_base64: str, mime_type: str = "image
             system_message=POS_EXTRACTION_PROMPT
         ).with_model("openai", "gpt-4o")  # gpt-4o has strong vision capabilities
         
-        # Create image content
-        image_content = ImageContent(image_base64=image_base64)
+        # Create file content for image
+        file_content = FileContent(content_type=mime_type, file_content_base64=image_base64)
         
         # Send message with image
         user_message = UserMessage(
             text="Please extract all employee performance data from this POS report image. Return the data as JSON.",
-            image_contents=[image_content]
+            file_contents=[file_content]
         )
         
         response = await chat.send_message(user_message)
