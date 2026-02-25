@@ -345,11 +345,12 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                 onClick={() => {
                   setExtractedData(null);
                   setPreviewUrl(null);
+                  setFileType(null);
                 }}
                 className="border-slate-600 text-slate-300 hover:bg-slate-700"
               >
                 <Edit3 className="w-4 h-4 mr-2" />
-                Upload Different Image
+                Upload Different File
               </Button>
               <Button onClick={handleConfirmData} className="bg-primary hover:bg-primary/90">
                 <CheckCircle className="w-4 h-4 mr-2" />
