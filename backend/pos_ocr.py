@@ -320,18 +320,27 @@ async def extract_pos_data_from_pdf(pdf_bytes: bytes, max_pages: int = 20) -> Di
                 "error": f"No employee data found in {len(images)} page(s). The PDF may not contain recognizable POS report data.",
                 "extraction_notes": "; ".join(extraction_notes) if extraction_notes else "No data extracted",
                 "employees": [],
-                "pages_processed": len(images)
+                "pages_processed": len(images),
+                "total_pages": total_pages
             }
+        
+        note_suffix = ""
+        if total_pages > max_pages:
+            note_suffix = f" (PDF had {total_pages} pages, processed first {max_pages})"
         
         return {
             "report_date": report_date,
             "report_type": report_type,
             "employees": unique_employees,
-            "extraction_notes": "; ".join(extraction_notes) if extraction_notes else f"Processed {len(images)} page(s)",
-            "pages_processed": len(images)
+            "extraction_notes": ("; ".join(extraction_notes) if extraction_notes else f"Processed {len(images)} page(s)") + note_suffix,
+            "pages_processed": len(images),
+            "total_pages": total_pages
         }
         
     except Exception as e:
+        import traceback
+        import logging
+        logging.error(f"PDF processing error: {str(e)}\n{traceback.format_exc()}")
         return {
             "error": f"PDF processing failed: {str(e)}",
             "employees": []
