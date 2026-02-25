@@ -114,6 +114,16 @@ async def extract_pos_data_from_image(image_base64: str, mime_type: str = "image
         
         response = await chat.send_message(user_message)
         
+        # Log response for debugging
+        import logging
+        logging.info(f"OCR Response (first 500 chars): {response[:500] if response else 'Empty response'}")
+        
+        if not response or not response.strip():
+            return {
+                "error": "AI returned empty response",
+                "employees": []
+            }
+        
         # Parse JSON response
         # Clean up response - remove markdown code blocks if present
         cleaned_response = response.strip()
@@ -133,6 +143,9 @@ async def extract_pos_data_from_image(image_base64: str, mime_type: str = "image
             }
             
     except Exception as e:
+        import logging
+        import traceback
+        logging.error(f"OCR extraction error: {str(e)}\n{traceback.format_exc()}")
         return {
             "error": f"OCR extraction failed: {str(e)}",
             "employees": []
