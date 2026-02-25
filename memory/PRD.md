@@ -69,12 +69,17 @@ Build a comprehensive performance review application for restaurant employees (B
 - ✅ Review Tracker with AI-powered employee detection
 - ✅ ReviewTrackers.com API integration
 
-### Recent Changes (Feb 25, 2026) - UI Fix & Verification
+### Recent Changes (Feb 25, 2026) - UI Fix & PDF OCR Support
 - ✅ **Top Performers Name Color Fix**: Changed employee name color from `text-white` to `text-slate-100` in Dashboard.js for better contrast against dark background
 - ✅ **"To Pass Next Employee" Feature Verified**: Confirmed working in Rankings expanded view
   - Shows comparison to employee ranked directly above
   - Displays: Gap (pts needed), PPA, LBW, Glass, LSC targets
   - Uses `peer_rank` to find the employee above in rankings
+- ✅ **PDF Support for POS OCR**: Added ability to upload PDF files for OCR scanning
+  - Supports: JPEG, PNG, WEBP images (10MB max) AND PDF documents (20MB max)
+  - PDF pages are converted to images and each page is processed
+  - Employee data is deduplicated across pages
+  - Updated frontend modal to show PDF support and file type indicators
 
 ### Recent Changes (Feb 22, 2026) - Full UX/UI Redesign
 - ✅ **Sidebar Navigation**: Replaced 8 horizontal tabs with collapsible sidebar
