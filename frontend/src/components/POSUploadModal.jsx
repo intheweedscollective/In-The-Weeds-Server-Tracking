@@ -161,7 +161,7 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/jpeg,image/png,image/webp"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
                   className="hidden"
                   onChange={handleFileSelect}
                 />
@@ -170,8 +170,12 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                   <div className="flex flex-col items-center gap-4">
                     <Loader2 className="w-12 h-12 text-primary animate-spin" />
                     <div>
-                      <p className="text-lg font-semibold text-white">Processing POS Report...</p>
-                      <p className="text-sm text-slate-400">AI is extracting employee data</p>
+                      <p className="text-lg font-semibold text-white">Processing {fileType === 'pdf' ? 'PDF' : 'POS Report'}...</p>
+                      <p className="text-sm text-slate-400">
+                        {fileType === 'pdf' 
+                          ? 'Converting PDF pages and extracting data' 
+                          : 'AI is extracting employee data'}
+                      </p>
                     </div>
                   </div>
                 ) : (
@@ -180,8 +184,8 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                       <Upload className="w-8 h-8 text-primary" />
                     </div>
                     <div>
-                      <p className="text-lg font-semibold text-white">Drop POS report image here</p>
-                      <p className="text-sm text-slate-400">or click to browse • JPEG, PNG, WEBP up to 10MB</p>
+                      <p className="text-lg font-semibold text-white">Drop POS report here</p>
+                      <p className="text-sm text-slate-400">Images (JPEG, PNG, WEBP) up to 10MB • PDF up to 20MB</p>
                     </div>
                   </div>
                 )}
