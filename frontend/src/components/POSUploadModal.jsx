@@ -167,7 +167,7 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf"
                   className="hidden"
                   onChange={handleFileSelect}
                 />
@@ -191,7 +191,7 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                     </div>
                     <div>
                       <p className="text-lg font-semibold text-white">Drop POS report here</p>
-                      <p className="text-sm text-slate-400">Images (JPEG, PNG, WEBP) up to 10MB • PDF up to 20MB</p>
+                      <p className="text-sm text-slate-400">Images (JPEG, PNG, WEBP, HEIC) up to 10MB • PDF up to 20MB</p>
                     </div>
                   </div>
                 )}
