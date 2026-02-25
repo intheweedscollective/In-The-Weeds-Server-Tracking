@@ -225,9 +225,9 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
               {error && (
                 <div className="flex items-start gap-3 p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
                   <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-                  <div>
+                  <div className="flex-1">
                     <p className="font-medium text-red-500">Extraction Failed</p>
-                    <p className="text-sm text-red-400">{error}</p>
+                    <p className="text-sm text-red-400 whitespace-pre-wrap">{error}</p>
                   </div>
                 </div>
               )}
