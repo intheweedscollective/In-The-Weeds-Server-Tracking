@@ -259,25 +259,25 @@ async def extract_pos_data_from_pdf(pdf_bytes: bytes, max_pages: int = 20) -> Di
     Returns:
         Dictionary containing extracted employee data from all pages
     """
-    from pdf2image import convert_from_bytes
+    import fitz  # PyMuPDF
     from io import BytesIO
     import logging
     
     try:
-        # Convert PDF pages to images (150 DPI for faster processing)
-        logging.info("Starting PDF conversion...")
-        images = convert_from_bytes(pdf_bytes, dpi=150, fmt='jpeg')
+        # Open PDF with PyMuPDF
+        logging.info("Starting PDF conversion with PyMuPDF...")
+        pdf_document = fitz.open(stream=pdf_bytes, filetype="pdf")
         
-        if not images:
-            return {"error": "Could not convert PDF to images", "employees": []}
-        
-        total_pages = len(images)
+        total_pages = len(pdf_document)
         logging.info(f"PDF has {total_pages} pages")
         
+        if total_pages == 0:
+            return {"error": "PDF has no pages", "employees": []}
+        
         # Limit pages to prevent timeout
+        pages_to_process = min(total_pages, max_pages)
         if total_pages > max_pages:
             logging.warning(f"PDF has {total_pages} pages, limiting to {max_pages}")
-            images = images[:max_pages]
         
         all_employees = []
         extraction_notes = []
@@ -285,12 +285,18 @@ async def extract_pos_data_from_pdf(pdf_bytes: bytes, max_pages: int = 20) -> Di
         report_type = "unknown"
         
         # Process each page
-        for page_num, image in enumerate(images, 1):
-            logging.info(f"Processing page {page_num}/{len(images)}...")
+        for page_num in range(pages_to_process):
+            logging.info(f"Processing page {page_num + 1}/{pages_to_process}...")
             
-            # Convert PIL image to base64
-            buffer = BytesIO()
-            image.save(buffer, format='JPEG', quality=75)  # Lower quality for faster uploads
+            page = pdf_document[page_num]
+            
+            # Render page to image (150 DPI for balance of quality and speed)
+            mat = fitz.Matrix(150/72, 150/72)  # 150 DPI
+            pix = page.get_pixmap(matrix=mat)
+            
+            # Convert to JPEG bytes
+            img_bytes = pix.tobytes("jpeg")
+            image_base64 = base64.b64encode(img_bytes).decode('utf-8')
             image_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
             
             # Extract data from this page
