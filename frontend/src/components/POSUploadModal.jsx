@@ -204,6 +204,17 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                   </div>
                 </div>
               )}
+              
+              {/* PDF File Indicator */}
+              {fileType === 'pdf' && !extractedData && (
+                <div className="flex items-center gap-3 p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
+                  <FileText className="w-6 h-6 text-blue-400" />
+                  <div>
+                    <p className="font-medium text-blue-400">PDF File Uploaded</p>
+                    <p className="text-sm text-blue-400/80">Each page will be processed for employee data</p>
+                  </div>
+                </div>
+              )}
 
               {/* Error */}
               {error && (
