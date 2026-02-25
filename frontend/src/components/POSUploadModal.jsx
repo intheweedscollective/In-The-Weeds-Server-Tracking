@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { Upload, Camera, FileImage, Loader2, CheckCircle, AlertCircle, X, Download, Edit3 } from "lucide-react";
+import { Upload, Camera, FileImage, Loader2, CheckCircle, AlertCircle, X, Download, Edit3, FileText } from "lucide-react";
 import { Button } from "./ui/button";
 import { toast } from "sonner";
 import axios from "axios";
@@ -10,6 +10,7 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [fileType, setFileType] = useState(null); // 'image' or 'pdf'
   const [extractedData, setExtractedData] = useState(null);
   const [error, setError] = useState(null);
   const fileInputRef = useRef(null);
