@@ -44,22 +44,34 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
 
   const processFile = async (file) => {
     // Validate file type
-    const validTypes = ["image/jpeg", "image/png", "image/webp"];
-    if (!validTypes.includes(file.type)) {
-      setError("Please upload a JPEG, PNG, or WEBP image");
+    const validImageTypes = ["image/jpeg", "image/png", "image/webp"];
+    const validPdfTypes = ["application/pdf"];
+    const allValidTypes = [...validImageTypes, ...validPdfTypes];
+    
+    if (!allValidTypes.includes(file.type)) {
+      setError("Please upload a JPEG, PNG, WEBP image or PDF file");
       return;
     }
 
-    // Validate file size (max 10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      setError("File too large. Maximum size is 10MB");
+    const isPdf = validPdfTypes.includes(file.type);
+    const maxSize = isPdf ? 20 * 1024 * 1024 : 10 * 1024 * 1024; // 20MB for PDF, 10MB for images
+
+    // Validate file size
+    if (file.size > maxSize) {
+      setError(`File too large. Maximum size is ${maxSize / (1024 * 1024)}MB`);
       return;
     }
 
-    // Create preview
-    const reader = new FileReader();
-    reader.onload = (e) => setPreviewUrl(e.target.result);
-    reader.readAsDataURL(file);
+    setFileType(isPdf ? 'pdf' : 'image');
+
+    // Create preview (only for images)
+    if (!isPdf) {
+      const reader = new FileReader();
+      reader.onload = (e) => setPreviewUrl(e.target.result);
+      reader.readAsDataURL(file);
+    } else {
+      setPreviewUrl(null); // No preview for PDFs
+    }
 
     // Process with OCR
     setIsProcessing(true);
