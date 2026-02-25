@@ -233,7 +233,8 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                 <ul className="text-sm text-slate-300 space-y-1">
                   <li>• Ensure the report is clearly visible and not blurry</li>
                   <li>• Include all columns: Employee Name, PPA, LBW, Glassware, Guest Count</li>
-                  <li>• Screenshot or photo of the full report works best</li>
+                  <li>• Screenshot, photo, or PDF of the full report works best</li>
+                  <li>• <strong>PDF files:</strong> Each page will be scanned for employee data</li>
                   <li>• Avoid cropping important data columns</li>
                 </ul>
               </div>
