@@ -114,6 +114,7 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
     setExtractedData(null);
     setError(null);
     setIsProcessing(false);
+    setFileType(null);
     onClose();
   };
 
