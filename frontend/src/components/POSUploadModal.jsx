@@ -44,16 +44,17 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
 
   const processFile = async (file) => {
     // Validate file type
-    const validImageTypes = ["image/jpeg", "image/png", "image/webp"];
+    const validImageTypes = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
     const validPdfTypes = ["application/pdf"];
     const allValidTypes = [...validImageTypes, ...validPdfTypes];
     
     if (!allValidTypes.includes(file.type)) {
-      setError("Please upload a JPEG, PNG, WEBP image or PDF file");
+      setError("Please upload a JPEG, PNG, WEBP, HEIC image or PDF file");
       return;
     }
 
     const isPdf = validPdfTypes.includes(file.type);
+    const isHeic = file.type === "image/heic" || file.type === "image/heif";
     const maxSize = isPdf ? 20 * 1024 * 1024 : 10 * 1024 * 1024; // 20MB for PDF, 10MB for images
 
     // Validate file size
@@ -62,15 +63,15 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
       return;
     }
 
-    setFileType(isPdf ? 'pdf' : 'image');
+    setFileType(isPdf ? 'pdf' : (isHeic ? 'heic' : 'image'));
 
-    // Create preview (only for images)
-    if (!isPdf) {
+    // Create preview (only for regular images, not HEIC or PDF)
+    if (!isPdf && !isHeic) {
       const reader = new FileReader();
       reader.onload = (e) => setPreviewUrl(e.target.result);
       reader.readAsDataURL(file);
     } else {
-      setPreviewUrl(null); // No preview for PDFs
+      setPreviewUrl(null); // No preview for PDFs or HEIC
     }
 
     // Process with OCR
