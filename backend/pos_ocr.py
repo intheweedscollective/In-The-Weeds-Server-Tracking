@@ -158,14 +158,34 @@ def validate_extracted_data(data: Dict[str, Any]) -> Dict[str, Any]:
     for emp in employees:
         if not emp.get("name"):
             continue
+        
+        # Extract all sales data
+        net_sales = _safe_float(emp.get("net_sales"))
+        guest_count = _safe_int(emp.get("guest_count"))
+        food_sales = _safe_float(emp.get("food_sales"))
+        liquor_sales = _safe_float(emp.get("liquor_sales"))
+        beer_sales = _safe_float(emp.get("beer_sales"))
+        wine_sales = _safe_float(emp.get("wine_sales"))
+        
+        # Calculate LBW total if not provided but components are
+        lbw_per_guest = _safe_float(emp.get("lbw_per_guest"))
+        if lbw_per_guest is None and guest_count and guest_count > 0:
+            lbw_total = (liquor_sales or 0) + (beer_sales or 0) + (wine_sales or 0)
+            if lbw_total > 0:
+                lbw_per_guest = lbw_total / guest_count
+        
+        # Calculate PPA if not provided
+        ppa = _safe_float(emp.get("ppa"))
+        if ppa is None and net_sales and guest_count and guest_count > 0:
+            ppa = net_sales / guest_count
             
         validated_emp = {
             "name": str(emp.get("name", "")).strip(),
-            "ppa": _safe_float(emp.get("ppa")),
-            "lbw_per_guest": _safe_float(emp.get("lbw_per_guest")),
+            "ppa": ppa,
+            "lbw_per_guest": lbw_per_guest,
             "glassware_per_guest": _safe_float(emp.get("glassware_per_guest")),
-            "guest_count": _safe_int(emp.get("guest_count")),
-            "net_sales": _safe_float(emp.get("net_sales")),
+            "guest_count": guest_count,
+            "net_sales": net_sales,
             "guests_per_lsc": _safe_float(emp.get("guests_per_lsc")),
             "tips": _safe_float(emp.get("tips")),
             "hours": _safe_float(emp.get("hours"))
