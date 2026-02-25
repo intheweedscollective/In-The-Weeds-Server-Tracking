@@ -197,3 +197,98 @@ def _safe_int(value) -> Optional[int]:
         return int(float(value)) if value else None
     except (ValueError, TypeError):
         return None
+
+
+async def extract_pos_data_from_pdf(pdf_bytes: bytes) -> Dict[str, Any]:
+    """
+    Extract employee performance data from a PDF file.
+    Converts PDF pages to images and processes each with OCR.
+    
+    Args:
+        pdf_bytes: Raw PDF file bytes
+    
+    Returns:
+        Dictionary containing extracted employee data from all pages
+    """
+    from pdf2image import convert_from_bytes
+    from io import BytesIO
+    
+    try:
+        # Convert PDF pages to images (200 DPI for good quality/size balance)
+        images = convert_from_bytes(pdf_bytes, dpi=200, fmt='jpeg')
+        
+        if not images:
+            return {"error": "Could not convert PDF to images", "employees": []}
+        
+        all_employees = []
+        extraction_notes = []
+        report_date = None
+        report_type = "unknown"
+        
+        # Process each page
+        for page_num, image in enumerate(images, 1):
+            # Convert PIL image to base64
+            buffer = BytesIO()
+            image.save(buffer, format='JPEG', quality=85)
+            image_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+            
+            # Extract data from this page
+            page_data = await extract_pos_data_from_image(image_base64, "image/jpeg")
+            
+            if page_data.get("employees"):
+                all_employees.extend(page_data["employees"])
+                
+            if page_data.get("report_date") and not report_date:
+                report_date = page_data["report_date"]
+                
+            if page_data.get("report_type") and page_data["report_type"] != "unknown":
+                report_type = page_data["report_type"]
+                
+            if page_data.get("extraction_notes"):
+                extraction_notes.append(f"Page {page_num}: {page_data['extraction_notes']}")
+            
+            if page_data.get("error"):
+                extraction_notes.append(f"Page {page_num} error: {page_data['error']}")
+        
+        # Deduplicate employees by name (keep the one with more data)
+        unique_employees = _deduplicate_employees(all_employees)
+        
+        return {
+            "report_date": report_date,
+            "report_type": report_type,
+            "employees": unique_employees,
+            "extraction_notes": "; ".join(extraction_notes) if extraction_notes else f"Processed {len(images)} page(s)",
+            "pages_processed": len(images)
+        }
+        
+    except Exception as e:
+        return {
+            "error": f"PDF processing failed: {str(e)}",
+            "employees": []
+        }
+
+
+def _deduplicate_employees(employees: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Deduplicate employees by name, keeping the entry with more data.
+    """
+    seen = {}
+    for emp in employees:
+        name = emp.get("name", "").strip().lower()
+        if not name:
+            continue
+            
+        # Count non-null fields
+        data_count = sum(1 for v in emp.values() if v is not None and v != "")
+        
+        if name not in seen or data_count > seen[name]["_count"]:
+            emp["_count"] = data_count
+            seen[name] = emp
+    
+    # Remove the _count field before returning
+    result = []
+    for emp in seen.values():
+        emp.pop("_count", None)
+        result.append(emp)
+    
+    return result
