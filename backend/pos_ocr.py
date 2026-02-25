@@ -297,7 +297,6 @@ async def extract_pos_data_from_pdf(pdf_bytes: bytes, max_pages: int = 20) -> Di
             # Convert to JPEG bytes
             img_bytes = pix.tobytes("jpeg")
             image_base64 = base64.b64encode(img_bytes).decode('utf-8')
-            image_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
             
             # Extract data from this page
             page_data = await extract_pos_data_from_image(image_base64, "image/jpeg")
