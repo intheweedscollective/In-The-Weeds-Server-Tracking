@@ -897,37 +897,45 @@ async def extract_pos_report(request: POSOCRRequest):
 
 
 @api_router.post("/v2/pos-ocr/upload")
-async def upload_pos_report_image(file: UploadFile = File(...)):
+async def upload_pos_report_file(file: UploadFile = File(...)):
     """
-    Upload a POS report image file and extract employee data.
+    Upload a POS report file (image or PDF) and extract employee data.
     
-    Accepts: JPEG, PNG, WEBP image files
-    Max size: 10MB
+    Accepts: JPEG, PNG, WEBP image files, PDF documents
+    Max size: 20MB for PDFs, 10MB for images
     """
-    from pos_ocr import extract_pos_data_from_image, validate_extracted_data
+    from pos_ocr import extract_pos_data_from_image, extract_pos_data_from_pdf, validate_extracted_data
     
     # Validate file type
-    valid_content_types = ["image/jpeg", "image/png", "image/webp"]
-    if file.content_type not in valid_content_types:
+    valid_image_types = ["image/jpeg", "image/png", "image/webp"]
+    valid_pdf_types = ["application/pdf"]
+    all_valid_types = valid_image_types + valid_pdf_types
+    
+    if file.content_type not in all_valid_types:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid file type '{file.content_type}'. Supported: JPEG, PNG, WEBP"
+            detail=f"Invalid file type '{file.content_type}'. Supported: JPEG, PNG, WEBP, PDF"
         )
     
-    # Read and validate file size (max 10MB)
+    is_pdf = file.content_type in valid_pdf_types
+    max_size = 20 * 1024 * 1024 if is_pdf else 10 * 1024 * 1024  # 20MB for PDF, 10MB for images
+    
+    # Read and validate file size
     contents = await file.read()
-    if len(contents) > 10 * 1024 * 1024:
+    if len(contents) > max_size:
         raise HTTPException(
             status_code=400,
-            detail="File too large. Maximum size is 10MB"
+            detail=f"File too large. Maximum size is {max_size // (1024*1024)}MB"
         )
-    
-    # Convert to base64
-    image_base64 = base64.b64encode(contents).decode('utf-8')
     
     try:
-        # Extract data from image
-        raw_data = await extract_pos_data_from_image(image_base64, file.content_type)
+        if is_pdf:
+            # Process PDF file
+            raw_data = await extract_pos_data_from_pdf(contents)
+        else:
+            # Process image file
+            image_base64 = base64.b64encode(contents).decode('utf-8')
+            raw_data = await extract_pos_data_from_image(image_base64, file.content_type)
         
         # Validate and clean extracted data
         validated_data = validate_extracted_data(raw_data)
@@ -942,6 +950,8 @@ async def upload_pos_report_image(file: UploadFile = File(...)):
         return {
             "success": True,
             "filename": file.filename,
+            "file_type": "pdf" if is_pdf else "image",
+            "pages_processed": raw_data.get("pages_processed", 1),
             "report_date": validated_data.get("report_date"),
             "report_type": validated_data.get("report_type"),
             "employees": validated_data.get("employees", []),
