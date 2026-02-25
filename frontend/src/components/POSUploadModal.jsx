@@ -93,7 +93,12 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
           : '';
         toast.success(`Extracted ${response.data.employee_count} employees${fileTypeMsg}`);
       } else {
-        setError(response.data.error || "Failed to extract data from image");
+        // Show detailed error message
+        let errorMsg = response.data.error || "Failed to extract data";
+        if (response.data.extraction_notes) {
+          errorMsg += `\n\nDetails: ${response.data.extraction_notes}`;
+        }
+        setError(errorMsg);
       }
     } catch (err) {
       setError(err.response?.data?.detail || "Failed to process image");
