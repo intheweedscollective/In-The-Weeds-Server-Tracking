@@ -254,6 +254,8 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                   <p className="font-medium text-green-400">
                     Successfully extracted {extractedData.employee_count} employees
                     {extractedData.pages_processed > 1 && ` from ${extractedData.pages_processed} pages`}
+                    {extractedData.total_pages > extractedData.pages_processed && 
+                      ` (PDF has ${extractedData.total_pages} pages total)`}
                   </p>
                   {extractedData.extraction_notes && (
                     <p className="text-sm text-green-400/80">{extractedData.extraction_notes}</p>
