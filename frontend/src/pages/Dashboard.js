@@ -371,7 +371,7 @@ export default function Dashboard() {
                           {idx + 1}
                         </div>
                         <div>
-                          <h3 className="font-medium text-white">{employee.name}</h3>
+                          <h3 className="font-medium text-slate-100">{employee.name}</h3>
                           <p className="text-xs text-slate-500 capitalize">{employee.job_title || 'Server'}</p>
                         </div>
                       </div>
