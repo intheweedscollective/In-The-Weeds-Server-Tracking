@@ -247,26 +247,37 @@ def _safe_int(value) -> Optional[int]:
         return None
 
 
-async def extract_pos_data_from_pdf(pdf_bytes: bytes) -> Dict[str, Any]:
+async def extract_pos_data_from_pdf(pdf_bytes: bytes, max_pages: int = 20) -> Dict[str, Any]:
     """
     Extract employee performance data from a PDF file.
     Converts PDF pages to images and processes each with OCR.
     
     Args:
         pdf_bytes: Raw PDF file bytes
+        max_pages: Maximum number of pages to process (default 20 to prevent timeout)
     
     Returns:
         Dictionary containing extracted employee data from all pages
     """
     from pdf2image import convert_from_bytes
     from io import BytesIO
+    import logging
     
     try:
-        # Convert PDF pages to images (200 DPI for good quality/size balance)
-        images = convert_from_bytes(pdf_bytes, dpi=200, fmt='jpeg')
+        # Convert PDF pages to images (150 DPI for faster processing)
+        logging.info("Starting PDF conversion...")
+        images = convert_from_bytes(pdf_bytes, dpi=150, fmt='jpeg')
         
         if not images:
             return {"error": "Could not convert PDF to images", "employees": []}
+        
+        total_pages = len(images)
+        logging.info(f"PDF has {total_pages} pages")
+        
+        # Limit pages to prevent timeout
+        if total_pages > max_pages:
+            logging.warning(f"PDF has {total_pages} pages, limiting to {max_pages}")
+            images = images[:max_pages]
         
         all_employees = []
         extraction_notes = []
@@ -275,9 +286,11 @@ async def extract_pos_data_from_pdf(pdf_bytes: bytes) -> Dict[str, Any]:
         
         # Process each page
         for page_num, image in enumerate(images, 1):
+            logging.info(f"Processing page {page_num}/{len(images)}...")
+            
             # Convert PIL image to base64
             buffer = BytesIO()
-            image.save(buffer, format='JPEG', quality=85)
+            image.save(buffer, format='JPEG', quality=75)  # Lower quality for faster uploads
             image_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
             
             # Extract data from this page
