@@ -247,14 +247,14 @@ def _safe_int(value) -> Optional[int]:
         return None
 
 
-async def extract_pos_data_from_pdf(pdf_bytes: bytes, max_pages: int = 20) -> Dict[str, Any]:
+async def extract_pos_data_from_pdf(pdf_bytes: bytes, max_pages: int = 10) -> Dict[str, Any]:
     """
     Extract employee performance data from a PDF file.
     Converts PDF pages to images and processes each with OCR.
     
     Args:
         pdf_bytes: Raw PDF file bytes
-        max_pages: Maximum number of pages to process (default 20 to prevent timeout)
+        max_pages: Maximum number of pages to process (default 10 to prevent timeout)
     
     Returns:
         Dictionary containing extracted employee data from all pages
