@@ -204,6 +204,14 @@ code {
     color: hsl(var(--foreground)) !important;
 }
 
+/* Override white text for light mode */
+.light .text-white {
+    color: hsl(var(--foreground)) !important;
+}
+.light .text-slate-100 {
+    color: hsl(var(--foreground)) !important;
+}
+
 /* Override dark borders */
 .light .border-slate-600,
 .light .border-slate-700,
