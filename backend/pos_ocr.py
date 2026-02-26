@@ -262,6 +262,7 @@ async def extract_pos_data_from_pdf(pdf_bytes: bytes, max_pages: int = 10) -> Di
     import fitz  # PyMuPDF
     from io import BytesIO
     import logging
+    import asyncio
     
     try:
         # Open PDF with PyMuPDF
@@ -279,45 +280,50 @@ async def extract_pos_data_from_pdf(pdf_bytes: bytes, max_pages: int = 10) -> Di
         if total_pages > max_pages:
             logging.warning(f"PDF has {total_pages} pages, limiting to {max_pages}")
         
+        # Convert all pages to images first
+        page_images = []
+        for page_num in range(pages_to_process):
+            page = pdf_document[page_num]
+            mat = fitz.Matrix(150/72, 150/72)  # 150 DPI
+            pix = page.get_pixmap(matrix=mat)
+            img_bytes = pix.tobytes("jpeg")
+            image_base64 = base64.b64encode(img_bytes).decode('utf-8')
+            page_images.append((page_num, image_base64))
+        
+        pdf_document.close()
+        
+        # Process pages in parallel (3 at a time to avoid rate limits)
         all_employees = []
         extraction_notes = []
         report_date = None
         report_type = "unknown"
         
-        # Process each page
-        for page_num in range(pages_to_process):
+        async def process_page(page_num, image_base64):
             logging.info(f"Processing page {page_num + 1}/{pages_to_process}...")
-            
-            page = pdf_document[page_num]
-            
-            # Render page to image (150 DPI for balance of quality and speed)
-            mat = fitz.Matrix(150/72, 150/72)  # 150 DPI
-            pix = page.get_pixmap(matrix=mat)
-            
-            # Convert to JPEG bytes
-            img_bytes = pix.tobytes("jpeg")
-            image_base64 = base64.b64encode(img_bytes).decode('utf-8')
-            
-            # Extract data from this page
-            page_data = await extract_pos_data_from_image(image_base64, "image/jpeg")
-            
-            if page_data.get("employees"):
-                all_employees.extend(page_data["employees"])
-                
-            if page_data.get("report_date") and not report_date:
-                report_date = page_data["report_date"]
-                
-            if page_data.get("report_type") and page_data["report_type"] != "unknown":
-                report_type = page_data["report_type"]
-                
-            if page_data.get("extraction_notes"):
-                extraction_notes.append(f"Page {page_num + 1}: {page_data['extraction_notes']}")
-            
-            if page_data.get("error"):
-                extraction_notes.append(f"Page {page_num + 1}: {page_data['error']}")
+            return page_num, await extract_pos_data_from_image(image_base64, "image/jpeg")
         
-        # Close the PDF document
-        pdf_document.close()
+        # Process in batches of 3
+        batch_size = 3
+        for i in range(0, len(page_images), batch_size):
+            batch = page_images[i:i+batch_size]
+            tasks = [process_page(page_num, img) for page_num, img in batch]
+            results = await asyncio.gather(*tasks)
+            
+            for page_num, page_data in results:
+                if page_data.get("employees"):
+                    all_employees.extend(page_data["employees"])
+                    
+                if page_data.get("report_date") and not report_date:
+                    report_date = page_data["report_date"]
+                    
+                if page_data.get("report_type") and page_data["report_type"] != "unknown":
+                    report_type = page_data["report_type"]
+                    
+                if page_data.get("extraction_notes"):
+                    extraction_notes.append(f"Page {page_num + 1}: {page_data['extraction_notes']}")
+                
+                if page_data.get("error"):
+                    extraction_notes.append(f"Page {page_num + 1}: {page_data['error']}")
         
         # Deduplicate employees by name (keep the one with more data)
         unique_employees = _deduplicate_employees(all_employees)
