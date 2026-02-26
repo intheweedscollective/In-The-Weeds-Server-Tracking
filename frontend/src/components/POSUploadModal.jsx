@@ -242,7 +242,7 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                   <li>• Ensure the report is clearly visible and not blurry</li>
                   <li>• Include all columns: Employee Name, PPA, LBW, Glassware, Guest Count</li>
                   <li>• Screenshot, photo, or PDF of the full report works best</li>
-                  <li>• <strong>PDF files:</strong> First 20 pages will be processed (for speed)</li>
+                  <li>• <strong>PDF files:</strong> First 10 pages processed (for speed)</li>
                   <li>• For large PDFs, split into smaller files or use images</li>
                 </ul>
               </div>
