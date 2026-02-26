@@ -83,8 +83,10 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
       const formData = new FormData();
       formData.append("file", file);
 
+      // Long timeout for PDF processing (up to 5 minutes for large PDFs)
       const response = await axios.post(`${API}/api/v2/pos-ocr/upload`, formData, {
-        headers: { "Content-Type": "multipart/form-data" }
+        headers: { "Content-Type": "multipart/form-data" },
+        timeout: 300000 // 5 minutes
       });
 
       if (response.data.success) {
