@@ -259,63 +259,6 @@ async def scrape_cv_feedback(
                 }
                 result["feedback"].append(feedback)
             
-            # Try to get more data by scrolling
-            if len(result["feedback"]) < 100:
-                more_data = await page.evaluate("""async () => {
-                    const gridBody = document.querySelector('.ag-body-viewport');
-                    const rows = [];
-                    
-                    if (gridBody) {
-                        // Scroll down to load more
-                        for (let i = 0; i < 10; i++) {
-                            gridBody.scrollTop += 500;
-                            await new Promise(r => setTimeout(r, 300));
-                        }
-                        
-                        // Collect all rows again
-                        const agRows = document.querySelectorAll('.ag-row');
-                        agRows.forEach(row => {
-                            const cells = row.querySelectorAll('.ag-cell');
-                            const rowData = {};
-                            cells.forEach(cell => {
-                                const colId = cell.getAttribute('col-id');
-                                if (colId) {
-                                    rowData[colId] = cell.innerText?.trim() || '';
-                                }
-                            });
-                            if (Object.keys(rowData).length > 0 && rowData.Rating) {
-                                rows.push(rowData);
-                            }
-                        });
-                    }
-                    return rows;
-                }""")
-                
-                # Add new items not already in list
-                existing_dates = {f.get("date") + f.get("customer_name", "") for f in result["feedback"]}
-                for item in more_data:
-                    key = item.get("DateCreated", "") + item.get("FkCustomer_FirstName", "")
-                    if key not in existing_dates:
-                        rating = parse_rating(item.get("Rating", ""))
-                        sentiment, points = get_sentiment_and_points(rating)
-                        
-                        feedback = {
-                            "rating": rating,
-                            "rating_str": item.get("Rating", ""),
-                            "customer_name": item.get("FkCustomer_FirstName", ""),
-                            "date": item.get("DateCreated", ""),
-                            "date_of_business": item.get("DateOfBusiness", ""),
-                            "shift": item.get("FkTransactionSummary_Shift_Name", ""),
-                            "comment": item.get("Body", ""),
-                            "store": item.get("FkTransactionSummary_FkLocation_Name", ""),
-                            "can_contact": item.get("FkCustomer_CanContact", ""),
-                            "sentiment": sentiment,
-                            "cv_points": points,
-                            "source": "loyalty_voice"
-                        }
-                        result["feedback"].append(feedback)
-                        existing_dates.add(key)
-            
             result["success"] = True
             result["total_count"] = len(result["feedback"])
             print(f"[CV] Scraped {len(result['feedback'])} feedback items")
