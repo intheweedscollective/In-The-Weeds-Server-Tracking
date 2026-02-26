@@ -181,7 +181,7 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                       <p className="text-lg font-semibold text-white">Processing {fileType === 'pdf' ? 'PDF' : 'POS Report'}...</p>
                       <p className="text-sm text-slate-400">
                         {fileType === 'pdf' 
-                          ? 'Converting PDF pages and extracting data' 
+                          ? 'Converting pages and extracting data (this may take 2-3 minutes for large PDFs)' 
                           : 'AI is extracting employee data'}
                       </p>
                     </div>
