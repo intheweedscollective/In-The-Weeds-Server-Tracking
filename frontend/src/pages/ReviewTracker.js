@@ -507,7 +507,7 @@ export default function ReviewTracker() {
       {/* Top Mentioned Employees */}
       {stats?.top_mentioned?.length > 0 && (
         <div className="bg-slate-800 rounded-xl p-4 shadow-sm border mb-6" data-testid="top-mentioned-section">
-          <h2 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+          <h2 className="text-lg font-semibold text-slate-100 mb-3 flex items-center gap-2">
             <TrendingUp className="w-5 h-5 text-primary" />
             Top Mentioned Employees
           </h2>
@@ -515,15 +515,15 @@ export default function ReviewTracker() {
             {stats.top_mentioned.slice(0, 5).map((emp, idx) => (
               <div
                 key={emp.name}
-                className="flex items-center gap-3 p-3 bg-background rounded-lg"
+                className="flex items-center gap-3 p-3 bg-slate-700/50 rounded-lg"
               >
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${
-                  idx === 0 ? "bg-yellow-500" : idx === 1 ? "bg-gray-400" : idx === 2 ? "bg-amber-600" : "bg-gray-300"
+                  idx === 0 ? "bg-yellow-500" : idx === 1 ? "bg-gray-400" : idx === 2 ? "bg-amber-600" : "bg-gray-500"
                 }`}>
                   {idx + 1}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-900 truncate">{emp.name}</p>
+                  <p className="font-medium text-slate-100 truncate">{emp.name}</p>
                   <p className="text-xs text-slate-400">
                     {emp.mentions} mentions • {emp.points.toFixed(1)} pts
                   </p>
