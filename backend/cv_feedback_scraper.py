@@ -169,19 +169,56 @@ async def scrape_cv_feedback(
                     await apply.click(force=True)
                     await page.wait_for_timeout(5000)
             
-            # Extract data via JavaScript (ag-grid)
-            feedback_data = await page.evaluate("""() => {
-                // Try to get all data by scrolling through virtual grid
+            # Extract data via JavaScript (ag-grid) - scroll through all rows
+            feedback_data = await page.evaluate("""async () => {
                 const gridBody = document.querySelector('.ag-body-viewport');
-                if (gridBody) {
-                    // Scroll to load all rows
-                    gridBody.scrollTop = 0;
+                const allRows = new Map();
+                
+                if (!gridBody) return [];
+                
+                // Scroll to top first
+                gridBody.scrollTop = 0;
+                await new Promise(r => setTimeout(r, 500));
+                
+                // Calculate scroll iterations needed (estimate based on viewport height)
+                const viewportHeight = gridBody.clientHeight;
+                const rowHeight = 40; // Approximate row height in ag-grid
+                const totalHeight = gridBody.scrollHeight;
+                const scrollIterations = Math.ceil(totalHeight / (viewportHeight * 0.8)) + 5;
+                
+                // Scroll through entire grid to load all rows
+                for (let i = 0; i < scrollIterations; i++) {
+                    const agRows = document.querySelectorAll('.ag-row');
+                    agRows.forEach(row => {
+                        const rowId = row.getAttribute('row-id') || row.getAttribute('row-index');
+                        const cells = row.querySelectorAll('.ag-cell');
+                        const rowData = {};
+                        cells.forEach(cell => {
+                            const colId = cell.getAttribute('col-id');
+                            if (colId) {
+                                rowData[colId] = cell.innerText?.trim() || '';
+                            }
+                        });
+                        if (Object.keys(rowData).length > 0 && rowData.Rating) {
+                            // Use date + customer name as unique key
+                            const key = (rowData.DateCreated || '') + (rowData.FkCustomer_FirstName || '') + (rowData.Body || '').substring(0, 50);
+                            if (!allRows.has(key)) {
+                                allRows.set(key, rowData);
+                            }
+                        }
+                    });
+                    
+                    // Scroll down
+                    gridBody.scrollTop += viewportHeight * 0.8;
+                    await new Promise(r => setTimeout(r, 400));
                 }
                 
-                // Collect visible row data
-                const rows = [];
-                const agRows = document.querySelectorAll('.ag-row');
-                agRows.forEach(row => {
+                // Scroll back to top and collect any missed rows
+                gridBody.scrollTop = 0;
+                await new Promise(r => setTimeout(r, 300));
+                
+                const finalRows = document.querySelectorAll('.ag-row');
+                finalRows.forEach(row => {
                     const cells = row.querySelectorAll('.ag-cell');
                     const rowData = {};
                     cells.forEach(cell => {
@@ -191,10 +228,14 @@ async def scrape_cv_feedback(
                         }
                     });
                     if (Object.keys(rowData).length > 0 && rowData.Rating) {
-                        rows.push(rowData);
+                        const key = (rowData.DateCreated || '') + (rowData.FkCustomer_FirstName || '') + (rowData.Body || '').substring(0, 50);
+                        if (!allRows.has(key)) {
+                            allRows.set(key, rowData);
+                        }
                     }
                 });
-                return rows;
+                
+                return Array.from(allRows.values());
             }""")
             
             # Process and structure feedback
