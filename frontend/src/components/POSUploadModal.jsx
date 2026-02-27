@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { Upload, Camera, FileImage, Loader2, CheckCircle, AlertCircle, X, Download, Edit3, FileText } from "lucide-react";
+import { Upload, Camera, FileImage, Loader2, CheckCircle, AlertCircle, X, Download, Edit3, FileText, Files } from "lucide-react";
 import { Button } from "./ui/button";
 import { toast } from "sonner";
 import axios from "axios";
@@ -9,8 +9,9 @@ const API = process.env.REACT_APP_BACKEND_URL;
 export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingStatus, setProcessingStatus] = useState(""); // Shows progress
   const [previewUrl, setPreviewUrl] = useState(null);
-  const [fileType, setFileType] = useState(null); // 'image' or 'pdf'
+  const [fileType, setFileType] = useState(null); // 'image', 'pdf', or 'multi'
   const [extractedData, setExtractedData] = useState(null);
   const [error, setError] = useState(null);
   const fileInputRef = useRef(null);
@@ -29,16 +30,91 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
     e.preventDefault();
     setIsDragging(false);
     
-    const file = e.dataTransfer.files[0];
-    if (file) {
-      await processFile(file);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 1) {
+      await processMultipleFiles(files);
+    } else if (files.length === 1) {
+      await processFile(files[0]);
     }
   };
 
   const handleFileSelect = async (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      await processFile(file);
+    const files = Array.from(e.target.files);
+    if (files.length > 1) {
+      await processMultipleFiles(files);
+    } else if (files.length === 1) {
+      await processFile(files[0]);
+    }
+  };
+
+  // Process multiple files (batch upload)
+  const processMultipleFiles = async (files) => {
+    const validImageTypes = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
+    
+    // Filter to only valid image files
+    const validFiles = files.filter(f => validImageTypes.includes(f.type));
+    
+    if (validFiles.length === 0) {
+      setError("No valid image files found. Please upload JPEG, PNG, WEBP, or HEIC images.");
+      return;
+    }
+
+    setFileType('multi');
+    setIsProcessing(true);
+    setError(null);
+    setExtractedData(null);
+    setPreviewUrl(null);
+
+    const allEmployees = [];
+    const errors = [];
+    let reportDate = null;
+
+    try {
+      for (let i = 0; i < validFiles.length; i++) {
+        const file = validFiles[i];
+        setProcessingStatus(`Processing ${i + 1} of ${validFiles.length}: ${file.name}`);
+
+        try {
+          const formData = new FormData();
+          formData.append("file", file);
+
+          const response = await axios.post(`${API}/api/v2/pos-ocr/upload`, formData, {
+            headers: { "Content-Type": "multipart/form-data" },
+            timeout: 60000 // 1 minute per file
+          });
+
+          if (response.data.success && response.data.employees?.length > 0) {
+            allEmployees.push(...response.data.employees);
+            if (response.data.report_date && !reportDate) {
+              reportDate = response.data.report_date;
+            }
+          } else if (response.data.error) {
+            errors.push(`${file.name}: ${response.data.error}`);
+          }
+        } catch (err) {
+          errors.push(`${file.name}: ${err.message || 'Failed to process'}`);
+        }
+      }
+
+      if (allEmployees.length > 0) {
+        setExtractedData({
+          success: true,
+          employees: allEmployees,
+          employee_count: allEmployees.length,
+          report_date: reportDate,
+          report_type: "server_sales_detail",
+          pages_processed: validFiles.length,
+          extraction_notes: errors.length > 0 ? `${errors.length} file(s) had issues` : `Processed ${validFiles.length} files`
+        });
+        toast.success(`Extracted ${allEmployees.length} employees from ${validFiles.length} files`);
+      } else {
+        setError(`No employee data extracted.\n\nErrors:\n${errors.join('\n')}`);
+      }
+    } catch (err) {
+      setError(`Batch processing failed: ${err.message}`);
+    } finally {
+      setIsProcessing(false);
+      setProcessingStatus("");
     }
   };
 
