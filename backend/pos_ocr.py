@@ -182,6 +182,7 @@ def validate_extracted_data(data: Dict[str, Any]) -> Dict[str, Any]:
         liquor_sales = _safe_float(emp.get("liquor_sales"))
         beer_sales = _safe_float(emp.get("beer_sales"))
         wine_sales = _safe_float(emp.get("wine_sales"))
+        loyalty_sales = _safe_float(emp.get("loyalty_sales"))
         
         # Calculate LBW total if not provided but components are
         lbw_per_guest = _safe_float(emp.get("lbw_per_guest"))
@@ -194,6 +195,12 @@ def validate_extracted_data(data: Dict[str, Any]) -> Dict[str, Any]:
         ppa = _safe_float(emp.get("ppa"))
         if ppa is None and net_sales and guest_count and guest_count > 0:
             ppa = net_sales / guest_count
+        
+        # Calculate LSC count from loyalty_sales (each LSC = $25)
+        # guests_per_lsc represents the number of LSC cards used
+        guests_per_lsc = _safe_float(emp.get("guests_per_lsc"))
+        if guests_per_lsc is None and loyalty_sales and loyalty_sales > 0:
+            guests_per_lsc = loyalty_sales / 25.0  # Each LSC = $25
             
         validated_emp = {
             "name": str(emp.get("name", "")).strip(),
@@ -202,7 +209,8 @@ def validate_extracted_data(data: Dict[str, Any]) -> Dict[str, Any]:
             "glassware_per_guest": _safe_float(emp.get("glassware_per_guest")),
             "guest_count": guest_count,
             "net_sales": net_sales,
-            "guests_per_lsc": _safe_float(emp.get("guests_per_lsc")),
+            "guests_per_lsc": guests_per_lsc,
+            "loyalty_sales": loyalty_sales,
             "tips": _safe_float(emp.get("tips")),
             "hours": _safe_float(emp.get("hours"))
         }
