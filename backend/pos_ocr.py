@@ -201,12 +201,18 @@ def validate_extracted_data(data: Dict[str, Any]) -> Dict[str, Any]:
         guests_per_lsc = _safe_float(emp.get("guests_per_lsc"))
         if guests_per_lsc is None and loyalty_sales and loyalty_sales > 0:
             guests_per_lsc = loyalty_sales / 25.0  # Each LSC = $25
+        
+        # Calculate glassware_per_guest from wine_sales if not directly provided
+        # Glassware = Wine sales in Aloha reports
+        glassware_per_guest = _safe_float(emp.get("glassware_per_guest"))
+        if glassware_per_guest is None and wine_sales and guest_count and guest_count > 0:
+            glassware_per_guest = wine_sales / guest_count
             
         validated_emp = {
             "name": str(emp.get("name", "")).strip(),
             "ppa": ppa,
             "lbw_per_guest": lbw_per_guest,
-            "glassware_per_guest": _safe_float(emp.get("glassware_per_guest")),
+            "glassware_per_guest": glassware_per_guest,
             "guest_count": guest_count,
             "net_sales": net_sales,
             "guests_per_lsc": guests_per_lsc,
