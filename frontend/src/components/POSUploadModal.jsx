@@ -104,7 +104,16 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
         setError(errorMsg);
       }
     } catch (err) {
-      setError(err.response?.data?.detail || "Failed to process image");
+      console.error("OCR Upload Error:", err);
+      let errorMsg = "Failed to process file";
+      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        errorMsg = "Request timed out. The PDF may have too many pages. Try splitting it into smaller files (10 pages max) or upload individual page images.";
+      } else if (err.response?.data?.detail) {
+        errorMsg = err.response.data.detail;
+      } else if (err.message) {
+        errorMsg = err.message;
+      }
+      setError(errorMsg);
     } finally {
       setIsProcessing(false);
     }
