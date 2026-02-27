@@ -329,11 +329,11 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
               <div className="bg-slate-700/50 rounded-xl p-4">
                 <p className="text-sm font-medium text-white mb-2">Tips for best results:</p>
                 <ul className="text-sm text-slate-300 space-y-1">
-                  <li>• Ensure the report is clearly visible and not blurry</li>
-                  <li>• Include all columns: Employee Name, PPA, LBW, Glassware, Guest Count</li>
-                  <li>• Screenshot or photo works best for quick processing</li>
-                  <li>• <strong>PDF files:</strong> First 5 pages processed to avoid timeout</li>
-                  <li>• For large PDFs, take screenshots of pages instead</li>
+                  <li>• <strong>Batch Upload:</strong> Select multiple images at once (one per employee)</li>
+                  <li>• Screenshot or photo of each employee's report page works best</li>
+                  <li>• Ensure reports are clearly visible and not blurry</li>
+                  <li>• PDF files: First 5 pages processed (use images for more)</li>
+                  <li>• Data extracted: PPA, LBW, Glassware, LSC, Guest Count, Net Sales</li>
                 </ul>
               </div>
             </div>
