@@ -16,7 +16,7 @@ load_dotenv()
 POS_EXTRACTION_PROMPT = """You are an expert at extracting employee performance data from restaurant POS (Point of Sale) reports, specifically Aloha POS reports.
 
 This could be one of several Aloha report types:
-1. **Server Sales Detail Report** - Shows ONE employee per page with sales by category (Food, Liquor, Beer, Wine, Loyalty, etc.) and totals. Employee name appears at top.
+1. **Server Sales Detail Report** - Shows ONE employee per page with sales by category (Food, Liquor, Beer, Wine, Loyalty, Bar Glassware, etc.) and totals. Employee name appears at top.
 2. **Server Performance Report** - Shows multiple employees in a table with columns for PPA, LBW, Glassware, Guest Count, etc.
 3. **Labor Report** - Shows hours worked, tips, and sales by employee.
 
@@ -28,9 +28,10 @@ Analyze the uploaded image and extract employee performance metrics. Look for:
 4. **PPA** (Per Person Average) - Net Sales divided by Guest Count, OR shown directly
 5. **LBW** (Liquor, Beer, Wine) - Combined or separate amounts
 6. **Loyalty Sales** - Dollar amount from "Loyalty" category (this is LSC - Loyalty Sales Check)
-7. **Food Sales** - Food category net sales
-8. **Tips** - If available
-9. **Hours Worked** - If available
+7. **Bar Glassware** - Dollar amount from "Bar Glassware" or "Glassware" category
+8. **Food Sales** - Food category net sales
+9. **Tips** - If available
+10. **Hours Worked** - If available
 
 For Server Sales Detail Reports (one employee per page):
 - Employee name is usually at the TOP of the page
@@ -39,6 +40,7 @@ For Server Sales Detail Reports (one employee per page):
 - Calculate PPA = Total Net Sales / Total Guests if not shown directly
 - Sum up Liquor + Beer + Wine for LBW total
 - **IMPORTANT: Look for "Loyalty" row - extract the Net Sales dollar amount as loyalty_sales**
+- **IMPORTANT: Look for "Bar Glassware" or "Glassware" row - extract the Net Sales dollar amount as bar_glassware_sales**
 
 IMPORTANT INSTRUCTIONS:
 - Extract data for EVERY employee visible in the report
@@ -46,7 +48,6 @@ IMPORTANT INSTRUCTIONS:
 - If a value is not visible or unclear, use null
 - Numbers should be extracted as floats without $ signs or commas
 - Be thorough - scan the entire image for all data
-- Look for a row labeled "Loyalty" and extract its Net Sales value as loyalty_sales
 
 Return the data as a JSON object with this exact structure:
 {
@@ -57,10 +58,10 @@ Return the data as a JSON object with this exact structure:
       "name": "Employee Name",
       "ppa": 45.50,
       "lbw_per_guest": 8.25,
-      "glassware_per_guest": 1.50,
       "guest_count": 120,
       "net_sales": 5460.00,
       "loyalty_sales": 425.00,
+      "bar_glassware_sales": 180.00,
       "tips": 650.00,
       "hours": 32.5,
       "food_sales": 4500.00,
