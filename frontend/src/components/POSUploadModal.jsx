@@ -257,17 +257,20 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                   accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf"
                   className="hidden"
                   onChange={handleFileSelect}
+                  multiple
                 />
 
                 {isProcessing ? (
                   <div className="flex flex-col items-center gap-4">
                     <Loader2 className="w-12 h-12 text-primary animate-spin" />
                     <div>
-                      <p className="text-lg font-semibold text-white">Processing {fileType === 'pdf' ? 'PDF' : 'POS Report'}...</p>
+                      <p className="text-lg font-semibold text-white">
+                        {fileType === 'multi' ? 'Processing Multiple Files...' : fileType === 'pdf' ? 'Processing PDF...' : 'Processing POS Report...'}
+                      </p>
                       <p className="text-sm text-slate-400">
-                        {fileType === 'pdf' 
-                          ? 'Converting pages and extracting data (this may take 2-3 minutes for large PDFs)' 
-                          : 'AI is extracting employee data'}
+                        {processingStatus || (fileType === 'pdf' 
+                          ? 'Converting pages and extracting data' 
+                          : 'AI is extracting employee data')}
                       </p>
                     </div>
                   </div>
@@ -277,8 +280,10 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                       <Upload className="w-8 h-8 text-primary" />
                     </div>
                     <div>
-                      <p className="text-lg font-semibold text-white">Drop POS report here</p>
-                      <p className="text-sm text-slate-400">Images (JPEG, PNG, WEBP, HEIC) up to 10MB • PDF up to 20MB</p>
+                      <p className="text-lg font-semibold text-white">Drop POS reports here</p>
+                      <p className="text-sm text-slate-400">
+                        <strong>Select multiple images</strong> for batch upload • Or single PDF
+                      </p>
                     </div>
                   </div>
                 )}
