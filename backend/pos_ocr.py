@@ -199,10 +199,12 @@ def validate_extracted_data(data: Dict[str, Any]) -> Dict[str, Any]:
             ppa = net_sales / guest_count
         
         # Calculate LSC count from loyalty_sales (each LSC = $25)
-        # guests_per_lsc represents the number of LSC cards used
+        # Then calculate guests_per_lsc = guest_count / lsc_count
         guests_per_lsc = _safe_float(emp.get("guests_per_lsc"))
-        if guests_per_lsc is None and loyalty_sales and loyalty_sales > 0:
-            guests_per_lsc = loyalty_sales / 25.0  # Each LSC = $25
+        if guests_per_lsc is None and loyalty_sales and loyalty_sales > 0 and guest_count and guest_count > 0:
+            lsc_count = loyalty_sales / 25.0  # Number of LSC cards sold
+            if lsc_count > 0:
+                guests_per_lsc = guest_count / lsc_count  # Guests per LSC card
         
         # Calculate glassware_per_guest from bar_glassware_sales
         # Glassware per guest = Bar Glassware sales / Guest Count
