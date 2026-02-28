@@ -111,14 +111,6 @@ const EditableNameCell = ({ value, onChange }) => {
       {value || '—'}
     </button>
   );
-}; 
-          ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/50' 
-          : 'text-slate-300 hover:bg-slate-600'
-      }`}
-    >
-      {displayValue || '—'}
-    </button>
-  );
 };
 
 export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter }) => {
