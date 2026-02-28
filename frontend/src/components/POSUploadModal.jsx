@@ -340,21 +340,39 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
             </div>
           ) : (
             <div className="space-y-6">
-              {/* Success Header */}
-              <div className="flex items-center gap-3 p-4 bg-green-500/10 border border-green-500/30 rounded-xl">
-                <CheckCircle className="w-6 h-6 text-green-500" />
-                <div>
-                  <p className="font-medium text-green-400">
-                    Successfully extracted {extractedData.employee_count} employees
-                    {extractedData.pages_processed > 1 && ` from ${extractedData.pages_processed} pages`}
-                    {extractedData.total_pages > extractedData.pages_processed && 
-                      ` (PDF has ${extractedData.total_pages} pages total)`}
-                  </p>
-                  {extractedData.extraction_notes && (
-                    <p className="text-sm text-green-400/80">{extractedData.extraction_notes}</p>
-                  )}
-                </div>
-              </div>
+              {/* Success/Warning Header */}
+              {(() => {
+                // Count employees with missing required fields (excluding LSC)
+                const missingCount = extractedData.employees.filter(emp => 
+                  !emp.ppa || !emp.lbw_per_guest || !emp.glassware_per_guest || !emp.guest_count || !emp.net_sales
+                ).length;
+                
+                return missingCount > 0 ? (
+                  <div className="flex items-center gap-3 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
+                    <AlertCircle className="w-6 h-6 text-yellow-500" />
+                    <div>
+                      <p className="font-medium text-yellow-400">
+                        Extracted {extractedData.employee_count} employees - {missingCount} need review
+                      </p>
+                      <p className="text-sm text-yellow-400/80">
+                        Click on any "—" value to manually enter the missing data
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3 p-4 bg-green-500/10 border border-green-500/30 rounded-xl">
+                    <CheckCircle className="w-6 h-6 text-green-500" />
+                    <div>
+                      <p className="font-medium text-green-400">
+                        Successfully extracted {extractedData.employee_count} employees - All data complete!
+                      </p>
+                      {extractedData.extraction_notes && (
+                        <p className="text-sm text-green-400/80">{extractedData.extraction_notes}</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Report Info */}
               {(extractedData.report_date || extractedData.report_type) && (
@@ -374,48 +392,108 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                 </div>
               )}
 
-              {/* Extracted Data Table */}
+              {/* Editable Data Table */}
               <div className="border border-slate-600 rounded-xl overflow-hidden">
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto max-h-96">
                   <table className="w-full text-sm">
-                    <thead className="bg-slate-700">
+                    <thead className="bg-slate-700 sticky top-0">
                       <tr>
-                        <th className="px-4 py-3 text-left font-semibold text-white">Employee</th>
-                        <th className="px-4 py-3 text-right font-semibold text-white">PPA</th>
-                        <th className="px-4 py-3 text-right font-semibold text-white">LBW/Guest</th>
-                        <th className="px-4 py-3 text-right font-semibold text-white">Glass/Guest</th>
-                        <th className="px-4 py-3 text-right font-semibold text-white">Guests</th>
-                        <th className="px-4 py-3 text-right font-semibold text-white">Net Sales</th>
-                        <th className="px-4 py-3 text-right font-semibold text-white">G/LSC</th>
+                        <th className="px-3 py-3 text-left font-semibold text-white">Employee</th>
+                        <th className="px-3 py-3 text-right font-semibold text-white">PPA</th>
+                        <th className="px-3 py-3 text-right font-semibold text-white">LBW</th>
+                        <th className="px-3 py-3 text-right font-semibold text-white">Glass</th>
+                        <th className="px-3 py-3 text-right font-semibold text-white">Guests</th>
+                        <th className="px-3 py-3 text-right font-semibold text-white">Net Sales</th>
+                        <th className="px-3 py-3 text-right font-semibold text-white">G/LSC</th>
+                        <th className="px-3 py-3 text-center font-semibold text-white">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-600">
-                      {extractedData.employees.map((emp, idx) => (
-                        <tr key={idx} className="hover:bg-slate-700/50">
-                          <td className="px-4 py-3 font-medium text-white">{emp.name}</td>
-                          <td className="px-4 py-3 text-right text-slate-300">
-                            {emp.ppa ? `$${emp.ppa.toFixed(2)}` : "—"}
-                          </td>
-                          <td className="px-4 py-3 text-right text-slate-300">
-                            {emp.lbw_per_guest ? `$${emp.lbw_per_guest.toFixed(2)}` : "—"}
-                          </td>
-                          <td className="px-4 py-3 text-right text-slate-300">
-                            {emp.glassware_per_guest ? `$${emp.glassware_per_guest.toFixed(2)}` : "—"}
-                          </td>
-                          <td className="px-4 py-3 text-right text-slate-300">
-                            {emp.guest_count || "—"}
-                          </td>
-                          <td className="px-4 py-3 text-right text-slate-300">
-                            {emp.net_sales ? `$${emp.net_sales.toLocaleString()}` : "—"}
-                          </td>
-                          <td className="px-4 py-3 text-right text-slate-300">
-                            {emp.guests_per_lsc ? emp.guests_per_lsc.toFixed(0) : "—"}
-                          </td>
-                        </tr>
-                      ))}
+                      {extractedData.employees.map((emp, idx) => {
+                        // Check for missing required fields (LSC is optional)
+                        const missingFields = [];
+                        if (!emp.ppa) missingFields.push('ppa');
+                        if (!emp.lbw_per_guest) missingFields.push('lbw');
+                        if (!emp.glassware_per_guest) missingFields.push('glass');
+                        if (!emp.guest_count) missingFields.push('guests');
+                        if (!emp.net_sales) missingFields.push('sales');
+                        const hasMissing = missingFields.length > 0;
+                        
+                        return (
+                          <tr key={idx} className={`${hasMissing ? 'bg-yellow-500/5' : 'hover:bg-slate-700/50'}`}>
+                            <td className="px-3 py-2 font-medium text-white">{emp.name}</td>
+                            <td className="px-3 py-2 text-right">
+                              <EditableCell 
+                                value={emp.ppa} 
+                                format="currency"
+                                isMissing={!emp.ppa}
+                                onChange={(val) => updateEmployeeField(idx, 'ppa', val)}
+                              />
+                            </td>
+                            <td className="px-3 py-2 text-right">
+                              <EditableCell 
+                                value={emp.lbw_per_guest} 
+                                format="currency"
+                                isMissing={!emp.lbw_per_guest}
+                                onChange={(val) => updateEmployeeField(idx, 'lbw_per_guest', val)}
+                              />
+                            </td>
+                            <td className="px-3 py-2 text-right">
+                              <EditableCell 
+                                value={emp.glassware_per_guest} 
+                                format="currency"
+                                isMissing={!emp.glassware_per_guest}
+                                onChange={(val) => updateEmployeeField(idx, 'glassware_per_guest', val)}
+                              />
+                            </td>
+                            <td className="px-3 py-2 text-right">
+                              <EditableCell 
+                                value={emp.guest_count} 
+                                format="number"
+                                isMissing={!emp.guest_count}
+                                onChange={(val) => updateEmployeeField(idx, 'guest_count', val)}
+                              />
+                            </td>
+                            <td className="px-3 py-2 text-right">
+                              <EditableCell 
+                                value={emp.net_sales} 
+                                format="currency"
+                                isMissing={!emp.net_sales}
+                                onChange={(val) => updateEmployeeField(idx, 'net_sales', val)}
+                              />
+                            </td>
+                            <td className="px-3 py-2 text-right text-slate-400">
+                              {emp.guests_per_lsc ? emp.guests_per_lsc.toFixed(0) : "—"}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              {hasMissing ? (
+                                <span className="inline-flex items-center gap-1 text-xs text-yellow-400">
+                                  <AlertCircle className="w-3 h-3" />
+                                  {missingFields.length}
+                                </span>
+                              ) : (
+                                <CheckCircle className="w-4 h-4 text-green-500 mx-auto" />
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
+              </div>
+              
+              {/* Legend */}
+              <div className="flex items-center gap-4 text-xs text-slate-400">
+                <span className="flex items-center gap-1">
+                  <span className="w-3 h-3 bg-yellow-500/20 border border-yellow-500/50 rounded"></span>
+                  Missing data (click to edit)
+                </span>
+                <span className="flex items-center gap-1">
+                  <CheckCircle className="w-3 h-3 text-green-500" />
+                  Complete
+                </span>
+                <span className="text-slate-500">• G/LSC is optional (0 is valid)</span>
               </div>
 
               {/* Preview (collapsed) */}
