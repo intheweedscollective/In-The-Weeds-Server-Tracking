@@ -212,7 +212,15 @@ def validate_extracted_data(data: Dict[str, Any]) -> Dict[str, Any]:
             "guests_per_lsc": guests_per_lsc,
             "loyalty_sales": loyalty_sales,
             "tips": _safe_float(emp.get("tips")),
-            "hours": _safe_float(emp.get("hours"))
+            "hours": _safe_float(emp.get("hours")),
+            # Include raw extracted values for debugging
+            "_raw": {
+                "liquor_sales": liquor_sales,
+                "beer_sales": beer_sales,
+                "wine_sales": wine_sales,
+                "bar_glassware_sales": bar_glassware_sales,
+                "food_sales": food_sales
+            }
         }
         
         # Only include if we have at least name and one metric
