@@ -349,6 +349,38 @@ code {
     color: hsl(160 84% 30%) !important;
 }
 
+/* Emerald colors for Top Performers card */
+.light .text-emerald-400,
+.light .text-emerald-500 {
+    color: hsl(160 84% 25%) !important;
+}
+
+.light .bg-emerald-900\/30,
+.light .bg-emerald-900\/20 {
+    background-color: hsl(160 40% 92%) !important;
+}
+
+.light .bg-emerald-500\/20,
+.light .bg-emerald-500\/10 {
+    background-color: hsl(160 50% 90%) !important;
+}
+
+.light .border-emerald-700\/50,
+.light .border-emerald-500\/50 {
+    border-color: hsl(160 40% 75%) !important;
+}
+
+/* Red colors for Needs Coaching card */
+.light .bg-red-900\/30,
+.light .bg-red-900\/20 {
+    background-color: hsl(0 50% 95%) !important;
+}
+
+.light .border-red-700\/50,
+.light .border-red-500\/50 {
+    border-color: hsl(0 50% 80%) !important;
+}
+
 .light .text-yellow-400,
 .light .text-yellow-500 {
     color: hsl(38 92% 35%) !important;
