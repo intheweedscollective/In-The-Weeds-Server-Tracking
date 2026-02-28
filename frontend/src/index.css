@@ -384,28 +384,28 @@ code {
 /* Amber colors for Training Priorities */
 .light .text-amber-400,
 .light .text-amber-500 {
-    color: hsl(25 95% 30%) !important;
+    color: hsl(25 95% 22%) !important;
 }
 
 .light .bg-amber-900\/20,
 .light .bg-amber-900\/30 {
-    background-color: hsl(38 60% 93%) !important;
+    background-color: hsl(38 50% 92%) !important;
 }
 
 .light .bg-amber-500\/20,
 .light .bg-amber-500\/10 {
-    background-color: hsl(38 70% 90%) !important;
+    background-color: hsl(38 60% 88%) !important;
 }
 
 .light .border-amber-700\/30,
 .light .border-amber-700\/50,
 .light .border-amber-500\/50 {
-    border-color: hsl(38 50% 70%) !important;
+    border-color: hsl(38 40% 65%) !important;
 }
 
 .light .text-yellow-400,
 .light .text-yellow-500 {
-    color: hsl(38 92% 30%) !important;
+    color: hsl(38 92% 22%) !important;
 }
 
 .light .text-red-400,
