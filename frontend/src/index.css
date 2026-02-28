@@ -192,56 +192,196 @@ code {
 }
 
 /* Override dark slate text */
-.light .text-slate-300,
+/* ========================================
+   LIGHT MODE COMPREHENSIVE OVERRIDES
+   Black/Blue/Grey Dark → White/Blue/Grey Light
+   ======================================== */
+
+/* Override ALL dark slate backgrounds to light equivalents */
+.light .bg-slate-700,
+.light .bg-slate-700\/50 {
+    background-color: hsl(210 20% 96%) !important;
+}
+
+.light .bg-slate-800,
+.light .bg-slate-800\/50,
+.light .bg-slate-800\/80 {
+    background-color: hsl(0 0% 100%) !important;
+}
+
+.light .bg-slate-900,
+.light .bg-slate-900\/50,
+.light .bg-slate-900\/80,
+.light .bg-slate-900\/95 {
+    background-color: hsl(210 20% 98%) !important;
+}
+
+.light .bg-slate-950 {
+    background-color: hsl(210 20% 96%) !important;
+}
+
+/* Override text colors */
+.light .text-white {
+    color: hsl(220 26% 14%) !important;
+}
+.light .text-slate-100,
+.light .text-slate-200 {
+    color: hsl(220 26% 14%) !important;
+}
+.light .text-slate-300 {
+    color: hsl(215 25% 35%) !important;
+}
 .light .text-slate-400 {
-    color: hsl(var(--muted-foreground)) !important;
+    color: hsl(215 25% 45%) !important;
 }
 .light .text-slate-500,
 .light .text-slate-600 {
-    color: hsl(215 25% 50%) !important;
-}
-.light .text-slate-200 {
-    color: hsl(var(--foreground)) !important;
+    color: hsl(215 25% 55%) !important;
 }
 
-/* Override white text for light mode */
-.light .text-white {
-    color: hsl(var(--foreground)) !important;
-}
-.light .text-slate-100 {
-    color: hsl(var(--foreground)) !important;
-}
-
-/* Override dark borders */
+/* Override borders */
 .light .border-slate-600,
 .light .border-slate-700,
 .light .border-slate-800 {
-    border-color: hsl(var(--border)) !important;
+    border-color: hsl(214 32% 85%) !important;
 }
 
-/* Override dark gradients */
-.light .from-secondary {
-    --tw-gradient-from: hsl(217 91% 50%) !important;
-}
-.light .to-primary {
-    --tw-gradient-to: hsl(217 91% 60%) !important;
+.light .divide-slate-600 > :not([hidden]) ~ :not([hidden]),
+.light .divide-slate-700 > :not([hidden]) ~ :not([hidden]) {
+    border-color: hsl(214 32% 85%) !important;
 }
 
-/* Override dark dividers */
-.light .divide-gray-700 > :not([hidden]) ~ :not([hidden]) {
-    border-color: hsl(var(--border)) !important;
+/* Override gradient backgrounds */
+.light .from-slate-900,
+.light .from-slate-800 {
+    --tw-gradient-from: hsl(210 20% 98%) !important;
+}
+.light .to-slate-800,
+.light .to-slate-900 {
+    --tw-gradient-to: hsl(0 0% 100%) !important;
+}
+.light .via-slate-800 {
+    --tw-gradient-via: hsl(210 20% 96%) !important;
 }
 
-/* Fix card backgrounds */
+/* Card and panel styling */
+.light .bg-card,
+.light [class*="bg-slate-800"] {
+    background-color: hsl(0 0% 100%) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Hover states */
+.light .hover\:bg-slate-700:hover,
+.light .hover\:bg-slate-600:hover {
+    background-color: hsl(210 20% 92%) !important;
+}
+
+/* Input and form elements */
+.light input,
+.light textarea,
+.light select {
+    background-color: hsl(0 0% 100%) !important;
+    border-color: hsl(214 32% 85%) !important;
+    color: hsl(220 26% 14%) !important;
+}
+
+.light input::placeholder,
+.light textarea::placeholder {
+    color: hsl(215 25% 55%) !important;
+}
+
+/* Table styling */
+.light table thead {
+    background-color: hsl(210 20% 96%) !important;
+}
+
+.light table th {
+    color: hsl(220 26% 20%) !important;
+}
+
+.light table tbody tr:hover {
+    background-color: hsl(210 20% 96%) !important;
+}
+
+/* Sidebar light mode */
+.light aside,
+.light [class*="sidebar"] {
+    background-color: hsl(210 20% 98%) !important;
+    border-color: hsl(214 32% 90%) !important;
+}
+
+/* Modal/Dialog backgrounds */
+.light .bg-black\/50,
+.light .bg-black\/80 {
+    background-color: rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Badge/tag backgrounds */
+.light .bg-primary\/10,
+.light .bg-primary\/20 {
+    background-color: hsl(217 91% 95%) !important;
+}
+
+.light .bg-green-500\/10,
+.light .bg-green-500\/20 {
+    background-color: hsl(160 84% 95%) !important;
+}
+
+.light .bg-yellow-500\/10,
+.light .bg-yellow-500\/20,
+.light .bg-yellow-500\/5 {
+    background-color: hsl(38 92% 95%) !important;
+}
+
+.light .bg-red-500\/10,
+.light .bg-red-500\/20 {
+    background-color: hsl(0 84% 95%) !important;
+}
+
+/* Accent text colors - keep them vibrant */
+.light .text-primary {
+    color: hsl(217 91% 45%) !important;
+}
+
+.light .text-green-400,
+.light .text-green-500 {
+    color: hsl(160 84% 30%) !important;
+}
+
+.light .text-yellow-400,
+.light .text-yellow-500 {
+    color: hsl(38 92% 35%) !important;
+}
+
+.light .text-red-400,
+.light .text-red-500 {
+    color: hsl(0 84% 45%) !important;
+}
+
+.light .text-blue-400,
+.light .text-blue-500 {
+    color: hsl(217 91% 45%) !important;
+}
+
+/* Fix specific component issues */
 .light .bubba-card {
-    background: hsl(var(--card)) !important;
-    border-color: hsl(var(--border)) !important;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08) !important;
+    background: hsl(0 0% 100%) !important;
+    border-color: hsl(214 32% 85%) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
 }
 
-/* Fix foreground text */
-.light .text-foreground {
-    color: hsl(var(--foreground)) !important;
+/* Fix scrollbar */
+.light ::-webkit-scrollbar-track {
+    background: hsl(210 20% 96%);
+}
+
+.light ::-webkit-scrollbar-thumb {
+    background: hsl(215 25% 75%);
+}
+
+.light ::-webkit-scrollbar-thumb:hover {
+    background: hsl(215 25% 65%);
 }
 
 /* ========================================
