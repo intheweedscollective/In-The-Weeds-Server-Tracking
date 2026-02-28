@@ -563,7 +563,12 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                         
                         return (
                           <tr key={idx} className={`${hasMissing ? 'bg-yellow-500/5' : 'hover:bg-slate-700/50'}`}>
-                            <td className="px-2 py-2 font-medium text-white text-sm truncate max-w-[120px] sticky left-0 bg-slate-800">{emp.name}</td>
+                            <td className="px-2 py-2 font-medium text-sm sticky left-0 bg-slate-800">
+                              <EditableNameCell
+                                value={emp.name}
+                                onChange={(val) => updateEmployeeField(idx, 'name', val)}
+                              />
+                            </td>
                             <td className="px-2 py-2 text-right">
                               <EditableCell 
                                 value={emp.ppa} 
