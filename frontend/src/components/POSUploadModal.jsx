@@ -6,7 +6,7 @@ import axios from "axios";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
-// Editable cell component for inline editing
+// Editable cell component for inline editing (numbers)
 const EditableCell = ({ value, format, isMissing, onChange }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(value || '');
@@ -58,6 +58,60 @@ const EditableCell = ({ value, format, isMissing, onChange }) => {
       }}
       className={`inline-block px-1 py-0.5 rounded text-xs transition-colors ${
         isMissing 
+          ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/50' 
+          : 'text-slate-300 hover:bg-slate-600'
+      }`}
+    >
+      {displayValue || '—'}
+    </button>
+  );
+};
+
+// Editable name cell component (text)
+const EditableNameCell = ({ value, onChange }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(value || '');
+  
+  const handleSave = () => {
+    onChange(editValue.trim() || value);
+    setIsEditing(false);
+  };
+  
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') handleSave();
+    if (e.key === 'Escape') {
+      setEditValue(value || '');
+      setIsEditing(false);
+    }
+  };
+  
+  if (isEditing) {
+    return (
+      <input
+        type="text"
+        value={editValue}
+        onChange={(e) => setEditValue(e.target.value)}
+        onBlur={handleSave}
+        onKeyDown={handleKeyDown}
+        className="w-24 px-1 py-1 text-left text-xs bg-slate-600 border border-primary rounded text-white focus:outline-none"
+        autoFocus
+      />
+    );
+  }
+  
+  return (
+    <button
+      onClick={() => {
+        setEditValue(value || '');
+        setIsEditing(true);
+      }}
+      className="text-left text-white hover:bg-slate-600 px-1 py-0.5 rounded transition-colors truncate max-w-[100px] block"
+      title={value}
+    >
+      {value || '—'}
+    </button>
+  );
+}; 
           ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/50' 
           : 'text-slate-300 hover:bg-slate-600'
       }`}
