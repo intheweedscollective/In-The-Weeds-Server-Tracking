@@ -13,73 +13,63 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # System prompt for extracting POS data
-POS_EXTRACTION_PROMPT = """You are an expert at extracting employee performance data from restaurant POS (Point of Sale) reports, specifically Aloha POS reports.
+POS_EXTRACTION_PROMPT = """You are an expert at extracting employee performance data from Aloha POS Server Sales Detail Reports.
 
-This could be one of several Aloha report types:
-1. **Server Sales Detail Report** - Shows ONE employee per page with sales by category (Food, Liquor, Beer, Wine, Loyalty, Bar Glassware, etc.) and totals. Employee name appears at top.
-2. **Server Performance Report** - Shows multiple employees in a table with columns for PPA, LBW, Glassware, Guest Count, etc.
-3. **Labor Report** - Shows hours worked, tips, and sales by employee.
+REPORT STRUCTURE - Server Sales Detail Report:
+- Employee name at the TOP of the page
+- Table with columns: Category | Qty Sold | Gross Sls | Net Sls | Void | Comp | Promo | Emp Disc
+- Categories include: Food, Liquor, Beer, Wine, Bar Glassware, Loyalty, etc.
+- Summary section at bottom with "Total Guests"
 
-Analyze the uploaded image and extract employee performance metrics. Look for:
+CRITICAL: Extract values from the "Net Sls" column ONLY (not Gross Sls).
 
-1. **Employee Names** - Server/bartender names (may be at top of page or in a column)
-2. **Net Sales** - Total sales amount (look for "Net Sls" or "Net Sales" column/total)
-3. **Guest Count** - Total number of guests served (look for "Total Guests" or "Guests")
-4. **PPA** (Per Person Average) - Net Sales divided by Guest Count, OR shown directly
-5. **LBW** (Liquor, Beer, Wine) - Combined or separate amounts
-6. **Loyalty Sales** - Dollar amount from "Loyalty" category (this is LSC - Loyalty Sales Check)
-7. **Bar Glassware** - Dollar amount from "Bar Glassware" or "Glassware" category
-8. **Food Sales** - Food category net sales
-9. **Tips** - If available
-10. **Hours Worked** - If available
+DATA TO EXTRACT:
+1. **Employee Name** - At top of page (e.g., "Terrance Kott", "Kitti Smith")
+2. **Total Guests** - From summary section at bottom (number of guests served)
+3. **Net Sales by Category** - From the "Net Sls" column for each row:
+   - **Food** → food_sales
+   - **Liquor** → liquor_sales  
+   - **Beer** → beer_sales
+   - **Wine** → wine_sales
+   - **Bar Glassware** → bar_glassware_sales
+   - **Loyalty** → loyalty_sales
+   - **Total (grand total row)** → net_sales
 
-For Server Sales Detail Reports (one employee per page):
-- Employee name is usually at the TOP of the page
-- Look for "Net Sls" totals row at bottom of category table
-- Look for "Total Guests" summary
-- Calculate PPA = Total Net Sales / Total Guests if not shown directly
-- Sum up Liquor + Beer + Wine for LBW total
-- **IMPORTANT: Look for "Loyalty" row - extract the Net Sales dollar amount as loyalty_sales**
-- **IMPORTANT: Look for "Bar Glassware" or "Glassware" row - extract the Net Sales dollar amount as bar_glassware_sales**
+FORMULAS (DO NOT calculate these - I will calculate them):
+- PPA = net_sales / guest_count
+- LBW per guest = (liquor_sales + beer_sales + wine_sales) / guest_count
+- Glassware per guest = bar_glassware_sales / guest_count
+- Guests per LSC = guest_count / (loyalty_sales / 25)
 
-IMPORTANT INSTRUCTIONS:
-- Extract data for EVERY employee visible in the report
-- Use the exact names as shown (first name, last name, or full name)
-- If a value is not visible or unclear, use null
-- Numbers should be extracted as floats without $ signs or commas
-- Be thorough - scan the entire image for all data
+Return RAW extracted values - do NOT pre-calculate PPA, LBW per guest, etc.
 
-Return the data as a JSON object with this exact structure:
+JSON FORMAT:
 {
-  "report_date": "YYYY-MM-DD or null if not visible",
-  "report_type": "server_sales_detail/server_performance/labor/unknown",
+  "report_date": "YYYY-MM-DD or null",
+  "report_type": "server_sales_detail",
   "employees": [
     {
       "name": "Employee Name",
-      "ppa": 45.50,
-      "lbw_per_guest": 8.25,
-      "guest_count": 120,
-      "net_sales": 5460.00,
-      "loyalty_sales": 425.00,
-      "bar_glassware_sales": 180.00,
-      "tips": 650.00,
-      "hours": 32.5,
-      "food_sales": 4500.00,
-      "liquor_sales": 500.00,
-      "beer_sales": 300.00,
-      "wine_sales": 160.00
+      "guest_count": 725,
+      "net_sales": 38274.79,
+      "food_sales": 28500.00,
+      "liquor_sales": 3467.00,
+      "beer_sales": 1960.00,
+      "wine_sales": 238.00,
+      "bar_glassware_sales": 837.00,
+      "loyalty_sales": 250.00
     }
   ],
-  "extraction_notes": "Any notes about data quality or missing information"
+  "extraction_notes": "Any issues or notes"
 }
 
-If you cannot extract any meaningful data, return:
-{
-  "error": "Description of why extraction failed",
-  "employees": []
-}
+IMPORTANT:
+- Use "Net Sls" column values, NOT "Gross Sls"
+- Extract numbers as-is without $ signs or commas
+- If a category row doesn't exist, use null
+- Do NOT calculate derived values like PPA or LBW/guest
 
-Return ONLY valid JSON, no markdown formatting or explanation."""
+Return ONLY valid JSON."""
 
 
 async def extract_pos_data_from_image(image_base64: str, mime_type: str = "image/jpeg") -> Dict[str, Any]:
