@@ -35,11 +35,12 @@ const EditableCell = ({ value, format, isMissing, onChange }) => {
     return (
       <input
         type="text"
+        inputMode="decimal"
         value={editValue}
         onChange={(e) => setEditValue(e.target.value)}
         onBlur={handleSave}
         onKeyDown={handleKeyDown}
-        className="w-20 px-2 py-1 text-right text-sm bg-slate-600 border border-primary rounded text-white focus:outline-none focus:ring-1 focus:ring-primary"
+        className="w-16 px-1 py-1 text-right text-xs bg-slate-600 border border-primary rounded text-white focus:outline-none"
         autoFocus
       />
     );
@@ -55,14 +56,13 @@ const EditableCell = ({ value, format, isMissing, onChange }) => {
         setEditValue(value || '');
         setIsEditing(true);
       }}
-      className={`inline-flex items-center gap-1 px-2 py-1 rounded transition-colors ${
+      className={`inline-block px-1 py-0.5 rounded text-xs transition-colors ${
         isMissing 
-          ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 border border-yellow-500/50' 
+          ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/50' 
           : 'text-slate-300 hover:bg-slate-600'
       }`}
     >
       {displayValue || '—'}
-      <Pencil className="w-3 h-3 opacity-50" />
     </button>
   );
 };
