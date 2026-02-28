@@ -550,8 +550,13 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                                 onChange={(val) => updateEmployeeField(idx, 'net_sales', val)}
                               />
                             </td>
-                            <td className="px-2 py-2 text-right text-slate-400 text-xs">
-                              {emp.guests_per_lsc ? emp.guests_per_lsc.toFixed(0) : "—"}
+                            <td className="px-2 py-2 text-right">
+                              <EditableCell 
+                                value={emp.guests_per_lsc} 
+                                format="number"
+                                isMissing={false}
+                                onChange={(val) => updateEmployeeField(idx, 'guests_per_lsc', val)}
+                              />
                             </td>
                             <td className="px-2 py-2 text-center">
                               {hasMissing ? (
