@@ -534,7 +534,7 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                                 onChange={(val) => updateEmployeeField(idx, 'glassware_per_guest', val)}
                               />
                             </td>
-                            <td className="px-3 py-2 text-right">
+                            <td className="px-2 py-2 text-right">
                               <EditableCell 
                                 value={emp.guest_count} 
                                 format="number"
@@ -542,7 +542,7 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                                 onChange={(val) => updateEmployeeField(idx, 'guest_count', val)}
                               />
                             </td>
-                            <td className="px-3 py-2 text-right">
+                            <td className="px-2 py-2 text-right">
                               <EditableCell 
                                 value={emp.net_sales} 
                                 format="currency"
@@ -550,15 +550,12 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                                 onChange={(val) => updateEmployeeField(idx, 'net_sales', val)}
                               />
                             </td>
-                            <td className="px-3 py-2 text-right text-slate-400">
+                            <td className="px-2 py-2 text-right text-slate-400 text-xs">
                               {emp.guests_per_lsc ? emp.guests_per_lsc.toFixed(0) : "—"}
                             </td>
-                            <td className="px-3 py-2 text-center">
+                            <td className="px-2 py-2 text-center">
                               {hasMissing ? (
-                                <span className="inline-flex items-center gap-1 text-xs text-yellow-400">
-                                  <AlertCircle className="w-3 h-3" />
-                                  {missingFields.length}
-                                </span>
+                                <span className="text-yellow-400 text-xs">{missingFields.length}</span>
                               ) : (
                                 <CheckCircle className="w-4 h-4 text-green-500 mx-auto" />
                               )}
@@ -571,17 +568,13 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                 </div>
               </div>
               
-              {/* Legend */}
-              <div className="flex items-center gap-4 text-xs text-slate-400">
+              {/* Legend - simplified for mobile */}
+              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
                 <span className="flex items-center gap-1">
-                  <span className="w-3 h-3 bg-yellow-500/20 border border-yellow-500/50 rounded"></span>
-                  Missing data (click to edit)
+                  <span className="w-2 h-2 bg-yellow-500/50 rounded"></span>
+                  Click to edit
                 </span>
-                <span className="flex items-center gap-1">
-                  <CheckCircle className="w-3 h-3 text-green-500" />
-                  Complete
-                </span>
-                <span className="text-slate-500">• G/LSC is optional (0 is valid)</span>
+                <span className="text-slate-500">• G/LSC optional</span>
               </div>
 
               {/* Preview (collapsed) */}
