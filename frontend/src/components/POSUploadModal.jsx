@@ -482,18 +482,18 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
 
               {/* Editable Data Table */}
               <div className="border border-slate-600 rounded-xl overflow-hidden">
-                <div className="overflow-x-auto max-h-96">
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-700 sticky top-0">
+                <div className="overflow-x-auto max-h-80">
+                  <table className="w-full text-sm min-w-[700px]">
+                    <thead className="bg-slate-700 sticky top-0 z-10">
                       <tr>
-                        <th className="px-3 py-3 text-left font-semibold text-white">Employee</th>
-                        <th className="px-3 py-3 text-right font-semibold text-white">PPA</th>
-                        <th className="px-3 py-3 text-right font-semibold text-white">LBW</th>
-                        <th className="px-3 py-3 text-right font-semibold text-white">Glass</th>
-                        <th className="px-3 py-3 text-right font-semibold text-white">Guests</th>
-                        <th className="px-3 py-3 text-right font-semibold text-white">Net Sales</th>
-                        <th className="px-3 py-3 text-right font-semibold text-white">G/LSC</th>
-                        <th className="px-3 py-3 text-center font-semibold text-white">Status</th>
+                        <th className="px-2 py-2 text-left font-semibold text-white sticky left-0 bg-slate-700 min-w-[100px]">Name</th>
+                        <th className="px-2 py-2 text-right font-semibold text-white whitespace-nowrap">PPA</th>
+                        <th className="px-2 py-2 text-right font-semibold text-white whitespace-nowrap">LBW</th>
+                        <th className="px-2 py-2 text-right font-semibold text-white whitespace-nowrap">Glass</th>
+                        <th className="px-2 py-2 text-right font-semibold text-white whitespace-nowrap">Guests</th>
+                        <th className="px-2 py-2 text-right font-semibold text-white whitespace-nowrap">Sales</th>
+                        <th className="px-2 py-2 text-right font-semibold text-white whitespace-nowrap">G/LSC</th>
+                        <th className="px-2 py-2 text-center font-semibold text-white">✓</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-600">
@@ -509,8 +509,8 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                         
                         return (
                           <tr key={idx} className={`${hasMissing ? 'bg-yellow-500/5' : 'hover:bg-slate-700/50'}`}>
-                            <td className="px-3 py-2 font-medium text-white">{emp.name}</td>
-                            <td className="px-3 py-2 text-right">
+                            <td className="px-2 py-2 font-medium text-white text-sm truncate max-w-[120px] sticky left-0 bg-slate-800">{emp.name}</td>
+                            <td className="px-2 py-2 text-right">
                               <EditableCell 
                                 value={emp.ppa} 
                                 format="currency"
@@ -518,7 +518,7 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                                 onChange={(val) => updateEmployeeField(idx, 'ppa', val)}
                               />
                             </td>
-                            <td className="px-3 py-2 text-right">
+                            <td className="px-2 py-2 text-right">
                               <EditableCell 
                                 value={emp.lbw_per_guest} 
                                 format="currency"
@@ -526,7 +526,7 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                                 onChange={(val) => updateEmployeeField(idx, 'lbw_per_guest', val)}
                               />
                             </td>
-                            <td className="px-3 py-2 text-right">
+                            <td className="px-2 py-2 text-right">
                               <EditableCell 
                                 value={emp.glassware_per_guest} 
                                 format="currency"
