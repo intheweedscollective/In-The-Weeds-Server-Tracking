@@ -574,8 +574,8 @@ export default function Dashboard() {
                 
                 const priorities = [
                   { metric: 'PPA', count: belowPPA, pct: Math.round(belowPPA / employees.length * 100), tip: 'Upselling appetizers & desserts' },
-                  { metric: 'LBW', count: belowLBW, pct: Math.round(belowLBW / employees.length * 100), tip: 'Wine pairings & cocktails' },
-                  { metric: 'Glassware', count: belowGlass, pct: Math.round(belowGlass / employees.length * 100), tip: 'Souvenir glass suggestions' },
+                  { metric: 'LBW', count: belowLBW, pct: Math.round(belowLBW / employees.length * 100), tip: 'LTO cocktails & premium spirits' },
+                  { metric: 'Glassware', count: belowGlass, pct: Math.round(belowGlass / employees.length * 100), tip: 'Bar glassware add-ons' },
                 ].filter(p => p.count > 0).sort((a, b) => b.pct - a.pct);
                 
                 return priorities.length > 0 ? (
