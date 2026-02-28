@@ -1,10 +1,71 @@
 import { useState, useRef } from "react";
-import { Upload, Camera, FileImage, Loader2, CheckCircle, AlertCircle, X, Download, Edit3, FileText, Files } from "lucide-react";
+import { Upload, Camera, FileImage, Loader2, CheckCircle, AlertCircle, X, Download, Edit3, FileText, Files, Pencil } from "lucide-react";
 import { Button } from "./ui/button";
 import { toast } from "sonner";
 import axios from "axios";
 
 const API = process.env.REACT_APP_BACKEND_URL;
+
+// Editable cell component for inline editing
+const EditableCell = ({ value, format, isMissing, onChange }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(value || '');
+  
+  const handleSave = () => {
+    let parsedValue = null;
+    if (editValue !== '' && editValue !== null) {
+      const numVal = parseFloat(String(editValue).replace(/[$,]/g, ''));
+      if (!isNaN(numVal)) {
+        parsedValue = numVal;
+      }
+    }
+    onChange(parsedValue);
+    setIsEditing(false);
+  };
+  
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') handleSave();
+    if (e.key === 'Escape') {
+      setEditValue(value || '');
+      setIsEditing(false);
+    }
+  };
+  
+  if (isEditing) {
+    return (
+      <input
+        type="text"
+        value={editValue}
+        onChange={(e) => setEditValue(e.target.value)}
+        onBlur={handleSave}
+        onKeyDown={handleKeyDown}
+        className="w-20 px-2 py-1 text-right text-sm bg-slate-600 border border-primary rounded text-white focus:outline-none focus:ring-1 focus:ring-primary"
+        autoFocus
+      />
+    );
+  }
+  
+  const displayValue = value != null 
+    ? (format === 'currency' ? `$${value.toFixed(2)}` : value.toLocaleString())
+    : null;
+  
+  return (
+    <button
+      onClick={() => {
+        setEditValue(value || '');
+        setIsEditing(true);
+      }}
+      className={`inline-flex items-center gap-1 px-2 py-1 rounded transition-colors ${
+        isMissing 
+          ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 border border-yellow-500/50' 
+          : 'text-slate-300 hover:bg-slate-600'
+      }`}
+    >
+      {displayValue || '—'}
+      <Pencil className="w-3 h-3 opacity-50" />
+    </button>
+  );
+};
 
 export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter }) => {
   const [isDragging, setIsDragging] = useState(false);
@@ -15,6 +76,33 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
   const [extractedData, setExtractedData] = useState(null);
   const [error, setError] = useState(null);
   const fileInputRef = useRef(null);
+  
+  // Function to update an employee field
+  const updateEmployeeField = (employeeIndex, field, value) => {
+    if (!extractedData) return;
+    
+    const updatedEmployees = [...extractedData.employees];
+    updatedEmployees[employeeIndex] = {
+      ...updatedEmployees[employeeIndex],
+      [field]: value
+    };
+    
+    // Recalculate derived fields if needed
+    const emp = updatedEmployees[employeeIndex];
+    if (field === 'net_sales' || field === 'guest_count') {
+      // Recalculate PPA
+      if (emp.net_sales && emp.guest_count && emp.guest_count > 0) {
+        updatedEmployees[employeeIndex].ppa = emp.net_sales / emp.guest_count;
+      }
+    }
+    
+    setExtractedData({
+      ...extractedData,
+      employees: updatedEmployees
+    });
+    
+    toast.success(`Updated ${emp.name}'s ${field.replace(/_/g, ' ')}`);
+  };
 
   const handleDragOver = (e) => {
     e.preventDefault();
