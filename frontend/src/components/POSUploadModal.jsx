@@ -592,14 +592,10 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
           )}
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-700 bg-slate-800/50">
-          <Button variant="outline" onClick={handleClose} className="border-slate-600 text-slate-300 hover:bg-slate-700">
-            Cancel
-          </Button>
-          
+        {/* Footer - Mobile Responsive */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 px-4 py-4 border-t border-slate-700 bg-slate-800/50">
           {extractedData ? (
-            <div className="flex gap-3">
+            <>
               <Button 
                 variant="outline" 
                 onClick={() => {
@@ -607,20 +603,25 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                   setPreviewUrl(null);
                   setFileType(null);
                 }}
-                className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                className="border-slate-600 text-slate-300 hover:bg-slate-700 order-2 sm:order-1"
               >
                 <Edit3 className="w-4 h-4 mr-2" />
-                Upload Different File
+                Re-upload
               </Button>
-              <Button onClick={handleConfirmData} className="bg-primary hover:bg-primary/90">
+              <Button onClick={handleConfirmData} className="bg-primary hover:bg-primary/90 order-1 sm:order-2">
                 <CheckCircle className="w-4 h-4 mr-2" />
-                Use This Data
+                Save Data
               </Button>
-            </div>
+            </>
           ) : (
-            <p className="text-sm text-slate-400">
-              Upload a POS report (image or PDF) to extract employee data
-            </p>
+            <>
+              <Button variant="outline" onClick={handleClose} className="border-slate-600 text-slate-300 hover:bg-slate-700">
+                Cancel
+              </Button>
+              <p className="text-sm text-slate-400 text-center sm:text-right">
+                Upload images to extract data
+              </p>
+            </>
           )}
         </div>
       </div>
