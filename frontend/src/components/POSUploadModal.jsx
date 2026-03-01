@@ -149,6 +149,104 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
     
     toast.success(`Updated ${emp.name}'s ${field.replace(/_/g, ' ')}`);
   };
+  
+  // Update field and recalculate derived values
+  const updateEmployeeFieldWithRecalc = (employeeIndex, field, value) => {
+    if (!extractedData) return;
+    
+    const updatedEmployees = [...extractedData.employees];
+    const emp = { ...updatedEmployees[employeeIndex] };
+    
+    // Update the raw value
+    if (field === 'lbw_total') {
+      emp.lbw_total = value;
+    } else if (field === 'glass_total') {
+      emp.glass_total = value;
+    } else {
+      emp[field] = value;
+    }
+    
+    // Recalculate derived fields
+    const guests = emp.guest_count || 0;
+    
+    if (guests > 0) {
+      // PPA = Net Sales / Guests
+      if (emp.net_sales) {
+        emp.ppa = emp.net_sales / guests;
+      }
+      
+      // LBW per guest = LBW Total / Guests
+      const lbwTotal = emp.lbw_total || (emp._raw?.liquor_sales || 0) + (emp._raw?.beer_sales || 0) + (emp._raw?.wine_sales || 0);
+      if (lbwTotal > 0) {
+        emp.lbw_per_guest = lbwTotal / guests;
+      }
+      
+      // Glassware per guest = Glass Total / Guests
+      const glassTotal = emp.glass_total || emp._raw?.bar_glassware_sales || 0;
+      if (glassTotal > 0) {
+        emp.glassware_per_guest = glassTotal / guests;
+      }
+      
+      // G/LSC = Guests / (Loyalty$ / 25)
+      if (emp.loyalty_sales && emp.loyalty_sales > 0) {
+        const lscCount = emp.loyalty_sales / 25;
+        emp.guests_per_lsc = guests / lscCount;
+      }
+    }
+    
+    updatedEmployees[employeeIndex] = emp;
+    
+    setExtractedData({
+      ...extractedData,
+      employees: updatedEmployees
+    });
+    
+    toast.success(`Updated & recalculated ${emp.name}'s data`);
+  };
+  
+  // Recalculate all employees' derived fields
+  const recalculateAllFields = () => {
+    if (!extractedData) return;
+    
+    const updatedEmployees = extractedData.employees.map(emp => {
+      const updated = { ...emp };
+      const guests = updated.guest_count || 0;
+      
+      if (guests > 0) {
+        // PPA
+        if (updated.net_sales) {
+          updated.ppa = updated.net_sales / guests;
+        }
+        
+        // LBW per guest
+        const lbwTotal = updated.lbw_total || (updated._raw?.liquor_sales || 0) + (updated._raw?.beer_sales || 0) + (updated._raw?.wine_sales || 0);
+        if (lbwTotal > 0) {
+          updated.lbw_per_guest = lbwTotal / guests;
+        }
+        
+        // Glassware per guest
+        const glassTotal = updated.glass_total || updated._raw?.bar_glassware_sales || 0;
+        if (glassTotal > 0) {
+          updated.glassware_per_guest = glassTotal / guests;
+        }
+        
+        // G/LSC
+        if (updated.loyalty_sales && updated.loyalty_sales > 0) {
+          const lscCount = updated.loyalty_sales / 25;
+          updated.guests_per_lsc = guests / lscCount;
+        }
+      }
+      
+      return updated;
+    });
+    
+    setExtractedData({
+      ...extractedData,
+      employees: updatedEmployees
+    });
+    
+    toast.success('Recalculated all employee metrics');
+  };
 
   const handleDragOver = (e) => {
     e.preventDefault();
