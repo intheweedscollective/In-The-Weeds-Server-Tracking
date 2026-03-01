@@ -529,15 +529,18 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
               {/* Editable Data Table */}
               <div className="border border-slate-600 rounded-xl overflow-hidden">
                 <div className="overflow-x-auto max-h-80">
-                  <table className="w-full text-sm min-w-[700px]">
+                  <table className="w-full text-sm min-w-[900px]">
                     <thead className="bg-slate-700 sticky top-0 z-10">
                       <tr>
                         <th className="px-2 py-2 text-left font-semibold text-white sticky left-0 bg-slate-700 min-w-[100px]">Name</th>
-                        <th className="px-2 py-2 text-right font-semibold text-white whitespace-nowrap">PPA</th>
-                        <th className="px-2 py-2 text-right font-semibold text-white whitespace-nowrap">LBW</th>
-                        <th className="px-2 py-2 text-right font-semibold text-white whitespace-nowrap">Glass</th>
                         <th className="px-2 py-2 text-right font-semibold text-white whitespace-nowrap">Guests</th>
-                        <th className="px-2 py-2 text-right font-semibold text-white whitespace-nowrap">Sales</th>
+                        <th className="px-2 py-2 text-right font-semibold text-white whitespace-nowrap">Net Sales</th>
+                        <th className="px-2 py-2 text-right font-semibold text-white whitespace-nowrap">PPA</th>
+                        <th className="px-2 py-2 text-right font-semibold text-white whitespace-nowrap">LBW$</th>
+                        <th className="px-2 py-2 text-right font-semibold text-white whitespace-nowrap">LBW/G</th>
+                        <th className="px-2 py-2 text-right font-semibold text-white whitespace-nowrap">Glass$</th>
+                        <th className="px-2 py-2 text-right font-semibold text-white whitespace-nowrap">Glass/G</th>
+                        <th className="px-2 py-2 text-right font-semibold text-white whitespace-nowrap">LSC$</th>
                         <th className="px-2 py-2 text-right font-semibold text-white whitespace-nowrap">G/LSC</th>
                         <th className="px-2 py-2 text-center font-semibold text-white">✓</th>
                       </tr>
@@ -553,12 +556,32 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                         if (!emp.net_sales) missingFields.push('sales');
                         const hasMissing = missingFields.length > 0;
                         
+                        // Get raw values
+                        const lbwTotal = (emp._raw?.liquor_sales || 0) + (emp._raw?.beer_sales || 0) + (emp._raw?.wine_sales || 0);
+                        const glassTotal = emp._raw?.bar_glassware_sales || 0;
+                        
                         return (
                           <tr key={idx} className={`${hasMissing ? 'bg-yellow-500/5' : 'hover:bg-slate-700/50'}`}>
                             <td className="px-2 py-2 font-medium text-sm sticky left-0 bg-slate-800">
                               <EditableNameCell
                                 value={emp.name}
                                 onChange={(val) => updateEmployeeField(idx, 'name', val)}
+                              />
+                            </td>
+                            <td className="px-2 py-2 text-right">
+                              <EditableCell 
+                                value={emp.guest_count} 
+                                format="number"
+                                isMissing={!emp.guest_count}
+                                onChange={(val) => updateEmployeeFieldWithRecalc(idx, 'guest_count', val)}
+                              />
+                            </td>
+                            <td className="px-2 py-2 text-right">
+                              <EditableCell 
+                                value={emp.net_sales} 
+                                format="currency"
+                                isMissing={!emp.net_sales}
+                                onChange={(val) => updateEmployeeFieldWithRecalc(idx, 'net_sales', val)}
                               />
                             </td>
                             <td className="px-2 py-2 text-right">
@@ -571,10 +594,26 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                             </td>
                             <td className="px-2 py-2 text-right">
                               <EditableCell 
+                                value={lbwTotal || emp.lbw_total} 
+                                format="currency"
+                                isMissing={false}
+                                onChange={(val) => updateEmployeeFieldWithRecalc(idx, 'lbw_total', val)}
+                              />
+                            </td>
+                            <td className="px-2 py-2 text-right">
+                              <EditableCell 
                                 value={emp.lbw_per_guest} 
                                 format="currency"
                                 isMissing={!emp.lbw_per_guest}
                                 onChange={(val) => updateEmployeeField(idx, 'lbw_per_guest', val)}
+                              />
+                            </td>
+                            <td className="px-2 py-2 text-right">
+                              <EditableCell 
+                                value={glassTotal || emp.glass_total} 
+                                format="currency"
+                                isMissing={false}
+                                onChange={(val) => updateEmployeeFieldWithRecalc(idx, 'glass_total', val)}
                               />
                             </td>
                             <td className="px-2 py-2 text-right">
@@ -587,18 +626,10 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                             </td>
                             <td className="px-2 py-2 text-right">
                               <EditableCell 
-                                value={emp.guest_count} 
-                                format="number"
-                                isMissing={!emp.guest_count}
-                                onChange={(val) => updateEmployeeField(idx, 'guest_count', val)}
-                              />
-                            </td>
-                            <td className="px-2 py-2 text-right">
-                              <EditableCell 
-                                value={emp.net_sales} 
+                                value={emp.loyalty_sales} 
                                 format="currency"
-                                isMissing={!emp.net_sales}
-                                onChange={(val) => updateEmployeeField(idx, 'net_sales', val)}
+                                isMissing={false}
+                                onChange={(val) => updateEmployeeFieldWithRecalc(idx, 'loyalty_sales', val)}
                               />
                             </td>
                             <td className="px-2 py-2 text-right">
@@ -624,13 +655,24 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                 </div>
               </div>
               
-              {/* Legend - simplified for mobile */}
-              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 bg-yellow-500/50 rounded"></span>
-                  Click to edit
-                </span>
-                <span className="text-slate-500">• G/LSC optional</span>
+              {/* Recalculate Button */}
+              <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 bg-yellow-500/50 rounded"></span>
+                    Click to edit
+                  </span>
+                  <span className="text-slate-500">• Edit $ amounts to auto-recalc per-guest values</span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={recalculateAllFields}
+                  className="border-slate-600 text-slate-300 hover:bg-slate-700 text-xs"
+                >
+                  <RefreshCw className="w-3 h-3 mr-1" />
+                  Recalc All
+                </Button>
               </div>
 
               {/* Preview (collapsed) */}
