@@ -256,39 +256,41 @@ def _safe_float(value) -> Optional[float]:
         val_str = val_str.replace("$", "")
         
         # Handle OCR-style errors with spaces in numbers
-        # Examples: "51 ,70633" -> "51706.33", "21 962.81" -> "21962.81", "51 .72" -> "51.72"
+        # Examples: "51 ,70633" -> "51706.33", "21 962.81" -> "21962.81"
+        # "67,671 .77" -> "67671.77", "67,671 .77  5,588.29" -> "67671.77"
         
         # Check if there are multiple space-separated parts
         parts = val_str.split()
         
-        if len(parts) > 1:
-            # Check raw second part before stripping
+        if len(parts) >= 2:
             raw_second = parts[1]
-            
             first = parts[0].rstrip(',.')
             
-            # If second part starts with comma/decimal, it's a continuation
-            if raw_second.startswith(',') or raw_second.startswith('.'):
-                # Join them: "51 ,70633" -> "51,70633", "51 .72" -> "51.72"
-                val_str = "".join(parts)
+            # If second part starts with decimal, join ONLY first two parts
+            # "67,671 .77  5,588.29" -> join "67,671" + ".77" = "67,671.77"
+            if raw_second.startswith('.'):
+                # Join only first and second part
+                val_str = first + raw_second.split()[0] if ' ' in raw_second else first + raw_second
+                # Actually raw_second is already split, so it's just ".77"
+                val_str = first + raw_second
+            elif raw_second.startswith(','):
+                # "51 ,70633" -> join first two: "51,70633"
+                val_str = first + raw_second
             else:
-                second = raw_second.lstrip(',')
+                # Check if it looks like a broken number
+                second = raw_second
                 first_ends_digit = first and first[-1].isdigit()
                 second_starts_digit = second and second[0].isdigit()
                 
-                # If pattern looks like "number space number.decimal" -> join
-                # "21 962.81" should become "21962.81"
                 if first_ends_digit and second_starts_digit:
-                    # Check if first is incomplete (no decimal and second has decimal)
+                    # "21 962.81" -> "21962.81"
                     if '.' not in first and '.' in second:
-                        # Join first two parts: "21 962.81" -> "21962.81"
                         val_str = first + second
-                    elif len(first) <= 2 and len(second) >= 3:
-                        # First part is too short to be a complete number
-                        # "21 962" -> "21962"
-                        val_str = "".join(parts[:2])
+                    elif len(first.replace(",", "")) <= 2:
+                        # First part too short, join
+                        val_str = first + second
                     else:
-                        # First looks like complete number
+                        # First looks complete
                         val_str = first
                 else:
                     val_str = first
@@ -306,9 +308,8 @@ def _safe_float(value) -> Optional[float]:
         num = float(val_str)
         
         # Handle case where decimal might be missing: "5170633" should be "51706.33"
-        # But only if the number is unreasonably large (> 100,000) and has no decimal
+        # But only if unreasonably large and no decimal
         if num > 100000 and "." not in val_str:
-            # Insert decimal 2 places from end
             val_str = val_str[:-2] + "." + val_str[-2:]
             num = float(val_str)
         
