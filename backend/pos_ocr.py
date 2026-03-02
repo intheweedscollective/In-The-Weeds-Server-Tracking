@@ -489,40 +489,63 @@ def extract_pos_data_from_xlsx(xlsx_bytes: bytes) -> Dict[str, Any]:
                 glassware_row = find_row_by_label("glassware", 28, 35) or 31
                 totals_row = find_row_by_label("totals", 35, 42) or 38
                 
-                # Find "Total Guests" row (usually around row 42)
+                # Find "Total Guests" row - search more broadly
                 guests_row = None
-                for row in range(39, 50):
-                    cell_a = sheet.cell(row=row, column=1).value
-                    cell_b = sheet.cell(row=row, column=2).value
-                    if cell_a and "total guests" in str(cell_a).lower():
-                        guests_row = row
+                guest_count = None
+                
+                # First, try to find by label
+                for row in range(35, 55):
+                    for col in range(1, 4):  # Check columns A, B, C
+                        cell_val = sheet.cell(row=row, column=col).value
+                        if cell_val and "total guests" in str(cell_val).lower():
+                            guests_row = row
+                            # Guest count might be in the same row but different column
+                            for val_col in range(col, col + 4):
+                                val = _safe_int(sheet.cell(row=row, column=val_col).value)
+                                if val and val > 0:
+                                    guest_count = val
+                                    break
+                            if guest_count:
+                                break
+                    if guest_count:
                         break
-                    if cell_b and "total guests" in str(cell_b).lower():
-                        guests_row = row
-                        break
                 
-                if not guests_row:
-                    guests_row = 42  # Default fallback
-                
-                # Extract values
-                food_sales = get_net_sales_value(food_row)
-                liquor_sales = get_net_sales_value(liquor_row)
-                beer_sales = get_net_sales_value(beer_row)
-                wine_sales = get_net_sales_value(wine_row)
-                loyalty_sales = get_net_sales_value(loyalty_row)
-                bar_glassware_sales = get_net_sales_value(glassware_row)
-                net_sales = get_net_sales_value(totals_row)
-                
-                # Get Total Guests - value is in column C for the guests row
-                guest_count = _safe_int(sheet.cell(row=guests_row, column=3).value)
-                
-                # If guest_count not in column C, try column B
+                # If not found, try default row 42 column C or B
                 if not guest_count:
-                    guest_count = _safe_int(sheet.cell(row=guests_row, column=2).value)
+                    guests_row = 42
+                    guest_count = _safe_int(sheet.cell(row=42, column=3).value)
+                    if not guest_count:
+                        guest_count = _safe_int(sheet.cell(row=42, column=2).value)
                 
-                # If still no guest count, skip this employee
+                # Also try searching for "Num Guests" or just "Guests" as alternative labels
+                if not guest_count:
+                    for row in range(35, 55):
+                        for col in range(1, 4):
+                            cell_val = sheet.cell(row=row, column=col).value
+                            if cell_val and ("num guests" in str(cell_val).lower() or 
+                                            (str(cell_val).lower().strip() == "guests")):
+                                for val_col in range(col, col + 4):
+                                    val = _safe_int(sheet.cell(row=row, column=val_col).value)
+                                    if val and val > 0:
+                                        guest_count = val
+                                        break
+                                if guest_count:
+                                    break
+                        if guest_count:
+                            break
+                
+                # If still no guest count, log more details and skip
                 if not guest_count or guest_count <= 0:
-                    logging.warning(f"Sheet '{sheet_name}': No valid guest count for {employee_name}")
+                    logging.warning(f"Sheet '{sheet_name}': No valid guest count for {employee_name}. Checked rows 35-55.")
+                    # Log some cell values for debugging
+                    debug_cells = []
+                    for r in range(40, 46):
+                        for c in range(1, 5):
+                            v = sheet.cell(row=r, column=c).value
+                            if v:
+                                debug_cells.append(f"R{r}C{c}={v}")
+                    if debug_cells:
+                        logging.warning(f"  Sample cells: {', '.join(debug_cells[:10])}")
                     extraction_notes.append(f"{employee_name}: Missing guest count")
                     continue
                 
