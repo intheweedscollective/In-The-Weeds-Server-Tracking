@@ -92,6 +92,148 @@ async def login_to_loyalty_voice(page: Page) -> bool:
         return False
 
 
+async def scrape_transactions_for_servers(
+    page: Page,
+    start_date: str,
+    end_date: str
+) -> Dict[str, str]:
+    """
+    Scrape the Transactions page to build a mapping of customer name -> server name.
+    This allows us to credit the correct server for each CV review.
+    
+    Args:
+        page: Playwright page (already logged in)
+        start_date: Start date in MM/DD/YYYY format
+        end_date: End date in MM/DD/YYYY format
+    
+    Returns:
+        Dict mapping customer first name (lowercase) to server name
+    """
+    customer_to_server = {}
+    
+    try:
+        # Navigate to Transactions page
+        await page.goto(f"{LV_URL}/Transactions", wait_until="domcontentloaded", timeout=30000)
+        await page.wait_for_timeout(3000)
+        
+        # Set date filter
+        date_filter = page.locator('#date-filter').first
+        if await date_filter.is_visible(timeout=5000):
+            await date_filter.click()
+            await page.wait_for_timeout(1500)
+            
+            # Use Custom Range
+            custom = page.locator('li:has-text("Custom Range")').first
+            if await custom.is_visible(timeout=2000):
+                await custom.click()
+                await page.wait_for_timeout(1000)
+                
+                # Fill dates
+                start_input = page.locator('input[name="daterangepicker_start"]').first
+                end_input = page.locator('input[name="daterangepicker_end"]').first
+                
+                if await start_input.is_visible(timeout=2000):
+                    await start_input.clear()
+                    await start_input.fill(start_date)
+                if await end_input.is_visible(timeout=2000):
+                    await end_input.clear()
+                    await end_input.fill(end_date)
+                
+                await page.wait_for_timeout(1000)
+            
+            # Apply
+            apply = page.locator('.applyBtn').first
+            if await apply.is_visible(timeout=2000):
+                await apply.click(force=True)
+                await page.wait_for_timeout(5000)
+        
+        # Extract transaction data from the grid
+        transactions = await page.evaluate("""async () => {
+            const gridBody = document.querySelector('.ag-body-viewport');
+            const allRows = new Map();
+            
+            if (!gridBody) return [];
+            
+            gridBody.scrollTop = 0;
+            await new Promise(r => setTimeout(r, 500));
+            
+            const viewportHeight = gridBody.clientHeight;
+            const totalHeight = gridBody.scrollHeight;
+            const scrollIterations = Math.ceil(totalHeight / (viewportHeight * 0.3)) + 15;
+            
+            function collectRows() {
+                const agRows = document.querySelectorAll('.ag-row');
+                agRows.forEach(row => {
+                    const cells = row.querySelectorAll('.ag-cell');
+                    const rowData = {};
+                    cells.forEach(cell => {
+                        const colId = cell.getAttribute('col-id');
+                        if (colId) {
+                            rowData[colId] = cell.innerText?.trim() || '';
+                        }
+                    });
+                    // Look for customer name and server/employee columns
+                    // Common column names: Server, Employee, ServerName, FkEmployee_Name, CustomerFirstName
+                    if (Object.keys(rowData).length > 0) {
+                        const key = JSON.stringify(rowData);
+                        if (!allRows.has(key)) {
+                            allRows.set(key, rowData);
+                        }
+                    }
+                });
+            }
+            
+            for (let i = 0; i < scrollIterations; i++) {
+                collectRows();
+                gridBody.scrollTop += viewportHeight * 0.3;
+                await new Promise(r => setTimeout(r, 200));
+            }
+            
+            gridBody.scrollTop = gridBody.scrollHeight;
+            await new Promise(r => setTimeout(r, 500));
+            collectRows();
+            
+            return Array.from(allRows.values());
+        }""")
+        
+        print(f"[CV] Scraped {len(transactions)} transactions")
+        
+        # Log column names from first transaction for debugging
+        if transactions and len(transactions) > 0:
+            print(f"[CV] Transaction columns available: {list(transactions[0].keys())}")
+        
+        # Build customer -> server mapping
+        # Try different possible column names for customer and server
+        customer_cols = ['FkCustomer_FirstName', 'CustomerFirstName', 'Customer', 'FirstName', 'GuestName', 'Guest']
+        server_cols = ['Server', 'ServerName', 'Employee', 'FkEmployee_Name', 'EmployeeName', 'Staff', 'Waiter']
+        
+        for txn in transactions:
+            customer_name = None
+            server_name = None
+            
+            # Find customer name
+            for col in customer_cols:
+                if col in txn and txn[col]:
+                    customer_name = txn[col].strip().lower()
+                    break
+            
+            # Find server name
+            for col in server_cols:
+                if col in txn and txn[col]:
+                    server_name = txn[col].strip()
+                    break
+            
+            if customer_name and server_name:
+                customer_to_server[customer_name] = server_name
+        
+        print(f"[CV] Built customer->server mapping with {len(customer_to_server)} entries")
+        
+    except Exception as e:
+        print(f"[CV] Error scraping transactions: {e}")
+    
+    return customer_to_server
+
+
 async def scrape_cv_feedback(
     quarter: str = None,
     year: int = None
