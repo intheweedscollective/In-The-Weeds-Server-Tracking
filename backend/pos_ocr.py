@@ -677,24 +677,41 @@ def extract_pos_data_from_xlsx(xlsx_bytes: bytes) -> Dict[str, Any]:
                             break
                 
                 # Last resort: Look for a number after "Totals" row that could be guest count
-                # Pattern: After totals row, look for rows 45-55 with reasonable numbers
+                # Pattern: After totals row, look for Shift A + Shift B + Total pattern
+                # Total is usually the largest of the three consecutive values
                 if not guest_count and totals_row:
-                    for row in range(totals_row + 2, totals_row + 20):
+                    candidates = []
+                    for row in range(totals_row + 2, totals_row + 15):
                         for col in range(3, 6):  # Check columns C, D, E
                             val = _safe_int(sheet.cell(row=row, column=col).value)
-                            # Guest count is typically 100-10000
-                            if val and val > 50 and val < 10000:
-                                # Check if there's a "Shift" label nearby indicating this is guest data
-                                prev_val = sheet.cell(row=row-1, column=2).value
-                                curr_val = sheet.cell(row=row, column=2).value
-                                if not guest_count:  # Take first reasonable number
-                                    guest_count = val
-                                # If we see "Total" or similar, prefer this value
-                                if curr_val and 'total' in str(curr_val).lower().replace(" ", ""):
-                                    guest_count = val
-                                    break
-                        if guest_count:
+                            # Guest count is typically 50-10000
+                            if val and val > 30 and val < 10000:
+                                label_col2 = sheet.cell(row=row, column=2).value or ""
+                                label_str = str(label_col2).lower().replace(" ", "")
+                                candidates.append({
+                                    'row': row,
+                                    'col': col,
+                                    'value': val,
+                                    'label': label_str,
+                                    'is_total': 'total' in label_str
+                                })
+                    
+                    # First, prefer any value with "total" label
+                    for c in candidates:
+                        if c['is_total']:
+                            guest_count = c['value']
                             break
+                    
+                    # If no "total" label, look for the pattern: smaller, smaller, larger (total)
+                    # Or take the largest reasonable value
+                    if not guest_count and candidates:
+                        # Sort by value descending and take largest
+                        candidates.sort(key=lambda x: x['value'], reverse=True)
+                        # Take the largest that's not unreasonably large
+                        for c in candidates:
+                            if c['value'] < 5000:  # Most restaurants don't have >5000 guests per employee
+                                guest_count = c['value']
+                                break
                 
                 # If still no guest count, log more details and skip
                 if not guest_count or guest_count <= 0:
