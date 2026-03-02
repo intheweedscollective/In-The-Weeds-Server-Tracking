@@ -256,19 +256,25 @@ def _safe_float(value) -> Optional[float]:
         val_str = val_str.replace("$", "")
         
         # Handle OCR-style errors with spaces in numbers
-        # Examples: "51 ,70633" -> "51,706.33", "51 .72" -> "51.72", "2,471 .05" -> "2471.05"
+        # Examples: "51 ,70633" -> "51706.33", "51 .72" -> "51.72"
         
-        # First, if there are multiple numbers separated by whitespace, take the first one
-        # Example: "30,251.08            2,471 .05" -> "30,251.08"
+        # First, if there are multiple space-separated parts, check if they form one number
+        # "51 ,70633" splits to ['51', ',70633'] - these should be joined
+        # "30,251.08            2,471 .05" splits to ['30,251.08', '2,471', '.05'] - take first complete number
         parts = val_str.split()
+        
         if len(parts) > 1:
-            # Check if first part looks like a complete number
-            first_part = parts[0].replace(",", "")
-            if first_part.replace(".", "").isdigit():
-                val_str = parts[0]
-            else:
-                # Reconstruct - might be "51 ,70633" (space before comma)
+            # Check if the second part starts with comma or decimal (continuation of first number)
+            if parts[1].startswith(',') or parts[1].startswith('.'):
+                # Join them - it's one number split by space
                 val_str = "".join(parts)
+            else:
+                # Multiple separate numbers - take the first one that looks complete
+                first = parts[0].rstrip(',')  # Remove trailing comma if any
+                if first.replace(",", "").replace(".", "").isdigit():
+                    val_str = first
+                else:
+                    val_str = "".join(parts)
         
         # Remove all spaces
         val_str = val_str.replace(" ", "")
@@ -276,18 +282,20 @@ def _safe_float(value) -> Optional[float]:
         # Handle comma as thousand separator
         val_str = val_str.replace(",", "")
         
-        # Handle case where decimal might be missing: "5170633" should be "51706.33"
-        # But only if the number is unreasonably large (> 1,000,000) and has no decimal
-        if val_str.replace(".", "").isdigit():
-            num = float(val_str)
-            # If > 1 million and no decimal in original, it's probably missing a decimal
-            if num > 1000000 and "." not in val_str:
-                # Insert decimal 2 places from end
-                val_str = val_str[:-2] + "." + val_str[-2:]
-                num = float(val_str)
-            return num
+        # Validate it's a number
+        if not val_str or not val_str.replace(".", "").replace("-", "").isdigit():
+            return None
         
-        return float(val_str) if val_str else None
+        num = float(val_str)
+        
+        # Handle case where decimal might be missing: "5170633" should be "51706.33"
+        # But only if the number is unreasonably large (> 100,000) and has no decimal in original
+        if num > 100000 and "." not in str(value):
+            # Insert decimal 2 places from end
+            val_str = val_str[:-2] + "." + val_str[-2:]
+            num = float(val_str)
+        
+        return num
     except (ValueError, TypeError):
         return None
 
