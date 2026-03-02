@@ -256,25 +256,46 @@ def _safe_float(value) -> Optional[float]:
         val_str = val_str.replace("$", "")
         
         # Handle OCR-style errors with spaces in numbers
-        # Examples: "51 ,70633" -> "51706.33", "51 .72" -> "51.72"
+        # Examples: "51 ,70633" -> "51706.33", "21 962.81" -> "21962.81", "51 .72" -> "51.72"
         
-        # First, if there are multiple space-separated parts, check if they form one number
-        # "51 ,70633" splits to ['51', ',70633'] - these should be joined
-        # "30,251.08            2,471 .05" splits to ['30,251.08', '2,471', '.05'] - take first complete number
+        # Check if there are multiple space-separated parts
         parts = val_str.split()
         
         if len(parts) > 1:
-            # Check if the second part starts with comma or decimal (continuation of first number)
-            if parts[1].startswith(',') or parts[1].startswith('.'):
-                # Join them - it's one number split by space
-                val_str = "".join(parts)
-            else:
-                # Multiple separate numbers - take the first one that looks complete
-                first = parts[0].rstrip(',')  # Remove trailing comma if any
-                if first.replace(",", "").replace(".", "").isdigit():
-                    val_str = first
-                else:
+            # Heuristic: If parts look like they form ONE number (e.g., "21 962.81"), join them
+            # vs. multiple numbers (e.g., "30,251.08            2,471 .05"), take the first
+            
+            # Check if the pattern looks like "number space number" (broken number)
+            # vs "complete_number space other_stuff"
+            
+            first = parts[0].rstrip(',.')
+            second = parts[1].lstrip(',')
+            
+            # If first part ends with digits and second starts with digits/decimal/comma,
+            # they're likely one number
+            first_ends_digit = first and first[-1].isdigit()
+            second_starts_continuation = (second.startswith('.') or 
+                                          second.startswith(',') or 
+                                          (second and second[0].isdigit()))
+            
+            if first_ends_digit and second_starts_continuation:
+                # Check if first is incomplete (no decimal and second has decimal)
+                if '.' not in first and '.' in second:
+                    # Join them: "21 962.81" -> "21962.81"
+                    val_str = "".join(parts[:2])  # Take first two parts
+                elif second.startswith(',') or second.startswith('.'):
+                    # "51 ,70633" or "51 .72"
                     val_str = "".join(parts)
+                else:
+                    # Could be "30,251.08  2,471.05" - first looks complete
+                    first_clean = first.replace(",", "")
+                    if '.' in first or len(first_clean) <= 6:
+                        val_str = first
+                    else:
+                        val_str = "".join(parts[:2])
+            else:
+                # Take the first complete number
+                val_str = first
         
         # Remove all spaces
         val_str = val_str.replace(" ", "")
