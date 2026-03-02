@@ -448,34 +448,36 @@ def extract_pos_data_from_xlsx(xlsx_bytes: bytes) -> Dict[str, Any]:
                 # Extract employee name - try multiple locations
                 employee_name = None
                 
-                # Primary location: cell F5 (row 5, column 6)
-                name_cell = sheet.cell(row=5, column=6).value
+                # Primary location based on user feedback: cell N11 (row 11, column 14)
+                name_cell = sheet.cell(row=11, column=14).value
                 if name_cell:
-                    employee_name = str(name_cell).strip()
+                    val = str(name_cell).strip()
+                    # Make sure it looks like a name (not a number or date)
+                    if val and len(val) > 2 and not val.replace('.','').replace(',','').isdigit():
+                        employee_name = val
                 
-                # Fallback: Check other common name locations
+                # Fallback: cell F5 (row 5, column 6) - original location
                 if not employee_name or employee_name.lower() in ['none', 'nan', '']:
-                    # Try row 5 across columns D-H
-                    for col in range(4, 9):
-                        cell_val = sheet.cell(row=5, column=col).value
-                        if cell_val and isinstance(cell_val, str) and len(cell_val) > 2:
-                            # Check if it looks like a name (not a date or number)
-                            val = str(cell_val).strip()
-                            if not any(c.isdigit() for c in val[:3]) and '/' not in val and '-' not in val[:4]:
-                                employee_name = val
-                                break
+                    name_cell = sheet.cell(row=5, column=6).value
+                    if name_cell:
+                        employee_name = str(name_cell).strip()
                 
-                # Fallback: Try row 4 and row 6 with same logic
+                # Fallback: Check other common name locations (rows 4-6, 10-12 across columns D-P)
                 if not employee_name or employee_name.lower() in ['none', 'nan', '']:
-                    for row in [4, 6]:
-                        for col in range(4, 9):
+                    for row in [11, 5, 4, 6, 10, 12]:
+                        for col in range(4, 17):  # D through P
                             cell_val = sheet.cell(row=row, column=col).value
                             if cell_val and isinstance(cell_val, str) and len(cell_val) > 2:
                                 val = str(cell_val).strip()
-                                if not any(c.isdigit() for c in val[:3]) and '/' not in val and '-' not in val[:4]:
+                                # Check if it looks like a name (not a date, number, or address)
+                                if (not any(c.isdigit() for c in val[:3]) and 
+                                    '/' not in val and 
+                                    '-' not in val[:4] and
+                                    'NV' not in val and
+                                    not val.endswith(('89109', '89101', '89102', '89103'))):
                                     employee_name = val
                                     break
-                        if employee_name:
+                        if employee_name and employee_name.lower() not in ['none', 'nan', '']:
                             break
                 
                 # Last resort: Use sheet name if it looks like a name
@@ -485,7 +487,7 @@ def extract_pos_data_from_xlsx(xlsx_bytes: bytes) -> Dict[str, Any]:
                 
                 # Skip sheets without a valid employee name
                 if not employee_name or employee_name.lower() in ['none', 'nan', '']:
-                    logging.warning(f"Skipping sheet '{sheet_name}': No employee name found in F5 or fallback locations")
+                    logging.warning(f"Skipping sheet '{sheet_name}': No employee name found in N11, F5, or fallback locations")
                     skipped_sheets.append(sheet_name)
                     continue
                 
