@@ -91,8 +91,16 @@ def get_font(size: int, weight: str = "regular"):
     try:
         return ImageFont.truetype(path, size)
     except:
-        fallback = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if weight != "regular" else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-        return ImageFont.truetype(fallback, size)
+        # Use Liberation fonts as fallback (available in container)
+        if weight in ["bold", "semibold"]:
+            fallback = "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
+        else:
+            fallback = "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
+        try:
+            return ImageFont.truetype(fallback, size)
+        except:
+            # Last resort: use default PIL font
+            return ImageFont.load_default()
 
 
 def get_cell_color(value: float, is_total: bool = False) -> Tuple[int, int, int]:
