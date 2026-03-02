@@ -576,10 +576,11 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
               <div className="bg-slate-700/50 rounded-xl p-4">
                 <p className="text-sm font-medium text-white mb-2">Tips for best results:</p>
                 <ul className="text-sm text-slate-300 space-y-1">
-                  <li>• <strong>Batch Upload:</strong> Select multiple images at once (one per employee)</li>
-                  <li>• Screenshot or photo of each employee's report page works best</li>
-                  <li>• Ensure reports are clearly visible and not blurry</li>
-                  <li>• PDF files: First 5 pages processed (use images for more)</li>
+                  <li>• <strong className="text-green-400">XLSX (Recommended):</strong> Export from Aloha → 100% accurate, no OCR needed</li>
+                  <li>• Each employee should have their own sheet/tab in the Excel file</li>
+                  <li>• Employee name must be in cell F5 (yellow cell in Aloha export)</li>
+                  <li>• Images: Screenshot or photo of each employee's report page</li>
+                  <li>• PDF files: First 5 pages processed (use XLSX for more employees)</li>
                   <li>• Data extracted: PPA, LBW, Glassware, LSC, Guest Count, Net Sales</li>
                 </ul>
               </div>
