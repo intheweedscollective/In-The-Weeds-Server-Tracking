@@ -294,7 +294,12 @@ async def scrape_cv_feedback(
                 result["error"] = "Login failed"
                 return result
             
-            # Navigate to Feedback page
+            # FIRST: Scrape Transactions page to get customer -> server mapping
+            print("[CV] Step 1: Scraping Transactions page for server assignments...")
+            customer_to_server = await scrape_transactions_for_servers(page, start_date, end_date)
+            
+            # SECOND: Navigate to Feedback page
+            print("[CV] Step 2: Scraping Feedback page for CV reviews...")
             await page.goto(f"{LV_URL}/Feedback", wait_until="domcontentloaded", timeout=30000)
             await page.wait_for_timeout(3000)
             
