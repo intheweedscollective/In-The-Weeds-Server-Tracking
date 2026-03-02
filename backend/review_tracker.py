@@ -155,6 +155,22 @@ def get_review_stats(reviews: List[Dict], employee_names: List[str]) -> Dict[str
             "points": 0.0
         }
     
+    # Build a mapping of partial names to full names for matching
+    name_mapping = {}
+    for full_name in employee_names:
+        # Map full name
+        name_mapping[full_name.lower()] = full_name
+        # Map first name
+        parts = full_name.split()
+        if parts:
+            name_mapping[parts[0].lower()] = full_name
+            # Also map common nicknames/short forms
+            first_name = parts[0].lower()
+            # Handle nicknames like "Trey" for "Treyanna", "TK" for "Thomas Kozan"
+            if len(first_name) > 4:
+                name_mapping[first_name[:4]] = full_name  # First 4 chars
+                name_mapping[first_name[:3]] = full_name  # First 3 chars
+    
     # Process reviews
     for review in reviews:
         platform = review.get("platform", "")
@@ -166,10 +182,25 @@ def get_review_stats(reviews: List[Dict], employee_names: List[str]) -> Dict[str
             sentiment = mention.get("sentiment", "neutral")
             points = mention.get("points", 0.0)
             
-            if emp_name in stats["by_employee"]:
-                stats["by_employee"][emp_name]["mentions"] += 1
-                stats["by_employee"][emp_name][sentiment] += 1
-                stats["by_employee"][emp_name]["points"] += points
+            # Try to match the mentioned name to a full employee name
+            matched_name = None
+            emp_lower = emp_name.lower()
+            
+            # Direct match
+            if emp_lower in name_mapping:
+                matched_name = name_mapping[emp_lower]
+            else:
+                # Try partial matching - check if mentioned name is start of any employee's first name
+                for full_name in employee_names:
+                    first_name = full_name.split()[0].lower() if full_name.split() else ""
+                    if first_name.startswith(emp_lower) or emp_lower.startswith(first_name[:3]):
+                        matched_name = full_name
+                        break
+            
+            if matched_name and matched_name in stats["by_employee"]:
+                stats["by_employee"][matched_name]["mentions"] += 1
+                stats["by_employee"][matched_name][sentiment] += 1
+                stats["by_employee"][matched_name]["points"] += points
     
     # Round points
     for name in stats["by_employee"]:

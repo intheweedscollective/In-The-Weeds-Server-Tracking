@@ -3806,6 +3806,26 @@ async def recalculate_snapshot(snapshot_id: str):
     review_mentions_data = await review_mentions_cursor.to_list(1000)
     review_lookup = {r["_id"].lower(): r["mentions"] for r in review_mentions_data if r.get("_id")}
     
+    # Build a function to match partial names (e.g., "Trey" to "Treyanna Quick")
+    def get_review_mentions_for_employee(emp_name: str) -> int:
+        emp_lower = emp_name.lower()
+        first_name = emp_lower.split()[0] if emp_lower.split() else ""
+        
+        # Direct match on full name
+        if emp_lower in review_lookup:
+            return review_lookup[emp_lower]
+        
+        # Match on first name only
+        if first_name in review_lookup:
+            return review_lookup[first_name]
+        
+        # Match on partial first name (e.g., "Trey" matches "Treyanna")
+        for mention_name, count in review_lookup.items():
+            if first_name.startswith(mention_name) or mention_name.startswith(first_name[:3]):
+                return count
+        
+        return 0
+    
     recalculated_employees = []
     for emp_data in employees_data:
         try:
@@ -3816,8 +3836,8 @@ async def recalculate_snapshot(snapshot_id: str):
             nps_data = nps_lookup.get(emp_name_lower, {})
             nps_score = nps_data.get("nps_score", 0) or 0
             
-            # Get review mentions for this employee
-            review_mentions = review_lookup.get(emp_name_lower, 0)
+            # Get review mentions for this employee (with partial name matching)
+            review_mentions = get_review_mentions_for_employee(emp_name)
             
             # Create EmployeeV2 from existing data
             emp = EmployeeV2(
