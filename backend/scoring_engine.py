@@ -1024,6 +1024,18 @@ def generate_hierarchy_rankings(employees: List[EmployeeV2], settings: QuarterSe
             "bonus_points": round(metric_bonus + review_bonus, 2),
             "review_bonus": round(review_bonus, 2),
             "metric_bonus": round(metric_bonus, 2),
+            # Raw metric values
+            "ppa": emp.ppa or 0,
+            "lbw_per_guest": emp.lbw_per_guest or 0,
+            "glassware_per_guest": emp.glassware_per_guest or 0,
+            "guests_per_lsc": emp.guests_per_lsc or 0,
+            "guest_count": emp.guests or 0,
+            "net_sales": emp.net_sales or 0,
+            # Percentage scores (0-100)
+            "ppa_percentage": emp.score_ppa or 0,
+            "lbw_percentage": emp.score_lbw or 0,
+            "glassware_percentage": emp.score_glass or 0,
+            "lsc_percentage": emp.score_lsc or 0,
             # NPS data
             "nps_score": nps_score,
             "nps_points": round(nps_points, 2),
