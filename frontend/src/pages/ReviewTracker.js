@@ -647,8 +647,8 @@ export default function ReviewTracker() {
                             }`}>
                               {item.rating}/10 {item.sentiment === "promoter" ? "★" : item.sentiment === "detractor" ? "✗" : "○"}
                             </span>
-                            <span className="text-sm text-slate-400">{item.date}</span>
-                            <span className="text-sm text-gray-400">by {item.customer_name}</span>
+                            <span className="text-sm text-slate-300">{item.date}</span>
+                            <span className="text-sm text-slate-300">by {item.customer_name}</span>
                           </div>
                           
                           {/* Comment */}
