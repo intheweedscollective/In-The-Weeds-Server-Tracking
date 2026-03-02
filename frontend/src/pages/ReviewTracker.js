@@ -739,7 +739,7 @@ export default function ReviewTracker() {
                 {activeTab === "all" && (
                   <div className="flex items-center gap-2 mb-4 mt-8">
                     <MessageSquare className="w-5 h-5 text-primary" />
-                    <h2 className="text-lg font-bold text-gray-900">External Reviews</h2>
+                    <h2 className="text-lg font-bold text-white">External Reviews</h2>
                   </div>
                 )}
                 <div className="space-y-3">
