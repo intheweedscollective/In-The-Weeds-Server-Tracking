@@ -206,77 +206,86 @@ async def scrape_cv_feedback(
                         await page.wait_for_timeout(2000)
                 except:
                     pass
-            
-            # Extract data via JavaScript (ag-grid) - scroll through all rows
-            feedback_data = await page.evaluate("""async () => {
-                const gridBody = document.querySelector('.ag-body-viewport');
-                const allRows = new Map();
                 
-                if (!gridBody) return [];
-                
-                // Scroll to top first
-                gridBody.scrollTop = 0;
-                await new Promise(r => setTimeout(r, 500));
-                
-                // Calculate scroll iterations needed (estimate based on viewport height)
-                const viewportHeight = gridBody.clientHeight;
-                const rowHeight = 40; // Approximate row height in ag-grid
-                const totalHeight = gridBody.scrollHeight;
-                // Add extra buffer for virtual scrolling - need more iterations
-                const scrollIterations = Math.ceil(totalHeight / (viewportHeight * 0.5)) + 10;
-                
-                // Function to collect visible rows
-                function collectRows() {
-                    const agRows = document.querySelectorAll('.ag-row');
-                    agRows.forEach(row => {
-                        const rowId = row.getAttribute('row-id') || row.getAttribute('row-index');
-                        const cells = row.querySelectorAll('.ag-cell');
-                        const rowData = {};
-                        cells.forEach(cell => {
-                            const colId = cell.getAttribute('col-id');
-                            if (colId) {
-                                rowData[colId] = cell.innerText?.trim() || '';
-                            }
-                        });
-                        if (Object.keys(rowData).length > 0 && rowData.Rating) {
-                            // Use date + customer name + comment as unique key
-                            const key = (rowData.DateCreated || '') + (rowData.FkCustomer_FirstName || '') + (rowData.Body || '').substring(0, 50);
-                            if (!allRows.has(key)) {
-                                allRows.set(key, rowData);
+                # Try to use ag-Grid API directly to get ALL data
+                feedback_data = await page.evaluate("""async () => {
+                    // First, try to access ag-Grid API directly
+                    const gridElements = document.querySelectorAll('[class*="ag-root"]');
+                    for (const el of gridElements) {
+                        // Try to find the grid API
+                        if (el.__agComponent && el.__agComponent.gridOptions && el.__agComponent.gridOptions.api) {
+                            const api = el.__agComponent.gridOptions.api;
+                            const allData = [];
+                            api.forEachNode(node => {
+                                if (node.data) allData.push(node.data);
+                            });
+                            if (allData.length > 0) {
+                                console.log('[CV] Got ' + allData.length + ' rows from ag-Grid API');
+                                return allData;
                             }
                         }
-                    });
-                }
-                
-                // Scroll through entire grid slowly to load all virtual rows
-                for (let i = 0; i < scrollIterations; i++) {
+                    }
+                    
+                    // Fallback: Try window-level grid references
+                    if (window.gridApi) {
+                        const allData = [];
+                        window.gridApi.forEachNode(node => {
+                            if (node.data) allData.push(node.data);
+                        });
+                        if (allData.length > 0) return allData;
+                    }
+                    
+                    // Fallback 2: Scroll-based scraping
+                    const gridBody = document.querySelector('.ag-body-viewport');
+                    const allRows = new Map();
+                    
+                    if (!gridBody) return [];
+                    
+                    gridBody.scrollTop = 0;
+                    await new Promise(r => setTimeout(r, 500));
+                    
+                    const viewportHeight = gridBody.clientHeight;
+                    const totalHeight = gridBody.scrollHeight;
+                    const scrollIterations = Math.ceil(totalHeight / (viewportHeight * 0.3)) + 15;
+                    
+                    function collectRows() {
+                        const agRows = document.querySelectorAll('.ag-row');
+                        agRows.forEach(row => {
+                            const cells = row.querySelectorAll('.ag-cell');
+                            const rowData = {};
+                            cells.forEach(cell => {
+                                const colId = cell.getAttribute('col-id');
+                                if (colId) {
+                                    rowData[colId] = cell.innerText?.trim() || '';
+                                }
+                            });
+                            if (Object.keys(rowData).length > 0 && rowData.Rating) {
+                                const key = (rowData.DateCreated || '') + (rowData.FkCustomer_FirstName || '') + (rowData.Body || '').substring(0, 50);
+                                if (!allRows.has(key)) {
+                                    allRows.set(key, rowData);
+                                }
+                            }
+                        });
+                    }
+                    
+                    // Scroll very slowly with smaller increments
+                    for (let i = 0; i < scrollIterations; i++) {
+                        collectRows();
+                        gridBody.scrollTop += viewportHeight * 0.3;
+                        await new Promise(r => setTimeout(r, 250));
+                    }
+                    
+                    // Final passes
+                    gridBody.scrollTop = gridBody.scrollHeight;
+                    await new Promise(r => setTimeout(r, 500));
                     collectRows();
                     
-                    // Scroll down by smaller increments for better coverage
-                    gridBody.scrollTop += viewportHeight * 0.5;
-                    await new Promise(r => setTimeout(r, 300));
-                }
-                
-                // Scroll to the very bottom to ensure we got everything
-                gridBody.scrollTop = gridBody.scrollHeight;
-                await new Promise(r => setTimeout(r, 500));
-                collectRows();
-                
-                // Scroll back to top and collect any missed rows
-                gridBody.scrollTop = 0;
-                await new Promise(r => setTimeout(r, 500));
-                collectRows();
-                
-                // One more slow scroll through for any stragglers
-                const checkPoints = [0, 0.25, 0.5, 0.75, 1.0];
-                for (const pct of checkPoints) {
-                    gridBody.scrollTop = gridBody.scrollHeight * pct;
-                    await new Promise(r => setTimeout(r, 400));
+                    gridBody.scrollTop = 0;
+                    await new Promise(r => setTimeout(r, 500));
                     collectRows();
-                }
-                
-                return Array.from(allRows.values());
-            }""")
+                    
+                    return Array.from(allRows.values());
+                }""")
             
             # Process and structure feedback
             for item in feedback_data:
