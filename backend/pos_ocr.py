@@ -472,6 +472,12 @@ def extract_pos_data_from_xlsx(xlsx_bytes: bytes) -> Dict[str, Any]:
                 if name_cell and is_valid_name(name_cell):
                     employee_name = str(name_cell).strip()
                 
+                # Try H11 (row 11, column 8) - seen in some sheets
+                if not employee_name:
+                    name_cell = sheet.cell(row=11, column=8).value
+                    if name_cell and is_valid_name(name_cell):
+                        employee_name = str(name_cell).strip()
+                
                 # Fallback: cell F5 (row 5, column 6) - original location
                 if not employee_name:
                     name_cell = sheet.cell(row=5, column=6).value
