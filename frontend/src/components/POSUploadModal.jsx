@@ -487,7 +487,7 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf"
+                  accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsx"
                   className="hidden"
                   onChange={handleFileSelect}
                   multiple
