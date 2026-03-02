@@ -563,7 +563,8 @@ def extract_pos_data_from_xlsx(xlsx_bytes: bytes) -> Dict[str, Any]:
                 }
                 
                 all_employees.append(employee_data)
-                logging.info(f"Extracted: {employee_name} - Guests: {guest_count}, Net Sales: ${net_sales:.2f}, PPA: ${ppa:.2f if ppa else 0}")
+                ppa_str = f"${ppa:.2f}" if ppa else "$0.00"
+                logging.info(f"Extracted: {employee_name} - Guests: {guest_count}, Net Sales: ${net_sales:.2f}, PPA: {ppa_str}")
                 
             except Exception as sheet_error:
                 logging.warning(f"Error processing sheet '{sheet_name}': {str(sheet_error)}")
