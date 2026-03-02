@@ -899,27 +899,41 @@ async def extract_pos_report(request: POSOCRRequest):
 @api_router.post("/v2/pos-ocr/upload")
 async def upload_pos_report_file(file: UploadFile = File(...)):
     """
-    Upload a POS report file (image or PDF) and extract employee data.
+    Upload a POS report file (image, PDF, or XLSX) and extract employee data.
     
-    Accepts: JPEG, PNG, WEBP image files, PDF documents
-    Max size: 20MB for PDFs, 10MB for images
+    Accepts: JPEG, PNG, WEBP, HEIC image files, PDF documents, XLSX spreadsheets
+    Max size: 20MB for PDFs/XLSX, 10MB for images
+    
+    XLSX Format (Aloha Server Sales Detail):
+    - Each employee has their own sheet/tab
+    - Employee name in cell F5
+    - Net Sales data in column C
+    - Loyalty$ / 25 = LSC Card Count
     """
-    from pos_ocr import extract_pos_data_from_image, extract_pos_data_from_pdf, validate_extracted_data
+    from pos_ocr import extract_pos_data_from_image, extract_pos_data_from_pdf, extract_pos_data_from_xlsx, validate_extracted_data
     
-    # Validate file type - include HEIC support
+    # Validate file type - include HEIC and XLSX support
     valid_image_types = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]
     valid_pdf_types = ["application/pdf"]
-    all_valid_types = valid_image_types + valid_pdf_types
+    valid_xlsx_types = [
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.ms-excel"
+    ]
+    all_valid_types = valid_image_types + valid_pdf_types + valid_xlsx_types
     
-    if file.content_type not in all_valid_types:
+    # Also check by file extension for xlsx (some systems may not send correct MIME type)
+    is_xlsx_by_extension = file.filename and file.filename.lower().endswith(('.xlsx', '.xls'))
+    
+    if file.content_type not in all_valid_types and not is_xlsx_by_extension:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid file type '{file.content_type}'. Supported: JPEG, PNG, WEBP, HEIC, PDF"
+            detail=f"Invalid file type '{file.content_type}'. Supported: JPEG, PNG, WEBP, HEIC, PDF, XLSX"
         )
     
+    is_xlsx = file.content_type in valid_xlsx_types or is_xlsx_by_extension
     is_pdf = file.content_type in valid_pdf_types
     is_heic = file.content_type in ["image/heic", "image/heif"]
-    max_size = 20 * 1024 * 1024 if is_pdf else 10 * 1024 * 1024  # 20MB for PDF, 10MB for images
+    max_size = 20 * 1024 * 1024 if (is_pdf or is_xlsx) else 10 * 1024 * 1024  # 20MB for PDF/XLSX, 10MB for images
     
     # Read and validate file size
     contents = await file.read()
@@ -930,7 +944,30 @@ async def upload_pos_report_file(file: UploadFile = File(...)):
         )
     
     try:
-        if is_pdf:
+        if is_xlsx:
+            # Process XLSX file - direct extraction, no OCR needed
+            raw_data = extract_pos_data_from_xlsx(contents)
+            
+            if "error" in raw_data and not raw_data.get("employees"):
+                return {
+                    "success": False,
+                    "error": raw_data.get("error"),
+                    "extraction_notes": raw_data.get("extraction_notes")
+                }
+            
+            return {
+                "success": True,
+                "filename": file.filename,
+                "file_type": "xlsx",
+                "sheets_processed": raw_data.get("sheets_processed", 0),
+                "report_date": raw_data.get("report_date"),
+                "report_type": raw_data.get("report_type"),
+                "employees": raw_data.get("employees", []),
+                "employee_count": raw_data.get("employee_count", 0),
+                "extraction_notes": raw_data.get("extraction_notes")
+            }
+            
+        elif is_pdf:
             # Process PDF file
             raw_data = await extract_pos_data_from_pdf(contents)
         elif is_heic:
@@ -950,7 +987,7 @@ async def upload_pos_report_file(file: UploadFile = File(...)):
             image_base64 = base64.b64encode(contents).decode('utf-8')
             raw_data = await extract_pos_data_from_image(image_base64, file.content_type)
         
-        # Validate and clean extracted data
+        # Validate and clean extracted data (for OCR sources)
         validated_data = validate_extracted_data(raw_data)
         
         if "error" in validated_data and not validated_data.get("employees"):
@@ -973,7 +1010,7 @@ async def upload_pos_report_file(file: UploadFile = File(...)):
         }
         
     except Exception as e:
-        logging.error(f"POS OCR upload failed: {str(e)}")
+        logging.error(f"POS file upload failed: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Extraction failed: {str(e)}"
