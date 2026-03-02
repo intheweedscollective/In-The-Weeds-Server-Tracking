@@ -242,14 +242,36 @@ def validate_extracted_data(data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _safe_float(value) -> Optional[float]:
-    """Safely convert value to float."""
+    """Safely convert value to float. Handles spaces, commas, merged cells."""
     if value is None:
         return None
     try:
-        # Handle string values with $ or commas or spaces
-        if isinstance(value, str):
-            value = value.replace("$", "").replace(",", "").replace(" ", "").strip()
-        return float(value) if value else None
+        val_str = str(value)
+        
+        # If the cell has multiple numbers (merged data), extract the first one
+        # Example: "30,251.08            2,471 .05" -> 30251.08
+        # Example: "51 ,70633" -> 51706.33
+        
+        # Remove $ signs
+        val_str = val_str.replace("$", "")
+        
+        # Handle spaces in numbers (e.g., "51 ,70633" or "51 .72")
+        # First, normalize: remove spaces around decimal points and commas
+        import re
+        
+        # Find the first number pattern (handles "30,251.08" or "51 ,70633" or "2,471 .05")
+        # Look for patterns like: digits, optional comma/space, more digits, optional decimal, more digits
+        match = re.search(r'[\d,\s]+\.?\s*\d*', val_str)
+        if match:
+            num_str = match.group(0)
+            # Clean it up: remove all spaces and extra characters
+            num_str = num_str.replace(" ", "").replace(",", "")
+            if num_str and num_str != '.':
+                return float(num_str)
+        
+        # Fallback: try direct conversion after basic cleanup
+        val_str = val_str.replace(",", "").replace(" ", "").strip()
+        return float(val_str) if val_str else None
     except (ValueError, TypeError):
         return None
 
