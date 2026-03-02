@@ -184,10 +184,11 @@ async def scrape_cv_feedback(
                 const viewportHeight = gridBody.clientHeight;
                 const rowHeight = 40; // Approximate row height in ag-grid
                 const totalHeight = gridBody.scrollHeight;
-                const scrollIterations = Math.ceil(totalHeight / (viewportHeight * 0.8)) + 5;
+                // Add extra buffer for virtual scrolling - need more iterations
+                const scrollIterations = Math.ceil(totalHeight / (viewportHeight * 0.5)) + 10;
                 
-                // Scroll through entire grid to load all rows
-                for (let i = 0; i < scrollIterations; i++) {
+                // Function to collect visible rows
+                function collectRows() {
                     const agRows = document.querySelectorAll('.ag-row');
                     agRows.forEach(row => {
                         const rowId = row.getAttribute('row-id') || row.getAttribute('row-index');
@@ -200,40 +201,41 @@ async def scrape_cv_feedback(
                             }
                         });
                         if (Object.keys(rowData).length > 0 && rowData.Rating) {
-                            // Use date + customer name as unique key
+                            // Use date + customer name + comment as unique key
                             const key = (rowData.DateCreated || '') + (rowData.FkCustomer_FirstName || '') + (rowData.Body || '').substring(0, 50);
                             if (!allRows.has(key)) {
                                 allRows.set(key, rowData);
                             }
                         }
                     });
-                    
-                    // Scroll down
-                    gridBody.scrollTop += viewportHeight * 0.8;
-                    await new Promise(r => setTimeout(r, 400));
                 }
+                
+                // Scroll through entire grid slowly to load all virtual rows
+                for (let i = 0; i < scrollIterations; i++) {
+                    collectRows();
+                    
+                    // Scroll down by smaller increments for better coverage
+                    gridBody.scrollTop += viewportHeight * 0.5;
+                    await new Promise(r => setTimeout(r, 300));
+                }
+                
+                // Scroll to the very bottom to ensure we got everything
+                gridBody.scrollTop = gridBody.scrollHeight;
+                await new Promise(r => setTimeout(r, 500));
+                collectRows();
                 
                 // Scroll back to top and collect any missed rows
                 gridBody.scrollTop = 0;
-                await new Promise(r => setTimeout(r, 300));
+                await new Promise(r => setTimeout(r, 500));
+                collectRows();
                 
-                const finalRows = document.querySelectorAll('.ag-row');
-                finalRows.forEach(row => {
-                    const cells = row.querySelectorAll('.ag-cell');
-                    const rowData = {};
-                    cells.forEach(cell => {
-                        const colId = cell.getAttribute('col-id');
-                        if (colId) {
-                            rowData[colId] = cell.innerText?.trim() || '';
-                        }
-                    });
-                    if (Object.keys(rowData).length > 0 && rowData.Rating) {
-                        const key = (rowData.DateCreated || '') + (rowData.FkCustomer_FirstName || '') + (rowData.Body || '').substring(0, 50);
-                        if (!allRows.has(key)) {
-                            allRows.set(key, rowData);
-                        }
-                    }
-                });
+                // One more slow scroll through for any stragglers
+                const checkPoints = [0, 0.25, 0.5, 0.75, 1.0];
+                for (const pct of checkPoints) {
+                    gridBody.scrollTop = gridBody.scrollHeight * pct;
+                    await new Promise(r => setTimeout(r, 400));
+                    collectRows();
+                }
                 
                 return Array.from(allRows.values());
             }""")
