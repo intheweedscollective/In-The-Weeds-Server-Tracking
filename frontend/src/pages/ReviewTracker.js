@@ -468,7 +468,7 @@ export default function ReviewTracker() {
                 <MessageSquare className="w-5 h-5 text-blue-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-gray-900">{stats.total_reviews}</p>
+                <p className="text-2xl font-bold text-white">{stats.total_reviews}</p>
                 <p className="text-xs text-slate-400">Total Reviews</p>
               </div>
             </div>
