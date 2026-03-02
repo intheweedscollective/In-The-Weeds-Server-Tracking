@@ -827,10 +827,10 @@ export default function ReviewTracker() {
                     <span className={`px-2 py-0.5 rounded-full text-xs text-white ${PLATFORM_COLORS[review.platform]}`}>
                       {PLATFORM_ICONS[review.platform]} {review.platform}
                     </span>
-                    <span className="text-sm text-slate-400">{review.review_date}</span>
+                    <span className="text-sm text-slate-300">{review.review_date}</span>
                     {renderStars(review.rating)}
                     {review.reviewer_name && (
-                      <span className="text-sm text-gray-400">by {review.reviewer_name}</span>
+                      <span className="text-sm text-slate-300">by {review.reviewer_name}</span>
                     )}
                   </div>
                   
