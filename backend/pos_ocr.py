@@ -523,12 +523,15 @@ def extract_pos_data_from_xlsx(xlsx_bytes: bytes) -> Dict[str, Any]:
                 
                 def find_row_by_label(label: str, start_row: int = 1, end_row: int = 60) -> Optional[int]:
                     """Find a row by searching for a label in columns A, B, or C."""
-                    label_lower = label.lower()
+                    label_lower = label.lower().replace(" ", "")  # Remove spaces for matching
                     for row in range(start_row, end_row + 1):
                         for col in range(1, 4):  # Check columns A, B, C
                             cell_val = sheet.cell(row=row, column=col).value
-                            if cell_val and label_lower in str(cell_val).lower():
-                                return row
+                            if cell_val:
+                                # Remove spaces from cell value for comparison (handles "Tota ls" -> "totals")
+                                cell_clean = str(cell_val).lower().replace(" ", "")
+                                if label_lower in cell_clean:
+                                    return row
                     return None
                 
                 # Find key rows by label - search entire sheet with wide ranges
