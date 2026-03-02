@@ -444,15 +444,47 @@ def extract_pos_data_from_xlsx(xlsx_bytes: bytes) -> Dict[str, Any]:
             sheet = workbook[sheet_name]
             
             try:
-                # Extract employee name from cell F5 (row 5, column 6)
+                # Extract employee name - try multiple locations
                 employee_name = None
+                
+                # Primary location: cell F5 (row 5, column 6)
                 name_cell = sheet.cell(row=5, column=6).value
                 if name_cell:
                     employee_name = str(name_cell).strip()
                 
+                # Fallback: Check other common name locations
+                if not employee_name or employee_name.lower() in ['none', 'nan', '']:
+                    # Try row 5 across columns D-H
+                    for col in range(4, 9):
+                        cell_val = sheet.cell(row=5, column=col).value
+                        if cell_val and isinstance(cell_val, str) and len(cell_val) > 2:
+                            # Check if it looks like a name (not a date or number)
+                            val = str(cell_val).strip()
+                            if not any(c.isdigit() for c in val[:3]) and '/' not in val and '-' not in val[:4]:
+                                employee_name = val
+                                break
+                
+                # Fallback: Try row 4 and row 6 with same logic
+                if not employee_name or employee_name.lower() in ['none', 'nan', '']:
+                    for row in [4, 6]:
+                        for col in range(4, 9):
+                            cell_val = sheet.cell(row=row, column=col).value
+                            if cell_val and isinstance(cell_val, str) and len(cell_val) > 2:
+                                val = str(cell_val).strip()
+                                if not any(c.isdigit() for c in val[:3]) and '/' not in val and '-' not in val[:4]:
+                                    employee_name = val
+                                    break
+                        if employee_name:
+                            break
+                
+                # Last resort: Use sheet name if it looks like a name
+                if not employee_name or employee_name.lower() in ['none', 'nan', '']:
+                    if sheet_name and not sheet_name.lower().startswith('sheet'):
+                        employee_name = sheet_name
+                
                 # Skip sheets without a valid employee name
                 if not employee_name or employee_name.lower() in ['none', 'nan', '']:
-                    logging.debug(f"Skipping sheet '{sheet_name}': No employee name found")
+                    logging.debug(f"Skipping sheet '{sheet_name}': No employee name found in F5 or fallback locations")
                     continue
                 
                 # Try to extract date from row 3 (e.g., "01/01/2026 — 03/01/2026")
