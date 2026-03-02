@@ -354,16 +354,21 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
     // Validate file type
     const validImageTypes = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
     const validPdfTypes = ["application/pdf"];
-    const allValidTypes = [...validImageTypes, ...validPdfTypes];
+    const validXlsxTypes = ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel"];
+    const allValidTypes = [...validImageTypes, ...validPdfTypes, ...validXlsxTypes];
     
-    if (!allValidTypes.includes(file.type)) {
-      setError("Please upload a JPEG, PNG, WEBP, HEIC image or PDF file");
+    // Also check by file extension for xlsx
+    const isXlsxByExtension = file.name && file.name.toLowerCase().endsWith('.xlsx');
+    
+    if (!allValidTypes.includes(file.type) && !isXlsxByExtension) {
+      setError("Please upload a JPEG, PNG, WEBP, HEIC image, PDF, or XLSX file");
       return;
     }
 
+    const isXlsx = validXlsxTypes.includes(file.type) || isXlsxByExtension;
     const isPdf = validPdfTypes.includes(file.type);
     const isHeic = file.type === "image/heic" || file.type === "image/heif";
-    const maxSize = isPdf ? 20 * 1024 * 1024 : 10 * 1024 * 1024; // 20MB for PDF, 10MB for images
+    const maxSize = (isPdf || isXlsx) ? 20 * 1024 * 1024 : 10 * 1024 * 1024; // 20MB for PDF/XLSX, 10MB for images
 
     // Validate file size
     if (file.size > maxSize) {
@@ -371,18 +376,18 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
       return;
     }
 
-    setFileType(isPdf ? 'pdf' : (isHeic ? 'heic' : 'image'));
+    setFileType(isXlsx ? 'xlsx' : (isPdf ? 'pdf' : (isHeic ? 'heic' : 'image')));
 
-    // Create preview (only for regular images, not HEIC or PDF)
-    if (!isPdf && !isHeic) {
+    // Create preview (only for regular images, not HEIC, PDF, or XLSX)
+    if (!isPdf && !isHeic && !isXlsx) {
       const reader = new FileReader();
       reader.onload = (e) => setPreviewUrl(e.target.result);
       reader.readAsDataURL(file);
     } else {
-      setPreviewUrl(null); // No preview for PDFs or HEIC
+      setPreviewUrl(null); // No preview for PDFs, HEIC, or XLSX
     }
 
-    // Process with OCR
+    // Process with backend
     setIsProcessing(true);
     setError(null);
     setExtractedData(null);
@@ -399,9 +404,12 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
 
       if (response.data.success) {
         setExtractedData(response.data);
-        const fileTypeMsg = response.data.file_type === 'pdf' 
-          ? ` from ${response.data.pages_processed} PDF page(s)` 
-          : '';
+        let fileTypeMsg = '';
+        if (response.data.file_type === 'xlsx') {
+          fileTypeMsg = ` from ${response.data.sheets_processed} Excel sheet(s)`;
+        } else if (response.data.file_type === 'pdf') {
+          fileTypeMsg = ` from ${response.data.pages_processed} PDF page(s)`;
+        }
         toast.success(`Extracted ${response.data.employee_count} employees${fileTypeMsg}`);
       } else {
         // Show detailed error message
@@ -412,10 +420,10 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
         setError(errorMsg);
       }
     } catch (err) {
-      console.error("OCR Upload Error:", err);
+      console.error("File Upload Error:", err);
       let errorMsg = "Failed to process file";
       if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
-        errorMsg = "Request timed out. The PDF may have too many pages. Try splitting it into smaller files (10 pages max) or upload individual page images.";
+        errorMsg = "Request timed out. The file may be too large. Try splitting it into smaller files.";
       } else if (err.response?.data?.detail) {
         errorMsg = err.response.data.detail;
       } else if (err.message) {
