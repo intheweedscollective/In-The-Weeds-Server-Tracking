@@ -246,21 +246,22 @@ def _safe_float(value) -> Optional[float]:
     if value is None:
         return None
     try:
-        # Handle string values with $ or commas
+        # Handle string values with $ or commas or spaces
         if isinstance(value, str):
-            value = value.replace("$", "").replace(",", "").strip()
+            value = value.replace("$", "").replace(",", "").replace(" ", "").strip()
         return float(value) if value else None
     except (ValueError, TypeError):
         return None
 
 
 def _safe_int(value) -> Optional[int]:
-    """Safely convert value to int."""
+    """Safely convert value to int. Handles spaces in numbers like '61 5' -> 615"""
     if value is None:
         return None
     try:
         if isinstance(value, str):
-            value = value.replace(",", "").strip()
+            # Remove spaces, commas, and other formatting
+            value = value.replace(",", "").replace(" ", "").strip()
         return int(float(value)) if value else None
     except (ValueError, TypeError):
         return None
