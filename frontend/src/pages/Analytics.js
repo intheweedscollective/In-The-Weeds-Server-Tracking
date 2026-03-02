@@ -1036,18 +1036,30 @@ export default function Analytics() {
                           key={metricKey}
                           className={`p-4 rounded-lg border-2 ${
                             isNeutral 
-                              ? 'border-gray-200 bg-background'
+                              ? 'border-gray-200 bg-slate-700'
                               : isPositive 
                                 ? 'border-green-200 bg-green-50' 
                                 : 'border-red-200 bg-red-50'
                           }`}
                           data-testid={`trend-card-${metricKey}`}
                         >
-                          <div className="text-xs text-slate-400 font-medium mb-1">
+                          <div className={`text-xs font-semibold mb-1 ${
+                            isNeutral 
+                              ? 'text-slate-300'
+                              : isPositive 
+                                ? 'text-green-700' 
+                                : 'text-red-700'
+                          }`}>
                             {metricInfo.label}
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-lg font-bold text-foreground">
+                            <span className={`text-lg font-bold ${
+                              isNeutral 
+                                ? 'text-white'
+                                : isPositive 
+                                  ? 'text-green-800' 
+                                  : 'text-red-800'
+                            }`}>
                               {metricInfo.format === 'currency' ? '$' : ''}{currentVal?.toFixed(2) || '0'}
                             </span>
                             <span className={`flex items-center text-sm font-semibold ${
