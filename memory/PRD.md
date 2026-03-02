@@ -69,6 +69,28 @@ Build a comprehensive performance review application for restaurant employees (B
 - ✅ Review Tracker with AI-powered employee detection
 - ✅ ReviewTrackers.com API integration
 
+### Recent Changes (Mar 2, 2026) - XLSX Upload Support
+- ✅ **XLSX File Upload Support**: Added direct Excel file parsing for 100% accurate data extraction
+  - No OCR needed - parses Excel files directly using openpyxl library
+  - Supports Aloha Server Sales Detail format (each employee = separate sheet/tab)
+  - Employee name extracted from cell F5 (yellow cell in Aloha export)
+  - Automatic extraction of: Net Sales, Guests, Food/Liquor/Beer/Wine/Glassware sales
+  - LSC Card count calculated: Loyalty$ / $25
+  - All derived metrics calculated: PPA, LBW/Guest, Glassware/Guest, Guests/LSC
+- ✅ **Frontend Updates**:
+  - POS Upload Modal now accepts .xlsx files
+  - Updated UI messaging: "XLSX recommended for 100% accuracy"
+  - Green highlight for XLSX file indicator
+  - Tips section updated with XLSX instructions
+- ✅ **Backend Endpoint Updated**: `/api/v2/pos-ocr/upload` now handles:
+  - XLSX files (100% accuracy, direct parsing)
+  - Images (OCR via AI - JPEG, PNG, WEBP, HEIC)
+  - PDFs (OCR via AI - converted to images first)
+- ✅ **Technical Details**:
+  - Uses openpyxl for Excel parsing (already installed)
+  - Flexible row detection using label search (Food, Liquor, Beer, etc.)
+  - Multi-sheet support (extracts all employees from all tabs)
+
 ### Recent Changes (Feb 25, 2026) - UI Fix & PDF OCR Support
 - ✅ **Top Performers Name Color Fix**: Changed employee name color from `text-white` to `text-slate-100` in Dashboard.js for better contrast against dark background
 - ✅ **"To Pass Next Employee" Feature Verified**: Confirmed working in Rankings expanded view
