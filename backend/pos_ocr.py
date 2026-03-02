@@ -535,20 +535,20 @@ def extract_pos_data_from_xlsx(xlsx_bytes: bytes) -> Dict[str, Any]:
                 bar_glassware_sales = get_net_sales_value(glassware_row)
                 net_sales = get_net_sales_value(totals_row)
                 
-                # Find "Total Guests" row - search more broadly
+                # Find "Total Guests" row - search the entire sheet
                 guests_row = None
                 guest_count = None
                 
-                # First, try to find by label
-                for row in range(35, 55):
-                    for col in range(1, 4):  # Check columns A, B, C
+                # Search entire sheet for "total guests" label (rows 1-100, cols 1-10)
+                for row in range(1, 100):
+                    for col in range(1, 11):
                         cell_val = sheet.cell(row=row, column=col).value
                         if cell_val and "total guests" in str(cell_val).lower():
                             guests_row = row
                             # Guest count might be in the same row but different column
-                            for val_col in range(col, col + 4):
+                            for val_col in range(1, 11):
                                 val = _safe_int(sheet.cell(row=row, column=val_col).value)
-                                if val and val > 0:
+                                if val and val > 0 and val < 100000:  # Reasonable guest count
                                     guest_count = val
                                     break
                             if guest_count:
@@ -556,42 +556,37 @@ def extract_pos_data_from_xlsx(xlsx_bytes: bytes) -> Dict[str, Any]:
                     if guest_count:
                         break
                 
-                # If not found, try default row 42 column C or B
+                # If not found, try searching for just "Guests" or "Num Guests"
                 if not guest_count:
-                    guests_row = 42
-                    guest_count = _safe_int(sheet.cell(row=42, column=3).value)
-                    if not guest_count:
-                        guest_count = _safe_int(sheet.cell(row=42, column=2).value)
-                
-                # Also try searching for "Num Guests" or just "Guests" as alternative labels
-                if not guest_count:
-                    for row in range(35, 55):
-                        for col in range(1, 4):
+                    for row in range(1, 100):
+                        for col in range(1, 11):
                             cell_val = sheet.cell(row=row, column=col).value
-                            if cell_val and ("num guests" in str(cell_val).lower() or 
-                                            (str(cell_val).lower().strip() == "guests")):
-                                for val_col in range(col, col + 4):
-                                    val = _safe_int(sheet.cell(row=row, column=val_col).value)
-                                    if val and val > 0:
-                                        guest_count = val
+                            if cell_val:
+                                cell_str = str(cell_val).lower().strip()
+                                if cell_str in ['guests', 'num guests', 'total guest', 'guest count']:
+                                    for val_col in range(1, 11):
+                                        val = _safe_int(sheet.cell(row=row, column=val_col).value)
+                                        if val and val > 0 and val < 100000:
+                                            guest_count = val
+                                            break
+                                    if guest_count:
                                         break
-                                if guest_count:
-                                    break
                         if guest_count:
                             break
                 
                 # If still no guest count, log more details and skip
                 if not guest_count or guest_count <= 0:
-                    logging.warning(f"Sheet '{sheet_name}': No valid guest count for {employee_name}. Checked rows 35-55.")
-                    # Log some cell values for debugging
-                    debug_cells = []
-                    for r in range(40, 46):
-                        for c in range(1, 5):
+                    logging.warning(f"Sheet '{sheet_name}': No valid guest count for {employee_name}. Searched rows 1-100.")
+                    # Log cells from various areas for debugging
+                    debug_info = []
+                    # Check around common areas
+                    for r in [42, 43, 44, 50, 51, 52, 60, 61, 62]:
+                        for c in range(1, 6):
                             v = sheet.cell(row=r, column=c).value
                             if v:
-                                debug_cells.append(f"R{r}C{c}={v}")
-                    if debug_cells:
-                        logging.warning(f"  Sample cells: {', '.join(debug_cells[:10])}")
+                                debug_info.append(f"R{r}C{c}={v}")
+                    if debug_info:
+                        logging.warning(f"  Sample cells: {', '.join(debug_info[:15])}")
                     extraction_notes.append(f"{employee_name}: Missing guest count")
                     continue
                 
