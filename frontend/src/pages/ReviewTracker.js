@@ -241,7 +241,7 @@ export default function ReviewTracker() {
         <div className="mb-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 flex items-center gap-2">
+              <h1 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-2">
                 <MessageSquare className="w-8 h-8 text-primary" />
                 Review Tracker
               </h1>
