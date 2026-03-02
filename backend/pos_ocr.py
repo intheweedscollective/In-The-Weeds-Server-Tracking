@@ -485,7 +485,8 @@ def extract_pos_data_from_xlsx(xlsx_bytes: bytes) -> Dict[str, Any]:
                 
                 # Skip sheets without a valid employee name
                 if not employee_name or employee_name.lower() in ['none', 'nan', '']:
-                    logging.debug(f"Skipping sheet '{sheet_name}': No employee name found in F5 or fallback locations")
+                    logging.warning(f"Skipping sheet '{sheet_name}': No employee name found in F5 or fallback locations")
+                    skipped_sheets.append(sheet_name)
                     continue
                 
                 # Try to extract date from row 3 (e.g., "01/01/2026 — 03/01/2026")
