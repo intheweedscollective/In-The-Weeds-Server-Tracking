@@ -69,7 +69,18 @@ Build a comprehensive performance review application for restaurant employees (B
 - ✅ Review Tracker with AI-powered employee detection
 - ✅ ReviewTrackers.com API integration
 
-### Recent Changes (Mar 2, 2026) - XLSX Upload Support
+### Recent Changes (Mar 2, 2026) - CV Sync Duplication Bug Fix
+- ✅ **Fixed CV Data Duplication Bug**: Critical fix for inflated review counts
+  - **Problem**: Running CV sync multiple times caused data accumulation (123 surveys vs expected 65)
+  - **Root Cause**: Old `cv_nps` records were not being cleared before inserting new data
+  - **Solution**: Added `delete_many()` call to clear existing records for the quarter BEFORE syncing
+  - Files modified:
+    - `backend/loyalty_voice_integration.py`: Clears `cv_nps` collection before sync
+    - `backend/cv_feedback_scraper.py`: Clears `cv_feedback` and `cv_points` collections before sync
+  - **Result**: Survey count now accurate (64 surveys, close to expected 65)
+  - Multiple syncs no longer inflate data - counts stay consistent
+
+### Previous Changes (Mar 2, 2026) - XLSX Upload Support
 - ✅ **XLSX File Upload Support**: Added direct Excel file parsing for 100% accurate data extraction
   - No OCR needed - parses Excel files directly using openpyxl library
   - Supports Aloha Server Sales Detail format (each employee = separate sheet/tab)

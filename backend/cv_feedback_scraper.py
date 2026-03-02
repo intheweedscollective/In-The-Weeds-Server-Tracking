@@ -513,8 +513,8 @@ async def sync_cv_feedback_to_db(
     """
     Sync CV feedback from Loyalty Voice to the database.
     
-    1. Scrapes feedback from Loyalty Voice
-    2. Detects employee mentions (using AI or simple matching)
+    1. CLEARS existing cv_feedback and cv_points data for this quarter
+    2. Scrapes feedback from Loyalty Voice (Transactions page for server mapping, Feedback page for reviews)
     3. Stores feedback in cv_feedback collection
     4. Calculates and stores CV points per employee
     """
@@ -525,7 +525,9 @@ async def sync_cv_feedback_to_db(
         "new_count": 0,
         "skipped_count": 0,
         "error": None,
-        "synced_at": datetime.now(timezone.utc).isoformat()
+        "synced_at": datetime.now(timezone.utc).isoformat(),
+        "cleared_feedback_count": 0,
+        "cleared_points_count": 0
     }
     
     # Scrape feedback
@@ -541,6 +543,22 @@ async def sync_cv_feedback_to_db(
         result["error"] = "No feedback found for this period"
         return result
     
+    # CRITICAL: Clear ALL existing cv_feedback and cv_points records for this quarter
+    # This prevents data duplication and ensures counts are accurate
+    feedback_delete = await db.cv_feedback.delete_many({
+        "quarter": quarter.upper(),
+        "year": year
+    })
+    result["cleared_feedback_count"] = feedback_delete.deleted_count
+    
+    points_delete = await db.cv_points.delete_many({
+        "quarter": quarter.upper(),
+        "year": year
+    })
+    result["cleared_points_count"] = points_delete.deleted_count
+    
+    print(f"[CV] Cleared {feedback_delete.deleted_count} feedback + {points_delete.deleted_count} points records for {quarter} {year}")
+    
     # Get employee names for matching
     employees = await db.employees_v2.find(
         {"quarter": quarter.upper(), "year": year},
@@ -555,17 +573,7 @@ async def sync_cv_feedback_to_db(
     skipped_count = 0
     
     for item in feedback_items:
-        # Check if already exists
-        existing = await db.cv_feedback.find_one({
-            "date": item["date"],
-            "customer_name": item["customer_name"],
-            "quarter": quarter.upper(),
-            "year": year
-        })
-        
-        if existing:
-            skipped_count += 1
-            continue
+        # Since we cleared all existing data, no need to check for duplicates
         
         # CV Credit: Server who served the table gets the points (no comment mention bonus)
         comment = item.get("comment", "")

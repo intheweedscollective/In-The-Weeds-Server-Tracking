@@ -458,7 +458,8 @@ async def sync_loyalty_voice_to_db(
     This function:
     1. Scrapes the Server Performance Report for NPS scores
     2. Matches server names to employees in the database
-    3. Updates the cv_nps collection with the latest scores
+    3. CLEARS existing cv_nps data for this quarter before inserting new data
+    4. Updates the cv_nps collection with the latest scores
     """
     import uuid
     
@@ -467,7 +468,8 @@ async def sync_loyalty_voice_to_db(
         "matched_count": 0,
         "unmatched_servers": [],
         "synced_at": datetime.now(timezone.utc).isoformat(),
-        "error": None
+        "error": None,
+        "cleared_count": 0
     }
     
     # Scrape the report
@@ -483,6 +485,15 @@ async def sync_loyalty_voice_to_db(
     if not server_data:
         result["error"] = "No server data returned from scrape"
         return result
+    
+    # CRITICAL: Clear ALL existing cv_nps records for this quarter BEFORE inserting new data
+    # This prevents data duplication and ensures counts are accurate
+    delete_result = await db.cv_nps.delete_many({
+        "quarter": quarter.upper(),
+        "year": year
+    })
+    result["cleared_count"] = delete_result.deleted_count
+    print(f"[LV] Cleared {delete_result.deleted_count} existing cv_nps records for {quarter} {year}")
     
     # Get all employees for this quarter
     employees = await db.employees_v2.find(
@@ -501,6 +512,51 @@ async def sync_loyalty_voice_to_db(
         if first_name and len(first_name) > 2:
             if first_name not in employee_lookup:
                 employee_lookup[first_name] = emp
+        
+        # Add last name too
+        parts = name_lower.split()
+        if len(parts) > 1:
+            last_name = parts[-1]
+            if last_name not in employee_lookup:
+                employee_lookup[last_name] = emp
+    
+    # Common nickname mappings
+    nickname_map = {
+        "thaddeus": ["tad", "thad"],
+        "tad": ["thaddeus", "thad"],
+        "terrance": ["terry", "terrence"],
+        "terry": ["terrance", "terrence"],
+        "thomas": ["tom", "tommy"],
+        "tom": ["thomas", "tommy"],
+        "matthew": ["matt", "matty"],
+        "matt": ["matthew", "matty"],
+        "michael": ["mike", "mikey"],
+        "mike": ["michael", "mikey"],
+        "robert": ["rob", "bob", "bobby"],
+        "william": ["will", "bill", "billy"],
+        "richard": ["rick", "dick", "rich"],
+        "daniel": ["dan", "danny"],
+        "dan": ["daniel", "danny"],
+        "joseph": ["joe", "joey"],
+        "joe": ["joseph", "joey"],
+        "christopher": ["chris"],
+        "chris": ["christopher"],
+        "elizabeth": ["liz", "beth", "betty"],
+        "jennifer": ["jen", "jenny"],
+        "katherine": ["kate", "kathy", "katie"],
+        "nicholas": ["nick", "nicky"],
+        "nick": ["nicholas", "nicky"],
+        "sheridan": ["sheri"],
+        "sheri": ["sheridan"],
+        "lakeisha": ["keisha"],
+        "keisha": ["lakeisha"],
+    }
+    
+    def normalize_name(name: str) -> str:
+        """Normalize name for comparison - handle common typos"""
+        # Common substitutions for typos
+        name = name.replace("ei", "ey").replace("ey", "ei")  # keisey/kelsey
+        return name
     
     # Match and store NPS scores
     matched_servers = []
@@ -511,6 +567,10 @@ async def sync_loyalty_voice_to_db(
         nps_score = server.get("nps_score", 0)
         
         if not server_name:
+            continue
+        
+        # Skip manager entries
+        if "manager" in server_name.lower():
             continue
         
         server_name_lower = server_name.lower().strip()
@@ -525,11 +585,36 @@ async def sync_loyalty_voice_to_db(
             if first_name in employee_lookup:
                 matched_employee = employee_lookup[first_name]
             else:
-                # Try partial/fuzzy match
-                for emp_name, emp in employee_lookup.items():
-                    if server_name_lower in emp_name or emp_name in server_name_lower:
-                        matched_employee = emp
+                # Try nickname matching
+                nicknames = nickname_map.get(first_name, [])
+                for nick in nicknames:
+                    if nick in employee_lookup:
+                        matched_employee = employee_lookup[nick]
                         break
+                
+                # Try last name match
+                if not matched_employee:
+                    parts = server_name_lower.split()
+                    if len(parts) > 1:
+                        last_name = parts[-1]
+                        if last_name in employee_lookup:
+                            matched_employee = employee_lookup[last_name]
+                
+                # Try partial/fuzzy match
+                if not matched_employee:
+                    for emp_name, emp in employee_lookup.items():
+                        if server_name_lower in emp_name or emp_name in server_name_lower:
+                            matched_employee = emp
+                            break
+                
+                # Try normalized name matching (handles typos like keisey/kelsey)
+                if not matched_employee:
+                    normalized_first = normalize_name(first_name)
+                    for emp_name, emp in employee_lookup.items():
+                        emp_first = emp_name.split()[0] if emp_name else ""
+                        if normalize_name(emp_first) == normalized_first:
+                            matched_employee = emp
+                            break
         
         if matched_employee:
             nps_doc = {
