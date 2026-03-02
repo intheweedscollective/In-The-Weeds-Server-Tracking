@@ -404,3 +404,195 @@ def _deduplicate_employees(employees: List[Dict[str, Any]]) -> List[Dict[str, An
         result.append(emp)
     
     return result
+
+
+def extract_pos_data_from_xlsx(xlsx_bytes: bytes) -> Dict[str, Any]:
+    """
+    Extract employee performance data from an XLSX file.
+    Each employee has their own sheet/tab with the Aloha Server Sales Detail format.
+    
+    XLSX Structure (per sheet):
+    - Row 5, Column F: Employee Name (yellow cell)
+    - Row 10-37: Category rows (Food, Liquor, Beer, Wine, Bar Glassware, Loyalty, etc.)
+    - Row 16 (Loyalty): Net Sales / 25 = LSC Count
+    - Row 31 (Bar Glassware): Net Sales for glassware
+    - Row 38: Totals row with Net Sales
+    - Row 42: Total Guests
+    
+    Args:
+        xlsx_bytes: Raw XLSX file bytes
+    
+    Returns:
+        Dictionary containing extracted employee data from all sheets
+    """
+    import openpyxl
+    from io import BytesIO
+    import logging
+    
+    try:
+        logging.info("Starting XLSX extraction with openpyxl...")
+        workbook = openpyxl.load_workbook(BytesIO(xlsx_bytes), data_only=True)
+        
+        all_employees = []
+        extraction_notes = []
+        report_date = None
+        
+        logging.info(f"XLSX has {len(workbook.sheetnames)} sheets: {workbook.sheetnames[:5]}...")
+        
+        for sheet_name in workbook.sheetnames:
+            sheet = workbook[sheet_name]
+            
+            try:
+                # Extract employee name from cell F5 (row 5, column 6)
+                employee_name = None
+                name_cell = sheet.cell(row=5, column=6).value
+                if name_cell:
+                    employee_name = str(name_cell).strip()
+                
+                # Skip sheets without a valid employee name
+                if not employee_name or employee_name.lower() in ['none', 'nan', '']:
+                    logging.debug(f"Skipping sheet '{sheet_name}': No employee name found")
+                    continue
+                
+                # Try to extract date from row 3 (e.g., "01/01/2026 — 03/01/2026")
+                if not report_date:
+                    date_cell = sheet.cell(row=3, column=6).value
+                    if date_cell:
+                        report_date = str(date_cell).strip()
+                
+                # Extract data from specific rows
+                # Row numbers based on the Aloha Server Sales Detail format
+                
+                def get_net_sales_value(row_num) -> float:
+                    """Get the Net Sales value from column C (3) for a given row."""
+                    val = sheet.cell(row=row_num, column=3).value
+                    return _safe_float(val) or 0.0
+                
+                def find_row_by_label(label: str, start_row: int = 10, end_row: int = 40) -> Optional[int]:
+                    """Find a row by searching for a label in column A or B."""
+                    label_lower = label.lower()
+                    for row in range(start_row, end_row + 1):
+                        cell_a = sheet.cell(row=row, column=1).value
+                        cell_b = sheet.cell(row=row, column=2).value
+                        if cell_a and label_lower in str(cell_a).lower():
+                            return row
+                        if cell_b and label_lower in str(cell_b).lower():
+                            return row
+                    return None
+                
+                # Find key rows by label (more robust than fixed row numbers)
+                food_row = find_row_by_label("food", 9, 15) or 10
+                liquor_row = find_row_by_label("liquor", 10, 16) or 11
+                beer_row = find_row_by_label("beer", 11, 17) or 12
+                wine_row = find_row_by_label("wine", 12, 18) or 13
+                loyalty_row = find_row_by_label("loyalty", 14, 20) or 16
+                glassware_row = find_row_by_label("glassware", 28, 35) or 31
+                totals_row = find_row_by_label("totals", 35, 42) or 38
+                
+                # Find "Total Guests" row (usually around row 42)
+                guests_row = None
+                for row in range(39, 50):
+                    cell_a = sheet.cell(row=row, column=1).value
+                    cell_b = sheet.cell(row=row, column=2).value
+                    if cell_a and "total guests" in str(cell_a).lower():
+                        guests_row = row
+                        break
+                    if cell_b and "total guests" in str(cell_b).lower():
+                        guests_row = row
+                        break
+                
+                if not guests_row:
+                    guests_row = 42  # Default fallback
+                
+                # Extract values
+                food_sales = get_net_sales_value(food_row)
+                liquor_sales = get_net_sales_value(liquor_row)
+                beer_sales = get_net_sales_value(beer_row)
+                wine_sales = get_net_sales_value(wine_row)
+                loyalty_sales = get_net_sales_value(loyalty_row)
+                bar_glassware_sales = get_net_sales_value(glassware_row)
+                net_sales = get_net_sales_value(totals_row)
+                
+                # Get Total Guests - value is in column C for the guests row
+                guest_count = _safe_int(sheet.cell(row=guests_row, column=3).value)
+                
+                # If guest_count not in column C, try column B
+                if not guest_count:
+                    guest_count = _safe_int(sheet.cell(row=guests_row, column=2).value)
+                
+                # If still no guest count, skip this employee
+                if not guest_count or guest_count <= 0:
+                    logging.warning(f"Sheet '{sheet_name}': No valid guest count for {employee_name}")
+                    extraction_notes.append(f"{employee_name}: Missing guest count")
+                    continue
+                
+                # Calculate derived values
+                # PPA = Net Sales / Guests
+                ppa = net_sales / guest_count if guest_count > 0 else None
+                
+                # LBW Total = Liquor + Beer + Wine
+                lbw_total = liquor_sales + beer_sales + wine_sales
+                lbw_per_guest = lbw_total / guest_count if guest_count > 0 else None
+                
+                # Glassware per guest
+                glassware_per_guest = bar_glassware_sales / guest_count if guest_count > 0 else None
+                
+                # LSC Count = Loyalty$ / 25 (each LSC card = $25)
+                # Guests per LSC = Guest Count / LSC Count
+                lsc_count = loyalty_sales / 25.0 if loyalty_sales > 0 else 0
+                guests_per_lsc = guest_count / lsc_count if lsc_count > 0 else None
+                
+                employee_data = {
+                    "name": employee_name,
+                    "ppa": round(ppa, 2) if ppa else None,
+                    "lbw_per_guest": round(lbw_per_guest, 2) if lbw_per_guest else None,
+                    "glassware_per_guest": round(glassware_per_guest, 2) if glassware_per_guest else None,
+                    "guest_count": guest_count,
+                    "net_sales": round(net_sales, 2) if net_sales else None,
+                    "guests_per_lsc": round(guests_per_lsc, 2) if guests_per_lsc else None,
+                    "loyalty_sales": round(loyalty_sales, 2) if loyalty_sales else None,
+                    "_raw": {
+                        "food_sales": round(food_sales, 2),
+                        "liquor_sales": round(liquor_sales, 2),
+                        "beer_sales": round(beer_sales, 2),
+                        "wine_sales": round(wine_sales, 2),
+                        "bar_glassware_sales": round(bar_glassware_sales, 2),
+                        "lbw_total": round(lbw_total, 2),
+                        "lsc_count": round(lsc_count, 2)
+                    }
+                }
+                
+                all_employees.append(employee_data)
+                logging.info(f"Extracted: {employee_name} - Guests: {guest_count}, Net Sales: ${net_sales:.2f}, PPA: ${ppa:.2f if ppa else 0}")
+                
+            except Exception as sheet_error:
+                logging.warning(f"Error processing sheet '{sheet_name}': {str(sheet_error)}")
+                extraction_notes.append(f"Sheet '{sheet_name}': {str(sheet_error)}")
+                continue
+        
+        workbook.close()
+        
+        if not all_employees:
+            return {
+                "error": "No employee data found in XLSX file. Ensure each sheet has employee name in cell F5 and valid sales data.",
+                "extraction_notes": "; ".join(extraction_notes) if extraction_notes else "No valid sheets found",
+                "employees": []
+            }
+        
+        return {
+            "report_date": report_date,
+            "report_type": "server_sales_detail",
+            "employees": all_employees,
+            "extraction_notes": f"Extracted {len(all_employees)} employees from {len(workbook.sheetnames)} sheets" + (f". Issues: {'; '.join(extraction_notes)}" if extraction_notes else ""),
+            "sheets_processed": len(workbook.sheetnames),
+            "employee_count": len(all_employees)
+        }
+        
+    except Exception as e:
+        import traceback
+        import logging
+        logging.error(f"XLSX processing error: {str(e)}\n{traceback.format_exc()}")
+        return {
+            "error": f"XLSX processing failed: {str(e)}",
+            "employees": []
+        }
