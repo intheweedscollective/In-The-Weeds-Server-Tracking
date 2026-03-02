@@ -510,9 +510,16 @@ def extract_pos_data_from_xlsx(xlsx_bytes: bytes) -> Dict[str, Any]:
                 # Row numbers based on the Aloha Server Sales Detail format
                 
                 def get_net_sales_value(row_num) -> float:
-                    """Get the Net Sales value from column C (3) for a given row."""
-                    val = sheet.cell(row=row_num, column=3).value
-                    return _safe_float(val) or 0.0
+                    """Get the Net Sales value from columns C, D, or E for a given row."""
+                    if not row_num:
+                        return 0.0
+                    # Try columns C (3), D (4), E (5) - Net Sales might be in different columns
+                    for col in [3, 4, 5]:
+                        val = sheet.cell(row=row_num, column=col).value
+                        parsed = _safe_float(val)
+                        if parsed and parsed > 0:
+                            return parsed
+                    return 0.0
                 
                 def find_row_by_label(label: str, start_row: int = 1, end_row: int = 60) -> Optional[int]:
                     """Find a row by searching for a label in columns A, B, or C."""
