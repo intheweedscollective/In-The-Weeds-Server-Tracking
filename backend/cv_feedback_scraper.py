@@ -625,6 +625,7 @@ async def sync_cv_feedback_to_db(
             "rating": item["rating"],
             "rating_str": item["rating_str"],
             "customer_name": item["customer_name"],
+            "server_name": server_name,  # Server who served this table
             "date": item["date"],
             "date_of_business": item["date_of_business"],
             "shift": item["shift"],
