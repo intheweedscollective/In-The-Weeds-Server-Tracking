@@ -567,16 +567,18 @@ async def sync_cv_feedback_to_db(
             skipped_count += 1
             continue
         
-        # Detect employee - FIRST from server assignment, THEN from comment mentions
+        # CV Credit: Server who served the table gets the points (no comment mention bonus)
         comment = item.get("comment", "")
         server_name = item.get("server_name", "")
         
-        # Build mentions list
+        # Build mentions list - ONLY from server assignment for CV
         mentions = []
         
-        # Priority 1: Server who served the table (from Transactions page)
+        # Server who served the table (from Transactions page)
         if server_name:
             server_lower = server_name.lower()
+            matched = False
+            
             # Try exact match first
             if server_lower in employee_lookup:
                 emp_data = employee_lookup[server_lower]
@@ -586,8 +588,10 @@ async def sync_cv_feedback_to_db(
                     "match_type": "server_assignment",
                     "cv_points": item["cv_points"]
                 })
-            else:
-                # Try partial match (first name or last name)
+                matched = True
+            
+            # Try partial match (first name or last name)
+            if not matched:
                 for emp_name_lower, emp_data in employee_lookup.items():
                     emp_parts = emp_name_lower.split()
                     server_parts = server_lower.split()
@@ -603,21 +607,8 @@ async def sync_cv_feedback_to_db(
                         })
                         break
         
-        # Priority 2: Also check comment mentions (in case someone else is mentioned)
-        detected_in_comment = detect_employee_in_comment(comment, employee_names)
-        for emp in detected_in_comment:
-            emp_name = emp["name"]
-            emp_lower = emp_name.lower()
-            if emp_lower in employee_lookup:
-                emp_data = employee_lookup[emp_lower]
-                # Don't duplicate if already added from server assignment
-                if not any(m["employee_id"] == emp_data["id"] for m in mentions):
-                    mentions.append({
-                        "employee_id": emp_data["id"],
-                        "employee_name": emp_data["name"],
-                        "match_type": f"comment_{emp['match_type']}",
-                        "cv_points": item["cv_points"]
-                    })
+        # NOTE: For CV, we do NOT check comment mentions - only server assignment matters
+        # Comment mentions are for External Reviews (Google, Yelp, etc.) only
         
         # Store feedback
         feedback_doc = {
