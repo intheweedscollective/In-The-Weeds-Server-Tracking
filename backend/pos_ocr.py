@@ -246,31 +246,47 @@ def _safe_float(value) -> Optional[float]:
     if value is None:
         return None
     try:
-        val_str = str(value)
+        val_str = str(value).strip()
         
-        # If the cell has multiple numbers (merged data), extract the first one
-        # Example: "30,251.08            2,471 .05" -> 30251.08
-        # Example: "51 ,70633" -> 51706.33
+        # If empty, return None
+        if not val_str:
+            return None
         
         # Remove $ signs
         val_str = val_str.replace("$", "")
         
-        # Handle spaces in numbers (e.g., "51 ,70633" or "51 .72")
-        # First, normalize: remove spaces around decimal points and commas
-        import re
+        # Handle OCR-style errors with spaces in numbers
+        # Examples: "51 ,70633" -> "51,706.33", "51 .72" -> "51.72", "2,471 .05" -> "2471.05"
         
-        # Find the first number pattern (handles "30,251.08" or "51 ,70633" or "2,471 .05")
-        # Look for patterns like: digits, optional comma/space, more digits, optional decimal, more digits
-        match = re.search(r'[\d,\s]+\.?\s*\d*', val_str)
-        if match:
-            num_str = match.group(0)
-            # Clean it up: remove all spaces and extra characters
-            num_str = num_str.replace(" ", "").replace(",", "")
-            if num_str and num_str != '.':
-                return float(num_str)
+        # First, if there are multiple numbers separated by whitespace, take the first one
+        # Example: "30,251.08            2,471 .05" -> "30,251.08"
+        parts = val_str.split()
+        if len(parts) > 1:
+            # Check if first part looks like a complete number
+            first_part = parts[0].replace(",", "")
+            if first_part.replace(".", "").isdigit():
+                val_str = parts[0]
+            else:
+                # Reconstruct - might be "51 ,70633" (space before comma)
+                val_str = "".join(parts)
         
-        # Fallback: try direct conversion after basic cleanup
-        val_str = val_str.replace(",", "").replace(" ", "").strip()
+        # Remove all spaces
+        val_str = val_str.replace(" ", "")
+        
+        # Handle comma as thousand separator
+        val_str = val_str.replace(",", "")
+        
+        # Handle case where decimal might be missing: "5170633" should be "51706.33"
+        # But only if the number is unreasonably large (> 1,000,000) and has no decimal
+        if val_str.replace(".", "").isdigit():
+            num = float(val_str)
+            # If > 1 million and no decimal in original, it's probably missing a decimal
+            if num > 1000000 and "." not in val_str:
+                # Insert decimal 2 places from end
+                val_str = val_str[:-2] + "." + val_str[-2:]
+                num = float(val_str)
+            return num
+        
         return float(val_str) if val_str else None
     except (ValueError, TypeError):
         return None
