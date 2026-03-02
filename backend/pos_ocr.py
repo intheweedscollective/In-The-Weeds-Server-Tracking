@@ -262,40 +262,36 @@ def _safe_float(value) -> Optional[float]:
         parts = val_str.split()
         
         if len(parts) > 1:
-            # Heuristic: If parts look like they form ONE number (e.g., "21 962.81"), join them
-            # vs. multiple numbers (e.g., "30,251.08            2,471 .05"), take the first
-            
-            # Check if the pattern looks like "number space number" (broken number)
-            # vs "complete_number space other_stuff"
+            # Check raw second part before stripping
+            raw_second = parts[1]
             
             first = parts[0].rstrip(',.')
-            second = parts[1].lstrip(',')
             
-            # If first part ends with digits and second starts with digits/decimal/comma,
-            # they're likely one number
-            first_ends_digit = first and first[-1].isdigit()
-            second_starts_continuation = (second.startswith('.') or 
-                                          second.startswith(',') or 
-                                          (second and second[0].isdigit()))
-            
-            if first_ends_digit and second_starts_continuation:
-                # Check if first is incomplete (no decimal and second has decimal)
-                if '.' not in first and '.' in second:
-                    # Join them: "21 962.81" -> "21962.81"
-                    val_str = "".join(parts[:2])  # Take first two parts
-                elif second.startswith(',') or second.startswith('.'):
-                    # "51 ,70633" or "51 .72"
-                    val_str = "".join(parts)
-                else:
-                    # Could be "30,251.08  2,471.05" - first looks complete
-                    first_clean = first.replace(",", "")
-                    if '.' in first or len(first_clean) <= 6:
-                        val_str = first
-                    else:
-                        val_str = "".join(parts[:2])
+            # If second part starts with comma/decimal, it's a continuation
+            if raw_second.startswith(',') or raw_second.startswith('.'):
+                # Join them: "51 ,70633" -> "51,70633", "51 .72" -> "51.72"
+                val_str = "".join(parts)
             else:
-                # Take the first complete number
-                val_str = first
+                second = raw_second.lstrip(',')
+                first_ends_digit = first and first[-1].isdigit()
+                second_starts_digit = second and second[0].isdigit()
+                
+                # If pattern looks like "number space number.decimal" -> join
+                # "21 962.81" should become "21962.81"
+                if first_ends_digit and second_starts_digit:
+                    # Check if first is incomplete (no decimal and second has decimal)
+                    if '.' not in first and '.' in second:
+                        # Join first two parts: "21 962.81" -> "21962.81"
+                        val_str = first + second
+                    elif len(first) <= 2 and len(second) >= 3:
+                        # First part is too short to be a complete number
+                        # "21 962" -> "21962"
+                        val_str = "".join(parts[:2])
+                    else:
+                        # First looks like complete number
+                        val_str = first
+                else:
+                    val_str = first
         
         # Remove all spaces
         val_str = val_str.replace(" ", "")
@@ -310,8 +306,8 @@ def _safe_float(value) -> Optional[float]:
         num = float(val_str)
         
         # Handle case where decimal might be missing: "5170633" should be "51706.33"
-        # But only if the number is unreasonably large (> 100,000) and has no decimal in original
-        if num > 100000 and "." not in str(value):
+        # But only if the number is unreasonably large (> 100,000) and has no decimal
+        if num > 100000 and "." not in val_str:
             # Insert decimal 2 places from end
             val_str = val_str[:-2] + "." + val_str[-2:]
             num = float(val_str)
