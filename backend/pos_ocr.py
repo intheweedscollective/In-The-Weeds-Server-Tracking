@@ -489,6 +489,15 @@ def extract_pos_data_from_xlsx(xlsx_bytes: bytes) -> Dict[str, Any]:
                 glassware_row = find_row_by_label("glassware", 28, 35) or 31
                 totals_row = find_row_by_label("totals", 35, 42) or 38
                 
+                # Extract values
+                food_sales = get_net_sales_value(food_row)
+                liquor_sales = get_net_sales_value(liquor_row)
+                beer_sales = get_net_sales_value(beer_row)
+                wine_sales = get_net_sales_value(wine_row)
+                loyalty_sales = get_net_sales_value(loyalty_row)
+                bar_glassware_sales = get_net_sales_value(glassware_row)
+                net_sales = get_net_sales_value(totals_row)
+                
                 # Find "Total Guests" row - search more broadly
                 guests_row = None
                 guest_count = None
