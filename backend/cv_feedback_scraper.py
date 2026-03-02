@@ -567,23 +567,57 @@ async def sync_cv_feedback_to_db(
             skipped_count += 1
             continue
         
-        # Detect employee mentions
+        # Detect employee - FIRST from server assignment, THEN from comment mentions
         comment = item.get("comment", "")
-        detected_employees = detect_employee_in_comment(comment, employee_names)
+        server_name = item.get("server_name", "")
         
         # Build mentions list
         mentions = []
-        for emp in detected_employees:
+        
+        # Priority 1: Server who served the table (from Transactions page)
+        if server_name:
+            server_lower = server_name.lower()
+            # Try exact match first
+            if server_lower in employee_lookup:
+                emp_data = employee_lookup[server_lower]
+                mentions.append({
+                    "employee_id": emp_data["id"],
+                    "employee_name": emp_data["name"],
+                    "match_type": "server_assignment",
+                    "cv_points": item["cv_points"]
+                })
+            else:
+                # Try partial match (first name or last name)
+                for emp_name_lower, emp_data in employee_lookup.items():
+                    emp_parts = emp_name_lower.split()
+                    server_parts = server_lower.split()
+                    # Match if first names match or last names match
+                    if (emp_parts and server_parts and 
+                        (emp_parts[0] == server_parts[0] or 
+                         (len(emp_parts) > 1 and len(server_parts) > 1 and emp_parts[-1] == server_parts[-1]))):
+                        mentions.append({
+                            "employee_id": emp_data["id"],
+                            "employee_name": emp_data["name"],
+                            "match_type": "server_assignment_partial",
+                            "cv_points": item["cv_points"]
+                        })
+                        break
+        
+        # Priority 2: Also check comment mentions (in case someone else is mentioned)
+        detected_in_comment = detect_employee_in_comment(comment, employee_names)
+        for emp in detected_in_comment:
             emp_name = emp["name"]
             emp_lower = emp_name.lower()
             if emp_lower in employee_lookup:
                 emp_data = employee_lookup[emp_lower]
-                mentions.append({
-                    "employee_id": emp_data["id"],
-                    "employee_name": emp_data["name"],
-                    "match_type": emp["match_type"],
-                    "cv_points": item["cv_points"]
-                })
+                # Don't duplicate if already added from server assignment
+                if not any(m["employee_id"] == emp_data["id"] for m in mentions):
+                    mentions.append({
+                        "employee_id": emp_data["id"],
+                        "employee_name": emp_data["name"],
+                        "match_type": f"comment_{emp['match_type']}",
+                        "cv_points": item["cv_points"]
+                    })
         
         # Store feedback
         feedback_doc = {
