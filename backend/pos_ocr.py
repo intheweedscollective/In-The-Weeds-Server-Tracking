@@ -439,6 +439,7 @@ def extract_pos_data_from_xlsx(xlsx_bytes: bytes) -> Dict[str, Any]:
         report_date = None
         
         logging.info(f"XLSX has {len(workbook.sheetnames)} sheets: {workbook.sheetnames[:5]}...")
+        skipped_sheets = []
         
         for sheet_name in workbook.sheetnames:
             sheet = workbook[sheet_name]
