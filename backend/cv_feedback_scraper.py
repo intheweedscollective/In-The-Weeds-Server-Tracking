@@ -128,6 +128,24 @@ async def scrape_cv_feedback(
         context = await browser.new_context(viewport={"width": 1920, "height": 1080})
         page = await context.new_page()
         
+        # Capture API responses for grid data
+        api_data = []
+        async def handle_response(response):
+            try:
+                if "/api/" in response.url and response.status == 200:
+                    content_type = response.headers.get("content-type", "")
+                    if "json" in content_type:
+                        data = await response.json()
+                        if isinstance(data, list) and len(data) > 0:
+                            # Check if it looks like feedback data
+                            if any(isinstance(item, dict) and ('Rating' in item or 'Body' in item) for item in data[:5] if isinstance(item, dict)):
+                                api_data.extend(data)
+                                print(f"[CV] Captured {len(data)} items from API: {response.url}")
+            except:
+                pass
+        
+        page.on("response", handle_response)
+        
         try:
             # Login
             if not await login_to_loyalty_voice(page):
@@ -168,6 +186,26 @@ async def scrape_cv_feedback(
                 if await apply.is_visible(timeout=2000):
                     await apply.click(force=True)
                     await page.wait_for_timeout(5000)
+            
+            # Wait for API data to be captured
+            await page.wait_for_timeout(3000)
+            
+            # If we captured API data, use that (more reliable)
+            if api_data:
+                print(f"[CV] Using API-captured data: {len(api_data)} items")
+                feedback_data = api_data
+            else:
+                # Fallback to scraping the grid
+                print("[CV] No API data captured, falling back to grid scraping")
+                # Try to find and click "Export" or "Show All" if available
+                try:
+                    # Check for page size selector
+                    page_size = page.locator('select.ag-paging-page-size, .ag-page-size select')
+                    if await page_size.count() > 0:
+                        await page_size.first.select_option("100")
+                        await page.wait_for_timeout(2000)
+                except:
+                    pass
             
             # Extract data via JavaScript (ag-grid) - scroll through all rows
             feedback_data = await page.evaluate("""async () => {
