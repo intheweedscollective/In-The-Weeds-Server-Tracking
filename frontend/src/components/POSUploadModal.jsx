@@ -506,12 +506,14 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                     <Loader2 className="w-12 h-12 text-primary animate-spin" />
                     <div>
                       <p className="text-lg font-semibold text-white">
-                        {fileType === 'multi' ? 'Processing Multiple Files...' : fileType === 'pdf' ? 'Processing PDF...' : 'Processing POS Report...'}
+                        {fileType === 'multi' ? 'Processing Multiple Files...' : fileType === 'xlsx' ? 'Processing Excel File...' : fileType === 'pdf' ? 'Processing PDF...' : 'Processing POS Report...'}
                       </p>
                       <p className="text-sm text-slate-400">
-                        {processingStatus || (fileType === 'pdf' 
-                          ? 'Converting pages and extracting data' 
-                          : 'AI is extracting employee data')}
+                        {processingStatus || (fileType === 'xlsx' 
+                          ? 'Extracting data from Excel sheets' 
+                          : fileType === 'pdf' 
+                            ? 'Converting pages and extracting data' 
+                            : 'AI is extracting employee data')}
                       </p>
                     </div>
                   </div>
@@ -523,7 +525,7 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                     <div>
                       <p className="text-lg font-semibold text-white">Drop POS reports here</p>
                       <p className="text-sm text-slate-400">
-                        <strong>Select multiple images</strong> for batch upload • Or single PDF
+                        <strong>XLSX recommended for 100% accuracy</strong> • Or images/PDF
                       </p>
                     </div>
                   </div>
