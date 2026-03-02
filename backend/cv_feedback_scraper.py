@@ -439,10 +439,17 @@ async def scrape_cv_feedback(
                 rating = parse_rating(item.get("Rating", ""))
                 sentiment, points = get_sentiment_and_points(rating)
                 
+                # Get customer name and look up their server
+                customer_name = item.get("FkCustomer_FirstName", "")
+                customer_key = customer_name.strip().lower() if customer_name else ""
+                
+                # Look up the server who served this customer
+                server_name = customer_to_server.get(customer_key, "")
+                
                 feedback = {
                     "rating": rating,
                     "rating_str": item.get("Rating", ""),
-                    "customer_name": item.get("FkCustomer_FirstName", ""),
+                    "customer_name": customer_name,
                     "date": item.get("DateCreated", ""),
                     "date_of_business": item.get("DateOfBusiness", ""),
                     "shift": item.get("FkTransactionSummary_Shift_Name", ""),
@@ -451,13 +458,14 @@ async def scrape_cv_feedback(
                     "can_contact": item.get("FkCustomer_CanContact", ""),
                     "sentiment": sentiment,
                     "cv_points": points,
-                    "source": "loyalty_voice"
+                    "source": "loyalty_voice",
+                    "server_name": server_name  # Server who served this customer
                 }
                 result["feedback"].append(feedback)
             
-            result["success"] = True
-            result["total_count"] = len(result["feedback"])
-            print(f"[CV] Scraped {len(result['feedback'])} feedback items")
+            # Log stats
+            with_server = sum(1 for f in result["feedback"] if f.get("server_name"))
+            print(f"[CV] Scraped {len(result['feedback'])} feedback items, {with_server} with server assignments")
             
         except Exception as e:
             print(f"[CV] Error: {e}")
