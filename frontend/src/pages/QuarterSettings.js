@@ -359,12 +359,12 @@ export default function QuarterSettings() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {suggestions.suggestions?.ppa && (
                   <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
-                    <div className="text-xs text-blue-700 uppercase font-semibold mb-1">PPA</div>
-                    <div className="text-sm text-blue-600 mb-2">Avg: ${suggestions.previous_averages.avg_ppa}</div>
+                    <div className="text-xs text-blue-700 uppercase font-bold mb-1">PPA</div>
+                    <div className="text-sm text-blue-600 font-semibold mb-2">Avg: ${suggestions.previous_averages.avg_ppa}</div>
                     <div className="space-y-1">
                       <button 
                         onClick={() => applySuggestion('ppa', suggestions.suggestions.ppa.default)}
-                        className="w-full text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 px-2 py-1 rounded"
+                        className="w-full text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 font-semibold px-2 py-1 rounded"
                       >
                         Use ${suggestions.suggestions.ppa.default} (115%)
                       </button>
@@ -373,12 +373,12 @@ export default function QuarterSettings() {
                 )}
                 {suggestions.suggestions?.lbw && (
                   <div className="p-3 bg-purple-50 rounded-lg border border-purple-100">
-                    <div className="text-xs text-purple-700 uppercase font-semibold mb-1">LBW/Guest</div>
-                    <div className="text-sm text-purple-600 mb-2">Avg: ${suggestions.previous_averages.avg_lbw}</div>
+                    <div className="text-xs text-purple-700 uppercase font-bold mb-1">LBW/Guest</div>
+                    <div className="text-sm text-purple-600 font-semibold mb-2">Avg: ${suggestions.previous_averages.avg_lbw}</div>
                     <div className="space-y-1">
                       <button 
                         onClick={() => applySuggestion('lbw', suggestions.suggestions.lbw.default)}
-                        className="w-full text-xs bg-purple-100 hover:bg-purple-200 text-purple-800 px-2 py-1 rounded"
+                        className="w-full text-xs bg-purple-100 hover:bg-purple-200 text-purple-800 font-semibold px-2 py-1 rounded"
                       >
                         Use ${suggestions.suggestions.lbw.default} (115%)
                       </button>
@@ -387,12 +387,12 @@ export default function QuarterSettings() {
                 )}
                 {suggestions.suggestions?.glass && (
                   <div className="p-3 bg-gray-100 rounded-lg border border-gray-200">
-                    <div className="text-xs text-gray-700 uppercase font-semibold mb-1">Glass/Guest</div>
-                    <div className="text-sm text-gray-600 mb-2">Avg: ${suggestions.previous_averages.avg_glass}</div>
+                    <div className="text-xs text-gray-700 uppercase font-bold mb-1">Glass/Guest</div>
+                    <div className="text-sm text-gray-600 font-semibold mb-2">Avg: ${suggestions.previous_averages.avg_glass}</div>
                     <div className="space-y-1">
                       <button 
                         onClick={() => applySuggestion('glass', suggestions.suggestions.glass.default)}
-                        className="w-full text-xs bg-gray-200 hover:bg-gray-300 text-gray-800 px-2 py-1 rounded"
+                        className="w-full text-xs bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold px-2 py-1 rounded"
                       >
                         Use ${suggestions.suggestions.glass.default} (115%)
                       </button>
@@ -401,12 +401,12 @@ export default function QuarterSettings() {
                 )}
                 {suggestions.suggestions?.lsc && (
                   <div className="p-3 bg-green-50 rounded-lg border border-green-100">
-                    <div className="text-xs text-green-700 uppercase font-semibold mb-1">Guests/LSC</div>
-                    <div className="text-sm text-green-600 mb-2">Avg: {suggestions.previous_averages.avg_lsc}</div>
+                    <div className="text-xs text-green-700 uppercase font-bold mb-1">Guests/LSC</div>
+                    <div className="text-sm text-green-600 font-semibold mb-2">Avg: {suggestions.previous_averages.avg_lsc}</div>
                     <div className="space-y-1">
                       <button 
                         onClick={() => applySuggestion('lsc', suggestions.suggestions.lsc.default)}
-                        className="w-full text-xs bg-green-100 hover:bg-green-200 text-green-800 px-2 py-1 rounded"
+                        className="w-full text-xs bg-green-100 hover:bg-green-200 text-green-800 font-semibold px-2 py-1 rounded"
                       >
                         Use {suggestions.suggestions.lsc.default} (÷1.15)
                       </button>
