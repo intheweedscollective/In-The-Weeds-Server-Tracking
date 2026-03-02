@@ -613,7 +613,7 @@ export default function ReviewTracker() {
                 {activeTab === "all" && (
                   <div className="flex items-center gap-2 mb-4">
                     <Star className="w-5 h-5 fill-yellow-400 text-yellow-400" />
-                    <h2 className="text-lg font-bold text-gray-900">Customer Voice Feedback</h2>
+                    <h2 className="text-lg font-bold text-white">Customer Voice Feedback</h2>
                     <span className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-xs px-2 py-0.5 rounded-full font-semibold">
                       PRIORITY
                     </span>
