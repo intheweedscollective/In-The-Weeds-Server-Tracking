@@ -682,7 +682,7 @@ export default function ReviewTracker() {
                           
                           {/* Meta info */}
                           <div className="mt-2 flex items-center justify-between">
-                            <div className="flex items-center gap-3 text-xs text-gray-400">
+                            <div className="flex items-center gap-3 text-xs text-slate-300">
                               <span>{item.shift || "No shift"}</span>
                               <span>•</span>
                               <span>{item.store}</span>
