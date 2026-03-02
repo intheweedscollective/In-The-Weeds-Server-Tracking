@@ -448,46 +448,55 @@ def extract_pos_data_from_xlsx(xlsx_bytes: bytes) -> Dict[str, Any]:
                 # Extract employee name - try multiple locations
                 employee_name = None
                 
+                def is_valid_name(val):
+                    """Check if a value looks like a person's name (not date, number, or address)"""
+                    if not val or len(val) < 3:
+                        return False
+                    val = str(val).strip()
+                    # Reject dates (contains / or starts with digits like 01/01)
+                    if '/' in val or '—' in val or '--' in val:
+                        return False
+                    # Reject numbers
+                    if val.replace('.','').replace(',','').replace(' ','').isdigit():
+                        return False
+                    # Reject addresses (contains state abbreviations or zip codes)
+                    if any(x in val for x in ['NV ', 'CA ', 'AZ ', '89109', '89101', '89102', '89103', '89104']):
+                        return False
+                    # Reject if starts with digits
+                    if val[0].isdigit():
+                        return False
+                    return True
+                
                 # Primary location based on user feedback: cell N11 (row 11, column 14)
                 name_cell = sheet.cell(row=11, column=14).value
-                if name_cell:
-                    val = str(name_cell).strip()
-                    # Make sure it looks like a name (not a number or date)
-                    if val and len(val) > 2 and not val.replace('.','').replace(',','').isdigit():
-                        employee_name = val
+                if name_cell and is_valid_name(name_cell):
+                    employee_name = str(name_cell).strip()
                 
                 # Fallback: cell F5 (row 5, column 6) - original location
-                if not employee_name or employee_name.lower() in ['none', 'nan', '']:
+                if not employee_name:
                     name_cell = sheet.cell(row=5, column=6).value
-                    if name_cell:
+                    if name_cell and is_valid_name(name_cell):
                         employee_name = str(name_cell).strip()
                 
                 # Fallback: Check other common name locations (rows 4-6, 10-12 across columns D-P)
-                if not employee_name or employee_name.lower() in ['none', 'nan', '']:
+                if not employee_name:
                     for row in [11, 5, 4, 6, 10, 12]:
                         for col in range(4, 17):  # D through P
                             cell_val = sheet.cell(row=row, column=col).value
-                            if cell_val and isinstance(cell_val, str) and len(cell_val) > 2:
-                                val = str(cell_val).strip()
-                                # Check if it looks like a name (not a date, number, or address)
-                                if (not any(c.isdigit() for c in val[:3]) and 
-                                    '/' not in val and 
-                                    '-' not in val[:4] and
-                                    'NV' not in val and
-                                    not val.endswith(('89109', '89101', '89102', '89103'))):
-                                    employee_name = val
-                                    break
-                        if employee_name and employee_name.lower() not in ['none', 'nan', '']:
+                            if cell_val and is_valid_name(cell_val):
+                                employee_name = str(cell_val).strip()
+                                break
+                        if employee_name:
                             break
                 
                 # Last resort: Use sheet name if it looks like a name
-                if not employee_name or employee_name.lower() in ['none', 'nan', '']:
-                    if sheet_name and not sheet_name.lower().startswith('sheet'):
+                if not employee_name:
+                    if sheet_name and not sheet_name.lower().startswith('sheet') and is_valid_name(sheet_name):
                         employee_name = sheet_name
                 
                 # Skip sheets without a valid employee name
-                if not employee_name or employee_name.lower() in ['none', 'nan', '']:
-                    logging.warning(f"Skipping sheet '{sheet_name}': No employee name found in N11, F5, or fallback locations")
+                if not employee_name:
+                    logging.warning(f"Skipping sheet '{sheet_name}': No valid employee name found")
                     skipped_sheets.append(sheet_name)
                     continue
                 
