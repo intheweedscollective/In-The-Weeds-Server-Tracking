@@ -220,6 +220,7 @@ Build a comprehensive performance review application for restaurant employees (B
 - [ ] Yodeck Embed Link feature
 
 ## Key API Endpoints
+- `POST /api/v2/pos-ocr/upload` - Upload POS report (XLSX, images, or PDF) for data extraction
 - `POST /api/v2/cv/sync` - Sync Loyalty Voice NPS scores
 - `GET /api/v2/cv/nps` - List NPS scores
 - `GET /api/v2/cv/stats` - NPS statistics
