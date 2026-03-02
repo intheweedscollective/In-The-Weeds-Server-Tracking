@@ -677,14 +677,12 @@ def extract_pos_data_from_xlsx(xlsx_bytes: bytes) -> Dict[str, Any]:
                             break
                 
                 # Last resort: Look for a number after "Totals" row that could be guest count
-                # Pattern: After totals row, look for Shift A + Shift B + Total pattern
-                # Total is usually the largest of the three consecutive values
+                # Pattern: Shift A value + Shift B value = Total Guests
                 if not guest_count and totals_row:
                     candidates = []
                     for row in range(totals_row + 2, totals_row + 15):
                         for col in range(3, 6):  # Check columns C, D, E
                             val = _safe_int(sheet.cell(row=row, column=col).value)
-                            # Guest count is typically 50-10000
                             if val and val > 30 and val < 10000:
                                 label_col2 = sheet.cell(row=row, column=2).value or ""
                                 label_str = str(label_col2).lower().replace(" ", "")
@@ -693,25 +691,53 @@ def extract_pos_data_from_xlsx(xlsx_bytes: bytes) -> Dict[str, Any]:
                                     'col': col,
                                     'value': val,
                                     'label': label_str,
-                                    'is_total': 'total' in label_str
+                                    'is_total': 'total' in label_str,
+                                    'is_shift': 'shift' in label_str
                                 })
                     
-                    # First, prefer any value with "total" label
+                    # First, prefer any value with "total" label (like "Total Guests")
                     for c in candidates:
                         if c['is_total']:
                             guest_count = c['value']
                             break
                     
-                    # If no "total" label, look for the pattern: smaller, smaller, larger (total)
-                    # Or take the largest reasonable value
-                    if not guest_count and candidates:
-                        # Sort by value descending and take largest
-                        candidates.sort(key=lambda x: x['value'], reverse=True)
-                        # Take the largest that's not unreasonably large
-                        for c in candidates:
-                            if c['value'] < 5000:  # Most restaurants don't have >5000 guests per employee
-                                guest_count = c['value']
+                    # If no "total" label, look for Shift A + Shift B = Total pattern
+                    # Find pairs where value[i] + value[i+shift_b] ≈ value[i+total]
+                    if not guest_count and len(candidates) >= 3:
+                        for i, c in enumerate(candidates):
+                            # Check if this could be a "Total" (sum of previous two)
+                            if i >= 2:
+                                prev_vals = [candidates[j]['value'] for j in range(max(0, i-3), i)]
+                                # Check if current value equals sum of any two previous
+                                for j in range(len(prev_vals)):
+                                    for k in range(j+1, len(prev_vals)):
+                                        if prev_vals[j] + prev_vals[k] == c['value']:
+                                            guest_count = c['value']
+                                            break
+                                    if guest_count:
+                                        break
+                            if guest_count:
                                 break
+                    
+                    # Still no guest count? Take value that appears multiple times (likely total)
+                    if not guest_count and candidates:
+                        value_counts = {}
+                        for c in candidates:
+                            v = c['value']
+                            value_counts[v] = value_counts.get(v, 0) + 1
+                        # Find values that appear more than once
+                        for v, count in sorted(value_counts.items(), key=lambda x: (-x[1], -x[0])):
+                            if count > 1 and v > 100:
+                                guest_count = v
+                                break
+                    
+                    # Last fallback: take the largest reasonable value (but not comps which are usually < 1000)
+                    if not guest_count and candidates:
+                        # Filter to likely guest counts (100-3000 typical range)
+                        guest_candidates = [c for c in candidates if 100 < c['value'] < 3000]
+                        if guest_candidates:
+                            guest_candidates.sort(key=lambda x: x['value'], reverse=True)
+                            guest_count = guest_candidates[0]['value']
                 
                 # If still no guest count, log more details and skip
                 if not guest_count or guest_count <= 0:
