@@ -505,35 +505,41 @@ def extract_pos_data_from_xlsx(xlsx_bytes: bytes) -> Dict[str, Any]:
                     val = sheet.cell(row=row_num, column=3).value
                     return _safe_float(val) or 0.0
                 
-                def find_row_by_label(label: str, start_row: int = 10, end_row: int = 40) -> Optional[int]:
-                    """Find a row by searching for a label in column A or B."""
+                def find_row_by_label(label: str, start_row: int = 1, end_row: int = 60) -> Optional[int]:
+                    """Find a row by searching for a label in columns A, B, or C."""
                     label_lower = label.lower()
                     for row in range(start_row, end_row + 1):
-                        cell_a = sheet.cell(row=row, column=1).value
-                        cell_b = sheet.cell(row=row, column=2).value
-                        if cell_a and label_lower in str(cell_a).lower():
-                            return row
-                        if cell_b and label_lower in str(cell_b).lower():
-                            return row
+                        for col in range(1, 4):  # Check columns A, B, C
+                            cell_val = sheet.cell(row=row, column=col).value
+                            if cell_val and label_lower in str(cell_val).lower():
+                                return row
                     return None
                 
-                # Find key rows by label (more robust than fixed row numbers)
-                food_row = find_row_by_label("food", 9, 15) or 10
-                liquor_row = find_row_by_label("liquor", 10, 16) or 11
-                beer_row = find_row_by_label("beer", 11, 17) or 12
-                wine_row = find_row_by_label("wine", 12, 18) or 13
-                loyalty_row = find_row_by_label("loyalty", 14, 20) or 16
-                glassware_row = find_row_by_label("glassware", 28, 35) or 31
-                totals_row = find_row_by_label("totals", 35, 42) or 38
+                # Find key rows by label - search entire sheet with wide ranges
+                food_row = find_row_by_label("food", 1, 60)
+                liquor_row = find_row_by_label("liquor", 1, 60)
+                beer_row = find_row_by_label("beer", 1, 60)
+                wine_row = find_row_by_label("wine", 1, 60)
+                loyalty_row = find_row_by_label("loyalty", 1, 60)
+                glassware_row = find_row_by_label("bar glassware", 1, 60) or find_row_by_label("glassware", 1, 60)
+                totals_row = find_row_by_label("totals", 1, 60)
                 
-                # Extract values
-                food_sales = get_net_sales_value(food_row)
-                liquor_sales = get_net_sales_value(liquor_row)
-                beer_sales = get_net_sales_value(beer_row)
-                wine_sales = get_net_sales_value(wine_row)
-                loyalty_sales = get_net_sales_value(loyalty_row)
-                bar_glassware_sales = get_net_sales_value(glassware_row)
-                net_sales = get_net_sales_value(totals_row)
+                # If totals not found, try alternative labels
+                if not totals_row:
+                    totals_row = find_row_by_label("total", 30, 60)  # Just "total" as fallback
+                
+                # Extract values - use found rows or skip if critical rows missing
+                food_sales = get_net_sales_value(food_row) if food_row else 0.0
+                liquor_sales = get_net_sales_value(liquor_row) if liquor_row else 0.0
+                beer_sales = get_net_sales_value(beer_row) if beer_row else 0.0
+                wine_sales = get_net_sales_value(wine_row) if wine_row else 0.0
+                loyalty_sales = get_net_sales_value(loyalty_row) if loyalty_row else 0.0
+                bar_glassware_sales = get_net_sales_value(glassware_row) if glassware_row else 0.0
+                net_sales = get_net_sales_value(totals_row) if totals_row else 0.0
+                
+                # Log if key data is missing
+                if not totals_row or net_sales == 0:
+                    logging.warning(f"Sheet '{sheet_name}': Could not find Totals row for {employee_name}. Food row: {food_row}, Totals row: {totals_row}")
                 
                 # Find "Total Guests" row - search the entire sheet
                 guests_row = None
