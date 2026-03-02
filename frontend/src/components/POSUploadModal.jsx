@@ -546,13 +546,17 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                 </div>
               )}
               
-              {/* PDF File Indicator */}
-              {fileType === 'pdf' && !extractedData && (
-                <div className="flex items-center gap-3 p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
-                  <FileText className="w-6 h-6 text-blue-400" />
+              {/* PDF/XLSX File Indicator */}
+              {(fileType === 'pdf' || fileType === 'xlsx') && !extractedData && (
+                <div className={`flex items-center gap-3 p-4 ${fileType === 'xlsx' ? 'bg-green-500/10 border-green-500/30' : 'bg-blue-500/10 border-blue-500/30'} border rounded-xl`}>
+                  <FileText className={`w-6 h-6 ${fileType === 'xlsx' ? 'text-green-400' : 'text-blue-400'}`} />
                   <div>
-                    <p className="font-medium text-blue-400">PDF File Uploaded</p>
-                    <p className="text-sm text-blue-400/80">Each page will be processed for employee data</p>
+                    <p className={`font-medium ${fileType === 'xlsx' ? 'text-green-400' : 'text-blue-400'}`}>
+                      {fileType === 'xlsx' ? 'Excel File Uploaded' : 'PDF File Uploaded'}
+                    </p>
+                    <p className={`text-sm ${fileType === 'xlsx' ? 'text-green-400/80' : 'text-blue-400/80'}`}>
+                      {fileType === 'xlsx' ? 'Each sheet tab = one employee (100% accurate extraction)' : 'Each page will be processed for employee data'}
+                    </p>
                   </div>
                 </div>
               )}
