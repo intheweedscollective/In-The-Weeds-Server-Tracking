@@ -3775,6 +3775,26 @@ async def recalculate_snapshot(snapshot_id: str):
         if name:
             nps_lookup[name] = nps
     
+    # Function to match NPS records by partial name (first name matching)
+    def get_nps_for_employee(emp_name: str) -> dict:
+        emp_lower = emp_name.strip().lower()
+        first_name = emp_lower.split()[0] if emp_lower.split() else ""
+        
+        # Try full name match first
+        if emp_lower in nps_lookup:
+            return nps_lookup[emp_lower]
+        
+        # Try first name match
+        if first_name in nps_lookup:
+            return nps_lookup[first_name]
+        
+        # Try partial first name match
+        for nps_name, nps_data in nps_lookup.items():
+            if first_name.startswith(nps_name) or nps_name.startswith(first_name[:3]):
+                return nps_data
+        
+        return {}
+    
     # Fetch review mentions from customer_reviews collection
     # Filter by actual review_date within the quarter, not just the quarter label
     quarter_dates = {
@@ -3832,8 +3852,8 @@ async def recalculate_snapshot(snapshot_id: str):
             emp_name = emp_data.get("name", "Unknown")
             emp_name_lower = emp_name.strip().lower()
             
-            # Get NPS score for this employee
-            nps_data = nps_lookup.get(emp_name_lower, {})
+            # Get NPS score for this employee (with partial name matching)
+            nps_data = get_nps_for_employee(emp_name)
             nps_score = nps_data.get("nps_score", 0) or 0
             
             # Get review mentions for this employee (with partial name matching)
