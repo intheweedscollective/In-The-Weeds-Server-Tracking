@@ -570,38 +570,65 @@ def extract_pos_data_from_xlsx(xlsx_bytes: bytes) -> Dict[str, Any]:
                 guests_row = None
                 guest_count = None
                 
-                # Search entire sheet for "total guests" label (rows 1-100, cols 1-10)
+                # Search for "total guests" label (with space handling)
                 for row in range(1, 100):
                     for col in range(1, 11):
                         cell_val = sheet.cell(row=row, column=col).value
-                        if cell_val and "total guests" in str(cell_val).lower():
-                            guests_row = row
-                            # Guest count might be in the same row but different column
-                            for val_col in range(1, 11):
-                                val = _safe_int(sheet.cell(row=row, column=val_col).value)
-                                if val and val > 0 and val < 100000:  # Reasonable guest count
-                                    guest_count = val
+                        if cell_val:
+                            # Remove spaces for comparison (handles "Total Guests" or "TotalGuests")
+                            cell_clean = str(cell_val).lower().replace(" ", "")
+                            if "totalguests" in cell_clean or "totalguest" in cell_clean:
+                                guests_row = row
+                                # Guest count might be in the same row but different column
+                                for val_col in range(1, 11):
+                                    val = _safe_int(sheet.cell(row=row, column=val_col).value)
+                                    if val and val > 0 and val < 100000:  # Reasonable guest count
+                                        guest_count = val
+                                        break
+                                if guest_count:
                                     break
-                            if guest_count:
-                                break
                     if guest_count:
                         break
                 
-                # If not found, try searching for just "Guests" or "Num Guests"
+                # If not found, try searching for "Num Guests" pattern
                 if not guest_count:
                     for row in range(1, 100):
                         for col in range(1, 11):
                             cell_val = sheet.cell(row=row, column=col).value
                             if cell_val:
-                                cell_str = str(cell_val).lower().strip()
-                                if cell_str in ['guests', 'num guests', 'total guest', 'guest count']:
-                                    for val_col in range(1, 11):
-                                        val = _safe_int(sheet.cell(row=row, column=val_col).value)
-                                        if val and val > 0 and val < 100000:
-                                            guest_count = val
+                                cell_clean = str(cell_val).lower().replace(" ", "")
+                                if cell_clean in ['numguests', 'numguests:', 'guests', 'guestcount']:
+                                    # Look in next rows for the actual count
+                                    for check_row in range(row, row + 5):
+                                        for val_col in range(1, 11):
+                                            val = _safe_int(sheet.cell(row=check_row, column=val_col).value)
+                                            if val and val > 10 and val < 100000:
+                                                guest_count = val
+                                                break
+                                        if guest_count:
                                             break
-                                    if guest_count:
-                                        break
+                                if guest_count:
+                                    break
+                        if guest_count:
+                            break
+                
+                # Last resort: Look for a number after "Totals" row that could be guest count
+                # Pattern: After totals row, look for rows 45-55 with reasonable numbers
+                if not guest_count and totals_row:
+                    for row in range(totals_row + 2, totals_row + 20):
+                        for col in range(3, 6):  # Check columns C, D, E
+                            val = _safe_int(sheet.cell(row=row, column=col).value)
+                            # Guest count is typically 100-10000
+                            if val and val > 50 and val < 10000:
+                                # Check if there's a "Shift" label nearby indicating this is guest data
+                                prev_val = sheet.cell(row=row-1, column=2).value
+                                curr_val = sheet.cell(row=row, column=2).value
+                                if not guest_count:  # Take first reasonable number
+                                    guest_count = val
+                                # If we see "Total" or similar, prefer this value
+                                if curr_val and 'total' in str(curr_val).lower().replace(" ", ""):
+                                    guest_count = val
+                                    break
                         if guest_count:
                             break
                 
