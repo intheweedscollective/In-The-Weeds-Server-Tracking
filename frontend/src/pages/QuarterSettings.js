@@ -359,8 +359,8 @@ export default function QuarterSettings() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {suggestions.suggestions?.ppa && (
                   <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
-                    <div className="text-xs text-slate-400 uppercase font-semibold mb-1">PPA</div>
-                    <div className="text-sm text-slate-300 mb-2">Avg: ${suggestions.previous_averages.avg_ppa}</div>
+                    <div className="text-xs text-blue-700 uppercase font-semibold mb-1">PPA</div>
+                    <div className="text-sm text-blue-600 mb-2">Avg: ${suggestions.previous_averages.avg_ppa}</div>
                     <div className="space-y-1">
                       <button 
                         onClick={() => applySuggestion('ppa', suggestions.suggestions.ppa.default)}
@@ -373,8 +373,8 @@ export default function QuarterSettings() {
                 )}
                 {suggestions.suggestions?.lbw && (
                   <div className="p-3 bg-purple-50 rounded-lg border border-purple-100">
-                    <div className="text-xs text-slate-400 uppercase font-semibold mb-1">LBW/Guest</div>
-                    <div className="text-sm text-slate-300 mb-2">Avg: ${suggestions.previous_averages.avg_lbw}</div>
+                    <div className="text-xs text-purple-700 uppercase font-semibold mb-1">LBW/Guest</div>
+                    <div className="text-sm text-purple-600 mb-2">Avg: ${suggestions.previous_averages.avg_lbw}</div>
                     <div className="space-y-1">
                       <button 
                         onClick={() => applySuggestion('lbw', suggestions.suggestions.lbw.default)}
@@ -386,9 +386,9 @@ export default function QuarterSettings() {
                   </div>
                 )}
                 {suggestions.suggestions?.glass && (
-                  <div className="p-3 bg-background rounded-lg border border-gray-200">
-                    <div className="text-xs text-slate-400 uppercase font-semibold mb-1">Glass/Guest</div>
-                    <div className="text-sm text-slate-300 mb-2">Avg: ${suggestions.previous_averages.avg_glass}</div>
+                  <div className="p-3 bg-gray-100 rounded-lg border border-gray-200">
+                    <div className="text-xs text-gray-700 uppercase font-semibold mb-1">Glass/Guest</div>
+                    <div className="text-sm text-gray-600 mb-2">Avg: ${suggestions.previous_averages.avg_glass}</div>
                     <div className="space-y-1">
                       <button 
                         onClick={() => applySuggestion('glass', suggestions.suggestions.glass.default)}
@@ -401,8 +401,8 @@ export default function QuarterSettings() {
                 )}
                 {suggestions.suggestions?.lsc && (
                   <div className="p-3 bg-green-50 rounded-lg border border-green-100">
-                    <div className="text-xs text-slate-400 uppercase font-semibold mb-1">Guests/LSC</div>
-                    <div className="text-sm text-slate-300 mb-2">Avg: {suggestions.previous_averages.avg_lsc}</div>
+                    <div className="text-xs text-green-700 uppercase font-semibold mb-1">Guests/LSC</div>
+                    <div className="text-sm text-green-600 mb-2">Avg: {suggestions.previous_averages.avg_lsc}</div>
                     <div className="space-y-1">
                       <button 
                         onClick={() => applySuggestion('lsc', suggestions.suggestions.lsc.default)}
