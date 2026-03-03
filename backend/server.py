@@ -2643,6 +2643,26 @@ async def update_employee(employee_id: str, data: EmployeeUpdate):
         {"$set": emp_dict}
     )
     
+    # ALSO update the snapshot's embedded employee data
+    # This ensures the snapshot stays in sync with employee changes
+    await db.snapshots.update_many(
+        {
+            "year": emp_doc['year'],
+            "quarter": emp_doc['quarter'],
+            "employees.id": employee_id
+        },
+        {
+            "$set": {
+                "employees.$.job_title": emp_dict['job_title'],
+                "employees.$.tier_label": tier_label,
+                "employees.$.total_score": emp_dict.get('total_score', 0),
+                "employees.$.pre_dar_score": emp_dict.get('pre_dar_score', 0),
+                "employees.$.weighted_score": emp_dict.get('weighted_score', 0)
+            }
+        }
+    )
+    logging.info(f"Updated employee {employee.name} job_title to {emp_dict['job_title']} in both employees_v2 and snapshots")
+    
     # Recalculate peer rankings
     all_employees = await db.employees_v2.find(
         {"year": emp_doc['year'], "quarter": emp_doc['quarter']},
