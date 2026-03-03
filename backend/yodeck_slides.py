@@ -958,8 +958,9 @@ def generate_top_10_by_metric_slide(
             rank_text = f"#{rank}"
             draw.text((badge_x, badge_y), rank_text, font=font_badge, fill="#FFFFFF", anchor="mm")
             
-            # Employee name - centered in name column (SINGLE draw call)
-            name = emp.get("name", "Unknown")
+            # Employee name - First name only, centered in name column
+            full_name = emp.get("name", "Unknown")
+            name = full_name.split()[0] if full_name else "Unknown"  # First name only
             if len(name) > 10:
                 name = name[:9] + ".."
             draw.text((rank_divider_x + name_col_w // 2, badge_y), 
@@ -1102,8 +1103,9 @@ def generate_top_10_slide(
                       font=font_rank, fill=colors.get("text_muted", "#888"), anchor="lm")
             name_x = left_margin + int(100 * font_scale)
         
-        # Employee name
-        name = emp.get("name", "Unknown")
+        # Employee name - First name only
+        full_name = emp.get("name", "Unknown")
+        name = full_name.split()[0] if full_name else "Unknown"  # First name only
         if len(name) > 18:
             name = name[:17] + ".."
         draw.text((name_x, y + row_height//2 - 5), name, font=font_name, 
@@ -1389,8 +1391,9 @@ def generate_complete_rankings_slide(
                     draw.text((rank_x + dx, row_cy + dy), rank_text, font=font_rank, fill="#000000", anchor="mm")
         draw.text((rank_x, row_cy), rank_text, font=font_rank, fill=tier_color, anchor="mm")
         
-        # Name (left aligned, no outline needed)
-        name = emp.get("name", "Unknown")[:18]
+        # Name - First name only (left aligned, no outline needed)
+        full_name = emp.get("name", "Unknown")
+        name = full_name.split()[0][:18] if full_name else "Unknown"  # First name only
         draw.text((col_x[1] + 8, row_cy), name, font=font_data, fill="#222222", anchor="lm")
         
         # PPA - 2 DECIMALS
@@ -1522,8 +1525,9 @@ def generate_tier_slide(
         position = emp.get("position_label", f"{idx + 1}")
         draw.text((120, y + 12), position, font=font_rank, fill=tier_color)
         
-        # Name
-        name = emp.get("name", "Unknown")[:20]
+        # Name - First name only
+        full_name = emp.get("name", "Unknown")
+        name = full_name.split()[0][:20] if full_name else "Unknown"  # First name only
         draw.text((220, y + 14), name, font=font_name, fill=colors["text_white"])
         
         # Metric values with color coding
@@ -1685,8 +1689,9 @@ def generate_most_improved_slide(
         draw.ellipse([badge_x - 25, badge_y - 25, badge_x + 25, badge_y + 25], fill=badge_color)
         draw.text((badge_x, badge_y), f"#{idx + 1}", font=get_font(int(14 * scale), bold=True), fill="#FFFFFF", anchor="mm")
         
-        # Name
-        draw.text((int(180 * scale), badge_y), emp["name"][:18], font=font_name, fill="#222222", anchor="lm")
+        # Name - First name only
+        first_name = emp["name"].split()[0][:18] if emp.get("name") else "Unknown"
+        draw.text((int(180 * scale), badge_y), first_name, font=font_name, fill="#222222", anchor="lm")
         
         # Change with arrow
         change_text = f"+{emp['change']:.1f}"

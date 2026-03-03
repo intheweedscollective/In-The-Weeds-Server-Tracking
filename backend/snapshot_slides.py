@@ -366,8 +366,9 @@ def generate_snapshot_slide(
         draw.text((col_x[0] + columns[0]["width"] // 2, row_cy), rank_text,
                   font=get_font(16, "aptos"), fill=(0, 0, 0), anchor="mm")
         
-        # Employee name - Aptos Narrow Bold, black text
-        name = emp.get("name", "Unknown")
+        # Employee name - First name only, Aptos Narrow Bold, black text
+        full_name = emp.get("name", "Unknown")
+        name = full_name.split()[0] if full_name else "Unknown"  # First name only
         max_ch = columns[1]["width"] // 10
         if len(name) > max_ch:
             name = name[:max_ch-1] + "…"
