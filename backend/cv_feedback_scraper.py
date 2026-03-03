@@ -116,6 +116,16 @@ async def scrape_transactions_for_servers(
         await page.goto(f"{LV_URL}/Transactions", wait_until="domcontentloaded", timeout=30000)
         await page.wait_for_timeout(3000)
         
+        # Try to set page size to maximum (100 or All)
+        try:
+            page_size_selector = page.locator('.ag-paging-page-size select, select.ag-paging-page-size, .ag-page-size select')
+            if await page_size_selector.count() > 0:
+                await page_size_selector.first.select_option("100")
+                await page.wait_for_timeout(2000)
+                print("[CV] Set page size to 100")
+        except Exception as e:
+            print(f"[CV] Could not set page size: {e}")
+        
         # Set date filter
         date_filter = page.locator('#date-filter').first
         if await date_filter.is_visible(timeout=5000):
@@ -147,20 +157,14 @@ async def scrape_transactions_for_servers(
                 await apply.click(force=True)
                 await page.wait_for_timeout(5000)
         
-        # Extract transaction data from the grid
+        # Extract transaction data from the grid - handle both pagination and scroll
         transactions = await page.evaluate("""async () => {
             const gridBody = document.querySelector('.ag-body-viewport');
             const allRows = new Map();
             
             if (!gridBody) return [];
             
-            gridBody.scrollTop = 0;
-            await new Promise(r => setTimeout(r, 500));
-            
-            const viewportHeight = gridBody.clientHeight;
-            const totalHeight = gridBody.scrollHeight;
-            const scrollIterations = Math.ceil(totalHeight / (viewportHeight * 0.3)) + 15;
-            
+            // Helper to collect visible rows
             function collectRows() {
                 const agRows = document.querySelectorAll('.ag-row');
                 agRows.forEach(row => {
@@ -172,8 +176,6 @@ async def scrape_transactions_for_servers(
                             rowData[colId] = cell.innerText?.trim() || '';
                         }
                     });
-                    // Look for customer name and server/employee columns
-                    // Common column names: Server, Employee, ServerName, FkEmployee_Name, CustomerFirstName
                     if (Object.keys(rowData).length > 0) {
                         const key = JSON.stringify(rowData);
                         if (!allRows.has(key)) {
@@ -183,15 +185,59 @@ async def scrape_transactions_for_servers(
                 });
             }
             
-            for (let i = 0; i < scrollIterations; i++) {
-                collectRows();
-                gridBody.scrollTop += viewportHeight * 0.3;
-                await new Promise(r => setTimeout(r, 200));
-            }
+            // Check for pagination
+            const paginationPanel = document.querySelector('.ag-paging-panel');
+            const nextBtn = document.querySelector('[ref="btNext"], .ag-paging-button[ref="btNext"], button.ag-paging-button:has([ref="btNext"])');
+            const lastBtn = document.querySelector('[ref="btLast"], .ag-paging-button[ref="btLast"]');
             
-            gridBody.scrollTop = gridBody.scrollHeight;
-            await new Promise(r => setTimeout(r, 500));
-            collectRows();
+            if (paginationPanel && nextBtn) {
+                // Pagination mode - click through all pages
+                let prevCount = 0;
+                let sameCountLoops = 0;
+                const maxPages = 50;
+                
+                for (let page = 0; page < maxPages; page++) {
+                    collectRows();
+                    
+                    // Check if we've collected all rows
+                    if (allRows.size === prevCount) {
+                        sameCountLoops++;
+                        if (sameCountLoops >= 3) break;
+                    } else {
+                        sameCountLoops = 0;
+                        prevCount = allRows.size;
+                    }
+                    
+                    // Try to go to next page
+                    const next = document.querySelector('[ref="btNext"]:not([disabled]), .ag-paging-button[ref="btNext"]:not([disabled])');
+                    if (next && !next.disabled && next.getAttribute('aria-disabled') !== 'true') {
+                        next.click();
+                        await new Promise(r => setTimeout(r, 1000));
+                    } else {
+                        break;
+                    }
+                }
+            } else {
+                // Virtual scroll mode - scroll through all data
+                gridBody.scrollTop = 0;
+                await new Promise(r => setTimeout(r, 1000));
+                
+                const viewportHeight = gridBody.clientHeight;
+                const totalHeight = gridBody.scrollHeight;
+                const scrollIterations = Math.ceil(totalHeight / (viewportHeight * 0.25)) + 30;
+                
+                collectRows();
+                
+                for (let i = 0; i < scrollIterations; i++) {
+                    gridBody.scrollTop += viewportHeight * 0.25;
+                    await new Promise(r => setTimeout(r, 300));
+                    collectRows();
+                }
+                
+                gridBody.scrollTop = gridBody.scrollHeight;
+                await new Promise(r => setTimeout(r, 1000));
+                collectRows();
+            }
             
             return Array.from(allRows.values());
         }""")
@@ -204,8 +250,8 @@ async def scrape_transactions_for_servers(
         
         # Build customer -> server mapping
         # Try different possible column names for customer and server
-        customer_cols = ['FkCustomer_FirstName', 'CustomerFirstName', 'Customer', 'FirstName', 'GuestName', 'Guest']
-        server_cols = ['Server', 'ServerName', 'Employee', 'FkEmployee_Name', 'EmployeeName', 'Staff', 'Waiter']
+        customer_cols = ['Customer_Name', 'FkCustomer_FirstName', 'CustomerFirstName', 'Customer', 'FirstName', 'GuestName', 'Guest']
+        server_cols = ['ServerName', 'Server', 'Employee', 'FkEmployee_Name', 'EmployeeName', 'Staff', 'Waiter']
         
         for txn in transactions:
             customer_name = None
@@ -303,6 +349,16 @@ async def scrape_cv_feedback(
             await page.goto(f"{LV_URL}/Feedback", wait_until="domcontentloaded", timeout=30000)
             await page.wait_for_timeout(3000)
             
+            # Try to set page size to maximum
+            try:
+                page_size_selector = page.locator('.ag-paging-page-size select, select.ag-paging-page-size, .ag-page-size select')
+                if await page_size_selector.count() > 0:
+                    await page_size_selector.first.select_option("100")
+                    await page.wait_for_timeout(2000)
+                    print("[CV] Set Feedback page size to 100")
+            except:
+                pass
+            
             # Set date filter
             date_filter = page.locator('#date-filter').first
             if await date_filter.is_visible(timeout=5000):
@@ -382,18 +438,19 @@ async def scrape_cv_feedback(
                         if (allData.length > 0) return allData;
                     }
                     
-                    // Fallback 2: Scroll-based scraping
+                    // Fallback 2: Scroll-based scraping with improved pagination
                     const gridBody = document.querySelector('.ag-body-viewport');
                     const allRows = new Map();
                     
                     if (!gridBody) return [];
                     
                     gridBody.scrollTop = 0;
-                    await new Promise(r => setTimeout(r, 500));
+                    await new Promise(r => setTimeout(r, 1000));
                     
                     const viewportHeight = gridBody.clientHeight;
                     const totalHeight = gridBody.scrollHeight;
-                    const scrollIterations = Math.ceil(totalHeight / (viewportHeight * 0.3)) + 15;
+                    // Increase iterations for more complete data capture
+                    const scrollIterations = Math.ceil(totalHeight / (viewportHeight * 0.2)) + 40;
                     
                     function collectRows() {
                         const agRows = document.querySelectorAll('.ag-row');
@@ -415,11 +472,14 @@ async def scrape_cv_feedback(
                         });
                     }
                     
-                    // Scroll very slowly with smaller increments
+                    // Initial collection
+                    collectRows();
+                    
+                    // Scroll very slowly with smaller increments for better coverage
                     for (let i = 0; i < scrollIterations; i++) {
+                        gridBody.scrollTop += viewportHeight * 0.2;
+                        await new Promise(r => setTimeout(r, 350));
                         collectRows();
-                        gridBody.scrollTop += viewportHeight * 0.3;
-                        await new Promise(r => setTimeout(r, 250));
                     }
                     
                     // Final passes
