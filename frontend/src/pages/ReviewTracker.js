@@ -535,7 +535,7 @@ export default function ReviewTracker() {
       )}
 
       {/* Filters */}
-      <div className="bg-slate-800 rounded-xl p-4 shadow-sm border mb-6">
+      <div className="bg-slate-800 rounded-xl p-4 shadow-sm border border-slate-700 mb-6">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-slate-400" />
@@ -545,7 +545,7 @@ export default function ReviewTracker() {
           <select
             value={selectedYear}
             onChange={(e) => setSelectedYear(Number(e.target.value))}
-            className="px-3 py-1.5 border rounded-lg text-sm"
+            className="px-3 py-1.5 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-200"
             data-testid="filter-year"
           >
             <option value={2026}>2026</option>
@@ -555,7 +555,7 @@ export default function ReviewTracker() {
           <select
             value={selectedQuarter}
             onChange={(e) => setSelectedQuarter(e.target.value)}
-            className="px-3 py-1.5 border rounded-lg text-sm"
+            className="px-3 py-1.5 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-200"
             data-testid="filter-quarter"
           >
             <option value="Q1">Q1</option>
@@ -567,7 +567,7 @@ export default function ReviewTracker() {
           <select
             value={filterPlatform}
             onChange={(e) => setFilterPlatform(e.target.value)}
-            className="px-3 py-1.5 border rounded-lg text-sm"
+            className="px-3 py-1.5 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-200"
             data-testid="filter-platform"
           >
             <option value="">All Platforms</option>
@@ -580,7 +580,7 @@ export default function ReviewTracker() {
             placeholder="Filter by employee..."
             value={filterEmployee}
             onChange={(e) => setFilterEmployee(e.target.value)}
-            className="w-48 text-sm"
+            className="w-48 text-sm bg-slate-700 border-slate-600 text-slate-200 placeholder:text-slate-400"
             data-testid="filter-employee"
           />
           
