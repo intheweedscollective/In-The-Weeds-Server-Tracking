@@ -311,227 +311,312 @@ async def scrape_cv_feedback(
         "scraped_at": datetime.now(timezone.utc).isoformat()
     }
     
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(viewport={"width": 1920, "height": 1080})
-        page = await context.new_page()
-        
-        # Capture API responses for grid data
-        api_data = []
-        async def handle_response(response):
+    customer_to_server = {}
+    feedback_items = []
+    
+    # SESSION 1: Scrape Transactions page for customer -> server mapping
+    print("[CV] Session 1: Scraping Transactions page for server assignments...")
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            context = await browser.new_context(viewport={"width": 1920, "height": 1080})
+            page = await context.new_page()
+            
             try:
-                if "/api/" in response.url and response.status == 200:
-                    content_type = response.headers.get("content-type", "")
-                    if "json" in content_type:
-                        data = await response.json()
-                        if isinstance(data, list) and len(data) > 0:
-                            # Check if it looks like feedback data
-                            if any(isinstance(item, dict) and ('Rating' in item or 'Body' in item) for item in data[:5] if isinstance(item, dict)):
-                                api_data.extend(data)
-                                print(f"[CV] Captured {len(data)} items from API: {response.url}")
-            except:
-                pass
-        
-        page.on("response", handle_response)
-        
-        try:
-            # Login
-            if not await login_to_loyalty_voice(page):
-                result["error"] = "Login failed"
-                return result
-            
-            # FIRST: Scrape Transactions page to get customer -> server mapping
-            print("[CV] Step 1: Scraping Transactions page for server assignments...")
-            customer_to_server = await scrape_transactions_for_servers(page, start_date, end_date)
-            
-            # SECOND: Navigate to Feedback page
-            print("[CV] Step 2: Scraping Feedback page for CV reviews...")
-            await page.goto(f"{LV_URL}/Feedback", wait_until="domcontentloaded", timeout=30000)
-            await page.wait_for_timeout(3000)
-            
-            # Try to set page size to maximum
-            try:
-                page_size_selector = page.locator('.ag-paging-page-size select, select.ag-paging-page-size, .ag-page-size select')
-                if await page_size_selector.count() > 0:
-                    await page_size_selector.first.select_option("100")
-                    await page.wait_for_timeout(2000)
-                    print("[CV] Set Feedback page size to 100")
-            except:
-                pass
-            
-            # Set date filter
-            date_filter = page.locator('#date-filter').first
-            if await date_filter.is_visible(timeout=5000):
-                await date_filter.click()
-                await page.wait_for_timeout(1500)
+                # Login
+                if not await login_to_loyalty_voice(page):
+                    result["error"] = "Login failed (session 1)"
+                    return result
                 
-                # Use Custom Range for specific quarter
-                custom = page.locator('li:has-text("Custom Range")').first
-                if await custom.is_visible(timeout=2000):
-                    await custom.click()
-                    await page.wait_for_timeout(1000)
-                    
-                    # Fill dates
-                    start_input = page.locator('input[name="daterangepicker_start"]').first
-                    end_input = page.locator('input[name="daterangepicker_end"]').first
-                    
-                    if await start_input.is_visible(timeout=2000):
-                        await start_input.clear()
-                        await start_input.fill(start_date)
-                    if await end_input.is_visible(timeout=2000):
-                        await end_input.clear()
-                        await end_input.fill(end_date)
-                    
-                    await page.wait_for_timeout(1000)
+                customer_to_server = await scrape_transactions_for_servers(page, start_date, end_date)
+                print(f"[CV] Session 1 complete: {len(customer_to_server)} customer->server mappings")
                 
-                # Apply
-                apply = page.locator('.applyBtn').first
-                if await apply.is_visible(timeout=2000):
-                    await apply.click(force=True)
-                    await page.wait_for_timeout(5000)
+            except Exception as e:
+                print(f"[CV] Session 1 error: {e}")
+                # Continue anyway - we can still scrape feedback without mappings
+            finally:
+                await browser.close()
+    except Exception as e:
+        print(f"[CV] Session 1 browser error: {e}")
+    
+    # SESSION 2: Scrape Feedback page for CV reviews (separate browser)
+    print("[CV] Session 2: Scraping Feedback page for CV reviews...")
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            context = await browser.new_context(viewport={"width": 1920, "height": 1080})
+            page = await context.new_page()
             
-            # Wait for API data to be captured
-            await page.wait_for_timeout(3000)
-            
-            # If we captured API data, use that (more reliable)
-            if api_data:
-                print(f"[CV] Using API-captured data: {len(api_data)} items")
-                feedback_data = api_data
-            else:
-                # Fallback to scraping the grid
-                print("[CV] No API data captured, falling back to grid scraping")
-                # Try to find and click "Export" or "Show All" if available
+            # Capture API responses for grid data
+            api_data = []
+            async def handle_response(response):
                 try:
-                    # Check for page size selector
-                    page_size = page.locator('select.ag-paging-page-size, .ag-page-size select')
-                    if await page_size.count() > 0:
-                        await page_size.first.select_option("100")
-                        await page.wait_for_timeout(2000)
+                    if "/api/" in response.url and response.status == 200:
+                        content_type = response.headers.get("content-type", "")
+                        if "json" in content_type:
+                            data = await response.json()
+                            if isinstance(data, list) and len(data) > 0:
+                                if any(isinstance(item, dict) and ('Rating' in item or 'Body' in item) for item in data[:5] if isinstance(item, dict)):
+                                    api_data.extend(data)
+                                    print(f"[CV] Captured {len(data)} items from API: {response.url}")
+                except:
+                    pass
+            
+            page.on("response", handle_response)
+            
+            try:
+                # Login again for session 2
+                if not await login_to_loyalty_voice(page):
+                    result["error"] = "Login failed (session 2)"
+                    await browser.close()
+                    return result
+                
+                # Navigate to Feedback page
+                await page.goto(f"{LV_URL}/Feedback", wait_until="domcontentloaded", timeout=30000)
+                await page.wait_for_timeout(5000)  # Wait longer for full page load
+                
+                # Set date filter - the Feedback page uses specific input IDs
+                print(f"[CV] Setting date filter to {start_date} - {end_date}")
+                
+                # The Feedback page has date filter inputs with specific IDs
+                date_filter_selectors = [
+                    '#Feedback-DateCreated-date-filter',  # Main date filter on Feedback page
+                    '#Feedback-DateOfBusiness-date-filter',
+                    '#date-filter', 
+                    '.date-filter', 
+                    '[data-filter="date"]'
+                ]
+                date_filter_found = False
+                
+                for selector in date_filter_selectors:
+                    date_filter = page.locator(selector).first
+                    try:
+                        if await date_filter.is_visible(timeout=3000):
+                            await date_filter.click()
+                            await page.wait_for_timeout(1500)
+                            date_filter_found = True
+                            print(f"[CV] Found date filter with selector: {selector}")
+                            break
+                    except:
+                        continue
+                
+                if date_filter_found:
+                    # Use Custom Range for specific quarter
+                    custom = page.locator('li:has-text("Custom Range")').first
+                    if await custom.is_visible(timeout=3000):
+                        await custom.click()
+                        await page.wait_for_timeout(1000)
+                        
+                        # Fill dates
+                        start_input = page.locator('input[name="daterangepicker_start"]').first
+                        end_input = page.locator('input[name="daterangepicker_end"]').first
+                        
+                        if await start_input.is_visible(timeout=2000):
+                            await start_input.clear()
+                            await start_input.fill(start_date)
+                            print(f"[CV] Filled start date: {start_date}")
+                        if await end_input.is_visible(timeout=2000):
+                            await end_input.clear()
+                            await end_input.fill(end_date)
+                            print(f"[CV] Filled end date: {end_date}")
+                        
+                        await page.wait_for_timeout(1000)
+                        
+                        # Apply the date filter
+                        apply = page.locator('.applyBtn').first
+                        if await apply.is_visible(timeout=2000):
+                            await apply.click(force=True)
+                            print("[CV] Applied date filter")
+                            await page.wait_for_timeout(6000)  # Wait longer for data to load
+                else:
+                    print("[CV] Date filter not found with any selector")
+                
+                # Try to set page size to 100 (after date filter is applied)
+                try:
+                    page_size_selectors = [
+                        '.ag-paging-page-size select',
+                        'select.ag-paging-page-size', 
+                        '.ag-page-size select',
+                        '.ag-paging-page-size-wrapper select'
+                    ]
+                    for selector in page_size_selectors:
+                        page_size_el = page.locator(selector).first
+                        if await page_size_el.count() > 0:
+                            await page_size_el.select_option("100")
+                            print(f"[CV] Set page size to 100 using selector: {selector}")
+                            await page.wait_for_timeout(3000)
+                            break
+                except Exception as e:
+                    print(f"[CV] Could not set page size: {e}")
+                
+                # Check how many total records we should expect
+                try:
+                    page_summary = await page.locator('.ag-paging-row-summary-panel').inner_text()
+                    print(f"[CV] Pagination summary: {page_summary}")
                 except:
                     pass
                 
-                # Try to use ag-Grid API directly to get ALL data
-                feedback_data = await page.evaluate("""async () => {
-                    // First, try to access ag-Grid API directly
-                    const gridElements = document.querySelectorAll('[class*="ag-root"]');
-                    for (const el of gridElements) {
-                        // Try to find the grid API
-                        if (el.__agComponent && el.__agComponent.gridOptions && el.__agComponent.gridOptions.api) {
-                            const api = el.__agComponent.gridOptions.api;
-                            const allData = [];
-                            api.forEachNode(node => {
-                                if (node.data) allData.push(node.data);
+                # Wait for API data to be captured
+                await page.wait_for_timeout(3000)
+                
+                # If we captured API data, use that (more reliable)
+                if api_data:
+                    print(f"[CV] Using API-captured data: {len(api_data)} items")
+                    feedback_data = api_data
+                else:
+                    # Fallback to scraping the grid
+                    print("[CV] No API data captured, falling back to grid scraping")
+                    # Try to find and click "Export" or "Show All" if available
+                    try:
+                        # Check for page size selector
+                        page_size = page.locator('select.ag-paging-page-size, .ag-page-size select')
+                        if await page_size.count() > 0:
+                            await page_size.first.select_option("100")
+                            await page.wait_for_timeout(2000)
+                    except:
+                        pass
+                    
+                    # Scrape feedback with pagination support (same approach as Transactions)
+                    feedback_data = await page.evaluate("""async () => {
+                        const gridBody = document.querySelector('.ag-body-viewport');
+                        const allRows = new Map();
+                        
+                        if (!gridBody) return [];
+                        
+                        // Helper to collect visible rows
+                        function collectRows() {
+                            const agRows = document.querySelectorAll('.ag-row');
+                            agRows.forEach(row => {
+                                const cells = row.querySelectorAll('.ag-cell');
+                                const rowData = {};
+                                cells.forEach(cell => {
+                                    const colId = cell.getAttribute('col-id');
+                                    if (colId) {
+                                        rowData[colId] = cell.innerText?.trim() || '';
+                                    }
+                                });
+                                if (Object.keys(rowData).length > 0 && rowData.Rating) {
+                                    // Use composite key for deduplication
+                                    const key = (rowData.DateCreated || '') + '|' + (rowData.FkCustomer_FirstName || '') + '|' + (rowData.Body || '').substring(0, 50);
+                                    if (!allRows.has(key)) {
+                                        allRows.set(key, rowData);
+                                    }
+                                }
                             });
-                            if (allData.length > 0) {
-                                console.log('[CV] Got ' + allData.length + ' rows from ag-Grid API');
-                                return allData;
-                            }
                         }
-                    }
-                    
-                    // Fallback: Try window-level grid references
-                    if (window.gridApi) {
-                        const allData = [];
-                        window.gridApi.forEachNode(node => {
-                            if (node.data) allData.push(node.data);
-                        });
-                        if (allData.length > 0) return allData;
-                    }
-                    
-                    // Fallback 2: Scroll-based scraping with improved pagination
-                    const gridBody = document.querySelector('.ag-body-viewport');
-                    const allRows = new Map();
-                    
-                    if (!gridBody) return [];
-                    
-                    gridBody.scrollTop = 0;
-                    await new Promise(r => setTimeout(r, 1000));
-                    
-                    const viewportHeight = gridBody.clientHeight;
-                    const totalHeight = gridBody.scrollHeight;
-                    // Increase iterations for more complete data capture
-                    const scrollIterations = Math.ceil(totalHeight / (viewportHeight * 0.2)) + 40;
-                    
-                    function collectRows() {
-                        const agRows = document.querySelectorAll('.ag-row');
-                        agRows.forEach(row => {
-                            const cells = row.querySelectorAll('.ag-cell');
-                            const rowData = {};
-                            cells.forEach(cell => {
-                                const colId = cell.getAttribute('col-id');
-                                if (colId) {
-                                    rowData[colId] = cell.innerText?.trim() || '';
+                        
+                        // Check for pagination controls
+                        const paginationPanel = document.querySelector('.ag-paging-panel');
+                        
+                        if (paginationPanel) {
+                            // PAGINATION MODE - click through all pages
+                            console.log('[CV Feedback] Using pagination mode');
+                            let prevCount = 0;
+                            let sameCountLoops = 0;
+                            const maxPages = 100;  // Support up to 100 pages
+                            
+                            for (let pageNum = 0; pageNum < maxPages; pageNum++) {
+                                // Collect rows on current page
+                                collectRows();
+                                console.log('[CV Feedback] Page ' + (pageNum + 1) + ': collected ' + allRows.size + ' total rows');
+                                
+                                // Check if we've stopped finding new rows
+                                if (allRows.size === prevCount) {
+                                    sameCountLoops++;
+                                    if (sameCountLoops >= 2) {
+                                        console.log('[CV Feedback] No new rows found, stopping pagination');
+                                        break;
+                                    }
+                                } else {
+                                    sameCountLoops = 0;
+                                    prevCount = allRows.size;
                                 }
-                            });
-                            if (Object.keys(rowData).length > 0 && rowData.Rating) {
-                                const key = (rowData.DateCreated || '') + (rowData.FkCustomer_FirstName || '') + (rowData.Body || '').substring(0, 50);
-                                if (!allRows.has(key)) {
-                                    allRows.set(key, rowData);
+                                
+                                // Try to click next button
+                                const nextBtn = document.querySelector('[ref="btNext"]:not([disabled]), .ag-paging-button[ref="btNext"]:not([disabled])');
+                                if (nextBtn && !nextBtn.disabled && nextBtn.getAttribute('aria-disabled') !== 'true') {
+                                    nextBtn.click();
+                                    await new Promise(r => setTimeout(r, 1500));  // Wait for page to load
+                                } else {
+                                    console.log('[CV Feedback] No more pages (next button disabled)');
+                                    break;
                                 }
                             }
-                        });
+                        } else {
+                            // SCROLL MODE - for virtual scrolling grids
+                            console.log('[CV Feedback] Using scroll mode');
+                            gridBody.scrollTop = 0;
+                            await new Promise(r => setTimeout(r, 1000));
+                            
+                            const viewportHeight = gridBody.clientHeight;
+                            const totalHeight = gridBody.scrollHeight;
+                            const scrollIterations = Math.ceil(totalHeight / (viewportHeight * 0.2)) + 50;
+                            
+                            collectRows();
+                            
+                            for (let i = 0; i < scrollIterations; i++) {
+                                gridBody.scrollTop += viewportHeight * 0.2;
+                                await new Promise(r => setTimeout(r, 400));
+                                collectRows();
+                            }
+                            
+                            // Final passes
+                            gridBody.scrollTop = gridBody.scrollHeight;
+                            await new Promise(r => setTimeout(r, 1000));
+                            collectRows();
+                            
+                            gridBody.scrollTop = 0;
+                            await new Promise(r => setTimeout(r, 500));
+                            collectRows();
+                        }
+                        
+                        console.log('[CV Feedback] Total rows collected: ' + allRows.size);
+                        return Array.from(allRows.values());
+                    }""")
+                
+                # Process and structure feedback
+                for item in feedback_data:
+                    rating = parse_rating(item.get("Rating", ""))
+                    sentiment, points = get_sentiment_and_points(rating)
+                    
+                    # Get customer name and look up their server
+                    customer_name = item.get("FkCustomer_FirstName", "")
+                    customer_key = customer_name.strip().lower() if customer_name else ""
+                    
+                    # Look up the server who served this customer
+                    server_name = customer_to_server.get(customer_key, "")
+                    
+                    feedback = {
+                        "rating": rating,
+                        "rating_str": item.get("Rating", ""),
+                        "customer_name": customer_name,
+                        "date": item.get("DateCreated", ""),
+                        "date_of_business": item.get("DateOfBusiness", ""),
+                        "shift": item.get("FkTransactionSummary_Shift_Name", ""),
+                        "comment": item.get("Body", ""),
+                        "store": item.get("FkTransactionSummary_FkLocation_Name", ""),
+                        "can_contact": item.get("FkCustomer_CanContact", ""),
+                        "sentiment": sentiment,
+                        "cv_points": points,
+                        "source": "loyalty_voice",
+                        "server_name": server_name  # Server who served this customer
                     }
-                    
-                    // Initial collection
-                    collectRows();
-                    
-                    // Scroll very slowly with smaller increments for better coverage
-                    for (let i = 0; i < scrollIterations; i++) {
-                        gridBody.scrollTop += viewportHeight * 0.2;
-                        await new Promise(r => setTimeout(r, 350));
-                        collectRows();
-                    }
-                    
-                    // Final passes
-                    gridBody.scrollTop = gridBody.scrollHeight;
-                    await new Promise(r => setTimeout(r, 500));
-                    collectRows();
-                    
-                    gridBody.scrollTop = 0;
-                    await new Promise(r => setTimeout(r, 500));
-                    collectRows();
-                    
-                    return Array.from(allRows.values());
-                }""")
-            
-            # Process and structure feedback
-            for item in feedback_data:
-                rating = parse_rating(item.get("Rating", ""))
-                sentiment, points = get_sentiment_and_points(rating)
+                    result["feedback"].append(feedback)
                 
-                # Get customer name and look up their server
-                customer_name = item.get("FkCustomer_FirstName", "")
-                customer_key = customer_name.strip().lower() if customer_name else ""
+                # Log stats
+                with_server = sum(1 for f in result["feedback"] if f.get("server_name"))
+                print(f"[CV] Scraped {len(result['feedback'])} feedback items, {with_server} with server assignments")
+                result["success"] = True
                 
-                # Look up the server who served this customer
-                server_name = customer_to_server.get(customer_key, "")
+            except Exception as e:
+                print(f"[CV] Session 2 error: {e}")
+                result["error"] = str(e)
+            finally:
+                await browser.close()
                 
-                feedback = {
-                    "rating": rating,
-                    "rating_str": item.get("Rating", ""),
-                    "customer_name": customer_name,
-                    "date": item.get("DateCreated", ""),
-                    "date_of_business": item.get("DateOfBusiness", ""),
-                    "shift": item.get("FkTransactionSummary_Shift_Name", ""),
-                    "comment": item.get("Body", ""),
-                    "store": item.get("FkTransactionSummary_FkLocation_Name", ""),
-                    "can_contact": item.get("FkCustomer_CanContact", ""),
-                    "sentiment": sentiment,
-                    "cv_points": points,
-                    "source": "loyalty_voice",
-                    "server_name": server_name  # Server who served this customer
-                }
-                result["feedback"].append(feedback)
-            
-            # Log stats
-            with_server = sum(1 for f in result["feedback"] if f.get("server_name"))
-            print(f"[CV] Scraped {len(result['feedback'])} feedback items, {with_server} with server assignments")
-            
-        except Exception as e:
-            print(f"[CV] Error: {e}")
-            result["error"] = str(e)
-        finally:
-            await browser.close()
+    except Exception as e:
+        print(f"[CV] Session 2 browser error: {e}")
+        result["error"] = str(e)
     
     return result
 

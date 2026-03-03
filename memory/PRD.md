@@ -69,7 +69,16 @@ Build a comprehensive performance review application for restaurant employees (B
 - ✅ Review Tracker with AI-powered employee detection
 - ✅ ReviewTrackers.com API integration
 
-### Recent Changes (Mar 3, 2026) - Employee Aliases & Clickable Dashboard
+### Recent Changes (Mar 3, 2026) - CV Feedback Scraper Fix
+
+- ✅ **Fixed Customer Voice Feedback Scraper**: The `cv_feedback_scraper.py` was broken with Python syntax errors
+  - **Problem**: Incorrect indentation on `except`/`finally` blocks caused syntax errors
+  - **Problem**: Wrong date filter selector (`#date-filter` vs `#Feedback-DateCreated-date-filter`)
+  - **Solution**: Fixed indentation and updated selector to match Feedback page elements
+  - **Result**: Scraper now correctly fetches all CV feedback (29 items Q1 2026, 29 items Q4 2025)
+  - Files modified: `backend/cv_feedback_scraper.py`
+
+### Previous Changes (Mar 3, 2026) - Employee Aliases & Clickable Dashboard
 
 - ✅ **Employee Aliases Feature**: Added ability to set nicknames for employees
   - New `aliases` field in employee model (array of strings)
