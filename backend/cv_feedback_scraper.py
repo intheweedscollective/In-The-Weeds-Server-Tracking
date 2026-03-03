@@ -31,7 +31,11 @@ CV_DETRACTOR_POINTS = -2    # Rating 1-6
 
 
 def get_quarter_date_range(quarter: str, year: int) -> Tuple[str, str]:
-    """Get date range for a quarter in MM/DD/YYYY format."""
+    """Get date range for a quarter in MM/DD/YYYY format.
+    
+    For the current quarter, uses today's date as the end date to avoid
+    filtering for future dates that don't exist yet.
+    """
     quarter_ranges = {
         "Q1": ("01/01", "03/31"),
         "Q2": ("04/01", "06/30"),
@@ -41,8 +45,21 @@ def get_quarter_date_range(quarter: str, year: int) -> Tuple[str, str]:
     q = quarter.upper()
     if q not in quarter_ranges:
         raise ValueError(f"Invalid quarter: {quarter}")
+    
     start_mmdd, end_mmdd = quarter_ranges[q]
-    return f"{start_mmdd}/{year}", f"{end_mmdd}/{year}"
+    start_date = f"{start_mmdd}/{year}"
+    
+    # For current quarter, use today's date as the end date
+    today = date.today()
+    current_quarter = "Q1" if today.month <= 3 else "Q2" if today.month <= 6 else "Q3" if today.month <= 9 else "Q4"
+    
+    if year == today.year and q == current_quarter:
+        end_date = today.strftime("%m/%d/%Y")
+        print(f"[CV] Current quarter detected, using today's date as end: {end_date}")
+    else:
+        end_date = f"{end_mmdd}/{year}"
+    
+    return start_date, end_date
 
 
 def parse_rating(rating_str: str) -> int:
@@ -375,6 +392,11 @@ async def scrape_cv_feedback(
                 await page.goto(f"{LV_URL}/Feedback", wait_until="domcontentloaded", timeout=30000)
                 await page.wait_for_timeout(5000)  # Wait longer for full page load
                 
+                # Determine if this is the current quarter
+                today = date.today()
+                current_quarter = "Q1" if today.month <= 3 else "Q2" if today.month <= 6 else "Q3" if today.month <= 9 else "Q4"
+                is_current_quarter = (year == today.year and quarter.upper() == current_quarter)
+                
                 # Set date filter - the Feedback page uses specific input IDs
                 print(f"[CV] Setting date filter to {start_date} - {end_date}")
                 
@@ -401,33 +423,66 @@ async def scrape_cv_feedback(
                         continue
                 
                 if date_filter_found:
-                    # Use Custom Range for specific quarter
-                    custom = page.locator('li:has-text("Custom Range")').first
-                    if await custom.is_visible(timeout=3000):
-                        await custom.click()
-                        await page.wait_for_timeout(1000)
-                        
-                        # Fill dates
-                        start_input = page.locator('input[name="daterangepicker_start"]').first
-                        end_input = page.locator('input[name="daterangepicker_end"]').first
-                        
-                        if await start_input.is_visible(timeout=2000):
-                            await start_input.clear()
-                            await start_input.fill(start_date)
-                            print(f"[CV] Filled start date: {start_date}")
-                        if await end_input.is_visible(timeout=2000):
-                            await end_input.clear()
-                            await end_input.fill(end_date)
-                            print(f"[CV] Filled end date: {end_date}")
-                        
-                        await page.wait_for_timeout(1000)
-                        
-                        # Apply the date filter
-                        apply = page.locator('.applyBtn').first
-                        if await apply.is_visible(timeout=2000):
-                            await apply.click(force=True)
-                            print("[CV] Applied date filter")
-                            await page.wait_for_timeout(6000)  # Wait longer for data to load
+                    # For current quarter, try using "Quarter-To-Date" preset first (more reliable)
+                    if is_current_quarter:
+                        qtd = page.locator('li:has-text("Quarter-To-Date")').first
+                        if await qtd.is_visible(timeout=2000):
+                            await qtd.click()
+                            print("[CV] Using Quarter-To-Date preset for current quarter")
+                            await page.wait_for_timeout(5000)
+                        else:
+                            # Fall back to Custom Range with today's date
+                            print("[CV] Quarter-To-Date not available, using Custom Range")
+                            await date_filter.click()
+                            await page.wait_for_timeout(1500)
+                            
+                            custom = page.locator('li:has-text("Custom Range")').first
+                            if await custom.is_visible(timeout=2000):
+                                await custom.click()
+                                await page.wait_for_timeout(1000)
+                                
+                                start_input = page.locator('input[name="daterangepicker_start"]').first
+                                end_input = page.locator('input[name="daterangepicker_end"]').first
+                                
+                                if await start_input.is_visible(timeout=2000):
+                                    await start_input.clear()
+                                    await start_input.fill(start_date)
+                                if await end_input.is_visible(timeout=2000):
+                                    await end_input.clear()
+                                    await end_input.fill(end_date)
+                                
+                                apply = page.locator('.applyBtn').first
+                                if await apply.is_visible(timeout=2000):
+                                    await apply.click(force=True)
+                                    await page.wait_for_timeout(5000)
+                    else:
+                        # For past quarters, use Custom Range
+                        custom = page.locator('li:has-text("Custom Range")').first
+                        if await custom.is_visible(timeout=3000):
+                            await custom.click()
+                            await page.wait_for_timeout(1000)
+                            
+                            # Fill dates
+                            start_input = page.locator('input[name="daterangepicker_start"]').first
+                            end_input = page.locator('input[name="daterangepicker_end"]').first
+                            
+                            if await start_input.is_visible(timeout=2000):
+                                await start_input.clear()
+                                await start_input.fill(start_date)
+                                print(f"[CV] Filled start date: {start_date}")
+                            if await end_input.is_visible(timeout=2000):
+                                await end_input.clear()
+                                await end_input.fill(end_date)
+                                print(f"[CV] Filled end date: {end_date}")
+                            
+                            await page.wait_for_timeout(1000)
+                            
+                            # Apply the date filter
+                            apply = page.locator('.applyBtn').first
+                            if await apply.is_visible(timeout=2000):
+                                await apply.click(force=True)
+                                print("[CV] Applied date filter")
+                                await page.wait_for_timeout(6000)  # Wait longer for data to load
                 else:
                     print("[CV] Date filter not found with any selector")
                 
