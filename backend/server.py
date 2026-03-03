@@ -1290,13 +1290,36 @@ async def upload_employees_v2(
         # Run full scoring (Q1 2026 model)
         scored_employees = run_full_scoring(employees, settings)
         
+        # PRESERVE custom job titles from existing employees before deleting
+        # This ensures manually set Trainer/Bartender designations aren't lost on re-upload
+        existing_employees = await db.employees_v2.find(
+            {"year": year, "quarter": quarter},
+            {"_id": 0, "name": 1, "job_title": 1}
+        ).to_list(500)
+        
+        preserved_job_titles = {}
+        for emp in existing_employees:
+            job = (emp.get("job_title") or "").lower()
+            # Only preserve non-default job titles (trainer, bartender, etc.)
+            if job and job not in ["server", ""]:
+                preserved_job_titles[emp["name"].lower()] = emp["job_title"]
+        
+        logging.info(f"Preserved {len(preserved_job_titles)} custom job titles: {list(preserved_job_titles.values())}")
+        
         # Clear existing employees for this quarter
         await db.employees_v2.delete_many({"year": year, "quarter": quarter})
         
-        # Insert scored employees
+        # Insert scored employees, restoring preserved job titles
         for emp in scored_employees:
             doc = emp.model_dump()
             doc['created_at'] = doc['created_at'].isoformat()
+            
+            # Restore preserved job title if this employee had one
+            emp_name_lower = doc['name'].lower()
+            if emp_name_lower in preserved_job_titles:
+                doc['job_title'] = preserved_job_titles[emp_name_lower]
+                logging.info(f"Restored job title '{doc['job_title']}' for {doc['name']}")
+            
             await db.employees_v2.insert_one(doc)
         
         # Populate CV data from synced Loyalty Voice data
@@ -3946,13 +3969,27 @@ async def recalculate_snapshot(snapshot_id: str):
     should_sync = current_snapshot_date >= latest_snapshot_date
     
     if should_sync:
+        # PRESERVE custom job titles from existing employees before deleting
+        existing_employees = await db.employees_v2.find(
+            {"year": snapshot["year"], "quarter": snapshot["quarter"]},
+            {"_id": 0, "name": 1, "job_title": 1}
+        ).to_list(500)
+        
+        preserved_job_titles = {}
+        for emp in existing_employees:
+            job = (emp.get("job_title") or "").lower()
+            if job and job not in ["server", ""]:
+                preserved_job_titles[emp["name"].lower()] = emp["job_title"]
+        
+        logging.info(f"Recalculate: Preserved {len(preserved_job_titles)} custom job titles")
+        
         # Clear existing employees for this quarter/year
         await db.employees_v2.delete_many({
             "year": snapshot["year"],
             "quarter": snapshot["quarter"]
         })
         
-        # Insert the recalculated employee data
+        # Insert the recalculated employee data, restoring preserved job titles
         if recalculated_employees:
             main_employees = []
             for emp in recalculated_employees:
@@ -3961,6 +3998,16 @@ async def recalculate_snapshot(snapshot_id: str):
                     main_emp['created_at'] = main_emp['created_at'].isoformat()
                 elif not main_emp.get('created_at'):
                     main_emp['created_at'] = datetime.now(timezone.utc).isoformat()
+                
+                # Restore preserved job title if this employee had one
+                emp_name_lower = main_emp['name'].lower()
+                if emp_name_lower in preserved_job_titles:
+                    main_emp['job_title'] = preserved_job_titles[emp_name_lower]
+                    # Also update tier_label to match the preserved job title
+                    if main_emp['job_title'].lower() in ['trainer', 'bartender']:
+                        main_emp['tier_label'] = main_emp['job_title'].title()
+                        logging.info(f"Restored job title '{main_emp['job_title']}' for {main_emp['name']}")
+                
                 main_employees.append(main_emp)
             
             await db.employees_v2.insert_many(main_employees)

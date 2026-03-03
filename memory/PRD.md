@@ -69,7 +69,16 @@ Build a comprehensive performance review application for restaurant employees (B
 - ✅ Review Tracker with AI-powered employee detection
 - ✅ ReviewTrackers.com API integration
 
-### Recent Changes (Mar 2, 2026) - CV Sync Bug Fixes
+### Recent Changes (Mar 3, 2026) - Job Title Preservation Bug Fix
+- ✅ **Fixed Job Title Not Persisting**: Critical bug where custom job titles (Trainer, Bartender) were reset to "Server"
+  - **Problem**: When data was re-uploaded or recalculated, custom job titles were being overwritten
+  - **Root Cause**: The upload and recalculate endpoints deleted all employees then re-inserted with default "Server" job title
+  - **Solution**: Added logic to preserve non-default job titles (Trainer, Bartender, etc.) before delete and restore after insert
+  - Files modified:
+    - `backend/server.py`: Added preservation logic in both upload endpoint (~line 1290) and recalculate endpoint (~line 3971)
+  - **Result**: Trainers and Bartenders now retain their designation through uploads and recalculations
+
+### Previous Changes (Mar 2, 2026) - CV Sync Bug Fixes
 - ✅ **Fixed CV Data Duplication Bug**: Critical fix for inflated review counts
   - **Problem**: Running CV sync multiple times caused data accumulation (123 surveys vs expected 65)
   - **Root Cause**: Old `cv_nps` records were not being cleared before inserting new data
