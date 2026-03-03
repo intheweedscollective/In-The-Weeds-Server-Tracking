@@ -1024,6 +1024,7 @@ def generate_hierarchy_rankings(employees: List[EmployeeV2], settings: QuarterSe
             "bonus_points": round(metric_bonus + review_bonus, 2),
             "review_bonus": round(review_bonus, 2),
             "metric_bonus": round(metric_bonus, 2),
+            "combined_review_bonus": round(review_bonus + nps_points, 2),  # RT + NPS combined
             # Raw metric values
             "ppa": emp.ppa or 0,
             "lbw_per_guest": emp.lbw_per_guest or 0,

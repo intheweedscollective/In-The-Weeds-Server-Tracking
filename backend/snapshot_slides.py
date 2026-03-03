@@ -278,10 +278,16 @@ def generate_snapshot_slide(
         {"name": "LBW", "width": 100, "key": "score_lbw"},
         {"name": "GLASS", "width": 100, "key": "score_glass"},
         {"name": "LSC", "width": 100, "key": "score_lsc"},
-        {"name": "Review Bonus", "width": 120, "key": "review_tracker_bonus", "is_bonus": True},
+        {"name": "Review Bonus", "width": 120, "key": "combined_review_bonus", "is_bonus": True},
         {"name": "Metric Bonus", "width": 120, "key": "total_metric_bonus", "is_bonus": True},
         {"name": "Total Score", "width": 120, "key": "total_score"},
     ]
+    
+    # Pre-calculate combined review bonus (Review Tracker + NPS points) for each employee
+    for emp in sorted_emps:
+        rt_bonus = float(emp.get("review_tracker_bonus", 0) or emp.get("review_bonus", 0) or 0)
+        nps_pts = float(emp.get("nps_points", 0) or emp.get("cv_score", 0) or 0)
+        emp["combined_review_bonus"] = rt_bonus + nps_pts
     
     # Scale columns
     total_col_w = sum(c["width"] for c in columns)
@@ -374,14 +380,8 @@ def generate_snapshot_slide(
             if not key:
                 continue
             
-            # Calculate Review Bonus using correct formula
-            if key == "review_tracker_bonus":
-                review_mentions = emp.get("review_mentions", 0) or 0
-                cv_promoters = emp.get("cv_promoters", 0) or 0
-                cv_detractors = emp.get("cv_detractors", 0) or 0
-                val = (review_mentions * 0.2) + cv_promoters - (cv_detractors * 2)
-            else:
-                val = emp.get(key, 0) or 0
+            # Get value - combined_review_bonus is already calculated above
+            val = emp.get(key, 0) or 0
             
             is_bonus = col.get("is_bonus", False)
             
@@ -393,8 +393,8 @@ def generate_snapshot_slide(
             cy = y + 4
             
             # Determine color and format
-            if key == "review_tracker_bonus":
-                # Review Bonus: 0=Red, 1-5=Yellow, 5-10=Green, +10=Blue
+            if key == "combined_review_bonus":
+                # Combined Review Bonus (RT + NPS): 0=Red, 1-5=Yellow, 5-10=Green, +10=Blue
                 if val >= 10:
                     color = COLORS["blue"]
                     text_color = COLORS["white"]  # White text on blue
@@ -407,7 +407,7 @@ def generate_snapshot_slide(
                 else:
                     color = COLORS["red"]
                     text_color = (0, 0, 0)  # Black text
-                text = f"{val:.2f}"
+                text = f"+{val:.1f}"
             elif key == "total_metric_bonus":
                 # Metric Bonus: 0=Red, +1=Green, +10=Blue
                 if val >= 10:

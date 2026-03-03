@@ -632,7 +632,7 @@ export default function FullRankings() {
                     <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider">Tier</th>
                     <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider">Total Score</th>
                     <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden md:table-cell">Customer Voice</th>
-                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden lg:table-cell">Review Tracker</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden lg:table-cell">Review Bonus</th>
                     <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden lg:table-cell">Metric Bonus</th>
                     <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell">PPA (25%)</th>
                     <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell">LBW (20%)</th>
@@ -705,10 +705,10 @@ export default function FullRankings() {
                             {formatNps(getEmployeeNps(employee.employee_id))}
                           </td>
                           
-                          {/* Review Bonus: RT mentions × 0.2 */}
+                          {/* Review Bonus: Combined RT + NPS */}
                           <td className="px-4 py-4 text-center hidden lg:table-cell">
                             <span className="text-sm font-semibold text-green-400">
-                              +{formatNumber(employee.review_bonus || 0)}
+                              +{formatNumber(employee.combined_review_bonus || (employee.review_bonus || 0) + (employee.nps_points || 0))}
                             </span>
                           </td>
                           
