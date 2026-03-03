@@ -43,6 +43,7 @@ export default function ReviewTracker() {
   const [showExcluded, setShowExcluded] = useState(false);
   const [excludedCount, setExcludedCount] = useState(0);
   const [platformStats, setPlatformStats] = useState(null);
+  const [cvSentimentFilter, setCvSentimentFilter] = useState("all"); // "all", "detractor", "passive", "promoter"
 
   // Fetch data
   const fetchData = useCallback(async () => {
@@ -610,17 +611,75 @@ export default function ReviewTracker() {
             {/* Customer Voice Section - Always on top with stars */}
             {(activeTab === "cv" || activeTab === "all") && cvFeedback.length > 0 && (
               <div className="mb-6">
-                {activeTab === "all" && (
-                  <div className="flex items-center gap-2 mb-4">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
                     <Star className="w-5 h-5 fill-yellow-400 text-yellow-400" />
                     <h2 className="text-lg font-bold text-white">Customer Voice Feedback</h2>
                     <span className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-xs px-2 py-0.5 rounded-full font-semibold">
-                      PRIORITY
+                      {cvFeedback.length} RESPONSES
                     </span>
                   </div>
+                  
+                  {/* Sentiment Filter */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-slate-400">Show:</span>
+                    <select
+                      value={cvSentimentFilter}
+                      onChange={(e) => setCvSentimentFilter(e.target.value)}
+                      className="px-3 py-1.5 border border-slate-600 rounded-lg text-sm bg-slate-700 text-slate-200"
+                      data-testid="cv-sentiment-filter"
+                    >
+                      <option value="all">All Responses</option>
+                      <option value="detractor">❌ Detractors Only ({cvFeedback.filter(f => f.sentiment === "detractor").length})</option>
+                      <option value="passive">⚪ Passives Only ({cvFeedback.filter(f => f.sentiment === "passive").length})</option>
+                      <option value="promoter">✅ Promoters Only ({cvFeedback.filter(f => f.sentiment === "promoter").length})</option>
+                    </select>
+                    
+                    <label className="flex items-center gap-2 text-sm text-slate-400">
+                      <input
+                        type="checkbox"
+                        checked={showExcluded}
+                        onChange={(e) => setShowExcluded(e.target.checked)}
+                        className="rounded border-slate-600 bg-slate-700"
+                      />
+                      Show Excluded ({excludedCount})
+                    </label>
+                  </div>
+                </div>
+                
+                {/* Detractor Alert Banner */}
+                {cvFeedback.filter(f => f.sentiment === "detractor" && !f.excluded).length > 0 && cvSentimentFilter === "all" && (
+                  <div className="mb-4 p-3 bg-red-900/30 border border-red-500/50 rounded-lg flex items-center gap-3">
+                    <AlertCircle className="w-5 h-5 text-red-400" />
+                    <div>
+                      <span className="font-semibold text-red-300">
+                        {cvFeedback.filter(f => f.sentiment === "detractor" && !f.excluded).length} Detractor(s) Need Review
+                      </span>
+                      <span className="text-red-400 text-sm ml-2">
+                        - Click "Exclude from Rankings" to remove unfair or invalid responses
+                      </span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCvSentimentFilter("detractor")}
+                      className="ml-auto border-red-500 text-red-400 hover:bg-red-500/20"
+                    >
+                      View Detractors
+                    </Button>
+                  </div>
                 )}
+                
                 <div className="space-y-3">
-                  {cvFeedback.map((item) => (
+                  {/* Sort: Detractors first, then passives, then promoters */}
+                  {cvFeedback
+                    .filter(item => cvSentimentFilter === "all" || item.sentiment === cvSentimentFilter)
+                    .filter(item => showExcluded || !item.excluded)
+                    .sort((a, b) => {
+                      const order = { detractor: 0, passive: 1, promoter: 2 };
+                      return (order[a.sentiment] || 2) - (order[b.sentiment] || 2);
+                    })
+                    .map((item) => (
                     <div
                       key={item.id}
                       className="bg-slate-800 rounded-xl p-4 shadow-sm border-2 border-yellow-200 hover:shadow-md transition-shadow relative overflow-hidden"

@@ -224,6 +224,14 @@ code {
 .light .text-white {
     color: hsl(220 26% 14%) !important;
 }
+
+/* EXCEPTION: Keep white text on gradient headers */
+.light thead tr .text-white,
+.light .bg-gradient-to-r .text-white,
+.light tr[style*="color: white"] th {
+    color: white !important;
+}
+
 .light .text-slate-100,
 .light .text-slate-200 {
     color: hsl(220 26% 14%) !important;

@@ -626,19 +626,19 @@ export default function FullRankings() {
             <div className="overflow-x-auto pt-4 max-h-[70vh] overflow-y-auto">
               <table className="w-full" data-testid="rankings-table">
                 <thead className="sticky top-0 z-10">
-                  <tr className="bg-gradient-to-r from-secondary to-primary text-white shadow-lg">
-                    <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider">Position</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider">Employee</th>
-                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider">Tier</th>
-                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider">Total Score</th>
-                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden md:table-cell">Customer Voice</th>
-                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden lg:table-cell">Review Bonus</th>
-                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden lg:table-cell">Metric Bonus</th>
-                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell">PPA (25%)</th>
-                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell">LBW (20%)</th>
-                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell">LSC (25%)</th>
-                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell">Glass (15%)</th>
-                    <th className="px-2 py-3 text-center text-xs font-bold uppercase tracking-wider"></th>
+                  <tr className="bg-gradient-to-r from-secondary to-primary shadow-lg" style={{ color: 'white' }}>
+                    <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-white">Position</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-white">Employee</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-white">Tier</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-white">Total Score</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden md:table-cell text-white">Customer Voice</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden lg:table-cell text-white">Review Bonus</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden lg:table-cell text-white">Metric Bonus</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell text-white">PPA (25%)</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell text-white">LBW (20%)</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell text-white">LSC (25%)</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell text-white">Glass (15%)</th>
+                    <th className="px-2 py-3 text-center text-xs font-bold uppercase tracking-wider text-white"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-700">
