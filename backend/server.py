@@ -2483,6 +2483,7 @@ class EmployeeUpdate(BaseModel):
     """Model for updating an employee"""
     name: Optional[str] = None
     job_title: Optional[str] = None
+    aliases: Optional[List[str]] = None  # Nicknames for name matching
     guests: Optional[float] = None
     net_sales: Optional[float] = None
     lbw: Optional[float] = None

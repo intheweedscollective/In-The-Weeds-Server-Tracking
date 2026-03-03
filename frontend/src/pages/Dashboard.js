@@ -161,19 +161,21 @@ export default function Dashboard() {
 
         {/* Bento Grid Layout */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {/* Hero Stat - Crew Count */}
-          <div className="bg-slate-800 rounded-2xl border border-slate-700 p-6 hover:border-slate-600 transition-colors" data-testid="total-employees-card">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-400 uppercase tracking-wide">Crew Members</p>
-                <p className="text-4xl font-bold text-white mt-2">{stats.totalEmployees}</p>
-                <p className="text-xs text-slate-500 mt-1">Active this quarter</p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
-                <Users className="w-6 h-6 text-blue-400" />
+          {/* Hero Stat - Crew Count - Clickable to Employees page */}
+          <Link to="/employees" className="block">
+            <div className="bg-slate-800 rounded-2xl border border-slate-700 p-6 hover:border-blue-500/50 transition-colors cursor-pointer" data-testid="total-employees-card">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm font-medium text-slate-400 uppercase tracking-wide">Crew Members</p>
+                  <p className="text-4xl font-bold text-white mt-2">{stats.totalEmployees}</p>
+                  <p className="text-xs text-slate-500 mt-1">Active this quarter</p>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                  <Users className="w-6 h-6 text-blue-400" />
+                </div>
               </div>
             </div>
-          </div>
+          </Link>
 
           {/* Avg Score */}
           <Link to="/analytics" className="block">

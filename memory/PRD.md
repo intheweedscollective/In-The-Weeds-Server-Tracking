@@ -69,7 +69,22 @@ Build a comprehensive performance review application for restaurant employees (B
 - ✅ Review Tracker with AI-powered employee detection
 - ✅ ReviewTrackers.com API integration
 
-### Recent Changes (Mar 3, 2026) - Job Title Preservation Bug Fix
+### Recent Changes (Mar 3, 2026) - Employee Aliases & Clickable Dashboard
+
+- ✅ **Employee Aliases Feature**: Added ability to set nicknames for employees
+  - New `aliases` field in employee model (array of strings)
+  - Editable via Employees page edit modal
+  - Used for matching names in CV sync and Review Tracker
+  - Example: "Treyanna Quick" with aliases ["Trey", "T.Q.", "Tre"]
+  
+- ✅ **Clickable Dashboard Crew Card**: "Crew Members" stat card now links to /employees page
+  - Click to view and manage all employees
+  - Edit job titles, aliases, and performance data
+
+- ✅ **Enhanced Name Matching**: CV sync now checks employee aliases first before fuzzy matching
+  - More reliable attribution of reviews/NPS to correct employees
+
+### Previous Changes (Mar 3, 2026) - Job Title Preservation Bug Fix
 - ✅ **Fixed Job Title Not Persisting**: Critical bug where custom job titles (Trainer, Bartender) were reset to "Server"
   - **Problem**: When data was re-uploaded or recalculated, custom job titles were being overwritten
   - **Root Cause**: The upload and recalculate endpoints deleted all employees then re-inserted with default "Server" job title

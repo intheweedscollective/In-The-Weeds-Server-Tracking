@@ -580,41 +580,54 @@ async def sync_loyalty_voice_to_db(
         if server_name_lower in employee_lookup:
             matched_employee = employee_lookup[server_name_lower]
         else:
-            # Try first name match
-            first_name = server_name_lower.split()[0]
-            if first_name in employee_lookup:
-                matched_employee = employee_lookup[first_name]
-            else:
-                # Try nickname matching
-                nicknames = nickname_map.get(first_name, [])
-                for nick in nicknames:
-                    if nick in employee_lookup:
-                        matched_employee = employee_lookup[nick]
-                        break
-                
-                # Try last name match
-                if not matched_employee:
-                    parts = server_name_lower.split()
-                    if len(parts) > 1:
-                        last_name = parts[-1]
-                        if last_name in employee_lookup:
-                            matched_employee = employee_lookup[last_name]
-                
-                # Try partial/fuzzy match
-                if not matched_employee:
-                    for emp_name, emp in employee_lookup.items():
-                        if server_name_lower in emp_name or emp_name in server_name_lower:
-                            matched_employee = emp
+            # Try alias match first (most reliable)
+            for emp_name, emp in employee_lookup.items():
+                emp_aliases = [a.lower() for a in emp.get("aliases", [])]
+                if server_name_lower in emp_aliases:
+                    matched_employee = emp
+                    break
+                # Also check if server's first name matches any alias
+                server_first = server_name_lower.split()[0]
+                if server_first in emp_aliases:
+                    matched_employee = emp
+                    break
+            
+            if not matched_employee:
+                # Try first name match
+                first_name = server_name_lower.split()[0]
+                if first_name in employee_lookup:
+                    matched_employee = employee_lookup[first_name]
+                else:
+                    # Try nickname matching
+                    nicknames = nickname_map.get(first_name, [])
+                    for nick in nicknames:
+                        if nick in employee_lookup:
+                            matched_employee = employee_lookup[nick]
                             break
-                
-                # Try normalized name matching (handles typos like keisey/kelsey)
-                if not matched_employee:
-                    normalized_first = normalize_name(first_name)
-                    for emp_name, emp in employee_lookup.items():
-                        emp_first = emp_name.split()[0] if emp_name else ""
-                        if normalize_name(emp_first) == normalized_first:
-                            matched_employee = emp
-                            break
+                    
+                    # Try last name match
+                    if not matched_employee:
+                        parts = server_name_lower.split()
+                        if len(parts) > 1:
+                            last_name = parts[-1]
+                            if last_name in employee_lookup:
+                                matched_employee = employee_lookup[last_name]
+                    
+                    # Try partial/fuzzy match
+                    if not matched_employee:
+                        for emp_name, emp in employee_lookup.items():
+                            if server_name_lower in emp_name or emp_name in server_name_lower:
+                                matched_employee = emp
+                                break
+                    
+                    # Try normalized name matching (handles typos like keisey/kelsey)
+                    if not matched_employee:
+                        normalized_first = normalize_name(first_name)
+                        for emp_name, emp in employee_lookup.items():
+                            emp_first = emp_name.split()[0] if emp_name else ""
+                            if normalize_name(emp_first) == normalized_first:
+                                matched_employee = emp
+                                break
         
         if matched_employee:
             nps_doc = {

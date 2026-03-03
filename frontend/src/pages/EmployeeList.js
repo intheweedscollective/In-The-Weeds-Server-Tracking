@@ -15,6 +15,7 @@ const API = `${BACKEND_URL}/api`;
 const emptyEmployee = {
   name: "",
   job_title: "server",
+  aliases: "",  // Comma-separated aliases
   guests: 0,
   net_sales: 0,
   lbw: 0,
@@ -90,6 +91,7 @@ export default function EmployeeList() {
     setFormData({
       name: employee.name || "",
       job_title: employee.job_title || "server",
+      aliases: (employee.aliases || []).join(", "),  // Convert array to comma-separated string
       guests: employee.guests || 0,
       net_sales: employee.net_sales || 0,
       lbw: employee.lbw || 0,
@@ -118,16 +120,26 @@ export default function EmployeeList() {
       return;
     }
     
+    // Convert aliases string to array
+    const aliasesArray = formData.aliases 
+      ? formData.aliases.split(",").map(a => a.trim()).filter(a => a)
+      : [];
+    
+    const dataToSave = {
+      ...formData,
+      aliases: aliasesArray
+    };
+    
     setSaving(true);
     try {
       if (editingEmployee) {
         // Update existing
-        await axios.put(`${API}/v2/employees/${editingEmployee.id}`, formData);
+        await axios.put(`${API}/v2/employees/${editingEmployee.id}`, dataToSave);
         toast.success(`Updated ${formData.name}`);
       } else {
         // Create new
         await axios.post(`${API}/v2/employees`, {
-          ...formData,
+          ...dataToSave,
           year: selectedYear,
           quarter: selectedQuarter
         });
@@ -756,6 +768,17 @@ export default function EmployeeList() {
                         <option value="bartender">Bartender</option>
                         <option value="trainer">Trainer</option>
                       </select>
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-slate-300 mb-1">Aliases (Nicknames)</label>
+                      <Input
+                        type="text"
+                        value={formData.aliases}
+                        onChange={(e) => handleFormChange('aliases', e.target.value)}
+                        placeholder="Trey, T.Q., Tre (comma-separated)"
+                        className="w-full"
+                      />
+                      <p className="text-xs text-slate-500 mt-1">Used for matching names in reviews & CV data</p>
                     </div>
                   </div>
                 </div>

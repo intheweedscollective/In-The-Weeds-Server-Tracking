@@ -74,6 +74,7 @@ class EmployeeV2(BaseModel):
     # === CANONICAL FIELDS (from upload) ===
     name: str
     job_title: str = "Server"  # NEW: Job Title for hierarchy-based rankings
+    aliases: List[str] = Field(default_factory=list)  # Nicknames for name matching (e.g., ["Trey", "T.Q."])
     guests: int  # Must be > 0
     net_sales: float
     
