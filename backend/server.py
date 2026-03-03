@@ -4831,6 +4831,7 @@ async def sync_loyalty_voice(quarter: str = "Q1", year: int = 2026):
     
     This scrapes the Server Performance Report which contains NPS %
     for each server, then matches them to employees in the database.
+    Also updates employees_v2 collection with the synced NPS data.
     """
     try:
         results = await sync_loyalty_voice_to_db(
@@ -4847,13 +4848,75 @@ async def sync_loyalty_voice(quarter: str = "Q1", year: int = 2026):
                 "debug_screenshot": results.get("debug_screenshot")
             }
         
+        # IMPORTANT: Also update employees_v2 with the synced NPS data
+        # This ensures CV scores are reflected in the main employee records
+        cv_records = await db.cv_nps.find(
+            {"quarter": quarter.upper(), "year": year},
+            {"_id": 0}
+        ).to_list(500)
+        
+        employees_updated = 0
+        for cv in cv_records:
+            emp_name = cv.get("employee_name", "")
+            nps_score = cv.get("nps_score", 0) or 0
+            
+            # Calculate CV score from NPS (NPS% × 0.10)
+            cv_score = round(nps_score * 0.10, 2)
+            
+            if emp_name:
+                # First, get the current employee data to recalculate scores
+                emp_doc = await db.employees_v2.find_one(
+                    {"name": emp_name, "quarter": quarter.upper(), "year": year},
+                    {"_id": 0}
+                )
+                
+                if emp_doc:
+                    # Recalculate weighted_score and pre_dar_score with new CV score
+                    # weighted_score = base_score + cv_score
+                    # base_score = capped(PPA×0.25 + LBW×0.20 + Glass×0.15 + LSC×0.25)
+                    capped_ppa = min(emp_doc.get('score_ppa', 0) or 0, 100)
+                    capped_lbw = min(emp_doc.get('score_lbw', 0) or 0, 100)
+                    capped_glass = min(emp_doc.get('score_glass', 0) or 0, 100)
+                    capped_lsc = min(emp_doc.get('score_lsc', 0) or 0, 100)
+                    
+                    base_score = capped_ppa * 0.25 + capped_lbw * 0.20 + capped_glass * 0.15 + capped_lsc * 0.25
+                    new_weighted = round(base_score + cv_score, 2)
+                    
+                    # pre_dar_score = weighted + metric_bonus + rt_bonus
+                    metric_bonus = emp_doc.get('total_metric_bonus', 0) or 0
+                    rt_bonus = emp_doc.get('review_tracker_bonus', 0) or 0
+                    new_pre_dar = round(new_weighted + metric_bonus + rt_bonus, 2)
+                    new_total = round(new_pre_dar + (emp_doc.get('dar_penalty', 0) or 0), 2)
+                    
+                    result = await db.employees_v2.update_one(
+                        {"name": emp_name, "quarter": quarter.upper(), "year": year},
+                        {"$set": {
+                            "cv_promoters": cv.get("promoters", 0),
+                            "cv_passives": cv.get("passives", 0),
+                            "cv_detractors": cv.get("detractors", 0),
+                            "cv_score": cv_score,
+                            "score_cv": cv_score,
+                            "nps_score": nps_score,
+                            "cv_source": "loyalty_voice_sync",
+                            "weighted_score": new_weighted,
+                            "pre_dar_score": new_pre_dar,
+                            "total_score": new_total
+                        }}
+                    )
+                    if result.modified_count > 0:
+                        employees_updated += 1
+        
+        logging.info(f"CV sync: Updated {employees_updated} employees with NPS data and recalculated scores")
+        
         return {
             "success": True,
             "message": f"Synced NPS scores for {results.get('matched_count', 0)} employees",
             "matched_count": results.get("matched_count", 0),
             "matched_servers": results.get("matched_servers", []),
             "unmatched_servers": results.get("unmatched_servers", []),
-            "total_scraped": results.get("total_scraped", 0)
+            "total_scraped": results.get("total_scraped", 0),
+            "employees_updated": employees_updated,
+            "cleared_count": results.get("cleared_count", 0)
         }
     except Exception as e:
         logging.error(f"CV sync error: {e}")
