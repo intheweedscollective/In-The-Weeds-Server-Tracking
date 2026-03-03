@@ -333,7 +333,7 @@ export default function Analytics() {
           <select
             value={selectedYear}
             onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2 border border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-700 text-slate-200"
           >
             <option value={2025}>2025</option>
             <option value={2026}>2026</option>
@@ -342,7 +342,7 @@ export default function Analytics() {
           <select
             value={selectedQuarter}
             onChange={(e) => setSelectedQuarter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2 border border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-700 text-slate-200"
           >
             <option value="Q1">Q1</option>
             <option value="Q2">Q2</option>

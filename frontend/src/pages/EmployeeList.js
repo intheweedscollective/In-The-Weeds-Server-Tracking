@@ -254,7 +254,7 @@ export default function EmployeeList() {
                   <select 
                     value={selectedYear}
                     onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                    className="flex-1 h-10 px-3 border-2 border-gray-200 rounded-lg focus:border-secondary"
+                    className="flex-1 h-10 px-3 border-2 border-slate-600 rounded-lg focus:border-secondary bg-slate-700 text-slate-200"
                     data-testid="year-select"
                   >
                     <option value={2024}>2024</option>
@@ -265,7 +265,7 @@ export default function EmployeeList() {
                   <select
                     value={selectedQuarter}
                     onChange={(e) => setSelectedQuarter(e.target.value)}
-                    className="flex-1 h-10 px-3 border-2 border-gray-200 rounded-lg focus:border-secondary"
+                    className="flex-1 h-10 px-3 border-2 border-slate-600 rounded-lg focus:border-secondary bg-slate-700 text-slate-200"
                     data-testid="quarter-select"
                   >
                     <option value="Q1">Q1</option>
@@ -357,7 +357,10 @@ export default function EmployeeList() {
                         <h3 className="text-lg font-serif font-bold text-foreground" data-testid={`employee-name-${employee.id}`}>
                           {employee.name}
                         </h3>
-                        <p className="text-slate-400 text-sm" data-testid={`employee-rank-${employee.id}`}>
+                        <p className="text-sm text-slate-400 capitalize" data-testid={`employee-job-title-${employee.id}`}>
+                          {employee.job_title || 'Server'}
+                        </p>
+                        <p className="text-slate-500 text-xs" data-testid={`employee-rank-${employee.id}`}>
                           Rank: #{employee.peer_rank || '-'} of {employees.length}
                         </p>
                       </div>
@@ -380,9 +383,9 @@ export default function EmployeeList() {
                         <div className="text-sm font-serif font-bold text-purple-700">{formatCurrency(lbwPerGuest)}</div>
                         <div className="text-[10px] text-slate-400 font-semibold uppercase">LBW/G</div>
                       </div>
-                      <div className="text-center p-2 bg-background rounded-lg border border-gray-200">
-                        <div className="text-sm font-serif font-bold text-slate-200">{formatCurrency(glassPerGuest)}</div>
-                        <div className="text-[10px] text-slate-400 font-semibold uppercase">Glass/G</div>
+                      <div className="text-center p-2 bg-slate-600 rounded-lg border border-slate-500">
+                        <div className="text-sm font-serif font-bold text-slate-100">{formatCurrency(glassPerGuest)}</div>
+                        <div className="text-[10px] text-slate-300 font-semibold uppercase">Glass/G</div>
                       </div>
                       <div className="text-center p-2 bg-green-50 rounded-lg border border-green-100">
                         <div className="text-sm font-serif font-bold text-green-700">{guestsPerLsc ? formatNumber(guestsPerLsc) : 'N/A'}</div>
@@ -762,7 +765,7 @@ export default function EmployeeList() {
                       <select
                         value={formData.job_title}
                         onChange={(e) => handleFormChange('job_title', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-700 text-slate-200"
                       >
                         <option value="server">Server</option>
                         <option value="bartender">Bartender</option>

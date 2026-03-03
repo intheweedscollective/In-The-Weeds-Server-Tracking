@@ -475,7 +475,7 @@ export default function YodeckSlides() {
               <select 
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                className="h-10 px-4 border-2 border-gray-200 rounded-lg focus:border-secondary"
+                className="h-10 px-4 border-2 border-slate-600 rounded-lg focus:border-secondary bg-slate-700 text-slate-200"
                 data-testid="year-select"
               >
                 <option value={2024}>2024</option>
@@ -486,7 +486,7 @@ export default function YodeckSlides() {
               <select
                 value={selectedQuarter}
                 onChange={(e) => setSelectedQuarter(e.target.value)}
-                className="h-10 px-4 border-2 border-gray-200 rounded-lg focus:border-secondary"
+                className="h-10 px-4 border-2 border-slate-600 rounded-lg focus:border-secondary bg-slate-700 text-slate-200"
                 data-testid="quarter-select"
               >
                 <option value="Q1">Q1</option>

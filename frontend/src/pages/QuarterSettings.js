@@ -298,7 +298,7 @@ export default function QuarterSettings() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Year</label>
                 <select
-                  className="w-full h-10 rounded-lg border-2 border-gray-200 bg-slate-800 px-3 text-sm"
+                  className="w-full h-10 rounded-lg border-2 border-slate-600 bg-slate-700 px-3 text-sm text-slate-200"
                   value={selectedYear}
                   onChange={(e) => setSelectedYear(parseInt(e.target.value))}
                 >
@@ -310,7 +310,7 @@ export default function QuarterSettings() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Quarter</label>
                 <select
-                  className="w-full h-10 rounded-lg border-2 border-gray-200 bg-slate-800 px-3 text-sm"
+                  className="w-full h-10 rounded-lg border-2 border-slate-600 bg-slate-700 px-3 text-sm text-slate-200"
                   value={selectedQuarter}
                   onChange={(e) => setSelectedQuarter(e.target.value)}
                 >

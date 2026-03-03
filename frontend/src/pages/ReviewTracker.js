@@ -1010,7 +1010,7 @@ function AddReviewModal({ onClose, onSuccess, platforms, quarter, year }) {
                 <select
                   value={formData.platform}
                   onChange={(e) => setFormData({ ...formData, platform: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg"
+                  className="w-full px-3 py-2 border border-slate-600 rounded-lg bg-slate-700 text-slate-200"
                   data-testid="input-platform"
                 >
                   {platforms.map((p) => (
