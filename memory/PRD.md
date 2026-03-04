@@ -69,7 +69,29 @@ Build a comprehensive performance review application for restaurant employees (B
 - ✅ Review Tracker with AI-powered employee detection
 - ✅ ReviewTrackers.com API integration
 
-### Recent Changes (Mar 3, 2026) - CV Feedback Scraper Complete Fix
+### Recent Changes (Mar 4, 2026) - Complete CV Server Attribution & Exclusion System
+
+- ✅ **New Server Details Scraping Method**: Created `scrape_cv_feedback_via_server_details()` that follows Reports → Server Performance → Server Details path
+  - **Result**: 216 feedback entries with **100% server attribution** (was 45% before)
+  - **All 16 detractors** now have their responsible server identified
+  - Removed dependency on Transactions page matching which only worked 35% of the time
+
+- ✅ **Exclusion/Restore System Updated**:
+  - Exclusion now recalculates server NPS from actual feedback data (not CSV aggregates)
+  - Excluding a detractor correctly removes -2 penalty and recalculates server's NPS
+  - Restore function correctly adds the feedback back and recalculates
+
+- ✅ **Excluded Reviews Management UI**:
+  - Added collapsible "Excluded Reviews" panel on Review Tracker page
+  - Shows all excluded reviews with server attribution and restore button
+  - Easy to review and undo exclusions if made by mistake
+
+- ✅ **UI Enhancements**:
+  - Added "Upload Server Report" button for CSV backup method
+  - Feedback cards now show server name with point impact (+1 pts, -2 pts, etc.)
+  - "Show excluded" checkbox filter and dedicated Excluded Reviews panel
+
+### Previous Changes (Mar 3, 2026) - CV Feedback Scraper Complete Fix
 
 - ✅ **Fixed Customer Voice Feedback Scraper**: Now correctly retrieves all 71 feedback entries for Q1 2026
   - **Root Cause 1**: Python syntax errors (incorrect `except`/`finally` indentation)

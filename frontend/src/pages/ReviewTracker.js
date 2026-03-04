@@ -729,6 +729,76 @@ export default function ReviewTracker() {
                   </div>
                 )}
                 
+                {/* Excluded Reviews Panel - Collapsible */}
+                {excludedCount > 0 && (
+                  <div className="mb-4 border border-slate-600 rounded-lg overflow-hidden">
+                    <button
+                      onClick={() => setShowExcluded(!showExcluded)}
+                      className="w-full p-3 bg-slate-800/50 flex items-center justify-between hover:bg-slate-700/50 transition-colors"
+                      data-testid="toggle-excluded-panel"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Ban className="w-4 h-4 text-orange-400" />
+                        <span className="font-medium text-orange-300">
+                          Excluded Reviews ({excludedCount})
+                        </span>
+                        <span className="text-xs text-slate-400 ml-2">
+                          - Click to {showExcluded ? 'hide' : 'review and restore'}
+                        </span>
+                      </div>
+                      <span className={`transition-transform ${showExcluded ? 'rotate-180' : ''}`}>
+                        ▼
+                      </span>
+                    </button>
+                    
+                    {showExcluded && (
+                      <div className="p-3 bg-slate-900/50 space-y-3 max-h-96 overflow-y-auto">
+                        <p className="text-xs text-slate-400 mb-2">
+                          These reviews have been excluded from NPS calculations. Click "Restore" to include them again.
+                        </p>
+                        {cvFeedback
+                          .filter(item => item.excluded)
+                          .map((item) => (
+                            <div
+                              key={item.id}
+                              className="bg-slate-800 rounded-lg p-3 border border-orange-500/30"
+                              data-testid={`excluded-item-${item.id}`}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
+                                      {item.rating}/10
+                                    </span>
+                                    <span className="text-sm text-slate-300">{item.customer_name}</span>
+                                    <span className="text-xs text-slate-500">→</span>
+                                    <span className="text-sm font-medium text-orange-300">{item.server_name || 'Unknown Server'}</span>
+                                  </div>
+                                  <p className="text-xs text-slate-400 line-clamp-2">
+                                    "{item.comment?.substring(0, 150)}{item.comment?.length > 150 ? '...' : ''}"
+                                  </p>
+                                  <div className="mt-1 text-xs text-slate-500">
+                                    {item.date} • {item.shift || 'No shift'}
+                                  </div>
+                                </div>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleIncludeFeedback(item.id)}
+                                  className="text-green-500 hover:text-green-400 hover:bg-green-500/10 border-green-500/50 shrink-0"
+                                  data-testid={`restore-${item.id}`}
+                                >
+                                  <Undo2 className="w-3 h-3 mr-1" />
+                                  Restore
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                
                 <div className="space-y-3">
                   {/* Sort: Detractors first, then passives, then promoters */}
                   {cvFeedback
@@ -768,6 +838,25 @@ export default function ReviewTracker() {
                             <span className="text-sm text-slate-300">{item.date}</span>
                             <span className="text-sm text-slate-300">by {item.customer_name}</span>
                           </div>
+                          
+                          {/* Server Attribution - Shows who gets credit/blame */}
+                          {item.server_name && (
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-xs text-slate-400">Server:</span>
+                              <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                                item.sentiment === "promoter"
+                                  ? "bg-green-900/50 text-green-300 border border-green-500/30"
+                                  : item.sentiment === "detractor"
+                                  ? "bg-red-900/50 text-red-300 border border-red-500/30"
+                                  : "bg-yellow-900/50 text-yellow-300 border border-yellow-500/30"
+                              }`}>
+                                {item.server_name}
+                                <span className="ml-1 opacity-75">
+                                  ({item.sentiment === "promoter" ? "+1 pt" : item.sentiment === "detractor" ? "-2 pts" : "0 pts"})
+                                </span>
+                              </span>
+                            </div>
+                          )}
                           
                           {/* Comment */}
                           <p className="text-slate-200 text-sm leading-relaxed mb-3">

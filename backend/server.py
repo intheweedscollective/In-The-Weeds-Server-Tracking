@@ -5252,7 +5252,7 @@ async def get_employee_cv_points(employee_id: str, quarter: str = "Q1", year: in
 async def exclude_cv_feedback(feedback_id: str):
     """
     Exclude a CV feedback item from NPS calculations.
-    When excluded, recalculate the SERVER's NPS score (not based on mentions).
+    When excluded, recalculate the SERVER's NPS score from all non-excluded feedback.
     
     For Customer Voice, credit goes to the server who served the table,
     not employees mentioned in the comment text.
@@ -5275,59 +5275,58 @@ async def exclude_cv_feedback(feedback_id: str):
     quarter = feedback.get("quarter", "Q1")
     year = feedback.get("year", 2026)
     server_name = feedback.get("server_name", "")
-    sentiment = feedback.get("sentiment", "passive")
     
     affected_employees = []
+    new_nps = None
     
-    # If we have a server_name, update their NPS
+    # If we have a server_name, recalculate their NPS from all non-excluded feedback
     if server_name:
         affected_employees.append(server_name)
         
-        # Find the NPS record for this server
-        nps_record = await db.cv_nps.find_one({
-            "employee_name": {"$regex": f"^{server_name}$", "$options": "i"},
+        # Get all non-excluded feedback for this server
+        server_feedback = await db.cv_feedback.find({
+            "server_name": {"$regex": f"^{server_name}$", "$options": "i"},
             "quarter": quarter,
-            "year": year
-        })
+            "year": year,
+            "excluded": {"$ne": True}
+        }).to_list(500)
         
-        if nps_record:
-            # Calculate new NPS excluding this feedback
-            promoters = nps_record.get("promoters", 0)
-            detractors = nps_record.get("detractors", 0)
-            passives = nps_record.get("passives", 0)
-            received = nps_record.get("received", 0)
-            
-            # Adjust counts based on excluded feedback sentiment
-            if sentiment == "promoter":
-                promoters = max(0, promoters - 1)
-            elif sentiment == "detractor":
-                detractors = max(0, detractors - 1)
-            else:
-                passives = max(0, passives - 1)
-            
-            received = max(0, received - 1)
-            
-            # Calculate new NPS
-            if received > 0:
-                new_nps = ((promoters - detractors) / received) * 100
-            else:
-                new_nps = 0
-            
-            # Update the NPS record
-            await db.cv_nps.update_one(
-                {"_id": nps_record.get("_id")},
-                {"$set": {
-                    "promoters": promoters,
-                    "detractors": detractors,
-                    "passives": passives,
-                    "received": received,
-                    "nps_score": round(new_nps, 2),
-                    "last_adjusted": datetime.now(timezone.utc).isoformat(),
-                    "adjustment_reason": f"Excluded feedback {feedback_id}"
-                }}
-            )
-            
-            logging.info(f"CV Exclusion: Updated {server_name} NPS to {new_nps:.1f}% (was {nps_record.get('nps_score', 0)}%)")
+        # Calculate NPS from actual feedback
+        promoters = sum(1 for f in server_feedback if f.get("sentiment") == "promoter")
+        detractors = sum(1 for f in server_feedback if f.get("sentiment") == "detractor")
+        passives = sum(1 for f in server_feedback if f.get("sentiment") == "passive")
+        received = len(server_feedback)
+        
+        # Calculate NPS
+        if received > 0:
+            new_nps = ((promoters - detractors) / received) * 100
+        else:
+            new_nps = 0
+        
+        # Update or create NPS record
+        await db.cv_nps.update_one(
+            {
+                "employee_name": {"$regex": f"^{server_name}$", "$options": "i"},
+                "quarter": quarter,
+                "year": year
+            },
+            {"$set": {
+                "employee_name": server_name,
+                "quarter": quarter,
+                "year": year,
+                "promoters": promoters,
+                "detractors": detractors,
+                "passives": passives,
+                "received": received,
+                "nps_score": round(new_nps, 2),
+                "last_adjusted": datetime.now(timezone.utc).isoformat(),
+                "adjustment_reason": f"Excluded feedback {feedback_id}",
+                "source": "calculated_from_feedback"
+            }},
+            upsert=True
+        )
+        
+        logging.info(f"CV Exclusion: Recalculated {server_name} NPS to {new_nps:.1f}% (P:{promoters}/Pa:{passives}/D:{detractors})")
     
     # Also check mentions for backward compatibility with external reviews
     mentions = feedback.get("mentions", [])
@@ -5338,9 +5337,10 @@ async def exclude_cv_feedback(feedback_id: str):
     
     return {
         "success": True,
-        "message": f"Feedback excluded. Server '{server_name}' NPS recalculated." if server_name else "Feedback excluded (no server attribution).",
+        "message": f"Feedback excluded. Server '{server_name}' NPS recalculated to {new_nps:.1f}%." if server_name and new_nps is not None else "Feedback excluded (no server attribution).",
         "feedback_id": feedback_id,
         "server_name": server_name,
+        "new_nps": round(new_nps, 2) if new_nps is not None else None,
         "affected_employees": affected_employees
     }
 
@@ -5349,7 +5349,7 @@ async def exclude_cv_feedback(feedback_id: str):
 async def include_cv_feedback(feedback_id: str):
     """
     Undo exclusion - restore a CV feedback item to NPS calculations.
-    Restores the SERVER's NPS score (not based on mentions).
+    Recalculates the SERVER's NPS score from all non-excluded feedback.
     """
     # Find the feedback item
     feedback = await db.cv_feedback.find_one({"id": feedback_id})
@@ -5369,59 +5369,58 @@ async def include_cv_feedback(feedback_id: str):
     quarter = feedback.get("quarter", "Q1")
     year = feedback.get("year", 2026)
     server_name = feedback.get("server_name", "")
-    sentiment = feedback.get("sentiment", "passive")
     
     affected_employees = []
+    new_nps = None
     
-    # If we have a server_name, update their NPS
+    # If we have a server_name, recalculate their NPS from all non-excluded feedback
     if server_name:
         affected_employees.append(server_name)
         
-        # Find the NPS record for this server
-        nps_record = await db.cv_nps.find_one({
-            "employee_name": {"$regex": f"^{server_name}$", "$options": "i"},
+        # Get all non-excluded feedback for this server (including the just-restored one)
+        server_feedback = await db.cv_feedback.find({
+            "server_name": {"$regex": f"^{server_name}$", "$options": "i"},
             "quarter": quarter,
-            "year": year
-        })
+            "year": year,
+            "excluded": {"$ne": True}
+        }).to_list(500)
         
-        if nps_record:
-            # Calculate new NPS including this feedback
-            promoters = nps_record.get("promoters", 0)
-            detractors = nps_record.get("detractors", 0)
-            passives = nps_record.get("passives", 0)
-            received = nps_record.get("received", 0)
-            
-            # Adjust counts based on restored feedback sentiment
-            if sentiment == "promoter":
-                promoters += 1
-            elif sentiment == "detractor":
-                detractors += 1
-            else:
-                passives += 1
-            
-            received += 1
-            
-            # Calculate new NPS
-            if received > 0:
-                new_nps = ((promoters - detractors) / received) * 100
-            else:
-                new_nps = 0
-            
-            # Update the NPS record
-            await db.cv_nps.update_one(
-                {"_id": nps_record.get("_id")},
-                {"$set": {
-                    "promoters": promoters,
-                    "detractors": detractors,
-                    "passives": passives,
-                    "received": received,
-                    "nps_score": round(new_nps, 2),
-                    "last_adjusted": datetime.now(timezone.utc).isoformat(),
-                    "adjustment_reason": f"Restored feedback {feedback_id}"
-                }}
-            )
-            
-            logging.info(f"CV Restore: Updated {server_name} NPS to {new_nps:.1f}%")
+        # Calculate NPS from actual feedback
+        promoters = sum(1 for f in server_feedback if f.get("sentiment") == "promoter")
+        detractors = sum(1 for f in server_feedback if f.get("sentiment") == "detractor")
+        passives = sum(1 for f in server_feedback if f.get("sentiment") == "passive")
+        received = len(server_feedback)
+        
+        # Calculate NPS
+        if received > 0:
+            new_nps = ((promoters - detractors) / received) * 100
+        else:
+            new_nps = 0
+        
+        # Update or create NPS record
+        await db.cv_nps.update_one(
+            {
+                "employee_name": {"$regex": f"^{server_name}$", "$options": "i"},
+                "quarter": quarter,
+                "year": year
+            },
+            {"$set": {
+                "employee_name": server_name,
+                "quarter": quarter,
+                "year": year,
+                "promoters": promoters,
+                "detractors": detractors,
+                "passives": passives,
+                "received": received,
+                "nps_score": round(new_nps, 2),
+                "last_adjusted": datetime.now(timezone.utc).isoformat(),
+                "adjustment_reason": f"Restored feedback {feedback_id}",
+                "source": "calculated_from_feedback"
+            }},
+            upsert=True
+        )
+        
+        logging.info(f"CV Restore: Recalculated {server_name} NPS to {new_nps:.1f}% (P:{promoters}/Pa:{passives}/D:{detractors})")
     
     # Also check mentions for backward compatibility
     mentions = feedback.get("mentions", [])
@@ -5432,9 +5431,10 @@ async def include_cv_feedback(feedback_id: str):
     
     return {
         "success": True,
-        "message": f"Feedback restored. Server '{server_name}' NPS recalculated." if server_name else "Feedback restored (no server attribution).",
+        "message": f"Feedback restored. Server '{server_name}' NPS recalculated to {new_nps:.1f}%." if server_name and new_nps is not None else "Feedback restored (no server attribution).",
         "feedback_id": feedback_id,
         "server_name": server_name,
+        "new_nps": round(new_nps, 2) if new_nps is not None else None,
         "affected_employees": affected_employees
     }
 
