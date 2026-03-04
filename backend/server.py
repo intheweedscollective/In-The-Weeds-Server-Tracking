@@ -5252,7 +5252,10 @@ async def get_employee_cv_points(employee_id: str, quarter: str = "Q1", year: in
 async def exclude_cv_feedback(feedback_id: str):
     """
     Exclude a CV feedback item from NPS calculations.
-    When excluded, recalculate the employee's NPS score without this feedback.
+    When excluded, recalculate the SERVER's NPS score (not based on mentions).
+    
+    For Customer Voice, credit goes to the server who served the table,
+    not employees mentioned in the comment text.
     """
     # Find the feedback item
     feedback = await db.cv_feedback.find_one({"id": feedback_id})
@@ -5268,22 +5271,21 @@ async def exclude_cv_feedback(feedback_id: str):
         {"$set": {"excluded": True, "excluded_at": datetime.now(timezone.utc).isoformat()}}
     )
     
-    # Recalculate NPS for the affected employee(s)
+    # Get the SERVER who served this customer (the correct attribution for CV)
     quarter = feedback.get("quarter", "Q1")
     year = feedback.get("year", 2026)
-    
-    # Get all mentions from this feedback
-    mentions = feedback.get("mentions", [])
-    affected_employees = [m.get("employee_name") for m in mentions if m.get("employee_name")]
-    
-    # Get the sentiment/rating of the excluded feedback
+    server_name = feedback.get("server_name", "")
     sentiment = feedback.get("sentiment", "passive")
     
-    # Update NPS for each affected employee
-    for emp_name in affected_employees:
-        # Find the NPS record for this employee
+    affected_employees = []
+    
+    # If we have a server_name, update their NPS
+    if server_name:
+        affected_employees.append(server_name)
+        
+        # Find the NPS record for this server
         nps_record = await db.cv_nps.find_one({
-            "employee_name": emp_name,
+            "employee_name": {"$regex": f"^{server_name}$", "$options": "i"},
             "quarter": quarter,
             "year": year
         })
@@ -5313,21 +5315,32 @@ async def exclude_cv_feedback(feedback_id: str):
             
             # Update the NPS record
             await db.cv_nps.update_one(
-                {"id": nps_record.get("id")},
+                {"_id": nps_record.get("_id")},
                 {"$set": {
                     "promoters": promoters,
                     "detractors": detractors,
                     "passives": passives,
                     "received": received,
                     "nps_score": round(new_nps, 2),
-                    "last_adjusted": datetime.now(timezone.utc).isoformat()
+                    "last_adjusted": datetime.now(timezone.utc).isoformat(),
+                    "adjustment_reason": f"Excluded feedback {feedback_id}"
                 }}
             )
+            
+            logging.info(f"CV Exclusion: Updated {server_name} NPS to {new_nps:.1f}% (was {nps_record.get('nps_score', 0)}%)")
+    
+    # Also check mentions for backward compatibility with external reviews
+    mentions = feedback.get("mentions", [])
+    for m in mentions:
+        emp_name = m.get("employee_name")
+        if emp_name and emp_name not in affected_employees:
+            affected_employees.append(emp_name)
     
     return {
         "success": True,
-        "message": "Feedback excluded from rankings",
+        "message": f"Feedback excluded. Server '{server_name}' NPS recalculated." if server_name else "Feedback excluded (no server attribution).",
         "feedback_id": feedback_id,
+        "server_name": server_name,
         "affected_employees": affected_employees
     }
 
@@ -5336,6 +5349,7 @@ async def exclude_cv_feedback(feedback_id: str):
 async def include_cv_feedback(feedback_id: str):
     """
     Undo exclusion - restore a CV feedback item to NPS calculations.
+    Restores the SERVER's NPS score (not based on mentions).
     """
     # Find the feedback item
     feedback = await db.cv_feedback.find_one({"id": feedback_id})
@@ -5351,22 +5365,21 @@ async def include_cv_feedback(feedback_id: str):
         {"$set": {"excluded": False}, "$unset": {"excluded_at": ""}}
     )
     
-    # Recalculate NPS for the affected employee(s)
+    # Get the SERVER who served this customer
     quarter = feedback.get("quarter", "Q1")
     year = feedback.get("year", 2026)
-    
-    # Get all mentions from this feedback
-    mentions = feedback.get("mentions", [])
-    affected_employees = [m.get("employee_name") for m in mentions if m.get("employee_name")]
-    
-    # Get the sentiment/rating of the included feedback
+    server_name = feedback.get("server_name", "")
     sentiment = feedback.get("sentiment", "passive")
     
-    # Update NPS for each affected employee
-    for emp_name in affected_employees:
-        # Find the NPS record for this employee
+    affected_employees = []
+    
+    # If we have a server_name, update their NPS
+    if server_name:
+        affected_employees.append(server_name)
+        
+        # Find the NPS record for this server
         nps_record = await db.cv_nps.find_one({
-            "employee_name": emp_name,
+            "employee_name": {"$regex": f"^{server_name}$", "$options": "i"},
             "quarter": quarter,
             "year": year
         })
@@ -5396,21 +5409,32 @@ async def include_cv_feedback(feedback_id: str):
             
             # Update the NPS record
             await db.cv_nps.update_one(
-                {"id": nps_record.get("id")},
+                {"_id": nps_record.get("_id")},
                 {"$set": {
                     "promoters": promoters,
                     "detractors": detractors,
                     "passives": passives,
                     "received": received,
                     "nps_score": round(new_nps, 2),
-                    "last_adjusted": datetime.now(timezone.utc).isoformat()
+                    "last_adjusted": datetime.now(timezone.utc).isoformat(),
+                    "adjustment_reason": f"Restored feedback {feedback_id}"
                 }}
             )
+            
+            logging.info(f"CV Restore: Updated {server_name} NPS to {new_nps:.1f}%")
+    
+    # Also check mentions for backward compatibility
+    mentions = feedback.get("mentions", [])
+    for m in mentions:
+        emp_name = m.get("employee_name")
+        if emp_name and emp_name not in affected_employees:
+            affected_employees.append(emp_name)
     
     return {
         "success": True,
-        "message": "Feedback restored to rankings",
+        "message": f"Feedback restored. Server '{server_name}' NPS recalculated." if server_name else "Feedback restored (no server attribution).",
         "feedback_id": feedback_id,
+        "server_name": server_name,
         "affected_employees": affected_employees
     }
 
