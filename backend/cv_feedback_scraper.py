@@ -639,7 +639,40 @@ async def scrape_cv_feedback(
                     customer_key = customer_name.strip().lower() if customer_name else ""
                     
                     # Look up the server who served this customer
+                    # Try multiple matching strategies
+                    server_name = ""
+                    
+                    # Strategy 1: Exact match
                     server_name = customer_to_server.get(customer_key, "")
+                    
+                    if not server_name:
+                        # Strategy 2: Remove middle initials (e.g., "Carmen A Lisco" -> "carmen lisco")
+                        # Middle initial pattern: single letter between first and last name
+                        import re
+                        name_no_middle = re.sub(r'\s+[a-z]\s+', ' ', customer_key)  # Remove single letters
+                        name_no_middle = re.sub(r'\s+', ' ', name_no_middle).strip()  # Clean up spaces
+                        server_name = customer_to_server.get(name_no_middle, "")
+                    
+                    if not server_name:
+                        # Strategy 3: First and last name only
+                        parts = customer_key.split()
+                        if len(parts) >= 2:
+                            first_last = f"{parts[0]} {parts[-1]}"
+                            server_name = customer_to_server.get(first_last, "")
+                    
+                    if not server_name:
+                        # Strategy 4: Fuzzy search - first name + partial last name
+                        parts = customer_key.split()
+                        if parts:
+                            first_name = parts[0]
+                            for txn_customer, txn_server in customer_to_server.items():
+                                if txn_customer.startswith(first_name):
+                                    # Check if last names match (allowing for middle initial)
+                                    txn_parts = txn_customer.split()
+                                    if len(txn_parts) >= 2 and len(parts) >= 2:
+                                        if txn_parts[-1] == parts[-1]:  # Same last name
+                                            server_name = txn_server
+                                            break
                     
                     feedback = {
                         "rating": rating,
