@@ -737,17 +737,227 @@ def detect_employee_in_comment(comment: str, employee_names: List[str]) -> List[
     return detected
 
 
+async def scrape_cv_feedback_via_server_details(quarter: str, year: int) -> Dict[str, Any]:
+    """
+    Scrape CV feedback by visiting each server's detail page.
+    
+    This method provides 100% server attribution by:
+    1. Going to Reports -> Server Performance
+    2. Getting list of all servers with their detail page links
+    3. Visiting each server's detail page to get their feedback
+    
+    This is more reliable than matching Feedback page customers to Transactions.
+    """
+    result = {
+        "success": False,
+        "feedback": [],
+        "error": None
+    }
+    
+    start_date, end_date = get_quarter_date_range(quarter, year)
+    print(f"[CV] Scraping via Server Details for {quarter} {year} ({start_date} - {end_date})")
+    
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            context = await browser.new_context(viewport={"width": 1920, "height": 1080})
+            page = await context.new_page()
+            
+            try:
+                # Login
+                await page.goto(LV_URL, wait_until="networkidle", timeout=60000)
+                await page.wait_for_timeout(3000)
+                
+                email_input = page.locator('input[type="email"]')
+                if await email_input.is_visible(timeout=10000):
+                    await email_input.fill(LV_USERNAME)
+                    await page.locator('input[type="submit"]').click()
+                    await page.wait_for_timeout(4000)
+                
+                password_input = page.locator('input[type="password"]')
+                if await password_input.is_visible(timeout=10000):
+                    await password_input.fill(LV_PASSWORD)
+                    await page.locator('input[type="submit"]').click()
+                    await page.wait_for_timeout(5000)
+                
+                yes_btn = page.locator('input[value="Yes"]')
+                if await yes_btn.is_visible(timeout=5000):
+                    await yes_btn.click()
+                    await page.wait_for_timeout(4000)
+                
+                print("[CV] Logged in successfully")
+                
+                # Navigate to Server Performance Report
+                await page.goto(f"{LV_URL}/Report/ServerPerformance", wait_until="domcontentloaded", timeout=30000)
+                await page.wait_for_timeout(5000)
+                
+                # Set date filter to Quarter-To-Date or Custom Range
+                today = date.today()
+                current_quarter = "Q1" if today.month <= 3 else "Q2" if today.month <= 6 else "Q3" if today.month <= 9 else "Q4"
+                is_current_quarter = (year == today.year and quarter.upper() == current_quarter)
+                
+                date_filter = page.locator('#date-filter').first
+                if await date_filter.is_visible(timeout=3000):
+                    await date_filter.click()
+                    await page.wait_for_timeout(1500)
+                    
+                    if is_current_quarter:
+                        qtd = page.locator('li:has-text("Quarter-To-Date")').first
+                        if await qtd.is_visible(timeout=2000):
+                            await qtd.click()
+                            await page.wait_for_timeout(5000)
+                            print("[CV] Set filter to Quarter-To-Date")
+                    else:
+                        custom = page.locator('li:has-text("Custom Range")').first
+                        if await custom.is_visible(timeout=2000):
+                            await custom.click()
+                            await page.wait_for_timeout(1000)
+                            
+                            start_input = page.locator('input[name="daterangepicker_start"]').first
+                            end_input = page.locator('input[name="daterangepicker_end"]').first
+                            
+                            if await start_input.is_visible(timeout=2000):
+                                await start_input.clear()
+                                await start_input.fill(start_date)
+                            if await end_input.is_visible(timeout=2000):
+                                await end_input.clear()
+                                await end_input.fill(end_date)
+                            
+                            apply = page.locator('.applyBtn').first
+                            if await apply.is_visible(timeout=2000):
+                                await apply.click(force=True)
+                                await page.wait_for_timeout(5000)
+                            print(f"[CV] Set custom date range: {start_date} - {end_date}")
+                
+                # Get all server detail links
+                server_links = []
+                for _ in range(10):  # Pagination handling
+                    links = await page.evaluate("""() => {
+                        const links = [];
+                        document.querySelectorAll('a[href*="/Server/Details"]').forEach(a => {
+                            const href = a.getAttribute('href');
+                            const row = a.closest('.ag-row, tr');
+                            let name = '';
+                            if (row) {
+                                const nameCell = row.querySelector('[col-id="Name"], td:first-child');
+                                name = nameCell?.innerText?.trim() || '';
+                            }
+                            if (!name) name = a.innerText?.trim() || '';
+                            if (href && name && name.length > 2 && !name.includes('Manager App')) {
+                                links.push({href, name});
+                            }
+                        });
+                        return links;
+                    }""")
+                    
+                    for link in links:
+                        if link['href'] not in [s['href'] for s in server_links]:
+                            server_links.append(link)
+                    
+                    # Try next page
+                    next_btn = page.locator('[ref="btNext"]:not([disabled])')
+                    if await next_btn.count() > 0:
+                        try:
+                            await next_btn.click(timeout=2000)
+                            await page.wait_for_timeout(1500)
+                        except:
+                            break
+                    else:
+                        break
+                
+                print(f"[CV] Found {len(server_links)} servers with detail pages")
+                
+                # Visit each server's detail page
+                for i, server in enumerate(server_links):
+                    server_name = server['name']
+                    server_url = f"{LV_URL}{server['href']}" if server['href'].startswith('/') else server['href']
+                    
+                    try:
+                        await page.goto(server_url, wait_until="domcontentloaded", timeout=30000)
+                        await page.wait_for_timeout(2000)
+                        
+                        # Scrape feedback from this server's page
+                        feedback_data = await page.evaluate("""() => {
+                            const feedback = [];
+                            document.querySelectorAll('.ag-row').forEach(row => {
+                                const cells = row.querySelectorAll('.ag-cell');
+                                const rowData = {};
+                                cells.forEach(cell => {
+                                    const colId = cell.getAttribute('col-id');
+                                    if (colId) rowData[colId] = cell.innerText?.trim() || '';
+                                });
+                                // This is a feedback row if it has Rating column
+                                if (rowData.Rating && rowData.Rating !== '') {
+                                    feedback.push(rowData);
+                                }
+                            });
+                            return feedback;
+                        }""")
+                        
+                        for fb in feedback_data:
+                            # Parse rating from "X / 10" format
+                            rating_str = fb.get('Rating', '')
+                            try:
+                                rating = int(rating_str.split('/')[0].strip()) if '/' in rating_str else int(rating_str)
+                            except:
+                                rating = 0
+                            
+                            sentiment, points = get_sentiment_and_points(rating)
+                            
+                            # Filter by date if needed
+                            response_date = fb.get('DateCreated', fb.get('Response Date', ''))
+                            
+                            feedback_item = {
+                                "rating": rating,
+                                "rating_str": rating_str,
+                                "customer_name": fb.get('FkCustomer_FirstName', fb.get('Customer Name', '')),
+                                "date": response_date,
+                                "date_of_business": fb.get('DateOfBusiness', fb.get('Date of Business', '')),
+                                "shift": fb.get('FkTransactionSummary_Shift_Name', fb.get('Shift', '')),
+                                "comment": fb.get('Body', fb.get('Comment', '')),
+                                "store": fb.get('FkTransactionSummary_FkLocation_Name', fb.get('Store', '')),
+                                "can_contact": fb.get('FkCustomer_CanContact', fb.get('Can Contact', '')),
+                                "sentiment": sentiment,
+                                "cv_points": points,
+                                "source": "loyalty_voice_server_details",
+                                "server_name": server_name  # 100% attribution from server detail page
+                            }
+                            result["feedback"].append(feedback_item)
+                        
+                        if feedback_data:
+                            print(f"[CV] {server_name}: {len(feedback_data)} feedback entries")
+                        
+                    except Exception as e:
+                        print(f"[CV] Error scraping {server_name}: {e}")
+                
+                result["success"] = True
+                print(f"[CV] Total: {len(result['feedback'])} feedback entries with 100% server attribution")
+                
+            except Exception as e:
+                print(f"[CV] Session error: {e}")
+                result["error"] = str(e)
+            finally:
+                await browser.close()
+                
+    except Exception as e:
+        print(f"[CV] Browser error: {e}")
+        result["error"] = str(e)
+    
+    return result
+
+
 async def sync_cv_feedback_to_db(
     db,
     quarter: str,
     year: int,
-    use_ai_detection: bool = True
+    use_ai_detection: bool = True,
+    use_server_details: bool = True  # New: Use Server Details method for 100% attribution
 ) -> Dict[str, Any]:
     """
     Sync CV feedback from Loyalty Voice to the database.
     
     1. CLEARS existing cv_feedback and cv_points data for this quarter
-    2. Scrapes feedback from Loyalty Voice (Transactions page for server mapping, Feedback page for reviews)
+    2. Scrapes feedback from Loyalty Voice using Server Details method (100% attribution)
     3. Stores feedback in cv_feedback collection
     4. Calculates and stores CV points per employee
     """
@@ -763,8 +973,15 @@ async def sync_cv_feedback_to_db(
         "cleared_points_count": 0
     }
     
-    # Scrape feedback
-    scrape_result = await scrape_cv_feedback(quarter, year)
+    # Scrape feedback using the appropriate method
+    if use_server_details:
+        # NEW: Use Server Details page for 100% server attribution
+        print("[CV] Using Server Details method for 100% server attribution")
+        scrape_result = await scrape_cv_feedback_via_server_details(quarter, year)
+    else:
+        # Legacy: Use Transactions + Feedback page matching
+        print("[CV] Using legacy Transactions + Feedback matching")
+        scrape_result = await scrape_cv_feedback(quarter, year)
     
     if not scrape_result.get("success"):
         result["error"] = scrape_result.get("error", "Scraping failed")
