@@ -5415,6 +5415,123 @@ async def include_cv_feedback(feedback_id: str):
     }
 
 
+@api_router.post("/v2/cv/server-performance/upload")
+async def upload_server_performance_csv(
+    file: UploadFile = File(...),
+    quarter: str = "Q1",
+    year: int = 2026
+):
+    """
+    Upload Server Performance Report CSV from Customer Voice to properly
+    attribute CV surveys to servers.
+    
+    The CSV should have columns: Name, Location, Sent, Received, Response Rate, Avg Rating, NPS
+    
+    This updates the cv_nps collection with accurate server-level NPS data.
+    """
+    import csv
+    import io
+    
+    try:
+        contents = await file.read()
+        csv_text = contents.decode('utf-8')
+        reader = csv.DictReader(io.StringIO(csv_text))
+        
+        records_updated = 0
+        total_surveys = 0
+        
+        for row in reader:
+            server_name = row.get('Name', '').strip()
+            if not server_name or server_name == 'Manager App Manager App':
+                continue
+            
+            received = int(row.get('Received', 0) or 0)
+            sent = int(row.get('Sent', 0) or 0)
+            nps_score = float(row.get('NPS', 0) or 0)
+            avg_rating = float(row.get('Avg Rating', 0) or 0)
+            
+            if received == 0:
+                continue
+            
+            total_surveys += received
+            
+            # Calculate promoters/passives/detractors from NPS
+            # NPS = (promoters - detractors) / received * 100
+            # For now, estimate based on NPS score
+            if nps_score >= 75:
+                promoters = received
+                detractors = 0
+                passives = 0
+            elif nps_score >= 50:
+                promoters = int(received * 0.75)
+                passives = int(received * 0.25)
+                detractors = 0
+            elif nps_score >= 0:
+                promoters = int(received * 0.5)
+                passives = int(received * 0.3)
+                detractors = int(received * 0.2)
+            else:
+                promoters = 0
+                passives = int(received * 0.3)
+                detractors = int(received * 0.7)
+            
+            # Ensure counts sum to received
+            total = promoters + passives + detractors
+            if total < received:
+                promoters += (received - total)
+            
+            # Find matching employee in database
+            employee = await db.employees_v2.find_one({
+                "quarter": quarter.upper(),
+                "year": year,
+                "$or": [
+                    {"name": {"$regex": f"^{server_name}$", "$options": "i"}},
+                    {"name": {"$regex": server_name.split()[0], "$options": "i"}} if ' ' in server_name else {"name": server_name}
+                ]
+            })
+            
+            employee_id = employee.get("id") if employee else None
+            
+            # Update or insert cv_nps record
+            await db.cv_nps.update_one(
+                {
+                    "employee_name": server_name,
+                    "quarter": quarter.upper(),
+                    "year": year
+                },
+                {"$set": {
+                    "employee_name": server_name,
+                    "employee_id": employee_id,
+                    "quarter": quarter.upper(),
+                    "year": year,
+                    "nps_score": nps_score,
+                    "received": received,
+                    "sent": sent,
+                    "promoters": promoters,
+                    "passives": passives,
+                    "detractors": detractors,
+                    "avg_rating": avg_rating,
+                    "source": "csv_upload",
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                }},
+                upsert=True
+            )
+            records_updated += 1
+        
+        return {
+            "success": True,
+            "message": f"Updated {records_updated} server NPS records",
+            "records_updated": records_updated,
+            "total_surveys": total_surveys,
+            "quarter": quarter,
+            "year": year
+        }
+        
+    except Exception as e:
+        logging.error(f"Server Performance CSV upload error: {e}")
+        raise HTTPException(status_code=500, detail=f"CSV upload failed: {str(e)}")
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
