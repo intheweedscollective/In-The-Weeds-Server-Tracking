@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Star, Plus, Search, Filter, Trash2, Edit2, MessageSquare, TrendingUp, Award, X, Check, AlertCircle, RefreshCw, Cloud, CheckCircle, Sparkles, Ban, Undo2 } from "lucide-react";
+import { Star, Plus, Search, Filter, Trash2, Edit2, MessageSquare, TrendingUp, Award, X, Check, AlertCircle, RefreshCw, Cloud, CheckCircle, Sparkles, Ban, Undo2, Upload } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { toast } from "sonner";
@@ -162,6 +162,44 @@ export default function ReviewTracker() {
     }
   };
 
+  // Upload Server Performance CSV
+  const handleServerPerfUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    // Validate file type
+    if (!file.name.endsWith('.csv')) {
+      toast.error("Please upload a CSV file");
+      return;
+    }
+    
+    toast.info("Uploading Server Performance data...");
+    
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const res = await fetch(
+        `${API_URL}/api/v2/cv/server-performance/upload?quarter=${selectedQuarter}&year=${selectedYear}`,
+        { method: "POST", body: formData }
+      );
+      
+      const data = await res.json();
+      
+      if (data.success) {
+        toast.success(`Updated ${data.records_updated} server NPS records (${data.total_surveys} surveys)`);
+        fetchData();
+      } else {
+        toast.error(data.message || data.detail || "Upload failed");
+      }
+    } catch (error) {
+      toast.error("Server Performance upload failed");
+    }
+    
+    // Clear the input
+    event.target.value = '';
+  };
+
   // Exclude CV feedback from rankings
   const handleExcludeFeedback = async (feedbackId) => {
     try {
@@ -265,6 +303,27 @@ export default function ReviewTracker() {
                 )}
                 {syncingCV ? "Syncing..." : "Sync Customer Voice"}
               </Button>
+              
+              {/* Server Performance CSV Upload */}
+              <label className="cursor-pointer">
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={handleServerPerfUpload}
+                  className="hidden"
+                  data-testid="server-perf-upload-input"
+                />
+                <Button
+                  variant="outline"
+                  className="border-orange-400 text-orange-600 hover:bg-orange-50 pointer-events-none"
+                  asChild
+                >
+                  <span>
+                    <Upload className="w-4 h-4 mr-2" />
+                    Upload Server Report
+                  </span>
+                </Button>
+              </label>
               
               {/* ReviewTrackers Sync Button */}
               {syncStatus?.configured && (
