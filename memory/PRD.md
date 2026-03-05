@@ -204,6 +204,48 @@ Build a comprehensive performance review application for restaurant employees (B
 - ✅ **PWA Icons**: Added Bubba Gump logo for mobile home screen
 - ✅ **Review Tracker Label Fix**: Corrected "CV SCORE" → "Review Tracker" in expanded view
 
+### Changes (Mar 5, 2026) - NEW SCORING MODEL IMPLEMENTATION
+
+#### User-Confirmed Scoring Model Implemented
+The scoring model has been completely updated based on user confirmation:
+
+**1. Weighted POS Metrics (75 pts max)**
+| Metric | Weight |
+|--------|--------|
+| PPA | 25% |
+| LSC | 25% |
+| LBW | 15% |
+| Glassware | 10% |
+
+**2. Review Tracker**: +0.2 pts per mention (uncapped)
+
+**3. Customer Voice (NO CAP - highly incentivized)**
+- **NPS% Bonus**:
+  - 100% NPS = 5 pts
+  - 75-99.9% NPS = 2.5 pts
+  - Below 75% = 0 pts
+- **Survey Points**:
+  - Promoter (9-10 rating): +1 pt each
+  - Detractor (6 or below): -2 pts each
+- **NO CAP** on total CV score
+
+**4. Metric Bonuses (up to 20 pts total)**
+- 5 pts max per metric (PPA, LSC, LBW, Glassware)
+- Linear scale from 100%-120% of benchmark
+- Example: 110% = 2.5 pts, 105% = 1.25 pts
+
+**Files Modified:**
+- `backend/scoring_engine.py`: Complete rewrite of scoring functions
+  - `calculate_customer_voice_score()`: Now uses NPS bonus tiers + promoter/detractor points
+  - `calculate_bonus_points()`: Linear scale from 100%-120%
+  - `calculate_total_score()`: Updated weights (PPA 25%, LSC 25%, LBW 15%, Glass 10%)
+- `backend/server.py`: Updated `recalculate_snapshot()` to pull CV promoters/detractors from cv_nps collection
+
+**Verification Examples:**
+- Keisha Martin: 9 promoters + 100% NPS → CV Score = 5 + 9 = 14 pts ✅
+- Starwars Mckinnon-Herrera: 4 promoters + 75% NPS → CV Score = 2.5 + 4 = 6.5 pts ✅
+- Daniel Mayorga: 6 promoters + 50% NPS → CV Score = 0 + 6 = 6 pts ✅
+
 ### Changes (Feb 21, 2026) - UI Label & Data Fix
 - ✅ Fixed "CV SCORE" label in Rankings page expanded view → Now shows "Review Tracker"
 - ✅ Fixed Review Tracker value displaying wrong data (was showing NPS points, now shows mentions × 0.2)
@@ -211,14 +253,11 @@ Build a comprehensive performance review application for restaurant employees (B
   - After: Shows `review_tracker_bonus` = +0.6 (3 mentions × 0.2)
   - Now displays calculation breakdown: "3 mentions × 0.2"
 
-### Changes (Feb 20, 2026) - Scoring Model Overhaul
+### Changes (Feb 20, 2026) - Scoring Model (SUPERSEDED by Mar 5, 2026 update)
 
-#### NPS Scoring Simplified
-- **NEW Formula**: `NPS% × 0.10` (2.5 pts per 25%, max ±10 pts)
-- **Scale**:
-  - -100% = -10 pts | -50% = -5 pts | 0% = 0 pts
-  - 25% = 2.5 pts | 50% = 5 pts | 75% = 7.5 pts | 100% = 10 pts
-- **OLD Formula** (removed): Estimated promoter/detractor counts which were often inaccurate
+#### NPS Scoring (OLD - NO LONGER USED)
+- **OLD Formula**: `NPS% × 0.10` (2.5 pts per 25%, max ±10 pts)
+- **REPLACED BY**: NPS% Bonus tiers (5/2.5/0 pts) + Promoter/Detractor points
 
 #### Review Bonus
 - **Formula**: ReviewTracker mentions × 0.2 pts each (separate bonus, uncapped)

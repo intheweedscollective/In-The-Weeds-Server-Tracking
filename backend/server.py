@@ -2913,7 +2913,7 @@ async def get_analytics_pdf_v2(year: int, quarter: str):
     # Get frontend URL from environment
     frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
     # Use the preview URL for capturing
-    preview_url = os.environ.get("REACT_APP_BACKEND_URL", "https://loyalty-voice.preview.emergentagent.com")
+    preview_url = os.environ.get("REACT_APP_BACKEND_URL", "https://employee-pulse-36.preview.emergentagent.com")
     if "preview.emergentagent.com" in preview_url:
         frontend_url = preview_url.replace("/api", "").rstrip("/")
     
@@ -3896,14 +3896,19 @@ async def recalculate_snapshot(snapshot_id: str):
             emp_name = emp_data.get("name", "Unknown")
             emp_name_lower = emp_name.strip().lower()
             
-            # Get NPS score for this employee (with partial name matching)
+            # Get NPS data for this employee (with partial name matching)
+            # This includes nps_score, promoters, detractors, passives
             nps_data = get_nps_for_employee(emp_name)
             nps_score = nps_data.get("nps_score", 0) or 0
+            cv_promoters = nps_data.get("promoters", 0) or 0
+            cv_passives = nps_data.get("passives", 0) or 0
+            cv_detractors = nps_data.get("detractors", 0) or 0
             
             # Get review mentions for this employee (with partial name matching)
             review_mentions = get_review_mentions_for_employee(emp_name)
             
             # Create EmployeeV2 from existing data
+            # Use CV data from cv_nps collection (not from snapshot which may be stale)
             emp = EmployeeV2(
                 id=emp_data.get("id", str(uuid.uuid4())),
                 name=emp_name,
@@ -3915,11 +3920,11 @@ async def recalculate_snapshot(snapshot_id: str):
                 wine_sales=emp_data.get("wine_sales", 0),
                 glassware_sales=emp_data.get("glassware_sales", 0),
                 lsc_count=emp_data.get("lsc_count", 0),
-                cv_promoters=emp_data.get("cv_promoters", 0),
-                cv_passives=emp_data.get("cv_passives", 0),
-                cv_detractors=emp_data.get("cv_detractors", 0),
+                cv_promoters=cv_promoters,  # From cv_nps collection
+                cv_passives=cv_passives,     # From cv_nps collection
+                cv_detractors=cv_detractors, # From cv_nps collection
                 review_mentions=review_mentions,
-                nps_score=nps_score,  # Add NPS score from cv_nps collection
+                nps_score=nps_score,  # From cv_nps collection
                 year=snapshot["year"],
                 quarter=snapshot["quarter"],
             )

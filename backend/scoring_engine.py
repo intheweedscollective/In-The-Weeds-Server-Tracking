@@ -1,22 +1,35 @@
 """
-Restaurant Performance Engine v2.2
+Restaurant Performance Engine v2.3
 Q1 2026 Official Scoring Model - Bubba Gump Shrimp Co.
 
-Scoring Logic:
-- PPA (25%), LSC (25%), LBW (20%), Glassware (15%) = 85 pts base
-- NPS (15%): NPS% × 0.15 = 0-15 pts (from Loyalty Voice)
-- Review Tracker Bonus: Mentions × 0.2 pts (separate bonus)
-- Metric Bonuses: Up to 5 pts each for exceeding benchmarks
-- DAR: Disciplinary penalties (admin-only, applied at final stage)
+USER CONFIRMED SCORING MODEL:
+=============================
 
-NPS Scoring Scale (2.5 pts per 25%):
-- -100% NPS = -10 points
-- -50% NPS = -5 points
-- 0% NPS = 0 points
-- 25% NPS = 2.5 points
-- 50% NPS = 5 points
-- 75% NPS = 7.5 points
-- 100% NPS = 10 points (cap)
+1. WEIGHTED POS METRICS (75% of base score):
+   - PPA: 25%
+   - LSC: 25%
+   - LBW: 15%
+   - Glassware: 10%
+
+2. REVIEW TRACKER: +0.2 pts per mention (uncapped bonus)
+
+3. CUSTOMER VOICE (NO CAP - highly incentivized):
+   - NPS% Bonus: 
+     * 100% NPS = 5 pts
+     * 75-99.9% NPS = 2.5 pts
+     * Below 75% = 0 pts
+   - Survey Points:
+     * Promoter (9-10 rating): +1 pt each
+     * Detractor (6 or below): -2 pts each
+
+4. METRIC BONUSES (up to 20 pts total):
+   - 5 pts max per metric (PPA, LSC, LBW, Glassware)
+   - Linear scale from 100%-120% of benchmark
+   - Example: 110% = 2.5 pts, 105% = 1.25 pts
+
+5. DAR: Disciplinary penalties (admin-only, applied at final stage)
+
+TOTAL SCORE = Weighted POS (75 max) + Review Tracker + CV Score + Metric Bonuses (20 max) - DAR
 """
 
 from typing import Optional, Dict, Any, List, Tuple
@@ -31,31 +44,42 @@ import pandas as pd
 # SCORING CONSTANTS
 # ============================================================================
 
-# NPS-based scoring (simplified)
-# NPS_points = NPS% × 0.10 (max 10 points, 2.5 pts per 25%)
-NPS_WEIGHT = 0.10
-NPS_MAX_POINTS = 10
+# Customer Voice scoring (User Confirmed Model)
+CV_PROMOTER_POINTS = 1    # +1 per promoter (9-10 rating)
+CV_PASSIVE_POINTS = 0     # 0 for passive (7-8)
+CV_DETRACTOR_POINTS = -2  # -2 per detractor (6 or below)
+# NO CAP on CV score - highly incentivize Customer Voice
+
+# NPS% Bonus thresholds
+NPS_BONUS_100 = 5.0      # 5 pts for 100% NPS
+NPS_BONUS_75_99 = 2.5    # 2.5 pts for 75-99.9% NPS
+NPS_BONUS_BELOW_75 = 0.0 # 0 pts for below 75%
 
 # Review Tracker Bonus
-RT_POINTS_PER_MENTION = 0.2  # Each mention = 0.2 points
+RT_POINTS_PER_MENTION = 0.2  # Each mention = 0.2 points (uncapped)
 
-# Legacy constants (kept for backwards compatibility)
-CV_PROMOTER_POINTS = 1
-CV_PASSIVE_POINTS = 0
-CV_DETRACTOR_POINTS = -2
-CV_MIN_POINTS = -6
-CV_MAX_POINTS = 10
+# Metric Bonus Settings (User Confirmed)
+# 5 pts max per metric, linear scale from 100%-120%
+METRIC_BONUS_MAX = 5.0       # Max bonus per metric
+METRIC_BONUS_THRESHOLD = 120 # At 120%+, get full 5 pts
 
 # DAR Penalties
 DAR_WRITTEN_WARNING = -3
 DAR_SUSPENSION = -5
 
+# Legacy constants (kept for backwards compatibility)
+NPS_WEIGHT = 0.10
+NPS_MAX_POINTS = 10
+CV_MIN_POINTS = -6
+CV_MAX_POINTS = 10
 
-# MAX SCORE BREAKDOWN:
-# Base Weighted: 100 pts (PPA 25 + LSC 25 + LBW 20 + Glass 15 + NPS 15)
+
+# MAX SCORE BREAKDOWN (User Confirmed Model):
+# Weighted POS: 75 pts (PPA 25 + LSC 25 + LBW 15 + Glass 10)
 # Metric Bonuses: 20 pts (PPA 5 + LSC 5 + LBW 5 + Glass 5)
 # Review Tracker Bonus: Mentions × 0.2 pts (uncapped)
-# TOTAL: 120+ pts possible
+# Customer Voice: NPS Bonus (0-5 pts) + Survey Points (+1/-2 each, NO CAP)
+# TOTAL: 95+ pts base possible, plus uncapped RT and CV bonuses
 
 
 # ============================================================================
@@ -163,7 +187,8 @@ class EmployeeV2(BaseModel):
 class QuarterSettings(BaseModel):
     """
     Quarter-specific settings including benchmarks.
-    Q1 2026 Official Model: PPA(25%), LSC(25%), LBW(20%), Glass(15%), CV(15%)
+    Q1 2026 User Confirmed Model: PPA(25%), LSC(25%), LBW(15%), Glass(10%)
+    CV and Review Tracker are handled as separate bonuses (not weighted)
     """
     model_config = ConfigDict(extra="ignore")
     
@@ -176,17 +201,17 @@ class QuarterSettings(BaseModel):
     benchmark_lbw: float = 8.0
     benchmark_glass: float = 1.25  # Per handout: $1.25 per person
     benchmark_lsc: float = 100.0   # Guests per LSC (lower is better)
-    benchmark_cv: float = 5.0     # Expected CV score (baseline for normalization)
+    benchmark_cv: float = 5.0     # Expected CV score (baseline for reference)
     
-    # === METRIC WEIGHTS (must sum to 1.0) - Q1 2026 Official ===
-    weight_ppa: float = 0.25      # Was 0.30
-    weight_lbw: float = 0.20      # Was 0.25
-    weight_glass: float = 0.15    # Was 0.20
-    weight_lsc: float = 0.25      # Same
-    weight_cv: float = 0.15       # NEW - Customer Voice & Review Tracker
+    # === METRIC WEIGHTS (User Confirmed - sum to 0.75 for POS metrics) ===
+    weight_ppa: float = 0.25      # PPA at 25%
+    weight_lbw: float = 0.15      # LBW at 15% (was 0.20)
+    weight_glass: float = 0.10    # Glassware at 10% (was 0.15)
+    weight_lsc: float = 0.25      # LSC at 25%
+    weight_cv: float = 0.00       # CV is now a separate bonus, not weighted
     
-    # === BONUS SETTINGS ===
-    bonus_rate: float = 0.2  # 0.2 per 1% over benchmark
+    # === BONUS SETTINGS (User Confirmed) ===
+    bonus_rate: float = 0.25  # (score - 100) / 20 * 5 = linear to 5 pts at 120%
     bonus_cap: float = 5.0   # Max bonus per metric
     
     # === SERVER TIER THRESHOLDS (Settings-driven) ===
@@ -402,33 +427,42 @@ def calculate_derived_metrics(employee: EmployeeV2) -> EmployeeV2:
 
 def calculate_customer_voice_score(employee: EmployeeV2) -> EmployeeV2:
     """
-    Calculate Customer Voice score using NPS percentage directly.
+    Calculate Customer Voice score using the NEW MODEL (User Confirmed):
     
-    NEW MODEL (Simplified):
-    - Use NPS% directly from Loyalty Voice sync
-    - NPS_points = NPS% × 0.10 (2.5 pts per 25%)
-    - Max +10 pts, Min -10 pts
+    COMPONENTS:
+    1. NPS% Bonus:
+       - 100% NPS = 5 pts
+       - 75-99.9% NPS = 2.5 pts
+       - Below 75% = 0 pts
     
-    Scale:
-    - -100% NPS = -10 points
-    - -50% NPS = -5 points
-    - 0% NPS = 0 points
-    - 25% NPS = 2.5 points
-    - 50% NPS = 5 points
-    - 75% NPS = 7.5 points
-    - 100% NPS = 10 points
+    2. Survey Points (from individual feedback):
+       - Promoter (9-10 rating): +1 pt each
+       - Detractor (6 or below): -2 pts each
+       - Passive (7-8): 0 pts
+    
+    TOTAL CV Score = NPS Bonus + Survey Points (NO CAP - highly incentivize CV)
     
     Review Tracker mentions are handled separately as Review Bonus.
     """
-    # Get NPS score from Loyalty Voice sync (ranges -100 to +100)
+    # 1. Calculate NPS% Bonus
     nps = employee.nps_score or 0
+    if nps >= 100:
+        nps_bonus = 5.0
+    elif nps >= 75:
+        nps_bonus = 2.5
+    else:
+        nps_bonus = 0.0
     
-    # Calculate CV score: NPS% × 0.10 (2.5 pts per 25%)
-    # Both positive and negative use same multiplier, capped at ±10
-    nps_points = nps * 0.10
+    # 2. Calculate Survey Points from promoters/detractors
+    promoters = employee.cv_promoters or 0
+    detractors = employee.cv_detractors or 0
+    survey_points = (promoters * CV_PROMOTER_POINTS) + (detractors * CV_DETRACTOR_POINTS)
     
-    employee.cv_score = round(nps_points, 2)
-    employee.cv_raw_points = round(nps_points, 2)
+    # Total CV Score = NPS Bonus + Survey Points (NO CAP)
+    total_cv_score = nps_bonus + survey_points
+    
+    employee.cv_score = round(total_cv_score, 2)
+    employee.cv_raw_points = round(survey_points, 2)  # Store survey points separately
     
     return employee
 
@@ -522,14 +556,25 @@ def calculate_normalized_scores(employee: EmployeeV2, settings: QuarterSettings)
 
 def calculate_bonus_points(employee: EmployeeV2, settings: QuarterSettings) -> EmployeeV2:
     """
-    Calculate bonus points (Y-AB logic).
-    If Score > 100: Bonus = MIN((Score - 100) * rate, cap)
-    Else: Bonus = 0
+    Calculate metric bonus points (User Confirmed Model).
+    
+    NEW MODEL:
+    - 5 pts max for each metric (PPA, LSC, LBW, Glassware)
+    - Based on how much they exceed benchmark:
+      - 120%+ of benchmark = 5 pts (max)
+      - 100%-120% = linear scale (e.g., 110% = 2.5 pts, 105% = 1.25 pts)
+      - Below 100% = 0 pts bonus
+    
+    Formula: bonus = ((score% - 100) / 20) * 5, capped at 5
     """
     def calc_bonus(score: Optional[float]) -> float:
         if score is None or score <= 100:
             return 0
-        return min((score - 100) * settings.bonus_rate, settings.bonus_cap)
+        # Linear scale from 100% to 120%
+        # At 100%: 0 pts, at 110%: 2.5 pts, at 120%+: 5 pts
+        excess_percent = score - 100  # How much over 100%
+        bonus = (excess_percent / 20) * 5  # Scale to 5 pts max at 20% over
+        return min(bonus, 5.0)  # Cap at 5 pts
     
     employee.bonus_ppa = round(calc_bonus(employee.score_ppa), 2)
     employee.bonus_lbw = round(calc_bonus(employee.score_lbw), 2)
@@ -546,52 +591,67 @@ def calculate_bonus_points(employee: EmployeeV2, settings: QuarterSettings) -> E
 
 def calculate_total_score(employee: EmployeeV2, settings: QuarterSettings) -> EmployeeV2:
     """
-    Calculate weighted score + total score.
+    Calculate weighted score + total score using USER CONFIRMED MODEL.
     
-    NEW MODEL (Simplified):
-    Base Score = Weighted(PPA + LSC + LBW + Glass) + NPS Points
-               = (PPA×25% + LSC×25% + LBW×20% + Glass×15%) + (NPS%×0.15)
-               = 85 pts max + 15 pts max = 100 pts base max
+    NEW SCORING MODEL:
+    ==================
+    1. WEIGHTED POS METRICS (75% total of base 100):
+       - PPA: 25%
+       - LSC: 25%  
+       - LBW: 15%
+       - Glassware: 10%
     
-    Total Score = Base Score + Metric Bonuses + Review Tracker Bonus - DAR
+    2. REVIEW TRACKER: +0.2 pts per mention (uncapped bonus)
     
-    Weights: PPA 25%, LSC 25%, LBW 20%, Glass 15% = 85 pts
-    NPS: NPS% × 0.15 = 15 pts max
-    Metric Bonuses: Up to 5 pts each (PPA, LBW, LSC, Glass) = 20 pts max
-    Review Tracker Bonus: Mentions × 0.2 pts
+    3. CUSTOMER VOICE (NO CAP - highly incentivized):
+       - NPS% Bonus: 5 pts (100%), 2.5 pts (75-99.9%), 0 pts (<75%)
+       - Survey Points: +1 per promoter (9-10), -2 per detractor (≤6)
+    
+    4. METRIC BONUSES (up to 20 pts total):
+       - 5 pts max per metric at 120%+ of benchmark
+       - Linear scale from 100%-120%
+    
+    TOTAL = Weighted POS Score + Review Tracker Bonus + CV Score + Metric Bonuses
     """
     # Cap each metric score at 100 before applying weight
-    # Base weighted score: PPA + LSC + LBW + Glass = 85 pts max
     capped_ppa = min((employee.score_ppa or 0), 100)
     capped_lbw = min((employee.score_lbw or 0), 100)
     capped_glass = min((employee.score_glass or 0), 100)
     capped_lsc = min((employee.score_lsc or 0), 100)
     
-    # Calculate weighted score from capped metrics (85 pts max)
-    metric_weighted = round(
-        capped_ppa * settings.weight_ppa +
-        capped_lbw * settings.weight_lbw +
-        capped_glass * settings.weight_glass +
-        capped_lsc * settings.weight_lsc,
+    # Calculate weighted POS score using USER CONFIRMED weights:
+    # PPA: 25%, LSC: 25%, LBW: 15%, Glassware: 10% = 75% total
+    weighted_pos_score = round(
+        capped_ppa * 0.25 +    # PPA at 25%
+        capped_lsc * 0.25 +    # LSC at 25%
+        capped_lbw * 0.15 +    # LBW at 15%
+        capped_glass * 0.10,   # Glassware at 10%
         2
     )
     
-    # Add NPS points (already calculated as NPS% × 0.15, max 15 pts)
-    nps_points = employee.cv_score or 0
+    # Store weighted score (POS metrics only, before bonuses)
+    employee.weighted_score = weighted_pos_score
     
-    # Total weighted score (base 100 pts max)
-    employee.weighted_score = round(metric_weighted + nps_points, 2)
+    # Get CV score (NPS bonus + survey points, NO CAP)
+    cv_score = employee.cv_score or 0
+    
+    # Get Review Tracker bonus (0.2 pts per mention)
+    review_bonus = employee.review_tracker_bonus or 0
+    
+    # Get metric bonuses (up to 20 pts total)
+    metric_bonus = employee.total_metric_bonus or 0
     
     # Pre-DAR score (shown in rankings)
-    # Add Metric Bonuses and Review Tracker Bonus
+    # = Weighted POS + Review Tracker + CV Score + Metric Bonuses
     employee.pre_dar_score = round(
-        employee.weighted_score + 
-        (employee.total_metric_bonus or 0) +
-        (employee.review_tracker_bonus or 0),
+        weighted_pos_score + 
+        review_bonus +
+        cv_score +
+        metric_bonus,
         2
     )
     
-    # Final total score (includes DAR, admin-only)
+    # Final total score (includes DAR penalties, admin-only)
     employee.total_score = round(
         employee.pre_dar_score + (employee.dar_penalty or 0),
         2
