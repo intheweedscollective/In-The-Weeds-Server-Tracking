@@ -264,6 +264,18 @@ The scoring model has been completely updated based on user confirmation:
 **Files Modified:**
 - `frontend/src/pages/FullRankings.js`: Added Tooltip components with CV breakdown
 
+#### Slide Color Coding Fix (Mar 5, 2026)
+**Issue**: Rankings slide download was missing cell-level color coding based on performance
+**Fix Applied**: Updated `backend/yodeck_slides.py` to restore:
+1. **Cell background colors** based on metric performance:
+   - 🟩 Green (#22C55E): >= 110% (Exceeding)
+   - 🟦 Cyan (#06B6D4): 100-109% (Meeting)
+   - 🟨 Yellow (#EAB308): 80-99% (Work in Progress)
+   - 🟥 Red (#EF4444): < 80% (Needs Improvement)
+2. **Left panel legend** explaining the color coding
+3. **Column headers** updated to match prior format: PPA, LBW, GLASS, LSC, Review Bonus, Metric Bonus, Total Score
+4. **Total Score cell** colored based on tier (green/yellow/red)
+
 ### Changes (Feb 21, 2026) - UI Label & Data Fix
 - ✅ Fixed "CV SCORE" label in Rankings page expanded view → Now shows "Review Tracker"
 - ✅ Fixed Review Tracker value displaying wrong data (was showing NPS points, now shows mentions × 0.2)
