@@ -236,15 +236,19 @@ The scoring model has been completely updated based on user confirmation:
 
 **Files Modified:**
 - `backend/scoring_engine.py`: Complete rewrite of scoring functions
-  - `calculate_customer_voice_score()`: Now uses NPS bonus tiers + promoter/detractor points
-  - `calculate_bonus_points()`: Linear scale from 100%-120%
-  - `calculate_total_score()`: Updated weights (PPA 25%, LSC 25%, LBW 15%, Glass 10%)
 - `backend/server.py`: Updated `recalculate_snapshot()` to pull CV promoters/detractors from cv_nps collection
 
-**Verification Examples:**
-- Keisha Martin: 9 promoters + 100% NPS → CV Score = 5 + 9 = 14 pts ✅
-- Starwars Mckinnon-Herrera: 4 promoters + 75% NPS → CV Score = 2.5 + 4 = 6.5 pts ✅
-- Daniel Mayorga: 6 promoters + 50% NPS → CV Score = 0 + 6 = 6 pts ✅
+#### CV Quarter Data Fix (Mar 5, 2026)
+**Issue**: CV feedback records had incorrect quarter/year assignments (all marked Q4 2025 instead of Q1 2026)
+**Root Cause**: Scraper stored the passed-in quarter parameter instead of deriving from actual feedback date
+**Fix Applied**:
+1. Updated all `cv_feedback` records to have correct quarter/year based on actual date
+2. Recalculated `cv_nps` aggregates for both Q1 2026 and Q4 2025
+3. Recalculated all employee scores
+
+**Verified Results**:
+- Q1 2026: 100 feedback entries, 24 cv_nps records, 4 employees with detractors
+- Detractors now correctly counted: Daniel Mayorga (2), Tarek Araman (1), Ethan Dever (1), Robert Mckinnon (1)
 
 #### CV Score Breakdown Tooltip Enhancement
 - Added info icon (ℹ️) to "Customer Voice" column header with scoring explanation
