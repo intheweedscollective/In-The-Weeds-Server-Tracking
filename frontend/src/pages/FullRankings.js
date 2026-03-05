@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Trophy, Calendar, Filter, ChevronDown, ChevronUp, Download, FileText, Medal, Award, Star, Users, Image, MessageCircle, RefreshCw, Edit3, Check, X, Search, TrendingUp, TrendingDown, Target, ArrowUp } from "lucide-react";
+import { Trophy, Calendar, Filter, ChevronDown, ChevronUp, Download, FileText, Medal, Award, Star, Users, Image, MessageCircle, RefreshCw, Edit3, Check, X, Search, TrendingUp, TrendingDown, Target, ArrowUp, Info } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../components/ui/tooltip";
 import { formatNumber, formatCurrency } from "../utils/formatters";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -631,7 +632,25 @@ export default function FullRankings() {
                     <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-white">Employee</th>
                     <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-white">Tier</th>
                     <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-white">Total Score</th>
-                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden md:table-cell text-white">Customer Voice</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden md:table-cell text-white">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger className="flex items-center justify-center gap-1 cursor-help">
+                            Customer Voice <Info className="w-3 h-3 opacity-60" />
+                          </TooltipTrigger>
+                          <TooltipContent className="bg-slate-800 text-white p-3 max-w-xs">
+                            <div className="text-xs space-y-1">
+                              <div className="font-bold mb-1">CV Score Breakdown:</div>
+                              <div>• NPS 100% = +5 pts</div>
+                              <div>• NPS 75-99% = +2.5 pts</div>
+                              <div>• Each Promoter (9-10) = +1 pt</div>
+                              <div>• Each Detractor (≤6) = -2 pts</div>
+                              <div className="mt-2 text-green-400 font-semibold">No cap on CV score!</div>
+                            </div>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </th>
                     <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden lg:table-cell text-white">Review Bonus</th>
                     <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden lg:table-cell text-white">Metric Bonus</th>
                     <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell text-white">PPA (25%)</th>
@@ -700,9 +719,57 @@ export default function FullRankings() {
                             </span>
                           </td>
                           
-                          {/* NPS Score */}
+                          {/* NPS Score with CV Breakdown Tooltip */}
                           <td className="px-4 py-4 text-center hidden md:table-cell" data-testid={`nps-score-${employee.position}`}>
-                            {formatNps(getEmployeeNps(employee.employee_id))}
+                            {(() => {
+                              const empData = getEmployeeDetails(employee.employee_id);
+                              const nps = empData.nps_score || 0;
+                              const promoters = empData.cv_promoters || 0;
+                              const detractors = empData.cv_detractors || 0;
+                              const cvScore = empData.cv_score || 0;
+                              const npsBonus = nps >= 100 ? 5 : nps >= 75 ? 2.5 : 0;
+                              const surveyPts = promoters - (detractors * 2);
+                              
+                              return (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger className="cursor-help">
+                                      <div className="flex flex-col items-center">
+                                        {formatNps(nps)}
+                                        {cvScore > 0 && (
+                                          <span className="text-xs text-green-400 font-semibold">+{cvScore} pts</span>
+                                        )}
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="bg-slate-800 text-white p-3 max-w-xs border border-slate-600">
+                                      <div className="text-xs space-y-1">
+                                        <div className="font-bold text-primary mb-2">{employee.name}'s CV Score</div>
+                                        <div className="flex justify-between">
+                                          <span>NPS ({nps}%):</span>
+                                          <span className={npsBonus > 0 ? "text-green-400" : "text-slate-400"}>+{npsBonus} pts</span>
+                                        </div>
+                                        {promoters > 0 && (
+                                          <div className="flex justify-between">
+                                            <span>Promoters ({promoters} × +1):</span>
+                                            <span className="text-green-400">+{promoters} pts</span>
+                                          </div>
+                                        )}
+                                        {detractors > 0 && (
+                                          <div className="flex justify-between">
+                                            <span>Detractors ({detractors} × -2):</span>
+                                            <span className="text-red-400">-{detractors * 2} pts</span>
+                                          </div>
+                                        )}
+                                        <div className="border-t border-slate-600 pt-1 mt-1 flex justify-between font-bold">
+                                          <span>Total CV Score:</span>
+                                          <span className="text-primary">{cvScore} pts</span>
+                                        </div>
+                                      </div>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              );
+                            })()}
                           </td>
                           
                           {/* Review Bonus: Combined RT + NPS */}

@@ -246,6 +246,20 @@ The scoring model has been completely updated based on user confirmation:
 - Starwars Mckinnon-Herrera: 4 promoters + 75% NPS → CV Score = 2.5 + 4 = 6.5 pts ✅
 - Daniel Mayorga: 6 promoters + 50% NPS → CV Score = 0 + 6 = 6 pts ✅
 
+#### CV Score Breakdown Tooltip Enhancement
+- Added info icon (ℹ️) to "Customer Voice" column header with scoring explanation
+- Each employee's CV cell now shows:
+  - NPS percentage (color-coded: green ≥75%, yellow 50-74%, red <50%)
+  - CV Score in green below (e.g., "+14 pts")
+- Hovering on any CV cell shows detailed breakdown:
+  - NPS Bonus contribution
+  - Promoter count and points
+  - Detractor count and penalty
+  - Total CV Score
+
+**Files Modified:**
+- `frontend/src/pages/FullRankings.js`: Added Tooltip components with CV breakdown
+
 ### Changes (Feb 21, 2026) - UI Label & Data Fix
 - ✅ Fixed "CV SCORE" label in Rankings page expanded view → Now shows "Review Tracker"
 - ✅ Fixed Review Tracker value displaying wrong data (was showing NPS points, now shows mentions × 0.2)
