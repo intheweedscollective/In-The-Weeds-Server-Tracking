@@ -1438,28 +1438,30 @@ def generate_complete_rankings_slide(
             text_color = "#FFFFFF" if cell_color else "#222222"
             draw.text((cell_x + cell_w // 2, row_cy), text, font=font_data, fill=text_color, anchor="mm")
         
-        # PPA - color based on score percentage
-        ppa_raw = emp.get("ppa") or emp.get("score_ppa", 0) or 0
-        draw_metric_cell(2, ppa_raw, "${:.2f}", ppa_raw)
+        # PPA - use percentage score for display and color coding
+        ppa_score = emp.get("score_ppa", 0) or 0
+        draw_metric_cell(2, ppa_score, "{:.2f}", ppa_score)
         
-        # LBW - color based on score percentage
-        lbw_raw = emp.get("lbw_per_guest") or emp.get("score_lbw", 0) or 0
-        draw_metric_cell(3, lbw_raw, "${:.2f}", lbw_raw)
+        # LBW - use percentage score for display and color coding
+        lbw_score = emp.get("score_lbw", 0) or 0
+        draw_metric_cell(3, lbw_score, "{:.2f}", lbw_score)
         
-        # Glass - color based on score percentage
-        glass_raw = emp.get("glassware_per_guest") or emp.get("score_glass", 0) or 0
-        draw_metric_cell(4, glass_raw, "${:.2f}", glass_raw)
+        # Glass - use percentage score for display and color coding
+        glass_score = emp.get("score_glass", 0) or 0
+        draw_metric_cell(4, glass_score, "{:.2f}", glass_score)
         
-        # LSC - color based on score percentage (inverted - lower is better)
-        lsc_raw = emp.get("guests_per_lsc") or emp.get("score_lsc", 0) or 0
-        draw_metric_cell(5, lsc_raw, "{:.1f}", lsc_raw)
+        # LSC - use percentage score for display and color coding
+        lsc_score = emp.get("score_lsc", 0) or 0
+        draw_metric_cell(5, lsc_score, "{:.2f}", lsc_score)
         
-        # Review Bonus - green if positive
-        review_bonus = emp.get("review_tracker_bonus", 0) or 0
-        review_color = (34, 197, 94) if review_bonus > 0 else None
+        # Review Bonus = CV Score + RT Bonus (combined customer feedback bonus)
+        cv_score = emp.get("cv_score", 0) or 0
+        rt_bonus = emp.get("review_tracker_bonus", 0) or 0
+        review_combined = cv_score + rt_bonus
+        review_color = (34, 197, 94) if review_combined > 0 else None
         if review_color:
             draw.rectangle([col_x[6] + 1, y + 1, col_x[6] + columns[6]["width"] - 1, y + row_h - 1], fill=review_color)
-        review_text = f"+{review_bonus:.1f}" if review_bonus > 0 else "-"
+        review_text = f"+{review_combined:.1f}" if review_combined > 0 else "-"
         draw.text((col_x[6] + columns[6]["width"] // 2, row_cy), review_text,
                   font=font_data, fill="#FFFFFF" if review_color else "#222222", anchor="mm")
         
