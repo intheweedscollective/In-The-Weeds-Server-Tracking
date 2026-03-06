@@ -29,11 +29,12 @@ from yodeck_slides import (
     generate_top_10_slide, generate_tier_slide,
     generate_most_improved_slide, generate_promotion_watchlist_slide, generate_at_risk_slide,
     generate_complete_rankings_slide, generate_top_10_by_metric_slide,
-    generate_printable_rankings_slide,
+    generate_printable_rankings_slide, generate_leaderboard_slide,
     THEMES
 )
 from snapshot_slides import generate_snapshot_slide, get_available_backgrounds, BACKGROUNDS
 from trend_charts import get_previous_quarter, generate_employee_comparison_chart
+from data_integrity import DataIntegrityChecker, VerificationMode
 
 # Import new scoring engine
 from scoring_engine import (
@@ -5669,6 +5670,143 @@ async def upload_server_performance_csv(
         raise HTTPException(status_code=500, detail=f"CSV upload failed: {str(e)}")
 
 
+# ============================================================================
+# DATA INTEGRITY ENDPOINTS (Admin Only)
+# ============================================================================
+
+@api_router.get("/v2/admin/data-integrity/check")
+async def run_integrity_check():
+    """
+    Run a full data integrity check across all data sources.
+    Returns a comprehensive report of any issues found.
+    """
+    checker = DataIntegrityChecker(db)
+    report = await checker.run_full_integrity_check()
+    return report
+
+
+@api_router.get("/v2/admin/data-integrity/review-duplicates")
+async def check_review_duplicates():
+    """
+    Check for duplicate reviews in the system.
+    """
+    checker = DataIntegrityChecker(db)
+    return await checker.check_review_duplicates()
+
+
+@api_router.post("/v2/admin/data-integrity/remove-duplicates")
+async def remove_duplicate_reviews(dry_run: bool = True):
+    """
+    Remove duplicate reviews from the system.
+    Set dry_run=false to actually delete duplicates.
+    """
+    checker = DataIntegrityChecker(db)
+    return await checker.remove_duplicate_reviews(dry_run=dry_run)
+
+
+@api_router.get("/v2/admin/data-integrity/cv-server-names")
+async def check_cv_server_names():
+    """
+    Check CV feedback for missing server names.
+    All CV feedback must have server attribution.
+    """
+    checker = DataIntegrityChecker(db)
+    return await checker.check_cv_server_names()
+
+
+@api_router.post("/v2/admin/data-integrity/flag-invalid-cv")
+async def flag_invalid_cv_feedback(dry_run: bool = True):
+    """
+    Flag CV feedback entries without server names as invalid.
+    These should not be counted in scoring.
+    """
+    checker = DataIntegrityChecker(db)
+    return await checker.fix_cv_server_names(dry_run=dry_run)
+
+
+@api_router.get("/v2/admin/data-integrity/cv-nps-validation")
+async def validate_cv_nps():
+    """
+    Validate that CV NPS records match the raw feedback data.
+    """
+    checker = DataIntegrityChecker(db)
+    return await checker.validate_cv_nps_calculations()
+
+
+@api_router.post("/v2/admin/data-integrity/recalculate-cv-nps")
+async def recalculate_all_cv_nps():
+    """
+    Recalculate all CV NPS records from raw feedback data.
+    This ensures 100% accuracy between feedback and NPS.
+    """
+    checker = DataIntegrityChecker(db)
+    result = await checker.recalculate_all_cv_nps()
+    return {
+        "status": "complete",
+        "message": f"Recalculated NPS for {result['employees_processed']} employees",
+        **result
+    }
+
+
+@api_router.get("/v2/admin/data-integrity/review-counts")
+async def get_review_counts():
+    """
+    Get review counts by source and quarter.
+    """
+    checker = DataIntegrityChecker(db)
+    return await checker.check_review_counts()
+
+
+@api_router.delete("/v2/admin/data-integrity/invalid-cv-feedback")
+async def delete_invalid_cv_feedback():
+    """
+    Delete CV feedback entries that are flagged as invalid (missing server names).
+    This is a destructive operation - use with caution.
+    """
+    checker = DataIntegrityChecker(db)
+    await checker.fix_cv_server_names(dry_run=False)
+    
+    result = await db.cv_feedback.delete_many({"is_valid": False})
+    
+    return {
+        "status": "complete",
+        "deleted_count": result.deleted_count,
+        "message": f"Deleted {result.deleted_count} invalid CV feedback entries"
+    }
+
+
+@api_router.get("/v2/admin/data-integrity/summary")
+async def get_integrity_summary():
+    """
+    Get a quick summary of data integrity status.
+    """
+    total_reviews = await db.customer_reviews.count_documents({})
+    total_cv_feedback = await db.cv_feedback.count_documents({})
+    valid_cv_feedback = await db.cv_feedback.count_documents({
+        "server_name": {"$nin": [None, ""]}
+    })
+    invalid_cv_feedback = total_cv_feedback - valid_cv_feedback
+    
+    total_cv_nps = await db.cv_nps.count_documents({})
+    
+    return {
+        "reviews": {
+            "total": total_reviews
+        },
+        "cv_feedback": {
+            "total": total_cv_feedback,
+            "valid": valid_cv_feedback,
+            "invalid": invalid_cv_feedback,
+            "attribution_rate": round(valid_cv_feedback / total_cv_feedback * 100, 2) if total_cv_feedback > 0 else 0
+        },
+        "cv_nps": {
+            "total": total_cv_nps
+        },
+        "status": "healthy" if invalid_cv_feedback == 0 else "needs_attention",
+        "issues": invalid_cv_feedback
+    }
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
@@ -5686,6 +5824,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

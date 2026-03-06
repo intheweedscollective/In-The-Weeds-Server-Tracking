@@ -13,6 +13,7 @@ import {
   HelpCircle,
   ChevronDown,
   ChevronRight,
+  ShieldCheck,
   Menu,
   X,
   Sun,
@@ -58,6 +59,13 @@ const navGroups = [
     label: "Team",
     items: [
       { path: "/employees", label: "Employees", icon: Users }
+    ]
+  },
+  {
+    id: "admin",
+    label: "Admin",
+    items: [
+      { path: "/data-integrity", label: "Data Integrity", icon: ShieldCheck }
     ]
   }
 ];
