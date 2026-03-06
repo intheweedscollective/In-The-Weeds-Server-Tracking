@@ -5147,15 +5147,48 @@ async def get_cv_nps_scores(quarter: str = "Q1", year: int = 2026):
 
 @api_router.get("/v2/cv/stats")
 async def get_cv_stats(quarter: str = "Q1", year: int = 2026):
-    """Get NPS statistics from Loyalty Voice sync."""
-    # Get NPS records
+    """Get NPS statistics from Loyalty Voice.
+    Uses official CV stats if set (for 100% accuracy with LV dashboard),
+    otherwise falls back to scraped data.
+    """
+    # Check for official stats first
+    official = await db.official_cv_stats.find_one(
+        {"quarter": quarter.upper(), "year": year},
+        {"_id": 0}
+    )
+    
+    # Get NPS records (always needed for breakdown)
     nps_records = await db.cv_nps.find(
         {"quarter": quarter.upper(), "year": year},
         {"_id": 0}
     ).to_list(500)
     
+    # Sort by NPS for breakdown
+    sorted_records = sorted(nps_records, key=lambda x: x.get("nps_score", 0), reverse=True)
+    
+    if official:
+        # Use official LV UI stats for aggregate numbers
+        return {
+            "source": "official_lv_ui",
+            "total_servers": len(nps_records),
+            "avg_nps": official.get("nps_score", 0),
+            "store_nps": official.get("nps_score", 0),
+            "avg_individual_nps": sum(r.get("nps_score", 0) for r in nps_records if r.get("total_surveys", 0) > 0) / len([r for r in nps_records if r.get("total_surveys", 0) > 0]) if nps_records else 0,
+            "highest_nps": sorted_records[0] if sorted_records else None,
+            "lowest_nps": sorted_records[-1] if sorted_records else None,
+            "nps_breakdown": sorted_records[:20],
+            "last_sync": nps_records[0].get("synced_at") if nps_records else None,
+            "promoter_count": official.get("promoters", 0),
+            "passive_count": official.get("passives", 0),
+            "detractor_count": official.get("detractors", 0),
+            "total_surveys": official.get("total_responses", 0),
+            "updated_at": official.get("updated_at")
+        }
+    
+    # Fall back to scraped data
     if not nps_records:
         return {
+            "source": "scraped_data",
             "total_servers": 0,
             "avg_nps": 0,
             "store_nps": 0,
@@ -5173,36 +5206,33 @@ async def get_cv_stats(quarter: str = "Q1", year: int = 2026):
     total_promoters = sum(r.get("promoters", 0) for r in nps_records)
     total_passives = sum(r.get("passives", 0) for r in nps_records)
     total_detractors = sum(r.get("detractors", 0) for r in nps_records)
-    # Field name is "total_surveys" not "received"
     total_surveys = sum(r.get("total_surveys", 0) or r.get("received", 0) for r in nps_records)
     
-    # Calculate STORE-LEVEL NPS (correct formula)
-    # NPS = ((Promoters - Detractors) / Total Surveys) × 100
+    # Calculate STORE-LEVEL NPS
     if total_surveys > 0:
         store_nps = ((total_promoters - total_detractors) / total_surveys) * 100
     else:
         store_nps = 0
     
-    # Also calculate average of individual NPS scores (for reference)
+    # Average of individual NPS scores
     nps_scores = [r.get("nps_score", 0) for r in nps_records if (r.get("total_surveys", 0) or r.get("received", 0)) > 0]
     avg_individual_nps = sum(nps_scores) / len(nps_scores) if nps_scores else 0
     
-    # Sort by NPS
-    sorted_records = sorted(nps_records, key=lambda x: x.get("nps_score", 0), reverse=True)
-    
     return {
+        "source": "scraped_data",
         "total_servers": len(nps_records),
-        "avg_nps": round(store_nps, 2),  # Use store-level NPS as the main metric
+        "avg_nps": round(store_nps, 2),
         "store_nps": round(store_nps, 2),
         "avg_individual_nps": round(avg_individual_nps, 2),
         "highest_nps": sorted_records[0] if sorted_records else None,
         "lowest_nps": sorted_records[-1] if sorted_records else None,
-        "nps_breakdown": sorted_records[:20],  # Top 20
+        "nps_breakdown": sorted_records[:20],
         "last_sync": nps_records[0].get("synced_at") if nps_records else None,
         "promoter_count": total_promoters,
         "passive_count": total_passives,
         "detractor_count": total_detractors,
-        "total_surveys": total_surveys
+        "total_surveys": total_surveys,
+        "note": "Using scraped data. Set official CV stats via /v2/admin/cv-stats/set for 100% accuracy."
     }
 
 
@@ -6120,6 +6150,77 @@ async def get_official_rt_stats(quarter: str = "Q1", year: int = 2026):
         "official_stats_set": True,
         "stats": stats
     }
+
+
+
+# ============================================================
+# OFFICIAL CUSTOMER VOICE STATS (Manual Override for Accuracy)
+# ============================================================
+
+class OfficialCVStats(BaseModel):
+    """Official Customer Voice (Loyalty Voice) stats as shown in their UI."""
+    nps_score: float = 0.0
+    promoters: int = 0
+    passives: int = 0
+    detractors: int = 0
+    total_responses: int = 0
+    quarter: str = "Q1"
+    year: int = 2026
+
+
+@api_router.post("/v2/admin/cv-stats/set")
+async def set_official_cv_stats(stats: OfficialCVStats):
+    """
+    Set the official Customer Voice stats from Loyalty Voice UI.
+    These values will be used for display instead of scraped data.
+    This ensures 100% accuracy with what Loyalty Voice dashboard shows.
+    """
+    stats_doc = {
+        "quarter": stats.quarter.upper(),
+        "year": stats.year,
+        "nps_score": stats.nps_score,
+        "promoters": stats.promoters,
+        "passives": stats.passives,
+        "detractors": stats.detractors,
+        "total_responses": stats.total_responses,
+        "source": "manual_from_lv_ui",
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.official_cv_stats.update_one(
+        {"quarter": stats.quarter.upper(), "year": stats.year},
+        {"$set": stats_doc},
+        upsert=True
+    )
+    
+    return {
+        "success": True,
+        "message": "Official CV stats saved",
+        "stats": stats_doc
+    }
+
+
+@api_router.get("/v2/admin/cv-stats/official")
+async def get_official_cv_stats(quarter: str = "Q1", year: int = 2026):
+    """Get the official Customer Voice stats (manually set from LV UI)."""
+    stats = await db.official_cv_stats.find_one(
+        {"quarter": quarter.upper(), "year": year},
+        {"_id": 0}
+    )
+    
+    if not stats:
+        return {
+            "official_stats_set": False,
+            "message": "No official CV stats set. Using scraped data.",
+            "quarter": quarter.upper(),
+            "year": year
+        }
+    
+    return {
+        "official_stats_set": True,
+        "stats": stats
+    }
+
 
 
 
