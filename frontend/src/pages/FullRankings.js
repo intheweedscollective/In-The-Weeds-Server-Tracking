@@ -913,8 +913,9 @@ export default function FullRankings() {
                                   }
                                 ];
                                 
-                                // Get NPS score for this employee
-                                const empNps = getEmployeeNps(employee.employee_id);
+                                // Get NPS score for this employee - use the nps_score from employee record
+                                // (already matched via smart name matching on backend)
+                                const empNps = emp.nps_score;
                                 
                                 return (
                                   <div className="space-y-4">
