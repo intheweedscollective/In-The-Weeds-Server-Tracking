@@ -6218,6 +6218,113 @@ async def get_official_cv_stats(quarter: str = "Q1", year: int = 2026):
     
     return {
         "official_stats_set": True,
+
+
+# ============================================================
+# UI DASHBOARD SCRAPER - Sync from RT and LV dashboards directly
+# ============================================================
+
+@api_router.post("/v2/admin/sync-from-ui")
+async def sync_stats_from_ui_dashboards(
+    quarter: str = "Q1", 
+    year: int = 2026,
+    background_tasks: BackgroundTasks = None
+):
+    """
+    Scrape official stats directly from ReviewTrackers and Loyalty Voice UI dashboards.
+    This ensures 100% accuracy with what you see in their interfaces.
+    
+    This operation logs into both platforms and extracts the exact numbers displayed.
+    """
+    from ui_scrapers import sync_official_stats_from_ui
+    
+    try:
+        results = await sync_official_stats_from_ui(db, quarter, year)
+        return {
+            "success": True,
+            "message": "Stats synced from UI dashboards",
+            "results": results
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@api_router.post("/v2/admin/sync-rt-from-ui")
+async def sync_rt_from_ui(quarter: str = "Q1", year: int = 2026):
+    """
+    Scrape ReviewTrackers stats directly from their web dashboard.
+    """
+    from ui_scrapers import ReviewTrackersScraper
+    
+    scraper = ReviewTrackersScraper()
+    stats = await scraper.scrape_platform_stats(quarter, year)
+    
+    if stats.get("success"):
+        # Save as official stats
+        official = {
+            "quarter": quarter.upper(),
+            "year": year,
+            "platforms": {
+                "Google": stats.get("platforms", {}).get("Google", {"rating": 0, "reviews": 0}),
+                "Yelp": stats.get("platforms", {}).get("Yelp", {"rating": 0, "reviews": 0}),
+                "TripAdvisor": stats.get("platforms", {}).get("TripAdvisor", {"rating": 0, "reviews": 0}),
+                "OpenTable": stats.get("platforms", {}).get("OpenTable", {"rating": 0, "reviews": 0}),
+                "Facebook": stats.get("platforms", {}).get("Facebook", {"rating": 0, "reviews": 0}),
+            },
+            "total_reviews": stats.get("total_reviews", 0),
+            "source": "scraped_from_ui",
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        await db.official_rt_stats.update_one(
+            {"quarter": quarter.upper(), "year": year},
+            {"$set": official},
+            upsert=True
+        )
+        
+        return {"success": True, "stats": official}
+    else:
+        return {"success": False, "error": stats.get("error")}
+
+
+@api_router.post("/v2/admin/sync-cv-from-ui")
+async def sync_cv_from_ui(quarter: str = "Q1", year: int = 2026):
+    """
+    Scrape Loyalty Voice (Customer Voice) stats directly from their web dashboard.
+    """
+    from ui_scrapers import LoyaltyVoiceScraper
+    
+    scraper = LoyaltyVoiceScraper()
+    stats = await scraper.scrape_nps_stats(quarter, year)
+    
+    if stats.get("success"):
+        # Save as official stats
+        official = {
+            "quarter": quarter.upper(),
+            "year": year,
+            "nps_score": stats.get("nps_score", 0),
+            "promoters": stats.get("promoters", 0),
+            "passives": stats.get("passives", 0),
+            "detractors": stats.get("detractors", 0),
+            "total_responses": stats.get("total_responses", 0),
+            "source": "scraped_from_ui",
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        await db.official_cv_stats.update_one(
+            {"quarter": quarter.upper(), "year": year},
+            {"$set": official},
+            upsert=True
+        )
+        
+        return {"success": True, "stats": official}
+    else:
+        return {"success": False, "error": stats.get("error")}
+
+
         "stats": stats
     }
 
