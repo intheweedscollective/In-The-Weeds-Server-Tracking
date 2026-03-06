@@ -4600,7 +4600,33 @@ async def get_review_platforms():
 
 @api_router.get("/v2/reviews/platform-stats")
 async def get_platform_stats(quarter: str = "Q1", year: int = 2026):
-    """Get QTD stats for each review platform."""
+    """Get QTD stats for each review platform.
+    Uses official RT stats if set (for 100% accuracy with RT dashboard),
+    otherwise falls back to API-synced data.
+    """
+    # Check for official stats first (set manually from RT UI)
+    official = await db.official_rt_stats.find_one(
+        {"quarter": quarter.upper(), "year": year},
+        {"_id": 0}
+    )
+    
+    if official:
+        # Use official RT UI stats - these match the ReviewTrackers dashboard exactly
+        platforms = official.get("platforms", {})
+        return {
+            "source": "official_rt_ui",
+            "quarter": quarter.upper(),
+            "year": year,
+            "google": {"count": platforms.get("Google", {}).get("reviews", 0), "avg_rating": platforms.get("Google", {}).get("rating", 0)},
+            "yelp": {"count": platforms.get("Yelp", {}).get("reviews", 0), "avg_rating": platforms.get("Yelp", {}).get("rating", 0)},
+            "facebook": {"count": platforms.get("Facebook", {}).get("reviews", 0), "avg_rating": platforms.get("Facebook", {}).get("rating", 0)},
+            "tripadvisor": {"count": platforms.get("TripAdvisor", {}).get("reviews", 0), "avg_rating": platforms.get("TripAdvisor", {}).get("rating", 0)},
+            "opentable": {"count": platforms.get("OpenTable", {}).get("reviews", 0), "avg_rating": platforms.get("OpenTable", {}).get("rating", 0)},
+            "total_reviews": official.get("total_reviews", 0),
+            "updated_at": official.get("updated_at")
+        }
+    
+    # Fall back to API-synced data
     # Define quarter date range
     quarter_dates = {
         "Q1": ("01-01", "03-31"),
@@ -4645,6 +4671,7 @@ async def get_platform_stats(quarter: str = "Q1", year: int = 2026):
         }
     
     return {
+        "source": "api_synced",
         "quarter": quarter.upper(),
         "year": year,
         "google": platform_stats.get("google", {"count": 0, "avg_rating": 0}),
@@ -4652,7 +4679,8 @@ async def get_platform_stats(quarter: str = "Q1", year: int = 2026):
         "facebook": platform_stats.get("facebook", {"count": 0, "avg_rating": 0}),
         "tripadvisor": platform_stats.get("tripadvisor", {"count": 0, "avg_rating": 0}),
         "opentable": platform_stats.get("opentable", {"count": 0, "avg_rating": 0}),
-        "all_platforms": platform_stats
+        "all_platforms": platform_stats,
+        "note": "Using API-synced data. Set official RT stats via /v2/admin/rt-stats/set for 100% accuracy."
     }
 
 
@@ -6010,6 +6038,90 @@ async def get_integrity_summary():
         "status": "healthy" if invalid_cv_feedback == 0 else "needs_attention",
         "issues": invalid_cv_feedback
     }
+
+
+
+# ============================================================
+# OFFICIAL REVIEW TRACKER STATS (Manual Override for Accuracy)
+# ============================================================
+
+class OfficialRTStats(BaseModel):
+    """Official ReviewTrackers stats as shown in their UI."""
+    google_reviews: int = 0
+    google_rating: float = 0.0
+    yelp_reviews: int = 0
+    yelp_rating: float = 0.0
+    tripadvisor_reviews: int = 0
+    tripadvisor_rating: float = 0.0
+    opentable_reviews: int = 0
+    opentable_rating: float = 0.0
+    facebook_reviews: int = 0
+    facebook_rating: float = 0.0
+    quarter: str = "Q1"
+    year: int = 2026
+
+
+@api_router.post("/v2/admin/rt-stats/set")
+async def set_official_rt_stats(stats: OfficialRTStats):
+    """
+    Set the official ReviewTrackers stats from their UI.
+    These values will be used for display and scoring instead of API-synced data.
+    This ensures 100% accuracy with what ReviewTrackers dashboard shows.
+    """
+    stats_doc = {
+        "quarter": stats.quarter.upper(),
+        "year": stats.year,
+        "platforms": {
+            "Google": {"reviews": stats.google_reviews, "rating": stats.google_rating},
+            "Yelp": {"reviews": stats.yelp_reviews, "rating": stats.yelp_rating},
+            "TripAdvisor": {"reviews": stats.tripadvisor_reviews, "rating": stats.tripadvisor_rating},
+            "OpenTable": {"reviews": stats.opentable_reviews, "rating": stats.opentable_rating},
+            "Facebook": {"reviews": stats.facebook_reviews, "rating": stats.facebook_rating},
+        },
+        "total_reviews": stats.google_reviews + stats.yelp_reviews + stats.tripadvisor_reviews + stats.opentable_reviews + stats.facebook_reviews,
+        "source": "manual_from_rt_ui",
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    # Upsert the official stats
+    await db.official_rt_stats.update_one(
+        {"quarter": stats.quarter.upper(), "year": stats.year},
+        {"$set": stats_doc},
+        upsert=True
+    )
+    
+    return {
+        "success": True,
+        "message": "Official RT stats saved",
+        "stats": stats_doc
+    }
+
+
+@api_router.get("/v2/admin/rt-stats/official")
+async def get_official_rt_stats(quarter: str = "Q1", year: int = 2026):
+    """
+    Get the official ReviewTrackers stats (manually set from RT UI).
+    Returns None if not set - then API-synced data should be used.
+    """
+    stats = await db.official_rt_stats.find_one(
+        {"quarter": quarter.upper(), "year": year},
+        {"_id": 0}
+    )
+    
+    if not stats:
+        return {
+            "official_stats_set": False,
+            "message": "No official RT stats set. Using API-synced data.",
+            "quarter": quarter.upper(),
+            "year": year
+        }
+    
+    return {
+        "official_stats_set": True,
+        "stats": stats
+    }
+
+
 
 
 # Include the router in the main app
