@@ -5145,7 +5145,8 @@ async def get_cv_stats(quarter: str = "Q1", year: int = 2026):
     total_promoters = sum(r.get("promoters", 0) for r in nps_records)
     total_passives = sum(r.get("passives", 0) for r in nps_records)
     total_detractors = sum(r.get("detractors", 0) for r in nps_records)
-    total_surveys = sum(r.get("received", 0) for r in nps_records)
+    # Field name is "total_surveys" not "received"
+    total_surveys = sum(r.get("total_surveys", 0) or r.get("received", 0) for r in nps_records)
     
     # Calculate STORE-LEVEL NPS (correct formula)
     # NPS = ((Promoters - Detractors) / Total Surveys) × 100
@@ -5155,7 +5156,7 @@ async def get_cv_stats(quarter: str = "Q1", year: int = 2026):
         store_nps = 0
     
     # Also calculate average of individual NPS scores (for reference)
-    nps_scores = [r.get("nps_score", 0) for r in nps_records if r.get("received", 0) > 0]
+    nps_scores = [r.get("nps_score", 0) for r in nps_records if (r.get("total_surveys", 0) or r.get("received", 0)) > 0]
     avg_individual_nps = sum(nps_scores) / len(nps_scores) if nps_scores else 0
     
     # Sort by NPS
