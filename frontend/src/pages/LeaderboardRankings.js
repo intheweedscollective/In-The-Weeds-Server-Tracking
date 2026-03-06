@@ -269,14 +269,50 @@ export default function LeaderboardRankings() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [rankingsRes, employeesRes, snapshotsRes] = await Promise.all([
-        axios.get(`${API}/v2/full-rankings/${selectedYear}/${selectedQuarter}`),
+      const [employeesRes, snapshotsRes] = await Promise.all([
         axios.get(`${API}/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`),
         axios.get(`${API}/v2/snapshots?year=${selectedYear}&quarter=${selectedQuarter}`),
       ]);
       
-      setRankings(rankingsRes.data.rankings || []);
-      setEmployees(employeesRes.data || []);
+      // Sort employees by score (highest to lowest) for leaderboard view
+      const sortedEmployees = (employeesRes.data || []).sort((a, b) => {
+        const scoreA = a.pre_dar_score || a.total_score || 0;
+        const scoreB = b.pre_dar_score || b.total_score || 0;
+        return scoreB - scoreA;
+      });
+      
+      // Transform to rankings format with position
+      const leaderboardRankings = sortedEmployees.map((emp, idx) => ({
+        position: idx + 1,
+        position_label: `#${idx + 1}`,
+        tier_label: emp.job_title || "Server",
+        employee_id: emp.id,
+        name: emp.name,
+        job_title: emp.job_title || "Server",
+        total_score: emp.pre_dar_score || emp.total_score || 0,
+        bonus_points: (emp.total_metric_bonus || 0) + ((emp.review_mentions || 0) * 0.2),
+        review_bonus: (emp.review_mentions || 0) * 0.2,
+        metric_bonus: emp.total_metric_bonus || 0,
+        combined_review_bonus: (emp.cv_score || 0) + ((emp.review_mentions || 0) * 0.2),
+        ppa: emp.ppa || 0,
+        lbw_per_guest: emp.lbw_per_guest || 0,
+        glassware_per_guest: emp.glassware_per_guest || 0,
+        guests_per_lsc: emp.guests_per_lsc || 0,
+        guest_count: emp.guests || 0,
+        net_sales: emp.net_sales || 0,
+        ppa_percentage: emp.score_ppa || 0,
+        lbw_percentage: emp.score_lbw || 0,
+        glassware_percentage: emp.score_glass || 0,
+        lsc_percentage: emp.score_lsc || 0,
+        nps_score: emp.nps_score || 0,
+        nps_points: emp.cv_score || 0,
+        cv_promoters: emp.cv_promoters || 0,
+        cv_detractors: emp.cv_detractors || 0,
+        review_mentions: emp.review_mentions || 0,
+      }));
+      
+      setRankings(leaderboardRankings);
+      setEmployees(sortedEmployees);
       setSnapshots(snapshotsRes.data || []);
       
       // Build previous scores from second-latest snapshot for momentum
