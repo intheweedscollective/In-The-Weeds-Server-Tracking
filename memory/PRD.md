@@ -204,39 +204,33 @@ Build a comprehensive performance review application for restaurant employees (B
 - ✅ **PWA Icons**: Added Bubba Gump logo for mobile home screen
 - ✅ **Review Tracker Label Fix**: Corrected "CV SCORE" → "Review Tracker" in expanded view
 
-### Changes (Mar 5, 2026) - NEW SCORING MODEL IMPLEMENTATION
+### Changes (Mar 5, 2026) - HYBRID SCORING MODEL
 
-#### User-Confirmed Scoring Model Implemented
-The scoring model has been completely updated based on user confirmation:
+#### Hybrid NPS Scoring Model Implemented
+Updated Customer Voice scoring to use spec NPS scale with current promoter logic:
 
-**1. Weighted POS Metrics (75 pts max)**
-| Metric | Weight |
-|--------|--------|
-| PPA | 25% |
-| LSC | 25% |
-| LBW | 15% |
-| Glassware | 10% |
+**NPS Score (from Spec - max 10 pts)**:
+| NPS Range | Points |
+|-----------|--------|
+| 90-100% | 10 pts |
+| 80-89% | 9 pts |
+| 70-79% | 8 pts |
+| 60-69% | 7 pts |
+| 50-59% | 6 pts |
+| Below 50% | Scaled proportionally |
 
-**2. Review Tracker**: +0.2 pts per mention (uncapped)
-
-**3. Customer Voice (NO CAP - highly incentivized)**
-- **NPS% Bonus**:
-  - 100% NPS = 5 pts
-  - 75-99.9% NPS = 2.5 pts
-  - Below 75% = 0 pts
-- **Survey Points**:
-  - Promoter (9-10 rating): +1 pt each
-  - Detractor (6 or below): -2 pts each
-- **NO CAP** on total CV score
-
-**4. Metric Bonuses (up to 20 pts total)**
-- 5 pts max per metric (PPA, LSC, LBW, Glassware)
-- Linear scale from 100%-120% of benchmark
-- Example: 110% = 2.5 pts, 105% = 1.25 pts
+**Promoter/Detractor Points (Current - NO CAP)**:
+- Promoter (9-10 rating): +1 pt each
+- Detractor (6 or below): -2 pts each
 
 **Files Modified:**
-- `backend/scoring_engine.py`: Complete rewrite of scoring functions
-- `backend/server.py`: Updated `recalculate_snapshot()` to pull CV promoters/detractors from cv_nps collection
+- `backend/scoring_engine.py`: Updated `calculate_customer_voice_score()` with spec NPS scale
+- `frontend/src/pages/FullRankings.js`: Updated tooltips to show new NPS scale
+
+**Verification Examples:**
+- Julian Taveras: 100% NPS (10 pts) + 6 promoters = 16 CV pts ✅
+- Starwars Mckinnon: 80% NPS (9 pts) + 4 promoters = 13 CV pts ✅
+- Robert Mckinnon: 33% NPS (3.3 pts) + 2P - 1D = 3.3 CV pts ✅
 
 #### CV Quarter Data Fix (Mar 5, 2026)
 **Issue**: CV feedback records had incorrect quarter/year assignments (all marked Q4 2025 instead of Q1 2026)

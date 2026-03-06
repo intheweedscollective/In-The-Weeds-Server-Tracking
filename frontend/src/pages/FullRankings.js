@@ -641,11 +641,17 @@ export default function FullRankings() {
                           <TooltipContent className="bg-slate-800 text-white p-3 max-w-xs">
                             <div className="text-xs space-y-1">
                               <div className="font-bold mb-1">CV Score Breakdown:</div>
-                              <div>• NPS 100% = +5 pts</div>
-                              <div>• NPS 75-99% = +2.5 pts</div>
+                              <div className="font-semibold text-primary">NPS Score (max 10 pts):</div>
+                              <div>• 90-100% = 10 pts</div>
+                              <div>• 80-89% = 9 pts</div>
+                              <div>• 70-79% = 8 pts</div>
+                              <div>• 60-69% = 7 pts</div>
+                              <div>• 50-59% = 6 pts</div>
+                              <div>• Below 50% = scaled</div>
+                              <div className="font-semibold text-primary mt-2">Promoter/Detractor:</div>
                               <div>• Each Promoter (9-10) = +1 pt</div>
                               <div>• Each Detractor (≤6) = -2 pts</div>
-                              <div className="mt-2 text-green-400 font-semibold">No cap on CV score!</div>
+                              <div className="mt-2 text-green-400 font-semibold">No cap on promoter points!</div>
                             </div>
                           </TooltipContent>
                         </Tooltip>
@@ -727,7 +733,17 @@ export default function FullRankings() {
                               const promoters = empData.cv_promoters || 0;
                               const detractors = empData.cv_detractors || 0;
                               const cvScore = empData.cv_score || 0;
-                              const npsBonus = nps >= 100 ? 5 : nps >= 75 ? 2.5 : 0;
+                              
+                              // Calculate NPS points using spec scale
+                              let npsPts;
+                              if (nps >= 90) npsPts = 10;
+                              else if (nps >= 80) npsPts = 9;
+                              else if (nps >= 70) npsPts = 8;
+                              else if (nps >= 60) npsPts = 7;
+                              else if (nps >= 50) npsPts = 6;
+                              else if (nps > 0) npsPts = Math.round((nps / 50) * 5 * 10) / 10;
+                              else npsPts = 0;
+                              
                               const surveyPts = promoters - (detractors * 2);
                               
                               return (
@@ -739,6 +755,9 @@ export default function FullRankings() {
                                         {cvScore > 0 && (
                                           <span className="text-xs text-green-400 font-semibold">+{cvScore} pts</span>
                                         )}
+                                        {cvScore < 0 && (
+                                          <span className="text-xs text-red-400 font-semibold">{cvScore} pts</span>
+                                        )}
                                       </div>
                                     </TooltipTrigger>
                                     <TooltipContent className="bg-slate-800 text-white p-3 max-w-xs border border-slate-600">
@@ -746,7 +765,7 @@ export default function FullRankings() {
                                         <div className="font-bold text-primary mb-2">{employee.name}'s CV Score</div>
                                         <div className="flex justify-between">
                                           <span>NPS ({nps}%):</span>
-                                          <span className={npsBonus > 0 ? "text-green-400" : "text-slate-400"}>+{npsBonus} pts</span>
+                                          <span className="text-green-400">{npsPts} pts</span>
                                         </div>
                                         {promoters > 0 && (
                                           <div className="flex justify-between">
@@ -762,7 +781,7 @@ export default function FullRankings() {
                                         )}
                                         <div className="border-t border-slate-600 pt-1 mt-1 flex justify-between font-bold">
                                           <span>Total CV Score:</span>
-                                          <span className="text-primary">{cvScore} pts</span>
+                                          <span className={cvScore >= 0 ? "text-primary" : "text-red-400"}>{cvScore} pts</span>
                                         </div>
                                       </div>
                                     </TooltipContent>

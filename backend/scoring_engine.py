@@ -1,11 +1,11 @@
 """
-Restaurant Performance Engine v2.3
-Q1 2026 Official Scoring Model - Bubba Gump Shrimp Co.
+Restaurant Performance Engine v2.4
+Q1 2026 HYBRID Scoring Model - Bubba Gump Shrimp Co.
 
-USER CONFIRMED SCORING MODEL:
-=============================
+SCORING MODEL (Hybrid - Spec NPS + Current Promoter Logic):
+============================================================
 
-1. WEIGHTED POS METRICS (75% of base score):
+1. WEIGHTED POS METRICS (75 pts max):
    - PPA: 25%
    - LSC: 25%
    - LBW: 15%
@@ -13,19 +13,23 @@ USER CONFIRMED SCORING MODEL:
 
 2. REVIEW TRACKER: +0.2 pts per mention (uncapped bonus)
 
-3. CUSTOMER VOICE (NO CAP - highly incentivized):
-   - NPS% Bonus: 
-     * 100% NPS = 5 pts
-     * 75-99.9% NPS = 2.5 pts
-     * Below 75% = 0 pts
-   - Survey Points:
-     * Promoter (9-10 rating): +1 pt each
-     * Detractor (6 or below): -2 pts each
+3. CUSTOMER VOICE (NPS from Spec + Promoters from Current):
+   
+   NPS Score (max 10 pts - from Spec):
+   - NPS 90-100 = 10 pts
+   - NPS 80-89 = 9 pts
+   - NPS 70-79 = 8 pts
+   - NPS 60-69 = 7 pts
+   - NPS 50-59 = 6 pts
+   - Below 50 = scaled proportionally
+   
+   Promoter/Detractor Points (NO CAP - from Current):
+   - Promoter (9-10 rating): +1 pt each
+   - Detractor (6 or below): -2 pts each
 
 4. METRIC BONUSES (up to 20 pts total):
    - 5 pts max per metric (PPA, LSC, LBW, Glassware)
    - Linear scale from 100%-120% of benchmark
-   - Example: 110% = 2.5 pts, 105% = 1.25 pts
 
 5. DAR: Disciplinary penalties (admin-only, applied at final stage)
 
@@ -44,16 +48,14 @@ import pandas as pd
 # SCORING CONSTANTS
 # ============================================================================
 
-# Customer Voice scoring (User Confirmed Model)
-CV_PROMOTER_POINTS = 1    # +1 per promoter (9-10 rating)
+# Customer Voice scoring (Hybrid Model)
+CV_PROMOTER_POINTS = 1    # +1 per promoter (9-10 rating) - NO CAP
 CV_PASSIVE_POINTS = 0     # 0 for passive (7-8)
 CV_DETRACTOR_POINTS = -2  # -2 per detractor (6 or below)
-# NO CAP on CV score - highly incentivize Customer Voice
 
-# NPS% Bonus thresholds
-NPS_BONUS_100 = 5.0      # 5 pts for 100% NPS
-NPS_BONUS_75_99 = 2.5    # 2.5 pts for 75-99.9% NPS
-NPS_BONUS_BELOW_75 = 0.0 # 0 pts for below 75%
+# NPS Score Scale (from Spec - max 10 pts)
+# NPS 90-100 = 10 pts, 80-89 = 9 pts, etc.
+NPS_MAX_POINTS = 10
 
 # Review Tracker Bonus
 RT_POINTS_PER_MENTION = 0.2  # Each mention = 0.2 points (uncapped)
@@ -69,7 +71,6 @@ DAR_SUSPENSION = -5
 
 # Legacy constants (kept for backwards compatibility)
 NPS_WEIGHT = 0.10
-NPS_MAX_POINTS = 10
 CV_MIN_POINTS = -6
 CV_MAX_POINTS = 10
 
@@ -148,6 +149,7 @@ class EmployeeV2(BaseModel):
     
     # === CUSTOMER VOICE SCORE ===
     cv_raw_points: Optional[float] = None      # Raw CV calculation before cap
+    nps_score_pts: Optional[float] = None      # NPS points (max 10) from spec scale
     cv_score: Optional[float] = None           # Capped CV score (min -6)
     score_cv: Optional[float] = None           # Normalized for weighting (0-100 scale)
     cv_penalty: Optional[float] = None         # Negative CV penalty (applied to final score)
@@ -427,42 +429,57 @@ def calculate_derived_metrics(employee: EmployeeV2) -> EmployeeV2:
 
 def calculate_customer_voice_score(employee: EmployeeV2) -> EmployeeV2:
     """
-    Calculate Customer Voice score using the NEW MODEL (User Confirmed):
+    Calculate Customer Voice score using HYBRID MODEL:
     
     COMPONENTS:
-    1. NPS% Bonus:
-       - 100% NPS = 5 pts
-       - 75-99.9% NPS = 2.5 pts
-       - Below 75% = 0 pts
+    1. NPS Score (from Spec - max 10 pts):
+       - NPS 90-100 = 10 pts
+       - NPS 80-89 = 9 pts
+       - NPS 70-79 = 8 pts
+       - NPS 60-69 = 7 pts
+       - NPS 50-59 = 6 pts
+       - Below 50 = scaled proportionally (NPS/50 * 5)
     
-    2. Survey Points (from individual feedback):
+    2. Promoter/Detractor Points (Current Implementation - NO CAP):
        - Promoter (9-10 rating): +1 pt each
        - Detractor (6 or below): -2 pts each
        - Passive (7-8): 0 pts
     
-    TOTAL CV Score = NPS Bonus + Survey Points (NO CAP - highly incentivize CV)
+    TOTAL CV Score = NPS Score + Promoter/Detractor Points (NO CAP on promoters)
     
     Review Tracker mentions are handled separately as Review Bonus.
     """
-    # 1. Calculate NPS% Bonus
+    # 1. Calculate NPS Score using SPEC scale (max 10 pts)
     nps = employee.nps_score or 0
-    if nps >= 100:
-        nps_bonus = 5.0
-    elif nps >= 75:
-        nps_bonus = 2.5
-    else:
-        nps_bonus = 0.0
     
-    # 2. Calculate Survey Points from promoters/detractors
+    if nps >= 90:
+        nps_score_pts = 10.0
+    elif nps >= 80:
+        nps_score_pts = 9.0
+    elif nps >= 70:
+        nps_score_pts = 8.0
+    elif nps >= 60:
+        nps_score_pts = 7.0
+    elif nps >= 50:
+        nps_score_pts = 6.0
+    elif nps > 0:
+        # Below 50: scale proportionally (e.g., NPS 40 = 4 pts, NPS 25 = 2.5 pts)
+        nps_score_pts = round((nps / 50) * 5, 1)
+    else:
+        # NPS 0 or negative
+        nps_score_pts = 0.0
+    
+    # 2. Calculate Promoter/Detractor Points (Current Implementation - NO CAP)
     promoters = employee.cv_promoters or 0
     detractors = employee.cv_detractors or 0
     survey_points = (promoters * CV_PROMOTER_POINTS) + (detractors * CV_DETRACTOR_POINTS)
     
-    # Total CV Score = NPS Bonus + Survey Points (NO CAP)
-    total_cv_score = nps_bonus + survey_points
+    # Total CV Score = NPS Score + Survey Points (NO CAP on promoters)
+    total_cv_score = nps_score_pts + survey_points
     
     employee.cv_score = round(total_cv_score, 2)
     employee.cv_raw_points = round(survey_points, 2)  # Store survey points separately
+    employee.nps_score_pts = round(nps_score_pts, 2)  # Store NPS points for display
     
     return employee
 
