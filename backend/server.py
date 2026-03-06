@@ -3928,25 +3928,21 @@ async def recalculate_snapshot(snapshot_id: str):
         if name:
             nps_lookup[name] = nps
     
-    # Function to match NPS records by partial name (first name matching)
+    # Import smart name matcher
+    from name_matcher import get_nps_for_employee_smart, normalize_name
+    
+    # Build employee aliases lookup from employees collection
+    all_employees = await db.employees_v2.find(
+        {"quarter": snapshot["quarter"], "year": snapshot["year"]},
+        {"_id": 0, "name": 1, "aliases": 1}
+    ).to_list(1000)
+    employee_aliases_map = {e["name"]: e.get("aliases", []) for e in all_employees}
+    
+    # Function to match NPS records with smart nickname handling
     def get_nps_for_employee(emp_name: str) -> dict:
-        emp_lower = emp_name.strip().lower()
-        first_name = emp_lower.split()[0] if emp_lower.split() else ""
-        
-        # Try full name match first
-        if emp_lower in nps_lookup:
-            return nps_lookup[emp_lower]
-        
-        # Try first name match
-        if first_name in nps_lookup:
-            return nps_lookup[first_name]
-        
-        # Try partial first name match
-        for nps_name, nps_data in nps_lookup.items():
-            if first_name.startswith(nps_name) or nps_name.startswith(first_name[:3]):
-                return nps_data
-        
-        return {}
+        aliases = employee_aliases_map.get(emp_name, [])
+        nps_data, match_reason = get_nps_for_employee_smart(emp_name, nps_lookup, aliases)
+        return nps_data
     
     # Fetch review mentions from customer_reviews collection
     # Filter by actual review_date within the quarter, not just the quarter label
@@ -5772,6 +5768,214 @@ async def delete_invalid_cv_feedback():
         "status": "complete",
         "deleted_count": result.deleted_count,
         "message": f"Deleted {result.deleted_count} invalid CV feedback entries"
+    }
+
+
+@api_router.get("/v2/admin/name-matching/preview")
+async def preview_name_matching(quarter: str = "Q1", year: int = 2026):
+    """
+    Preview how employee names will be matched to CV NPS names.
+    Shows the mapping and confidence scores without applying changes.
+    """
+    from name_matcher import build_name_mapping, get_nps_for_employee_smart, normalize_name
+    
+    # Get employee names
+    employees = await db.employees_v2.find(
+        {"quarter": quarter, "year": year},
+        {"_id": 0, "name": 1, "nps_score": 1, "cv_score": 1, "cv_promoters": 1, "aliases": 1}
+    ).to_list(1000)
+    
+    # Get CV NPS names
+    nps_records = await db.cv_nps.find(
+        {"quarter": quarter, "year": year},
+        {"_id": 0, "employee_name": 1, "nps_score": 1, "promoters": 1, "detractors": 1}
+    ).to_list(1000)
+    
+    employee_names = [e["name"] for e in employees]
+    cv_names = [n["employee_name"] for n in nps_records]
+    
+    # Build NPS lookup
+    nps_lookup = {normalize_name(n["employee_name"]): n for n in nps_records}
+    
+    # Build mapping
+    mapping_results = []
+    for emp in employees:
+        emp_name = emp["name"]
+        aliases = emp.get("aliases", [])
+        nps_data, match_reason = get_nps_for_employee_smart(emp_name, nps_lookup, aliases)
+        
+        current_nps = emp.get("nps_score") or 0
+        current_cv = emp.get("cv_score") or 0
+        matched_nps = nps_data.get("nps_score") or 0
+        matched_promoters = nps_data.get("promoters") or 0
+        matched_detractors = nps_data.get("detractors") or 0
+        
+        # Calculate what CV score would be
+        nps_pts = 0
+        if matched_nps >= 90: nps_pts = 10
+        elif matched_nps >= 80: nps_pts = 9
+        elif matched_nps >= 70: nps_pts = 8
+        elif matched_nps >= 60: nps_pts = 7
+        elif matched_nps >= 50: nps_pts = 6
+        elif matched_nps > 0: nps_pts = round((matched_nps / 50) * 5, 1)
+        
+        projected_cv = nps_pts + (matched_promoters * 1) + (matched_detractors * -2)
+        
+        mapping_results.append({
+            "employee_name": emp_name,
+            "current_nps": current_nps,
+            "current_cv_score": current_cv,
+            "matched_cv_name": nps_data.get("employee_name") if nps_data else None,
+            "match_reason": match_reason,
+            "matched_nps": matched_nps,
+            "matched_promoters": matched_promoters,
+            "matched_detractors": matched_detractors,
+            "projected_cv_score": round(projected_cv, 2),
+            "score_change": round(projected_cv - current_cv, 2),
+            "needs_update": abs(projected_cv - current_cv) > 0.1
+        })
+    
+    # Sort by score change (biggest gains first)
+    mapping_results.sort(key=lambda x: x["score_change"], reverse=True)
+    
+    # Count unmatched CV names
+    matched_cv_names = {m["matched_cv_name"] for m in mapping_results if m["matched_cv_name"]}
+    unmatched_cv = [n for n in cv_names if n not in matched_cv_names]
+    
+    return {
+        "quarter": quarter,
+        "year": year,
+        "total_employees": len(employees),
+        "total_cv_records": len(nps_records),
+        "matches_found": len([m for m in mapping_results if m["matched_cv_name"]]),
+        "employees_needing_update": len([m for m in mapping_results if m["needs_update"]]),
+        "unmatched_cv_names": unmatched_cv,
+        "mapping": mapping_results
+    }
+
+
+@api_router.post("/v2/admin/name-matching/apply")
+async def apply_name_matching(quarter: str = "Q1", year: int = 2026):
+    """
+    Apply the smart name matching and recalculate all employee scores.
+    This will:
+    1. Match employees to CV NPS data using smart nickname matching
+    2. Update employee records with correct CV data
+    3. Recalculate all scores
+    """
+    from name_matcher import get_nps_for_employee_smart, normalize_name
+    from scoring_engine import (
+        EmployeeV2, QuarterSettings,
+        calculate_lbw_total, calculate_derived_metrics,
+        calculate_customer_voice_score, calculate_review_tracker_bonus,
+        calculate_combined_cv_rt, calculate_normalized_scores,
+        calculate_bonus_points, calculate_total_score,
+        calculate_rankings, calculate_performance_tiers
+    )
+    
+    # Get employees
+    employees = await db.employees_v2.find(
+        {"quarter": quarter, "year": year},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    # Get CV NPS data
+    nps_records = await db.cv_nps.find(
+        {"quarter": quarter, "year": year},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    # Get settings
+    settings_doc = await db.quarter_settings.find_one(
+        {"quarter": quarter, "year": year},
+        {"_id": 0}
+    )
+    settings = QuarterSettings(**(settings_doc or {}))
+    
+    # Build NPS lookup
+    nps_lookup = {normalize_name(n["employee_name"]): n for n in nps_records}
+    
+    # Track updates
+    updates = []
+    employee_objects = []
+    
+    for emp_data in employees:
+        emp_name = emp_data["name"]
+        aliases = emp_data.get("aliases", [])
+        
+        # Smart match to CV data
+        nps_data, match_reason = get_nps_for_employee_smart(emp_name, nps_lookup, aliases)
+        
+        nps_score = nps_data.get("nps_score") or 0
+        cv_promoters = nps_data.get("promoters") or 0
+        cv_passives = nps_data.get("passives") or 0
+        cv_detractors = nps_data.get("detractors") or 0
+        
+        # Create employee object with updated CV data
+        emp = EmployeeV2(
+            id=emp_data.get("id", str(uuid.uuid4())),
+            name=emp_name,
+            job_title=emp_data.get("job_title", "Server"),
+            aliases=emp_data.get("aliases", []),
+            guests=emp_data.get("guests", 0),
+            net_sales=emp_data.get("net_sales", 0),
+            liquor_sales=emp_data.get("liquor_sales", 0),
+            beer_sales=emp_data.get("beer_sales", 0),
+            wine_sales=emp_data.get("wine_sales", 0),
+            glassware_sales=emp_data.get("glassware_sales", 0),
+            lsc_count=emp_data.get("lsc_count", 0),
+            cv_promoters=cv_promoters,
+            cv_passives=cv_passives,
+            cv_detractors=cv_detractors,
+            review_mentions=emp_data.get("review_mentions", 0),
+            nps_score=nps_score,
+            year=year,
+            quarter=quarter,
+        )
+        
+        # Run scoring pipeline
+        emp = calculate_lbw_total(emp)
+        emp = calculate_derived_metrics(emp)
+        emp = calculate_customer_voice_score(emp)
+        emp = calculate_review_tracker_bonus(emp)
+        emp = calculate_combined_cv_rt(emp)
+        emp = calculate_normalized_scores(emp, settings)
+        emp = calculate_bonus_points(emp, settings)
+        emp = calculate_total_score(emp, settings)
+        
+        employee_objects.append(emp)
+        
+        old_cv = emp_data.get("cv_score") or 0
+        if abs((emp.cv_score or 0) - old_cv) > 0.1:
+            updates.append({
+                "name": emp_name,
+                "matched_to": nps_data.get("employee_name"),
+                "reason": match_reason,
+                "old_cv": old_cv,
+                "new_cv": emp.cv_score,
+                "old_score": emp_data.get("pre_dar_score") or emp_data.get("total_score") or 0,
+                "new_score": emp.pre_dar_score
+            })
+    
+    # Calculate rankings
+    employee_objects = calculate_rankings(employee_objects)
+    employee_objects = calculate_performance_tiers(employee_objects)
+    
+    # Update database
+    for emp in employee_objects:
+        emp_dict = emp.model_dump()
+        await db.employees_v2.update_one(
+            {"name": emp.name, "quarter": quarter, "year": year},
+            {"$set": emp_dict}
+        )
+    
+    return {
+        "status": "complete",
+        "quarter": quarter,
+        "year": year,
+        "employees_processed": len(employee_objects),
+        "employees_updated": len(updates),
+        "updates": updates
     }
 
 
