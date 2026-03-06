@@ -2266,3 +2266,272 @@ def generate_all_slides(rankings: List[Dict[str, Any]], quarter: str, year: int,
             slides[tier_key].append(generate_tier_slide(tier_name, page_employees, quarter, year, page + 1, total_pages, theme, custom_colors, None, seasonal_theme))
     
     return slides
+
+
+
+# ============================================================================
+# NEW LEADERBOARD SLIDE - Professional Design System
+# ============================================================================
+
+LEADERBOARD_COLORS = {
+    "background": "#0F172A",
+    "backgroundAlt": "#1E293B",
+    "backgroundRow": "#162032",
+    "backgroundRowAlt": "#1A2744",
+    "textPrimary": "#F9FAFB",
+    "textSecondary": "#9CA3AF",
+    "textMuted": "#6B7280",
+    "gold": "#FBBF24",
+    "silver": "#94A3B8",
+    "bronze": "#CD7F32",
+    "green": "#22C55E",
+    "blue": "#3B82F6",
+    "orange": "#F97316",
+    "red": "#EF4444",
+    "purple": "#A855F7",
+}
+
+
+def generate_leaderboard_slide(
+    rankings: List[Dict[str, Any]],
+    employees: List[Dict[str, Any]],
+    quarter: str,
+    year: int,
+    previous_scores: Dict[str, float] = None
+) -> bytes:
+    """
+    Generate a professional leaderboard slide matching the new design system.
+    
+    Features:
+    - Dark navy background with high contrast
+    - Gold/Silver/Bronze for top 3
+    - Green highlight for top 5
+    - Momentum indicators
+    - Recognition badges
+    - Category leaders panel
+    """
+    width, height = 1920, 1080
+    img = Image.new("RGB", (width, height), LEADERBOARD_COLORS["background"])
+    draw = ImageDraw.Draw(img)
+    
+    # Load fonts
+    def get_font(size, bold=False):
+        try:
+            if bold:
+                return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", size)
+            return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", size)
+        except:
+            return ImageFont.load_default()
+    
+    font_title = get_font(42, bold=True)
+    font_subtitle = get_font(24)
+    font_rank = get_font(32, bold=True)
+    font_name = get_font(22, bold=True)
+    font_score = get_font(28, bold=True)
+    font_small = get_font(16)
+    font_label = get_font(14)
+    
+    # Build employee lookup
+    emp_lookup = {e.get("id"): e for e in employees}
+    
+    # Header Section
+    header_y = 40
+    draw.text((60, header_y), f"{quarter} {year}", font=font_title, fill=LEADERBOARD_COLORS["gold"])
+    draw.text((60, header_y + 50), "PERFORMANCE LEADERBOARD", font=font_subtitle, fill=LEADERBOARD_COLORS["textPrimary"])
+    
+    # Draw separator line
+    draw.line([(60, header_y + 100), (width - 60, header_y + 100)], fill=LEADERBOARD_COLORS["backgroundAlt"], width=2)
+    
+    # Calculate category leaders
+    def find_leader(metric, higher_better=True):
+        sorted_emps = sorted(employees, key=lambda x: x.get(metric, 0) or 0, reverse=higher_better)
+        return sorted_emps[0] if sorted_emps else None
+    
+    leaders = {
+        "ppa": find_leader("ppa"),
+        "lbw": find_leader("lbw_per_guest"),
+        "lsc": find_leader("guests_per_lsc", False),
+        "reviews": find_leader("review_mentions"),
+    }
+    
+    # Category Leaders Panel (Right Side)
+    panel_x = width - 350
+    panel_y = 160
+    panel_width = 290
+    
+    draw.text((panel_x, panel_y - 30), "CATEGORY LEADERS", font=get_font(18, bold=True), fill=LEADERBOARD_COLORS["gold"])
+    
+    leader_cards = [
+        ("PPA LEADER", leaders["ppa"], "ppa", "${:.2f}"),
+        ("LBW LEADER", leaders["lbw"], "lbw_per_guest", "${:.2f}"),
+        ("LSC CHAMPION", leaders["lsc"], "guests_per_lsc", "{:.1f}"),
+        ("REVIEW LEADER", leaders["reviews"], "review_mentions", "{:.0f}"),
+    ]
+    
+    for i, (title, leader, metric, fmt) in enumerate(leader_cards):
+        card_y = panel_y + i * 100
+        # Card background
+        draw.rectangle([panel_x, card_y, panel_x + panel_width, card_y + 85], 
+                       fill=LEADERBOARD_COLORS["backgroundAlt"], outline=LEADERBOARD_COLORS["backgroundRow"])
+        # Title
+        draw.text((panel_x + 15, card_y + 10), title, font=font_label, fill=LEADERBOARD_COLORS["textMuted"])
+        # Leader name
+        leader_name = (leader.get("name", "N/A")[:20] if leader else "N/A")
+        draw.text((panel_x + 15, card_y + 30), leader_name, font=get_font(16, bold=True), fill=LEADERBOARD_COLORS["textPrimary"])
+        # Value
+        if leader:
+            value = leader.get(metric, 0) or 0
+            value_text = fmt.format(value)
+        else:
+            value_text = "-"
+        draw.text((panel_x + 15, card_y + 55), value_text, font=get_font(24, bold=True), fill=LEADERBOARD_COLORS["green"])
+    
+    # Main Leaderboard Table
+    table_x = 60
+    table_y = 160
+    table_width = panel_x - 100
+    row_height = 60
+    max_rows = 12
+    
+    # Column headers
+    col_widths = [80, 280, 120, 120, 100, 140, 80]  # Rank, Name, Operational, Guest Rep, Bonus, Score, Trend
+    col_headers = ["RANK", "EMPLOYEE", "OPS SCORE", "GUEST REP", "BONUS", "FINAL SCORE", "TREND"]
+    
+    header_y_table = table_y
+    x = table_x
+    for i, (header, width) in enumerate(zip(col_headers, col_widths)):
+        text_x = x + width // 2 if i > 0 else x + 40
+        draw.text((text_x, header_y_table), header, font=font_label, fill=LEADERBOARD_COLORS["textMuted"], anchor="mm" if i > 0 else "lm")
+        x += width
+    
+    # Draw rows
+    for idx, emp in enumerate(rankings[:max_rows]):
+        row_y = table_y + 40 + idx * row_height
+        emp_data = emp_lookup.get(emp.get("employee_id"), {})
+        position = emp.get("position", idx + 1)
+        
+        # Alternating row background
+        row_bg = LEADERBOARD_COLORS["backgroundRow"] if idx % 2 == 0 else LEADERBOARD_COLORS["backgroundRowAlt"]
+        draw.rectangle([table_x, row_y, table_x + table_width, row_y + row_height - 2], fill=row_bg)
+        
+        # Top 5 highlight
+        if position <= 5:
+            # Draw left border highlight
+            draw.rectangle([table_x, row_y, table_x + 4, row_y + row_height - 2], fill=LEADERBOARD_COLORS["green"])
+        
+        # Rank badge
+        rank_x = table_x + 40
+        rank_y = row_y + row_height // 2
+        
+        # Color based on position
+        if position == 1:
+            rank_bg = LEADERBOARD_COLORS["gold"]
+            rank_text_color = "#1A1A1A"
+        elif position == 2:
+            rank_bg = LEADERBOARD_COLORS["silver"]
+            rank_text_color = "#1A1A1A"
+        elif position == 3:
+            rank_bg = LEADERBOARD_COLORS["bronze"]
+            rank_text_color = "#FFFFFF"
+        elif position <= 5:
+            rank_bg = LEADERBOARD_COLORS["green"]
+            rank_text_color = "#FFFFFF"
+        else:
+            rank_bg = LEADERBOARD_COLORS["backgroundAlt"]
+            rank_text_color = LEADERBOARD_COLORS["textPrimary"]
+        
+        # Draw rank badge
+        badge_size = 40
+        draw.rounded_rectangle([rank_x - badge_size//2, rank_y - badge_size//2, 
+                                rank_x + badge_size//2, rank_y + badge_size//2], 
+                               radius=8, fill=rank_bg)
+        draw.text((rank_x, rank_y), str(position), font=font_rank, fill=rank_text_color, anchor="mm")
+        
+        # Employee name
+        name_x = table_x + col_widths[0] + 20
+        name = emp.get("name", "Unknown")[:22]
+        draw.text((name_x, rank_y - 10), name, font=font_name, fill=LEADERBOARD_COLORS["textPrimary"], anchor="lm")
+        
+        # Tier badge
+        tier = emp.get("tier_label", "Server")
+        tier_colors = {
+            "Trainer": LEADERBOARD_COLORS["purple"],
+            "Bartender": LEADERBOARD_COLORS["blue"],
+            "A-Server": LEADERBOARD_COLORS["green"],
+            "B-Server": LEADERBOARD_COLORS["gold"],
+            "C-Server": LEADERBOARD_COLORS["red"],
+        }
+        tier_color = tier_colors.get(tier, LEADERBOARD_COLORS["textMuted"])
+        draw.text((name_x, rank_y + 12), tier, font=font_label, fill=tier_color, anchor="lm")
+        
+        # Recognition badge (if 5+ mentions)
+        mentions = emp_data.get("review_mentions", 0) or 0
+        if mentions >= 20:
+            draw.text((name_x + 200, rank_y - 10), "👑", font=font_small, anchor="lm")
+        elif mentions >= 10:
+            draw.text((name_x + 200, rank_y - 10), "⭐", font=font_small, anchor="lm")
+        elif mentions >= 5:
+            draw.text((name_x + 200, rank_y - 10), "✨", font=font_small, anchor="lm")
+        
+        # Scores
+        ops_score = emp_data.get("weighted_score", 0) or 0
+        guest_rep = (emp_data.get("cv_score", 0) or 0) + (emp_data.get("review_tracker_bonus", 0) or 0)
+        bonus = emp_data.get("total_metric_bonus", 0) or 0
+        final_score = emp_data.get("pre_dar_score") or emp_data.get("total_score") or emp.get("score", 0) or 0
+        
+        col_x = table_x + col_widths[0] + col_widths[1]
+        
+        # Ops Score
+        draw.text((col_x + col_widths[2]//2, rank_y), f"{ops_score:.1f}", font=font_small, 
+                  fill=LEADERBOARD_COLORS["textPrimary"], anchor="mm")
+        col_x += col_widths[2]
+        
+        # Guest Rep
+        draw.text((col_x + col_widths[3]//2, rank_y), f"{guest_rep:.1f}", font=font_small,
+                  fill=LEADERBOARD_COLORS["textPrimary"], anchor="mm")
+        col_x += col_widths[3]
+        
+        # Bonus
+        bonus_color = LEADERBOARD_COLORS["green"] if bonus > 0 else LEADERBOARD_COLORS["textMuted"]
+        bonus_text = f"+{bonus:.1f}" if bonus > 0 else "0"
+        draw.text((col_x + col_widths[4]//2, rank_y), bonus_text, font=font_small,
+                  fill=bonus_color, anchor="mm")
+        col_x += col_widths[4]
+        
+        # Final Score (larger)
+        score_color = LEADERBOARD_COLORS["gold"] if position == 1 else (
+            LEADERBOARD_COLORS["silver"] if position <= 3 else (
+            LEADERBOARD_COLORS["green"] if position <= 5 else LEADERBOARD_COLORS["textPrimary"]))
+        draw.text((col_x + col_widths[5]//2, rank_y), f"{final_score:.1f}", font=font_score,
+                  fill=score_color, anchor="mm")
+        col_x += col_widths[5]
+        
+        # Momentum indicator
+        if previous_scores:
+            prev_score = previous_scores.get(emp.get("employee_id"), 0)
+            change = final_score - prev_score
+            if change >= 5:
+                trend_text = "🔥"
+            elif change > 0:
+                trend_text = "↑"
+            elif change < -2:
+                trend_text = "↓"
+            else:
+                trend_text = "→"
+            
+            trend_color = LEADERBOARD_COLORS["orange"] if change >= 5 else (
+                LEADERBOARD_COLORS["green"] if change > 0 else (
+                LEADERBOARD_COLORS["red"] if change < -2 else LEADERBOARD_COLORS["textMuted"]))
+            draw.text((col_x + col_widths[6]//2, rank_y), trend_text, font=get_font(20), 
+                      fill=trend_color, anchor="mm")
+    
+    # Footer
+    footer_y = height - 50
+    draw.text((width // 2, footer_y), "BUBBA GUMP SHRIMP CO. | PERFORMANCE LEADERBOARD", 
+              font=font_label, fill=LEADERBOARD_COLORS["textMuted"], anchor="mm")
+    
+    # Convert to bytes
+    buffer = io.BytesIO()
+    img.save(buffer, format='PNG', optimize=True)
+    buffer.seek(0)
+    return buffer.getvalue()

@@ -33,6 +33,7 @@ const navGroups = [
     label: "Performance",
     items: [
       { path: "/rankings", label: "Rankings", icon: Trophy },
+      { path: "/leaderboard", label: "Leaderboard", icon: BarChart3 },
       { path: "/snapshots", label: "Snapshots", icon: Camera },
       { path: "/analytics", label: "Analytics", icon: BarChart3 }
     ]

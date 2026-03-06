@@ -9,6 +9,7 @@ import ReviewTracker from "./pages/ReviewTracker";
 import Analytics from "./pages/Analytics";
 import QuarterSettings from "./pages/QuarterSettings";
 import FullRankings from "./pages/FullRankings";
+import LeaderboardRankings from "./pages/LeaderboardRankings";
 import YodeckSlides from "./pages/YodeckSlides";
 import Snapshots from "./pages/Snapshots";
 import HelpCenter from "./pages/HelpCenter";
@@ -24,6 +25,7 @@ function App() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/rankings" element={<FullRankings />} />
+              <Route path="/leaderboard" element={<LeaderboardRankings />} />
               <Route path="/employees" element={<EmployeeList />} />
               <Route path="/reviews" element={<ReviewGeneration />} />
               <Route path="/review-tracker" element={<ReviewTracker />} />

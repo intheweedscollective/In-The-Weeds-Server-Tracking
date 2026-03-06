@@ -2009,6 +2009,114 @@ async def get_yodeck_printable_rankings_slide(year: int, quarter: str, format: s
     )
 
 
+@api_router.get("/v2/yodeck/{year}/{quarter}/leaderboard-slide")
+async def get_leaderboard_slide(year: int, quarter: str, format: str = "16:9"):
+    """
+    Generate a professional leaderboard slide with the new design system.
+    
+    Features:
+    - Dark navy background with high contrast
+    - Gold/Silver/Bronze for top 3
+    - Green highlight for top 5
+    - Momentum indicators (using snapshot comparison)
+    - Recognition badges (5/10/20 mentions)
+    - Category leaders panel
+    """
+    from yodeck_slides import generate_leaderboard_slide
+    
+    # Get all employees for the quarter
+    employees = await db.employees_v2.find(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    ).to_list(5000)
+    
+    if not employees:
+        raise HTTPException(status_code=404, detail=f"No data for {quarter} {year}")
+    
+    # Get settings for tier thresholds
+    settings = await db.quarter_settings.find_one(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    ) or {}
+    
+    a_server_min = settings.get("a_server_min_score", 85.0)
+    b_server_min = settings.get("b_server_min_score", 70.0)
+    
+    # Build rankings with tier labels
+    tier_counters = {"trainer": 0, "bartender": 0, "a-server": 0, "b-server": 0, "c-server": 0}
+    
+    def get_sort_key(e):
+        job = str(e.get("job_title", "server")).lower()
+        if job == "trainer":
+            return (0, -float(e.get("total_score", 0) or 0))
+        elif job == "bartender":
+            return (1, -float(e.get("total_score", 0) or 0))
+        else:
+            return (2, -float(e.get("total_score", 0) or 0))
+    
+    sorted_employees = sorted(employees, key=get_sort_key)
+    
+    rankings = []
+    position = 1
+    for emp in sorted_employees:
+        job = str(emp.get("job_title", "server")).lower()
+        total = emp.get("total_score", 0) or 0
+        
+        if job == "trainer":
+            tier_counters["trainer"] += 1
+            tier_label = "Trainer"
+        elif job == "bartender":
+            tier_counters["bartender"] += 1
+            tier_label = "Bartender"
+        else:
+            if total >= a_server_min:
+                tier_counters["a-server"] += 1
+                tier_label = "A-Server"
+            elif total >= b_server_min:
+                tier_counters["b-server"] += 1
+                tier_label = "B-Server"
+            else:
+                tier_counters["c-server"] += 1
+                tier_label = "C-Server"
+        
+        rankings.append({
+            "employee_id": emp.get("id"),
+            "name": emp.get("name", "Unknown"),
+            "position": position,
+            "score": total,
+            "job_title": emp.get("job_title", "Server"),
+            "tier_label": tier_label
+        })
+        position += 1
+    
+    # Get previous scores from second-latest snapshot for momentum
+    snapshots = await db.snapshots.find(
+        {"year": year, "quarter": quarter.upper()}
+    ).sort("snapshot_date", -1).to_list(2)
+    
+    previous_scores = {}
+    if len(snapshots) > 1:
+        prev_snapshot = snapshots[1]
+        for emp in (prev_snapshot.get("employees_data") or []):
+            previous_scores[emp.get("id")] = emp.get("total_score", 0) or emp.get("pre_dar_score", 0) or 0
+    
+    # Generate slide
+    slide_bytes = generate_leaderboard_slide(
+        rankings=rankings,
+        employees=employees,
+        quarter=quarter.upper(),
+        year=year,
+        previous_scores=previous_scores
+    )
+    
+    filename = f"leaderboard_{quarter}_{year}.png"
+    return Response(
+        content=slide_bytes,
+        media_type="image/png",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
 @api_router.get("/v2/yodeck/{year}/{quarter}/tier/{tier_name}")
 async def get_yodeck_tier_slide(year: int, quarter: str, tier_name: str, page: int = 1):
     """
