@@ -18,16 +18,23 @@ RT_GROUPS_URL = "https://api.reviewtrackers.com/groups"
 
 # Platform mapping from ReviewTrackers source names to our platform names
 SOURCE_TO_PLATFORM = {
+    # Lowercase source_code values
     "google": "Google",
     "google_play": "Google",
     "yelp": "Yelp",
     "facebook": "Facebook",
     "tripadvisor": "TripAdvisor",
     "opentable": "OpenTable",
-    "foursquare": "Yelp",  # Map to closest
-    "yellowpages": "Google",  # Map to closest
+    "foursquare": "Yelp",
+    "yellowpages": "Google",
     "bbb": "Google",
     "citysearch": "Google",
+    # Also handle source_name values (with different casing)
+    "Google": "Google",
+    "Yelp": "Yelp",
+    "Facebook": "Facebook",
+    "TripAdvisor": "TripAdvisor",
+    "OpenTable": "OpenTable",
 }
 
 
@@ -173,9 +180,14 @@ class ReviewTrackersClient:
 
 def transform_rt_review(rt_review: Dict) -> Dict[str, Any]:
     """Transform ReviewTrackers review to our format."""
-    # Map source to our platform names
-    source = rt_review.get("source", "").lower()
-    platform = SOURCE_TO_PLATFORM.get(source, "Google")  # Default to Google
+    # Map source to our platform names - check multiple fields
+    source_name = rt_review.get("source_name", "")
+    source_code = rt_review.get("source_code", "")
+    source = rt_review.get("source", "")
+    
+    # Use source_name first (most reliable), then source_code, then source
+    source_value = (source_name or source_code or source or "").lower()
+    platform = SOURCE_TO_PLATFORM.get(source_value, source_name or "Google")  # Default to source_name if available
     
     # Parse the published date
     published_at = rt_review.get("published_at", "")
