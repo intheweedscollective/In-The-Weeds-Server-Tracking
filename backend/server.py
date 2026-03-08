@@ -3763,6 +3763,120 @@ async def upload_snapshot_data(snapshot_id: str, file: UploadFile = File(...)):
     filename = file.filename.lower()
     
     try:
+        # First, check if this is a POS report format (multiple sheets, one per employee)
+        from pos_report_parser import is_pos_report_format, parse_pos_report
+        import tempfile
+        
+        # Save to temp file for POS parser
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
+            tmp.write(contents)
+            tmp_path = tmp.name
+        
+        if not filename.endswith('.csv') and is_pos_report_format(tmp_path):
+            # Use specialized POS report parser
+            logging.info("Detected POS report format - using specialized parser")
+            pos_employees = parse_pos_report(tmp_path)
+            
+            import os
+            os.unlink(tmp_path)  # Clean up temp file
+            
+            if not pos_employees:
+                raise HTTPException(status_code=400, detail="Could not parse any employees from POS report")
+            
+            # Get settings for scoring
+            settings_doc = await db.quarter_settings.find_one(
+                {"year": snapshot["year"], "quarter": snapshot["quarter"]},
+                {"_id": 0}
+            )
+            settings = QuarterSettings(**(settings_doc or {}))
+            
+            employees = []
+            for emp_data in pos_employees:
+                name = emp_data['name']
+                guests = emp_data.get('guests', 0)
+                net_sales = emp_data.get('net_sales', 0)
+                lbw = emp_data.get('lbw', 0)
+                glassware_sales = emp_data.get('glassware_sales', 0)
+                lsc_count = emp_data.get('lsc_count', 0)
+                
+                # Skip if no meaningful data
+                if net_sales <= 0 and lbw <= 0:
+                    continue
+                
+                # Calculate derived values
+                ppa = net_sales / guests if guests > 0 else 0
+                lbw_per_guest = lbw / guests if guests > 0 else 0
+                glassware_per_guest = glassware_sales / guests if guests > 0 else 0
+                guests_per_lsc = guests / lsc_count if lsc_count > 0 else None
+                
+                # Calculate scores using benchmarks
+                benchmark_ppa = settings.benchmark_ppa or 55
+                benchmark_lbw = settings.benchmark_lbw or 8
+                benchmark_glass = settings.benchmark_glass or 1.25
+                benchmark_lsc = settings.benchmark_lsc or 100
+                
+                score_ppa = (ppa / benchmark_ppa) * 100 if benchmark_ppa > 0 else 0
+                score_lbw = (lbw_per_guest / benchmark_lbw) * 100 if benchmark_lbw > 0 else 0
+                score_glass = (glassware_per_guest / benchmark_glass) * 100 if benchmark_glass > 0 else 0
+                score_lsc = (benchmark_lsc / guests_per_lsc) * 100 if guests_per_lsc and guests_per_lsc > 0 else 0
+                
+                # Calculate weighted base score (capped at 100 each)
+                capped_ppa = min(score_ppa, 100)
+                capped_lbw = min(score_lbw, 100)
+                capped_glass = min(score_glass, 100)
+                capped_lsc = min(score_lsc, 100)
+                
+                base_score = (
+                    capped_ppa * 0.25 +
+                    capped_lsc * 0.25 +
+                    capped_lbw * 0.15 +
+                    capped_glass * 0.10
+                )
+                
+                # For snapshots, we just use the base operational score
+                total_score = round(base_score, 2)
+                
+                emp = {
+                    "name": name,
+                    "guests": guests,
+                    "net_sales": round(net_sales, 2),
+                    "lbw": round(lbw, 2),
+                    "glassware_sales": round(glassware_sales, 2),
+                    "lsc_count": lsc_count,
+                    "ppa": round(ppa, 2),
+                    "lbw_per_guest": round(lbw_per_guest, 2),
+                    "glassware_per_guest": round(glassware_per_guest, 2),
+                    "guests_per_lsc": round(guests_per_lsc, 2) if guests_per_lsc else None,
+                    "score_ppa": round(score_ppa, 2),
+                    "score_lbw": round(score_lbw, 2),
+                    "score_glass": round(score_glass, 2),
+                    "score_lsc": round(score_lsc, 2),
+                    "total_score": total_score
+                }
+                employees.append(emp)
+            
+            # Update snapshot
+            await db.snapshots.update_one(
+                {"id": snapshot_id},
+                {"$set": {
+                    "employees": employees,
+                    "employee_count": len(employees),
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                }}
+            )
+            
+            return {
+                "message": f"POS report parsed successfully",
+                "employee_count": len(employees),
+                "format": "pos_report"
+            }
+        
+        # Clean up temp file if not POS format
+        import os
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        
+        # Standard table format parsing
         if filename.endswith('.csv'):
             df = pd.read_csv(io.BytesIO(contents))
         else:
