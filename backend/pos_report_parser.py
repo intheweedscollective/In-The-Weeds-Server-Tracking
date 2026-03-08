@@ -358,17 +358,31 @@ def is_pos_report_format(file_path: str) -> bool:
         # Check first sheet for POS report markers
         df = pd.read_excel(file_path, sheet_name=0, header=None)
         
-        # Look for common POS report markers
-        for row_idx in range(min(10, len(df))):
-            for col_idx in range(min(5, df.shape[1])):
+        # Look for common POS report markers in a wider range
+        pos_markers = ['server sales report', 'grs sls', 'bubba gump', 'bglv', 'pos report', 
+                       'net sls', 'guest avg', 'total guests', 'food', 'liquor', 'beer', 'wine']
+        
+        found_markers = 0
+        for row_idx in range(min(50, len(df))):
+            for col_idx in range(min(20, df.shape[1])):
                 val = df.iloc[row_idx, col_idx]
                 if val is not None and not pd.isna(val):
                     val_str = str(val).lower()
-                    if 'server sales report' in val_str or 'grs sls' in val_str:
-                        return True
+                    for marker in pos_markers:
+                        if marker in val_str:
+                            found_markers += 1
+                            if found_markers >= 3:  # If we find 3+ markers, it's likely a POS report
+                                logger.info(f"Detected POS report format (found {found_markers} markers)")
+                                return True
+        
+        # If file has 10+ sheets and we found at least one marker, likely POS format
+        if len(xlsx.sheet_names) >= 10 and found_markers >= 1:
+            logger.info(f"Detected POS report format (many sheets + {found_markers} markers)")
+            return True
         
         return False
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error checking POS format: {e}")
         return False
 
 
