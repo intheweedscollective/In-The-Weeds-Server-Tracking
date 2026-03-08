@@ -23,17 +23,34 @@ def clean_number(val) -> float:
     
     val_str = str(val).strip()
     
-    # Remove common OCR errors and formatting
-    val_str = val_str.replace(',', '').replace(' ', '').replace('.', '', val_str.count('.') - 1)
+    # Handle OCR errors like "71,875.97     0,207.71" becoming one cell
+    # Take only the first number if there are multiple
+    parts = val_str.split()
+    if len(parts) > 1:
+        val_str = parts[0]
     
-    # Handle cases like "3.911.00" -> "3911.00"
-    parts = val_str.split('.')
-    if len(parts) > 2:
-        # Keep only the last decimal
+    # Remove commas
+    val_str = val_str.replace(',', '')
+    
+    # Handle cases like "3.911.00" -> keep only one decimal point
+    # Count periods
+    period_count = val_str.count('.')
+    if period_count > 1:
+        # Keep only the last decimal point
+        parts = val_str.split('.')
         val_str = ''.join(parts[:-1]) + '.' + parts[-1]
     
+    # Remove any trailing non-numeric characters
+    val_str = re.sub(r'[^\d.]+$', '', val_str)
+    val_str = re.sub(r'^[^\d.]+', '', val_str)
+    
     try:
-        return float(val_str)
+        result = float(val_str)
+        # Sanity check - sales should be less than $10 million for an individual
+        if result > 10000000:
+            logger.warning(f"Suspicious large value {result}, returning 0")
+            return 0.0
+        return result
     except (ValueError, TypeError):
         return 0.0
 
@@ -41,19 +58,23 @@ def clean_number(val) -> float:
 def find_employee_name(df: pd.DataFrame) -> Optional[str]:
     """
     Find the employee name in a POS report sheet.
-    The name is typically in rows 5-7, columns 4-8.
+    The name position varies - search rows 3-12, columns 2-20.
     """
-    invalid_patterns = [
+    # These patterns must match as whole words or at word boundaries
+    invalid_words = [
         'printed', 'page', 'grs', 'net', 'tax', 'bglv', 'bubba', 'vegas',
-        'food', 'liquor', 'beer', 'wine', 'retail', 'nan', 'sls', 'sis',
-        'avg', 'guest', 'check', 'sales', 'category', 'vd/', 'sur/', 'add',
-        'chg', 'server', 'report', 'date', 'blvd', '337', '3717', 'less',
-        'taxes', 'surch', 'order', 'charges', '19mm', '19637', 'nv'
+        'food', 'liquor', 'beer', 'wine', 'retail', 'sls', 'sis',
+        'avg', 'guest', 'check', 'sales', 'category', 'server', 'report', 
+        'date', 'blvd', 'less', 'taxes', 'surch', 'order', 'charges', 
+        'las vegas', 'avgt', 'totals'
     ]
     
-    # Search in likely locations for the name
-    for row_idx in range(3, 10):
-        for col_idx in range(2, 10):
+    # These patterns should match anywhere in the string
+    invalid_contains = ['337', '3717', '19mm', '19637', '89109', 'vd/', 'sur/', 'add chg', 'nan']
+    
+    # Search in wider range for the name
+    for row_idx in range(3, 13):
+        for col_idx in range(2, 20):
             if col_idx >= df.shape[1]:
                 continue
             
@@ -68,23 +89,33 @@ def find_employee_name(df: pd.DataFrame) -> Optional[str]:
                 continue
             
             # Skip numbers
-            clean_val = val_str.replace('.', '').replace(',', '').replace(' ', '').replace('-', '')
+            clean_val = val_str.replace('.', '').replace(',', '').replace(' ', '').replace('-', '').replace('—', '')
             if clean_val.isdigit():
                 continue
             
-            # Skip values with invalid patterns
             val_lower = val_str.lower()
-            if any(pattern in val_lower for pattern in invalid_patterns):
+            
+            # Check invalid_contains patterns
+            if any(pattern in val_lower for pattern in invalid_contains):
+                continue
+            
+            # Check invalid_words - split value into words and check
+            val_words = set(re.split(r'[\s,.\-—]+', val_lower))
+            if val_words & set(invalid_words):
                 continue
             
             # Skip values that are mostly numbers/special chars
             letter_count = sum(1 for c in val_str if c.isalpha())
-            if letter_count < len(val_str) * 0.6:
+            if letter_count < len(val_str) * 0.5:
                 continue
             
-            # Name must have at least one space (first + last name) or be a single word name
-            # But should look like a proper name
+            # Name must have at least one uppercase letter (proper name)
             if not any(c.isupper() for c in val_str):
+                continue
+            
+            # Should look like a name (letters and spaces mainly)
+            alpha_space_count = sum(1 for c in val_str if c.isalpha() or c == ' ' or c == '-' or c == '—')
+            if alpha_space_count < len(val_str) * 0.8:
                 continue
             
             # Valid name candidate
@@ -132,9 +163,30 @@ def find_sales_value(df: pd.DataFrame, category: str) -> float:
 def find_guest_count(df: pd.DataFrame) -> int:
     """
     Find the guest count from the POS report.
-    Usually in the header area or near "Guest Avg." row.
+    Look for "Total Guests" row - the value is in column 4.
     """
-    # Look for "Guest" related values
+    for row_idx in range(len(df)):
+        for col_idx in range(min(3, df.shape[1])):
+            val = df.iloc[row_idx, col_idx]
+            if val is None or pd.isna(val):
+                continue
+            
+            val_str = str(val).strip().lower()
+            
+            # Look for "Total Guests" row
+            if 'total guests' in val_str or val_str == 'total guests':
+                # Get the guest count from column 4
+                for search_col in range(3, 8):
+                    if search_col >= df.shape[1]:
+                        continue
+                    guest_val = df.iloc[row_idx, search_col]
+                    if guest_val is not None and not pd.isna(guest_val):
+                        guest_str = str(guest_val).strip().replace(',', '').replace(' ', '')
+                        if guest_str.isdigit():
+                            logger.info(f"Found Total Guests: {guest_str} at row {row_idx}")
+                            return int(guest_str)
+    
+    # Fallback: look for "Num Guests:" pattern
     for row_idx in range(len(df)):
         for col_idx in range(df.shape[1]):
             val = df.iloc[row_idx, col_idx]
@@ -142,16 +194,17 @@ def find_guest_count(df: pd.DataFrame) -> int:
                 continue
             
             val_str = str(val).strip()
-            
-            # Look for "Guests:" or guest count patterns
-            if 'guest' in val_str.lower() and ':' in val_str:
-                # Try to extract number after "Guests:"
-                match = re.search(r'guests?\s*:\s*(\d+)', val_str, re.IGNORECASE)
-                if match:
-                    return int(match.group(1))
+            if 'num guests' in val_str.lower():
+                # Try next few rows/columns for the number
+                for offset_row in range(0, 5):
+                    for offset_col in range(0, 5):
+                        if row_idx + offset_row < len(df) and col_idx + offset_col < df.shape[1]:
+                            check_val = df.iloc[row_idx + offset_row, col_idx + offset_col]
+                            if check_val is not None and not pd.isna(check_val):
+                                check_str = str(check_val).strip().replace(',', '')
+                                if check_str.isdigit() and int(check_str) > 10:
+                                    return int(check_str)
     
-    # Alternative: Calculate from Food sales / Guest Avg
-    # This requires finding the Guest Avg column
     return 0
 
 
