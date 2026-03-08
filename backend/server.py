@@ -1199,11 +1199,57 @@ async def upload_employees_v2(
             except (ValueError, TypeError):
                 return default
         
+        def is_valid_employee_name(name: str) -> bool:
+            """Filter out garbage names from XLSX parsing."""
+            if not name or len(name) < 2:
+                return False
+            
+            # Common garbage patterns from XLSX headers/footers
+            invalid_patterns = [
+                "printed by", "net sls", "net sis", "net sales", "taxes",
+                "avg.", "average", "total", "subtotal", "grand total",
+                "report", "date:", "page", "location", "store",
+                "bglv", "edc", "pos", "server:", "employee:",
+                "unnamed", "column", "header", "footer",
+                "liquor", "beer", "wine", "glassware", "guests",
+                "lsc", "count", "sales", "-----", "=====", "____"
+            ]
+            
+            name_lower = name.lower().strip()
+            
+            # Check for invalid patterns
+            for pattern in invalid_patterns:
+                if pattern in name_lower:
+                    return False
+            
+            # Name should contain at least one letter
+            if not any(c.isalpha() for c in name):
+                return False
+            
+            # Name should not be all numbers
+            if name.replace(" ", "").replace(".", "").isdigit():
+                return False
+            
+            # Name should not start with special characters
+            if name[0] in "0123456789.-_=+*&^%$#@!~`":
+                return False
+            
+            # Name should be reasonable length (2-50 chars)
+            if len(name) > 50:
+                return False
+            
+            return True
+        
         for idx, row in df.iterrows():
             try:
                 # Extract core values
                 name = str(row.get(mapping["name"], "")).strip()
                 if not name or name == "nan":
+                    continue
+                
+                # Filter out garbage names from XLSX headers/footers
+                if not is_valid_employee_name(name):
+                    logging.info(f"Skipping invalid name during upload: {name}")
                     continue
                 
                 guests = safe_int(row.get(mapping["guests"]))
@@ -3756,11 +3802,57 @@ async def upload_snapshot_data(snapshot_id: str, file: UploadFile = File(...)):
             except (ValueError, TypeError):
                 return default
         
+        def is_valid_employee_name(name: str) -> bool:
+            """Filter out garbage names from XLSX parsing."""
+            if not name or len(name) < 2:
+                return False
+            
+            # Common garbage patterns from XLSX headers/footers
+            invalid_patterns = [
+                "printed by", "net sls", "net sis", "net sales", "taxes",
+                "avg.", "average", "total", "subtotal", "grand total",
+                "report", "date:", "page", "location", "store",
+                "bglv", "edc", "pos", "server:", "employee:",
+                "unnamed", "column", "header", "footer",
+                "liquor", "beer", "wine", "glassware", "guests",
+                "lsc", "count", "sales", "-----", "=====", "____"
+            ]
+            
+            name_lower = name.lower().strip()
+            
+            # Check for invalid patterns
+            for pattern in invalid_patterns:
+                if pattern in name_lower:
+                    return False
+            
+            # Name should contain at least one letter
+            if not any(c.isalpha() for c in name):
+                return False
+            
+            # Name should not be all numbers
+            if name.replace(" ", "").replace(".", "").isdigit():
+                return False
+            
+            # Name should not start with special characters
+            if name[0] in "0123456789.-_=+*&^%$#@!~`":
+                return False
+            
+            # Name should be reasonable length (2-50 chars)
+            if len(name) > 50:
+                return False
+            
+            return True
+        
         employees = []
         for idx, row in df.iterrows():
             try:
                 name = str(row.get(mapping["name"], "")).strip()
                 if not name or name == "nan":
+                    continue
+                
+                # Filter out garbage names from XLSX headers/footers
+                if not is_valid_employee_name(name):
+                    logging.info(f"Skipping invalid name: {name}")
                     continue
                 
                 # Extract job title
