@@ -239,6 +239,10 @@ export default function ScoringAudit() {
   const [searchTerm, setSearchTerm] = useState("");
   const [quarter] = useState("Q1");
   const [year] = useState(2026);
+  const [dataCapStatus, setDataCapStatus] = useState(null);
+  const [recalculating, setRecalculating] = useState(false);
+  const [enforcing, setEnforcing] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   const fetchAuditReport = useCallback(async () => {
     try {
@@ -289,10 +293,6 @@ export default function ScoringAudit() {
       setLoading(false);
     }
   };
-
-  const [dataCapStatus, setDataCapStatus] = useState(null);
-  const [recalculating, setRecalculating] = useState(false);
-  const [enforcing, setEnforcing] = useState(false);
 
   const fetchDataCapStatus = useCallback(async () => {
     try {
@@ -350,8 +350,6 @@ export default function ScoringAudit() {
     }
   };
 
-  const [syncing, setSyncing] = useState(false);
-
   const syncEmployeeMentions = async () => {
     setSyncing(true);
     try {
@@ -373,9 +371,15 @@ export default function ScoringAudit() {
   useEffect(() => {
     const init = async () => {
       setLoading(true);
-      await fetchAuditReport();
-      await fetchAllEmployeesAudit();
-      await fetchDataCapStatus();
+      try {
+        await Promise.all([
+          fetchAuditReport(),
+          fetchAllEmployeesAudit(),
+          fetchDataCapStatus()
+        ]);
+      } catch (error) {
+        console.error("Error loading audit data:", error);
+      }
       setLoading(false);
     };
     init();
