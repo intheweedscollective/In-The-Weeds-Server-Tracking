@@ -1,0 +1,202 @@
+<analysis>**original_problem_statement:**
+The user wants to build a comprehensive performance review application for restaurant employees. The app should handle data ingestion (XLSX upload), calculate employee scores based on a detailed and configurable set of metrics, and generate various outputs like downloadable slides for digital signage (Yodeck), leaderboards, and reports.
+
+PRODUCT REQUIREMENTS:
+The application must evaluate staff on operational metrics (PPA, LSC, LBW, Glassware) and guest feedback metrics (Customer Voice NPS, Public Reviews). It includes a complex scoring system with weighted categories, benchmark bonuses, and specific point allocations for promoter/detractor reviews. The system should generate leaderboards and downloadable slides with detailed performance breakdowns and visual indicators (color-coding, badges, progress bars). A recent addition is a data integrity system to ensure the accuracy of scraped and uploaded data by detecting duplicates, mismatches, and attribution errors. The UI/UX should be professional, high-contrast, and motivational, following a detailed design specification provided by the user. The user has emphasized that data accuracy is paramount as it affects employees' livelihoods.
+
+**User's preferred language**: English
+
+**what currently exists?**
+The application is a full-stack React/FastAPI/MongoDB system. In this session, the agent performed a deep dive into data integrity to resolve numerous user-reported issues regarding inconsistent and incorrect rankings.
+
+Key accomplishments include:
+1.  **Automated Name Matching:** A smart name-matching utility () was created to resolve discrepancies between employee common names/nicknames (e.g., Keisha) and their legal names in feedback systems (e.g., Lakeisha), fixing a major cause of incorrect scores.
+2.  **Data Inconsistency Fixes:** Numerous data issues were resolved, including duplicate feedback entries, incorrect NPS calculations, and CV feedback data from the wrong quarter being used in scores.
+3.  **Official Stats Override System:** It was discovered that the APIs for ReviewTrackers and Loyalty Voice return different data than their respective UI dashboards. To ensure 100% accuracy with what the user sees, a system was built allowing manual entry of the official platform-wide stats (total reviews, NPS, etc.) which then override the API-synced data for display.
+4.  **Leaderboard/Rankings Logic Correction:** The Leaderboard was updated to show a pure, top-to-bottom score ranking, while the main Rankings page retains its job-tier hierarchy, as per the user's explicit request.
+5.  **ReviewTracker Sync Enhancement:** The sync logic was fixed to correctly identify and pull reviews from multiple platforms (Google, Yelp, TripAdvisor, OpenTable), not just Google.
+
+The application now displays data that perfectly matches the user's source dashboards (ReviewTrackers, Loyalty Voice) because of the manual override system. The agent was attempting to automate the data gathering by scraping the source UIs directly but got stuck.
+
+**Last working item**:
+-   Last item agent was working: The user made a new, high-priority request: We need to get this scoring 100% accurate. We need to build self-checking audit process that guarantees everything is accurate. The agent acknowledged this and was about to begin planning the implementation of this audit system. This task supersedes the previous effort to build a UI scraper.
+-   Status: **NOT STARTED**
+-   Agent Testing Done: N/A
+-   Which testing method agent to use? backend testing agent. This will involve creating new backend logic and potentially new database collections to store audit logs and results.
+-   User Testing Done: N
+
+**All Pending/In progress Issue list**:
+-   Issue 1: Build a self-checking audit process (P0)
+-   Issue 2: Fix UI contrast issues on the Leaderboard page (P1)
+-   Issue 3: Automate UI scraping to fetch official stats (P2)
+-   Issue 4: Implement a robust background task queue (P3)
+
+Issues Detail:
+-   **Issue 1: Build a self-checking audit process (P0)**
+    -   **Attempted fixes**: None. This is a new request.
+    -   **Next debug checklist**:
+        1.  Plan the architecture for the audit system. This could involve:
+            -   A new database collection to log every scoring calculation step (e.g., ).
+            -   Endpoints to trigger audits and view results.
+            -   A UI to display the audit trail for an employee's score, showing how each component (CV, RT, Metrics) contributes to the total.
+            -   Cross-referencing raw data (e.g., ) against aggregated data () and final scores ().
+        2.  Present the plan to the user for approval.
+        3.  Implement the backend logic for the audit trail.
+        4.  Implement the frontend UI to display the audit results.
+    -   **Why fix this issue and what will be achieved with the fix?** To fulfill the user's critical requirement for a transparent, verifiable, and 100% accurate scoring system. This will build trust and ensure fairness.
+    -   **Status**: **NOT STARTED**
+    -   **Is recurring issue?** N
+    -   **Should Test frontend/backend/both after fix?** both
+    -   **Blocked on other issue**: None.
+
+-   **Issue 2: Fix UI contrast issues on the Leaderboard page (P1)**
+    -   **Attempted fixes**: None. This task was deprioritized to handle data accuracy issues.
+    -   **Next debug checklist**:
+        1.  Review the user's original feedback: stop putting like colors on top of each other.
+        2.  Inspect CSS in .
+        3.  Adjust colors for text, badges, and progress bars to meet high-contrast standards.
+        4.  Take a screenshot to verify.
+    -   **Why fix this issue and what will be achieved with the fix?** To improve readability and meet the user's design requirements.
+    -   **Status**: **NOT STARTED**
+    -   **Is recurring issue?** N
+    -   **Should Test frontend/backend/both after fix?** frontend
+    -   **Blocked on other issue**: Issue 1.
+
+-   **Issue 3: Automate UI scraping to fetch official stats (P2)**
+    -   **Attempted fixes**: The agent started building a Playwright scraper for the Loyalty Voice dashboard but was unable to correctly apply the date filters to get Quarter-to-Date stats. The scraper currently only gets daily data.
+    -   **Next debug checklist**:
+        1.  Revisit .
+        2.  Debug the Playwright interaction with the date picker on the Loyalty Voice dashboard. It might require complex selectors or executing JavaScript directly.
+        3.  Create a similar scraper for the ReviewTrackers dashboard.
+        4.  Integrate both scrapers into an endpoint that automatically updates the  collection.
+    -   **Why fix this issue and what will be achieved with the fix?** To eliminate the need for manual data entry and fully automate the process of keeping the app's stats in sync with the source dashboards.
+    -   **Status**: **BLOCKED**
+    -   **Is recurring issue?** N
+    -   **Should Test frontend/backend/both after fix?** backend
+    -   **Blocked on other issue**: Blocked on agent capability to interact with complex date-picker UI elements. Also deprioritized in favor of Issue 1.
+
+-   **Issue 4: Implement robust background task queue (P2)**
+    -   **Attempted fixes**: None. This is a known architectural improvement that has been deferred.
+    -   **Next debug checklist**:
+        1.  Choose a solution (e.g., FastAPI's , Celery).
+        2.  Refactor long-running endpoints like  and  to use it.
+    -   **Why fix this issue and what will be achieved with the fix?** To prevent API timeouts during data syncs and improve UI responsiveness.
+    -   **Status**: **NOT STARTED**
+    -   **Is recurring issue?** Y
+    -   **Should Test frontend/backend/both after fix?** both
+    -   **Blocked on other issue**: Issue 1.
+
+**In progress Task List**:
+None. The last task was completed (implementing the manual override) and the agent is about to start the new task of building an audit system.
+
+**Upcoming and Future Tasks**
+Upcoming Tasks:
+-   **Implement Momentum Indicators (P1)**: The Trend column on the Leaderboard is a placeholder. Implement logic to compare current scores against previous snapshots (Snapshots QTD) to show trend icons (🔥, ↑, →, ↓).
+-   **Multi-Store Architecture (P1)**: Plan and implement a multi-tenant system to support 22 locations with global reporting.
+
+Future Tasks:
+-   **Review Spotlight Feature**: Implement the Review Spotlight section on the dashboard.
+-   **Gamification Expansion**: Enhance the Review Recognition feature beyond simple badges.
+-   **Download All Slides ZIP**: Create a feature to download all generated slides as a single ZIP file.
+-   **Code Refactoring**:
+    -   Refactor the monolithic  file into smaller, route-specific modules.
+    -   Refactor frontend components: .
+    -   Delete the redundant file: .
+
+**Completed work in this session**
+-   **Automated Name Matching**: Created a smart name-matching system () to correctly attribute feedback to employees with nicknames or formal names, fixing major scoring inaccuracies.
+-   **Resolved Data Inconsistencies**: Investigated and fixed numerous data integrity issues, including duplicate feedback entries, an impossible NPS score (>1000%), incorrect quarter attribution for CV data, and inflated scores.
+-   **Implemented Official Stats Override**: Created a system to manually set platform-wide stats (total reviews, NPS scores) to perfectly match the user's source dashboards (ReviewTrackers, Loyalty Voice), bypassing discrepancies in the vendor APIs.
+-   **Corrected ReviewTracker Sync**: Fixed the sync process to pull reviews from all platforms (Yelp, TripAdvisor, OpenTable), not just Google.
+-   **Fixed Rankings Display Logic**: Corrected the Leaderboard to show a pure score-based ranking, while ensuring the Rankings page retained its job-tier hierarchy.
+-   **Fixed Frontend Display Bug**: Repaired the expanded employee view on the Rankings page, which was incorrectly showing N/A for NPS scores.
+
+**Earlier issues found/mentioned but not fixed**
+-   The need for a background task queue has been mentioned multiple times but not implemented.
+-   The UI contrast issue on the Leaderboard page was reported but deferred.
+
+**Known issue recurrence from previous fork**
+-   None.
+
+**Code Architecture**
+
+
+**Key Technical Concepts**
+-   **Data Discrepancy Resolution**: The core challenge was that vendor APIs (ReviewTrackers, Loyalty Voice) provide different data than their own UI dashboards.
+-   **Manual Data Override System**: A system was built ( collection and associated endpoints) to allow manual entry of dashboard stats, ensuring the app is 100% accurate relative to the user's source of truth.
+-   **Fuzzy Name Matching**: A dictionary-based approach was used in  to map common names/nicknames to formal names found in feedback data (e.g., Tad -> Thaddeus).
+-   **Data Auditing & Correction**: The session involved extensive manual and scripted auditing of the database to find and remove duplicate entries, data from incorrect time periods, and sync aggregated collections () with raw data ().
+
+**key DB schema**
+-   **reviews**: Stores external review data from ReviewTrackers. Was cleared and re-synced multiple times.
+-   **cv_feedback**: Stores raw customer feedback from Loyalty Voice. Was cleaned of entries from the wrong quarter.
+-   **cv_nps**: Aggregated NPS data. Was frequently re-calculated to fix inconsistencies.
+-   **employees_v2**: Main employee collection. Was updated repeatedly with corrected scores.
+-   **official_stats**: **(New)** Stores the manually entered official platform-wide statistics for both ReviewTrackers and Customer Voice to override API data.
+
+**changes in tech stack**
+-   None.
+
+**All files of reference**
+-   : Heavily modified. Contains all new data integrity logic, official stats endpoints, and name matching integration. It's extremely large and fragile.
+-   : New file containing the logic to resolve employee name discrepancies.
+-   : Modified to fix a display bug in the expanded view.
+-   : Modified to use the correct data for pure score ranking.
+-   : Modified to display the official stats instead of directly calculated API stats.
+
+**Areas that need refactoring**:
+-   ****: This file has grown to over 6,500 lines and is critically unmanageable. It must be broken down into smaller FastAPI routers (e.g., , , ). This is the highest technical debt priority.
+
+**key api endpoints**
+-   : **(New)** Applies the smart name matching and recalculates scores.
+-   : **(New)** Shows a preview of what the name matcher will do.
+-   : **(New)** Sets the official stats for ReviewTrackers.
+-   : **(New)** Sets the official stats for Customer Voice.
+-   : **(Modified)** Now serves data from  if available.
+-   : **(Modified)** Now serves data from  if available. Fixed a major calculation bug.
+-   : This endpoint provides hierarchy-based rankings and is used by the Rankings page.
+-   : This endpoint provides raw employee data, now used by the Leaderboard page to create a pure score ranking.
+
+**Critical Info for New Agent**
+-   **The #1 Priority is building a self-checking audit process.** The user needs a transparent system to verify how every score is calculated, from raw data to the final number. This is a response to the numerous data issues found in this session.
+-   **The Official Stats system is a CRITICAL concept.** The app intentionally ignores live API data for platform-wide stats and uses manually entered values to match the user's dashboards. This was a deliberate choice to achieve 100% accuracy from the user's perspective. Do not fix this by reverting to live API data without understanding the context.
+-   The user wants to automate the Official Stats entry by scraping the source UIs, but this is a secondary goal now. The agent's previous attempt at scraping Loyalty Voice got stuck on interacting with a date picker.
+-   The password for Loyalty Voice is  (no ). The password for ReviewTrackers is .
+-   The contrast issue on the Leaderboard page from the previous handoff is still unresolved.
+
+**documents and test reports created in this job**
+-   None.
+
+**Last 10 User Messages and any pending HUMAN messages**
+1.  **User**: We need to get this scoring 100% accurate. We need to build self-checking audit process that guarantees everything is accurate - **New P0 task.** This is the current directive.
+2.  **User**:  - Provided the correct password for Loyalty Voice, unblocking the scraper test.
+3.  **User**: I do not want to have to manually override anything and I do not want inaccurate information. How can we create a tool that will pull the data from the UI that I gave you credentials for? - This led to the agent attempting to build UI scrapers.
+4.  **User**: When I sync moving forward it will sync to match the current real-time data correct? - This question revealed the user's expectation for full automation, leading to the discussion about UI scraping.
+5.  **User**: Sent a screenshot of the official Customer Voice dashboard stats and asked if the app matched. It did not, leading to the creation of the  system for CV.
+6.  **User**: UI needs to be the answer. That should be the only metric considered. Please represent the UI data in the scoring model - Explicit instruction to prioritize the dashboard UI as the source of truth over the API.
+7.  **User**: Sent a screenshot of their ReviewTrackers filters, emphasizing the need for 100% accuracy.
+8.  **User**: Sent a screenshot of the ReviewTrackers dashboard, highlighting the discrepancy with the app's data. This led to the investigation of the API vs. UI data differences.
+9.  **User**: Leaderboard data is all jumbled. Please resolve. Also need a sanity check... - Reported the jumbled leaderboard and questioned data consistency.
+10. **User**: The dates of the reviews are still wrong. They are supposed to be from 2026 quarter 1 only. - Reported that CV feedback data included dates from 2025.
+
+**Project Health Check:**
+-   **Broken**: The data sync processes (, ) are known to pull data that diverges from the user's source-of-truth dashboards. The official stats override masks this problem for platform-wide numbers, but individual employee data could still be affected.
+-   **Mocked**: The platform-wide statistics for both ReviewTrackers and Customer Voice are effectively mocked with manually entered data stored in the  collection.
+
+**3rd Party Integrations**
+-   **Landry's Loyalty Voice (Customer Voice)**: Web scraping via Playwright for individual feedback. A new effort to scrape summary stats from the UI was started but is blocked.
+-   **ReviewTrackers.com**: REST API for customer reviews. The API sync is functional but known to return different counts than the RT dashboard.
+-   **OpenAI GPT-4o**: Used for a legacy OCR feature and for employee name detection in review text. Uses Emergent LLM Key.
+
+**Testing status**
+-   Testing agent used after significant changes: NO
+-   Troubleshoot agent used after agent stuck in loop: NO
+-   Test files created: []
+-   Known regressions: The UI contrast on the Leaderboard page is still poor.
+
+**Credentials to test flow:**
+-   Loyalty Voice Login:  / 
+-   ReviewTrackers Login:  / 
+
+**What agent forgot to execute**
+-   The agent did not fix the UI contrast issues on the Leaderboard page, which was the original P0 task from the previous fork. It was superseded by a cascade of data integrity emergencies.</analysis>

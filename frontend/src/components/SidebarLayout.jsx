@@ -14,6 +14,7 @@ import {
   ChevronDown,
   ChevronRight,
   ShieldCheck,
+  ClipboardCheck,
   Menu,
   X,
   Sun,
@@ -65,6 +66,7 @@ const navGroups = [
     id: "admin",
     label: "Admin",
     items: [
+      { path: "/scoring-audit", label: "Scoring Audit", icon: ClipboardCheck },
       { path: "/data-integrity", label: "Data Integrity", icon: ShieldCheck }
     ]
   }

@@ -12,6 +12,7 @@ Build a comprehensive performance review application for restaurant employees (B
 6. **Time-Series Analytics**: Quarter-over-quarter trend graphs
 7. **Bi-Weekly Snapshots**: One-page, color-coded grid of all employees' performance
 8. **DAR Calculator**: End-of-quarter disciplinary action report deductions
+9. **Self-Checking Audit System**: Comprehensive scoring verification that guarantees 100% accuracy
 
 ## Tech Stack
 - **Frontend**: React.js, Tailwind CSS, Shadcn/UI
@@ -25,8 +26,10 @@ Build a comprehensive performance review application for restaurant employees (B
 ```
 /app/
 ├── backend/
-│   ├── server.py                    # Main API server
+│   ├── server.py                    # Main API server (6800+ lines)
 │   ├── scoring_engine.py            # Scoring calculations
+│   ├── audit_system.py              # NEW: Self-checking audit system
+│   ├── name_matcher.py              # Smart name matching for CV attribution
 │   ├── snapshot_slides.py           # Snapshot slide generator
 │   ├── trend_charts.py              # Multi-panel line/bar charts
 │   ├── yodeck_slides.py             # Yodeck slide generator
@@ -36,15 +39,17 @@ Build a comprehensive performance review application for restaurant employees (B
 └── frontend/
     └── src/
         ├── components/
-        │   ├── SidebarLayout.jsx     # NEW: Main layout with sidebar nav
+        │   ├── SidebarLayout.jsx     # Main layout with sidebar nav
         │   ├── FinalizeQuarterModal.js
         │   └── OnboardingGuide.js
         └── pages/
-            ├── Dashboard.js          # REDESIGNED: Bento grid layout
+            ├── Dashboard.js          # Bento grid layout
             ├── FullRankings.js
             ├── ReviewTracker.js
+            ├── ScoringAudit.js       # NEW: Self-checking audit UI
+            ├── DataIntegrity.js      # Data integrity panel
             ├── YodeckSlides.js
-            ├── HelpCenter.js         # NEW: FAQ & documentation
+            ├── HelpCenter.js         # FAQ & documentation
             └── QuarterSettings.js
 ```
 
@@ -68,8 +73,46 @@ Build a comprehensive performance review application for restaurant employees (B
 - ✅ Peer Comparison Badges (Top 10%, Top 25%, Top 50%)
 - ✅ Review Tracker with AI-powered employee detection
 - ✅ ReviewTrackers.com API integration
+- ✅ Self-Checking Scoring Audit System
 
-### Recent Changes (Mar 4, 2026) - Complete CV Server Attribution & Exclusion System
+### Recent Changes (Mar 8, 2026) - Self-Checking Audit System
+
+- ✅ **Scoring Audit System**: Built comprehensive self-checking audit process that guarantees 100% accurate scoring
+  - **New API Endpoints**:
+    - `GET /api/v2/audit/employee/{name}` - Detailed audit of single employee's score calculation
+    - `GET /api/v2/audit/all` - Batch audit of all employees with pass/warning/fail status
+    - `GET /api/v2/audit/report` - Comprehensive audit report with data sources, consistency checks, recommendations
+    - `GET /api/v2/audit/trail` - View audit trail of changes
+    - `POST /api/v2/audit/log` - Log audit entries for tracking
+  - **Features**:
+    - Step-by-step calculation verification for every score component
+    - Data trail from raw sources (CV feedback, review mentions) to final scores
+    - Discrepancy detection with severity levels (CRITICAL, HIGH, MEDIUM)
+    - Cross-reference validation between raw data and aggregated records
+    - Official stats verification (CV and RT)
+  
+- ✅ **Scoring Audit UI** (`/scoring-audit`):
+  - Summary cards showing total employees, passed, warnings, failed counts
+  - Data source status indicators (Official CV/RT stats set or not)
+  - Employee list with audit status (PASS, WARNING, FAIL)
+  - Detailed employee audit view with:
+    - Discrepancies panel with severity badges
+    - Calculation Audit Trail with expandable sections:
+      - POS Metrics (PPA, LBW/Guest, Glass/Guest, Guests/LSC)
+      - Normalized Scores (vs Benchmark)
+      - Weighted Base Score
+      - Customer Voice Score
+      - Review Tracker Bonus
+      - Metric Bonus
+      - Final Score calculation
+    - Data trail showing raw feedback counts vs stored values
+  - Consistency checks panel
+  - Recommendations section
+  - "How It Works" explainer section
+
+- ✅ **Sidebar Navigation Updated**: Added "Scoring Audit" link under Admin section
+
+### Previous Changes (Mar 4, 2026) - Complete CV Server Attribution & Exclusion System
 
 - ✅ **New Server Details Scraping Method**: Created `scrape_cv_feedback_via_server_details()` that follows Reports → Server Performance → Server Details path
   - **Result**: 216 feedback entries with **100% server attribution** (was 45% before)

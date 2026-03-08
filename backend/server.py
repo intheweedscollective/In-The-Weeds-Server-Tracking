@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException
+from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.responses import Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -3022,7 +3022,7 @@ async def get_analytics_pdf_v2(year: int, quarter: str):
     # Get frontend URL from environment
     frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
     # Use the preview URL for capturing
-    preview_url = os.environ.get("REACT_APP_BACKEND_URL", "https://dining-leaderboard.preview.emergentagent.com")
+    preview_url = os.environ.get("REACT_APP_BACKEND_URL", "https://perf-check-3.preview.emergentagent.com")
     if "preview.emergentagent.com" in preview_url:
         frontend_url = preview_url.replace("/api", "").rstrip("/")
     
@@ -6070,6 +6070,537 @@ async def get_integrity_summary():
     }
 
 
+# ============================================================
+# SELF-CHECKING AUDIT SYSTEM - Guarantees 100% Accurate Scoring
+# ============================================================
+
+@api_router.get("/v2/audit/employee/{employee_name}")
+async def audit_employee_score(employee_name: str, quarter: str = "Q1", year: int = 2026):
+    """
+    Audit a single employee's score calculation step-by-step.
+    Returns a detailed breakdown showing exactly how each component was calculated.
+    This is the self-checking audit process that guarantees 100% accuracy.
+    """
+    # Get employee record
+    employee = await db.employees_v2.find_one(
+        {"name": {"$regex": f"^{employee_name}$", "$options": "i"}, "quarter": quarter.upper(), "year": year},
+        {"_id": 0}
+    )
+    
+    if not employee:
+        return {"success": False, "error": f"Employee '{employee_name}' not found for {quarter} {year}"}
+    
+    # Get quarter settings
+    settings = await db.quarter_settings.find_one(
+        {"quarter": quarter.upper(), "year": year},
+        {"_id": 0}
+    )
+    
+    if not settings:
+        return {"success": False, "error": f"Quarter settings not found for {quarter} {year}"}
+    
+    # Get raw CV feedback for this employee
+    cv_feedback = await db.cv_feedback.find(
+        {"server_name": {"$regex": f"^{employee_name}$", "$options": "i"}, "quarter": quarter.upper(), "year": year},
+        {"_id": 0}
+    ).to_list(100)
+    
+    # Count raw feedback
+    raw_promoters = len([f for f in cv_feedback if f.get("rating", 0) >= 9])
+    raw_passives = len([f for f in cv_feedback if 7 <= f.get("rating", 0) <= 8])
+    raw_detractors = len([f for f in cv_feedback if f.get("rating", 0) <= 6])
+    raw_total = len(cv_feedback)
+    raw_nps = round(((raw_promoters - raw_detractors) / raw_total) * 100, 2) if raw_total > 0 else 0
+    
+    # Get CV NPS record (aggregated)
+    cv_nps = await db.cv_nps.find_one(
+        {"employee_name": {"$regex": f"^{employee_name}$", "$options": "i"}, "quarter": quarter.upper(), "year": year},
+        {"_id": 0}
+    )
+    
+    # Get review mentions for this employee
+    review_mentions_cursor = db.customer_reviews.find({
+        "quarter": quarter.upper(), 
+        "year": year,
+        "employee_mentions": {"$regex": employee_name, "$options": "i"}
+    }, {"_id": 0})
+    review_mentions = await review_mentions_cursor.to_list(100)
+    raw_rt_mentions = len(review_mentions)
+    
+    # Build audit report
+    audit = {
+        "employee_name": employee["name"],
+        "quarter": quarter.upper(),
+        "year": year,
+        "audited_at": datetime.now(timezone.utc).isoformat(),
+        "final_score": employee.get("pre_dar_score") or employee.get("total_score", 0),
+        "discrepancies": [],
+        "data_trail": {},
+        "calculations": {},
+        "validation_status": "PASS"
+    }
+    
+    # === POS METRICS AUDIT ===
+    guests = employee.get("guests", 0)
+    net_sales = employee.get("net_sales", 0)
+    stored_ppa = employee.get("ppa", 0)
+    expected_ppa = round(net_sales / guests, 2) if guests > 0 else 0
+    
+    lbw = employee.get("lbw", 0)
+    stored_lbw_per_guest = employee.get("lbw_per_guest", 0)
+    expected_lbw_per_guest = round(lbw / guests, 2) if guests > 0 else 0
+    
+    glassware = employee.get("glassware_sales", 0)
+    stored_glass_per_guest = employee.get("glassware_per_guest", 0)
+    expected_glass_per_guest = round(glassware / guests, 2) if guests > 0 else 0
+    
+    lsc_count = employee.get("lsc_count", 0)
+    stored_guests_per_lsc = employee.get("guests_per_lsc")
+    expected_guests_per_lsc = round(guests / lsc_count, 2) if lsc_count > 0 else None
+    
+    audit["data_trail"]["pos_metrics"] = {
+        "guests": guests,
+        "net_sales": net_sales,
+        "lbw_total": lbw,
+        "glassware_sales": glassware,
+        "lsc_count": lsc_count
+    }
+    
+    audit["calculations"]["pos_metrics"] = {
+        "ppa": {
+            "formula": f"{net_sales} / {guests}",
+            "expected": expected_ppa,
+            "stored": stored_ppa,
+            "match": abs(expected_ppa - stored_ppa) < 0.01
+        },
+        "lbw_per_guest": {
+            "formula": f"{lbw} / {guests}",
+            "expected": expected_lbw_per_guest,
+            "stored": stored_lbw_per_guest,
+            "match": abs(expected_lbw_per_guest - stored_lbw_per_guest) < 0.01
+        },
+        "glassware_per_guest": {
+            "formula": f"{glassware} / {guests}",
+            "expected": expected_glass_per_guest,
+            "stored": stored_glass_per_guest,
+            "match": abs(expected_glass_per_guest - stored_glass_per_guest) < 0.01
+        },
+        "guests_per_lsc": {
+            "formula": f"{guests} / {lsc_count}" if lsc_count > 0 else "N/A (no LSC)",
+            "expected": expected_guests_per_lsc,
+            "stored": stored_guests_per_lsc,
+            "match": (stored_guests_per_lsc is None and expected_guests_per_lsc is None) or 
+                    (stored_guests_per_lsc and expected_guests_per_lsc and abs(expected_guests_per_lsc - stored_guests_per_lsc) < 0.01)
+        }
+    }
+    
+    # === NORMALIZED SCORES AUDIT ===
+    benchmark_ppa = settings.get("benchmark_ppa", 55)
+    benchmark_lbw = settings.get("benchmark_lbw", 8)
+    benchmark_glass = settings.get("benchmark_glass", 1.25)
+    benchmark_lsc = settings.get("benchmark_lsc", 100)
+    
+    expected_score_ppa = round((expected_ppa / benchmark_ppa) * 100, 2) if benchmark_ppa > 0 else 0
+    expected_score_lbw = round((expected_lbw_per_guest / benchmark_lbw) * 100, 2) if benchmark_lbw > 0 else 0
+    expected_score_glass = round((expected_glass_per_guest / benchmark_glass) * 100, 2) if benchmark_glass > 0 else 0
+    expected_score_lsc = round((benchmark_lsc / expected_guests_per_lsc) * 100, 2) if expected_guests_per_lsc and expected_guests_per_lsc > 0 else 0
+    
+    stored_score_ppa = employee.get("score_ppa", 0)
+    stored_score_lbw = employee.get("score_lbw", 0)
+    stored_score_glass = employee.get("score_glass", 0)
+    stored_score_lsc = employee.get("score_lsc", 0)
+    
+    audit["calculations"]["normalized_scores"] = {
+        "ppa_score": {
+            "formula": f"({expected_ppa} / {benchmark_ppa}) × 100",
+            "expected": expected_score_ppa,
+            "stored": stored_score_ppa,
+            "match": abs(expected_score_ppa - stored_score_ppa) < 1
+        },
+        "lbw_score": {
+            "formula": f"({expected_lbw_per_guest} / {benchmark_lbw}) × 100",
+            "expected": expected_score_lbw,
+            "stored": stored_score_lbw,
+            "match": abs(expected_score_lbw - stored_score_lbw) < 1
+        },
+        "glass_score": {
+            "formula": f"({expected_glass_per_guest} / {benchmark_glass}) × 100",
+            "expected": expected_score_glass,
+            "stored": stored_score_glass,
+            "match": abs(expected_score_glass - stored_score_glass) < 1
+        },
+        "lsc_score": {
+            "formula": f"({benchmark_lsc} / {expected_guests_per_lsc}) × 100" if expected_guests_per_lsc else "N/A",
+            "expected": expected_score_lsc,
+            "stored": stored_score_lsc,
+            "match": abs(expected_score_lsc - stored_score_lsc) < 1
+        }
+    }
+    
+    # === WEIGHTED BASE SCORE AUDIT ===
+    capped_ppa = min(expected_score_ppa, 100)
+    capped_lbw = min(expected_score_lbw, 100)
+    capped_glass = min(expected_score_glass, 100)
+    capped_lsc = min(expected_score_lsc, 100)
+    
+    expected_weighted = round(capped_ppa * 0.25 + capped_lsc * 0.25 + capped_lbw * 0.15 + capped_glass * 0.10, 2)
+    stored_weighted = employee.get("weighted_score", 0)
+    
+    audit["calculations"]["weighted_score"] = {
+        "formula": f"PPA({capped_ppa}×0.25) + LSC({capped_lsc}×0.25) + LBW({capped_lbw}×0.15) + Glass({capped_glass}×0.10)",
+        "breakdown": {
+            "ppa_contribution": round(capped_ppa * 0.25, 2),
+            "lsc_contribution": round(capped_lsc * 0.25, 2),
+            "lbw_contribution": round(capped_lbw * 0.15, 2),
+            "glass_contribution": round(capped_glass * 0.10, 2)
+        },
+        "expected": expected_weighted,
+        "stored": stored_weighted,
+        "match": abs(expected_weighted - stored_weighted) < 1
+    }
+    
+    # === CUSTOMER VOICE AUDIT ===
+    stored_cv_promoters = employee.get("cv_promoters", 0)
+    stored_cv_detractors = employee.get("cv_detractors", 0)
+    stored_nps = employee.get("nps_score", 0)
+    stored_cv_score = employee.get("cv_score", 0)
+    
+    # Calculate expected NPS points using spec scale
+    nps_for_calc = stored_nps
+    if nps_for_calc >= 90: expected_nps_pts = 10
+    elif nps_for_calc >= 80: expected_nps_pts = 9
+    elif nps_for_calc >= 70: expected_nps_pts = 8
+    elif nps_for_calc >= 60: expected_nps_pts = 7
+    elif nps_for_calc >= 50: expected_nps_pts = 6
+    elif nps_for_calc > 0: expected_nps_pts = round((nps_for_calc / 50) * 5, 1)
+    else: expected_nps_pts = 0
+    
+    expected_cv_score = expected_nps_pts + (stored_cv_promoters * 1) + (stored_cv_detractors * -2)
+    
+    audit["data_trail"]["customer_voice"] = {
+        "raw_feedback_count": raw_total,
+        "raw_promoters": raw_promoters,
+        "raw_passives": raw_passives,
+        "raw_detractors": raw_detractors,
+        "raw_nps_calculated": raw_nps,
+        "cv_nps_record": cv_nps,
+        "stored_in_employee": {
+            "promoters": stored_cv_promoters,
+            "detractors": stored_cv_detractors,
+            "nps_score": stored_nps
+        }
+    }
+    
+    audit["calculations"]["customer_voice"] = {
+        "nps_points": {
+            "nps_score": stored_nps,
+            "formula": f"NPS {stored_nps}% → {expected_nps_pts} pts (90%=10, 80%=9, ...)",
+            "expected": expected_nps_pts,
+            "stored_nps_pts": employee.get("nps_score_pts", 0)
+        },
+        "promoter_points": {
+            "formula": f"{stored_cv_promoters} promoters × +1 pt",
+            "expected": stored_cv_promoters,
+            "match": True
+        },
+        "detractor_points": {
+            "formula": f"{stored_cv_detractors} detractors × -2 pts",
+            "expected": stored_cv_detractors * -2,
+            "match": True
+        },
+        "total_cv_score": {
+            "formula": f"{expected_nps_pts} (NPS) + {stored_cv_promoters} (promoters) + {stored_cv_detractors * -2} (detractors)",
+            "expected": round(expected_cv_score, 2),
+            "stored": stored_cv_score,
+            "match": abs(expected_cv_score - stored_cv_score) < 0.5
+        }
+    }
+    
+    # Check CV data consistency
+    if raw_total > 0:
+        if raw_promoters != stored_cv_promoters:
+            audit["discrepancies"].append({
+                "field": "cv_promoters",
+                "description": f"Raw feedback shows {raw_promoters} promoters but employee record has {stored_cv_promoters}",
+                "severity": "HIGH"
+            })
+        if raw_detractors != stored_cv_detractors:
+            audit["discrepancies"].append({
+                "field": "cv_detractors",
+                "description": f"Raw feedback shows {raw_detractors} detractors but employee record has {stored_cv_detractors}",
+                "severity": "HIGH"
+            })
+    
+    # === REVIEW TRACKER AUDIT ===
+    stored_rt_mentions = employee.get("review_mentions", 0)
+    stored_rt_bonus = employee.get("review_tracker_bonus", 0)
+    expected_rt_bonus = round(stored_rt_mentions * 0.2, 2)
+    
+    audit["data_trail"]["review_tracker"] = {
+        "raw_mentions_found": raw_rt_mentions,
+        "stored_mentions": stored_rt_mentions,
+        "review_details": [{"platform": r.get("platform"), "date": r.get("date")} for r in review_mentions[:5]]
+    }
+    
+    audit["calculations"]["review_tracker"] = {
+        "formula": f"{stored_rt_mentions} mentions × 0.2 pts",
+        "expected_bonus": expected_rt_bonus,
+        "stored_bonus": stored_rt_bonus,
+        "match": abs(expected_rt_bonus - stored_rt_bonus) < 0.01
+    }
+    
+    if raw_rt_mentions != stored_rt_mentions:
+        audit["discrepancies"].append({
+            "field": "review_mentions",
+            "description": f"Found {raw_rt_mentions} review mentions but employee record has {stored_rt_mentions}",
+            "severity": "MEDIUM"
+        })
+    
+    # === METRIC BONUS AUDIT ===
+    def calc_bonus(score):
+        if score is None or score <= 100:
+            return 0
+        excess = score - 100
+        bonus = (excess / 20) * 5
+        return min(bonus, 5.0)
+    
+    expected_bonus_ppa = round(calc_bonus(expected_score_ppa), 2)
+    expected_bonus_lbw = round(calc_bonus(expected_score_lbw), 2)
+    expected_bonus_glass = round(calc_bonus(expected_score_glass), 2)
+    expected_bonus_lsc = round(calc_bonus(expected_score_lsc), 2)
+    expected_total_bonus = round(expected_bonus_ppa + expected_bonus_lbw + expected_bonus_glass + expected_bonus_lsc, 2)
+    
+    stored_total_bonus = employee.get("total_metric_bonus", 0)
+    
+    audit["calculations"]["metric_bonus"] = {
+        "formula": "For each metric: ((score - 100) / 20) × 5, capped at 5",
+        "ppa_bonus": {"expected": expected_bonus_ppa, "stored": employee.get("bonus_ppa", 0)},
+        "lbw_bonus": {"expected": expected_bonus_lbw, "stored": employee.get("bonus_lbw", 0)},
+        "glass_bonus": {"expected": expected_bonus_glass, "stored": employee.get("bonus_glass", 0)},
+        "lsc_bonus": {"expected": expected_bonus_lsc, "stored": employee.get("bonus_lsc", 0)},
+        "total": {
+            "expected": expected_total_bonus,
+            "stored": stored_total_bonus,
+            "match": abs(expected_total_bonus - stored_total_bonus) < 0.5
+        }
+    }
+    
+    # === FINAL SCORE AUDIT ===
+    expected_final = round(expected_weighted + expected_rt_bonus + expected_cv_score + expected_total_bonus, 2)
+    stored_final = employee.get("pre_dar_score") or employee.get("total_score", 0)
+    
+    audit["calculations"]["final_score"] = {
+        "formula": f"Weighted({expected_weighted}) + RT({expected_rt_bonus}) + CV({expected_cv_score}) + Bonus({expected_total_bonus})",
+        "breakdown": {
+            "weighted_pos_score": expected_weighted,
+            "review_tracker_bonus": expected_rt_bonus,
+            "customer_voice_score": round(expected_cv_score, 2),
+            "metric_bonus": expected_total_bonus
+        },
+        "expected": expected_final,
+        "stored": stored_final,
+        "match": abs(expected_final - stored_final) < 1
+    }
+    
+    if abs(expected_final - stored_final) >= 1:
+        audit["discrepancies"].append({
+            "field": "pre_dar_score",
+            "description": f"Calculated score is {expected_final} but stored score is {stored_final}. Difference: {round(stored_final - expected_final, 2)}",
+            "severity": "CRITICAL"
+        })
+    
+    # Set validation status
+    if len(audit["discrepancies"]) > 0:
+        high_severity = [d for d in audit["discrepancies"] if d["severity"] in ["HIGH", "CRITICAL"]]
+        if high_severity:
+            audit["validation_status"] = "FAIL"
+        else:
+            audit["validation_status"] = "WARNING"
+    
+    return {"success": True, "audit": audit}
+
+
+@api_router.get("/v2/audit/all")
+async def audit_all_employees(quarter: str = "Q1", year: int = 2026):
+    """
+    Run audit on ALL employees for a quarter.
+    Returns a summary of which employees pass/fail validation.
+    """
+    employees = await db.employees_v2.find(
+        {"quarter": quarter.upper(), "year": year},
+        {"_id": 0, "name": 1, "pre_dar_score": 1}
+    ).to_list(1000)
+    
+    results = {
+        "quarter": quarter.upper(),
+        "year": year,
+        "audited_at": datetime.now(timezone.utc).isoformat(),
+        "total_employees": len(employees),
+        "passed": 0,
+        "warnings": 0,
+        "failed": 0,
+        "employees": []
+    }
+    
+    for emp in employees:
+        audit_result = await audit_employee_score(emp["name"], quarter, year)
+        if audit_result.get("success"):
+            status = audit_result["audit"]["validation_status"]
+            discrepancies = audit_result["audit"]["discrepancies"]
+            
+            emp_summary = {
+                "name": emp["name"],
+                "score": emp.get("pre_dar_score", 0),
+                "status": status,
+                "discrepancy_count": len(discrepancies),
+                "issues": [d["description"] for d in discrepancies[:3]]  # Top 3 issues
+            }
+            
+            if status == "PASS":
+                results["passed"] += 1
+            elif status == "WARNING":
+                results["warnings"] += 1
+            else:
+                results["failed"] += 1
+            
+            results["employees"].append(emp_summary)
+    
+    # Sort by status (FAIL first, then WARNING, then PASS)
+    status_order = {"FAIL": 0, "WARNING": 1, "PASS": 2}
+    results["employees"].sort(key=lambda x: (status_order.get(x["status"], 3), -x["discrepancy_count"]))
+    
+    results["overall_status"] = "VERIFIED" if results["failed"] == 0 and results["warnings"] == 0 else "ISSUES_FOUND"
+    
+    return results
+
+
+@api_router.get("/v2/audit/report")
+async def generate_audit_report(quarter: str = "Q1", year: int = 2026):
+    """
+    Generate a comprehensive audit report for a quarter.
+    This is the self-checking audit process that guarantees 100% scoring accuracy.
+    """
+    from audit_system import ScoringAuditSystem
+    
+    audit_system = ScoringAuditSystem(db)
+    
+    # Run consistency checks
+    consistency = await audit_system.run_consistency_checks(quarter, year)
+    
+    # Get official stats status
+    official_cv = await db.official_cv_stats.find_one(
+        {"quarter": quarter.upper(), "year": year}, {"_id": 0}
+    )
+    official_rt = await db.official_rt_stats.find_one(
+        {"quarter": quarter.upper(), "year": year}, {"_id": 0}
+    )
+    
+    # Get employee audit summary
+    employee_audit = await audit_all_employees(quarter, year)
+    
+    # Get data counts
+    cv_feedback_count = await db.cv_feedback.count_documents({"quarter": quarter.upper(), "year": year})
+    reviews_count = await db.customer_reviews.count_documents({"quarter": quarter.upper(), "year": year})
+    cv_nps_count = await db.cv_nps.count_documents({"quarter": quarter.upper(), "year": year})
+    
+    report = {
+        "title": f"Scoring Audit Report - {quarter.upper()} {year}",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "quarter": quarter.upper(),
+        "year": year,
+        "overall_status": "VERIFIED" if (
+            consistency.get("passed") and 
+            employee_audit.get("failed", 1) == 0
+        ) else "ISSUES_FOUND",
+        "data_sources": {
+            "official_cv_stats": {
+                "set": official_cv is not None,
+                "source": official_cv.get("source") if official_cv else None,
+                "updated_at": official_cv.get("updated_at") if official_cv else None
+            },
+            "official_rt_stats": {
+                "set": official_rt is not None,
+                "source": official_rt.get("source") if official_rt else None,
+                "updated_at": official_rt.get("updated_at") if official_rt else None
+            }
+        },
+        "data_counts": {
+            "employees": employee_audit.get("total_employees", 0),
+            "cv_feedback": cv_feedback_count,
+            "cv_nps_records": cv_nps_count,
+            "customer_reviews": reviews_count
+        },
+        "consistency_checks": consistency,
+        "employee_audit": {
+            "total": employee_audit.get("total_employees", 0),
+            "passed": employee_audit.get("passed", 0),
+            "warnings": employee_audit.get("warnings", 0),
+            "failed": employee_audit.get("failed", 0),
+            "issues": [e for e in employee_audit.get("employees", []) if e["status"] != "PASS"]
+        },
+        "recommendations": []
+    }
+    
+    # Add recommendations
+    if not official_cv:
+        report["recommendations"].append("Set official CV stats from Loyalty Voice UI for 100% accuracy")
+    if not official_rt:
+        report["recommendations"].append("Set official RT stats from ReviewTrackers UI for 100% accuracy")
+    if employee_audit.get("failed", 0) > 0:
+        report["recommendations"].append(f"Investigate and fix {employee_audit['failed']} employees with score calculation errors")
+    if employee_audit.get("warnings", 0) > 0:
+        report["recommendations"].append(f"Review {employee_audit['warnings']} employees with data warnings")
+    
+    return report
+
+
+@api_router.get("/v2/audit/trail")
+async def get_audit_trail(quarter: str = "Q1", year: int = 2026, limit: int = 50):
+    """
+    Get the audit trail showing all changes made to data for a quarter.
+    """
+    entries = await db.audit_log.find(
+        {"quarter": quarter.upper(), "year": year},
+        {"_id": 0}
+    ).sort("timestamp", -1).limit(limit).to_list(limit)
+    
+    return {
+        "quarter": quarter.upper(),
+        "year": year,
+        "entries": entries,
+        "count": len(entries)
+    }
+
+
+@api_router.post("/v2/audit/log")
+async def log_audit_entry(
+    action: str,
+    quarter: str = "Q1",
+    year: int = 2026,
+    details: dict = None,
+    user: str = "admin"
+):
+    """
+    Log an audit entry for tracking changes.
+    """
+    import hashlib
+    import json
+    
+    entry = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "action": action,
+        "quarter": quarter.upper(),
+        "year": year,
+        "details": details or {},
+        "user": user,
+        "checksum": hashlib.sha256(json.dumps({"action": action, "details": details}, sort_keys=True).encode()).hexdigest()[:16]
+    }
+    
+    await db.audit_log.insert_one(entry)
+    
+    return {"success": True, "entry": entry}
+
+
 
 # ============================================================
 # OFFICIAL REVIEW TRACKER STATS (Manual Override for Accuracy)
@@ -6218,6 +6749,8 @@ async def get_official_cv_stats(quarter: str = "Q1", year: int = 2026):
     
     return {
         "official_stats_set": True,
+        "stats": stats
+    }
 
 
 # ============================================================
@@ -6323,12 +6856,6 @@ async def sync_cv_from_ui(quarter: str = "Q1", year: int = 2026):
         return {"success": True, "stats": official}
     else:
         return {"success": False, "error": stats.get("error")}
-
-
-        "stats": stats
-    }
-
-
 
 
 

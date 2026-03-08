@@ -11,6 +11,7 @@ import QuarterSettings from "./pages/QuarterSettings";
 import FullRankings from "./pages/FullRankings";
 import LeaderboardRankings from "./pages/LeaderboardRankings";
 import DataIntegrity from "./pages/DataIntegrity";
+import ScoringAudit from "./pages/ScoringAudit";
 import YodeckSlides from "./pages/YodeckSlides";
 import Snapshots from "./pages/Snapshots";
 import HelpCenter from "./pages/HelpCenter";
@@ -35,6 +36,7 @@ function App() {
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/settings" element={<QuarterSettings />} />
               <Route path="/data-integrity" element={<DataIntegrity />} />
+              <Route path="/scoring-audit" element={<ScoringAudit />} />
               <Route path="/help" element={<HelpCenter />} />
             </Routes>
           </SidebarLayout>
