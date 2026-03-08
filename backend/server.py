@@ -6119,10 +6119,11 @@ async def audit_employee_score(employee_name: str, quarter: str = "Q1", year: in
     )
     
     # Get review mentions for this employee
+    # employee_mentions is an array of objects: [{name: "...", sentiment: "...", points: 0.2}]
     review_mentions_cursor = db.customer_reviews.find({
         "quarter": quarter.upper(), 
         "year": year,
-        "employee_mentions": {"$regex": employee_name, "$options": "i"}
+        "employee_mentions.name": {"$regex": employee_name, "$options": "i"}
     }, {"_id": 0})
     review_mentions = await review_mentions_cursor.to_list(100)
     raw_rt_mentions = len(review_mentions)
