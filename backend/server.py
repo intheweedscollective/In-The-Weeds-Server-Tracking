@@ -6931,6 +6931,168 @@ async def recalculate_all_scores(quarter: str = "Q1", year: int = 2026):
     }
 
 
+@api_router.post("/v2/audit/sync-nps-to-employees")
+async def sync_nps_to_employees(quarter: str = "Q1", year: int = 2026):
+    """
+    Sync NPS data from cv_nps collection and review mentions from customer_reviews
+    to the employees_v2 collection. This ensures scores are properly calculated.
+    """
+    import re
+    
+    # Get NPS records for this quarter
+    nps_records = await db.cv_nps.find(
+        {"quarter": quarter.upper(), "year": year},
+        {"_id": 0}
+    ).to_list(500)
+    
+    # Get customer reviews
+    customer_reviews = await db.customer_reviews.find(
+        {"quarter": quarter.upper(), "year": year}
+    ).to_list(2000)
+    
+    # Get employees
+    employees = await db.employees_v2.find(
+        {"quarter": quarter.upper(), "year": year}
+    ).to_list(500)
+    
+    if not employees:
+        return {"success": False, "error": f"No employees found for {quarter} {year}"}
+    
+    # Build NPS lookup by name (case-insensitive)
+    nps_lookup = {}
+    for nps in nps_records:
+        name = (nps.get("employee_name") or "").strip().lower()
+        if name:
+            nps_lookup[name] = nps
+    
+    # Build review mention counts
+    first_name_map = {}
+    mention_counts = {}
+    for emp in employees:
+        full_name = emp["name"]
+        first_name = full_name.split()[0].lower()
+        mention_counts[full_name] = 0
+        if len(first_name) > 2:  # Skip short names
+            first_name_map[first_name] = full_name
+    
+    for review in customer_reviews:
+        text = (review.get("text", "") or review.get("review_text", "") or "").lower()
+        for first_name, full_name in first_name_map.items():
+            pattern = r'\b' + re.escape(first_name) + r'\b'
+            if re.search(pattern, text):
+                mention_counts[full_name] += 1
+    
+    # Update employees
+    nps_updated = 0
+    rt_updated = 0
+    scores_recalculated = 0
+    
+    for emp in employees:
+        emp_name = emp["name"]
+        emp_name_lower = emp_name.lower()
+        updates = {}
+        
+        # Check for NPS data
+        nps_data = nps_lookup.get(emp_name_lower)
+        if nps_data:
+            nps_score = nps_data.get("nps_score", 0) or 0
+            promoters = nps_data.get("promoters", 0) or 0
+            passives = nps_data.get("passives", 0) or 0
+            detractors = nps_data.get("detractors", 0) or 0
+            
+            # Calculate NPS points
+            if nps_score >= 90: nps_pts = 10
+            elif nps_score >= 80: nps_pts = 9
+            elif nps_score >= 70: nps_pts = 8
+            elif nps_score >= 60: nps_pts = 7
+            elif nps_score >= 50: nps_pts = 6
+            elif nps_score > 0: nps_pts = round((nps_score / 50) * 5, 1)
+            else: nps_pts = 0
+            
+            # Survey points
+            survey_pts = promoters - (detractors * 2)
+            cv_score = nps_pts + survey_pts
+            
+            updates.update({
+                "nps_score": nps_score,
+                "cv_promoters": promoters,
+                "cv_passives": passives,
+                "cv_detractors": detractors,
+                "cv_score": cv_score,
+                "score_cv": cv_score,
+                "nps_score_pts": nps_pts,
+                "cv_raw_points": survey_pts,
+                "cv_source": "cv_nps_sync"
+            })
+            nps_updated += 1
+        
+        # Check for review mentions
+        mentions = mention_counts.get(emp_name, 0)
+        if mentions > 0:
+            rt_bonus = round(mentions * 0.2, 1)
+            updates.update({
+                "review_mentions": mentions,
+                "review_tracker_bonus": rt_bonus,
+                "review_source": "customer_review_sync"
+            })
+            rt_updated += 1
+        
+        # Recalculate total score if we have updates
+        if updates:
+            cv_score = updates.get("cv_score", emp.get("cv_score", 0)) or 0
+            rt_bonus = updates.get("review_tracker_bonus", emp.get("review_tracker_bonus", 0)) or 0
+            metric_bonus = emp.get("total_metric_bonus", 0) or 0
+            
+            # Base weighted score
+            capped_ppa = min(emp.get("score_ppa", 0) or 0, 100)
+            capped_lbw = min(emp.get("score_lbw", 0) or 0, 100)
+            capped_glass = min(emp.get("score_glass", 0) or 0, 100)
+            capped_lsc = min(emp.get("score_lsc", 0) or 0, 100)
+            base_weighted = capped_ppa * 0.25 + capped_lbw * 0.20 + capped_glass * 0.15 + capped_lsc * 0.25
+            
+            new_weighted = round(base_weighted + cv_score, 2)
+            new_pre_dar = round(new_weighted + metric_bonus + rt_bonus, 2)
+            
+            updates.update({
+                "weighted_score": new_weighted,
+                "pre_dar_score": new_pre_dar,
+                "total_score": new_pre_dar
+            })
+            scores_recalculated += 1
+            
+            await db.employees_v2.update_one(
+                {"_id": emp["_id"]},
+                {"$set": updates}
+            )
+    
+    # Log this action
+    await db.audit_log.insert_one({
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "action": "sync_nps_to_employees",
+        "quarter": quarter.upper(),
+        "year": year,
+        "details": {
+            "nps_updated": nps_updated,
+            "rt_updated": rt_updated,
+            "scores_recalculated": scores_recalculated
+        },
+        "user": "system"
+    })
+    
+    return {
+        "success": True,
+        "quarter": quarter.upper(),
+        "year": year,
+        "summary": {
+            "total_employees": len(employees),
+            "nps_records_found": len(nps_records),
+            "nps_matched_to_employees": nps_updated,
+            "review_mentions_matched": rt_updated,
+            "scores_recalculated": scores_recalculated
+        }
+    }
+
+
 @api_router.get("/v2/audit/data-cap-check")
 async def check_data_caps(quarter: str = "Q1", year: int = 2026):
     """

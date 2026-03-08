@@ -243,6 +243,26 @@ export default function ScoringAudit() {
   const [recalculating, setRecalculating] = useState(false);
   const [enforcing, setEnforcing] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [syncingNps, setSyncingNps] = useState(false);
+
+  // Sync NPS and Review data to employees
+  const syncNpsToEmployees = async () => {
+    setSyncingNps(true);
+    try {
+      const response = await axios.post(`${API}/v2/audit/sync-nps-to-employees?quarter=${quarter}&year=${year}`);
+      if (response.data.success) {
+        const summary = response.data.summary;
+        toast.success(`Synced ${summary.nps_matched_to_employees} NPS records and ${summary.review_mentions_matched} review mentions`);
+        // Refresh audit data
+        await fetchAuditReport();
+        await fetchAllEmployeesAudit();
+      }
+    } catch (error) {
+      toast.error("Failed to sync NPS data");
+    } finally {
+      setSyncingNps(false);
+    }
+  };
 
   const fetchAuditReport = useCallback(async () => {
     try {
@@ -417,6 +437,20 @@ export default function ScoringAudit() {
           
           <div className="flex items-center gap-3">
             {report && <StatusBadge status={report.overall_status} />}
+            <Button
+              onClick={syncNpsToEmployees}
+              disabled={syncingNps}
+              variant="outline"
+              className="border-green-500/50 text-green-400 hover:bg-green-500/10"
+              data-testid="sync-nps-btn"
+            >
+              {syncingNps ? (
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Users className="w-4 h-4 mr-2" />
+              )}
+              Sync NPS & Reviews
+            </Button>
             <Button
               onClick={async () => {
                 await syncEmployeeMentions();
