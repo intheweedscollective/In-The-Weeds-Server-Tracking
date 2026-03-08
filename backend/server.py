@@ -5525,20 +5525,25 @@ async def get_cv_stats(quarter: str = "Q1", year: int = 2026):
     
     if official:
         # Use official LV UI stats for aggregate numbers
+        servers_with_surveys = [r for r in nps_records if r.get("total_surveys", 0) > 0]
+        avg_individual_nps = (
+            sum(r.get("nps_score", 0) for r in servers_with_surveys) / len(servers_with_surveys)
+            if servers_with_surveys else 0
+        )
         return {
             "source": "official_lv_ui",
             "total_servers": len(nps_records),
-            "avg_nps": official.get("nps_score", 0),
-            "store_nps": official.get("nps_score", 0),
-            "avg_individual_nps": sum(r.get("nps_score", 0) for r in nps_records if r.get("total_surveys", 0) > 0) / len([r for r in nps_records if r.get("total_surveys", 0) > 0]) if nps_records else 0,
+            "avg_nps": official.get("nps_score") or official.get("avg_nps") or official.get("store_nps") or 0,
+            "store_nps": official.get("store_nps") or official.get("nps_score") or official.get("avg_nps") or 0,
+            "avg_individual_nps": round(avg_individual_nps, 2),
             "highest_nps": sorted_records[0] if sorted_records else None,
             "lowest_nps": sorted_records[-1] if sorted_records else None,
             "nps_breakdown": sorted_records[:20],
             "last_sync": nps_records[0].get("synced_at") if nps_records else None,
-            "promoter_count": official.get("promoters", 0),
-            "passive_count": official.get("passives", 0),
-            "detractor_count": official.get("detractors", 0),
-            "total_surveys": official.get("total_responses", 0),
+            "promoter_count": official.get("promoters") or official.get("total_promoters") or 0,
+            "passive_count": official.get("passives") or official.get("total_passives") or 0,
+            "detractor_count": official.get("detractors") or official.get("total_detractors") or 0,
+            "total_surveys": official.get("total_responses") or official.get("total_surveys") or 0,
             "updated_at": official.get("updated_at")
         }
     
