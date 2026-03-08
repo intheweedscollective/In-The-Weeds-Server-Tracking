@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { 
   ShieldCheck, AlertTriangle, CheckCircle, XCircle, RefreshCw, 
   FileText, Users, ChevronDown, ChevronUp, Search, 
-  Calculator, Database, ClipboardCheck, Info, ArrowRight
+  Calculator, Database, ClipboardCheck, Info, ArrowRight, Trash2, RotateCcw
 } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
@@ -281,6 +281,7 @@ export default function ScoringAudit() {
     try {
       await fetchAuditReport();
       await fetchAllEmployeesAudit();
+      await fetchDataCapStatus();
       toast.success("Audit complete!");
     } catch (error) {
       toast.error("Failed to run audit");
@@ -289,15 +290,96 @@ export default function ScoringAudit() {
     }
   };
 
+  const [dataCapStatus, setDataCapStatus] = useState(null);
+  const [recalculating, setRecalculating] = useState(false);
+  const [enforcing, setEnforcing] = useState(false);
+
+  const fetchDataCapStatus = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API}/v2/audit/data-cap-check?quarter=${quarter}&year=${year}`);
+      setDataCapStatus(response.data);
+    } catch (error) {
+      console.error("Failed to fetch data cap status");
+    }
+  }, [quarter, year]);
+
+  const recalculateAllScores = async () => {
+    setRecalculating(true);
+    try {
+      const response = await axios.post(`${API}/v2/audit/recalculate-all?quarter=${quarter}&year=${year}`);
+      if (response.data.success) {
+        const { fixed, unchanged, errors } = response.data.summary;
+        if (fixed > 0) {
+          toast.success(`Fixed ${fixed} employee scores!`);
+        } else {
+          toast.info("All scores are already correct");
+        }
+        // Refresh audit data
+        await fetchAuditReport();
+        await fetchAllEmployeesAudit();
+      }
+    } catch (error) {
+      toast.error("Failed to recalculate scores");
+    } finally {
+      setRecalculating(false);
+    }
+  };
+
+  const enforceDataCaps = async () => {
+    setEnforcing(true);
+    try {
+      const response = await axios.post(`${API}/v2/audit/enforce-data-caps?quarter=${quarter}&year=${year}`);
+      const cv_removed = response.data.customer_voice?.removed || 0;
+      const rt_removed = response.data.review_tracker?.removed || 0;
+      
+      if (cv_removed > 0 || rt_removed > 0) {
+        toast.success(`Removed ${cv_removed} excess CV entries and ${rt_removed} excess reviews`);
+        // Sync employee mentions after removing data
+        await syncEmployeeMentions();
+        // Refresh data
+        await fetchDataCapStatus();
+        await fetchAuditReport();
+        await fetchAllEmployeesAudit();
+      } else {
+        toast.info("All data is within official limits - no action needed");
+      }
+    } catch (error) {
+      toast.error("Failed to enforce data caps");
+    } finally {
+      setEnforcing(false);
+    }
+  };
+
+  const [syncing, setSyncing] = useState(false);
+
+  const syncEmployeeMentions = async () => {
+    setSyncing(true);
+    try {
+      const response = await axios.post(`${API}/v2/audit/sync-employee-mentions?quarter=${quarter}&year=${year}`);
+      if (response.data.success) {
+        const { updated, unchanged } = response.data.summary;
+        if (updated > 0) {
+          toast.success(`Synced ${updated} employee records with current review data`);
+        }
+        return response.data;
+      }
+    } catch (error) {
+      toast.error("Failed to sync employee mentions");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   useEffect(() => {
     const init = async () => {
       setLoading(true);
       await fetchAuditReport();
       await fetchAllEmployeesAudit();
+      await fetchDataCapStatus();
       setLoading(false);
     };
     init();
-  }, [fetchAuditReport, fetchAllEmployeesAudit]);
+  }, [fetchAuditReport, fetchAllEmployeesAudit, fetchDataCapStatus]);
 
   const filteredEmployees = allEmployeesAudit?.employees?.filter(emp =>
     emp.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -332,6 +414,36 @@ export default function ScoringAudit() {
           <div className="flex items-center gap-3">
             {report && <StatusBadge status={report.overall_status} />}
             <Button
+              onClick={async () => {
+                await syncEmployeeMentions();
+                await fetchAuditReport();
+                await fetchAllEmployeesAudit();
+              }}
+              disabled={syncing}
+              variant="outline"
+              className="border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/10"
+            >
+              {syncing ? (
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Database className="w-4 h-4 mr-2" />
+              )}
+              Sync Mentions
+            </Button>
+            <Button
+              onClick={recalculateAllScores}
+              disabled={recalculating}
+              variant="outline"
+              className="border-blue-500/50 text-blue-400 hover:bg-blue-500/10"
+            >
+              {recalculating ? (
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <RotateCcw className="w-4 h-4 mr-2" />
+              )}
+              Recalculate All
+            </Button>
+            <Button
               onClick={runFullAudit}
               disabled={loading}
               className="bg-emerald-600 hover:bg-emerald-700"
@@ -345,6 +457,91 @@ export default function ScoringAudit() {
             </Button>
           </div>
         </div>
+
+        {/* Data Cap Enforcement Section */}
+        {dataCapStatus && (
+          <div className={`rounded-xl border p-4 mb-8 ${
+            dataCapStatus.overall_status === 'COMPLIANT' 
+              ? 'bg-green-500/10 border-green-500/30' 
+              : 'bg-red-500/10 border-red-500/30'
+          }`}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <Database className="w-5 h-5 text-slate-400" />
+                <div>
+                  <h3 className="font-semibold text-white">Data Cap Enforcement</h3>
+                  <p className="text-sm text-slate-400">Official dashboard data is the ABSOLUTE MAXIMUM allowed</p>
+                </div>
+              </div>
+              {dataCapStatus.overall_status !== 'COMPLIANT' && (
+                <Button
+                  onClick={enforceDataCaps}
+                  disabled={enforcing}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  {enforcing ? (
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4 mr-2" />
+                  )}
+                  Remove Excess Data
+                </Button>
+              )}
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Customer Voice */}
+              <div className={`p-3 rounded-lg ${
+                dataCapStatus.customer_voice?.status === 'EXCEEDS_LIMIT' 
+                  ? 'bg-red-500/20' 
+                  : dataCapStatus.customer_voice?.status === 'AT_LIMIT'
+                  ? 'bg-green-500/20'
+                  : 'bg-slate-800/50'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-300">Customer Voice Feedback</span>
+                  {dataCapStatus.customer_voice?.status === 'EXCEEDS_LIMIT' ? (
+                    <span className="text-red-400 text-sm font-medium">
+                      EXCEEDS by {dataCapStatus.customer_voice.excess}
+                    </span>
+                  ) : (
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                  )}
+                </div>
+                <div className="mt-1 text-sm text-slate-500">
+                  Our Data: <span className="text-white font-mono">{dataCapStatus.customer_voice?.our_count}</span>
+                  {' / '}
+                  Official Max: <span className="text-white font-mono">{dataCapStatus.customer_voice?.official_max ?? 'Not Set'}</span>
+                </div>
+              </div>
+              
+              {/* Review Tracker */}
+              <div className={`p-3 rounded-lg ${
+                dataCapStatus.review_tracker?.status === 'EXCEEDS_LIMIT' 
+                  ? 'bg-red-500/20' 
+                  : dataCapStatus.review_tracker?.status === 'AT_LIMIT'
+                  ? 'bg-green-500/20'
+                  : 'bg-slate-800/50'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-300">ReviewTracker Reviews</span>
+                  {dataCapStatus.review_tracker?.status === 'EXCEEDS_LIMIT' ? (
+                    <span className="text-red-400 text-sm font-medium">
+                      EXCEEDS by {dataCapStatus.review_tracker.excess}
+                    </span>
+                  ) : (
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                  )}
+                </div>
+                <div className="mt-1 text-sm text-slate-500">
+                  Our Data: <span className="text-white font-mono">{dataCapStatus.review_tracker?.our_count}</span>
+                  {' / '}
+                  Official Max: <span className="text-white font-mono">{dataCapStatus.review_tracker?.official_max ?? 'Not Set'}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Summary Cards */}
         {report && (

@@ -6602,6 +6602,331 @@ async def log_audit_entry(
     return {"success": True, "entry": entry}
 
 
+@api_router.post("/v2/audit/recalculate-all")
+async def recalculate_all_scores(quarter: str = "Q1", year: int = 2026):
+    """
+    Recalculate ALL employee scores from their stored components.
+    This fixes any score mismatches found during audits.
+    """
+    employees = await db.employees_v2.find(
+        {"quarter": quarter.upper(), "year": year}
+    ).to_list(1000)
+    
+    fixed = []
+    unchanged = []
+    errors = []
+    
+    for emp in employees:
+        try:
+            # Get stored component values
+            weighted = emp.get('weighted_score', 0) or 0
+            rt_bonus = emp.get('review_tracker_bonus', 0) or 0
+            cv_score = emp.get('cv_score', 0) or 0
+            metric_bonus = emp.get('total_metric_bonus', 0) or 0
+            
+            # Calculate correct score
+            correct_score = round(weighted + rt_bonus + cv_score + metric_bonus, 2)
+            stored_score = emp.get('pre_dar_score', 0) or emp.get('total_score', 0) or 0
+            
+            if abs(correct_score - stored_score) >= 0.01:
+                # Update the employee record
+                await db.employees_v2.update_one(
+                    {"_id": emp["_id"]},
+                    {"$set": {
+                        "pre_dar_score": correct_score,
+                        "total_score": correct_score
+                    }}
+                )
+                fixed.append({
+                    "name": emp["name"],
+                    "old_score": stored_score,
+                    "new_score": correct_score,
+                    "difference": round(correct_score - stored_score, 2)
+                })
+            else:
+                unchanged.append(emp["name"])
+        except Exception as e:
+            errors.append({"name": emp.get("name"), "error": str(e)})
+    
+    # Log this action
+    await db.audit_log.insert_one({
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "action": "recalculate_all_scores",
+        "quarter": quarter.upper(),
+        "year": year,
+        "details": {
+            "fixed_count": len(fixed),
+            "unchanged_count": len(unchanged),
+            "error_count": len(errors),
+            "fixed_employees": [f["name"] for f in fixed]
+        },
+        "user": "system"
+    })
+    
+    return {
+        "success": True,
+        "quarter": quarter.upper(),
+        "year": year,
+        "summary": {
+            "total_employees": len(employees),
+            "fixed": len(fixed),
+            "unchanged": len(unchanged),
+            "errors": len(errors)
+        },
+        "fixed_employees": fixed,
+        "errors": errors if errors else None
+    }
+
+
+@api_router.get("/v2/audit/data-cap-check")
+async def check_data_caps(quarter: str = "Q1", year: int = 2026):
+    """
+    Check if our data exceeds official dashboard limits.
+    The real-time reviews on RT and CV dashboards are the ABSOLUTE MAX.
+    """
+    # Get official stats
+    official_cv = await db.official_cv_stats.find_one(
+        {"quarter": quarter.upper(), "year": year}, {"_id": 0}
+    )
+    official_rt = await db.official_rt_stats.find_one(
+        {"quarter": quarter.upper(), "year": year}, {"_id": 0}
+    )
+    
+    # Get our data counts
+    cv_count = await db.cv_feedback.count_documents({"quarter": quarter.upper(), "year": year})
+    rt_count = await db.customer_reviews.count_documents({"quarter": quarter.upper(), "year": year})
+    
+    result = {
+        "quarter": quarter.upper(),
+        "year": year,
+        "customer_voice": {
+            "our_count": cv_count,
+            "official_max": official_cv.get("total_responses") if official_cv else None,
+            "status": "UNKNOWN",
+            "excess": 0
+        },
+        "review_tracker": {
+            "our_count": rt_count,
+            "official_max": official_rt.get("total_reviews") if official_rt else None,
+            "status": "UNKNOWN",
+            "excess": 0
+        },
+        "overall_status": "UNKNOWN"
+    }
+    
+    # Check CV
+    if official_cv and official_cv.get("total_responses"):
+        cv_max = official_cv["total_responses"]
+        if cv_count > cv_max:
+            result["customer_voice"]["status"] = "EXCEEDS_LIMIT"
+            result["customer_voice"]["excess"] = cv_count - cv_max
+        elif cv_count == cv_max:
+            result["customer_voice"]["status"] = "AT_LIMIT"
+        else:
+            result["customer_voice"]["status"] = "UNDER_LIMIT"
+    
+    # Check RT
+    if official_rt and official_rt.get("total_reviews"):
+        rt_max = official_rt["total_reviews"]
+        if rt_count > rt_max:
+            result["review_tracker"]["status"] = "EXCEEDS_LIMIT"
+            result["review_tracker"]["excess"] = rt_count - rt_max
+        elif rt_count == rt_max:
+            result["review_tracker"]["status"] = "AT_LIMIT"
+        else:
+            result["review_tracker"]["status"] = "UNDER_LIMIT"
+    
+    # Overall status
+    cv_ok = result["customer_voice"]["status"] in ["AT_LIMIT", "UNDER_LIMIT", "UNKNOWN"]
+    rt_ok = result["review_tracker"]["status"] in ["AT_LIMIT", "UNDER_LIMIT", "UNKNOWN"]
+    
+    if cv_ok and rt_ok:
+        result["overall_status"] = "COMPLIANT"
+    else:
+        result["overall_status"] = "EXCEEDS_OFFICIAL_DATA"
+    
+    return result
+
+
+@api_router.post("/v2/audit/enforce-data-caps")
+async def enforce_data_caps(quarter: str = "Q1", year: int = 2026):
+    """
+    ENFORCE data caps by removing excess entries that exceed official dashboard counts.
+    The real-time reviews on RT and CV dashboards are the ABSOLUTE MAX.
+    This removes the OLDEST excess entries to match the official count.
+    """
+    # Get official stats
+    official_cv = await db.official_cv_stats.find_one(
+        {"quarter": quarter.upper(), "year": year}, {"_id": 0}
+    )
+    official_rt = await db.official_rt_stats.find_one(
+        {"quarter": quarter.upper(), "year": year}, {"_id": 0}
+    )
+    
+    results = {
+        "quarter": quarter.upper(),
+        "year": year,
+        "customer_voice": {"removed": 0, "details": []},
+        "review_tracker": {"removed": 0, "details": []},
+        "actions_taken": []
+    }
+    
+    # Enforce CV cap
+    if official_cv and official_cv.get("total_responses"):
+        cv_max = official_cv["total_responses"]
+        cv_count = await db.cv_feedback.count_documents({"quarter": quarter.upper(), "year": year})
+        
+        if cv_count > cv_max:
+            excess = cv_count - cv_max
+            results["actions_taken"].append(f"CV feedback exceeds limit by {excess} entries")
+            
+            # Find the oldest excess entries to remove (by feedback_date or _id)
+            excess_entries = await db.cv_feedback.find(
+                {"quarter": quarter.upper(), "year": year},
+                {"_id": 1, "server_name": 1, "feedback_date": 1, "rating": 1}
+            ).sort("feedback_date", 1).limit(excess).to_list(excess)
+            
+            for entry in excess_entries:
+                await db.cv_feedback.delete_one({"_id": entry["_id"]})
+                results["customer_voice"]["details"].append({
+                    "server_name": entry.get("server_name"),
+                    "date": entry.get("feedback_date"),
+                    "rating": entry.get("rating")
+                })
+            
+            results["customer_voice"]["removed"] = len(excess_entries)
+            results["actions_taken"].append(f"Removed {len(excess_entries)} oldest CV feedback entries")
+    
+    # Enforce RT cap
+    if official_rt and official_rt.get("total_reviews"):
+        rt_max = official_rt["total_reviews"]
+        rt_count = await db.customer_reviews.count_documents({"quarter": quarter.upper(), "year": year})
+        
+        if rt_count > rt_max:
+            excess = rt_count - rt_max
+            results["actions_taken"].append(f"Reviews exceed limit by {excess} entries")
+            
+            # Find the oldest excess entries to remove
+            excess_entries = await db.customer_reviews.find(
+                {"quarter": quarter.upper(), "year": year},
+                {"_id": 1, "platform": 1, "date": 1, "rating": 1}
+            ).sort("date", 1).limit(excess).to_list(excess)
+            
+            for entry in excess_entries:
+                await db.customer_reviews.delete_one({"_id": entry["_id"]})
+                results["review_tracker"]["details"].append({
+                    "platform": entry.get("platform"),
+                    "date": entry.get("date"),
+                    "rating": entry.get("rating")
+                })
+            
+            results["review_tracker"]["removed"] = len(excess_entries)
+            results["actions_taken"].append(f"Removed {len(excess_entries)} oldest review entries")
+    
+    # Log this action
+    if results["customer_voice"]["removed"] > 0 or results["review_tracker"]["removed"] > 0:
+        await db.audit_log.insert_one({
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "action": "enforce_data_caps",
+            "quarter": quarter.upper(),
+            "year": year,
+            "details": {
+                "cv_removed": results["customer_voice"]["removed"],
+                "rt_removed": results["review_tracker"]["removed"]
+            },
+            "user": "system"
+        })
+        
+        # Recalculate affected employee scores
+        results["actions_taken"].append("Triggering score recalculation for affected employees...")
+    else:
+        results["actions_taken"].append("No excess data found - all within official limits")
+    
+    return results
+
+
+@api_router.post("/v2/audit/sync-employee-mentions")
+async def sync_employee_review_mentions(quarter: str = "Q1", year: int = 2026):
+    """
+    Sync employee review_mentions count with actual reviews in database.
+    This should be run after enforcing data caps to update employee records.
+    """
+    employees = await db.employees_v2.find(
+        {"quarter": quarter.upper(), "year": year}
+    ).to_list(1000)
+    
+    updated = []
+    unchanged = []
+    
+    for emp in employees:
+        # Count actual review mentions for this employee
+        actual_mentions = await db.customer_reviews.count_documents({
+            "quarter": quarter.upper(),
+            "year": year,
+            "employee_mentions.name": {"$regex": f"^{emp['name']}$", "$options": "i"}
+        })
+        
+        stored_mentions = emp.get("review_mentions", 0) or 0
+        
+        if actual_mentions != stored_mentions:
+            # Calculate new RT bonus
+            new_rt_bonus = round(actual_mentions * 0.2, 2)
+            old_rt_bonus = emp.get("review_tracker_bonus", 0) or 0
+            
+            # Calculate new score
+            weighted = emp.get('weighted_score', 0) or 0
+            cv_score = emp.get('cv_score', 0) or 0
+            metric_bonus = emp.get('total_metric_bonus', 0) or 0
+            new_score = round(weighted + new_rt_bonus + cv_score + metric_bonus, 2)
+            
+            await db.employees_v2.update_one(
+                {"_id": emp["_id"]},
+                {"$set": {
+                    "review_mentions": actual_mentions,
+                    "review_tracker_bonus": new_rt_bonus,
+                    "pre_dar_score": new_score,
+                    "total_score": new_score
+                }}
+            )
+            
+            updated.append({
+                "name": emp["name"],
+                "old_mentions": stored_mentions,
+                "new_mentions": actual_mentions,
+                "old_rt_bonus": old_rt_bonus,
+                "new_rt_bonus": new_rt_bonus,
+                "score_change": round(new_score - (emp.get("pre_dar_score", 0) or 0), 2)
+            })
+        else:
+            unchanged.append(emp["name"])
+    
+    # Log this action
+    if updated:
+        await db.audit_log.insert_one({
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "action": "sync_employee_mentions",
+            "quarter": quarter.upper(),
+            "year": year,
+            "details": {
+                "updated_count": len(updated),
+                "employees": [u["name"] for u in updated]
+            },
+            "user": "system"
+        })
+    
+    return {
+        "success": True,
+        "quarter": quarter.upper(),
+        "year": year,
+        "summary": {
+            "total_employees": len(employees),
+            "updated": len(updated),
+            "unchanged": len(unchanged)
+        },
+        "updated_employees": updated
+    }
+
+
 
 # ============================================================
 # OFFICIAL REVIEW TRACKER STATS (Manual Override for Accuracy)

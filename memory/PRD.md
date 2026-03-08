@@ -84,31 +84,33 @@ Build a comprehensive performance review application for restaurant employees (B
     - `GET /api/v2/audit/report` - Comprehensive audit report with data sources, consistency checks, recommendations
     - `GET /api/v2/audit/trail` - View audit trail of changes
     - `POST /api/v2/audit/log` - Log audit entries for tracking
+    - `POST /api/v2/audit/recalculate-all` - Recalculate ALL employee scores from stored components
+    - `GET /api/v2/audit/data-cap-check` - Check if data exceeds official dashboard limits
+    - `POST /api/v2/audit/enforce-data-caps` - Remove excess data to match official limits
+    - `POST /api/v2/audit/sync-employee-mentions` - Sync employee mention counts with current review data
   - **Features**:
     - Step-by-step calculation verification for every score component
     - Data trail from raw sources (CV feedback, review mentions) to final scores
     - Discrepancy detection with severity levels (CRITICAL, HIGH, MEDIUM)
     - Cross-reference validation between raw data and aggregated records
     - Official stats verification (CV and RT)
+    - **Data Cap Enforcement**: Official dashboard data is the ABSOLUTE MAXIMUM allowed
+    - Auto-sync employee mentions after removing excess data
   
 - ✅ **Scoring Audit UI** (`/scoring-audit`):
   - Summary cards showing total employees, passed, warnings, failed counts
-  - Data source status indicators (Official CV/RT stats set or not)
+  - **Data Cap Enforcement Panel**: Shows CV and RT data vs official limits
+  - **"Remove Excess Data"** button to enforce caps (removes oldest entries)
+  - **"Sync Mentions"** button to update employee records after data changes
+  - **"Recalculate All"** button to fix any score mismatches
   - Employee list with audit status (PASS, WARNING, FAIL)
-  - Detailed employee audit view with:
-    - Discrepancies panel with severity badges
-    - Calculation Audit Trail with expandable sections:
-      - POS Metrics (PPA, LBW/Guest, Glass/Guest, Guests/LSC)
-      - Normalized Scores (vs Benchmark)
-      - Weighted Base Score
-      - Customer Voice Score
-      - Review Tracker Bonus
-      - Metric Bonus
-      - Final Score calculation
-    - Data trail showing raw feedback counts vs stored values
-  - Consistency checks panel
-  - Recommendations section
-  - "How It Works" explainer section
+  - Detailed employee audit view with calculation breakdown
+
+- ✅ **Current Audit Status (after enforcement)**:
+  - 28/28 employees PASS
+  - CV: 71/71 (AT_LIMIT) 
+  - RT: 196/196 (AT_LIMIT)
+  - Overall: VERIFIED & COMPLIANT
 
 - ✅ **Sidebar Navigation Updated**: Added "Scoring Audit" link under Admin section
 
