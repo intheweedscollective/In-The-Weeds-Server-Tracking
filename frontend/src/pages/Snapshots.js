@@ -530,7 +530,7 @@ export default function Snapshots() {
             <li>• <strong>Grid Layout:</strong> All employees on one slide, sorted by tier (Trainers → Bartenders → A/B/C-Servers)</li>
             <li>• <strong>Color Coding:</strong> Blue ≥100%, Green ≥80%, Yellow 70-79%, Red &lt;70%</li>
             <li>• <strong>Recommended Schedule:</strong> Upload cumulative quarter data on the 1st and 15th of each month</li>
-            <li>• <strong>Scan POS:</strong> Use AI to extract data directly from Aloha POS report screenshots</li>
+            <li>• <strong>Clean Format:</strong> Upload simplified XLSX with Employee Name, Net Sls breakdown, and Total Guests</li>
           </ul>
         </CardContent>
       </Card>

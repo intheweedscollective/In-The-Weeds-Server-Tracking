@@ -3714,6 +3714,39 @@ async def get_snapshot(snapshot_id: str):
     return snapshot
 
 
+@api_router.post("/v2/parse-clean-pos")
+async def parse_clean_pos_preview(file: UploadFile = File(...)):
+    """
+    Parse a clean POS file and preview the extracted data without creating a snapshot.
+    
+    Expected format: Each employee block has:
+    - Employee Name
+    - Net Sls (header)
+    - Food, Liquor, Beer, Wine, Loyalty, Bar Glassware values
+    - Totals
+    - Total Guests
+    """
+    from clean_pos_parser import parse_clean_pos_report
+    
+    contents = await file.read()
+    
+    result = parse_clean_pos_report(contents, file.filename)
+    
+    if not result["success"]:
+        return {
+            "success": False,
+            "message": "Failed to parse file",
+            "errors": result.get("errors", [])
+        }
+    
+    return {
+        "success": True,
+        "message": f"Successfully parsed {len(result['employees'])} employees",
+        "employees": result["employees"],
+        "stats": result["stats"]
+    }
+
+
 @api_router.post("/v2/snapshots")
 async def create_snapshot(data: SnapshotCreate):
     """Create a new empty snapshot for the given date."""
@@ -3763,14 +3796,109 @@ async def upload_snapshot_data(snapshot_id: str, file: UploadFile = File(...)):
     filename = file.filename.lower()
     
     try:
-        # First, check if this is a POS report format (multiple sheets, one per employee)
-        from pos_report_parser import is_pos_report_format, parse_pos_report
+        # First, try the Clean POS format (simplified single-sheet format)
+        from clean_pos_parser import parse_clean_pos_report
         import tempfile
         
-        # Save to temp file for POS parser
+        # Save to temp file
         with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
             tmp.write(contents)
             tmp_path = tmp.name
+        
+        # Try clean format first (if it's an xlsx)
+        if not filename.endswith('.csv'):
+            clean_result = parse_clean_pos_report(contents, filename)
+            
+            if clean_result["success"] and clean_result["employees"]:
+                logging.info(f"Detected clean POS format - found {len(clean_result['employees'])} employees")
+                
+                # Get settings for scoring
+                settings_doc = await db.quarter_settings.find_one(
+                    {"year": snapshot["year"], "quarter": snapshot["quarter"]},
+                    {"_id": 0}
+                )
+                settings = QuarterSettings(**(settings_doc or {}))
+                
+                employees = []
+                for emp_data in clean_result["employees"]:
+                    name = emp_data.get('name', '')
+                    guests = emp_data.get('total_guests', 0)
+                    net_sales = emp_data.get('totals', 0) or emp_data.get('net_sales', 0)
+                    
+                    # Calculate LBW from components
+                    liquor = emp_data.get('liquor', 0)
+                    beer = emp_data.get('beer', 0)
+                    wine = emp_data.get('wine', 0)
+                    lbw = liquor + beer + wine
+                    
+                    glassware_sales = emp_data.get('bar_glassware', 0)
+                    
+                    # Calculate PPA
+                    ppa = (net_sales / guests) if guests > 0 else 0
+                    
+                    # Calculate component scores
+                    score_ppa = (ppa / settings.ppa_benchmark * 100) if settings.ppa_benchmark > 0 else 0
+                    score_lbw = (lbw / guests / settings.lbw_benchmark * 100) if guests > 0 and settings.lbw_benchmark > 0 else 0
+                    score_glass = (glassware_sales / guests / settings.glassware_benchmark * 100) if guests > 0 and settings.glassware_benchmark > 0 else 0
+                    
+                    emp = EmployeeV2(
+                        employee_id=str(uuid.uuid4()),
+                        name=name,
+                        quarter=snapshot["quarter"],
+                        year=snapshot["year"],
+                        job_title="Server",
+                        guests=guests,
+                        net_sales=round(net_sales, 2),
+                        ppa=round(ppa, 2),
+                        lbw_amount=round(lbw, 2),
+                        glassware_sales=round(glassware_sales, 2),
+                        score_ppa=round(score_ppa, 2),
+                        score_lbw=round(score_lbw, 2),
+                        score_glass=round(score_glass, 2),
+                        score_lsc=0,
+                        lsc_count=0,
+                        created_at=datetime.now(timezone.utc)
+                    )
+                    
+                    emp = calculate_total_score(emp, settings)
+                    
+                    # Determine tier label
+                    if emp.total_score >= settings.a_server_min_score:
+                        tier_label = "A-Server"
+                    elif emp.total_score >= settings.b_server_min_score:
+                        tier_label = "B-Server"
+                    else:
+                        tier_label = "C-Server"
+                    
+                    emp_dict = emp.model_dump()
+                    emp_dict["tier_label"] = tier_label
+                    employees.append(emp_dict)
+                
+                # Update snapshot
+                await db.snapshots.update_one(
+                    {"id": snapshot_id},
+                    {
+                        "$set": {
+                            "employees": employees,
+                            "employee_count": len(employees),
+                            "updated_at": datetime.now(timezone.utc).isoformat(),
+                            "parse_method": "clean_pos_format"
+                        }
+                    }
+                )
+                
+                import os
+                os.unlink(tmp_path)
+                
+                return {
+                    "message": f"Parsed {len(employees)} employees using clean POS format",
+                    "employee_count": len(employees),
+                    "parse_method": "clean_pos_format",
+                    "stats": clean_result["stats"]
+                }
+        
+        # Fall back to original POS report format
+        from pos_report_parser import is_pos_report_format, parse_pos_report
         
         if not filename.endswith('.csv') and is_pos_report_format(tmp_path):
             # Use specialized POS report parser
