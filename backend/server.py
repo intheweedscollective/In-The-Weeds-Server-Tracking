@@ -4817,17 +4817,40 @@ async def get_platform_stats(quarter: str = "Q1", year: int = 2026):
     )
     
     if official:
-        # Use official RT UI stats - these match the ReviewTrackers dashboard exactly
+        # Get platform data - check both nested "platforms" and direct keys
         platforms = official.get("platforms", {})
+        
+        # If platforms is empty, try direct keys
+        google_data = platforms.get("Google", {}) if platforms else official.get("google", {})
+        yelp_data = platforms.get("Yelp", {}) if platforms else official.get("yelp", {})
+        facebook_data = platforms.get("Facebook", {}) if platforms else official.get("facebook", {})
+        tripadvisor_data = platforms.get("TripAdvisor", {}) if platforms else official.get("tripadvisor", {})
+        opentable_data = platforms.get("OpenTable", {}) if platforms else official.get("opentable", {})
+        
         return {
             "source": "official_rt_ui",
             "quarter": quarter.upper(),
             "year": year,
-            "google": {"count": platforms.get("Google", {}).get("reviews", 0), "avg_rating": platforms.get("Google", {}).get("rating", 0)},
-            "yelp": {"count": platforms.get("Yelp", {}).get("reviews", 0), "avg_rating": platforms.get("Yelp", {}).get("rating", 0)},
-            "facebook": {"count": platforms.get("Facebook", {}).get("reviews", 0), "avg_rating": platforms.get("Facebook", {}).get("rating", 0)},
-            "tripadvisor": {"count": platforms.get("TripAdvisor", {}).get("reviews", 0), "avg_rating": platforms.get("TripAdvisor", {}).get("rating", 0)},
-            "opentable": {"count": platforms.get("OpenTable", {}).get("reviews", 0), "avg_rating": platforms.get("OpenTable", {}).get("rating", 0)},
+            "google": {
+                "count": google_data.get("reviews") or google_data.get("count", 0), 
+                "avg_rating": google_data.get("rating") or google_data.get("avg_rating", 0)
+            },
+            "yelp": {
+                "count": yelp_data.get("reviews") or yelp_data.get("count", 0), 
+                "avg_rating": yelp_data.get("rating") or yelp_data.get("avg_rating", 0)
+            },
+            "facebook": {
+                "count": facebook_data.get("reviews") or facebook_data.get("count", 0), 
+                "avg_rating": facebook_data.get("rating") or facebook_data.get("avg_rating", 0)
+            },
+            "tripadvisor": {
+                "count": tripadvisor_data.get("reviews") or tripadvisor_data.get("count", 0), 
+                "avg_rating": tripadvisor_data.get("rating") or tripadvisor_data.get("avg_rating", 0)
+            },
+            "opentable": {
+                "count": opentable_data.get("reviews") or opentable_data.get("count", 0), 
+                "avg_rating": opentable_data.get("rating") or opentable_data.get("avg_rating", 0)
+            },
             "total_reviews": official.get("total_reviews", 0),
             "updated_at": official.get("updated_at")
         }
