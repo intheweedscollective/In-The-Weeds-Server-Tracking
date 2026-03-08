@@ -128,9 +128,18 @@ def find_employee_name(df: pd.DataFrame) -> Optional[str]:
 def find_sales_value(df: pd.DataFrame, category: str) -> float:
     """
     Find the net sales value for a category (Food, Liquor, Beer, Wine, Glassware).
+    The category label can be in various columns (0-10), and the value is typically
+    in columns 9-14 (Net Sales column).
     """
-    for row_idx in range(8, min(25, len(df))):
-        for col_idx in range(3):
+    category_lower = category.lower()
+    # Handle variations
+    if category_lower == 'glassware':
+        category_variants = ['glassware', 'bar glassware', 'glass']
+    else:
+        category_variants = [category_lower]
+    
+    for row_idx in range(8, min(45, len(df))):
+        for col_idx in range(12):  # Category label can be in cols 0-11
             if col_idx >= df.shape[1]:
                 continue
             
@@ -139,9 +148,11 @@ def find_sales_value(df: pd.DataFrame, category: str) -> float:
                 continue
             
             val_str = str(val).strip().lower()
-            if val_str == category.lower():
-                # Found the category row - look for net sales in columns 3-5
-                for sales_col in range(3, 7):
+            
+            # Check if this is the category we're looking for
+            if any(variant in val_str for variant in category_variants):
+                # Found the category row - look for net sales in columns 9-15
+                for sales_col in range(9, 16):
                     if sales_col >= df.shape[1]:
                         continue
                     
@@ -150,10 +161,22 @@ def find_sales_value(df: pd.DataFrame, category: str) -> float:
                         sales_str = str(sales_val).strip()
                         # Check if it looks like a number
                         if any(c.isdigit() for c in sales_str):
-                            # Extract first number-like pattern
-                            match = re.search(r'[\d,]+\.?\d*', sales_str.replace(' ', ''))
-                            if match:
-                                return clean_number(match.group())
+                            # Extract first number-like pattern (handle OCR concatenation)
+                            # Split on spaces first to get just the first number
+                            first_part = sales_str.split()[0] if ' ' in sales_str else sales_str
+                            return clean_number(first_part)
+                
+                # If not found in cols 9-15, check cols 3-8 as fallback
+                for sales_col in range(3, 9):
+                    if sales_col >= df.shape[1]:
+                        continue
+                    
+                    sales_val = df.iloc[row_idx, sales_col]
+                    if sales_val is not None and not pd.isna(sales_val):
+                        sales_str = str(sales_val).strip()
+                        if any(c.isdigit() for c in sales_str):
+                            first_part = sales_str.split()[0] if ' ' in sales_str else sales_str
+                            return clean_number(first_part)
                 
                 return 0.0
     
@@ -163,10 +186,10 @@ def find_sales_value(df: pd.DataFrame, category: str) -> float:
 def find_guest_count(df: pd.DataFrame) -> int:
     """
     Find the guest count from the POS report.
-    Look for "Total Guests" row - the value is in column 4.
+    Look for "Total Guests" row - the value is typically in column 4 or 9.
     """
     for row_idx in range(len(df)):
-        for col_idx in range(min(3, df.shape[1])):
+        for col_idx in range(min(8, df.shape[1])):
             val = df.iloc[row_idx, col_idx]
             if val is None or pd.isna(val):
                 continue
@@ -175,35 +198,49 @@ def find_guest_count(df: pd.DataFrame) -> int:
             
             # Look for "Total Guests" row
             if 'total guests' in val_str or val_str == 'total guests':
-                # Get the guest count from column 4
-                for search_col in range(3, 8):
+                # Get the guest count from columns 4-12
+                for search_col in range(3, 13):
                     if search_col >= df.shape[1]:
                         continue
                     guest_val = df.iloc[row_idx, search_col]
                     if guest_val is not None and not pd.isna(guest_val):
-                        guest_str = str(guest_val).strip().replace(',', '').replace(' ', '')
-                        if guest_str.isdigit():
-                            logger.info(f"Found Total Guests: {guest_str} at row {row_idx}")
-                            return int(guest_str)
+                        guest_str = str(guest_val).strip()
+                        # Remove spaces (OCR might put "31 8" instead of "318")
+                        guest_str = guest_str.replace(' ', '').replace(',', '')
+                        # Extract just digits
+                        digits_only = ''.join(c for c in guest_str if c.isdigit())
+                        if digits_only and int(digits_only) > 0:
+                            logger.info(f"Found Total Guests: {digits_only} at row {row_idx}")
+                            return int(digits_only)
     
-    # Fallback: look for "Num Guests:" pattern
+    # Fallback: look for "Num Guests:" pattern with value on next row or same row
     for row_idx in range(len(df)):
         for col_idx in range(df.shape[1]):
             val = df.iloc[row_idx, col_idx]
             if val is None or pd.isna(val):
                 continue
             
-            val_str = str(val).strip()
-            if 'num guests' in val_str.lower():
-                # Try next few rows/columns for the number
-                for offset_row in range(0, 5):
-                    for offset_col in range(0, 5):
-                        if row_idx + offset_row < len(df) and col_idx + offset_col < df.shape[1]:
-                            check_val = df.iloc[row_idx + offset_row, col_idx + offset_col]
+            val_str = str(val).strip().lower()
+            if 'num guests' in val_str:
+                # Check same row for numbers
+                for search_col in range(col_idx + 1, min(col_idx + 5, df.shape[1])):
+                    check_val = df.iloc[row_idx, search_col]
+                    if check_val is not None and not pd.isna(check_val):
+                        check_str = str(check_val).strip().replace(' ', '').replace(',', '')
+                        digits = ''.join(c for c in check_str if c.isdigit())
+                        if digits and int(digits) > 10:
+                            return int(digits)
+                
+                # Check next few rows
+                for offset in range(1, 5):
+                    if row_idx + offset < len(df):
+                        for search_col in range(df.shape[1]):
+                            check_val = df.iloc[row_idx + offset, search_col]
                             if check_val is not None and not pd.isna(check_val):
-                                check_str = str(check_val).strip().replace(',', '')
-                                if check_str.isdigit() and int(check_str) > 10:
-                                    return int(check_str)
+                                check_str = str(check_val).strip().replace(' ', '').replace(',', '')
+                                digits = ''.join(c for c in check_str if c.isdigit())
+                                if digits and int(digits) > 10:
+                                    return int(digits)
     
     return 0
 
