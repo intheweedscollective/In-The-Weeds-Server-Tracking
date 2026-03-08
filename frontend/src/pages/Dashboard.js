@@ -46,8 +46,8 @@ export default function Dashboard() {
     const underPerformers = employees.filter(emp => {
       const score = emp.total_score || 0;
       const jobTitle = (emp.job_title || '').toLowerCase();
-      // Only count servers as under performers (not trainers/bartenders)
-      return score < bServerThreshold && jobTitle === 'server';
+      // Count servers below threshold as under performers (trainers/bartenders excluded)
+      return score < bServerThreshold && (jobTitle === 'server' || jobTitle === '');
     }).length;
 
     setStats({
