@@ -5830,6 +5830,53 @@ async def delete_invalid_cv_feedback():
     }
 
 
+@api_router.delete("/v2/admin/data-integrity/orphaned-records")
+async def delete_orphaned_records(quarter: str = "Q1", year: int = 2026):
+    """
+    Delete orphaned CV NPS records that don't have a matching employee in employees_v2.
+    These are records for employees who have been removed or are from wrong quarters.
+    """
+    # Get ALL employee names from employees_v2 (same as check_orphaned_records)
+    employees = await db.employees_v2.find({}, {"_id": 0, "name": 1}).to_list(1000)
+    employee_names = set(e.get("name", "").lower().strip() for e in employees)
+    
+    # Find and delete orphaned CV NPS records (no quarter filter - same as check)
+    all_nps = await db.cv_nps.find({}).to_list(1000)
+    
+    orphaned_ids = []
+    orphaned_names = []
+    for nps in all_nps:
+        nps_name = nps.get("employee_name", "").lower().strip()
+        if nps_name and nps_name not in employee_names:
+            orphaned_ids.append(nps["_id"])
+            orphaned_names.append(nps.get("employee_name"))
+    
+    deleted_count = 0
+    if orphaned_ids:
+        result = await db.cv_nps.delete_many({"_id": {"$in": orphaned_ids}})
+        deleted_count = result.deleted_count
+    
+    # Log this action
+    await db.audit_log.insert_one({
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "action": "delete_orphaned_records",
+        "quarter": quarter.upper(),
+        "year": year,
+        "details": {
+            "deleted_count": deleted_count,
+            "orphaned_names": list(set(orphaned_names))
+        },
+        "user": "admin"
+    })
+    
+    return {
+        "status": "complete",
+        "deleted_count": deleted_count,
+        "deleted_names": list(set(orphaned_names)),
+        "message": f"Deleted {deleted_count} orphaned CV NPS records"
+    }
+
+
 @api_router.get("/v2/admin/name-matching/preview")
 async def preview_name_matching(quarter: str = "Q1", year: int = 2026):
     """

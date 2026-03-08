@@ -127,10 +127,55 @@ export default function DataIntegrity() {
       const response = await axios.post(`${API}/v2/admin/data-integrity/recalculate-cv-nps`);
       toast.success(`Recalculated NPS for ${response.data.employees_processed} employees`);
       fetchSummary();
+      runFullCheck();
     } catch (error) {
       toast.error("Failed to recalculate NPS");
     } finally {
       setRunning(prev => ({ ...prev, recalculate: false }));
+    }
+  };
+
+  const deleteOrphanedRecords = async () => {
+    if (!window.confirm("Delete all orphaned CV NPS records? These are records for employees not in the current roster.")) {
+      return;
+    }
+    
+    setRunning(prev => ({ ...prev, orphaned: true }));
+    try {
+      const response = await axios.delete(`${API}/v2/admin/data-integrity/orphaned-records`);
+      toast.success(`Deleted ${response.data.deleted_count} orphaned records`);
+      fetchSummary();
+      runFullCheck();
+    } catch (error) {
+      toast.error("Failed to delete orphaned records");
+    } finally {
+      setRunning(prev => ({ ...prev, orphaned: false }));
+    }
+  };
+
+  const fixAllIssues = async () => {
+    if (!window.confirm("This will:\n• Recalculate all NPS values\n• Delete orphaned records\n• Remove duplicate reviews\n\nContinue?")) {
+      return;
+    }
+    
+    setRunning(prev => ({ ...prev, fixAll: true }));
+    try {
+      // Fix NPS mismatches
+      await axios.post(`${API}/v2/admin/data-integrity/recalculate-cv-nps`);
+      
+      // Delete orphaned records
+      const orphanedResponse = await axios.delete(`${API}/v2/admin/data-integrity/orphaned-records`);
+      
+      // Remove duplicates
+      await axios.post(`${API}/v2/admin/data-integrity/remove-duplicates?dry_run=false`);
+      
+      toast.success(`All issues fixed! Deleted ${orphanedResponse.data.deleted_count || 0} orphaned records`);
+      fetchSummary();
+      runFullCheck();
+    } catch (error) {
+      toast.error("Failed to fix all issues");
+    } finally {
+      setRunning(prev => ({ ...prev, fixAll: false }));
     }
   };
 
@@ -335,53 +380,158 @@ export default function DataIntegrity() {
             <div className="space-y-3">
               {fullReport?.checks?.orphaned_records && (
                 <div className="text-sm text-slate-400">
-                  <div>Orphaned CV NPS Records: {fullReport.checks.orphaned_records.orphaned_count}</div>
-                  {fullReport.checks.orphaned_records.orphaned_details?.length > 0 && (
-                    <div className="mt-2">
-                      <div className="text-xs text-slate-500">Orphaned names:</div>
-                      <div className="text-xs text-yellow-400">
-                        {fullReport.checks.orphaned_records.orphaned_details.slice(0, 5).join(", ")}
-                      </div>
-                    </div>
-                  )}
+                  <div className={fullReport.checks.orphaned_records.orphaned_count > 0 ? "text-yellow-400" : ""}>
+                    Orphaned CV NPS Records: {fullReport.checks.orphaned_records.orphaned_count}
+                  </div>
                 </div>
               )}
               <div className="text-xs text-slate-500">
-                Orphaned records are CV NPS entries for employees not in the system.
+                Orphaned records are CV NPS entries for employees not in the current quarter's roster.
               </div>
+              {fullReport?.checks?.orphaned_records?.orphaned_count > 0 && (
+                <Button
+                  onClick={deleteOrphanedRecords}
+                  disabled={running.orphaned}
+                  variant="destructive"
+                  size="sm"
+                >
+                  {running.orphaned ? (
+                    <RefreshCw className="w-4 h-4 mr-1 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4 mr-1" />
+                  )}
+                  Delete Orphaned Records
+                </Button>
+              )}
             </div>
           </IntegrityCard>
         </div>
 
-        {/* Full Report Details */}
-        {fullReport && (
-          <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-6">
-            <h3 className="font-semibold text-white mb-4">Full Integrity Report</h3>
-            <div className="text-sm text-slate-400 space-y-2">
-              <div>Timestamp: {new Date(fullReport.timestamp).toLocaleString()}</div>
-              <div>Status: {fullReport.status}</div>
-              <div className={fullReport.issues_found > 0 ? "text-yellow-400" : "text-green-400"}>
-                Issues Found: {fullReport.issues_found}
-              </div>
-              
+        {/* Detailed Issues List */}
+        {fullReport && fullReport.issues_found > 0 && (
+          <div className="bg-slate-800/50 rounded-xl border border-red-500/30 p-6 mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-red-400 flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5" />
+                {fullReport.issues_found} Issues Requiring Attention
+              </h3>
+              <Button
+                onClick={fixAllIssues}
+                disabled={running.fixAll}
+                className="bg-red-600 hover:bg-red-700"
+                size="sm"
+              >
+                {running.fixAll ? (
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                )}
+                Fix All Issues
+              </Button>
+            </div>
+            
+            <div className="space-y-4">
+              {/* NPS Mismatches */}
               {fullReport.checks?.cv_nps_validation?.mismatch_details?.length > 0 && (
-                <div className="mt-4">
-                  <div className="font-semibold text-white mb-2">NPS Mismatches:</div>
-                  <div className="bg-slate-900/50 rounded-lg p-3 max-h-48 overflow-y-auto">
+                <div className="bg-slate-900/50 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-medium text-yellow-400">
+                      NPS Calculation Mismatches ({fullReport.checks.cv_nps_validation.mismatches})
+                    </h4>
+                    <Button
+                      onClick={recalculateNPS}
+                      disabled={running.recalculate}
+                      size="sm"
+                      className="bg-green-600 hover:bg-green-700"
+                    >
+                      Fix NPS
+                    </Button>
+                  </div>
+                  <div className="max-h-48 overflow-y-auto space-y-2">
                     {fullReport.checks.cv_nps_validation.mismatch_details.map((m, i) => (
-                      <div key={i} className="text-xs mb-2 border-b border-slate-700 pb-2">
-                        <div className="font-medium text-white">{m.employee} ({m.quarter} {m.year})</div>
-                        <div className="text-red-400">
-                          Stored: P={m.stored.promoters}, D={m.stored.detractors}, NPS={m.stored.nps}
-                        </div>
-                        <div className="text-green-400">
-                          Actual: P={m.actual.promoters}, D={m.actual.detractors}, NPS={m.actual.nps}
+                      <div key={i} className="text-xs bg-slate-800/50 rounded p-2 border border-slate-700/50">
+                        <div className="font-medium text-white">{m.employee}</div>
+                        <div className="flex gap-4 mt-1">
+                          <span className="text-red-400">
+                            Stored: P={m.stored.promoters}, D={m.stored.detractors}, NPS={m.stored.nps}%
+                          </span>
+                          <span className="text-green-400">
+                            Should be: P={m.actual.promoters}, D={m.actual.detractors}, NPS={m.actual.nps}%
+                          </span>
                         </div>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
+              
+              {/* Orphaned Records */}
+              {fullReport.checks?.orphaned_records?.orphaned_count > 0 && (
+                <div className="bg-slate-900/50 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-medium text-yellow-400">
+                      Orphaned NPS Records ({fullReport.checks.orphaned_records.orphaned_count})
+                    </h4>
+                    <Button
+                      onClick={deleteOrphanedRecords}
+                      disabled={running.orphaned}
+                      size="sm"
+                      variant="destructive"
+                    >
+                      Delete All
+                    </Button>
+                  </div>
+                  <p className="text-xs text-slate-500 mb-2">
+                    These are CV NPS records for employees not in the current roster. They may be from previous quarters or deleted employees.
+                  </p>
+                  <div className="max-h-48 overflow-y-auto">
+                    <div className="flex flex-wrap gap-2">
+                      {[...new Set(fullReport.checks.orphaned_records.orphaned_details)].map((name, i) => {
+                        const count = fullReport.checks.orphaned_records.orphaned_details.filter(n => n === name).length;
+                        return (
+                          <span key={i} className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded">
+                            {name} ({count})
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Duplicate Reviews */}
+              {fullReport.checks?.review_duplicates?.duplicates_found > 0 && (
+                <div className="bg-slate-900/50 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-medium text-yellow-400">
+                      Duplicate Reviews ({fullReport.checks.review_duplicates.duplicates_found})
+                    </h4>
+                    <Button
+                      onClick={() => removeDuplicates(false)}
+                      disabled={running.duplicates}
+                      size="sm"
+                      variant="destructive"
+                    >
+                      Remove Duplicates
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Full Report Summary */}
+        {fullReport && fullReport.issues_found === 0 && (
+          <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-6 mb-8">
+            <div className="flex items-center gap-3">
+              <CheckCircle className="w-6 h-6 text-green-400" />
+              <div>
+                <h3 className="font-semibold text-green-400">All Checks Passed!</h3>
+                <p className="text-sm text-slate-400">
+                  No data integrity issues found. Last checked: {new Date(fullReport.timestamp).toLocaleString()}
+                </p>
+              </div>
             </div>
           </div>
         )}
