@@ -6945,11 +6945,6 @@ async def sync_nps_to_employees(quarter: str = "Q1", year: int = 2026):
         {"_id": 0}
     ).to_list(500)
     
-    # Get customer reviews
-    customer_reviews = await db.customer_reviews.find(
-        {"quarter": quarter.upper(), "year": year}
-    ).to_list(2000)
-    
     # Get employees
     employees = await db.employees_v2.find(
         {"quarter": quarter.upper(), "year": year}
@@ -6965,22 +6960,40 @@ async def sync_nps_to_employees(quarter: str = "Q1", year: int = 2026):
         if name:
             nps_lookup[name] = nps
     
-    # Build review mention counts
-    first_name_map = {}
+    # Build review mention counts from employee_mentions field in customer_reviews
+    # This uses the already-detected mentions rather than text search
+    mention_pipeline = [
+        {"$match": {"employee_mentions": {"$exists": True, "$ne": [], "$ne": None}}},
+        {"$unwind": "$employee_mentions"},
+        {"$group": {
+            "_id": "$employee_mentions.name",
+            "count": {"$sum": 1}
+        }}
+    ]
+    mention_results = await db.customer_reviews.aggregate(mention_pipeline).to_list(500)
+    mention_lookup = {r["_id"].lower().strip(): r["count"] for r in mention_results if r.get("_id")}
+    
+    # Build mention counts for each employee (with name matching)
     mention_counts = {}
     for emp in employees:
         full_name = emp["name"]
-        first_name = full_name.split()[0].lower()
-        mention_counts[full_name] = 0
-        if len(first_name) > 2:  # Skip short names
-            first_name_map[first_name] = full_name
-    
-    for review in customer_reviews:
-        text = (review.get("text", "") or review.get("review_text", "") or "").lower()
-        for first_name, full_name in first_name_map.items():
-            pattern = r'\b' + re.escape(first_name) + r'\b'
-            if re.search(pattern, text):
-                mention_counts[full_name] += 1
+        full_name_lower = full_name.lower().strip()
+        first_name = full_name_lower.split()[0] if full_name_lower else ""
+        
+        # Direct match on full name
+        if full_name_lower in mention_lookup:
+            mention_counts[full_name] = mention_lookup[full_name_lower]
+        # Match on first name only
+        elif first_name in mention_lookup:
+            mention_counts[full_name] = mention_lookup[first_name]
+        else:
+            # Partial first name match
+            for name, count in mention_lookup.items():
+                if name.startswith(first_name) or first_name in name:
+                    mention_counts[full_name] = count
+                    break
+            else:
+                mention_counts[full_name] = 0
     
     # Update employees
     nps_updated = 0
