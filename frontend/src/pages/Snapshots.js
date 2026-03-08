@@ -481,18 +481,7 @@ export default function Snapshots() {
                       </Button>
                     </label>
                     
-                    {/* Scan POS Report (OCR) */}
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setPosUploadSnapshotId(snapshot.id);
-                        setShowPOSUpload(true);
-                      }}
-                      className="border-primary/50 text-primary hover:bg-primary/10"
-                    >
-                      <ScanLine className="w-4 h-4 mr-2" />
-                      Scan POS
-                    </Button>
+                    {/* Scan POS Report - REMOVED: Use Upload CSV for XLSX files */}
                     
                     {/* Generate Slide */}
                     <Button
