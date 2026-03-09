@@ -485,3 +485,21 @@ Updated Customer Voice scoring to use spec NPS scale with current promoter logic
 - NPS scores range from -100 to +100
 - Employee name matching supports partial/first-name matches
 - Date range presets: Quarter-To-Date (current quarter), Custom Range (past quarters)
+
+## Change Log
+
+### December 9, 2025
+**P0 Bug Fix: Clean POS Parser LBW/LSC Extraction**
+- Fixed critical bug in `server.py` where the clean POS format parser was not extracting Liquor, Beer, Wine (LBW) and Loyalty (LSC) data
+- The `loyalty` value is now properly converted to `lsc_count` by dividing by $25 (price per LSC card)
+- LBW components (liquor, beer, wine) are now summed and stored as `lbw_amount` with individual breakdowns
+- `score_lbw` and `score_lsc` are now properly calculated using benchmarks
+- Average employee score went from ~58 to ~78.4 after fix
+- All 27 employees now have proper LBW scores (100%)
+
+**UI Improvement: Leaderboard Contrast**
+- Enhanced leaderboard table header visibility (text-slate-200 instead of text-slate-400)
+- Improved tier badge contrast with borders and brighter colors
+- Thicker progress bars (h-3) with better color coding (orange for low values)
+- Better row alternation contrast for readability
+- Brighter subtext (text-slate-300 instead of text-slate-500)

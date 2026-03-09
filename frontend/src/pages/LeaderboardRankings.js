@@ -147,17 +147,17 @@ const ScoreBar = ({ value, max, benchmark, color = "blue" }) => {
     ? "bg-green-500" 
     : value >= (benchmark || max) * 0.8 
       ? "bg-blue-500" 
-      : "bg-slate-500";
+      : "bg-orange-500";
   
   return (
-    <div className="relative w-full h-2 bg-slate-700 rounded-full overflow-hidden">
+    <div className="relative w-full h-3 bg-slate-600 rounded-full overflow-hidden">
       <div 
         className={`absolute left-0 top-0 h-full ${barColor} transition-all duration-500`}
         style={{ width: `${percentage}%` }}
       />
       {benchmarkPct && (
         <div 
-          className="absolute top-0 h-full w-0.5 bg-yellow-400"
+          className="absolute top-0 h-full w-1 bg-yellow-400"
           style={{ left: `${benchmarkPct}%` }}
         />
       )}
@@ -444,9 +444,9 @@ export default function LeaderboardRankings() {
             </div>
 
             {/* Leaderboard Table */}
-            <div className="rounded-xl overflow-hidden border border-slate-700/50" style={{ backgroundColor: COLORS.backgroundAlt }}>
+            <div className="rounded-xl overflow-hidden border border-slate-600" style={{ backgroundColor: COLORS.backgroundAlt }}>
               {/* Table Header */}
-              <div className="grid grid-cols-12 gap-2 px-4 py-3 bg-slate-800/80 text-xs font-bold uppercase tracking-wider text-slate-400">
+              <div className="grid grid-cols-12 gap-2 px-4 py-3 bg-slate-900 text-sm font-bold uppercase tracking-wider text-slate-200 border-b border-slate-600">
                 <div className="col-span-1 text-center">Rank</div>
                 <div className="col-span-3">Employee</div>
                 <div className="col-span-2 text-center">Operational</div>
@@ -457,7 +457,7 @@ export default function LeaderboardRankings() {
               </div>
 
               {/* Table Body */}
-              <div className="divide-y divide-slate-700/30">
+              <div className="divide-y divide-slate-600/50">
                 {filteredRankings.map((employee, idx) => {
                   const empData = getEmployeeDetails(employee.employee_id);
                   const momentum = calculateMomentum(employee.employee_id, employee.score);
@@ -473,9 +473,9 @@ export default function LeaderboardRankings() {
                   return (
                     <div 
                       key={employee.employee_id}
-                      className={`grid grid-cols-12 gap-2 px-4 py-4 items-center transition-all duration-200 hover:bg-slate-700/30 ${
-                        idx % 2 === 0 ? "bg-slate-800/20" : "bg-slate-800/40"
-                      } ${isTop5 ? "border-l-4 border-green-500/50" : ""}`}
+                      className={`grid grid-cols-12 gap-2 px-4 py-4 items-center transition-all duration-200 hover:bg-slate-600/40 ${
+                        idx % 2 === 0 ? "bg-slate-800/50" : "bg-slate-700/30"
+                      } ${isTop5 ? "border-l-4 border-green-400" : ""}`}
                       data-testid={`leaderboard-row-${employee.position}`}
                     >
                       {/* Rank */}
@@ -487,14 +487,14 @@ export default function LeaderboardRankings() {
                       <div className="col-span-3">
                         <div className="flex items-center gap-3">
                           <div>
-                            <div className="font-semibold text-white text-lg">{employee.name}</div>
+                            <div className="font-bold text-white text-lg">{employee.name}</div>
                             <div className="flex items-center gap-2 mt-1">
-                              <span className={`text-xs px-2 py-0.5 rounded ${
-                                employee.tier_label?.includes("Trainer") ? "bg-purple-500/20 text-purple-400" :
-                                employee.tier_label?.includes("Bartender") ? "bg-blue-500/20 text-blue-400" :
-                                employee.tier_label?.includes("A-") ? "bg-green-500/20 text-green-400" :
-                                employee.tier_label?.includes("B-") ? "bg-yellow-500/20 text-yellow-400" :
-                                "bg-red-500/20 text-red-400"
+                              <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${
+                                employee.tier_label?.includes("Trainer") ? "bg-purple-600/30 text-purple-300 border-purple-500/50" :
+                                employee.tier_label?.includes("Bartender") ? "bg-blue-600/30 text-blue-300 border-blue-500/50" :
+                                employee.tier_label?.includes("A-") ? "bg-green-600/30 text-green-300 border-green-500/50" :
+                                employee.tier_label?.includes("B-") ? "bg-yellow-600/30 text-yellow-300 border-yellow-500/50" :
+                                "bg-red-600/30 text-red-300 border-red-500/50"
                               }`}>
                                 {employee.tier_label || employee.job_title}
                               </span>
@@ -506,16 +506,16 @@ export default function LeaderboardRankings() {
                       
                       {/* Operational Score */}
                       <div className="col-span-2 text-center">
-                        <div className="text-white font-medium">{operationalScore.toFixed(1)}</div>
+                        <div className="text-white font-semibold text-lg">{operationalScore.toFixed(1)}</div>
                         <ScoreBar value={operationalScore} max={75} benchmark={75} />
-                        <div className="text-xs text-slate-500 mt-1">of 75 pts</div>
+                        <div className="text-xs text-slate-300 mt-1">of 75 pts</div>
                       </div>
                       
                       {/* Guest Reputation Score */}
                       <div className="col-span-2 text-center">
-                        <div className="text-white font-medium">{guestRepScore.toFixed(1)}</div>
+                        <div className="text-white font-semibold text-lg">{guestRepScore.toFixed(1)}</div>
                         <ScoreBar value={guestRepScore} max={25} benchmark={15} />
-                        <div className="text-xs text-slate-500 mt-1">CV + Reviews</div>
+                        <div className="text-xs text-slate-300 mt-1">CV + Reviews</div>
                       </div>
                       
                       {/* Benchmark Bonus */}

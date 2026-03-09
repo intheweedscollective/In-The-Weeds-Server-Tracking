@@ -10,7 +10,7 @@ from PIL import Image
 import pandas as pd
 from pypdf import PdfReader
 
-BASE_URL = "https://perf-review-hub-8.preview.emergentagent.com"
+BASE_URL = "https://employee-metrics-13.preview.emergentagent.com"
 API_URL = f"{BASE_URL}/api"
 
 def create_proper_test_image():

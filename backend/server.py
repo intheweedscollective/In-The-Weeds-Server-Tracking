@@ -3068,7 +3068,7 @@ async def get_analytics_pdf_v2(year: int, quarter: str):
     # Get frontend URL from environment
     frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
     # Use the preview URL for capturing
-    preview_url = os.environ.get("REACT_APP_BACKEND_URL", "https://perf-review-hub-8.preview.emergentagent.com")
+    preview_url = os.environ.get("REACT_APP_BACKEND_URL", "https://employee-metrics-13.preview.emergentagent.com")
     if "preview.emergentagent.com" in preview_url:
         frontend_url = preview_url.replace("/api", "").rstrip("/")
     
@@ -3833,17 +3833,28 @@ async def upload_snapshot_data(snapshot_id: str, file: UploadFile = File(...)):
                     
                     glassware_sales = emp_data.get('bar_glassware', 0)
                     
+                    # Calculate LSC count from Loyalty sales ($25 per LSC card)
+                    loyalty_sales = emp_data.get('loyalty', 0)
+                    lsc_count = int(loyalty_sales / 25.0) if loyalty_sales > 0 else 0
+                    
                     # Calculate PPA
                     ppa = (net_sales / guests) if guests > 0 else 0
+                    
+                    # Calculate LBW per guest and Guests per LSC
+                    lbw_per_guest = (lbw / guests) if guests > 0 else 0
+                    guests_per_lsc = (guests / lsc_count) if lsc_count > 0 else None
                     
                     # Calculate component scores - use correct attribute names
                     ppa_benchmark = getattr(settings, 'ppa_benchmark', None) or getattr(settings, 'benchmark_ppa', 55)
                     lbw_benchmark = getattr(settings, 'lbw_benchmark', None) or getattr(settings, 'benchmark_lbw', 8)
                     glass_benchmark = getattr(settings, 'glassware_benchmark', None) or getattr(settings, 'benchmark_glass', 1)
+                    lsc_benchmark = getattr(settings, 'lsc_benchmark', None) or getattr(settings, 'benchmark_lsc', 20)
                     
                     score_ppa = (ppa / ppa_benchmark * 100) if ppa_benchmark > 0 else 0
-                    score_lbw = (lbw / guests / lbw_benchmark * 100) if guests > 0 and lbw_benchmark > 0 else 0
+                    score_lbw = (lbw_per_guest / lbw_benchmark * 100) if lbw_benchmark > 0 else 0
                     score_glass = (glassware_sales / guests / glass_benchmark * 100) if guests > 0 and glass_benchmark > 0 else 0
+                    # LSC score: lower guests_per_lsc is better (benchmark/actual * 100)
+                    score_lsc = (lsc_benchmark / guests_per_lsc * 100) if guests_per_lsc and guests_per_lsc > 0 else 0
                     
                     emp = EmployeeV2(
                         employee_id=str(uuid.uuid4()),
@@ -3855,12 +3866,17 @@ async def upload_snapshot_data(snapshot_id: str, file: UploadFile = File(...)):
                         net_sales=round(net_sales, 2),
                         ppa=round(ppa, 2),
                         lbw_amount=round(lbw, 2),
+                        lbw_per_guest=round(lbw_per_guest, 2),
                         glassware_sales=round(glassware_sales, 2),
+                        guests_per_lsc=round(guests_per_lsc, 2) if guests_per_lsc else None,
                         score_ppa=round(score_ppa, 2),
                         score_lbw=round(score_lbw, 2),
                         score_glass=round(score_glass, 2),
-                        score_lsc=0,
-                        lsc_count=0,
+                        score_lsc=round(score_lsc, 2),
+                        lsc_count=lsc_count,
+                        liquor_sales=round(liquor, 2),
+                        beer_sales=round(beer, 2),
+                        wine_sales=round(wine, 2),
                         created_at=datetime.now(timezone.utc)
                     )
                     
