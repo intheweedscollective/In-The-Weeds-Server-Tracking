@@ -3836,10 +3836,14 @@ async def upload_snapshot_data(snapshot_id: str, file: UploadFile = File(...)):
                     # Calculate PPA
                     ppa = (net_sales / guests) if guests > 0 else 0
                     
-                    # Calculate component scores
-                    score_ppa = (ppa / settings.ppa_benchmark * 100) if settings.ppa_benchmark > 0 else 0
-                    score_lbw = (lbw / guests / settings.lbw_benchmark * 100) if guests > 0 and settings.lbw_benchmark > 0 else 0
-                    score_glass = (glassware_sales / guests / settings.glassware_benchmark * 100) if guests > 0 and settings.glassware_benchmark > 0 else 0
+                    # Calculate component scores - use correct attribute names
+                    ppa_benchmark = getattr(settings, 'ppa_benchmark', None) or getattr(settings, 'benchmark_ppa', 55)
+                    lbw_benchmark = getattr(settings, 'lbw_benchmark', None) or getattr(settings, 'benchmark_lbw', 8)
+                    glass_benchmark = getattr(settings, 'glassware_benchmark', None) or getattr(settings, 'benchmark_glass', 1)
+                    
+                    score_ppa = (ppa / ppa_benchmark * 100) if ppa_benchmark > 0 else 0
+                    score_lbw = (lbw / guests / lbw_benchmark * 100) if guests > 0 and lbw_benchmark > 0 else 0
+                    score_glass = (glassware_sales / guests / glass_benchmark * 100) if guests > 0 and glass_benchmark > 0 else 0
                     
                     emp = EmployeeV2(
                         employee_id=str(uuid.uuid4()),
