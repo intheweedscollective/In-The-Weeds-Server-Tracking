@@ -468,17 +468,17 @@ export default function EmployeeList() {
               
               <div className="p-6">
                 {/* Total Score Summary */}
-                <div className="mb-6 p-4 bg-gradient-to-r from-red-50 to-blue-50 rounded-xl border-2 border-gray-200">
+                <div className="mb-6 p-4 bg-slate-700 rounded-xl border-2 border-slate-600">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-lg font-serif font-bold text-foreground">Total Score</h3>
-                      <p className="text-sm text-slate-400">Weighted score + bonuses</p>
+                      <h3 className="text-lg font-serif font-bold text-white">Total Score</h3>
+                      <p className="text-sm text-slate-300">Weighted score + bonuses</p>
                     </div>
                     <div className="text-right">
-                      <div className="text-4xl font-serif font-black text-primary">
+                      <div className="text-4xl font-serif font-black text-green-400">
                         {formatNumber(selectedEmployee.pre_dar_score || selectedEmployee.total_score || 0)}
                       </div>
-                      <div className="text-sm text-slate-400">points</div>
+                      <div className="text-sm text-slate-300">points</div>
                     </div>
                   </div>
                 </div>
@@ -492,153 +492,153 @@ export default function EmployeeList() {
                   
                   <div className="space-y-3">
                     {/* PPA - 25% weight, max 30 pts */}
-                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
+                    <div className="p-4 bg-slate-700/50 rounded-lg border border-blue-500/30">
                       <div className="flex items-center justify-between mb-2">
                         <div>
-                          <span className="font-semibold text-foreground">PPA (Per Person Average)</span>
-                          <span className="ml-2 text-xs bg-blue-200 text-blue-800 px-2 py-0.5 rounded-full">25% weight</span>
+                          <span className="font-semibold text-white">PPA (Per Person Average)</span>
+                          <span className="ml-2 text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full">25% weight</span>
                         </div>
                         <div className="text-right">
-                          <span className="font-bold text-secondary">{formatNumber(Math.min((selectedEmployee.score_ppa || 0), 100) * 0.25 + (selectedEmployee.bonus_ppa || 0))}</span>
+                          <span className="font-bold text-blue-400 text-lg">{formatNumber(Math.min((selectedEmployee.score_ppa || 0), 100) * 0.25 + (selectedEmployee.bonus_ppa || 0))}</span>
                           <span className="text-slate-400 text-sm"> / 30 pts</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-4 text-sm">
-                        <span className="text-slate-300">Value: {formatCurrency(selectedEmployee.ppa || 0)}</span>
-                        <span className="text-gray-400">|</span>
-                        <span className="text-slate-300">Score: {formatNumber(selectedEmployee.score_ppa || 0)}%</span>
+                        <span className="text-slate-200">Value: {formatCurrency(selectedEmployee.ppa || 0)}</span>
+                        <span className="text-slate-500">|</span>
+                        <span className="text-slate-200">Score: {formatNumber(selectedEmployee.score_ppa || 0)}%</span>
                         {(selectedEmployee.bonus_ppa || 0) > 0 && (
                           <>
-                            <span className="text-gray-400">|</span>
-                            <span className="text-green-600 font-medium">+{formatNumber(selectedEmployee.bonus_ppa)} bonus</span>
+                            <span className="text-slate-500">|</span>
+                            <span className="text-green-400 font-medium">+{formatNumber(selectedEmployee.bonus_ppa)} bonus</span>
                           </>
                         )}
                       </div>
-                      <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div className="mt-2 h-2 bg-slate-600 rounded-full overflow-hidden">
                         <div 
-                          className="h-full bg-secondary rounded-full transition-all" 
+                          className="h-full bg-blue-500 rounded-full transition-all" 
                           style={{ width: `${Math.min(100, ((Math.min((selectedEmployee.score_ppa || 0), 100) * 0.25 + (selectedEmployee.bonus_ppa || 0)) / 30) * 100)}%` }}
                         />
                       </div>
                     </div>
 
                     {/* LSC - 25% weight, max 30 pts */}
-                    <div className="p-4 bg-green-50 rounded-lg border border-green-100">
+                    <div className="p-4 bg-slate-700/50 rounded-lg border border-green-500/30">
                       <div className="flex items-center justify-between mb-2">
                         <div>
-                          <span className="font-semibold text-foreground">LSC (Guests per Signup)</span>
-                          <span className="ml-2 text-xs bg-green-200 text-green-800 px-2 py-0.5 rounded-full">25% weight</span>
+                          <span className="font-semibold text-white">LSC (Guests per Signup)</span>
+                          <span className="ml-2 text-xs bg-green-600 text-white px-2 py-0.5 rounded-full">25% weight</span>
                         </div>
                         <div className="text-right">
-                          <span className="font-bold text-green-700">{formatNumber(Math.min((selectedEmployee.score_lsc || 0), 100) * 0.25 + (selectedEmployee.bonus_lsc || 0))}</span>
+                          <span className="font-bold text-green-400 text-lg">{formatNumber(Math.min((selectedEmployee.score_lsc || 0), 100) * 0.25 + (selectedEmployee.bonus_lsc || 0))}</span>
                           <span className="text-slate-400 text-sm"> / 30 pts</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-4 text-sm">
-                        <span className="text-slate-300">Value: {selectedEmployee.guests_per_lsc ? formatNumber(selectedEmployee.guests_per_lsc) + ' G/LSC' : 'N/A'}</span>
-                        <span className="text-gray-400">|</span>
-                        <span className="text-slate-300">Score: {formatNumber(selectedEmployee.score_lsc || 0)}%</span>
+                        <span className="text-slate-200">Value: {selectedEmployee.guests_per_lsc ? formatNumber(selectedEmployee.guests_per_lsc) + ' G/LSC' : 'N/A'}</span>
+                        <span className="text-slate-500">|</span>
+                        <span className="text-slate-200">Score: {formatNumber(selectedEmployee.score_lsc || 0)}%</span>
                         {(selectedEmployee.bonus_lsc || 0) > 0 && (
                           <>
-                            <span className="text-gray-400">|</span>
-                            <span className="text-green-600 font-medium">+{formatNumber(selectedEmployee.bonus_lsc)} bonus</span>
+                            <span className="text-slate-500">|</span>
+                            <span className="text-green-400 font-medium">+{formatNumber(selectedEmployee.bonus_lsc)} bonus</span>
                           </>
                         )}
                       </div>
-                      <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div className="mt-2 h-2 bg-slate-600 rounded-full overflow-hidden">
                         <div 
-                          className="h-full bg-green-600 rounded-full transition-all" 
+                          className="h-full bg-green-500 rounded-full transition-all" 
                           style={{ width: `${Math.min(100, ((Math.min((selectedEmployee.score_lsc || 0), 100) * 0.25 + (selectedEmployee.bonus_lsc || 0)) / 30) * 100)}%` }}
                         />
                       </div>
                     </div>
 
                     {/* LBW - 20% weight, max 25 pts */}
-                    <div className="p-4 bg-purple-50 rounded-lg border border-purple-100">
+                    <div className="p-4 bg-slate-700/50 rounded-lg border border-purple-500/30">
                       <div className="flex items-center justify-between mb-2">
                         <div>
-                          <span className="font-semibold text-foreground">LBW per Guest</span>
-                          <span className="ml-2 text-xs bg-purple-200 text-purple-800 px-2 py-0.5 rounded-full">20% weight</span>
+                          <span className="font-semibold text-white">LBW per Guest</span>
+                          <span className="ml-2 text-xs bg-purple-600 text-white px-2 py-0.5 rounded-full">20% weight</span>
                         </div>
                         <div className="text-right">
-                          <span className="font-bold text-purple-700">{formatNumber(Math.min((selectedEmployee.score_lbw || 0), 100) * 0.20 + (selectedEmployee.bonus_lbw || 0))}</span>
+                          <span className="font-bold text-purple-400 text-lg">{formatNumber(Math.min((selectedEmployee.score_lbw || 0), 100) * 0.20 + (selectedEmployee.bonus_lbw || 0))}</span>
                           <span className="text-slate-400 text-sm"> / 25 pts</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-4 text-sm">
-                        <span className="text-slate-300">Value: {formatCurrency(selectedEmployee.lbw_per_guest || 0)}</span>
-                        <span className="text-gray-400">|</span>
-                        <span className="text-slate-300">Score: {formatNumber(selectedEmployee.score_lbw || 0)}%</span>
+                        <span className="text-slate-200">Value: {formatCurrency(selectedEmployee.lbw_per_guest || 0)}</span>
+                        <span className="text-slate-500">|</span>
+                        <span className="text-slate-200">Score: {formatNumber(selectedEmployee.score_lbw || 0)}%</span>
                         {(selectedEmployee.bonus_lbw || 0) > 0 && (
                           <>
-                            <span className="text-gray-400">|</span>
-                            <span className="text-green-600 font-medium">+{formatNumber(selectedEmployee.bonus_lbw)} bonus</span>
+                            <span className="text-slate-500">|</span>
+                            <span className="text-green-400 font-medium">+{formatNumber(selectedEmployee.bonus_lbw)} bonus</span>
                           </>
                         )}
                       </div>
-                      <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div className="mt-2 h-2 bg-slate-600 rounded-full overflow-hidden">
                         <div 
-                          className="h-full bg-purple-600 rounded-full transition-all" 
+                          className="h-full bg-purple-500 rounded-full transition-all" 
                           style={{ width: `${Math.min(100, ((Math.min((selectedEmployee.score_lbw || 0), 100) * 0.20 + (selectedEmployee.bonus_lbw || 0)) / 25) * 100)}%` }}
                         />
                       </div>
                     </div>
 
                     {/* Glassware - 15% weight, max 20 pts */}
-                    <div className="p-4 bg-background rounded-lg border border-gray-200">
+                    <div className="p-4 bg-slate-700/50 rounded-lg border border-slate-500/30">
                       <div className="flex items-center justify-between mb-2">
                         <div>
-                          <span className="font-semibold text-foreground">Glassware per Guest</span>
-                          <span className="ml-2 text-xs bg-gray-200 text-slate-200 px-2 py-0.5 rounded-full">15% weight</span>
+                          <span className="font-semibold text-white">Glassware per Guest</span>
+                          <span className="ml-2 text-xs bg-slate-600 text-white px-2 py-0.5 rounded-full">15% weight</span>
                         </div>
                         <div className="text-right">
-                          <span className="font-bold text-slate-200">{formatNumber(Math.min((selectedEmployee.score_glass || 0), 100) * 0.15 + (selectedEmployee.bonus_glass || 0))}</span>
+                          <span className="font-bold text-slate-300 text-lg">{formatNumber(Math.min((selectedEmployee.score_glass || 0), 100) * 0.15 + (selectedEmployee.bonus_glass || 0))}</span>
                           <span className="text-slate-400 text-sm"> / 20 pts</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-4 text-sm">
-                        <span className="text-slate-300">Value: {formatCurrency(selectedEmployee.glassware_per_guest || 0)}</span>
-                        <span className="text-gray-400">|</span>
-                        <span className="text-slate-300">Score: {formatNumber(selectedEmployee.score_glass || 0)}%</span>
+                        <span className="text-slate-200">Value: {formatCurrency(selectedEmployee.glassware_per_guest || 0)}</span>
+                        <span className="text-slate-500">|</span>
+                        <span className="text-slate-200">Score: {formatNumber(selectedEmployee.score_glass || 0)}%</span>
                         {(selectedEmployee.bonus_glass || 0) > 0 && (
                           <>
-                            <span className="text-gray-400">|</span>
-                            <span className="text-green-600 font-medium">+{formatNumber(selectedEmployee.bonus_glass)} bonus</span>
+                            <span className="text-slate-500">|</span>
+                            <span className="text-green-400 font-medium">+{formatNumber(selectedEmployee.bonus_glass)} bonus</span>
                           </>
                         )}
                       </div>
-                      <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div className="mt-2 h-2 bg-slate-600 rounded-full overflow-hidden">
                         <div 
-                          className="h-full bg-gray-600 rounded-full transition-all" 
+                          className="h-full bg-slate-400 rounded-full transition-all" 
                           style={{ width: `${Math.min(100, ((Math.min((selectedEmployee.score_glass || 0), 100) * 0.15 + (selectedEmployee.bonus_glass || 0)) / 20) * 100)}%` }}
                         />
                       </div>
                     </div>
 
                     {/* Customer Voice - 15% weight, max 20 pts */}
-                    <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-100">
+                    <div className="p-4 bg-slate-700/50 rounded-lg border border-yellow-500/30">
                       <div className="flex items-center justify-between mb-2">
                         <div>
-                          <span className="font-semibold text-foreground">Customer Voice & Reviews</span>
-                          <span className="ml-2 text-xs bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded-full">15% weight</span>
+                          <span className="font-semibold text-white">Customer Voice & Reviews</span>
+                          <span className="ml-2 text-xs bg-yellow-600 text-white px-2 py-0.5 rounded-full">15% weight</span>
                         </div>
                         <div className="text-right">
-                          <span className="font-bold text-yellow-700">{formatNumber(Math.min((selectedEmployee.score_cv || 0), 100) * 0.15)}</span>
+                          <span className="font-bold text-yellow-400 text-lg">{formatNumber(Math.min((selectedEmployee.score_cv || 0), 100) * 0.15)}</span>
                           <span className="text-slate-400 text-sm"> / 20 pts</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-4 text-sm flex-wrap">
-                        <span className="text-slate-300">CV Score: {selectedEmployee.cv_score > 0 ? '+' : ''}{formatNumber(selectedEmployee.cv_score || 0)}</span>
-                        <span className="text-gray-400">|</span>
-                        <span className="text-slate-300">Normalized: {formatNumber(selectedEmployee.score_cv || 0)}%</span>
+                        <span className="text-slate-200">CV Score: {selectedEmployee.cv_score > 0 ? '+' : ''}{formatNumber(selectedEmployee.cv_score || 0)}</span>
+                        <span className="text-slate-500">|</span>
+                        <span className="text-slate-200">Normalized: {formatNumber(selectedEmployee.score_cv || 0)}%</span>
                         {(selectedEmployee.review_tracker_bonus || 0) > 0 && (
                           <>
-                            <span className="text-gray-400">|</span>
-                            <span className="text-green-600 font-medium">+{formatNumber(selectedEmployee.review_tracker_bonus)} review bonus</span>
+                            <span className="text-slate-500">|</span>
+                            <span className="text-green-400 font-medium">+{formatNumber(selectedEmployee.review_tracker_bonus)} review bonus</span>
                           </>
                         )}
                       </div>
-                      <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div className="mt-2 h-2 bg-slate-600 rounded-full overflow-hidden">
                         <div 
                           className="h-full bg-yellow-500 rounded-full transition-all" 
                           style={{ width: `${Math.min(100, (selectedEmployee.score_cv || 0))}%` }}
@@ -649,24 +649,24 @@ export default function EmployeeList() {
                 </div>
 
                 {/* Score Summary Table */}
-                <div className="mb-6 p-4 bg-background rounded-xl border border-gray-200">
-                  <h4 className="font-serif font-bold text-foreground mb-3">Score Summary</h4>
+                <div className="mb-6 p-4 bg-slate-700/50 rounded-xl border border-slate-600">
+                  <h4 className="font-serif font-bold text-white mb-3">Score Summary</h4>
                   <div className="space-y-2 text-sm">
-                    <div className="flex justify-between py-1 border-b border-gray-200">
+                    <div className="flex justify-between py-1 border-b border-slate-600">
                       <span className="text-slate-300">Weighted Score (base)</span>
-                      <span className="font-medium">{formatNumber(selectedEmployee.weighted_score || 0)}</span>
+                      <span className="font-medium text-white">{formatNumber(selectedEmployee.weighted_score || 0)}</span>
                     </div>
-                    <div className="flex justify-between py-1 border-b border-gray-200">
+                    <div className="flex justify-between py-1 border-b border-slate-600">
                       <span className="text-slate-300">Metric Bonuses</span>
-                      <span className="font-medium text-green-600">+{formatNumber(selectedEmployee.total_metric_bonus || 0)}</span>
+                      <span className="font-medium text-green-400">+{formatNumber(selectedEmployee.total_metric_bonus || 0)}</span>
                     </div>
-                    <div className="flex justify-between py-1 border-b border-gray-200">
+                    <div className="flex justify-between py-1 border-b border-slate-600">
                       <span className="text-slate-300">Review Tracker Bonus</span>
-                      <span className="font-medium text-green-600">+{formatNumber(selectedEmployee.review_tracker_bonus || 0)}</span>
+                      <span className="font-medium text-green-400">+{formatNumber(selectedEmployee.review_tracker_bonus || 0)}</span>
                     </div>
                     <div className="flex justify-between py-2 font-bold text-base">
-                      <span className="text-foreground">Final Score</span>
-                      <span className="text-primary">{formatNumber(selectedEmployee.pre_dar_score || selectedEmployee.total_score || 0)}</span>
+                      <span className="text-white">Final Score</span>
+                      <span className="text-green-400">{formatNumber(selectedEmployee.pre_dar_score || selectedEmployee.total_score || 0)}</span>
                     </div>
                   </div>
                 </div>
@@ -674,22 +674,22 @@ export default function EmployeeList() {
                 {/* Customer Voice Breakdown */}
                 {(selectedEmployee.cv_promoters > 0 || selectedEmployee.cv_passives > 0 || selectedEmployee.cv_detractors > 0) && (
                   <div className="mb-6">
-                    <h4 className="font-serif font-bold text-foreground mb-3">Customer Voice Breakdown</h4>
+                    <h4 className="font-serif font-bold text-white mb-3">Customer Voice Breakdown</h4>
                     <div className="grid grid-cols-3 gap-2">
-                      <div className="text-center p-3 bg-green-50 rounded-lg border border-green-100">
-                        <div className="text-xl font-bold text-green-700">{selectedEmployee.cv_promoters || 0}</div>
-                        <div className="text-xs text-slate-400">Promoters</div>
-                        <div className="text-xs text-green-600 font-medium">+{(selectedEmployee.cv_promoters || 0) * 1} pts</div>
+                      <div className="text-center p-3 bg-green-900/30 rounded-lg border border-green-500/30">
+                        <div className="text-xl font-bold text-green-400">{selectedEmployee.cv_promoters || 0}</div>
+                        <div className="text-xs text-slate-300">Promoters</div>
+                        <div className="text-xs text-green-400 font-medium">+{(selectedEmployee.cv_promoters || 0) * 1} pts</div>
                       </div>
-                      <div className="text-center p-3 bg-slate-700 rounded-lg border border-gray-200">
+                      <div className="text-center p-3 bg-slate-700/50 rounded-lg border border-slate-600">
                         <div className="text-xl font-bold text-slate-300">{selectedEmployee.cv_passives || 0}</div>
                         <div className="text-xs text-slate-400">Passives</div>
                         <div className="text-xs text-slate-400">0 pts</div>
                       </div>
-                      <div className="text-center p-3 bg-red-50 rounded-lg border border-red-100">
-                        <div className="text-xl font-bold text-red-700">{selectedEmployee.cv_detractors || 0}</div>
-                        <div className="text-xs text-slate-400">Detractors</div>
-                        <div className="text-xs text-red-600 font-medium">{(selectedEmployee.cv_detractors || 0) * -2} pts</div>
+                      <div className="text-center p-3 bg-red-900/30 rounded-lg border border-red-500/30">
+                        <div className="text-xl font-bold text-red-400">{selectedEmployee.cv_detractors || 0}</div>
+                        <div className="text-xs text-slate-300">Detractors</div>
+                        <div className="text-xs text-red-400 font-medium">{(selectedEmployee.cv_detractors || 0) * -2} pts</div>
                       </div>
                     </div>
                   </div>
@@ -697,31 +697,31 @@ export default function EmployeeList() {
                 
                 {/* Raw Data Section */}
                 <div>
-                  <h4 className="font-serif font-bold text-foreground mb-3">Raw Input Data</h4>
+                  <h4 className="font-serif font-bold text-white mb-3">Raw Input Data</h4>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                    <div className="flex justify-between py-2 px-3 bg-background rounded-lg text-sm">
-                      <span className="text-slate-400">Guests</span>
-                      <span className="font-medium">{formatNumber(selectedEmployee.guests || 0)}</span>
+                    <div className="flex justify-between py-2 px-3 bg-slate-700/50 rounded-lg text-sm">
+                      <span className="text-slate-300">Guests</span>
+                      <span className="font-medium text-white">{formatNumber(selectedEmployee.guests || 0)}</span>
                     </div>
-                    <div className="flex justify-between py-2 px-3 bg-background rounded-lg text-sm">
-                      <span className="text-slate-400">Net Sales</span>
-                      <span className="font-medium">{formatCurrency(selectedEmployee.net_sales || 0)}</span>
+                    <div className="flex justify-between py-2 px-3 bg-slate-700/50 rounded-lg text-sm">
+                      <span className="text-slate-300">Net Sales</span>
+                      <span className="font-medium text-white">{formatCurrency(selectedEmployee.net_sales || 0)}</span>
                     </div>
-                    <div className="flex justify-between py-2 px-3 bg-background rounded-lg text-sm">
-                      <span className="text-slate-400">LBW Total</span>
-                      <span className="font-medium">{formatCurrency(selectedEmployee.lbw || 0)}</span>
+                    <div className="flex justify-between py-2 px-3 bg-slate-700/50 rounded-lg text-sm">
+                      <span className="text-slate-300">LBW Total</span>
+                      <span className="font-medium text-white">{formatCurrency(selectedEmployee.lbw || 0)}</span>
                     </div>
-                    <div className="flex justify-between py-2 px-3 bg-background rounded-lg text-sm">
-                      <span className="text-slate-400">Glassware</span>
-                      <span className="font-medium">{formatCurrency(selectedEmployee.glassware_sales || 0)}</span>
+                    <div className="flex justify-between py-2 px-3 bg-slate-700/50 rounded-lg text-sm">
+                      <span className="text-slate-300">Glassware</span>
+                      <span className="font-medium text-white">{formatCurrency(selectedEmployee.glassware_sales || 0)}</span>
                     </div>
-                    <div className="flex justify-between py-2 px-3 bg-background rounded-lg text-sm">
-                      <span className="text-slate-400">LSC Count</span>
-                      <span className="font-medium">{formatNumber(selectedEmployee.lsc_count || 0)}</span>
+                    <div className="flex justify-between py-2 px-3 bg-slate-700/50 rounded-lg text-sm">
+                      <span className="text-slate-300">LSC Count</span>
+                      <span className="font-medium text-white">{formatNumber(selectedEmployee.lsc_count || 0)}</span>
                     </div>
-                    <div className="flex justify-between py-2 px-3 bg-background rounded-lg text-sm">
-                      <span className="text-slate-400">Review Mentions</span>
-                      <span className="font-medium">{formatNumber(selectedEmployee.review_mentions || 0)}</span>
+                    <div className="flex justify-between py-2 px-3 bg-slate-700/50 rounded-lg text-sm">
+                      <span className="text-slate-300">Review Mentions</span>
+                      <span className="font-medium text-white">{formatNumber(selectedEmployee.review_mentions || 0)}</span>
                     </div>
                   </div>
                 </div>
