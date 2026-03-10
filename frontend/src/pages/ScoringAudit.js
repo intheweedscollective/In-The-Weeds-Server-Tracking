@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { 
   ShieldCheck, AlertTriangle, CheckCircle, XCircle, RefreshCw, 
   FileText, Users, ChevronDown, ChevronUp, Search, 
-  Calculator, Database, ClipboardCheck, Info, ArrowRight, Trash2, RotateCcw
+  Calculator, Database, ClipboardCheck, Info, ArrowRight, Trash2, RotateCcw, Settings, X
 } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
@@ -257,6 +257,74 @@ export default function ScoringAudit() {
   const [syncing, setSyncing] = useState(false);
   const [syncingNps, setSyncingNps] = useState(false);
   const [fixingAll, setFixingAll] = useState(false);
+  
+  // Official CV Stats state
+  const [showCVModal, setShowCVModal] = useState(false);
+  const [cvStats, setCvStats] = useState({
+    promoters: 0,
+    passives: 0,
+    detractors: 0,
+    total_responses: 0,
+    nps_score: 0
+  });
+  const [savingCV, setSavingCV] = useState(false);
+  const [reconcilingCV, setReconcilingCV] = useState(false);
+
+  // Save official CV stats
+  const saveOfficialCVStats = async () => {
+    setSavingCV(true);
+    try {
+      await axios.post(`${API}/v2/admin/cv-stats/set`, {
+        quarter,
+        year,
+        ...cvStats
+      });
+      toast.success("Official CV stats saved!");
+      await fetchDataCapStatus();
+    } catch (error) {
+      toast.error("Failed to save CV stats");
+    } finally {
+      setSavingCV(false);
+    }
+  };
+
+  // Reconcile CV data with official stats
+  const reconcileCVData = async () => {
+    setReconcilingCV(true);
+    toast.info("Reconciling CV data with official stats...");
+    try {
+      const response = await axios.post(`${API}/v2/admin/cv-stats/reconcile?quarter=${quarter}&year=${year}`);
+      const data = response.data;
+      if (data.success) {
+        toast.success(`Reconciled: Added ${data.added}, Removed ${data.removed} records`);
+        // Now fix all to recalculate scores
+        await fixAllDiscrepancies();
+      }
+      setShowCVModal(false);
+    } catch (error) {
+      toast.error(error.response?.data?.error || "Failed to reconcile CV data");
+    } finally {
+      setReconcilingCV(false);
+    }
+  };
+
+  // Fetch current official CV stats
+  const fetchOfficialCVStats = async () => {
+    try {
+      const response = await axios.get(`${API}/v2/admin/cv-stats/official?quarter=${quarter}&year=${year}`);
+      if (response.data.official_stats_set) {
+        setCvStats({
+          promoters: response.data.stats.promoters || 0,
+          passives: response.data.stats.passives || 0,
+          detractors: response.data.stats.detractors || 0,
+          total_responses: response.data.stats.total_responses || 0,
+          nps_score: response.data.stats.nps_score || 0
+        });
+      }
+    } catch (error) {
+      console.error("Failed to fetch official CV stats");
+    }
+  };
 
   // Fix all discrepancies - comprehensive fix
   const fixAllDiscrepancies = async () => {
@@ -462,7 +530,8 @@ export default function ScoringAudit() {
         await Promise.all([
           fetchAuditReport(),
           fetchAllEmployeesAudit(),
-          fetchDataCapStatus()
+          fetchDataCapStatus(),
+          fetchOfficialCVStats()
         ]);
       } catch (error) {
         console.error("Error loading audit data:", error);
@@ -597,21 +666,32 @@ export default function ScoringAudit() {
                   <p className="text-xs text-slate-400 hidden sm:block">Official dashboard = MAXIMUM allowed</p>
                 </div>
               </div>
-              {dataCapStatus.overall_status !== 'COMPLIANT' && (
+              <div className="flex items-center gap-2">
                 <Button
-                  onClick={enforceDataCaps}
-                  disabled={enforcing}
+                  onClick={() => setShowCVModal(true)}
                   size="sm"
-                  className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
+                  variant="outline"
+                  className="border-blue-500/50 text-blue-400 hover:bg-blue-500/10"
                 >
-                  {enforcing ? (
-                    <RefreshCw className="w-4 h-4 mr-1 animate-spin" />
-                  ) : (
-                    <Trash2 className="w-4 h-4 mr-1" />
-                  )}
-                  Remove Excess
+                  <Settings className="w-4 h-4 mr-1" />
+                  Set Official CV
                 </Button>
-              )}
+                {dataCapStatus.overall_status !== 'COMPLIANT' && (
+                  <Button
+                    onClick={enforceDataCaps}
+                    disabled={enforcing}
+                    size="sm"
+                    className="bg-red-600 hover:bg-red-700"
+                  >
+                    {enforcing ? (
+                      <RefreshCw className="w-4 h-4 mr-1 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-4 h-4 mr-1" />
+                    )}
+                    Remove Excess
+                  </Button>
+                )}
+              </div>
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -903,6 +983,111 @@ export default function ScoringAudit() {
           </div>
         </div>
       </div>
+
+      {/* Official CV Stats Modal */}
+      {showCVModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-md">
+            <div className="flex items-center justify-between p-4 border-b border-slate-700">
+              <h3 className="text-lg font-semibold text-white">Set Official CV Stats</h3>
+              <button 
+                onClick={() => setShowCVModal(false)}
+                className="p-1 hover:bg-slate-700 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+            
+            <div className="p-4 space-y-4">
+              <p className="text-sm text-slate-400">
+                Enter the exact values from your Loyalty Voice dashboard to reconcile the data.
+              </p>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm text-slate-400 mb-1">Promoters (9-10)</label>
+                  <Input
+                    type="number"
+                    value={cvStats.promoters}
+                    onChange={(e) => setCvStats({...cvStats, promoters: parseInt(e.target.value) || 0})}
+                    className="bg-slate-900 border-slate-700"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-400 mb-1">Passives (7-8)</label>
+                  <Input
+                    type="number"
+                    value={cvStats.passives}
+                    onChange={(e) => setCvStats({...cvStats, passives: parseInt(e.target.value) || 0})}
+                    className="bg-slate-900 border-slate-700"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-400 mb-1">Detractors (1-6)</label>
+                  <Input
+                    type="number"
+                    value={cvStats.detractors}
+                    onChange={(e) => setCvStats({...cvStats, detractors: parseInt(e.target.value) || 0})}
+                    className="bg-slate-900 border-slate-700"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-400 mb-1">Total Responses</label>
+                  <Input
+                    type="number"
+                    value={cvStats.total_responses}
+                    onChange={(e) => setCvStats({...cvStats, total_responses: parseInt(e.target.value) || 0})}
+                    className="bg-slate-900 border-slate-700"
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">NPS Score (%)</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={cvStats.nps_score}
+                  onChange={(e) => setCvStats({...cvStats, nps_score: parseFloat(e.target.value) || 0})}
+                  className="bg-slate-900 border-slate-700"
+                />
+              </div>
+              
+              <div className="bg-slate-900/50 rounded-lg p-3 text-sm">
+                <p className="text-slate-400">
+                  <strong className="text-white">Calculated Total:</strong> {cvStats.promoters + cvStats.passives + cvStats.detractors}
+                </p>
+                <p className="text-slate-400 mt-1">
+                  <strong className="text-white">Calculated NPS:</strong> {
+                    cvStats.total_responses > 0 
+                      ? (((cvStats.promoters - cvStats.detractors) / cvStats.total_responses) * 100).toFixed(2)
+                      : 0
+                  }%
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-3 p-4 border-t border-slate-700">
+              <Button
+                onClick={saveOfficialCVStats}
+                disabled={savingCV}
+                className="flex-1 bg-blue-600 hover:bg-blue-700"
+              >
+                {savingCV ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : null}
+                Save Stats
+              </Button>
+              <Button
+                onClick={reconcileCVData}
+                disabled={reconcilingCV || savingCV}
+                className="flex-1 bg-green-600 hover:bg-green-700"
+              >
+                {reconcilingCV ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : null}
+                Save & Reconcile
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
