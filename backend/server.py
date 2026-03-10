@@ -3068,7 +3068,7 @@ async def get_analytics_pdf_v2(year: int, quarter: str):
     # Get frontend URL from environment
     frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
     # Use the preview URL for capturing
-    preview_url = os.environ.get("REACT_APP_BACKEND_URL", "https://employee-metrics-13.preview.emergentagent.com")
+    preview_url = os.environ.get("REACT_APP_BACKEND_URL", "https://staff-score-engine.preview.emergentagent.com")
     if "preview.emergentagent.com" in preview_url:
         frontend_url = preview_url.replace("/api", "").rstrip("/")
     
@@ -7864,8 +7864,17 @@ async def enforce_data_caps(quarter: str = "Q1", year: int = 2026):
             "user": "system"
         })
         
-        # Recalculate affected employee scores
-        results["actions_taken"].append("Triggering score recalculation for affected employees...")
+        # CRITICAL: Sync employee mention counts after removing reviews
+        # This ensures employee records stay in sync with actual review data
+        results["actions_taken"].append("Syncing employee mention counts with review database...")
+        
+        sync_result = await sync_employee_review_mentions(quarter, year)
+        results["employee_sync"] = {
+            "updated": sync_result.get("summary", {}).get("updated", 0),
+            "unchanged": sync_result.get("summary", {}).get("unchanged", 0),
+            "details": sync_result.get("updated_employees", [])
+        }
+        results["actions_taken"].append(f"Updated {results['employee_sync']['updated']} employee mention counts")
     else:
         results["actions_taken"].append("No excess data found - all within official limits")
     
@@ -7896,21 +7905,39 @@ async def sync_employee_review_mentions(quarter: str = "Q1", year: int = 2026):
         stored_mentions = emp.get("review_mentions", 0) or 0
         
         if actual_mentions != stored_mentions:
-            # Calculate new RT bonus
-            new_rt_bonus = round(actual_mentions * 0.2, 2)
+            # Calculate new RT bonus: 0.5 pts per mention, max 15 pts (matches main scoring formula)
+            new_rt_bonus = round(min(actual_mentions * 0.5, 15), 2)
             old_rt_bonus = emp.get("review_tracker_bonus", 0) or 0
             
-            # Calculate new score
-            weighted = emp.get('weighted_score', 0) or 0
-            cv_score = emp.get('cv_score', 0) or 0
-            metric_bonus = emp.get('total_metric_bonus', 0) or 0
-            new_score = round(weighted + new_rt_bonus + cv_score + metric_bonus, 2)
+            # Recalculate full score from base components (using correct field names)
+            # Get raw metric scores (these are pre-calculated values stored in DB)
+            capped_ppa = min(emp.get('score_ppa', 0) or 0, 100)
+            capped_lsc = min(emp.get('score_lsc', 0) or 0, 100)
+            capped_lbw = min(emp.get('score_lbw', 0) or 0, 100)
+            capped_glass = min(emp.get('score_glass', 0) or 0, 100)
+            nps_score = emp.get('nps_score', 0) or 0
+            
+            # NPS contribution (10% weight)
+            nps_normalized = max(0, (nps_score + 100) / 2)
+            nps_contribution = min(nps_normalized, 100) * 0.10
+            
+            # Calculate base weighted score (PPA 25%, LSC 25%, LBW 15%, Glass 10%, NPS 10%, RT 15%)
+            base_weighted = (capped_ppa * 0.25) + (capped_lsc * 0.25) + (capped_lbw * 0.15) + (capped_glass * 0.10) + nps_contribution + new_rt_bonus
+            
+            # Get other components
+            metric_bonus = min(emp.get('total_metric_bonus', 0) or 0, 20)
+            cv_bonus = emp.get('cv_score', 0) or emp.get('cv_bonus', 0) or 0
+            
+            # Final score = Base + Metric Bonus + CV Bonus
+            new_weighted = round(base_weighted, 2)
+            new_score = round(base_weighted + metric_bonus + cv_bonus, 2)
             
             await db.employees_v2.update_one(
                 {"_id": emp["_id"]},
                 {"$set": {
                     "review_mentions": actual_mentions,
                     "review_tracker_bonus": new_rt_bonus,
+                    "weighted_score": new_weighted,
                     "pre_dar_score": new_score,
                     "total_score": new_score
                 }}
@@ -7922,6 +7949,8 @@ async def sync_employee_review_mentions(quarter: str = "Q1", year: int = 2026):
                 "new_mentions": actual_mentions,
                 "old_rt_bonus": old_rt_bonus,
                 "new_rt_bonus": new_rt_bonus,
+                "old_score": emp.get("pre_dar_score", 0) or 0,
+                "new_score": new_score,
                 "score_change": round(new_score - (emp.get("pre_dar_score", 0) or 0), 2)
             })
         else:

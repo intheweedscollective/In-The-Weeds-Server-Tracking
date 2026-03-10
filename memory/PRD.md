@@ -75,7 +75,21 @@ Build a comprehensive performance review application for restaurant employees (B
 - ✅ ReviewTrackers.com API integration
 - ✅ Self-Checking Scoring Audit System
 
-### Recent Changes (Mar 8, 2026) - Self-Checking Audit System
+### Recent Changes (Mar 10, 2026) - P0 Circular Bug Fix
+
+- ✅ **Fixed Circular Bug with "Fix All" and "Remove Excess" Actions**:
+  - **Problem**: Running "Fix All" created excess reviews above the 202 cap, but "Remove Excess Reviews" deleted records without updating employee `rt_mentions` counts, causing the audit to fail again - an impossible loop.
+  - **Root Cause**: The `enforce_data_caps` endpoint deleted excess reviews but did not sync employee mention counts afterward.
+  - **Solution**: 
+    1. Modified `enforce_data_caps` to call `sync_employee_review_mentions()` after removing excess reviews
+    2. Fixed the `sync_employee_review_mentions` function to use correct field names (`score_ppa`, `score_lsc`, etc.) and the correct RT bonus formula (0.5 pts per mention, max 15 pts)
+  - **Result**: The full workflow now works correctly:
+    - "Fix All" → creates excess reviews → Audit PASSES
+    - "Remove Excess" → deletes extra reviews AND syncs employee mentions → Audit STILL PASSES
+    - Data counts match official limits (CV: 75/75, RT: 202/202)
+  - **Files Modified**: `backend/server.py` (lines 7853-7907, 7898-7939)
+
+### Previous Changes (Mar 8, 2026) - Self-Checking Audit System
 
 - ✅ **Scoring Audit System**: Built comprehensive self-checking audit process that guarantees 100% accurate scoring
   - **New API Endpoints**:
@@ -107,9 +121,9 @@ Build a comprehensive performance review application for restaurant employees (B
   - Detailed employee audit view with calculation breakdown
 
 - ✅ **Current Audit Status (after enforcement)**:
-  - 28/28 employees PASS
-  - CV: 71/71 (AT_LIMIT) 
-  - RT: 196/196 (AT_LIMIT)
+  - 27/27 employees PASS
+  - CV: 75/75 (AT_LIMIT) 
+  - RT: 202/202 (AT_LIMIT)
   - Overall: VERIFIED & COMPLIANT
 
 - ✅ **Sidebar Navigation Updated**: Added "Scoring Audit" link under Admin section

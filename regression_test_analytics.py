@@ -18,7 +18,7 @@ def test_analytics_pdf_endpoint():
     """Test the Analytics PDF endpoint according to review request requirements"""
     print("🔍 Testing Analytics PDF Export Endpoint...")
     
-    base_url = "https://employee-metrics-13.preview.emergentagent.com"
+    base_url = "https://staff-score-engine.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     
     try:
@@ -86,7 +86,7 @@ def test_generate_review_q4_2025():
     """Test generate-review still works for Q4 2025 and returns pdf_base64"""
     print("\n🔍 Testing Generate Review Q4 2025 Regression...")
     
-    base_url = "https://employee-metrics-13.preview.emergentagent.com"
+    base_url = "https://staff-score-engine.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     
     try:

@@ -1,0 +1,158 @@
+<analysis>**original_problem_statement:**
+The user wants to build a comprehensive performance review application for restaurant employees. The app should handle data ingestion (XLSX upload), calculate employee scores based on a detailed and configurable set of metrics, and generate various outputs like downloadable slides for digital signage (Yodeck), leaderboards, and reports.
+
+PRODUCT REQUIREMENTS:
+The application must evaluate staff on operational metrics (PPA, LSC, LBW, Glassware) and guest feedback metrics (Customer Voice NPS, Public Reviews). It includes a complex scoring system with weighted categories, benchmark bonuses, and specific point allocations for promoter/detractor reviews. The system should generate leaderboards and downloadable slides with detailed performance breakdowns and visual indicators (color-coding, badges, progress bars). A data integrity system is required to ensure the accuracy of scraped and uploaded data by detecting and fixing duplicates, mismatches, and attribution errors. The user has emphasized that data accuracy is paramount, defining it as an exact match to their external dashboards (ReviewTrackers, Landry's Customer Voice, etc.).
+
+**User's preferred language**: English
+
+**what currently exists?**
+The application is a full-stack React/FastAPI/MongoDB system. In this session, the agent focused heavily on data integrity and scoring accuracy.
+
+-   **Scoring Logic:** A complex, user-defined scoring formula has been implemented and corrected. The final score is a sum of a weighted base score (100%), metric bonuses (up to 20 pts), and uncapped points from Customer Voice reviews.
+    -   **Weights:** PPA (25%), LSC (25%), LBW (15%), Glassware (10%), NPS % (10%), Review Tracker (15%).
+    -   **Bonuses:** +0.5 pts per CV promoter, -1 pt per CV detractor.
+-   **Data Integrity & Audit Page:** A comprehensive  page allows the user to:
+    -   Compare local data counts against official dashboard numbers.
+    -   Manually set official Customer Voice (CV) statistics via a modal.
+    -   Reconcile local data to match the official stats (adding/removing unattributed reviews).
+    -   Run an audit that verifies all 27 employees' calculated scores match their stored scores.
+    -   Use a Fix All Issues button to re-sync all data and recalculate scores, resolving any found discrepancies.
+-   **UI/UX Improvements:** Fixed critical contrast and legibility issues on the Leaderboard and the Employee Details modal. The Scoring Audit page was also made mobile-responsive.
+-   **Bug Fixes:** Resolved numerous bugs, including a POS parser issue with a data typo (Loyany), incorrect data sources being used for CV scores (which caused score inflation), and mismatches between the audit formula and the fix formula.
+
+**Last working item**:
+-   Last item agent was working: The user reported a circular bug: clicking Fix All syncs all reviews (creating an excess above the 202 cap), but clicking Remove Excess Reviews then causes the audit to fail because employee mention counts aren't updated.
+-   Status: **IN PROGRESS**
+-   Agent Testing Done: N
+-   Which testing method agent to use? backend testing agent. The agent must modify the backend endpoint for Remove Excess Reviews to also trigger a recalculation of employee review mention counts after deleting the records. This will keep the employee data in sync with the reviews database.
+-   User Testing Done: N
+
+**All Pending/In progress Issue list**:
+-   Issue 1: Circular bug with Fix All and Remove Excess actions (P0)
+-   Issue 2: Automate UI scraping to fetch official stats (P2)
+-   Issue 3: Implement a robust background task queue (P3)
+
+Issues Detail:
+-   **Issue 1: Circular bug with Fix All and Remove Excess actions (P0)**
+    -   **Attempted fixes**: The agent correctly identified that the  endpoint deletes review documents but fails to update the corresponding  count on the employee records, leading to audit failure. No code fix has been implemented yet.
+    -   **Next debug checklist**:
+        1.  Locate the  function in .
+        2.  After the  operation, add logic to re-sync the ReviewTracker mention counts for all employees. The logic for this already exists in the  endpoint and can be reused or called directly.
+        3.  Test the fix by first running Fix All (to create excess reviews), then Remove Excess, and finally running the audit to confirm it passes.
+    -   **Why fix this issue and what will be achieved with the fix?** This bug creates an impossible loop for the user, preventing them from having both accurate data counts and a passing audit. Fixing it is critical for user trust and application usability.
+    -   **Status**: **IN PROGRESS**
+    -   **Is recurring issue?** N
+    -   **Should Test frontend/backend/both after fix?** backend
+    -   **Blocked on other issue**: None.
+
+-   **Issue 2: Automate UI scraping to fetch official stats (P2)**
+    -   **Status**: **BLOCKED** (Deprioritized in favor of manual sync and reconciliation tools).
+
+-   **Issue 3: Implement robust background task queue (P2)**
+    -   **Status**: **NOT STARTED**.
+
+**In progress Task List**:
+None.
+
+**Upcoming and Future Tasks**
+Upcoming Tasks:
+-   **Implement Momentum Indicators (P1)**: Add logic for the Trend column on the Leaderboard by comparing current scores against previous snapshots.
+-   **Multi-Store Architecture (P1)**: Plan and implement a multi-tenant system to support 22 locations with global reporting.
+
+Future Tasks:
+-   **Review Spotlight Feature**: Implement the Review Spotlight section on the dashboard.
+-   **Download All Slides ZIP**: Create a feature to download all generated slides as a single ZIP file.
+-   **Code Refactoring**:
+    -   Break down the monolithic  into smaller, route-specific modules.
+    -   Refactor frontend components like .
+
+**Completed work in this session**
+-   **Fixed Critical Scoring Logic:** Corrected the main scoring formula multiple times to precisely match the user's business rules, resolving significant score inflation issues.
+-   **Achieved 100% Audit Pass:** Implemented and debugged a data audit system, culminating in a state where all 27 employees pass verification after data reconciliation and recalculation.
+-   **Built Data Reconciliation Tools:** Created a UI and backend for users to manually input official dashboard stats (for Customer Voice) and a reconcile function to align the application's database with that source of truth.
+-   **Resolved UI Legibility Issues:** Fixed major contrast and readability problems on the Leaderboard, Employee Details modal, and made the Scoring Audit page mobile-responsive.
+-   **Fixed Data Integrity Bugs:** Patched a series of bugs, including a typo in a source file (), incorrect data sources being used for syncs, and discrepancies between audit and scoring calculations.
+
+**Earlier issues found/mentioned but not fixed**
+-   **Background Task Queue**: Long-running sync processes can time out the API. This requires a proper background task queue like Celery but has been deferred.
+
+**Known issue recurrence from previous fork**
+-   None.
+
+**Code Architecture**
+
+
+**Key Technical Concepts**
+-   **Data Reconciliation**: The core of this session was building tools to reconcile the app's internal state with external sources of truth provided by the user, both for ReviewTracker and Customer Voice data.
+-   **Complex Business Logic Implementation**: The agent translated a detailed, multi-part scoring formula from plain English into a functional Python implementation, refining it several times based on user feedback.
+-   **State-Consistent Debugging**: The agent debugged issues where the application's state was internally inconsistent (e.g., audit formula not matching the fix formula, deleted data not being reflected in aggregate counts).
+
+**key DB schema**
+-   **employees_v2**: Main collection for employee data and their calculated scores. It is the target for all score recalculations and syncs.
+-   **customer_reviews**: Stores ReviewTracker data. The target of the Remove Excess function.
+-   **cv_feedback**: Stores raw survey data from Customer Voice. Now used as the source of truth for the audit and Fix All function.
+-   **cv_nps**: Stores aggregated data scraped from the Loyalty Voice dashboard. Was found to be an incomplete data source and is no longer the primary source for scoring.
+-   **admin_settings**: Stores the official CV stats set by the user.
+
+**changes in tech stack**
+-   None.
+
+**All files of reference**
+-   : Contains the  function that needs to be fixed. It also contains all related audit and sync logic.
+-   : The UI where the user encounters the circular bug.
+
+**Areas that need refactoring**:
+-   : This file is now critically oversized (over 7000 lines) and manages nearly all application logic. It urgently needs to be broken down into separate FastAPI routers for maintainability (e.g., , , ).
+
+**key api endpoints**
+-   : **(BUGGY)** Removes excess reviews but fails to update employee mention counts. **This is the endpoint to fix.**
+-   : Fixes audit failures by re-syncing data from  and recalculating scores for all employees.
+-   : Adjusts the  collection to match official stats set by the user.
+-   : Runs the data integrity audit across all employees.
+
+**Critical Info for New Agent**
+-   Your immediate and only priority is fixing the P0 circular bug.
+-   The bug is located in the  function within .
+-   **The Fix**: After the function deletes the extra reviews from the  collection, you must add a step to recalculate the  field for every employee in the  collection. The logic for this is already present in the  function and can be reused.
+-   **Testing the Fix**:
+    1.  Use the UI to run Fix All (this will create excess reviews).
+    2.  Use the UI to run Remove Excess Reviews.
+    3.  Refresh the Scoring Audit page. All 27 employees should now show a PASS status.
+
+**documents and test reports created in this job**
+-   None.
+
+**Last 10 User Messages and any pending HUMAN messages**
+10. **User:** Reports that the CV review counts are wrong, providing a screenshot of the official dashboard.
+9.  **Agent:** Implements a backend reconciliation feature to match the official CV stats.
+8.  **User:** Asks for a UI to use the new reconciliation feature.
+7.  **Agent:** Adds the Set Official CV modal and buttons to the Scoring Audit page.
+6.  **User:** Reports errors still persist after fixing. (Image shows audit failures).
+5.  **Agent:** Investigates and finds the sync wasn't working correctly for all employees. Fixes the sync logic and confirms all 27 employees pass the audit.
+4.  **User:** **Fix all removes errors but adds excessive reviews. Removing excessive reviews creates errors.** (The current P0 issue).
+3.  **Agent:** Acknowledges and correctly identifies the root cause of the circular bug.
+2.  **User:** [Implicit] Waiting for the fix.
+1.  **Agent:** Was about to implement the fix.
+
+**Project Health Check:**
+-   **Broken**: The data management workflow on the Scoring Audit page is broken due to the circular bug. The user cannot achieve a state of having both correct data counts and a passing audit simultaneously.
+-   **Mocked**: Not mocked. The system relies on reconciling with real, user-provided source of truth data from external dashboards.
+
+**3rd Party Integrations**
+-   **Landry's Loyalty Voice (Customer Voice)**: Scraper exists but is known to be incomplete. The system now relies on a manual reconciliation flow.
+-   **ReviewTrackers.com**: Sync is working. Data is filtered to Q1 2026. The number of reviews is capped at 202.
+-   **OpenAI GPT-4o**: Used for employee name detection in review text. Uses Emergent LLM Key.
+
+**Testing status**
+-   Testing agent used after significant changes: NO (in this final loop). The agent performed manual testing via  and screenshots.
+-   Troubleshoot agent used after agent stuck in loop: NO
+-   Test files created: []
+-   Known regressions: The interaction between the Fix All and Remove Excess features has created a major regression in usability.
+
+**Credentials to test flow:**
+-   Loyalty Voice Login:  / 
+-   ReviewTrackers Login:  / 
+
+**What agent forgot to execute**
+-   The agent correctly identified the cause of the final bug but did not get to implement the fix. The next action is to directly implement the required change in .</analysis>
