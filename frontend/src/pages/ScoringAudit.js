@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { 
   ShieldCheck, AlertTriangle, CheckCircle, XCircle, RefreshCw, 
   FileText, Users, ChevronDown, ChevronUp, Search, 
-  Calculator, Database, ClipboardCheck, Info, ArrowRight, Trash2, RotateCcw, Settings, X
+  Calculator, Database, ClipboardCheck, Info, ArrowRight, Trash2, RotateCcw, Settings, X, Clock, Play
 } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
@@ -270,6 +270,20 @@ export default function ScoringAudit() {
   const [savingCV, setSavingCV] = useState(false);
   const [reconcilingCV, setReconcilingCV] = useState(false);
 
+  // Scheduler state
+  const [showSchedulerModal, setShowSchedulerModal] = useState(false);
+  const [schedulerStatus, setSchedulerStatus] = useState(null);
+  const [schedulerConfig, setSchedulerConfig] = useState({
+    enabled: false,
+    schedule_hour: 2,
+    schedule_minute: 0,
+    quarter: "Q1",
+    year: 2026
+  });
+  const [savingScheduler, setSavingScheduler] = useState(false);
+  const [runningNow, setRunningNow] = useState(false);
+  const [reconciliationHistory, setReconciliationHistory] = useState([]);
+
   // Save official CV stats
   const saveOfficialCVStats = async () => {
     setSavingCV(true);
@@ -323,6 +337,68 @@ export default function ScoringAudit() {
       }
     } catch (error) {
       console.error("Failed to fetch official CV stats");
+    }
+  };
+
+  // Fetch scheduler status
+  const fetchSchedulerStatus = async () => {
+    try {
+      const response = await axios.get(`${API}/v2/scheduler/status`);
+      setSchedulerStatus(response.data);
+      if (response.data.config) {
+        setSchedulerConfig(response.data.config);
+      }
+    } catch (error) {
+      console.error("Failed to fetch scheduler status");
+    }
+  };
+
+  // Fetch reconciliation history
+  const fetchReconciliationHistory = async () => {
+    try {
+      const response = await axios.get(`${API}/v2/scheduler/history?limit=5`);
+      setReconciliationHistory(response.data.history || []);
+    } catch (error) {
+      console.error("Failed to fetch reconciliation history");
+    }
+  };
+
+  // Save scheduler configuration
+  const saveSchedulerConfig = async () => {
+    setSavingScheduler(true);
+    try {
+      const response = await axios.post(`${API}/v2/scheduler/configure`, schedulerConfig);
+      if (response.data.success) {
+        toast.success(response.data.message);
+        await fetchSchedulerStatus();
+      }
+    } catch (error) {
+      toast.error("Failed to save scheduler configuration");
+    } finally {
+      setSavingScheduler(false);
+    }
+  };
+
+  // Run reconciliation now
+  const runReconciliationNow = async () => {
+    setRunningNow(true);
+    toast.info("Running full reconciliation... This may take a moment.");
+    try {
+      const response = await axios.post(`${API}/v2/scheduler/run-now?quarter=${quarter}&year=${year}`);
+      if (response.data.success) {
+        toast.success(`Reconciliation complete! ${response.data.steps[2]?.passed || 0}/${response.data.steps[2]?.total || 0} employees verified.`);
+        // Refresh all data
+        await fetchAuditReport();
+        await fetchAllEmployeesAudit();
+        await fetchDataCapStatus();
+        await fetchReconciliationHistory();
+      } else {
+        toast.error("Reconciliation completed with issues");
+      }
+    } catch (error) {
+      toast.error("Failed to run reconciliation");
+    } finally {
+      setRunningNow(false);
     }
   };
 
@@ -531,7 +607,9 @@ export default function ScoringAudit() {
           fetchAuditReport(),
           fetchAllEmployeesAudit(),
           fetchDataCapStatus(),
-          fetchOfficialCVStats()
+          fetchOfficialCVStats(),
+          fetchSchedulerStatus(),
+          fetchReconciliationHistory()
         ]);
       } catch (error) {
         console.error("Error loading audit data:", error);
@@ -667,6 +745,15 @@ export default function ScoringAudit() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                <Button
+                  onClick={() => setShowSchedulerModal(true)}
+                  size="sm"
+                  variant="outline"
+                  className="border-purple-500/50 text-purple-400 hover:bg-purple-500/10"
+                >
+                  <Clock className="w-4 h-4 mr-1" />
+                  {schedulerStatus?.job_active ? "Scheduler On" : "Scheduler"}
+                </Button>
                 <Button
                   onClick={() => setShowCVModal(true)}
                   size="sm"
@@ -1083,6 +1170,119 @@ export default function ScoringAudit() {
               >
                 {reconcilingCV ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : null}
                 Save & Reconcile
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Scheduler Modal */}
+      {showSchedulerModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-lg">
+            <div className="flex items-center justify-between p-4 border-b border-slate-700">
+              <div className="flex items-center gap-2">
+                <Clock className="w-5 h-5 text-purple-400" />
+                <h3 className="text-lg font-semibold text-white">Automated Reconciliation</h3>
+              </div>
+              <button 
+                onClick={() => setShowSchedulerModal(false)}
+                className="p-1 hover:bg-slate-700 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+            
+            <div className="p-4 space-y-4">
+              <p className="text-sm text-slate-400">
+                Schedule automatic data reconciliation to run daily. This runs: Fix All → Remove Excess → Audit.
+              </p>
+              
+              {/* Status */}
+              <div className={`rounded-lg p-3 ${schedulerStatus?.job_active ? 'bg-green-500/10 border border-green-500/30' : 'bg-slate-900/50'}`}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-white">
+                      {schedulerStatus?.job_active ? 'Scheduler Active' : 'Scheduler Inactive'}
+                    </p>
+                    {schedulerStatus?.next_run && (
+                      <p className="text-xs text-slate-400 mt-1">
+                        Next run: {new Date(schedulerStatus.next_run).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                  {schedulerStatus?.job_active && (
+                    <CheckCircle className="w-5 h-5 text-green-400" />
+                  )}
+                </div>
+              </div>
+              
+              {/* Configuration */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={schedulerConfig.enabled}
+                      onChange={(e) => setSchedulerConfig({...schedulerConfig, enabled: e.target.checked})}
+                      className="w-4 h-4 rounded border-slate-600 bg-slate-900 text-purple-500 focus:ring-purple-500"
+                    />
+                    <span className="text-sm text-white">Enable daily reconciliation</span>
+                  </label>
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  <label className="text-sm text-slate-400">Run at:</label>
+                  <select
+                    value={schedulerConfig.schedule_hour}
+                    onChange={(e) => setSchedulerConfig({...schedulerConfig, schedule_hour: parseInt(e.target.value)})}
+                    className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-white text-sm"
+                  >
+                    {Array.from({length: 24}, (_, i) => (
+                      <option key={i} value={i}>{i.toString().padStart(2, '0')}:00</option>
+                    ))}
+                  </select>
+                  <span className="text-sm text-slate-400">UTC</span>
+                </div>
+              </div>
+              
+              {/* Recent History */}
+              {reconciliationHistory.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium text-white">Recent Runs</h4>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {reconciliationHistory.slice(0, 3).map((run, idx) => (
+                      <div key={idx} className={`text-xs p-2 rounded ${run.success ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-400">{new Date(run.timestamp).toLocaleString()}</span>
+                          <span className={run.success ? 'text-green-400' : 'text-red-400'}>
+                            {run.final_status}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex items-center gap-3 p-4 border-t border-slate-700">
+              <Button
+                onClick={runReconciliationNow}
+                disabled={runningNow}
+                variant="outline"
+                className="flex-1 border-purple-500/50 text-purple-400 hover:bg-purple-500/10"
+              >
+                {runningNow ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}
+                Run Now
+              </Button>
+              <Button
+                onClick={saveSchedulerConfig}
+                disabled={savingScheduler}
+                className="flex-1 bg-purple-600 hover:bg-purple-700"
+              >
+                {savingScheduler ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : null}
+                Save Schedule
               </Button>
             </div>
           </div>

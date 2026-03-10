@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 import pandas as pd
 import io
 from emergentintegrations.llm.chat import LlmChat, UserMessage
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
@@ -57,6 +59,9 @@ load_dotenv(ROOT_DIR / '.env')
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
+
+# Initialize scheduler
+scheduler = AsyncIOScheduler()
 
 # Create the main app without a prefix
 app = FastAPI()
@@ -8369,6 +8374,158 @@ async def sync_cv_from_ui(quarter: str = "Q1", year: int = 2026):
 
 
 
+# ============================================================
+# AUTOMATED RECONCILIATION SCHEDULER
+# ============================================================
+
+class SchedulerConfig(BaseModel):
+    """Configuration for automated reconciliation scheduler."""
+    enabled: bool = False
+    schedule_hour: int = 2  # Default: 2 AM
+    schedule_minute: int = 0
+    quarter: str = "Q1"
+    year: int = 2026
+
+async def run_automated_reconciliation(quarter: str = "Q1", year: int = 2026):
+    """
+    Run the full reconciliation sequence:
+    1. Fix All Discrepancies (sync reviews and recalculate scores)
+    2. Enforce Data Caps (remove excess reviews)
+    3. Run Audit (verify all employees pass)
+    """
+    log_entry = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "action": "automated_reconciliation",
+        "quarter": quarter.upper(),
+        "year": year,
+        "steps": [],
+        "success": False
+    }
+    
+    try:
+        # Step 1: Fix All Discrepancies
+        fix_result = await fix_all_discrepancies(quarter, year)
+        log_entry["steps"].append({
+            "step": "fix_all_discrepancies",
+            "success": fix_result.get("success", False),
+            "message": fix_result.get("message", "")
+        })
+        
+        # Step 2: Enforce Data Caps
+        cap_result = await enforce_data_caps(quarter, year)
+        log_entry["steps"].append({
+            "step": "enforce_data_caps",
+            "rt_removed": cap_result.get("review_tracker", {}).get("removed", 0),
+            "cv_removed": cap_result.get("customer_voice", {}).get("removed", 0),
+            "employees_synced": cap_result.get("employee_sync", {}).get("updated", 0)
+        })
+        
+        # Step 3: Run Audit
+        audit_result = await audit_all_employees(quarter, year)
+        passes = len([e for e in audit_result.get("employees", []) if e.get("status") == "PASS"])
+        total = len(audit_result.get("employees", []))
+        log_entry["steps"].append({
+            "step": "audit",
+            "status": audit_result.get("overall_status"),
+            "passed": passes,
+            "total": total
+        })
+        
+        log_entry["success"] = audit_result.get("overall_status") == "VERIFIED"
+        log_entry["final_status"] = "VERIFIED" if log_entry["success"] else "ISSUES_FOUND"
+        
+    except Exception as e:
+        log_entry["error"] = str(e)
+        log_entry["success"] = False
+    
+    # Save to audit log (insert_one adds _id to the dict, so we save first)
+    await db.reconciliation_log.insert_one(log_entry)
+    
+    # Remove _id before returning (MongoDB adds it during insert)
+    log_entry.pop("_id", None)
+    
+    return log_entry
+
+
+@api_router.get("/v2/scheduler/status")
+async def get_scheduler_status():
+    """Get the current status of the automated reconciliation scheduler."""
+    config = await db.scheduler_config.find_one({"_id": "reconciliation"}, {"_id": 0})
+    
+    jobs = scheduler.get_jobs()
+    reconciliation_job = next((j for j in jobs if j.id == "reconciliation_job"), None)
+    
+    return {
+        "scheduler_running": scheduler.running,
+        "config": config or {"enabled": False, "schedule_hour": 2, "schedule_minute": 0, "quarter": "Q1", "year": 2026},
+        "next_run": reconciliation_job.next_run_time.isoformat() if reconciliation_job and reconciliation_job.next_run_time else None,
+        "job_active": reconciliation_job is not None
+    }
+
+
+@api_router.post("/v2/scheduler/configure")
+async def configure_scheduler(config: SchedulerConfig):
+    """Configure and enable/disable the automated reconciliation scheduler."""
+    # Save config to database
+    await db.scheduler_config.update_one(
+        {"_id": "reconciliation"},
+        {"$set": {
+            "enabled": config.enabled,
+            "schedule_hour": config.schedule_hour,
+            "schedule_minute": config.schedule_minute,
+            "quarter": config.quarter,
+            "year": config.year,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }},
+        upsert=True
+    )
+    
+    # Remove existing job if any
+    try:
+        scheduler.remove_job("reconciliation_job")
+    except:
+        pass
+    
+    if config.enabled:
+        # Add new scheduled job
+        scheduler.add_job(
+            run_automated_reconciliation,
+            CronTrigger(hour=config.schedule_hour, minute=config.schedule_minute),
+            id="reconciliation_job",
+            kwargs={"quarter": config.quarter, "year": config.year},
+            replace_existing=True
+        )
+        next_run = scheduler.get_job("reconciliation_job").next_run_time
+        return {
+            "success": True,
+            "message": f"Scheduler enabled. Next run at {next_run.strftime('%Y-%m-%d %H:%M:%S')}",
+            "next_run": next_run.isoformat()
+        }
+    else:
+        return {
+            "success": True,
+            "message": "Scheduler disabled"
+        }
+
+
+@api_router.post("/v2/scheduler/run-now")
+async def run_reconciliation_now(quarter: str = "Q1", year: int = 2026):
+    """Manually trigger the full reconciliation sequence immediately."""
+    result = await run_automated_reconciliation(quarter, year)
+    return result
+
+
+@api_router.get("/v2/scheduler/history")
+async def get_reconciliation_history(limit: int = 10):
+    """Get the history of automated reconciliation runs."""
+    history = await db.reconciliation_log.find(
+        {},
+        {"_id": 0}
+    ).sort("timestamp", -1).limit(limit).to_list(limit)
+    
+    return {"history": history}
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
@@ -8390,4 +8547,23 @@ logger = logging.getLogger(__name__)
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
+    scheduler.shutdown(wait=False)
     client.close()
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Start the scheduler and load saved configuration."""
+    scheduler.start()
+    
+    # Load saved scheduler config
+    config = await db.scheduler_config.find_one({"_id": "reconciliation"})
+    if config and config.get("enabled"):
+        scheduler.add_job(
+            run_automated_reconciliation,
+            CronTrigger(hour=config.get("schedule_hour", 2), minute=config.get("schedule_minute", 0)),
+            id="reconciliation_job",
+            kwargs={"quarter": config.get("quarter", "Q1"), "year": config.get("year", 2026)},
+            replace_existing=True
+        )
+        logging.info(f"Scheduler loaded: reconciliation job scheduled at {config.get('schedule_hour', 2)}:{config.get('schedule_minute', 0):02d}")

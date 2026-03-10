@@ -75,7 +75,7 @@ Build a comprehensive performance review application for restaurant employees (B
 - ✅ ReviewTrackers.com API integration
 - ✅ Self-Checking Scoring Audit System
 
-### Recent Changes (Mar 10, 2026) - P0 Circular Bug Fix
+### Recent Changes (Mar 10, 2026) - P0 Circular Bug Fix + Automated Reconciliation
 
 - ✅ **Fixed Circular Bug with "Fix All" and "Remove Excess" Actions**:
   - **Problem**: Running "Fix All" created excess reviews above the 202 cap, but "Remove Excess Reviews" deleted records without updating employee `rt_mentions` counts, causing the audit to fail again - an impossible loop.
@@ -88,6 +88,20 @@ Build a comprehensive performance review application for restaurant employees (B
     - "Remove Excess" → deletes extra reviews AND syncs employee mentions → Audit STILL PASSES
     - Data counts match official limits (CV: 75/75, RT: 202/202)
   - **Files Modified**: `backend/server.py` (lines 7853-7907, 7898-7939)
+
+- ✅ **Automated Reconciliation Scheduler**:
+  - **New Backend Endpoints**:
+    - `GET /api/v2/scheduler/status` - Get scheduler status and configuration
+    - `POST /api/v2/scheduler/configure` - Enable/disable scheduler and set run time
+    - `POST /api/v2/scheduler/run-now` - Manually trigger reconciliation
+    - `GET /api/v2/scheduler/history` - View reconciliation history
+  - **Features**:
+    - Daily scheduled reconciliation runs at configurable time (default 2:00 AM UTC)
+    - Runs full sequence: Fix All → Remove Excess → Audit
+    - Logs all runs with success/failure status
+    - UI modal for configuration with recent run history
+  - **Dependencies Added**: APScheduler for job scheduling
+  - **Files Modified**: `backend/server.py`, `frontend/src/pages/ScoringAudit.js`
 
 ### Previous Changes (Mar 8, 2026) - Self-Checking Audit System
 
