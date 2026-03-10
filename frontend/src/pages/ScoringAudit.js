@@ -101,7 +101,7 @@ const CalculationCard = ({ title, data }) => {
   );
 };
 
-const EmployeeAuditDetail = ({ audit }) => {
+const EmployeeAuditDetail = ({ audit, onFixEmployee }) => {
   if (!audit) return null;
   
   return (
@@ -124,10 +124,22 @@ const EmployeeAuditDetail = ({ audit }) => {
       {/* Discrepancies */}
       {audit.discrepancies?.length > 0 && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
-          <h4 className="font-semibold text-red-400 flex items-center gap-2 mb-3">
-            <AlertTriangle className="w-5 h-5" />
-            Discrepancies Found ({audit.discrepancies.length})
-          </h4>
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="font-semibold text-red-400 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" />
+              Discrepancies Found ({audit.discrepancies.length})
+            </h4>
+            {onFixEmployee && (
+              <button
+                onClick={() => onFixEmployee(audit.employee_name)}
+                className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg flex items-center gap-2 transition-colors"
+                data-testid="fix-employee-btn"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Fix This Employee
+              </button>
+            )}
+          </div>
           <div className="space-y-2">
             {audit.discrepancies.map((d, i) => (
               <div key={i} className={`p-3 rounded-lg ${
@@ -244,6 +256,40 @@ export default function ScoringAudit() {
   const [enforcing, setEnforcing] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncingNps, setSyncingNps] = useState(false);
+  const [fixingAll, setFixingAll] = useState(false);
+
+  // Fix all discrepancies - comprehensive fix
+  const fixAllDiscrepancies = async () => {
+    setFixingAll(true);
+    toast.info("Fixing all discrepancies... This may take a moment.");
+    try {
+      const response = await axios.post(`${API}/v2/audit/fix-all-discrepancies?quarter=${quarter}&year=${year}`);
+      if (response.data.steps) {
+        const steps = response.data.steps;
+        const reviewStep = steps.find(s => s.step === "sync_reviews");
+        const mentionStep = steps.find(s => s.step === "update_mention_counts");
+        const scoreStep = steps.find(s => s.step === "recalculate_scores");
+        
+        let message = "Fixed: ";
+        if (reviewStep) message += `${reviewStep.updated || 0} reviews, `;
+        if (mentionStep) message += `${mentionStep.updated || 0} mentions, `;
+        if (scoreStep) message += `${scoreStep.recalculated || 0} scores`;
+        
+        toast.success(message);
+      } else {
+        toast.success("All discrepancies fixed!");
+      }
+      // Refresh all data
+      await fetchAuditReport();
+      await fetchAllEmployeesAudit();
+      await fetchDataCapStatus();
+    } catch (error) {
+      console.error("Fix error:", error);
+      toast.error(error.response?.data?.detail || "Failed to fix discrepancies");
+    } finally {
+      setFixingAll(false);
+    }
+  };
 
   // Sync NPS and Review data to employees
   const syncNpsToEmployees = async () => {
@@ -388,6 +434,27 @@ export default function ScoringAudit() {
     }
   };
 
+  // Fix a single employee's discrepancies
+  const fixSingleEmployee = async (employeeName) => {
+    toast.info(`Fixing discrepancies for ${employeeName}...`);
+    try {
+      // Sync mentions for this employee
+      await axios.post(`${API}/v2/audit/sync-employee-mentions?quarter=${quarter}&year=${year}`);
+      // Sync NPS
+      await axios.post(`${API}/v2/audit/sync-nps-to-employees?quarter=${quarter}&year=${year}`);
+      // Recalculate
+      await axios.post(`${API}/v2/audit/recalculate-all?quarter=${quarter}&year=${year}`);
+      
+      toast.success(`Fixed discrepancies for ${employeeName}`);
+      
+      // Refresh the audit for this employee
+      await fetchEmployeeAudit(employeeName);
+      await fetchAllEmployeesAudit();
+    } catch (error) {
+      toast.error(`Failed to fix ${employeeName}`);
+    }
+  };
+
   useEffect(() => {
     const init = async () => {
       setLoading(true);
@@ -480,6 +547,19 @@ export default function ScoringAudit() {
                 <RotateCcw className="w-4 h-4 mr-2" />
               )}
               Recalculate All
+            </Button>
+            <Button
+              onClick={fixAllDiscrepancies}
+              disabled={fixingAll}
+              className="bg-red-600 hover:bg-red-700 text-white"
+              data-testid="fix-all-btn"
+            >
+              {fixingAll ? (
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <AlertTriangle className="w-4 h-4 mr-2" />
+              )}
+              Fix All Issues
             </Button>
             <Button
               onClick={runFullAudit}
@@ -751,7 +831,7 @@ export default function ScoringAudit() {
                 <RefreshCw className="w-6 h-6 animate-spin text-blue-500" />
               </div>
             ) : employeeAudit ? (
-              <EmployeeAuditDetail audit={employeeAudit} />
+              <EmployeeAuditDetail audit={employeeAudit} onFixEmployee={fixSingleEmployee} />
             ) : (
               <div className="flex flex-col items-center justify-center h-64 text-slate-500">
                 <FileText className="w-12 h-12 mb-4 opacity-50" />

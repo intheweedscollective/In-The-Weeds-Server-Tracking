@@ -6847,6 +6847,20 @@ async def audit_employee_score(employee_name: str, quarter: str = "Q1", year: in
         else:
             audit["validation_status"] = "WARNING"
     
+    # Include employee data for UI display
+    audit["employee_data"] = {
+        "cv_promoters": employee.get("cv_promoters"),
+        "cv_detractors": employee.get("cv_detractors"),
+        "cv_score": employee.get("cv_score"),
+        "nps_score": employee.get("nps_score"),
+        "review_mentions": employee.get("review_mentions"),
+        "review_tracker_bonus": employee.get("review_tracker_bonus"),
+        "weighted_score": employee.get("weighted_score"),
+        "pre_dar_score": employee.get("pre_dar_score"),
+        "total_score": employee.get("total_score"),
+        "cv_sync_source": employee.get("cv_sync_source")
+    }
+    
     return {"success": True, "audit": audit}
 
 
@@ -7573,8 +7587,98 @@ async def fix_all_discrepancies(quarter: str = "Q1", year: int = 2026):
             "updated_count": updated_employees
         })
         
+        # Step 4: Sync CV promoters/detractors from cv_points collection (authoritative source)
+        cv_feedback_updated = 0
+        
+        # Get cv_points data (this is the authoritative CV feedback summary)
+        cv_points_cursor = db.cv_points.find({
+            "quarter": quarter.upper(),
+            "year": year
+        })
+        cv_points_list = await cv_points_cursor.to_list(100)
+        
+        cv_lookup = {}
+        for cp in cv_points_list:
+            emp_name = cp.get("employee_name", "").lower()
+            if emp_name:
+                cv_lookup[emp_name] = {
+                    "promoters": cp.get("promoter_count", 0) or 0,
+                    "passives": cp.get("passive_count", 0) or 0,
+                    "detractors": cp.get("detractor_count", 0) or 0,
+                    "total": cp.get("mention_count", 0) or 0,
+                    "cv_points": cp.get("total_cv_points", 0) or 0
+                }
+        
+        # Update employee cv_promoters/cv_detractors from cv_points
+        for emp in employees:
+            name = emp["name"]
+            name_lower = name.lower()
+            
+            cv_data = cv_lookup.get(name_lower)
+            if cv_data:
+                current = await db.employees_v2.find_one({"_id": emp["_id"]})
+                
+                promoters = cv_data["promoters"]
+                detractors = cv_data["detractors"]
+                passives = cv_data["passives"]
+                total = cv_data["total"]
+                
+                # NPS calculation
+                if total > 0:
+                    nps_score = round((promoters - detractors) / total * 100, 1)
+                else:
+                    nps_score = 0
+                
+                # NPS points
+                if nps_score >= 90: nps_pts = 10
+                elif nps_score >= 80: nps_pts = 9
+                elif nps_score >= 70: nps_pts = 8
+                elif nps_score >= 60: nps_pts = 7
+                elif nps_score >= 50: nps_pts = 6
+                elif nps_score > 0: nps_pts = round((nps_score / 50) * 5, 1)
+                else: nps_pts = 0
+                
+                # Survey points: promoters add 1 each, detractors subtract 2 each
+                survey_pts = promoters - (detractors * 2)
+                cv_score = nps_pts + survey_pts
+                
+                # Recalculate total score
+                capped_ppa = min(current.get("score_ppa", 0) or 0, 100)
+                capped_lbw = min(current.get("score_lbw", 0) or 0, 100)
+                capped_glass = min(current.get("score_glass", 0) or 0, 100)
+                capped_lsc = min(current.get("score_lsc", 0) or 0, 100)
+                base_weighted = capped_ppa * 0.25 + capped_lbw * 0.20 + capped_glass * 0.15 + capped_lsc * 0.25
+                
+                rt_bonus = current.get("review_tracker_bonus", 0) or 0
+                metric_bonus = current.get("total_metric_bonus", 0) or 0
+                
+                new_weighted = round(base_weighted + cv_score, 2)
+                new_pre_dar = round(new_weighted + metric_bonus + rt_bonus, 2)
+                
+                await db.employees_v2.update_one(
+                    {"_id": emp["_id"]},
+                    {"$set": {
+                        "cv_promoters": promoters,
+                        "cv_passives": passives,
+                        "cv_detractors": detractors,
+                        "nps_score": nps_score,
+                        "cv_score": cv_score,
+                        "score_cv": cv_score,
+                        "weighted_score": new_weighted,
+                        "pre_dar_score": new_pre_dar,
+                        "total_score": new_pre_dar,
+                        "cv_sync_source": "cv_points"
+                    }}
+                )
+                cv_feedback_updated += 1
+        
+        results["steps"].append({
+            "step": "sync_cv_feedback",
+            "updated": cv_feedback_updated
+        })
+        
         results["success"] = True
-        results["message"] = f"Fixed {new_reviews} new reviews, {updated_reviews} updated, {updated_employees} employees corrected"
+        results["message"] = f"Fixed {new_reviews} new reviews, {updated_reviews} updated, {updated_employees} employees mentions, {cv_feedback_updated} CV feedback synced"
         
     except Exception as e:
         results["success"] = False
