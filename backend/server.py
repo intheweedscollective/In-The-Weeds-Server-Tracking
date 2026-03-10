@@ -7623,37 +7623,43 @@ async def fix_all_discrepancies(quarter: str = "Q1", year: int = 2026):
                 passives = cv_data["passives"]
                 nps_score = cv_data["nps_score"]
                 
-                # NPS points calculation (max 10 pts)
-                if nps_score >= 90: nps_pts = 10
-                elif nps_score >= 80: nps_pts = 9
-                elif nps_score >= 70: nps_pts = 8
-                elif nps_score >= 60: nps_pts = 7
-                elif nps_score >= 50: nps_pts = 6
-                elif nps_score > 0: nps_pts = round((nps_score / 50) * 5, 1)
-                else: nps_pts = 0
+                # === NEW SCORING FORMULA ===
+                # Base Score (100 pts max):
+                # PPA: 25%, LSC: 25%, LBW: 15%, Glassware: 10%, NPS%: 10%, RT: 15%
                 
-                # Survey points: promoters add 1 each, detractors subtract 2 each
-                survey_pts = promoters - (detractors * 2)
-                raw_cv_score = nps_pts + survey_pts
-                
-                # Cap CV score to fit within 15% weight (max 15 points)
-                # CV is 15% of the total 100-point scale
-                cv_score = min(max(raw_cv_score, 0), 15)
-                
-                # Recalculate total score - CV is part of the 100% weighted score
                 capped_ppa = min(current.get("score_ppa", 0) or 0, 100)
+                capped_lsc = min(current.get("score_lsc", 0) or 0, 100)
                 capped_lbw = min(current.get("score_lbw", 0) or 0, 100)
                 capped_glass = min(current.get("score_glass", 0) or 0, 100)
-                capped_lsc = min(current.get("score_lsc", 0) or 0, 100)
                 
-                # Weighted score = PPA(25%) + LSC(25%) + LBW(20%) + Glass(15%) + CV(15%) = 100%
-                base_weighted = (capped_ppa * 0.25) + (capped_lsc * 0.25) + (capped_lbw * 0.20) + (capped_glass * 0.15) + cv_score
+                # NPS % contribution (10% weight) - normalize NPS (-100 to 100) to 0-100 scale
+                nps_normalized = max(0, (nps_score + 100) / 2)  # Convert -100..100 to 0..100
+                nps_contribution = min(nps_normalized, 100) * 0.10
                 
-                rt_bonus = current.get("review_tracker_bonus", 0) or 0
+                # Review Tracker contribution (15% weight) - 0.5 pts per mention, max 15 pts
+                rt_mentions = current.get("review_mentions", 0) or 0
+                rt_contribution = min(rt_mentions * 0.5, 15)
+                
+                # Base weighted score
+                base_weighted = (capped_ppa * 0.25) + (capped_lsc * 0.25) + (capped_lbw * 0.15) + (capped_glass * 0.10) + nps_contribution + rt_contribution
+                
+                # Metric Bonus (max 20 pts total)
                 metric_bonus = current.get("total_metric_bonus", 0) or 0
+                metric_bonus = min(metric_bonus, 20)
                 
+                # CV Promoter/Detractor bonus (no cap)
+                # Promoters (9-10): +0.5 each, Detractors (≤6): -1 each
+                cv_bonus = (promoters * 0.5) - (detractors * 1)
+                
+                # CV score for display (just the bonus portion)
+                cv_score = cv_bonus
+                
+                # Final score = Base + Metric Bonus + CV Bonus
                 new_weighted = round(base_weighted, 2)
-                new_pre_dar = round(new_weighted + metric_bonus + rt_bonus, 2)
+                new_pre_dar = round(base_weighted + metric_bonus + cv_bonus, 2)
+                
+                # Also update RT bonus field for consistency
+                rt_bonus = rt_contribution
                 
                 await db.employees_v2.update_one(
                     {"_id": emp["_id"]},
@@ -7663,7 +7669,10 @@ async def fix_all_discrepancies(quarter: str = "Q1", year: int = 2026):
                         "cv_detractors": detractors,
                         "nps_score": nps_score,
                         "cv_score": cv_score,
-                        "score_cv": cv_score,
+                        "score_cv": nps_contribution,
+                        "cv_bonus": cv_bonus,
+                        "review_tracker_bonus": rt_bonus,
+                        "total_metric_bonus": metric_bonus,
                         "weighted_score": new_weighted,
                         "pre_dar_score": new_pre_dar,
                         "total_score": new_pre_dar,
@@ -7675,19 +7684,27 @@ async def fix_all_discrepancies(quarter: str = "Q1", year: int = 2026):
                 # No CV data for this employee - set to 0
                 current = await db.employees_v2.find_one({"_id": emp["_id"]})
                 
+                # === NEW SCORING FORMULA (no CV data) ===
                 capped_ppa = min(current.get("score_ppa", 0) or 0, 100)
+                capped_lsc = min(current.get("score_lsc", 0) or 0, 100)
                 capped_lbw = min(current.get("score_lbw", 0) or 0, 100)
                 capped_glass = min(current.get("score_glass", 0) or 0, 100)
-                capped_lsc = min(current.get("score_lsc", 0) or 0, 100)
                 
-                # Weighted score = PPA(25%) + LSC(25%) + LBW(20%) + Glass(15%) + CV(15%=0) = 85% max
-                base_weighted = (capped_ppa * 0.25) + (capped_lsc * 0.25) + (capped_lbw * 0.20) + (capped_glass * 0.15)
+                # NPS % = 0 (no data)
+                nps_contribution = 0
                 
-                rt_bonus = current.get("review_tracker_bonus", 0) or 0
-                metric_bonus = current.get("total_metric_bonus", 0) or 0
+                # Review Tracker (15% weight)
+                rt_mentions = current.get("review_mentions", 0) or 0
+                rt_contribution = min(rt_mentions * 0.5, 15)
+                
+                # Base weighted score
+                base_weighted = (capped_ppa * 0.25) + (capped_lsc * 0.25) + (capped_lbw * 0.15) + (capped_glass * 0.10) + nps_contribution + rt_contribution
+                
+                # Metric Bonus (max 20 pts)
+                metric_bonus = min(current.get("total_metric_bonus", 0) or 0, 20)
                 
                 new_weighted = round(base_weighted, 2)
-                new_pre_dar = round(new_weighted + metric_bonus + rt_bonus, 2)
+                new_pre_dar = round(base_weighted + metric_bonus, 2)
                 
                 await db.employees_v2.update_one(
                     {"_id": emp["_id"]},
