@@ -480,6 +480,25 @@ Updated Customer Voice scoring to use spec NPS scale with current promoter logic
 - `cv_nps`: Customer Voice NPS scores from Loyalty Voice (NEW)
 - `customer_reviews`: Customer reviews from ReviewTrackers
 
+## Scoring Formula (Updated December 2025)
+
+**Base Score (100 pts max):**
+| Metric | Weight | Max Points |
+|--------|--------|------------|
+| PPA (Per Person Average) | 25% | 25 pts |
+| LSC (Loyalty Sales Count) | 25% | 25 pts |
+| LBW (Liquor/Beer/Wine per Guest) | 15% | 15 pts |
+| Glassware (per Guest) | 10% | 10 pts |
+| NPS % (Customer Voice) | 10% | 10 pts |
+| Review Tracker | 15% | 15 pts (0.5 pts per mention, capped) |
+
+**Additional Points:**
+- Metric Bonus: Up to 20 pts for exceeding 100% on benchmarks
+- CV Promoters (9-10 rating): +0.5 pts each (no cap)
+- CV Detractors (≤6 rating): -1 pt each (no cap)
+
+**Formula:** `Final Score = Base (max 100) + Metric Bonus (max 20) + CV Bonus (uncapped)`
+
 ## Notes
 - Loyalty Voice scraper uses Playwright to automate login and data extraction
 - NPS scores range from -100 to +100
