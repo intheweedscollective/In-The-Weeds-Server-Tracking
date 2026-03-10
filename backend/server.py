@@ -6673,16 +6673,28 @@ async def audit_employee_score(employee_name: str, quarter: str = "Q1", year: in
     capped_glass = min(expected_score_glass, 100)
     capped_lsc = min(expected_score_lsc, 100)
     
-    expected_weighted = round(capped_ppa * 0.25 + capped_lsc * 0.25 + capped_lbw * 0.15 + capped_glass * 0.10, 2)
+    # NPS % contribution (10% weight) - normalize NPS (-100 to 100) to 0-100 scale
+    raw_nps_for_weight = raw_nps if raw_nps else 0
+    nps_normalized = max(0, (raw_nps_for_weight + 100) / 2)
+    nps_contribution = round(min(nps_normalized, 100) * 0.10, 2)
+    
+    # Review Tracker contribution (15% weight) - 0.5 pts per mention, max 15 pts
+    rt_mentions = employee.get("review_mentions", 0) or 0
+    rt_contribution = min(rt_mentions * 0.5, 15)
+    
+    # Base weighted: PPA(25%) + LSC(25%) + LBW(15%) + Glass(10%) + NPS%(10%) + RT(15%) = 100%
+    expected_weighted = round(capped_ppa * 0.25 + capped_lsc * 0.25 + capped_lbw * 0.15 + capped_glass * 0.10 + nps_contribution + rt_contribution, 2)
     stored_weighted = employee.get("weighted_score", 0)
     
     audit["calculations"]["weighted_score"] = {
-        "formula": f"PPA({capped_ppa}×0.25) + LSC({capped_lsc}×0.25) + LBW({capped_lbw}×0.15) + Glass({capped_glass}×0.10)",
+        "formula": f"PPA({capped_ppa}×0.25) + LSC({capped_lsc}×0.25) + LBW({capped_lbw}×0.15) + Glass({capped_glass}×0.10) + NPS({nps_contribution}) + RT({rt_contribution})",
         "breakdown": {
             "ppa_contribution": round(capped_ppa * 0.25, 2),
             "lsc_contribution": round(capped_lsc * 0.25, 2),
             "lbw_contribution": round(capped_lbw * 0.15, 2),
-            "glass_contribution": round(capped_glass * 0.10, 2)
+            "glass_contribution": round(capped_glass * 0.10, 2),
+            "nps_contribution": nps_contribution,
+            "rt_contribution": rt_contribution
         },
         "expected": expected_weighted,
         "stored": stored_weighted,
@@ -6690,22 +6702,13 @@ async def audit_employee_score(employee_name: str, quarter: str = "Q1", year: in
     }
     
     # === CUSTOMER VOICE AUDIT ===
-    stored_cv_promoters = employee.get("cv_promoters", 0)
-    stored_cv_detractors = employee.get("cv_detractors", 0)
-    stored_nps = employee.get("nps_score", 0)
-    stored_cv_score = employee.get("cv_score", 0)
+    stored_cv_promoters = employee.get("cv_promoters", 0) or 0
+    stored_cv_detractors = employee.get("cv_detractors", 0) or 0
+    stored_nps = employee.get("nps_score", 0) or 0
+    stored_cv_score = employee.get("cv_score", 0) or 0
     
-    # Calculate expected NPS points using spec scale
-    nps_for_calc = stored_nps
-    if nps_for_calc >= 90: expected_nps_pts = 10
-    elif nps_for_calc >= 80: expected_nps_pts = 9
-    elif nps_for_calc >= 70: expected_nps_pts = 8
-    elif nps_for_calc >= 60: expected_nps_pts = 7
-    elif nps_for_calc >= 50: expected_nps_pts = 6
-    elif nps_for_calc > 0: expected_nps_pts = round((nps_for_calc / 50) * 5, 1)
-    else: expected_nps_pts = 0
-    
-    expected_cv_score = expected_nps_pts + (stored_cv_promoters * 1) + (stored_cv_detractors * -2)
+    # CV Bonus: Promoters +0.5 each, Detractors -1 each (no cap)
+    expected_cv_bonus = (raw_promoters * 0.5) - (raw_detractors * 1)
     
     audit["data_trail"]["customer_voice"] = {
         "raw_feedback_count": raw_total,
@@ -6722,27 +6725,21 @@ async def audit_employee_score(employee_name: str, quarter: str = "Q1", year: in
     }
     
     audit["calculations"]["customer_voice"] = {
-        "nps_points": {
-            "nps_score": stored_nps,
-            "formula": f"NPS {stored_nps}% → {expected_nps_pts} pts (90%=10, 80%=9, ...)",
-            "expected": expected_nps_pts,
-            "stored_nps_pts": employee.get("nps_score_pts", 0)
-        },
         "promoter_points": {
-            "formula": f"{stored_cv_promoters} promoters × +1 pt",
-            "expected": stored_cv_promoters,
+            "formula": f"{raw_promoters} promoters × +0.5 pt",
+            "expected": raw_promoters * 0.5,
             "match": True
         },
         "detractor_points": {
-            "formula": f"{stored_cv_detractors} detractors × -2 pts",
-            "expected": stored_cv_detractors * -2,
+            "formula": f"{raw_detractors} detractors × -1 pt",
+            "expected": raw_detractors * -1,
             "match": True
         },
-        "total_cv_score": {
-            "formula": f"{expected_nps_pts} (NPS) + {stored_cv_promoters} (promoters) + {stored_cv_detractors * -2} (detractors)",
-            "expected": round(expected_cv_score, 2),
+        "total_cv_bonus": {
+            "formula": f"({raw_promoters} × 0.5) - ({raw_detractors} × 1)",
+            "expected": round(expected_cv_bonus, 2),
             "stored": stored_cv_score,
-            "match": abs(expected_cv_score - stored_cv_score) < 0.5
+            "match": abs(expected_cv_bonus - stored_cv_score) < 0.5
         }
     }
     
@@ -6762,9 +6759,10 @@ async def audit_employee_score(employee_name: str, quarter: str = "Q1", year: in
             })
     
     # === REVIEW TRACKER AUDIT ===
-    stored_rt_mentions = employee.get("review_mentions", 0)
-    stored_rt_bonus = employee.get("review_tracker_bonus", 0)
-    expected_rt_bonus = round(stored_rt_mentions * 0.2, 2)
+    stored_rt_mentions = employee.get("review_mentions", 0) or 0
+    stored_rt_bonus = employee.get("review_tracker_bonus", 0) or 0
+    # RT formula: 0.5 pts per mention, max 15 pts (part of 15% weight in base score)
+    expected_rt_bonus = min(stored_rt_mentions * 0.5, 15)
     
     audit["data_trail"]["review_tracker"] = {
         "raw_mentions_found": raw_rt_mentions,
@@ -6773,10 +6771,10 @@ async def audit_employee_score(employee_name: str, quarter: str = "Q1", year: in
     }
     
     audit["calculations"]["review_tracker"] = {
-        "formula": f"{stored_rt_mentions} mentions × 0.2 pts",
+        "formula": f"min({stored_rt_mentions} mentions × 0.5 pts, 15) = {expected_rt_bonus}",
         "expected_bonus": expected_rt_bonus,
         "stored_bonus": stored_rt_bonus,
-        "match": abs(expected_rt_bonus - stored_rt_bonus) < 0.01
+        "match": abs(expected_rt_bonus - stored_rt_bonus) < 0.5
     }
     
     if raw_rt_mentions != stored_rt_mentions:
@@ -6816,16 +6814,16 @@ async def audit_employee_score(employee_name: str, quarter: str = "Q1", year: in
     }
     
     # === FINAL SCORE AUDIT ===
-    expected_final = round(expected_weighted + expected_rt_bonus + expected_cv_score + expected_total_bonus, 2)
+    # Final = Base Weighted (includes NPS% and RT) + Metric Bonus + CV Bonus
+    expected_final = round(expected_weighted + expected_total_bonus + expected_cv_bonus, 2)
     stored_final = employee.get("pre_dar_score") or employee.get("total_score", 0)
     
     audit["calculations"]["final_score"] = {
-        "formula": f"Weighted({expected_weighted}) + RT({expected_rt_bonus}) + CV({expected_cv_score}) + Bonus({expected_total_bonus})",
+        "formula": f"Weighted({expected_weighted}) + MetricBonus({expected_total_bonus}) + CVBonus({expected_cv_bonus})",
         "breakdown": {
-            "weighted_pos_score": expected_weighted,
-            "review_tracker_bonus": expected_rt_bonus,
-            "customer_voice_score": round(expected_cv_score, 2),
-            "metric_bonus": expected_total_bonus
+            "weighted_base_score": expected_weighted,
+            "metric_bonus": expected_total_bonus,
+            "cv_bonus": round(expected_cv_bonus, 2)
         },
         "expected": expected_final,
         "stored": stored_final,
@@ -7587,140 +7585,110 @@ async def fix_all_discrepancies(quarter: str = "Q1", year: int = 2026):
             "updated_count": updated_employees
         })
         
-        # Step 4: Sync CV promoters/detractors from cv_nps collection (Loyalty Voice - authoritative source)
+        # Step 4: Sync CV promoters/detractors from cv_feedback collection (raw survey data - matches audit)
         cv_feedback_updated = 0
         
-        # Get cv_nps data (this is from Loyalty Voice scrape - the authoritative CV data)
-        cv_nps_cursor = db.cv_nps.find({
-            "quarter": quarter.upper(),
-            "year": year
-        })
-        cv_nps_list = await cv_nps_cursor.to_list(100)
+        # Aggregate cv_feedback data by server_name
+        # Promoters: rating >= 9, Detractors: rating <= 6
+        cv_pipeline = [
+            {"$match": {"quarter": {"$in": [quarter.upper(), quarter]}, "year": year}},
+            {"$group": {
+                "_id": {"$toLower": "$server_name"},
+                "promoters": {"$sum": {"$cond": [{"$gte": ["$rating", 9]}, 1, 0]}},
+                "passives": {"$sum": {"$cond": [{"$and": [{"$gte": ["$rating", 7]}, {"$lte": ["$rating", 8]}]}, 1, 0]}},
+                "detractors": {"$sum": {"$cond": [{"$lte": ["$rating", 6]}, 1, 0]}},
+                "total": {"$sum": 1}
+            }}
+        ]
+        
+        cv_agg_result = await db.cv_feedback.aggregate(cv_pipeline).to_list(100)
         
         cv_lookup = {}
-        for cp in cv_nps_list:
-            emp_name = cp.get("employee_name", "").lower()
+        for cp in cv_agg_result:
+            emp_name = cp.get("_id", "").lower()
             if emp_name:
+                total = cp.get("total", 0) or 1
+                promoters = cp.get("promoters", 0) or 0
+                detractors = cp.get("detractors", 0) or 0
+                # Calculate NPS from raw feedback: (promoters - detractors) / total * 100
+                nps_score = round((promoters - detractors) / total * 100, 1) if total > 0 else 0
                 cv_lookup[emp_name] = {
-                    "promoters": cp.get("promoters", 0) or 0,
+                    "promoters": promoters,
                     "passives": cp.get("passives", 0) or 0,
-                    "detractors": cp.get("detractors", 0) or 0,
-                    "total": cp.get("total_responses", 0) or 0,
-                    "nps_score": cp.get("nps_score", 0) or 0
+                    "detractors": detractors,
+                    "total": total,
+                    "nps_score": nps_score
                 }
         
-        # Update employee cv_promoters/cv_detractors from cv_nps
+        # Update employee cv_promoters/cv_detractors from cv_feedback (raw data)
         for emp in employees:
             name = emp["name"]
             name_lower = name.lower()
             
             cv_data = cv_lookup.get(name_lower)
+            current = await db.employees_v2.find_one({"_id": emp["_id"]})
+            
             if cv_data:
-                current = await db.employees_v2.find_one({"_id": emp["_id"]})
-                
                 promoters = cv_data["promoters"]
                 detractors = cv_data["detractors"]
                 passives = cv_data["passives"]
                 nps_score = cv_data["nps_score"]
-                
-                # === NEW SCORING FORMULA ===
-                # Base Score (100 pts max):
-                # PPA: 25%, LSC: 25%, LBW: 15%, Glassware: 10%, NPS%: 10%, RT: 15%
-                
-                capped_ppa = min(current.get("score_ppa", 0) or 0, 100)
-                capped_lsc = min(current.get("score_lsc", 0) or 0, 100)
-                capped_lbw = min(current.get("score_lbw", 0) or 0, 100)
-                capped_glass = min(current.get("score_glass", 0) or 0, 100)
-                
-                # NPS % contribution (10% weight) - normalize NPS (-100 to 100) to 0-100 scale
-                nps_normalized = max(0, (nps_score + 100) / 2)  # Convert -100..100 to 0..100
-                nps_contribution = min(nps_normalized, 100) * 0.10
-                
-                # Review Tracker contribution (15% weight) - 0.5 pts per mention, max 15 pts
-                rt_mentions = current.get("review_mentions", 0) or 0
-                rt_contribution = min(rt_mentions * 0.5, 15)
-                
-                # Base weighted score
-                base_weighted = (capped_ppa * 0.25) + (capped_lsc * 0.25) + (capped_lbw * 0.15) + (capped_glass * 0.10) + nps_contribution + rt_contribution
-                
-                # Metric Bonus (max 20 pts total)
-                metric_bonus = current.get("total_metric_bonus", 0) or 0
-                metric_bonus = min(metric_bonus, 20)
-                
-                # CV Promoter/Detractor bonus (no cap)
-                # Promoters (9-10): +0.5 each, Detractors (≤6): -1 each
-                cv_bonus = (promoters * 0.5) - (detractors * 1)
-                
-                # CV score for display (just the bonus portion)
-                cv_score = cv_bonus
-                
-                # Final score = Base + Metric Bonus + CV Bonus
-                new_weighted = round(base_weighted, 2)
-                new_pre_dar = round(base_weighted + metric_bonus + cv_bonus, 2)
-                
-                # Also update RT bonus field for consistency
-                rt_bonus = rt_contribution
-                
-                await db.employees_v2.update_one(
-                    {"_id": emp["_id"]},
-                    {"$set": {
-                        "cv_promoters": promoters,
-                        "cv_passives": passives,
-                        "cv_detractors": detractors,
-                        "nps_score": nps_score,
-                        "cv_score": cv_score,
-                        "score_cv": nps_contribution,
-                        "cv_bonus": cv_bonus,
-                        "review_tracker_bonus": rt_bonus,
-                        "total_metric_bonus": metric_bonus,
-                        "weighted_score": new_weighted,
-                        "pre_dar_score": new_pre_dar,
-                        "total_score": new_pre_dar,
-                        "cv_sync_source": "cv_nps_loyalty_voice"
-                    }}
-                )
-                cv_feedback_updated += 1
             else:
-                # No CV data for this employee - set to 0
-                current = await db.employees_v2.find_one({"_id": emp["_id"]})
-                
-                # === NEW SCORING FORMULA (no CV data) ===
-                capped_ppa = min(current.get("score_ppa", 0) or 0, 100)
-                capped_lsc = min(current.get("score_lsc", 0) or 0, 100)
-                capped_lbw = min(current.get("score_lbw", 0) or 0, 100)
-                capped_glass = min(current.get("score_glass", 0) or 0, 100)
-                
-                # NPS % = 0 (no data)
-                nps_contribution = 0
-                
-                # Review Tracker (15% weight)
-                rt_mentions = current.get("review_mentions", 0) or 0
-                rt_contribution = min(rt_mentions * 0.5, 15)
-                
-                # Base weighted score
-                base_weighted = (capped_ppa * 0.25) + (capped_lsc * 0.25) + (capped_lbw * 0.15) + (capped_glass * 0.10) + nps_contribution + rt_contribution
-                
-                # Metric Bonus (max 20 pts)
-                metric_bonus = min(current.get("total_metric_bonus", 0) or 0, 20)
-                
-                new_weighted = round(base_weighted, 2)
-                new_pre_dar = round(base_weighted + metric_bonus, 2)
-                
-                await db.employees_v2.update_one(
-                    {"_id": emp["_id"]},
-                    {"$set": {
-                        "cv_promoters": 0,
-                        "cv_passives": 0,
-                        "cv_detractors": 0,
-                        "nps_score": 0,
-                        "cv_score": 0,
-                        "score_cv": 0,
-                        "weighted_score": new_weighted,
-                        "pre_dar_score": new_pre_dar,
-                        "total_score": new_pre_dar,
-                        "cv_sync_source": "no_cv_data"
-                    }}
-                )
+                promoters = 0
+                detractors = 0
+                passives = 0
+                nps_score = 0
+            
+            # === SCORING FORMULA (matches audit) ===
+            # Base Score (100 pts max):
+            # PPA: 25%, LSC: 25%, LBW: 15%, Glassware: 10%, NPS%: 10%, RT: 15%
+            
+            capped_ppa = min(current.get("score_ppa", 0) or 0, 100)
+            capped_lsc = min(current.get("score_lsc", 0) or 0, 100)
+            capped_lbw = min(current.get("score_lbw", 0) or 0, 100)
+            capped_glass = min(current.get("score_glass", 0) or 0, 100)
+            
+            # NPS % contribution (10% weight) - normalize NPS (-100 to 100) to 0-100 scale
+            nps_normalized = max(0, (nps_score + 100) / 2)  # Convert -100..100 to 0..100
+            nps_contribution = min(nps_normalized, 100) * 0.10
+            
+            # Review Tracker contribution (15% weight) - 0.5 pts per mention, max 15 pts
+            rt_mentions = current.get("review_mentions", 0) or 0
+            rt_contribution = min(rt_mentions * 0.5, 15)
+            
+            # Base weighted score
+            base_weighted = (capped_ppa * 0.25) + (capped_lsc * 0.25) + (capped_lbw * 0.15) + (capped_glass * 0.10) + nps_contribution + rt_contribution
+            
+            # Metric Bonus (max 20 pts total)
+            metric_bonus = min(current.get("total_metric_bonus", 0) or 0, 20)
+            
+            # CV Promoter/Detractor bonus (no cap)
+            # Promoters (9-10): +0.5 each, Detractors (<=6): -1 each
+            cv_bonus = (promoters * 0.5) - (detractors * 1)
+            
+            # Final score = Base + Metric Bonus + CV Bonus
+            new_weighted = round(base_weighted, 2)
+            new_pre_dar = round(base_weighted + metric_bonus + cv_bonus, 2)
+            
+            await db.employees_v2.update_one(
+                {"_id": emp["_id"]},
+                {"$set": {
+                    "cv_promoters": promoters,
+                    "cv_passives": passives,
+                    "cv_detractors": detractors,
+                    "nps_score": nps_score,
+                    "cv_score": cv_bonus,
+                    "score_cv": nps_contribution,
+                    "cv_bonus": cv_bonus,
+                    "review_tracker_bonus": rt_contribution,
+                    "total_metric_bonus": metric_bonus,
+                    "weighted_score": new_weighted,
+                    "pre_dar_score": new_pre_dar,
+                    "total_score": new_pre_dar,
+                    "cv_sync_source": "cv_feedback_raw"
+                }}
+            )
+            cv_feedback_updated += 1
         
         results["steps"].append({
             "step": "sync_cv_feedback",
