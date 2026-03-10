@@ -488,35 +488,37 @@ export default function ScoringAudit() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 p-6">
+    <div className="min-h-screen bg-slate-900 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-emerald-500/20 rounded-xl">
-              <ShieldCheck className="w-8 h-8 text-emerald-400" />
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 md:p-3 bg-emerald-500/20 rounded-xl shrink-0">
+              <ShieldCheck className="w-6 h-6 md:w-8 md:h-8 text-emerald-400" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-white">Scoring Audit System</h1>
-              <p className="text-slate-400">Self-checking process that guarantees 100% accurate scoring</p>
+              <h1 className="text-xl md:text-2xl font-bold text-white">Scoring Audit</h1>
+              <p className="text-sm text-slate-400 hidden sm:block">Self-checking process for 100% accurate scoring</p>
             </div>
+            {report && <StatusBadge status={report.overall_status} />}
           </div>
           
-          <div className="flex items-center gap-3">
-            {report && <StatusBadge status={report.overall_status} />}
+          {/* Action Buttons - Scrollable on mobile */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-4 px-4 md:mx-0 md:px-0 md:overflow-visible md:flex-wrap">
             <Button
               onClick={syncNpsToEmployees}
               disabled={syncingNps}
               variant="outline"
-              className="border-green-500/50 text-green-400 hover:bg-green-500/10"
+              size="sm"
+              className="border-green-500/50 text-green-400 hover:bg-green-500/10 whitespace-nowrap shrink-0"
               data-testid="sync-nps-btn"
             >
               {syncingNps ? (
-                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                <RefreshCw className="w-4 h-4 mr-1 animate-spin" />
               ) : (
-                <Users className="w-4 h-4 mr-2" />
+                <Users className="w-4 h-4 mr-1" />
               )}
-              Sync NPS & Reviews
+              <span className="hidden sm:inline">Sync </span>NPS
             </Button>
             <Button
               onClick={async () => {
@@ -526,90 +528,95 @@ export default function ScoringAudit() {
               }}
               disabled={syncing}
               variant="outline"
-              className="border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/10"
+              size="sm"
+              className="border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/10 whitespace-nowrap shrink-0"
             >
               {syncing ? (
-                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                <RefreshCw className="w-4 h-4 mr-1 animate-spin" />
               ) : (
-                <Database className="w-4 h-4 mr-2" />
+                <Database className="w-4 h-4 mr-1" />
               )}
-              Sync Mentions
+              <span className="hidden sm:inline">Sync </span>Mentions
             </Button>
             <Button
               onClick={recalculateAllScores}
               disabled={recalculating}
               variant="outline"
-              className="border-blue-500/50 text-blue-400 hover:bg-blue-500/10"
+              size="sm"
+              className="border-blue-500/50 text-blue-400 hover:bg-blue-500/10 whitespace-nowrap shrink-0"
             >
               {recalculating ? (
-                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                <RefreshCw className="w-4 h-4 mr-1 animate-spin" />
               ) : (
-                <RotateCcw className="w-4 h-4 mr-2" />
+                <RotateCcw className="w-4 h-4 mr-1" />
               )}
-              Recalculate All
+              Recalc
             </Button>
             <Button
               onClick={fixAllDiscrepancies}
               disabled={fixingAll}
-              className="bg-red-600 hover:bg-red-700 text-white"
+              size="sm"
+              className="bg-red-600 hover:bg-red-700 text-white whitespace-nowrap shrink-0"
               data-testid="fix-all-btn"
             >
               {fixingAll ? (
-                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                <RefreshCw className="w-4 h-4 mr-1 animate-spin" />
               ) : (
-                <AlertTriangle className="w-4 h-4 mr-2" />
+                <AlertTriangle className="w-4 h-4 mr-1" />
               )}
-              Fix All Issues
+              Fix All
             </Button>
             <Button
               onClick={runFullAudit}
               disabled={loading}
-              className="bg-emerald-600 hover:bg-emerald-700"
+              size="sm"
+              className="bg-emerald-600 hover:bg-emerald-700 whitespace-nowrap shrink-0"
             >
               {loading ? (
-                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                <RefreshCw className="w-4 h-4 mr-1 animate-spin" />
               ) : (
-                <ShieldCheck className="w-4 h-4 mr-2" />
+                <ShieldCheck className="w-4 h-4 mr-1" />
               )}
-              Run Full Audit
+              Audit
             </Button>
           </div>
         </div>
 
         {/* Data Cap Enforcement Section */}
         {dataCapStatus && (
-          <div className={`rounded-xl border p-4 mb-8 ${
+          <div className={`rounded-xl border p-3 md:p-4 mb-6 ${
             dataCapStatus.overall_status === 'COMPLIANT' 
               ? 'bg-green-500/10 border-green-500/30' 
               : 'bg-red-500/10 border-red-500/30'
           }`}>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <Database className="w-5 h-5 text-slate-400" />
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+              <div className="flex items-center gap-2">
+                <Database className="w-4 h-4 text-slate-400 shrink-0" />
                 <div>
-                  <h3 className="font-semibold text-white">Data Cap Enforcement</h3>
-                  <p className="text-sm text-slate-400">Official dashboard data is the ABSOLUTE MAXIMUM allowed</p>
+                  <h3 className="font-semibold text-white text-sm md:text-base">Data Cap Enforcement</h3>
+                  <p className="text-xs text-slate-400 hidden sm:block">Official dashboard = MAXIMUM allowed</p>
                 </div>
               </div>
               {dataCapStatus.overall_status !== 'COMPLIANT' && (
                 <Button
                   onClick={enforceDataCaps}
                   disabled={enforcing}
-                  className="bg-red-600 hover:bg-red-700"
+                  size="sm"
+                  className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
                 >
                   {enforcing ? (
-                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    <RefreshCw className="w-4 h-4 mr-1 animate-spin" />
                   ) : (
-                    <Trash2 className="w-4 h-4 mr-2" />
+                    <Trash2 className="w-4 h-4 mr-1" />
                   )}
-                  Remove Excess Data
+                  Remove Excess
                 </Button>
               )}
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {/* Customer Voice */}
-              <div className={`p-3 rounded-lg ${
+              <div className={`p-2 md:p-3 rounded-lg ${
                 dataCapStatus.customer_voice?.status === 'EXCEEDS_LIMIT' 
                   ? 'bg-red-500/20' 
                   : dataCapStatus.customer_voice?.status === 'AT_LIMIT'
@@ -617,24 +624,24 @@ export default function ScoringAudit() {
                   : 'bg-slate-800/50'
               }`}>
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-300">Customer Voice Feedback</span>
+                  <span className="text-slate-300 text-sm">CV Feedback</span>
                   {dataCapStatus.customer_voice?.status === 'EXCEEDS_LIMIT' ? (
-                    <span className="text-red-400 text-sm font-medium">
-                      EXCEEDS by {dataCapStatus.customer_voice.excess}
+                    <span className="text-red-400 text-xs font-medium">
+                      +{dataCapStatus.customer_voice.excess}
                     </span>
                   ) : (
                     <CheckCircle className="w-4 h-4 text-green-400" />
                   )}
                 </div>
-                <div className="mt-1 text-sm text-slate-500">
-                  Our Data: <span className="text-white font-mono">{dataCapStatus.customer_voice?.our_count}</span>
+                <div className="text-xs text-slate-500">
+                  <span className="text-white font-mono">{dataCapStatus.customer_voice?.our_count}</span>
                   {' / '}
-                  Official Max: <span className="text-white font-mono">{dataCapStatus.customer_voice?.official_max ?? 'Not Set'}</span>
+                  <span className="text-white font-mono">{dataCapStatus.customer_voice?.official_max ?? '?'}</span>
                 </div>
               </div>
               
               {/* Review Tracker */}
-              <div className={`p-3 rounded-lg ${
+              <div className={`p-2 md:p-3 rounded-lg ${
                 dataCapStatus.review_tracker?.status === 'EXCEEDS_LIMIT' 
                   ? 'bg-red-500/20' 
                   : dataCapStatus.review_tracker?.status === 'AT_LIMIT'
@@ -642,19 +649,19 @@ export default function ScoringAudit() {
                   : 'bg-slate-800/50'
               }`}>
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-300">ReviewTracker Reviews</span>
+                  <span className="text-slate-300 text-sm">RT Reviews</span>
                   {dataCapStatus.review_tracker?.status === 'EXCEEDS_LIMIT' ? (
-                    <span className="text-red-400 text-sm font-medium">
-                      EXCEEDS by {dataCapStatus.review_tracker.excess}
+                    <span className="text-red-400 text-xs font-medium">
+                      +{dataCapStatus.review_tracker.excess}
                     </span>
                   ) : (
                     <CheckCircle className="w-4 h-4 text-green-400" />
                   )}
                 </div>
-                <div className="mt-1 text-sm text-slate-500">
-                  Our Data: <span className="text-white font-mono">{dataCapStatus.review_tracker?.our_count}</span>
+                <div className="text-xs text-slate-500">
+                  <span className="text-white font-mono">{dataCapStatus.review_tracker?.our_count}</span>
                   {' / '}
-                  Official Max: <span className="text-white font-mono">{dataCapStatus.review_tracker?.official_max ?? 'Not Set'}</span>
+                  <span className="text-white font-mono">{dataCapStatus.review_tracker?.official_max ?? '?'}</span>
                 </div>
               </div>
             </div>
@@ -663,94 +670,94 @@ export default function ScoringAudit() {
 
         {/* Summary Cards */}
         {report && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-            <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-6">
-              <div className="flex items-center gap-3 mb-2">
-                <Users className="w-5 h-5 text-blue-400" />
-                <span className="text-slate-400">Total Employees</span>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4 mb-6">
+            <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-3 md:p-6">
+              <div className="flex items-center gap-2 mb-1 md:mb-2">
+                <Users className="w-4 h-4 md:w-5 md:h-5 text-blue-400" />
+                <span className="text-slate-400 text-xs md:text-sm">Total</span>
               </div>
-              <div className="text-3xl font-bold text-white">{report.employee_audit?.total || 0}</div>
+              <div className="text-2xl md:text-3xl font-bold text-white">{report.employee_audit?.total || 0}</div>
             </div>
 
-            <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-6">
-              <div className="flex items-center gap-3 mb-2">
-                <CheckCircle className="w-5 h-5 text-green-400" />
-                <span className="text-slate-400">Passed</span>
+            <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-3 md:p-6">
+              <div className="flex items-center gap-2 mb-1 md:mb-2">
+                <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-green-400" />
+                <span className="text-slate-400 text-xs md:text-sm">Passed</span>
               </div>
-              <div className="text-3xl font-bold text-green-400">{report.employee_audit?.passed || 0}</div>
+              <div className="text-2xl md:text-3xl font-bold text-green-400">{report.employee_audit?.passed || 0}</div>
             </div>
 
-            <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-6">
-              <div className="flex items-center gap-3 mb-2">
-                <AlertTriangle className="w-5 h-5 text-yellow-400" />
-                <span className="text-slate-400">Warnings</span>
+            <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-3 md:p-6">
+              <div className="flex items-center gap-2 mb-1 md:mb-2">
+                <AlertTriangle className="w-4 h-4 md:w-5 md:h-5 text-yellow-400" />
+                <span className="text-slate-400 text-xs md:text-sm">Warnings</span>
               </div>
-              <div className="text-3xl font-bold text-yellow-400">{report.employee_audit?.warnings || 0}</div>
+              <div className="text-2xl md:text-3xl font-bold text-yellow-400">{report.employee_audit?.warnings || 0}</div>
             </div>
 
-            <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-6">
-              <div className="flex items-center gap-3 mb-2">
-                <XCircle className="w-5 h-5 text-red-400" />
-                <span className="text-slate-400">Failed</span>
+            <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-3 md:p-6">
+              <div className="flex items-center gap-2 mb-1 md:mb-2">
+                <XCircle className="w-4 h-4 md:w-5 md:h-5 text-red-400" />
+                <span className="text-slate-400 text-xs md:text-sm">Failed</span>
               </div>
-              <div className="text-3xl font-bold text-red-400">{report.employee_audit?.failed || 0}</div>
+              <div className="text-2xl md:text-3xl font-bold text-red-400">{report.employee_audit?.failed || 0}</div>
             </div>
           </div>
         )}
 
         {/* Data Sources Status */}
         {report && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-            <div className={`rounded-xl border p-4 ${
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 md:gap-4 mb-6">
+            <div className={`rounded-xl border p-3 md:p-4 ${
               report.data_sources?.official_cv_stats?.set 
                 ? 'bg-green-500/10 border-green-500/30' 
                 : 'bg-yellow-500/10 border-yellow-500/30'
             }`}>
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Database className="w-5 h-5 text-slate-400" />
-                  <span className="font-medium text-white">Customer Voice Stats</span>
+                <div className="flex items-center gap-2">
+                  <Database className="w-4 h-4 text-slate-400" />
+                  <span className="font-medium text-white text-sm md:text-base">CV Stats</span>
                 </div>
                 {report.data_sources?.official_cv_stats?.set ? (
-                  <span className="text-green-400 text-sm flex items-center gap-1">
-                    <CheckCircle className="w-4 h-4" /> Official Set
+                  <span className="text-green-400 text-xs flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" /> Set
                   </span>
                 ) : (
-                  <span className="text-yellow-400 text-sm flex items-center gap-1">
-                    <AlertTriangle className="w-4 h-4" /> Not Set
+                  <span className="text-yellow-400 text-xs flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" /> Not Set
                   </span>
                 )}
               </div>
               {report.data_sources?.official_cv_stats?.updated_at && (
-                <p className="text-xs text-slate-500 mt-2">
-                  Last updated: {new Date(report.data_sources.official_cv_stats.updated_at).toLocaleString()}
+                <p className="text-xs text-slate-500 mt-1">
+                  {new Date(report.data_sources.official_cv_stats.updated_at).toLocaleDateString()}
                 </p>
               )}
             </div>
 
-            <div className={`rounded-xl border p-4 ${
+            <div className={`rounded-xl border p-3 md:p-4 ${
               report.data_sources?.official_rt_stats?.set 
                 ? 'bg-green-500/10 border-green-500/30' 
                 : 'bg-yellow-500/10 border-yellow-500/30'
             }`}>
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Database className="w-5 h-5 text-slate-400" />
-                  <span className="font-medium text-white">ReviewTrackers Stats</span>
+                <div className="flex items-center gap-2">
+                  <Database className="w-4 h-4 text-slate-400" />
+                  <span className="font-medium text-white text-sm md:text-base">RT Stats</span>
                 </div>
                 {report.data_sources?.official_rt_stats?.set ? (
-                  <span className="text-green-400 text-sm flex items-center gap-1">
-                    <CheckCircle className="w-4 h-4" /> Official Set
+                  <span className="text-green-400 text-xs flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" /> Set
                   </span>
                 ) : (
-                  <span className="text-yellow-400 text-sm flex items-center gap-1">
-                    <AlertTriangle className="w-4 h-4" /> Not Set
+                  <span className="text-yellow-400 text-xs flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" /> Not Set
                   </span>
                 )}
               </div>
               {report.data_sources?.official_rt_stats?.updated_at && (
-                <p className="text-xs text-slate-500 mt-2">
-                  Last updated: {new Date(report.data_sources.official_rt_stats.updated_at).toLocaleString()}
+                <p className="text-xs text-slate-500 mt-1">
+                  {new Date(report.data_sources.official_rt_stats.updated_at).toLocaleDateString()}
                 </p>
               )}
             </div>
@@ -759,59 +766,59 @@ export default function ScoringAudit() {
 
         {/* Recommendations */}
         {report?.recommendations?.length > 0 && (
-          <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 mb-8">
-            <h3 className="font-semibold text-blue-400 flex items-center gap-2 mb-3">
-              <Info className="w-5 h-5" />
+          <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3 md:p-4 mb-6">
+            <h3 className="font-semibold text-blue-400 flex items-center gap-2 mb-2 text-sm md:text-base">
+              <Info className="w-4 h-4" />
               Recommendations
             </h3>
-            <ul className="space-y-2">
+            <ul className="space-y-1">
               {report.recommendations.map((rec, i) => (
-                <li key={i} className="text-sm text-slate-300 flex items-center gap-2">
-                  <ArrowRight className="w-4 h-4 text-blue-400" />
-                  {rec}
+                <li key={i} className="text-xs md:text-sm text-slate-300 flex items-start gap-2">
+                  <ArrowRight className="w-3 h-3 mt-0.5 text-blue-400 shrink-0" />
+                  <span>{rec}</span>
                 </li>
               ))}
             </ul>
           </div>
         )}
 
-        {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Main Content - Stack on mobile */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
           {/* Employee List */}
-          <div className="lg:col-span-1 bg-slate-800/50 rounded-xl border border-slate-700/50 p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-white">Employee Audit Status</h3>
-              <span className="text-xs text-slate-500">{filteredEmployees.length} employees</span>
+          <div className="lg:col-span-1 bg-slate-800/50 rounded-xl border border-slate-700/50 p-3 md:p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-white text-sm md:text-base">Employee Audit Status</h3>
+              <span className="text-xs text-slate-500">{filteredEmployees.length} emp</span>
             </div>
             
-            <div className="relative mb-4">
+            <div className="relative mb-3">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-500" />
               <Input
                 type="text"
-                placeholder="Search employees..."
+                placeholder="Search..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 bg-slate-900/50 border-slate-700"
+                className="pl-9 bg-slate-900/50 border-slate-700 h-9 text-sm"
               />
             </div>
             
-            <div className="space-y-2 max-h-[600px] overflow-y-auto">
+            <div className="space-y-2 max-h-[400px] md:max-h-[600px] overflow-y-auto">
               {filteredEmployees.map((emp) => (
                 <button
                   key={emp.name}
                   onClick={() => fetchEmployeeAudit(emp.name)}
-                  className={`w-full text-left p-3 rounded-lg transition-colors ${
+                  className={`w-full text-left p-2 md:p-3 rounded-lg transition-colors ${
                     selectedEmployee === emp.name 
                       ? 'bg-blue-500/20 border border-blue-500/50' 
                       : 'bg-slate-900/50 hover:bg-slate-800/80 border border-transparent'
                   }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-white truncate">{emp.name}</span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-white text-sm truncate">{emp.name}</span>
                     <StatusBadge status={emp.status} />
                   </div>
-                  <div className="flex items-center justify-between mt-2 text-sm">
-                    <span className="text-slate-500">Score: <span className="text-white">{emp.score?.toFixed(2)}</span></span>
+                  <div className="flex items-center justify-between mt-1 text-xs">
+                    <span className="text-slate-500">Score: <span className="text-white">{emp.score?.toFixed(1)}</span></span>
                     {emp.discrepancy_count > 0 && (
                       <span className="text-yellow-400">{emp.discrepancy_count} issues</span>
                     )}
