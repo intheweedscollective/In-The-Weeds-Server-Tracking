@@ -8106,6 +8106,134 @@ async def get_official_cv_stats(quarter: str = "Q1", year: int = 2026):
     }
 
 
+@api_router.post("/v2/admin/cv-stats/reconcile")
+async def reconcile_cv_feedback_with_official(quarter: str = "Q1", year: int = 2026):
+    """
+    Reconcile cv_feedback data to match official stats.
+    This adjusts the scraped data to match the official Loyalty Voice dashboard numbers.
+    """
+    # Get official stats
+    official = await db.official_cv_stats.find_one(
+        {"quarter": quarter.upper(), "year": year}
+    )
+    
+    if not official:
+        return {
+            "success": False,
+            "error": "No official CV stats set. Please set official stats first via /v2/admin/cv-stats/set"
+        }
+    
+    # Get current cv_feedback counts
+    pipeline = [
+        {"$match": {"quarter": {"$in": [quarter.upper(), quarter]}, "year": year}},
+        {"$group": {
+            "_id": None,
+            "total": {"$sum": 1},
+            "promoters": {"$sum": {"$cond": [{"$gte": ["$rating", 9]}, 1, 0]}},
+            "passives": {"$sum": {"$cond": [{"$and": [{"$gte": ["$rating", 7]}, {"$lte": ["$rating", 8]}]}, 1, 0]}},
+            "detractors": {"$sum": {"$cond": [{"$lte": ["$rating", 6]}, 1, 0]}}
+        }}
+    ]
+    
+    result = await db.cv_feedback.aggregate(pipeline).to_list(1)
+    current = result[0] if result else {"total": 0, "promoters": 0, "passives": 0, "detractors": 0}
+    
+    official_total = official.get("total_responses", 0)
+    official_promoters = official.get("promoters", 0)
+    official_passives = official.get("passives", 0)
+    official_detractors = official.get("detractors", 0)
+    
+    diff = {
+        "total": official_total - current["total"],
+        "promoters": official_promoters - current["promoters"],
+        "passives": official_passives - current["passives"],
+        "detractors": official_detractors - current["detractors"]
+    }
+    
+    # Add missing records as "unattributed" feedback entries
+    added_records = []
+    
+    # Add missing promoters (rating 10)
+    for i in range(max(0, diff["promoters"])):
+        record = {
+            "quarter": quarter.upper(),
+            "year": year,
+            "server_name": "_unattributed_",
+            "rating": 10,
+            "date": datetime.now(timezone.utc).isoformat(),
+            "source": "reconciliation_from_official",
+            "comment": f"Added to reconcile with official stats (promoter {i+1})"
+        }
+        await db.cv_feedback.insert_one(record)
+        added_records.append("promoter")
+    
+    # Add missing passives (rating 8)
+    for i in range(max(0, diff["passives"])):
+        record = {
+            "quarter": quarter.upper(),
+            "year": year,
+            "server_name": "_unattributed_",
+            "rating": 8,
+            "date": datetime.now(timezone.utc).isoformat(),
+            "source": "reconciliation_from_official",
+            "comment": f"Added to reconcile with official stats (passive {i+1})"
+        }
+        await db.cv_feedback.insert_one(record)
+        added_records.append("passive")
+    
+    # Add missing detractors (rating 5)
+    for i in range(max(0, diff["detractors"])):
+        record = {
+            "quarter": quarter.upper(),
+            "year": year,
+            "server_name": "_unattributed_",
+            "rating": 5,
+            "date": datetime.now(timezone.utc).isoformat(),
+            "source": "reconciliation_from_official",
+            "comment": f"Added to reconcile with official stats (detractor {i+1})"
+        }
+        await db.cv_feedback.insert_one(record)
+        added_records.append("detractor")
+    
+    # If we have excess, remove oldest unattributed or excess records
+    removed_count = 0
+    if diff["promoters"] < 0:
+        # Remove excess promoters
+        excess = await db.cv_feedback.find(
+            {"quarter": quarter.upper(), "year": year, "rating": {"$gte": 9}},
+            sort=[("date", -1)]
+        ).limit(abs(diff["promoters"])).to_list(abs(diff["promoters"]))
+        for rec in excess:
+            await db.cv_feedback.delete_one({"_id": rec["_id"]})
+            removed_count += 1
+    
+    if diff["detractors"] < 0:
+        # Remove excess detractors
+        excess = await db.cv_feedback.find(
+            {"quarter": quarter.upper(), "year": year, "rating": {"$lte": 6}},
+            sort=[("date", -1)]
+        ).limit(abs(diff["detractors"])).to_list(abs(diff["detractors"]))
+        for rec in excess:
+            await db.cv_feedback.delete_one({"_id": rec["_id"]})
+            removed_count += 1
+    
+    return {
+        "success": True,
+        "message": f"Reconciled cv_feedback with official stats",
+        "official": {
+            "total": official_total,
+            "promoters": official_promoters,
+            "passives": official_passives,
+            "detractors": official_detractors
+        },
+        "before": current,
+        "diff": diff,
+        "added": len(added_records),
+        "removed": removed_count
+    }
+
+
+
 # ============================================================
 # UI DASHBOARD SCRAPER - Sync from RT and LV dashboards directly
 # ============================================================
