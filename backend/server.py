@@ -7623,7 +7623,7 @@ async def fix_all_discrepancies(quarter: str = "Q1", year: int = 2026):
                 passives = cv_data["passives"]
                 nps_score = cv_data["nps_score"]
                 
-                # NPS points calculation
+                # NPS points calculation (max 10 pts)
                 if nps_score >= 90: nps_pts = 10
                 elif nps_score >= 80: nps_pts = 9
                 elif nps_score >= 70: nps_pts = 8
@@ -7634,19 +7634,25 @@ async def fix_all_discrepancies(quarter: str = "Q1", year: int = 2026):
                 
                 # Survey points: promoters add 1 each, detractors subtract 2 each
                 survey_pts = promoters - (detractors * 2)
-                cv_score = nps_pts + survey_pts
+                raw_cv_score = nps_pts + survey_pts
                 
-                # Recalculate total score
+                # Cap CV score to fit within 15% weight (max 15 points)
+                # CV is 15% of the total 100-point scale
+                cv_score = min(max(raw_cv_score, 0), 15)
+                
+                # Recalculate total score - CV is part of the 100% weighted score
                 capped_ppa = min(current.get("score_ppa", 0) or 0, 100)
                 capped_lbw = min(current.get("score_lbw", 0) or 0, 100)
                 capped_glass = min(current.get("score_glass", 0) or 0, 100)
                 capped_lsc = min(current.get("score_lsc", 0) or 0, 100)
-                base_weighted = capped_ppa * 0.25 + capped_lbw * 0.20 + capped_glass * 0.15 + capped_lsc * 0.25
+                
+                # Weighted score = PPA(25%) + LSC(25%) + LBW(20%) + Glass(15%) + CV(15%) = 100%
+                base_weighted = (capped_ppa * 0.25) + (capped_lsc * 0.25) + (capped_lbw * 0.20) + (capped_glass * 0.15) + cv_score
                 
                 rt_bonus = current.get("review_tracker_bonus", 0) or 0
                 metric_bonus = current.get("total_metric_bonus", 0) or 0
                 
-                new_weighted = round(base_weighted + cv_score, 2)
+                new_weighted = round(base_weighted, 2)
                 new_pre_dar = round(new_weighted + metric_bonus + rt_bonus, 2)
                 
                 await db.employees_v2.update_one(
@@ -7673,7 +7679,9 @@ async def fix_all_discrepancies(quarter: str = "Q1", year: int = 2026):
                 capped_lbw = min(current.get("score_lbw", 0) or 0, 100)
                 capped_glass = min(current.get("score_glass", 0) or 0, 100)
                 capped_lsc = min(current.get("score_lsc", 0) or 0, 100)
-                base_weighted = capped_ppa * 0.25 + capped_lbw * 0.20 + capped_glass * 0.15 + capped_lsc * 0.25
+                
+                # Weighted score = PPA(25%) + LSC(25%) + LBW(20%) + Glass(15%) + CV(15%=0) = 85% max
+                base_weighted = (capped_ppa * 0.25) + (capped_lsc * 0.25) + (capped_lbw * 0.20) + (capped_glass * 0.15)
                 
                 rt_bonus = current.get("review_tracker_bonus", 0) or 0
                 metric_bonus = current.get("total_metric_bonus", 0) or 0
