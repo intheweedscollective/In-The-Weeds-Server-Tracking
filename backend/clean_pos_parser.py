@@ -96,7 +96,7 @@ def parse_single_sheet(df: pd.DataFrame) -> Optional[Dict[str, Any]]:
             employee["beer"] = value
         elif 'wine' in field_lower:
             employee["wine"] = value
-        elif 'loyal' in field_lower:  # matches loyalty and loyany (typo)
+        elif 'loyal' in field_lower or 'loya' in field_lower:  # matches loyalty, loyany (typo), etc.
             employee["loyalty"] = value
         elif 'glassware' in field_lower or 'bar glass' in field_lower:
             employee["bar_glassware"] = value
