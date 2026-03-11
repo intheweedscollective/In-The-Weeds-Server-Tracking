@@ -5,12 +5,9 @@ import {
   Calculator, Database, ClipboardCheck, Info, ArrowRight, Trash2, RotateCcw, Settings, X, Clock, Play
 } from "lucide-react";
 import { toast } from "sonner";
-import axios from "axios";
+import api from "../lib/api";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
 
 const StatusBadge = ({ status }) => {
   const styles = {
@@ -288,7 +285,7 @@ export default function ScoringAudit() {
   const saveOfficialCVStats = async () => {
     setSavingCV(true);
     try {
-      await axios.post(`${API}/v2/admin/cv-stats/set`, {
+      await api.post(`/v2/admin/cv-stats/set`, {
         quarter,
         year,
         ...cvStats
@@ -307,7 +304,7 @@ export default function ScoringAudit() {
     setReconcilingCV(true);
     toast.info("Reconciling CV data with official stats...");
     try {
-      const response = await axios.post(`${API}/v2/admin/cv-stats/reconcile?quarter=${quarter}&year=${year}`);
+      const response = await api.post(`/v2/admin/cv-stats/reconcile?quarter=${quarter}&year=${year}`);
       const data = response.data;
       if (data.success) {
         toast.success(`Reconciled: Added ${data.added}, Removed ${data.removed} records`);
@@ -325,7 +322,7 @@ export default function ScoringAudit() {
   // Fetch current official CV stats
   const fetchOfficialCVStats = async () => {
     try {
-      const response = await axios.get(`${API}/v2/admin/cv-stats/official?quarter=${quarter}&year=${year}`);
+      const response = await api.get(`/v2/admin/cv-stats/official?quarter=${quarter}&year=${year}`);
       if (response.data.official_stats_set) {
         setCvStats({
           promoters: response.data.stats.promoters || 0,
@@ -343,7 +340,7 @@ export default function ScoringAudit() {
   // Fetch scheduler status
   const fetchSchedulerStatus = async () => {
     try {
-      const response = await axios.get(`${API}/v2/scheduler/status`);
+      const response = await api.get(`/v2/scheduler/status`);
       setSchedulerStatus(response.data);
       if (response.data.config) {
         setSchedulerConfig(response.data.config);
@@ -356,7 +353,7 @@ export default function ScoringAudit() {
   // Fetch reconciliation history
   const fetchReconciliationHistory = async () => {
     try {
-      const response = await axios.get(`${API}/v2/scheduler/history?limit=5`);
+      const response = await api.get(`/v2/scheduler/history?limit=5`);
       setReconciliationHistory(response.data.history || []);
     } catch (error) {
       console.error("Failed to fetch reconciliation history");
@@ -367,7 +364,7 @@ export default function ScoringAudit() {
   const saveSchedulerConfig = async () => {
     setSavingScheduler(true);
     try {
-      const response = await axios.post(`${API}/v2/scheduler/configure`, schedulerConfig);
+      const response = await api.post(`/v2/scheduler/configure`, schedulerConfig);
       if (response.data.success) {
         toast.success(response.data.message);
         await fetchSchedulerStatus();
@@ -384,7 +381,7 @@ export default function ScoringAudit() {
     setRunningNow(true);
     toast.info("Running full reconciliation... This may take a moment.");
     try {
-      const response = await axios.post(`${API}/v2/scheduler/run-now?quarter=${quarter}&year=${year}`);
+      const response = await api.post(`/v2/scheduler/run-now?quarter=${quarter}&year=${year}`);
       if (response.data.success) {
         toast.success(`Reconciliation complete! ${response.data.steps[2]?.passed || 0}/${response.data.steps[2]?.total || 0} employees verified.`);
         // Refresh all data
@@ -407,7 +404,7 @@ export default function ScoringAudit() {
     setFixingAll(true);
     toast.info("Fixing all discrepancies... This may take a moment.");
     try {
-      const response = await axios.post(`${API}/v2/audit/fix-all-discrepancies?quarter=${quarter}&year=${year}`);
+      const response = await api.post(`/v2/audit/fix-all-discrepancies?quarter=${quarter}&year=${year}`);
       if (response.data.steps) {
         const steps = response.data.steps;
         const reviewStep = steps.find(s => s.step === "sync_reviews");
@@ -439,7 +436,7 @@ export default function ScoringAudit() {
   const syncNpsToEmployees = async () => {
     setSyncingNps(true);
     try {
-      const response = await axios.post(`${API}/v2/audit/sync-nps-to-employees?quarter=${quarter}&year=${year}`);
+      const response = await api.post(`/v2/audit/sync-nps-to-employees?quarter=${quarter}&year=${year}`);
       if (response.data.success) {
         const summary = response.data.summary;
         toast.success(`Synced ${summary.nps_matched_to_employees} NPS records and ${summary.review_mentions_matched} review mentions`);
@@ -456,7 +453,7 @@ export default function ScoringAudit() {
 
   const fetchAuditReport = useCallback(async () => {
     try {
-      const response = await axios.get(`${API}/v2/audit/report?quarter=${quarter}&year=${year}`);
+      const response = await api.get(`/v2/audit/report?quarter=${quarter}&year=${year}`);
       setReport(response.data);
     } catch (error) {
       toast.error("Failed to fetch audit report");
@@ -465,7 +462,7 @@ export default function ScoringAudit() {
 
   const fetchAllEmployeesAudit = useCallback(async () => {
     try {
-      const response = await axios.get(`${API}/v2/audit/all?quarter=${quarter}&year=${year}`);
+      const response = await api.get(`/v2/audit/all?quarter=${quarter}&year=${year}`);
       setAllEmployeesAudit(response.data);
     } catch (error) {
       toast.error("Failed to fetch employees audit");
@@ -475,7 +472,7 @@ export default function ScoringAudit() {
   const fetchEmployeeAudit = async (employeeName) => {
     setAuditLoading(true);
     try {
-      const response = await axios.get(`${API}/v2/audit/employee/${encodeURIComponent(employeeName)}?quarter=${quarter}&year=${year}`);
+      const response = await api.get(`/v2/audit/employee/${encodeURIComponent(employeeName)}?quarter=${quarter}&year=${year}`);
       if (response.data.success) {
         setEmployeeAudit(response.data.audit);
         setSelectedEmployee(employeeName);
@@ -506,7 +503,7 @@ export default function ScoringAudit() {
 
   const fetchDataCapStatus = useCallback(async () => {
     try {
-      const response = await axios.get(`${API}/v2/audit/data-cap-check?quarter=${quarter}&year=${year}`);
+      const response = await api.get(`/v2/audit/data-cap-check?quarter=${quarter}&year=${year}`);
       setDataCapStatus(response.data);
     } catch (error) {
       console.error("Failed to fetch data cap status");
@@ -516,7 +513,7 @@ export default function ScoringAudit() {
   const recalculateAllScores = async () => {
     setRecalculating(true);
     try {
-      const response = await axios.post(`${API}/v2/audit/recalculate-all?quarter=${quarter}&year=${year}`);
+      const response = await api.post(`/v2/audit/recalculate-all?quarter=${quarter}&year=${year}`);
       if (response.data.success) {
         const { fixed, unchanged, errors } = response.data.summary;
         if (fixed > 0) {
@@ -538,7 +535,7 @@ export default function ScoringAudit() {
   const enforceDataCaps = async () => {
     setEnforcing(true);
     try {
-      const response = await axios.post(`${API}/v2/audit/enforce-data-caps?quarter=${quarter}&year=${year}`);
+      const response = await api.post(`/v2/audit/enforce-data-caps?quarter=${quarter}&year=${year}`);
       const cv_removed = response.data.customer_voice?.removed || 0;
       const rt_removed = response.data.review_tracker?.removed || 0;
       
@@ -563,7 +560,7 @@ export default function ScoringAudit() {
   const syncEmployeeMentions = async () => {
     setSyncing(true);
     try {
-      const response = await axios.post(`${API}/v2/audit/sync-employee-mentions?quarter=${quarter}&year=${year}`);
+      const response = await api.post(`/v2/audit/sync-employee-mentions?quarter=${quarter}&year=${year}`);
       if (response.data.success) {
         const { updated, unchanged } = response.data.summary;
         if (updated > 0) {
@@ -583,11 +580,11 @@ export default function ScoringAudit() {
     toast.info(`Fixing discrepancies for ${employeeName}...`);
     try {
       // Sync mentions for this employee
-      await axios.post(`${API}/v2/audit/sync-employee-mentions?quarter=${quarter}&year=${year}`);
+      await api.post(`/v2/audit/sync-employee-mentions?quarter=${quarter}&year=${year}`);
       // Sync NPS
-      await axios.post(`${API}/v2/audit/sync-nps-to-employees?quarter=${quarter}&year=${year}`);
+      await api.post(`/v2/audit/sync-nps-to-employees?quarter=${quarter}&year=${year}`);
       // Recalculate
-      await axios.post(`${API}/v2/audit/recalculate-all?quarter=${quarter}&year=${year}`);
+      await api.post(`/v2/audit/recalculate-all?quarter=${quarter}&year=${year}`);
       
       toast.success(`Fixed discrepancies for ${employeeName}`);
       

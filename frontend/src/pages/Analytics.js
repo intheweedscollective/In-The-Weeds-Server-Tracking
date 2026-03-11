@@ -1,12 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { BarChart3, TrendingUp, Target, Download, Calendar, Info, ArrowUp, ArrowDown, Minus, X, Users, Filter } from "lucide-react";
-import axios from "axios";
+import api from "../lib/api";
 import { Button } from "../components/ui/button";
 import { formatCurrency, formatNumber } from "../utils/formatters";
 import { toast } from "sonner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
 
 // V2 Metric Definitions with benchmarks
 const V2_METRICS = {
@@ -128,9 +127,9 @@ export default function Analytics() {
     setLoading(true);
     try {
       const [empResponse, settingsResponse, trendResponse] = await Promise.all([
-        axios.get(`${API}/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`),
-        axios.get(`${API}/v2/quarter-settings/${selectedYear}/${selectedQuarter}`).catch(() => null),
-        axios.get(`${API}/v2/trends/${selectedYear}/${selectedQuarter}/team/data`).catch(() => null)
+        api.get(`/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`),
+        api.get(`/v2/quarter-settings/${selectedYear}/${selectedQuarter}`).catch(() => null),
+        api.get(`/v2/trends/${selectedYear}/${selectedQuarter}/team/data`).catch(() => null)
       ]);
       
       setEmployees(empResponse.data);
@@ -168,7 +167,7 @@ export default function Analytics() {
         return;
       }
 
-      const response = await axios.get(`${API}/v2/analytics/${selectedYear}/${selectedQuarter}/pdf`, {
+      const response = await api.get(`/v2/analytics/${selectedYear}/${selectedQuarter}/pdf`, {
         responseType: "blob",
       });
 

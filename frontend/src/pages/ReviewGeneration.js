@@ -1,13 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { FileText, Download, Clock, User, Ship, TrendingUp, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
-import axios from "axios";
+import api from "../lib/api";
 import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { formatNumber } from "../utils/formatters";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
 
 export default function ReviewGeneration() {
   const [employees, setEmployees] = useState([]);
@@ -22,7 +21,7 @@ export default function ReviewGeneration() {
   const fetchEmployees = useCallback(async () => {
     try {
       // Use V2 API with quarter filter
-      const response = await axios.get(`${API}/v2/employees`, {
+      const response = await api.get(`/v2/employees`, {
         params: { year: parseInt(selectedYear), quarter: selectedQuarter }
       });
       // Sort by peer_rank
@@ -37,7 +36,7 @@ export default function ReviewGeneration() {
 
   const fetchReviews = async () => {
     try {
-      const response = await axios.get(`${API}/reviews`);
+      const response = await api.get(`/reviews`);
       setReviews(response.data);
     } catch (error) {
     }
@@ -61,7 +60,7 @@ export default function ReviewGeneration() {
       }
       
       // Use V2 API endpoint - returns JSON with pdf_base64
-      const response = await axios.post(
+      const response = await api.post(
         `${API}/v2/employees/${employeeId}/generate-review`,
         { quarter: selectedQuarter, year: parseInt(selectedYear) }
       );
@@ -135,7 +134,7 @@ export default function ReviewGeneration() {
     if (!isExpanded && !trendData[employeeId]) {
       // Fetch trend data when expanding for the first time
       try {
-        const response = await axios.get(`${API}/v2/trends/${selectedYear}/${selectedQuarter}/employee/${employeeId}/data`);
+        const response = await api.get(`/v2/trends/${selectedYear}/${selectedQuarter}/employee/${employeeId}/data`);
         setTrendData(prev => ({ ...prev, [employeeId]: response.data }));
       } catch (error) {
         // Still allow expansion even if data fetch fails

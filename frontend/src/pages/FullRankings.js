@@ -1,14 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Trophy, Calendar, Filter, ChevronDown, ChevronUp, Download, FileText, Medal, Award, Star, Users, Image, MessageCircle, RefreshCw, Edit3, Check, X, Search, TrendingUp, TrendingDown, Target, ArrowUp, Info } from "lucide-react";
 import { toast } from "sonner";
-import axios from "axios";
+import api from "../lib/api";
 import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../components/ui/tooltip";
 import { formatNumber, formatCurrency } from "../utils/formatters";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
 
 // Tier badge colors (professional, no gimmicks)
 const TIER_STYLES = {
@@ -68,7 +67,7 @@ export default function FullRankings() {
   const updateEmployeeJobTitle = async (employeeId, newJobTitle) => {
     setSavingJobTitle(true);
     try {
-      await axios.put(`${API}/v2/employees/${employeeId}`, {
+      await api.put(`/v2/employees/${employeeId}`, {
         job_title: newJobTitle
       });
       toast.success(`Updated to ${newJobTitle}`);
@@ -87,11 +86,11 @@ export default function FullRankings() {
     try {
       const tierParam = tierFilter !== "all" ? `&tier_filter=${tierFilter}` : "";
       const [rankingsRes, employeesRes, settingsRes, bgRes, npsRes] = await Promise.all([
-        axios.get(`${API}/v2/full-rankings/${selectedYear}/${selectedQuarter}?${tierParam}`),
-        axios.get(`${API}/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`),
-        axios.get(`${API}/v2/quarter-settings/${selectedYear}/${selectedQuarter}`).catch(() => null),
-        axios.get(`${API}/v2/snapshots/backgrounds`).catch(() => ({ data: [] })),
-        axios.get(`${API}/v2/cv/nps?year=${selectedYear}&quarter=${selectedQuarter}`).catch(() => ({ data: { nps_records: [] } }))
+        api.get(`/v2/full-rankings/${selectedYear}/${selectedQuarter}?${tierParam}`),
+        api.get(`/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`),
+        api.get(`/v2/quarter-settings/${selectedYear}/${selectedQuarter}`).catch(() => null),
+        api.get(`/v2/snapshots/backgrounds`).catch(() => ({ data: [] })),
+        api.get(`/v2/cv/nps?year=${selectedYear}&quarter=${selectedQuarter}`).catch(() => ({ data: { nps_records: [] } }))
       ]);
       
       setRankings(rankingsRes.data.rankings || []);
@@ -110,7 +109,7 @@ export default function FullRankings() {
       
       // Also get NPS stats
       try {
-        const statsRes = await axios.get(`${API}/v2/cv/stats?year=${selectedYear}&quarter=${selectedQuarter}`);
+        const statsRes = await api.get(`/v2/cv/stats?year=${selectedYear}&quarter=${selectedQuarter}`);
         setNpsStats(statsRes.data);
       } catch {
         setNpsStats(null);
@@ -220,7 +219,7 @@ export default function FullRankings() {
     setSyncingNps(true);
     toast.info("Syncing NPS from Loyalty Voice... This may take a minute.");
     try {
-      const response = await axios.post(
+      const response = await api.post(
         `${API}/v2/cv/sync?quarter=${selectedQuarter}&year=${selectedYear}`,
         {},
         { timeout: 180000 }  // 3 minute timeout for scraping
@@ -276,7 +275,7 @@ export default function FullRankings() {
         return;
       }
       
-      const response = await axios.get(url, { responseType: 'blob' });
+      const response = await api.get(url, { responseType: 'blob' });
       
       // Create download link
       const blob = new Blob([response.data], { type: 'image/png' });
@@ -311,7 +310,7 @@ export default function FullRankings() {
         return;
       }
       
-      const response = await axios.get(url, { responseType: 'blob' });
+      const response = await api.get(url, { responseType: 'blob' });
       
       const blob = new Blob([response.data], { type: 'image/png' });
       const objectUrl = window.URL.createObjectURL(blob);
@@ -334,7 +333,7 @@ export default function FullRankings() {
   const handleDownloadReview = async (employeeId, employeeName) => {
     setDownloadingReview(employeeId);
     try {
-      const response = await axios.post(
+      const response = await api.post(
         `${API}/v2/employees/${employeeId}/generate-review`,
         { quarter: selectedQuarter, year: selectedYear },
         { responseType: 'blob' }

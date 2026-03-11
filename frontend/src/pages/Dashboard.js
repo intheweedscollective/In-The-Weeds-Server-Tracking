@@ -2,12 +2,11 @@ import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { Users, FileText, TrendingUp, Award, Target, Fish, Settings, Camera, Download, X, AlertTriangle, Lock, CheckCircle2, Trophy, Star, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
-import axios from "axios";
+import api from "../lib/api";
 import FinalizeQuarterModal from "../components/FinalizeQuarterModal";
 import { formatNumber } from "../utils/formatters";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
 
 export default function Dashboard() {
   const [employees, setEmployees] = useState([]);
@@ -61,7 +60,7 @@ export default function Dashboard() {
 
   const fetchQuarterSettings = useCallback(async () => {
     try {
-      const response = await axios.get(`${API}/v2/quarter-settings/${selectedYear}/${selectedQuarter}`);
+      const response = await api.get(`/v2/quarter-settings/${selectedYear}/${selectedQuarter}`);
       setQuarterSettings(response.data);
     } catch (error) {
       if (error.response?.status === 404) {
@@ -72,7 +71,7 @@ export default function Dashboard() {
 
   const fetchEmployeesForQuarter = useCallback(async () => {
     try {
-      const response = await axios.get(`${API}/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`);
+      const response = await api.get(`/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`);
       // Sort by total_score descending for display
       const sorted = (response.data || []).sort((a, b) => (b.total_score || 0) - (a.total_score || 0));
       setEmployees(sorted);
@@ -82,7 +81,7 @@ export default function Dashboard() {
 
   const fetchLatestSnapshot = useCallback(async () => {
     try {
-      const response = await axios.get(`${API}/v2/snapshots?year=${selectedYear}`);
+      const response = await api.get(`/v2/snapshots?year=${selectedYear}`);
       const snapshots = response.data.filter(s => s.quarter === selectedQuarter);
       if (snapshots.length > 0) {
         // Get most recent snapshot
@@ -96,7 +95,7 @@ export default function Dashboard() {
 
   const checkFinalizationStatus = useCallback(async () => {
     try {
-      const response = await axios.get(`${API}/v2/finalization/${selectedYear}/${selectedQuarter}`);
+      const response = await api.get(`/v2/finalization/${selectedYear}/${selectedQuarter}`);
       setIsQuarterFinalized(response.data.is_finalized || false);
     } catch (error) {
       setIsQuarterFinalized(false);

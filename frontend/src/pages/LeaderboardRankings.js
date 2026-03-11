@@ -1,13 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Trophy, TrendingUp, TrendingDown, Minus, Flame, Star, Crown, Award, Download, ChevronDown, ChevronUp, Search, RefreshCw, Info } from "lucide-react";
 import { toast } from "sonner";
-import axios from "axios";
+import api from "../lib/api";
 import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../components/ui/tooltip";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
 
 // Design System Colors
 const COLORS = {
@@ -270,8 +269,8 @@ export default function LeaderboardRankings() {
     setLoading(true);
     try {
       const [employeesRes, snapshotsRes] = await Promise.all([
-        axios.get(`${API}/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`),
-        axios.get(`${API}/v2/snapshots?year=${selectedYear}&quarter=${selectedQuarter}`),
+        api.get(`/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`),
+        api.get(`/v2/snapshots?year=${selectedYear}&quarter=${selectedQuarter}`),
       ]);
       
       // Sort employees by score (highest to lowest) for leaderboard view
@@ -345,7 +344,7 @@ export default function LeaderboardRankings() {
   const downloadLeaderboardSlide = async () => {
     setDownloading(true);
     try {
-      const response = await axios.get(
+      const response = await api.get(
         `${API}/v2/yodeck/${selectedYear}/${selectedQuarter}/leaderboard-slide?format=16:9`,
         { responseType: "blob" }
       );

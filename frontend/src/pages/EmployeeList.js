@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Trash2, Eye, FileText, Search, Filter, Users, X, Calendar, Target, Plus, Pencil, Save } from "lucide-react";
 import { toast } from "sonner";
-import axios from "axios";
+import api from "../lib/api";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
@@ -9,7 +9,6 @@ import { formatCurrency, formatLSCRatio, formatNumber } from "../utils/formatter
 import ConfirmDialog from "../components/ConfirmDialog";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
 
 // Default values for new employee form
 const emptyEmployee = {
@@ -51,7 +50,7 @@ export default function EmployeeList() {
     setLoading(true);
     try {
       // Use V2 API with quarter selection
-      const response = await axios.get(`${API}/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`);
+      const response = await api.get(`/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`);
       setEmployees(response.data);
     } catch (error) {
       toast.error("Error loading employees");
@@ -67,7 +66,7 @@ export default function EmployeeList() {
   const deleteEmployee = async () => {
     if (!employeeToDelete) return;
     try {
-      await axios.delete(`${API}/v2/employees/${employeeToDelete}`);
+      await api.delete(`/v2/employees/${employeeToDelete}`);
       toast.success("Employee deleted successfully");
       fetchEmployees();
     } catch (error) {
@@ -134,11 +133,11 @@ export default function EmployeeList() {
     try {
       if (editingEmployee) {
         // Update existing
-        await axios.put(`${API}/v2/employees/${editingEmployee.id}`, dataToSave);
+        await api.put(`/v2/employees/${editingEmployee.id}`, dataToSave);
         toast.success(`Updated ${formData.name}`);
       } else {
         // Create new
-        await axios.post(`${API}/v2/employees`, {
+        await api.post(`/v2/employees`, {
           ...dataToSave,
           year: selectedYear,
           quarter: selectedQuarter

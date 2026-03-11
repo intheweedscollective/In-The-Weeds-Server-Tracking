@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Settings, Lock, Unlock, Save, RefreshCw, AlertTriangle, Palette, Sparkles } from "lucide-react";
 import { toast } from "sonner";
-import axios from "axios";
+import api from "../lib/api";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 
@@ -29,7 +29,6 @@ const SEASONAL_THEMES = {
 };
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
 
 export default function QuarterSettings() {
   const [loading, setLoading] = useState(true);
@@ -77,7 +76,7 @@ export default function QuarterSettings() {
     const loadSettings = async () => {
       setLoading(true);
       try {
-        const response = await axios.get(`${API}/v2/quarter-settings/${selectedYear}/${selectedQuarter}`);
+        const response = await api.get(`/v2/quarter-settings/${selectedYear}/${selectedQuarter}`);
         setSettings(response.data);
         setFormData({
           benchmark_ppa: response.data.benchmark_ppa,
@@ -144,7 +143,7 @@ export default function QuarterSettings() {
 
     const loadSuggestions = async () => {
       try {
-        const response = await axios.get(`${API}/v2/quarter-settings/${selectedYear}/${selectedQuarter}/benchmark-suggestions`);
+        const response = await api.get(`/v2/quarter-settings/${selectedYear}/${selectedQuarter}/benchmark-suggestions`);
         setSuggestions(response.data);
       } catch (error) {
         setSuggestions(null);
@@ -157,7 +156,7 @@ export default function QuarterSettings() {
 
   const fetchAllSettings = async () => {
     try {
-      const response = await axios.get(`${API}/v2/quarter-settings`);
+      const response = await api.get(`/v2/quarter-settings`);
       setAllSettings(response.data);
     } catch (error) {
     }
@@ -166,7 +165,7 @@ export default function QuarterSettings() {
   const refetchSettings = async () => {
     setLoading(true);
     try {
-      const response = await axios.get(`${API}/v2/quarter-settings/${selectedYear}/${selectedQuarter}`);
+      const response = await api.get(`/v2/quarter-settings/${selectedYear}/${selectedQuarter}`);
       setSettings(response.data);
       setFormData({
         benchmark_ppa: response.data.benchmark_ppa,
@@ -211,14 +210,14 @@ export default function QuarterSettings() {
     setSaving(true);
     try {
       if (isNew) {
-        await axios.post(`${API}/v2/quarter-settings`, {
+        await api.post(`/v2/quarter-settings`, {
           year: selectedYear,
           quarter: selectedQuarter,
           ...formData
         });
         toast.success(`Created settings for ${selectedQuarter} ${selectedYear}`);
       } else {
-        await axios.put(`${API}/v2/quarter-settings/${selectedYear}/${selectedQuarter}`, formData);
+        await api.put(`/v2/quarter-settings/${selectedYear}/${selectedQuarter}`, formData);
         toast.success(`Updated settings for ${selectedQuarter} ${selectedYear}`);
       }
       refetchSettings();

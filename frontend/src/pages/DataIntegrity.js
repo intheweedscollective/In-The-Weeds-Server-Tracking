@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { ShieldCheck, AlertTriangle, CheckCircle, XCircle, RefreshCw, Trash2, Database, FileWarning, Users, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
-import axios from "axios";
+import api from "../lib/api";
 import { Button } from "../components/ui/button";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
 
 const StatusBadge = ({ status }) => {
   if (status === "healthy") {
@@ -49,7 +48,7 @@ export default function DataIntegrity() {
 
   const fetchSummary = useCallback(async () => {
     try {
-      const response = await axios.get(`${API}/v2/admin/data-integrity/summary`);
+      const response = await api.get(`/v2/admin/data-integrity/summary`);
       setSummary(response.data);
     } catch (error) {
       toast.error("Failed to fetch integrity summary");
@@ -59,7 +58,7 @@ export default function DataIntegrity() {
   const runFullCheck = async () => {
     setRunning(prev => ({ ...prev, fullCheck: true }));
     try {
-      const response = await axios.get(`${API}/v2/admin/data-integrity/check`);
+      const response = await api.get(`/v2/admin/data-integrity/check`);
       setFullReport(response.data);
       toast.success(`Integrity check complete - ${response.data.issues_found} issues found`);
     } catch (error) {
@@ -72,7 +71,7 @@ export default function DataIntegrity() {
   const removeDuplicates = async (dryRun = true) => {
     setRunning(prev => ({ ...prev, duplicates: true }));
     try {
-      const response = await axios.post(`${API}/v2/admin/data-integrity/remove-duplicates?dry_run=${dryRun}`);
+      const response = await api.post(`/v2/admin/data-integrity/remove-duplicates?dry_run=${dryRun}`);
       if (dryRun) {
         toast.info(`Found ${response.data.duplicates_found} duplicate reviews`);
       } else {
@@ -89,7 +88,7 @@ export default function DataIntegrity() {
   const flagInvalidCV = async (dryRun = true) => {
     setRunning(prev => ({ ...prev, invalidCV: true }));
     try {
-      const response = await axios.post(`${API}/v2/admin/data-integrity/flag-invalid-cv?dry_run=${dryRun}`);
+      const response = await api.post(`/v2/admin/data-integrity/flag-invalid-cv?dry_run=${dryRun}`);
       if (dryRun) {
         toast.info(`Found ${response.data.missing_found} CV entries without server names`);
       } else {
@@ -110,7 +109,7 @@ export default function DataIntegrity() {
     
     setRunning(prev => ({ ...prev, deleteCV: true }));
     try {
-      const response = await axios.delete(`${API}/v2/admin/data-integrity/invalid-cv-feedback`);
+      const response = await api.delete(`/v2/admin/data-integrity/invalid-cv-feedback`);
       toast.success(`Deleted ${response.data.deleted_count} invalid CV entries`);
       fetchSummary();
       runFullCheck();
@@ -124,7 +123,7 @@ export default function DataIntegrity() {
   const recalculateNPS = async () => {
     setRunning(prev => ({ ...prev, recalculate: true }));
     try {
-      const response = await axios.post(`${API}/v2/admin/data-integrity/recalculate-cv-nps`);
+      const response = await api.post(`/v2/admin/data-integrity/recalculate-cv-nps`);
       toast.success(`Recalculated NPS for ${response.data.employees_processed} employees`);
       fetchSummary();
       runFullCheck();
@@ -142,7 +141,7 @@ export default function DataIntegrity() {
     
     setRunning(prev => ({ ...prev, orphaned: true }));
     try {
-      const response = await axios.delete(`${API}/v2/admin/data-integrity/orphaned-records`);
+      const response = await api.delete(`/v2/admin/data-integrity/orphaned-records`);
       toast.success(`Deleted ${response.data.deleted_count} orphaned records`);
       fetchSummary();
       runFullCheck();
@@ -161,13 +160,13 @@ export default function DataIntegrity() {
     setRunning(prev => ({ ...prev, fixAll: true }));
     try {
       // Fix NPS mismatches
-      await axios.post(`${API}/v2/admin/data-integrity/recalculate-cv-nps`);
+      await api.post(`/v2/admin/data-integrity/recalculate-cv-nps`);
       
       // Delete orphaned records
-      const orphanedResponse = await axios.delete(`${API}/v2/admin/data-integrity/orphaned-records`);
+      const orphanedResponse = await api.delete(`/v2/admin/data-integrity/orphaned-records`);
       
       // Remove duplicates
-      await axios.post(`${API}/v2/admin/data-integrity/remove-duplicates?dry_run=false`);
+      await api.post(`/v2/admin/data-integrity/remove-duplicates?dry_run=false`);
       
       toast.success(`All issues fixed! Deleted ${orphanedResponse.data.deleted_count || 0} orphaned records`);
       fetchSummary();

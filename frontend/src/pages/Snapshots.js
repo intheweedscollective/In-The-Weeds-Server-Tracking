@@ -7,10 +7,9 @@ import { Label } from "../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { useToast } from "../hooks/use-toast";
 import { POSUploadModal } from "../components/POSUploadModal";
-import axios from "axios";
+import api from "../lib/api";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
 
 export default function Snapshots() {
   const { toast } = useToast();
@@ -38,7 +37,7 @@ export default function Snapshots() {
 
   const fetchSnapshots = useCallback(async () => {
     try {
-      const res = await axios.get(`${API}/v2/snapshots`);
+      const res = await api.get(`/v2/snapshots`);
       setSnapshots(res.data);
     } catch (error) {
     }
@@ -46,7 +45,7 @@ export default function Snapshots() {
 
   const fetchBackgrounds = useCallback(async () => {
     try {
-      const res = await axios.get(`${API}/v2/snapshots/backgrounds`);
+      const res = await api.get(`/v2/snapshots/backgrounds`);
       setBackgrounds(res.data);
     } catch (error) {
       // Fallback backgrounds
@@ -76,7 +75,7 @@ export default function Snapshots() {
     
     setCreating(true);
     try {
-      const res = await axios.post(`${API}/v2/snapshots`, newSnapshot);
+      const res = await api.post(`/v2/snapshots`, newSnapshot);
       toast({ title: "Success", description: "Snapshot created! Now upload data." });
       setShowCreateForm(false);
       setNewSnapshot({
@@ -102,7 +101,7 @@ export default function Snapshots() {
     formData.append("file", file);
     
     try {
-      const res = await axios.post(`${API}/v2/snapshots/${snapshotId}/upload`, formData);
+      const res = await api.post(`/v2/snapshots/${snapshotId}/upload`, formData);
       toast({ 
         title: "Success", 
         description: `Uploaded ${res.data.employee_count} employees. Dashboard & Rankings updated!` 
@@ -121,7 +120,7 @@ export default function Snapshots() {
   const generateSlide = async (snapshot) => {
     setGenerating(snapshot.id);
     try {
-      const response = await axios.get(
+      const response = await api.get(
         `${API}/v2/snapshots/${snapshot.id}/slide?background=${selectedBackground}`,
         { responseType: 'blob' }
       );
@@ -172,7 +171,7 @@ export default function Snapshots() {
   const recalculateSnapshot = async (snapshotId) => {
     setRecalculating(snapshotId);
     try {
-      const res = await axios.post(`${API}/v2/snapshots/${snapshotId}/recalculate`);
+      const res = await api.post(`/v2/snapshots/${snapshotId}/recalculate`);
       toast({ 
         title: "Success", 
         description: `Recalculated ${res.data.employee_count} employees. Dashboard & Rankings updated!` 
@@ -192,7 +191,7 @@ export default function Snapshots() {
     if (!window.confirm("Are you sure you want to delete this snapshot?")) return;
     
     try {
-      await axios.delete(`${API}/v2/snapshots/${snapshotId}`);
+      await api.delete(`/v2/snapshots/${snapshotId}`);
       toast({ title: "Deleted", description: "Snapshot removed" });
       await fetchSnapshots();
     } catch (error) {

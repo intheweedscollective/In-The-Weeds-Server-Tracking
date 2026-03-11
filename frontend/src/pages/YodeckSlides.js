@@ -1,13 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { Monitor, Download, Calendar, FileImage, Palette, Star, TrendingUp, AlertTriangle, Settings2 } from "lucide-react";
 import { toast } from "sonner";
-import axios from "axios";
+import api from "../lib/api";
 import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Input } from "../components/ui/input";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
 
 // Pre-built theme previews
 const THEME_PREVIEWS = {
@@ -74,17 +73,17 @@ export default function YodeckSlides() {
   const fetchSlideManifest = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await axios.get(
+      const response = await api.get(
         `${API}/v2/yodeck/${selectedYear}/${selectedQuarter}/all`
       );
       setSlideManifest(response.data);
       
       // Fetch backgrounds
-      const bgResponse = await axios.get(`${API}/v2/snapshots/backgrounds`);
+      const bgResponse = await api.get(`/v2/snapshots/backgrounds`);
       setBackgrounds(bgResponse.data || []);
       
       // Also fetch current theme settings
-      const settingsResponse = await axios.get(
+      const settingsResponse = await api.get(
         `${API}/v2/quarter-settings/${selectedYear}/${selectedQuarter}`
       );
       if (settingsResponse.data) {
@@ -216,7 +215,7 @@ export default function YodeckSlides() {
   const saveThemeSettings = async () => {
     setSavingTheme(true);
     try {
-      await axios.put(
+      await api.put(
         `${API}/v2/quarter-settings/${selectedYear}/${selectedQuarter}`,
         themeSettings
       );
