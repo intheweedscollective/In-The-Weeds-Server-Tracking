@@ -900,7 +900,7 @@ export default function FullRankings() {
                                     benchmark: `Target: ≤${benchmarks.benchmark_lsc || 100}`,
                                     rank: ranks.lsc,
                                     total,
-                                    color: (emp.guests_per_lsc || 999) <= (benchmarks.benchmark_lsc || 100) ? 'text-green-600' : 'text-red-600'
+                                    color: (emp.guests_per_lsc || 999) <= (benchmarks.benchmark_lsc || 100) ? 'text-green-400' : 'text-red-400'
                                   },
                                   {
                                     label: 'RT',
@@ -1045,15 +1045,15 @@ export default function FullRankings() {
                                     </div>
                                     
                                     {/* Improvement Plan Section */}
-                                    <div className="mt-6 bg-card rounded-xl p-5 border border-border shadow-sm">
+                                    <div className="mt-6 bg-slate-800 rounded-xl p-5 border border-slate-600 shadow-sm">
                                       <div className="flex items-center gap-2 mb-4">
-                                        <Target className="w-5 h-5 text-primary" />
-                                        <span className="text-lg font-serif font-bold text-foreground">Improvement Plan</span>
+                                        <Target className="w-5 h-5 text-blue-400" />
+                                        <span className="text-lg font-serif font-bold text-white">Improvement Plan</span>
                                       </div>
                                       
                                       {/* Gap Analysis vs Benchmarks */}
                                       <div className="mb-5">
-                                        <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                                        <h4 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
                                           <TrendingUp className="w-4 h-4" />
                                           Gap Analysis vs Benchmarks
                                         </h4>
@@ -1092,12 +1092,12 @@ export default function FullRankings() {
                                                 : g.current - g.target;
                                               const isGood = diff >= 0;
                                               return (
-                                                <div key={i} className={`p-3 rounded-lg ${isGood ? 'bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700' : 'bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700'}`}>
-                                                  <div className="text-xs text-muted-foreground mb-1">{g.label}</div>
-                                                  <div className={`text-lg font-bold ${isGood ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                                <div key={i} className={`p-3 rounded-lg ${isGood ? 'bg-green-900/40 border border-green-500/50' : 'bg-red-900/40 border border-red-500/50'}`}>
+                                                  <div className="text-xs text-slate-300 mb-1">{g.label}</div>
+                                                  <div className={`text-lg font-bold ${isGood ? 'text-green-400' : 'text-red-400'}`}>
                                                     {isGood ? '+' : '-'}{g.format(Math.abs(diff))}
                                                   </div>
-                                                  <div className="text-xs text-muted-foreground">
+                                                  <div className="text-xs text-slate-400">
                                                     {isGood ? 'Above target' : `Need ${g.format(Math.abs(diff))} more`}
                                                   </div>
                                                 </div>
@@ -1109,40 +1109,40 @@ export default function FullRankings() {
                                       
                                       {/* To Pass Next Employee */}
                                       {employeeAbove && (employee.peer_rank || 0) > 1 && (
-                                        <div className="border-t border-border pt-4">
-                                          <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
-                                            <ArrowUp className="w-4 h-4 text-blue-500" />
+                                        <div className="border-t border-slate-600 pt-4">
+                                          <h4 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
+                                            <ArrowUp className="w-4 h-4 text-blue-400" />
                                             <span className="truncate">To Pass #{(employee.peer_rank || 0) - 1} ({employeeAbove.name})</span>
                                           </h4>
                                           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
-                                            <div className="bg-blue-100 dark:bg-blue-900/30 rounded-lg p-2 sm:p-3 border border-blue-200 dark:border-blue-700">
-                                              <div className="text-xs text-muted-foreground">Gap</div>
-                                              <div className="text-base sm:text-lg font-bold text-blue-600 dark:text-blue-400">
+                                            <div className="bg-blue-900/40 rounded-lg p-2 sm:p-3 border border-blue-500/50">
+                                              <div className="text-xs text-slate-300">Gap</div>
+                                              <div className="text-base sm:text-lg font-bold text-blue-400">
                                                 +{((employeeAbove.total_score || 0) - (employee.total_score || 0)).toFixed(1)}
                                               </div>
-                                              <div className="text-xs text-muted-foreground hidden sm:block">pts needed</div>
+                                              <div className="text-xs text-slate-400 hidden sm:block">pts needed</div>
                                             </div>
-                                            <div className="bg-muted rounded-lg p-2 sm:p-3">
-                                              <div className="text-xs text-muted-foreground">PPA</div>
-                                              <div className="text-sm font-semibold text-foreground">
+                                            <div className="bg-slate-700/50 rounded-lg p-2 sm:p-3">
+                                              <div className="text-xs text-slate-400">PPA</div>
+                                              <div className="text-sm font-semibold text-white">
                                                 ${(employeeAbove.ppa || getEmployeeDetails(employeeAbove.employee_id)?.ppa || 0).toFixed(0)}
                                               </div>
                                             </div>
-                                            <div className="bg-muted rounded-lg p-2 sm:p-3">
-                                              <div className="text-xs text-muted-foreground">LBW</div>
-                                              <div className="text-sm font-semibold text-foreground">
+                                            <div className="bg-slate-700/50 rounded-lg p-2 sm:p-3">
+                                              <div className="text-xs text-slate-400">LBW</div>
+                                              <div className="text-sm font-semibold text-white">
                                                 ${(employeeAbove.lbw_per_guest || getEmployeeDetails(employeeAbove.employee_id)?.lbw_per_guest || 0).toFixed(2)}
                                               </div>
                                             </div>
-                                            <div className="bg-muted rounded-lg p-2 sm:p-3">
-                                              <div className="text-xs text-muted-foreground">Glass</div>
-                                              <div className="text-sm font-semibold text-foreground">
+                                            <div className="bg-slate-700/50 rounded-lg p-2 sm:p-3">
+                                              <div className="text-xs text-slate-400">Glass</div>
+                                              <div className="text-sm font-semibold text-white">
                                                 ${(employeeAbove.glassware_per_guest || getEmployeeDetails(employeeAbove.employee_id)?.glassware_per_guest || 0).toFixed(2)}
                                               </div>
                                             </div>
-                                            <div className="bg-muted rounded-lg p-2 sm:p-3">
-                                              <div className="text-xs text-muted-foreground">LSC</div>
-                                              <div className="text-sm font-semibold text-foreground">
+                                            <div className="bg-slate-700/50 rounded-lg p-2 sm:p-3">
+                                              <div className="text-xs text-slate-400">LSC</div>
+                                              <div className="text-sm font-semibold text-white">
                                                 {(employeeAbove.guests_per_lsc || getEmployeeDetails(employeeAbove.employee_id)?.guests_per_lsc || 0).toFixed(0)}
                                               </div>
                                             </div>
