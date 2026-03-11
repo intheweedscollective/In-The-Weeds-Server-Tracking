@@ -577,22 +577,25 @@ export default function ScoringAudit() {
 
   // Fix a single employee's discrepancies
   const fixSingleEmployee = async (employeeName) => {
-    toast.info(`Fixing discrepancies for ${employeeName}...`);
+    toast.info(`Fixing ${employeeName}...`);
     try {
-      // Sync mentions for this employee
-      await api.post(`/v2/audit/sync-employee-mentions?quarter=${quarter}&year=${year}`);
-      // Sync NPS
-      await api.post(`/v2/audit/sync-nps-to-employees?quarter=${quarter}&year=${year}`);
-      // Recalculate
-      await api.post(`/v2/audit/recalculate-all?quarter=${quarter}&year=${year}`);
+      const response = await api.post(`/v2/audit/fix-employee/${encodeURIComponent(employeeName)}?quarter=${quarter}&year=${year}`);
       
-      toast.success(`Fixed discrepancies for ${employeeName}`);
+      if (response.data.success) {
+        const { old_score, new_score, score_change } = response.data;
+        toast.success(`Fixed ${employeeName}: ${old_score} → ${new_score} (${score_change >= 0 ? '+' : ''}${score_change})`);
+      } else {
+        toast.error(response.data.error || 'Failed to fix employee');
+      }
       
       // Refresh the audit for this employee
-      await fetchEmployeeAudit(employeeName);
+      if (selectedEmployee === employeeName) {
+        await fetchEmployeeAudit(employeeName);
+      }
       await fetchAllEmployeesAudit();
+      await fetchDataCapStatus();
     } catch (error) {
-      toast.error(`Failed to fix ${employeeName}`);
+      toast.error(`Failed to fix ${employeeName}: ${error.response?.data?.detail || error.message}`);
     }
   };
 
@@ -955,6 +958,30 @@ export default function ScoringAudit() {
               <span className="text-xs text-slate-500">{filteredEmployees.length} emp</span>
             </div>
             
+            {/* Fix All Button when there are failures */}
+            {allEmployeesAudit?.employees?.some(e => e.status === 'FAIL') && (
+              <Button
+                onClick={async () => {
+                  toast.info("Fixing all discrepancies...");
+                  try {
+                    const response = await api.post(`/v2/audit/fix-all-discrepancies?quarter=${quarter}&year=${year}`);
+                    if (response.data.success) {
+                      toast.success(response.data.message || "All discrepancies fixed!");
+                      await fetchAllEmployeesAudit();
+                      await fetchDataCapStatus();
+                    }
+                  } catch (error) {
+                    toast.error("Failed to fix all discrepancies");
+                  }
+                }}
+                className="w-full mb-3 bg-red-600 hover:bg-red-700 text-white"
+                size="sm"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Fix All Issues ({allEmployeesAudit?.employees?.filter(e => e.status === 'FAIL').length})
+              </Button>
+            )}
+            
             <div className="relative mb-3">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-500" />
               <Input
@@ -979,7 +1006,22 @@ export default function ScoringAudit() {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-medium text-white text-sm truncate">{emp.name}</span>
-                    <StatusBadge status={emp.status} />
+                    <div className="flex items-center gap-2">
+                      {emp.status === 'FAIL' && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            fixSingleEmployee(emp.name);
+                          }}
+                          className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded flex items-center gap-1"
+                          title={`Fix ${emp.name}`}
+                        >
+                          <RefreshCw className="w-3 h-3" />
+                          Fix
+                        </button>
+                      )}
+                      <StatusBadge status={emp.status} />
+                    </div>
                   </div>
                   <div className="flex items-center justify-between mt-1 text-xs">
                     <span className="text-slate-500">Score: <span className="text-white">{emp.score?.toFixed(1)}</span></span>

@@ -6867,6 +6867,106 @@ async def audit_employee_score(employee_name: str, quarter: str = "Q1", year: in
     return {"success": True, "audit": audit}
 
 
+@api_router.post("/v2/audit/fix-employee/{employee_name}")
+async def fix_single_employee(employee_name: str, quarter: str = "Q1", year: int = 2026):
+    """
+    Fix a single employee's score discrepancies by recalculating from raw data.
+    This recalculates the score using the correct formula:
+    - Weighted Base (PPA 25%, LSC 25%, LBW 15%, Glass 10%, NPS 10%, RT 15%)
+    - + Metric Bonus (max 20 pts)
+    - + CV Bonus (promoters*0.5 - detractors*1, no cap)
+    """
+    # Get employee record
+    employee = await db.employees_v2.find_one(
+        {"name": {"$regex": f"^{employee_name}$", "$options": "i"}, "quarter": quarter.upper(), "year": year}
+    )
+    
+    if not employee:
+        return {"success": False, "error": f"Employee '{employee_name}' not found"}
+    
+    # Get raw CV feedback
+    cv_feedback = await db.cv_feedback.find(
+        {"server_name": {"$regex": f"^{employee_name}$", "$options": "i"}, "quarter": quarter.upper(), "year": year}
+    ).to_list(100)
+    
+    promoters = len([f for f in cv_feedback if f.get("rating", 0) >= 9])
+    passives = len([f for f in cv_feedback if 7 <= f.get("rating", 0) <= 8])
+    detractors = len([f for f in cv_feedback if f.get("rating", 0) <= 6])
+    total_feedback = len(cv_feedback)
+    nps_score = round(((promoters - detractors) / total_feedback) * 100, 2) if total_feedback > 0 else 0
+    
+    # Count actual review mentions
+    actual_mentions = await db.customer_reviews.count_documents({
+        "quarter": quarter.upper(),
+        "year": year,
+        "employee_mentions.name": {"$regex": f"^{employee_name}$", "$options": "i"}
+    })
+    
+    # Get benchmark scores from employee record
+    capped_ppa = min(employee.get("score_ppa", 0) or 0, 100)
+    capped_lsc = min(employee.get("score_lsc", 0) or 0, 100)
+    capped_lbw = min(employee.get("score_lbw", 0) or 0, 100)
+    capped_glass = min(employee.get("score_glass", 0) or 0, 100)
+    
+    # Calculate NPS contribution (10% weight)
+    nps_normalized = max(0, (nps_score + 100) / 2)
+    nps_contribution = min(nps_normalized, 100) * 0.10
+    
+    # Calculate RT contribution (0.5 pts per mention, max 15)
+    rt_contribution = min(actual_mentions * 0.5, 15)
+    
+    # Base weighted score
+    base_weighted = (capped_ppa * 0.25) + (capped_lsc * 0.25) + (capped_lbw * 0.15) + (capped_glass * 0.10) + nps_contribution + rt_contribution
+    
+    # Metric bonus
+    metric_bonus = min(employee.get("total_metric_bonus", 0) or 0, 20)
+    
+    # CV bonus
+    cv_bonus = (promoters * 0.5) - (detractors * 1)
+    
+    # Final score
+    new_weighted = round(base_weighted, 2)
+    new_score = round(base_weighted + metric_bonus + cv_bonus, 2)
+    
+    old_score = employee.get("pre_dar_score") or employee.get("total_score", 0)
+    
+    # Update employee
+    await db.employees_v2.update_one(
+        {"_id": employee["_id"]},
+        {"$set": {
+            "review_mentions": actual_mentions,
+            "review_tracker_bonus": rt_contribution,
+            "cv_promoters": promoters,
+            "cv_passives": passives,
+            "cv_detractors": detractors,
+            "nps_score": nps_score,
+            "cv_score": cv_bonus,
+            "cv_bonus": cv_bonus,
+            "weighted_score": new_weighted,
+            "pre_dar_score": new_score,
+            "total_score": new_score,
+            "fixed_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {
+        "success": True,
+        "employee_name": employee["name"],
+        "old_score": old_score,
+        "new_score": new_score,
+        "score_change": round(new_score - old_score, 2),
+        "details": {
+            "review_mentions": actual_mentions,
+            "rt_bonus": rt_contribution,
+            "cv_promoters": promoters,
+            "cv_detractors": detractors,
+            "cv_bonus": cv_bonus,
+            "metric_bonus": metric_bonus,
+            "weighted_score": new_weighted
+        }
+    }
+
+
 @api_router.get("/v2/audit/all")
 async def audit_all_employees(quarter: str = "Q1", year: int = 2026):
     """
