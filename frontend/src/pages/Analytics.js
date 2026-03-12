@@ -162,7 +162,7 @@ export default function Analytics() {
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
       if (isIOS) {
-        window.open(`${API}/v2/analytics/${selectedYear}/${selectedQuarter}/pdf`, "_blank", "noopener,noreferrer");
+        window.open(`${BACKEND_URL}/v2/analytics/${selectedYear}/${selectedQuarter}/pdf`, "_blank", "noopener,noreferrer");
         toast.success("Opened Analytics PDF");
         return;
       }
@@ -992,7 +992,7 @@ export default function Analytics() {
                     📊 Team Average Comparison
                   </h3>
                   <img 
-                    src={`${API}/v2/trends/${selectedYear}/${selectedQuarter}/team?chart_type=comparison`}
+                    src={`${BACKEND_URL}/v2/trends/${selectedYear}/${selectedQuarter}/team?chart_type=comparison`}
                     alt="Team Comparison Chart"
                     className="w-full rounded-lg"
                     data-testid="team-comparison-chart"
@@ -1007,7 +1007,7 @@ export default function Analytics() {
                     📈 Tier Distribution
                   </h3>
                   <img 
-                    src={`${API}/v2/trends/${selectedYear}/${selectedQuarter}/team?chart_type=distribution`}
+                    src={`${BACKEND_URL}/v2/trends/${selectedYear}/${selectedQuarter}/team?chart_type=distribution`}
                     alt="Tier Distribution Chart"
                     className="w-full rounded-lg"
                     data-testid="tier-distribution-chart"

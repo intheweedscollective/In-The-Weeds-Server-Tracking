@@ -220,7 +220,7 @@ export default function FullRankings() {
     toast.info("Syncing NPS from Loyalty Voice... This may take a minute.");
     try {
       const response = await api.post(
-        `${API}/v2/cv/sync?quarter=${selectedQuarter}&year=${selectedYear}`,
+        `${BACKEND_URL}/v2/cv/sync?quarter=${selectedQuarter}&year=${selectedYear}`,
         {},
         { timeout: 180000 }  // 3 minute timeout for scraping
       );
@@ -265,7 +265,7 @@ export default function FullRankings() {
     try {
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
       const filename = `rankings_${selectedQuarter}_${selectedYear}.png`;
-      const url = `${API}/v2/yodeck/${selectedYear}/${selectedQuarter}/complete-rankings?format=16:9&background=${selectedBackground}`;
+      const url = `${BACKEND_URL}/v2/yodeck/${selectedYear}/${selectedQuarter}/complete-rankings?format=16:9&background=${selectedBackground}`;
       
       if (isIOS) {
         // For iOS, open in new tab
@@ -301,7 +301,7 @@ export default function FullRankings() {
     try {
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
       const filename = `printable_rankings_${selectedQuarter}_${selectedYear}.png`;
-      const url = `${API}/v2/yodeck/${selectedYear}/${selectedQuarter}/printable-rankings?format=16:9`;
+      const url = `${BACKEND_URL}/v2/yodeck/${selectedYear}/${selectedQuarter}/printable-rankings?format=16:9`;
       
       if (isIOS) {
         window.open(url, '_blank');
@@ -334,7 +334,7 @@ export default function FullRankings() {
     setDownloadingReview(employeeId);
     try {
       const response = await api.post(
-        `${API}/v2/employees/${employeeId}/generate-review`,
+        `${BACKEND_URL}/v2/employees/${employeeId}/generate-review`,
         { quarter: selectedQuarter, year: selectedYear },
         { responseType: 'blob' }
       );

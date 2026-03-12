@@ -115,7 +115,7 @@ export default function Dashboard() {
   }, [employees, calculateStats]);
 
   const downloadTemplate = () => {
-    window.open(`${API}/v2/template`, '_blank');
+    window.open(`${BACKEND_URL}/v2/template`, '_blank');
     toast.success("Template downloaded!");
   };
 

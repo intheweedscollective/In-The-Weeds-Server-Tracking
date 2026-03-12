@@ -345,7 +345,7 @@ export default function LeaderboardRankings() {
     setDownloading(true);
     try {
       const response = await api.get(
-        `${API}/v2/yodeck/${selectedYear}/${selectedQuarter}/leaderboard-slide?format=16:9`,
+        `${BACKEND_URL}/v2/yodeck/${selectedYear}/${selectedQuarter}/leaderboard-slide?format=16:9`,
         { responseType: "blob" }
       );
       

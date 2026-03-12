@@ -9,8 +9,6 @@ import { useToast } from "../hooks/use-toast";
 import { POSUploadModal } from "../components/POSUploadModal";
 import api from "../lib/api";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-
 export default function Snapshots() {
   const { toast } = useToast();
   const [snapshots, setSnapshots] = useState([]);
@@ -121,7 +119,7 @@ export default function Snapshots() {
     setGenerating(snapshot.id);
     try {
       const response = await api.get(
-        `${API}/v2/snapshots/${snapshot.id}/slide?background=${selectedBackground}`,
+        `/v2/snapshots/${snapshot.id}/slide?background=${selectedBackground}`,
         { responseType: 'blob' }
       );
       
