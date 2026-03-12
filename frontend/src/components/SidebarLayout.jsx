@@ -94,7 +94,7 @@ export const SidebarLayout = ({ children }) => {
   const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const [expandedGroups, setExpandedGroups] = useState(["performance", "feedback", "exports", "team"]);
+  const [expandedGroups, setExpandedGroups] = useState(["performance", "feedback", "exports", "team", "qr"]);
   const { theme, toggleTheme } = useTheme();
 
   const toggleGroup = (groupId) => {

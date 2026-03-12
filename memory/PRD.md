@@ -535,6 +535,14 @@ Updated Customer Voice scoring to use spec NPS scale with current promoter logic
 
 ## Change Log
 
+### March 12, 2026
+**QR Track Hub Integration & Review Tracker Cleanup**
+- ✅ **Fixed QR Track Hub Sidebar Navigation**: Added "qr" to default expanded groups so the QR Track Hub section is visible by default in the sidebar
+- ✅ **Removed Sync Functions from Review Tracker**: Removed "Sync Customer Voice" and "Sync ReviewTrackers" buttons and their associated functions. The app now uses manual uploads only via the Data Uploads page.
+- **Files Modified**: 
+  - `/app/frontend/src/components/SidebarLayout.jsx` (added "qr" to expandedGroups)
+  - `/app/frontend/src/pages/ReviewTracker.js` (removed handleSync, handleSyncCV, and sync buttons)
+
 ### December 9, 2025
 **P0 Bug Fix: Clean POS Parser LBW/LSC Extraction**
 - Fixed critical bug in `server.py` where the clean POS format parser was not extracting Liquor, Beer, Wine (LBW) and Loyalty (LSC) data

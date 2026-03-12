@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Star, Plus, Search, Filter, Trash2, Edit2, MessageSquare, TrendingUp, Award, X, Check, AlertCircle, RefreshCw, Cloud, CheckCircle, Sparkles, Ban, Undo2, Upload } from "lucide-react";
+import { Star, Plus, Search, Filter, Trash2, Edit2, MessageSquare, TrendingUp, Award, X, Check, AlertCircle, CheckCircle, Ban, Undo2, Upload } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { toast } from "sonner";
@@ -37,8 +37,6 @@ export default function ReviewTracker() {
   const [filterPlatform, setFilterPlatform] = useState("");
   const [filterEmployee, setFilterEmployee] = useState("");
   const [syncStatus, setSyncStatus] = useState(null);
-  const [syncing, setSyncing] = useState(false);
-  const [syncingCV, setSyncingCV] = useState(false);
   const [activeTab, setActiveTab] = useState("all"); // "all", "cv", "reviews"
   const [showExcluded, setShowExcluded] = useState(false);
   const [excludedCount, setExcludedCount] = useState(0);
@@ -109,58 +107,6 @@ export default function ReviewTracker() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
-
-  // Sync from ReviewTrackers
-  const handleSync = async () => {
-    setSyncing(true);
-    toast.info("Syncing from ReviewTrackers... This may take a few minutes.");
-    
-    try {
-      const res = await fetch(
-        `${API_URL}/api/v2/reviews/sync?quarter=${selectedQuarter}&year=${selectedYear}`,
-        { method: "POST" }
-      );
-      
-      const data = await res.json();
-      
-      if (data.success) {
-        toast.success(`Synced ${data.new_reviews} new reviews!`);
-        fetchData(); // Refresh the data
-      } else {
-        toast.error(data.message || "Sync failed");
-      }
-    } catch (error) {
-      toast.error("Sync request failed - it may still be processing in the background");
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  // Sync Customer Voice feedback
-  const handleSyncCV = async () => {
-    setSyncingCV(true);
-    toast.info("Syncing Customer Voice feedback... This may take a minute.");
-    
-    try {
-      const res = await fetch(
-        `${API_URL}/api/v2/cv/feedback/sync?quarter=${selectedQuarter}&year=${selectedYear}`,
-        { method: "POST" }
-      );
-      
-      const data = await res.json();
-      
-      if (data.success) {
-        toast.success(`Synced ${data.new_count} new CV feedback items!`);
-        fetchData();
-      } else {
-        toast.error(data.message || "CV sync failed");
-      }
-    } catch (error) {
-      toast.error("CV sync request failed");
-    } finally {
-      setSyncingCV(false);
-    }
-  };
 
   // Upload Server Performance CSV
   const handleServerPerfUpload = async (event) => {
@@ -289,21 +235,6 @@ export default function ReviewTracker() {
               </p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              {/* Customer Voice Sync Button - Most Important */}
-              <Button
-                onClick={handleSyncCV}
-                disabled={syncingCV}
-                className="bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white font-semibold shadow-lg"
-                data-testid="sync-cv-btn"
-              >
-                {syncingCV ? (
-                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Sparkles className="w-4 h-4 mr-2" />
-                )}
-                {syncingCV ? "Syncing..." : "Sync Customer Voice"}
-              </Button>
-              
               {/* Server Performance CSV Upload */}
               <label className="cursor-pointer">
                 <input
@@ -325,23 +256,6 @@ export default function ReviewTracker() {
                 </Button>
               </label>
               
-              {/* ReviewTrackers Sync Button */}
-              {syncStatus?.configured && (
-                <Button
-                  onClick={handleSync}
-                  disabled={syncing}
-                  variant="outline"
-                  className="border-green-500 text-green-600 hover:bg-green-50"
-                  data-testid="sync-reviewtrackers-btn"
-                >
-                  {syncing ? (
-                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Cloud className="w-4 h-4 mr-2" />
-                  )}
-                  {syncing ? "Syncing..." : "Sync ReviewTrackers"}
-                </Button>
-              )}
               <Button
                 onClick={() => setShowAddModal(true)}
                 className="bg-primary hover:bg-primary/90 text-white"
@@ -353,9 +267,8 @@ export default function ReviewTracker() {
             </div>
           </div>
           
-          {/* Sync Status Banners */}
+          {/* CV Status - Highlighted */}
           <div className="mt-3 space-y-2">
-            {/* CV Status - Highlighted */}
             {cvStats && cvStats.total_feedback > 0 && (
               <div className="flex items-center gap-2 text-sm text-orange-700 bg-gradient-to-r from-yellow-50 to-orange-50 px-3 py-2 rounded-lg border border-orange-200">
                 <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
@@ -371,16 +284,11 @@ export default function ReviewTracker() {
               </div>
             )}
             
-            {syncStatus?.configured && (
+            {syncStatus?.total_synced_reviews > 0 && (
               <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 px-3 py-2 rounded-lg">
                 <CheckCircle className="w-4 h-4" />
                 <span>
-                  ReviewTrackers connected • {syncStatus.total_synced_reviews || 0} reviews synced
-                  {syncStatus.last_sync_time && (
-                    <span className="text-slate-400 ml-2">
-                      • Last sync: {new Date(syncStatus.last_sync_time).toLocaleString()}
-                    </span>
-                  )}
+                  ReviewTrackers: {syncStatus.total_synced_reviews || 0} reviews loaded
                 </span>
               </div>
             )}
