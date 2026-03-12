@@ -27,6 +27,7 @@ import asyncio
 import requests
 from pypdf import PdfReader, PdfWriter
 from pdf_full_rankings import build_full_rankings_pdf
+from qr_tracking import register_qr_routes
 from yodeck_slides import (
     generate_top_10_slide, generate_tier_slide,
     generate_most_improved_slide, generate_promotion_watchlist_slide, generate_at_risk_slide,
@@ -8931,6 +8932,9 @@ async def get_reconciliation_history(limit: int = 10):
     
     return {"history": history}
 
+
+# Register QR tracking routes BEFORE including in app
+register_qr_routes(api_router, db)
 
 # Include the router in the main app
 app.include_router(api_router)

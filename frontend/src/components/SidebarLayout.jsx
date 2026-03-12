@@ -19,7 +19,8 @@ import {
   X,
   Sun,
   Moon,
-  Upload
+  Upload,
+  QrCode
 } from "lucide-react";
 import { useTheme } from "../context/ThemeContext";
 
@@ -62,6 +63,16 @@ const navGroups = [
     label: "Team",
     items: [
       { path: "/employees", label: "Employees", icon: Users }
+    ]
+  },
+  {
+    id: "qr",
+    label: "QR Track Hub",
+    items: [
+      { path: "/qr", label: "QR Dashboard", icon: QrCode },
+      { path: "/qr/leaderboard", label: "QR Leaderboard", icon: Trophy },
+      { path: "/qr/codes", label: "QR Codes", icon: QrCode },
+      { path: "/qr/settings", label: "QR Settings", icon: Settings }
     ]
   },
   {
