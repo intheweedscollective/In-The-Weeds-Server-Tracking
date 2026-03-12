@@ -545,14 +545,23 @@ Updated Customer Voice scoring to use spec NPS scale with current promoter logic
 - ✅ **Integrated Top 10 QR Clicks into Dashboard**: Added QRTopClicksCard component to the main Dashboard showing top 5 employees by QR scan clicks
 - ✅ **Created Reports Page**: New `/reports` page with performance summaries, Top 5 performers, downloadable reports, and the full Top 10 QR Clicks leaderboard
 - ✅ **Added Reports to Sidebar**: Reports link added to the main navigation section
+- ✅ **Deprecated Legacy Scrapers**: All web scraping endpoints now return deprecation messages pointing to manual upload alternatives
+  - `/api/v2/reviews/sync` → Use `/api/v2/rt/upload`
+  - `/api/v2/cv/sync` → Use `/api/v2/cv/server-performance/upload`
+  - `/api/v2/cv/feedback/sync` → Use `/api/v2/cv/server-performance/upload`
+  - `/api/v2/admin/sync-from-ui`, `/api/v2/admin/sync-rt-from-ui`, `/api/v2/admin/sync-cv-from-ui` → Use manual uploads
+- ✅ **Archived Scraper Files**: Moved legacy scraper files to `/app/backend/_deprecated_scrapers/` directory
+  - `cv_feedback_scraper.py`, `loyalty_voice_integration.py`, `ui_scrapers.py`
 - **Files Created**: 
   - `/app/frontend/src/components/QRTopClicksCard.jsx` (reusable component for QR top clicks leaderboard)
   - `/app/frontend/src/pages/Reports.js` (new Reports & Analytics page)
+  - `/app/backend/_deprecated_scrapers/README.md` (documentation for deprecated files)
 - **Files Modified**: 
   - `/app/frontend/src/components/SidebarLayout.jsx` (added "qr" to expandedGroups, scroll preservation, added Reports link)
   - `/app/frontend/src/pages/ReviewTracker.js` (removed sync functions, renamed upload button, added RT template button)
   - `/app/frontend/src/pages/Dashboard.js` (added QRTopClicksCard component)
   - `/app/frontend/src/App.js` (added Reports route)
+  - `/app/backend/server.py` (deprecated all scraper endpoints, commented out scraper imports)
 
 ### December 9, 2025
 **P0 Bug Fix: Clean POS Parser LBW/LSC Extraction**

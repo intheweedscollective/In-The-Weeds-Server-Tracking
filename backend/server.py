@@ -4912,9 +4912,11 @@ from review_tracker import (
     generate_review_hash, detect_employees_in_review,
     calculate_review_points_for_employee, get_review_stats
 )
-from reviewtrackers_integration import (
-    ReviewTrackersClient, sync_reviews_from_reviewtrackers
-)
+
+# Legacy import - commented out since scrapers are deprecated
+# from reviewtrackers_integration import (
+#     ReviewTrackersClient, sync_reviews_from_reviewtrackers
+# )
 
 
 class CustomerReviewCreate(BaseModel):
@@ -5302,7 +5304,7 @@ async def get_employee_review_points(
 
 
 # ============================================================================
-# REVIEWTRACKERS SYNC - Automatic review import
+# REVIEWTRACKERS SYNC - DEPRECATED (Use manual upload at /api/v2/rt/upload)
 # ============================================================================
 
 @api_router.post("/v2/reviews/sync")
@@ -5312,34 +5314,15 @@ async def sync_from_reviewtrackers(
     since_date: Optional[str] = None
 ):
     """
-    Sync reviews from ReviewTrackers API.
-    
-    Args:
-        quarter: Quarter to assign reviews to
-        year: Year to assign reviews to
-        since_date: Only sync reviews published after this date (YYYY-MM-DD)
+    DEPRECATED: Use manual upload instead.
+    Upload ReviewTracker data via /api/v2/rt/upload or the Data Uploads page.
     """
-    try:
-        results = await sync_reviews_from_reviewtrackers(
-            db=db,
-            quarter=quarter,
-            year=year,
-            since_date=since_date,
-            detect_employees_func=detect_employees_in_review
-        )
-        
-        return {
-            "success": results.get("success", False),
-            "message": f"Synced {results.get('new_count', 0)} new reviews from ReviewTrackers",
-            "new_reviews": results.get("new_count", 0),
-            "skipped_duplicates": results.get("skipped_count", 0),
-            "total_fetched": results.get("total_fetched", 0),
-            "errors": results.get("errors", [])[:5]  # Limit errors shown
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+    return {
+        "success": False,
+        "deprecated": True,
+        "message": "This sync endpoint has been deprecated. Please use the manual upload feature at /api/v2/rt/upload or navigate to the Data Uploads page to upload ReviewTracker data.",
+        "alternative": "/api/v2/rt/upload"
+    }
 
 
 @api_router.get("/v2/reviews/sync/status")
@@ -5373,143 +5356,41 @@ async def get_sync_status():
 
 @api_router.post("/v2/reviews/sync/test")
 async def test_reviewtrackers_connection():
-    """Test connection to ReviewTrackers API."""
-    try:
-        client = ReviewTrackersClient()
-        success = await client.authenticate()
-        
-        if success:
-            # Try to get a few reviews to verify full access
-            result = await client.get_reviews(per_page=5)
-            review_count = len(result.get("reviews", []))
-            
-            return {
-                "success": True,
-                "message": "Successfully connected to ReviewTrackers",
-                "account_id": client.account_id,
-                "sample_reviews_found": review_count
-            }
-        else:
-            return {
-                "success": False,
-                "message": "Authentication failed - check credentials"
-            }
-    except Exception as e:
-        return {
-            "success": False,
-            "message": f"Connection error: {str(e)}"
-        }
+    """
+    DEPRECATED: ReviewTrackers sync has been replaced with manual uploads.
+    """
+    return {
+        "success": False,
+        "deprecated": True,
+        "message": "ReviewTrackers sync has been deprecated. Please use the manual upload feature instead."
+    }
 
 
 # ============================================================================
-# LOYALTY VOICE (CV) INTEGRATION - Server Performance NPS Scores
+# LOYALTY VOICE (CV) INTEGRATION - DEPRECATED (Use manual upload)
 # ============================================================================
 
-from loyalty_voice_integration import (
-    sync_loyalty_voice_to_db,
-    scrape_server_performance_report,
-    get_nps_score_for_employee,
-    get_quarter_date_range
-)
+# Legacy imports - commented out since scrapers are deprecated
+# from loyalty_voice_integration import (
+#     sync_loyalty_voice_to_db,
+#     scrape_server_performance_report,
+#     get_nps_score_for_employee,
+#     get_quarter_date_range
+# )
 
 
 @api_router.post("/v2/cv/sync")
 async def sync_loyalty_voice(quarter: str = "Q1", year: int = 2026):
     """
-    Sync NPS scores from Loyalty Voice Server Performance Report.
-    
-    This scrapes the Server Performance Report which contains NPS %
-    for each server, then matches them to employees in the database.
-    Also updates employees_v2 collection with the synced NPS data.
+    DEPRECATED: Use manual upload instead.
+    Upload Customer Voice data via /api/v2/cv/server-performance/upload or the Data Uploads page.
     """
-    try:
-        results = await sync_loyalty_voice_to_db(
-            db=db,
-            quarter=quarter,
-            year=year
-        )
-        
-        if not results.get("success"):
-            return {
-                "success": False,
-                "message": results.get("error", "Sync failed"),
-                "error": results.get("error"),
-                "debug_screenshot": results.get("debug_screenshot")
-            }
-        
-        # IMPORTANT: Also update employees_v2 with the synced NPS data
-        # This ensures CV scores are reflected in the main employee records
-        cv_records = await db.cv_nps.find(
-            {"quarter": quarter.upper(), "year": year},
-            {"_id": 0}
-        ).to_list(500)
-        
-        employees_updated = 0
-        for cv in cv_records:
-            emp_name = cv.get("employee_name", "")
-            nps_score = cv.get("nps_score", 0) or 0
-            
-            # Calculate CV score from NPS (NPS% × 0.10)
-            cv_score = round(nps_score * 0.10, 2)
-            
-            if emp_name:
-                # First, get the current employee data to recalculate scores
-                emp_doc = await db.employees_v2.find_one(
-                    {"name": emp_name, "quarter": quarter.upper(), "year": year},
-                    {"_id": 0}
-                )
-                
-                if emp_doc:
-                    # Recalculate weighted_score and pre_dar_score with new CV score
-                    # weighted_score = base_score + cv_score
-                    # base_score = capped(PPA×0.25 + LBW×0.20 + Glass×0.15 + LSC×0.25)
-                    capped_ppa = min(emp_doc.get('score_ppa', 0) or 0, 100)
-                    capped_lbw = min(emp_doc.get('score_lbw', 0) or 0, 100)
-                    capped_glass = min(emp_doc.get('score_glass', 0) or 0, 100)
-                    capped_lsc = min(emp_doc.get('score_lsc', 0) or 0, 100)
-                    
-                    base_score = capped_ppa * 0.25 + capped_lbw * 0.20 + capped_glass * 0.15 + capped_lsc * 0.25
-                    new_weighted = round(base_score + cv_score, 2)
-                    
-                    # pre_dar_score = weighted + metric_bonus + rt_bonus
-                    metric_bonus = emp_doc.get('total_metric_bonus', 0) or 0
-                    rt_bonus = emp_doc.get('review_tracker_bonus', 0) or 0
-                    new_pre_dar = round(new_weighted + metric_bonus + rt_bonus, 2)
-                    new_total = round(new_pre_dar + (emp_doc.get('dar_penalty', 0) or 0), 2)
-                    
-                    result = await db.employees_v2.update_one(
-                        {"name": emp_name, "quarter": quarter.upper(), "year": year},
-                        {"$set": {
-                            "cv_promoters": cv.get("promoters", 0),
-                            "cv_passives": cv.get("passives", 0),
-                            "cv_detractors": cv.get("detractors", 0),
-                            "cv_score": cv_score,
-                            "score_cv": cv_score,
-                            "nps_score": nps_score,
-                            "cv_source": "loyalty_voice_sync",
-                            "weighted_score": new_weighted,
-                            "pre_dar_score": new_pre_dar,
-                            "total_score": new_total
-                        }}
-                    )
-                    if result.modified_count > 0:
-                        employees_updated += 1
-        
-        logging.info(f"CV sync: Updated {employees_updated} employees with NPS data and recalculated scores")
-        
-        return {
-            "success": True,
-            "message": f"Synced NPS scores for {results.get('matched_count', 0)} employees",
-            "matched_count": results.get("matched_count", 0),
-            "matched_servers": results.get("matched_servers", []),
-            "unmatched_servers": results.get("unmatched_servers", []),
-            "total_scraped": results.get("total_scraped", 0),
-            "employees_updated": employees_updated,
-            "cleared_count": results.get("cleared_count", 0)
-        }
-    except Exception as e:
-        logging.error(f"CV sync error: {e}")
-        raise HTTPException(status_code=500, detail=f"CV sync failed: {str(e)}")
+    return {
+        "success": False,
+        "deprecated": True,
+        "message": "This sync endpoint has been deprecated. Please use the manual upload feature. Navigate to Data Uploads page and upload your Customer Voice XLSX file.",
+        "alternative": "/api/v2/cv/server-performance/upload"
+    }
 
 
 @api_router.get("/v2/cv/nps")
@@ -5676,45 +5557,25 @@ async def get_cv_sync_status():
 
 
 # ============================================================================
-# CV FEEDBACK (Customer Voice Comments) INTEGRATION
+# CV FEEDBACK (Customer Voice Comments) INTEGRATION - DEPRECATED
 # ============================================================================
 
-from cv_feedback_scraper import sync_cv_feedback_to_db, scrape_cv_feedback
+# Legacy imports - commented out since scrapers are deprecated
+# from cv_feedback_scraper import sync_cv_feedback_to_db, scrape_cv_feedback
 
 
 @api_router.post("/v2/cv/feedback/sync")
 async def sync_cv_feedback(quarter: str = "Q1", year: int = 2026):
     """
-    Sync Customer Voice feedback comments from Loyalty Voice.
-    
-    This scrapes individual feedback items with ratings and comments,
-    detects employee mentions, and awards CV points.
+    DEPRECATED: Use manual upload instead.
+    Upload Customer Voice data via /api/v2/cv/server-performance/upload or the Data Uploads page.
     """
-    try:
-        results = await sync_cv_feedback_to_db(
-            db=db,
-            quarter=quarter,
-            year=year
-        )
-        
-        if not results.get("success"):
-            return {
-                "success": False,
-                "message": results.get("error", "Sync failed"),
-                "error": results.get("error")
-            }
-        
-        return {
-            "success": True,
-            "message": f"Synced {results.get('new_count', 0)} new CV feedback items",
-            "new_count": results.get("new_count", 0),
-            "skipped_count": results.get("skipped_count", 0),
-            "total_scraped": results.get("total_scraped", 0),
-            "employees_with_mentions": results.get("employees_with_mentions", 0)
-        }
-    except Exception as e:
-        logging.error(f"CV feedback sync error: {e}")
-        raise HTTPException(status_code=500, detail=f"CV feedback sync failed: {str(e)}")
+    return {
+        "success": False,
+        "deprecated": True,
+        "message": "This sync endpoint has been deprecated. Please use the manual upload feature. Navigate to Data Uploads page and upload your Customer Voice XLSX file.",
+        "alternative": "/api/v2/cv/server-performance/upload"
+    }
 
 
 @api_router.get("/v2/cv/feedback")
@@ -8676,7 +8537,7 @@ async def reconcile_cv_feedback_with_official(quarter: str = "Q1", year: int = 2
 
 
 # ============================================================
-# UI DASHBOARD SCRAPER - Sync from RT and LV dashboards directly
+# UI DASHBOARD SCRAPER - DEPRECATED (Use manual upload instead)
 # ============================================================
 
 @api_router.post("/v2/admin/sync-from-ui")
@@ -8686,98 +8547,42 @@ async def sync_stats_from_ui_dashboards(
     background_tasks: BackgroundTasks = None
 ):
     """
-    Scrape official stats directly from ReviewTrackers and Loyalty Voice UI dashboards.
-    This ensures 100% accuracy with what you see in their interfaces.
-    
-    This operation logs into both platforms and extracts the exact numbers displayed.
+    DEPRECATED: Use manual upload instead.
+    This scraper endpoint has been replaced with manual data uploads.
     """
-    from ui_scrapers import sync_official_stats_from_ui
-    
-    try:
-        results = await sync_official_stats_from_ui(db, quarter, year)
-        return {
-            "success": True,
-            "message": "Stats synced from UI dashboards",
-            "results": results
+    return {
+        "success": False,
+        "deprecated": True,
+        "message": "UI scraping has been deprecated. Please use the manual upload features on the Data Uploads page.",
+        "alternatives": {
+            "cv_upload": "/api/v2/cv/server-performance/upload",
+            "rt_upload": "/api/v2/rt/upload"
         }
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
+    }
 
 
 @api_router.post("/v2/admin/sync-rt-from-ui")
 async def sync_rt_from_ui(quarter: str = "Q1", year: int = 2026):
     """
-    Scrape ReviewTrackers stats directly from their web dashboard.
+    DEPRECATED: Use manual upload instead.
     """
-    from ui_scrapers import ReviewTrackersScraper
-    
-    scraper = ReviewTrackersScraper()
-    stats = await scraper.scrape_platform_stats(quarter, year)
-    
-    if stats.get("success"):
-        # Save as official stats
-        official = {
-            "quarter": quarter.upper(),
-            "year": year,
-            "platforms": {
-                "Google": stats.get("platforms", {}).get("Google", {"rating": 0, "reviews": 0}),
-                "Yelp": stats.get("platforms", {}).get("Yelp", {"rating": 0, "reviews": 0}),
-                "TripAdvisor": stats.get("platforms", {}).get("TripAdvisor", {"rating": 0, "reviews": 0}),
-                "OpenTable": stats.get("platforms", {}).get("OpenTable", {"rating": 0, "reviews": 0}),
-                "Facebook": stats.get("platforms", {}).get("Facebook", {"rating": 0, "reviews": 0}),
-            },
-            "total_reviews": stats.get("total_reviews", 0),
-            "source": "scraped_from_ui",
-            "updated_at": datetime.now(timezone.utc).isoformat()
-        }
-        
-        await db.official_rt_stats.update_one(
-            {"quarter": quarter.upper(), "year": year},
-            {"$set": official},
-            upsert=True
-        )
-        
-        return {"success": True, "stats": official}
-    else:
-        return {"success": False, "error": stats.get("error")}
+    return {
+        "success": False,
+        "deprecated": True,
+        "message": "ReviewTrackers UI scraping has been deprecated. Please use manual upload at /api/v2/rt/upload or the Data Uploads page."
+    }
 
 
 @api_router.post("/v2/admin/sync-cv-from-ui")
 async def sync_cv_from_ui(quarter: str = "Q1", year: int = 2026):
     """
-    Scrape Loyalty Voice (Customer Voice) stats directly from their web dashboard.
+    DEPRECATED: Use manual upload instead.
     """
-    from ui_scrapers import LoyaltyVoiceScraper
-    
-    scraper = LoyaltyVoiceScraper()
-    stats = await scraper.scrape_nps_stats(quarter, year)
-    
-    if stats.get("success"):
-        # Save as official stats
-        official = {
-            "quarter": quarter.upper(),
-            "year": year,
-            "nps_score": stats.get("nps_score", 0),
-            "promoters": stats.get("promoters", 0),
-            "passives": stats.get("passives", 0),
-            "detractors": stats.get("detractors", 0),
-            "total_responses": stats.get("total_responses", 0),
-            "source": "scraped_from_ui",
-            "updated_at": datetime.now(timezone.utc).isoformat()
-        }
-        
-        await db.official_cv_stats.update_one(
-            {"quarter": quarter.upper(), "year": year},
-            {"$set": official},
-            upsert=True
-        )
-        
-        return {"success": True, "stats": official}
-    else:
-        return {"success": False, "error": stats.get("error")}
+    return {
+        "success": False,
+        "deprecated": True,
+        "message": "Loyalty Voice UI scraping has been deprecated. Please use manual upload at /api/v2/cv/server-performance/upload or the Data Uploads page."
+    }
 
 
 
