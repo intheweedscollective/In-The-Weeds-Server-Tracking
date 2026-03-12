@@ -4,6 +4,7 @@ import { Users, FileText, TrendingUp, Award, Target, Fish, Settings, Camera, Dow
 import { toast } from "sonner";
 import api from "../lib/api";
 import FinalizeQuarterModal from "../components/FinalizeQuarterModal";
+import QRTopClicksCard from "../components/QRTopClicksCard";
 import { formatNumber } from "../utils/formatters";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -605,6 +606,11 @@ export default function Dashboard() {
             </div>
           </div>
         )}
+
+        {/* QR Top Clicks Section */}
+        <div className="mt-6">
+          <QRTopClicksCard showViewAll={true} limit={5} />
+        </div>
       </div>
 
       {/* Top Performers Modal */}

@@ -542,9 +542,17 @@ Updated Customer Voice scoring to use spec NPS scale with current promoter logic
 - ✅ **Renamed Upload Button**: Changed "Upload Server Report" to "Upload Customer Voice" for clarity
 - ✅ **Added RT Template Button**: Added "RT Template" download button to Review Tracker page header
 - ✅ **Fixed Sidebar Scroll Behavior**: Sidebar scroll position is now preserved when expanding/collapsing navigation groups (using useRef and requestAnimationFrame)
+- ✅ **Integrated Top 10 QR Clicks into Dashboard**: Added QRTopClicksCard component to the main Dashboard showing top 5 employees by QR scan clicks
+- ✅ **Created Reports Page**: New `/reports` page with performance summaries, Top 5 performers, downloadable reports, and the full Top 10 QR Clicks leaderboard
+- ✅ **Added Reports to Sidebar**: Reports link added to the main navigation section
+- **Files Created**: 
+  - `/app/frontend/src/components/QRTopClicksCard.jsx` (reusable component for QR top clicks leaderboard)
+  - `/app/frontend/src/pages/Reports.js` (new Reports & Analytics page)
 - **Files Modified**: 
-  - `/app/frontend/src/components/SidebarLayout.jsx` (added "qr" to expandedGroups, added scroll preservation logic with useRef)
+  - `/app/frontend/src/components/SidebarLayout.jsx` (added "qr" to expandedGroups, scroll preservation, added Reports link)
   - `/app/frontend/src/pages/ReviewTracker.js` (removed sync functions, renamed upload button, added RT template button)
+  - `/app/frontend/src/pages/Dashboard.js` (added QRTopClicksCard component)
+  - `/app/frontend/src/App.js` (added Reports route)
 
 ### December 9, 2025
 **P0 Bug Fix: Clean POS Parser LBW/LSC Extraction**

@@ -16,6 +16,7 @@ import YodeckSlides from "./pages/YodeckSlides";
 import Snapshots from "./pages/Snapshots";
 import HelpCenter from "./pages/HelpCenter";
 import DataUploads from "./pages/DataUploads";
+import Reports from "./pages/Reports";
 import QRDashboard from "./pages/QRDashboard";
 import QRLeaderboard from "./pages/QRLeaderboard";
 import QREmployees from "./pages/QREmployees";
@@ -44,6 +45,7 @@ function App() {
               <Route path="/data-integrity" element={<DataIntegrity />} />
               <Route path="/scoring-audit" element={<ScoringAudit />} />
               <Route path="/help" element={<HelpCenter />} />
+              <Route path="/reports" element={<Reports />} />
               {/* QR Track Hub - Isolated Module */}
               <Route path="/qr" element={<QRDashboard />} />
               <Route path="/qr/leaderboard" element={<QRLeaderboard />} />
