@@ -5077,7 +5077,25 @@ async def get_reviews(
     employee_name: Optional[str] = None
 ):
     """Get all reviews with optional filters."""
-    query = {"quarter": quarter.upper(), "year": year}
+    # Define quarter date ranges
+    quarter_ranges = {
+        "Q1": (f"{year}-01-01", f"{year}-03-31"),
+        "Q2": (f"{year}-04-01", f"{year}-06-30"),
+        "Q3": (f"{year}-07-01", f"{year}-09-30"),
+        "Q4": (f"{year}-10-01", f"{year}-12-31"),
+    }
+    
+    start_date, end_date = quarter_ranges.get(quarter.upper(), (f"{year}-01-01", f"{year}-03-31"))
+    
+    # Filter by actual review_date within the quarter range
+    query = {
+        "quarter": quarter.upper(), 
+        "year": year,
+        "review_date": {
+            "$gte": start_date,
+            "$lte": end_date + "T23:59:59Z"
+        }
+    }
     
     if platform:
         query["platform"] = platform
@@ -5101,8 +5119,25 @@ async def get_reviews(
 @api_router.get("/v2/reviews/stats")
 async def get_review_stats_endpoint(quarter: str = "Q1", year: int = 2026):
     """Get review statistics including employee mention counts and points."""
+    # Define quarter date ranges
+    quarter_ranges = {
+        "Q1": (f"{year}-01-01", f"{year}-03-31"),
+        "Q2": (f"{year}-04-01", f"{year}-06-30"),
+        "Q3": (f"{year}-07-01", f"{year}-09-30"),
+        "Q4": (f"{year}-10-01", f"{year}-12-31"),
+    }
+    
+    start_date, end_date = quarter_ranges.get(quarter.upper(), (f"{year}-01-01", f"{year}-03-31"))
+    
     reviews = await db.customer_reviews.find(
-        {"quarter": quarter.upper(), "year": year},
+        {
+            "quarter": quarter.upper(), 
+            "year": year,
+            "review_date": {
+                "$gte": start_date,
+                "$lte": end_date + "T23:59:59Z"
+            }
+        },
         {"_id": 0}
     ).to_list(1000)
     
@@ -5590,9 +5625,40 @@ async def get_cv_feedback(quarter: str = "Q1", year: int = 2026, limit: int = 10
     feedback = await db.cv_feedback.find(
         query,
         {"_id": 0}
-    ).sort("date", -1).to_list(limit)
+    ).sort("date", -1).to_list(limit * 2)  # Fetch extra to account for filtering
     
-    # Also get excluded count
+    # Filter by date to only show Q1 2026 (January 1 - March 31, 2026)
+    # Handle multiple date formats
+    filtered_feedback = []
+    for f in feedback:
+        date_str = f.get("date", "")
+        if not date_str:
+            continue
+            
+        # Check if date is in Q1 2026
+        is_q1_2026 = False
+        
+        # Format: 2026-01-15T... (ISO format)
+        if date_str.startswith("2026-01") or date_str.startswith("2026-02") or date_str.startswith("2026-03"):
+            is_q1_2026 = True
+        # Format: 01/15/2026 or 1/15/2026 (US format)
+        elif "/2026" in date_str:
+            parts = date_str.split("/")
+            if len(parts) >= 2:
+                try:
+                    month = int(parts[0])
+                    if 1 <= month <= 3:
+                        is_q1_2026 = True
+                except:
+                    pass
+        
+        if is_q1_2026:
+            filtered_feedback.append(f)
+    
+    # Limit results
+    filtered_feedback = filtered_feedback[:limit]
+    
+    # Also get excluded count (for current quarter only)
     excluded_count = await db.cv_feedback.count_documents({
         "quarter": quarter.upper(), 
         "year": year,
@@ -5600,8 +5666,8 @@ async def get_cv_feedback(quarter: str = "Q1", year: int = 2026, limit: int = 10
     })
     
     return {
-        "feedback": feedback,
-        "total": len(feedback),
+        "feedback": filtered_feedback,
+        "total": len(filtered_feedback),
         "excluded_count": excluded_count,
         "quarter": quarter.upper(),
         "year": year
