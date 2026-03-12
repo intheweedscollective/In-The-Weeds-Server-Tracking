@@ -536,6 +536,28 @@ Updated Customer Voice scoring to use spec NPS scale with current promoter logic
 ## Change Log
 
 ### March 12, 2026
+**Multi-Store Architecture & Review Data Cleanup**
+- ✅ **Cleaned Up Old Review Data**: Reviews are now strictly filtered by actual `review_date` within the quarter range
+- ✅ **Built Multi-Store Module**: New `store_management.py` backend module supporting 22 Landry's locations
+  - Store CRUD endpoints (`/api/stores/*`)
+  - Global reports and leaderboard (`/api/stores/reports/*`)
+  - Store-level statistics (`/api/stores/{id}/stats`)
+  - Default stores initialization with 7 regions
+- ✅ **Created Store Management Frontend**: 
+  - `StoreManagement.js` - Grid view of all stores with search/filter
+  - `StoreLeaderboard.js` - Compare performance across all locations
+  - `StoreDetails.js` - Individual store details and metrics
+- ✅ **Added Multi-Store Navigation**: New "Multi-Store" section in sidebar with Store Management and Store Leaderboard links
+- **Files Created**:
+  - `/app/backend/store_management.py` (store CRUD, reports, leaderboard APIs)
+  - `/app/frontend/src/pages/StoreManagement.js`
+  - `/app/frontend/src/pages/StoreLeaderboard.js`
+  - `/app/frontend/src/pages/StoreDetails.js`
+- **Files Modified**:
+  - `/app/backend/server.py` (registered store routes)
+  - `/app/frontend/src/App.js` (added store routes)
+  - `/app/frontend/src/components/SidebarLayout.jsx` (added Multi-Store nav group)
+
 **QR Track Hub Integration & Review Tracker Cleanup**
 - ✅ **Fixed QR Track Hub Sidebar Navigation**: Added "qr" to default expanded groups so the QR Track Hub section is visible by default in the sidebar
 - ✅ **Removed Sync Functions from Review Tracker**: Removed "Sync Customer Voice" and "Sync ReviewTrackers" buttons and their associated functions. The app now uses manual uploads only via the Data Uploads page.

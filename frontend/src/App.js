@@ -21,6 +21,9 @@ import QRDashboard from "./pages/QRDashboard";
 import QRLeaderboard from "./pages/QRLeaderboard";
 import QREmployees from "./pages/QREmployees";
 import QRSettings from "./pages/QRSettings";
+import StoreManagement from "./pages/StoreManagement";
+import StoreLeaderboard from "./pages/StoreLeaderboard";
+import StoreDetails from "./pages/StoreDetails";
 import OnboardingGuide from "./components/OnboardingGuide";
 import "./App.css";
 
@@ -51,6 +54,10 @@ function App() {
               <Route path="/qr/leaderboard" element={<QRLeaderboard />} />
               <Route path="/qr/codes" element={<QREmployees />} />
               <Route path="/qr/settings" element={<QRSettings />} />
+              {/* Multi-Store Management */}
+              <Route path="/stores" element={<StoreManagement />} />
+              <Route path="/stores/leaderboard" element={<StoreLeaderboard />} />
+              <Route path="/stores/:storeId" element={<StoreDetails />} />
             </Routes>
           </SidebarLayout>
           <OnboardingGuide />

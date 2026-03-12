@@ -20,7 +20,8 @@ import {
   Sun,
   Moon,
   Upload,
-  QrCode
+  QrCode,
+  Building2
 } from "lucide-react";
 import { useTheme } from "../context/ThemeContext";
 
@@ -67,6 +68,14 @@ const navGroups = [
     ]
   },
   {
+    id: "stores",
+    label: "Multi-Store",
+    items: [
+      { path: "/stores", label: "Store Management", icon: Building2 },
+      { path: "/stores/leaderboard", label: "Store Leaderboard", icon: Trophy }
+    ]
+  },
+  {
     id: "qr",
     label: "QR Track Hub",
     items: [
@@ -95,7 +104,7 @@ export const SidebarLayout = ({ children }) => {
   const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const [expandedGroups, setExpandedGroups] = useState(["performance", "feedback", "exports", "team", "qr"]);
+  const [expandedGroups, setExpandedGroups] = useState(["performance", "feedback", "exports", "team", "qr", "stores"]);
   const { theme, toggleTheme } = useTheme();
   const navRef = useRef(null);
 
