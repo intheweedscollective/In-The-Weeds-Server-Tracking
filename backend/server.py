@@ -6002,63 +6002,74 @@ async def upload_server_performance_csv(
     year: int = 2026
 ):
     """
-    Upload Server Performance Report CSV from Customer Voice to properly
-    attribute CV surveys to servers.
+    Upload Server Performance Report from Customer Voice (Loyalty Voice).
+    Supports CSV and XLSX formats.
     
-    The CSV should have columns: Name, Location, Sent, Received, Response Rate, Avg Rating, NPS
+    Expected columns: Name, Location, Sent, Received, Response Rate, Avg Rating, NPS
     
-    This updates the cv_nps collection with accurate server-level NPS data.
+    This calculates promoters/detractors using the correct NPS formula:
+    - Promoters = Received × (100 + NPS) / 200
+    - Detractors = Received × (100 - NPS) / 200
+    
+    Then updates employee CV scores in the database.
     """
-    import csv
-    import io
-    
     try:
         contents = await file.read()
-        csv_text = contents.decode('utf-8')
-        reader = csv.DictReader(io.StringIO(csv_text))
         
-        records_updated = 0
-        total_surveys = 0
+        # Support both CSV and XLSX
+        if file.filename.lower().endswith('.csv'):
+            df = pd.read_csv(io.BytesIO(contents))
+        else:
+            df = pd.read_excel(io.BytesIO(contents))
         
-        for row in reader:
-            server_name = row.get('Name', '').strip()
-            if not server_name or server_name == 'Manager App Manager App':
+        # Clean column names
+        df.columns = [str(col).strip() for col in df.columns]
+        
+        # Required columns check
+        required = ['Name', 'Received', 'NPS']
+        missing = [c for c in required if c not in df.columns]
+        if missing:
+            raise HTTPException(status_code=400, detail=f"Missing columns: {', '.join(missing)}")
+        
+        records_processed = []
+        employees_updated = 0
+        
+        for _, row in df.iterrows():
+            server_name = str(row.get('Name', '')).strip()
+            if not server_name or server_name == 'nan' or 'Manager App' in server_name:
                 continue
             
             received = int(row.get('Received', 0) or 0)
-            sent = int(row.get('Sent', 0) or 0)
             nps_score = float(row.get('NPS', 0) or 0)
             avg_rating = float(row.get('Avg Rating', 0) or 0)
+            sent = int(row.get('Sent', 0) or 0)
             
             if received == 0:
+                # No responses - skip but still record
+                records_processed.append({
+                    "name": server_name,
+                    "received": 0,
+                    "nps": 0,
+                    "promoters": 0,
+                    "detractors": 0,
+                    "status": "no_responses"
+                })
                 continue
             
-            total_surveys += received
+            # Calculate promoters/detractors using correct NPS formula
+            # NPS = ((P - D) / R) * 100
+            # Solving: P = R × (100 + NPS) / 200, D = R × (100 - NPS) / 200
+            promoters = round(received * (100 + nps_score) / 200)
+            detractors = round(received * (100 - nps_score) / 200)
+            passives = received - promoters - detractors
             
-            # Calculate promoters/passives/detractors from NPS
-            # NPS = (promoters - detractors) / received * 100
-            # For now, estimate based on NPS score
-            if nps_score >= 75:
-                promoters = received
-                detractors = 0
-                passives = 0
-            elif nps_score >= 50:
-                promoters = int(received * 0.75)
-                passives = int(received * 0.25)
-                detractors = 0
-            elif nps_score >= 0:
-                promoters = int(received * 0.5)
-                passives = int(received * 0.3)
-                detractors = int(received * 0.2)
-            else:
-                promoters = 0
-                passives = int(received * 0.3)
-                detractors = int(received * 0.7)
+            # Ensure non-negative values
+            promoters = max(0, promoters)
+            detractors = max(0, detractors)
+            passives = max(0, passives)
             
-            # Ensure counts sum to received
-            total = promoters + passives + detractors
-            if total < received:
-                promoters += (received - total)
+            # Calculate CV bonus (used in scoring)
+            cv_bonus = (promoters * 0.5) - (detractors * 1.0)
             
             # Find matching employee in database
             employee = await db.employees_v2.find_one({
@@ -6066,50 +6077,299 @@ async def upload_server_performance_csv(
                 "year": year,
                 "$or": [
                     {"name": {"$regex": f"^{server_name}$", "$options": "i"}},
-                    {"name": {"$regex": server_name.split()[0], "$options": "i"}} if ' ' in server_name else {"name": server_name}
+                    {"name": {"$regex": f"^{server_name.split()[0]}", "$options": "i"}} if ' ' in server_name else {"name": server_name}
                 ]
             })
             
-            employee_id = employee.get("id") if employee else None
+            record_status = "no_match"
             
-            # Update or insert cv_nps record
-            await db.cv_nps.update_one(
-                {
-                    "employee_name": server_name,
-                    "quarter": quarter.upper(),
-                    "year": year
-                },
-                {"$set": {
-                    "employee_name": server_name,
-                    "employee_id": employee_id,
-                    "quarter": quarter.upper(),
-                    "year": year,
-                    "nps_score": nps_score,
-                    "received": received,
-                    "sent": sent,
-                    "promoters": promoters,
-                    "passives": passives,
-                    "detractors": detractors,
-                    "avg_rating": avg_rating,
-                    "source": "csv_upload",
-                    "updated_at": datetime.now(timezone.utc).isoformat()
-                }},
-                upsert=True
-            )
-            records_updated += 1
+            if employee:
+                # Update employee with CV data
+                old_score = employee.get('total_score', 0) or 0
+                old_cv_bonus = employee.get('cv_bonus', 0) or employee.get('cv_score', 0) or 0
+                
+                # Recalculate total score
+                weighted = employee.get('weighted_score', 0) or 0
+                metric_bonus = min(employee.get('total_metric_bonus', 0) or 0, 20)
+                new_total = round(weighted + metric_bonus + cv_bonus, 2)
+                
+                await db.employees_v2.update_one(
+                    {"_id": employee["_id"]},
+                    {"$set": {
+                        "nps_score": nps_score,
+                        "cv_surveys_sent": sent,
+                        "cv_surveys_received": received,
+                        "cv_promoters": promoters,
+                        "cv_passives": passives,
+                        "cv_detractors": detractors,
+                        "cv_score": cv_bonus,
+                        "cv_bonus": cv_bonus,
+                        "cv_avg_rating": avg_rating,
+                        "total_score": new_total,
+                        "pre_dar_score": new_total,
+                        "cv_source": "manual_upload",
+                        "cv_updated_at": datetime.now(timezone.utc).isoformat()
+                    }}
+                )
+                employees_updated += 1
+                record_status = "updated"
+            
+            records_processed.append({
+                "name": server_name,
+                "received": received,
+                "nps": nps_score,
+                "promoters": promoters,
+                "detractors": detractors,
+                "passives": passives,
+                "cv_bonus": cv_bonus,
+                "matched_employee": employee.get("name") if employee else None,
+                "status": record_status
+            })
+        
+        # Update admin settings with official CV stats
+        total_promoters = sum(r.get('promoters', 0) for r in records_processed)
+        total_detractors = sum(r.get('detractors', 0) for r in records_processed)
+        total_passives = sum(r.get('passives', 0) for r in records_processed)
+        total_responses = sum(r.get('received', 0) for r in records_processed)
+        
+        await db.admin_settings.update_one(
+            {"_id": f"official_cv_stats_{quarter}_{year}"},
+            {"$set": {
+                "quarter": quarter.upper(),
+                "year": year,
+                "promoters": total_promoters,
+                "detractors": total_detractors,
+                "passives": total_passives,
+                "total_responses": total_responses,
+                "source": "manual_upload",
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }},
+            upsert=True
+        )
         
         return {
             "success": True,
-            "message": f"Updated {records_updated} server NPS records",
-            "records_updated": records_updated,
-            "total_surveys": total_surveys,
+            "message": f"Processed {len(records_processed)} records, updated {employees_updated} employees",
+            "summary": {
+                "total_records": len(records_processed),
+                "employees_updated": employees_updated,
+                "total_responses": total_responses,
+                "total_promoters": total_promoters,
+                "total_detractors": total_detractors,
+                "total_passives": total_passives
+            },
+            "records": records_processed,
             "quarter": quarter,
             "year": year
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
-        logging.error(f"Server Performance CSV upload error: {e}")
-        raise HTTPException(status_code=500, detail=f"CSV upload failed: {str(e)}")
+        logging.error(f"CV upload error: {e}")
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+
+@api_router.get("/v2/review-tracker/template")
+async def download_review_tracker_template(quarter: str = "Q1", year: int = 2026):
+    """
+    Generate and download a ReviewTracker template pre-populated with employee names.
+    """
+    # Get all employees for this quarter
+    employees = await db.employees_v2.find(
+        {"quarter": quarter.upper(), "year": year},
+        {"name": 1, "review_mentions": 1}
+    ).sort("name", 1).to_list(100)
+    
+    # Create template DataFrame
+    template_data = []
+    for emp in employees:
+        template_data.append({
+            "Employee Name": emp.get("name", ""),
+            "Positive Mentions": emp.get("review_mentions", 0),
+            "Notes": ""
+        })
+    
+    df = pd.DataFrame(template_data)
+    
+    # Generate Excel file
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Review Tracker', index=False)
+        
+        # Auto-adjust column widths
+        worksheet = writer.sheets['Review Tracker']
+        worksheet.column_dimensions['A'].width = 30
+        worksheet.column_dimensions['B'].width = 20
+        worksheet.column_dimensions['C'].width = 40
+    
+    output.seek(0)
+    
+    return Response(
+        content=output.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f"attachment; filename=ReviewTracker_Template_{quarter}_{year}.xlsx"
+        }
+    )
+
+
+@api_router.post("/v2/review-tracker/upload")
+async def upload_review_tracker_data(
+    file: UploadFile = File(...),
+    quarter: str = "Q1",
+    year: int = 2026
+):
+    """
+    Upload ReviewTracker data (positive mentions per employee).
+    
+    Expected columns: Employee Name, Positive Mentions
+    
+    Updates employee review_mentions and recalculates RT bonus.
+    RT Bonus = min(mentions × 0.5, 15)
+    """
+    try:
+        contents = await file.read()
+        
+        # Support both CSV and XLSX
+        if file.filename.lower().endswith('.csv'):
+            df = pd.read_csv(io.BytesIO(contents))
+        else:
+            df = pd.read_excel(io.BytesIO(contents))
+        
+        # Clean column names
+        df.columns = [str(col).strip() for col in df.columns]
+        
+        # Find the employee name and mentions columns (flexible matching)
+        name_col = None
+        mentions_col = None
+        
+        for col in df.columns:
+            col_lower = col.lower()
+            if 'name' in col_lower or 'employee' in col_lower:
+                name_col = col
+            elif 'mention' in col_lower or 'positive' in col_lower or 'review' in col_lower:
+                mentions_col = col
+        
+        if not name_col:
+            raise HTTPException(status_code=400, detail="Could not find employee name column")
+        if not mentions_col:
+            raise HTTPException(status_code=400, detail="Could not find mentions column")
+        
+        employees_updated = 0
+        records_processed = []
+        total_mentions = 0
+        
+        for _, row in df.iterrows():
+            emp_name = str(row.get(name_col, '')).strip()
+            if not emp_name or emp_name == 'nan':
+                continue
+            
+            mentions = int(row.get(mentions_col, 0) or 0)
+            total_mentions += mentions
+            
+            # Calculate RT bonus
+            rt_bonus = min(mentions * 0.5, 15)
+            
+            # Find matching employee
+            employee = await db.employees_v2.find_one({
+                "quarter": quarter.upper(),
+                "year": year,
+                "name": {"$regex": f"^{emp_name}$", "$options": "i"}
+            })
+            
+            record_status = "no_match"
+            
+            if employee:
+                # Get current values for recalculation
+                old_mentions = employee.get('review_mentions', 0) or 0
+                old_rt_bonus = employee.get('review_tracker_bonus', 0) or 0
+                
+                # Recalculate scores
+                # Get base components
+                capped_ppa = min(employee.get('score_ppa', 0) or 0, 100)
+                capped_lsc = min(employee.get('score_lsc', 0) or 0, 100)
+                capped_lbw = min(employee.get('score_lbw', 0) or 0, 100)
+                capped_glass = min(employee.get('score_glass', 0) or 0, 100)
+                nps_score = employee.get('nps_score', 0) or 0
+                
+                # NPS contribution
+                nps_normalized = max(0, (nps_score + 100) / 2)
+                nps_contribution = min(nps_normalized, 100) * 0.10
+                
+                # Calculate new weighted score
+                new_weighted = (capped_ppa * 0.25) + (capped_lsc * 0.25) + (capped_lbw * 0.15) + (capped_glass * 0.10) + nps_contribution + rt_bonus
+                
+                # Get other components
+                metric_bonus = min(employee.get('total_metric_bonus', 0) or 0, 20)
+                cv_bonus = employee.get('cv_bonus', 0) or employee.get('cv_score', 0) or 0
+                
+                # Final score
+                new_total = round(new_weighted + metric_bonus + cv_bonus, 2)
+                
+                await db.employees_v2.update_one(
+                    {"_id": employee["_id"]},
+                    {"$set": {
+                        "review_mentions": mentions,
+                        "review_tracker_bonus": rt_bonus,
+                        "weighted_score": round(new_weighted, 2),
+                        "total_score": new_total,
+                        "pre_dar_score": new_total,
+                        "rt_source": "manual_upload",
+                        "rt_updated_at": datetime.now(timezone.utc).isoformat()
+                    }}
+                )
+                employees_updated += 1
+                record_status = "updated"
+                
+                records_processed.append({
+                    "name": emp_name,
+                    "mentions": mentions,
+                    "rt_bonus": rt_bonus,
+                    "old_mentions": old_mentions,
+                    "matched_employee": employee.get("name"),
+                    "score_change": round(new_total - (employee.get('total_score', 0) or 0), 2),
+                    "status": record_status
+                })
+            else:
+                records_processed.append({
+                    "name": emp_name,
+                    "mentions": mentions,
+                    "rt_bonus": rt_bonus,
+                    "status": "no_match"
+                })
+        
+        # Update admin settings with official RT stats
+        await db.admin_settings.update_one(
+            {"_id": f"official_rt_stats_{quarter}_{year}"},
+            {"$set": {
+                "quarter": quarter.upper(),
+                "year": year,
+                "total_mentions": total_mentions,
+                "source": "manual_upload",
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }},
+            upsert=True
+        )
+        
+        return {
+            "success": True,
+            "message": f"Processed {len(records_processed)} records, updated {employees_updated} employees",
+            "summary": {
+                "total_records": len(records_processed),
+                "employees_updated": employees_updated,
+                "total_mentions": total_mentions
+            },
+            "records": records_processed,
+            "quarter": quarter,
+            "year": year
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"RT upload error: {e}")
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 
 # ============================================================================
@@ -6678,12 +6938,22 @@ async def audit_employee_score(employee_name: str, quarter: str = "Q1", year: in
     capped_glass = min(expected_score_glass, 100)
     capped_lsc = min(expected_score_lsc, 100)
     
+    # Check if using manual upload - use stored NPS instead of raw
+    cv_source = employee.get("cv_source", "")
+    stored_nps_for_weight = employee.get("nps_score", 0) or 0
+    
     # NPS % contribution (10% weight) - normalize NPS (-100 to 100) to 0-100 scale
-    raw_nps_for_weight = raw_nps if raw_nps else 0
-    nps_normalized = max(0, (raw_nps_for_weight + 100) / 2)
+    # For manual uploads, use stored NPS; otherwise use raw from cv_feedback
+    if cv_source == "manual_upload":
+        nps_for_weight = stored_nps_for_weight
+    else:
+        nps_for_weight = raw_nps if raw_nps else 0
+    
+    nps_normalized = max(0, (nps_for_weight + 100) / 2)
     nps_contribution = round(min(nps_normalized, 100) * 0.10, 2)
     
     # Review Tracker contribution (15% weight) - 0.5 pts per mention, max 15 pts
+    rt_source = employee.get("rt_source", "")
     rt_mentions = employee.get("review_mentions", 0) or 0
     rt_contribution = min(rt_mentions * 0.5, 15)
     
@@ -6711,9 +6981,21 @@ async def audit_employee_score(employee_name: str, quarter: str = "Q1", year: in
     stored_cv_detractors = employee.get("cv_detractors", 0) or 0
     stored_nps = employee.get("nps_score", 0) or 0
     stored_cv_score = employee.get("cv_score", 0) or 0
+    cv_source = employee.get("cv_source", "")
+    
+    # For manual uploads, use stored values as the source of truth
+    # Otherwise, use raw cv_feedback data
+    if cv_source == "manual_upload":
+        audit_promoters = stored_cv_promoters
+        audit_detractors = stored_cv_detractors
+        audit_nps = stored_nps
+    else:
+        audit_promoters = raw_promoters
+        audit_detractors = raw_detractors
+        audit_nps = raw_nps
     
     # CV Bonus: Promoters +0.5 each, Detractors -1 each (no cap)
-    expected_cv_bonus = (raw_promoters * 0.5) - (raw_detractors * 1)
+    expected_cv_bonus = (audit_promoters * 0.5) - (audit_detractors * 1)
     
     audit["data_trail"]["customer_voice"] = {
         "raw_feedback_count": raw_total,
@@ -6726,22 +7008,28 @@ async def audit_employee_score(employee_name: str, quarter: str = "Q1", year: in
             "promoters": stored_cv_promoters,
             "detractors": stored_cv_detractors,
             "nps_score": stored_nps
+        },
+        "source": cv_source if cv_source else "cv_feedback",
+        "audit_using": {
+            "promoters": audit_promoters,
+            "detractors": audit_detractors,
+            "nps": audit_nps
         }
     }
     
     audit["calculations"]["customer_voice"] = {
         "promoter_points": {
-            "formula": f"{raw_promoters} promoters × +0.5 pt",
-            "expected": raw_promoters * 0.5,
+            "formula": f"{audit_promoters} promoters × +0.5 pt",
+            "expected": audit_promoters * 0.5,
             "match": True
         },
         "detractor_points": {
-            "formula": f"{raw_detractors} detractors × -1 pt",
-            "expected": raw_detractors * -1,
+            "formula": f"{audit_detractors} detractors × -1 pt",
+            "expected": audit_detractors * -1,
             "match": True
         },
         "total_cv_bonus": {
-            "formula": f"({raw_promoters} × 0.5) - ({raw_detractors} × 1)",
+            "formula": f"({audit_promoters} × 0.5) - ({audit_detractors} × 1)",
             "expected": round(expected_cv_bonus, 2),
             "stored": stored_cv_score,
             "match": abs(expected_cv_bonus - stored_cv_score) < 0.5
@@ -6749,7 +7037,8 @@ async def audit_employee_score(employee_name: str, quarter: str = "Q1", year: in
     }
     
     # Check CV data consistency
-    if raw_total > 0:
+    # Skip if using manual upload - the uploaded data IS the source of truth
+    if raw_total > 0 and cv_source != "manual_upload":
         if raw_promoters != stored_cv_promoters:
             audit["discrepancies"].append({
                 "field": "cv_promoters",
@@ -6762,6 +7051,8 @@ async def audit_employee_score(employee_name: str, quarter: str = "Q1", year: in
                 "description": f"Raw feedback shows {raw_detractors} detractors but employee record has {stored_cv_detractors}",
                 "severity": "HIGH"
             })
+    elif cv_source == "manual_upload":
+        audit["data_trail"]["customer_voice"]["note"] = "Using uploaded data as source of truth"
     
     # === REVIEW TRACKER AUDIT ===
     stored_rt_mentions = employee.get("review_mentions", 0) or 0
@@ -6782,12 +7073,18 @@ async def audit_employee_score(employee_name: str, quarter: str = "Q1", year: in
         "match": abs(expected_rt_bonus - stored_rt_bonus) < 0.5
     }
     
-    if raw_rt_mentions != stored_rt_mentions:
+    # Check RT data consistency
+    # Skip if using manual upload - the uploaded data IS the source of truth
+    rt_source = employee.get("rt_source", "")
+    if raw_rt_mentions != stored_rt_mentions and rt_source != "manual_upload":
         audit["discrepancies"].append({
             "field": "review_mentions",
             "description": f"Found {raw_rt_mentions} review mentions but employee record has {stored_rt_mentions}",
             "severity": "MEDIUM"
         })
+    elif rt_source == "manual_upload":
+        audit["data_trail"]["review_tracker"]["source"] = "manual_upload"
+        audit["data_trail"]["review_tracker"]["note"] = "Using uploaded data as source of truth"
     
     # === METRIC BONUS AUDIT ===
     def calc_bonus(score):
@@ -7726,23 +8023,32 @@ async def fix_all_discrepancies(quarter: str = "Q1", year: int = 2026):
                 }
         
         # Update employee cv_promoters/cv_detractors from cv_feedback (raw data)
+        # BUT skip employees with cv_source="manual_upload" - their uploaded data IS the source of truth
         for emp in employees:
             name = emp["name"]
             name_lower = name.lower()
             
-            cv_data = cv_lookup.get(name_lower)
             current = await db.employees_v2.find_one({"_id": emp["_id"]})
             
-            if cv_data:
-                promoters = cv_data["promoters"]
-                detractors = cv_data["detractors"]
-                passives = cv_data["passives"]
-                nps_score = cv_data["nps_score"]
+            # Skip if using manual upload - preserve the uploaded values
+            if current.get("cv_source") == "manual_upload":
+                # Use the stored values from the manual upload
+                promoters = current.get("cv_promoters", 0) or 0
+                detractors = current.get("cv_detractors", 0) or 0
+                passives = current.get("cv_passives", 0) or 0
+                nps_score = current.get("nps_score", 0) or 0
             else:
-                promoters = 0
-                detractors = 0
-                passives = 0
-                nps_score = 0
+                cv_data = cv_lookup.get(name_lower)
+                if cv_data:
+                    promoters = cv_data["promoters"]
+                    detractors = cv_data["detractors"]
+                    passives = cv_data["passives"]
+                    nps_score = cv_data["nps_score"]
+                else:
+                    promoters = 0
+                    detractors = 0
+                    passives = 0
+                    nps_score = 0
             
             # === SCORING FORMULA (matches audit) ===
             # Base Score (100 pts max):
@@ -7789,8 +8095,8 @@ async def fix_all_discrepancies(quarter: str = "Q1", year: int = 2026):
                     "total_metric_bonus": metric_bonus,
                     "weighted_score": new_weighted,
                     "pre_dar_score": new_pre_dar,
-                    "total_score": new_pre_dar,
-                    "cv_sync_source": "cv_feedback_raw"
+                    "total_score": new_pre_dar
+                    # Don't overwrite cv_source - preserve manual_upload flag
                 }}
             )
             cv_feedback_updated += 1

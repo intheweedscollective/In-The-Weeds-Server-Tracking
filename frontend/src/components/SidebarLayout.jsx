@@ -18,7 +18,8 @@ import {
   Menu,
   X,
   Sun,
-  Moon
+  Moon,
+  Upload
 } from "lucide-react";
 import { useTheme } from "../context/ThemeContext";
 
@@ -27,7 +28,8 @@ const navGroups = [
   {
     id: "main",
     items: [
-      { path: "/", label: "Dashboard", icon: Home }
+      { path: "/", label: "Dashboard", icon: Home },
+      { path: "/uploads", label: "Data Uploads", icon: Upload }
     ]
   },
   {

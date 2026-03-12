@@ -15,6 +15,7 @@ import ScoringAudit from "./pages/ScoringAudit";
 import YodeckSlides from "./pages/YodeckSlides";
 import Snapshots from "./pages/Snapshots";
 import HelpCenter from "./pages/HelpCenter";
+import DataUploads from "./pages/DataUploads";
 import OnboardingGuide from "./components/OnboardingGuide";
 import "./App.css";
 
@@ -26,6 +27,7 @@ function App() {
           <SidebarLayout>
             <Routes>
               <Route path="/" element={<Dashboard />} />
+              <Route path="/uploads" element={<DataUploads />} />
               <Route path="/rankings" element={<FullRankings />} />
               <Route path="/leaderboard" element={<LeaderboardRankings />} />
               <Route path="/employees" element={<EmployeeList />} />
