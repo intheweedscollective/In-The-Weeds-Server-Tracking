@@ -7628,153 +7628,77 @@ async def sync_nps_to_employees(quarter: str = "Q1", year: int = 2026):
 @api_router.get("/v2/audit/review-accuracy")
 async def audit_review_accuracy(quarter: str = "Q1", year: int = 2026):
     """
-    Comprehensive audit comparing our data against source systems.
-    Returns discrepancies and verification status.
+    DEPRECATED: This endpoint previously compared data against live scrapers.
+    Now returns current database status only since scrapers are deprecated.
+    Use manual uploads for data accuracy.
     """
-    from reviewtrackers_integration import ReviewTrackersClient
-    
     audit_results = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "quarter": quarter.upper(),
         "year": year,
         "status": "PASS",
+        "deprecated": True,
+        "message": "Live scraper comparison has been deprecated. Data is now managed through manual uploads.",
         "issues": [],
         "platform_comparison": {},
         "mention_verification": {},
-        "recommendations": []
+        "recommendations": ["Use Data Uploads page to manage review data"]
     }
     
     try:
-        # 1. Compare RT API data vs our database
-        rt_client = ReviewTrackersClient()
-        await rt_client.authenticate()
-        api_reviews = await rt_client.get_all_reviews()
-        
-        # Count API reviews by platform
-        api_platform_counts = {}
-        for r in api_reviews:
-            source = r.get('source_name') or r.get('source_code') or 'Unknown'
-            source_lower = source.lower()
-            if 'google' in source_lower:
-                platform = 'Google'
-            elif 'yelp' in source_lower:
-                platform = 'Yelp'
-            elif 'tripadvisor' in source_lower or 'trip' in source_lower:
-                platform = 'TripAdvisor'
-            elif 'opentable' in source_lower:
-                platform = 'OpenTable'
-            else:
-                platform = source
-            api_platform_counts[platform] = api_platform_counts.get(platform, 0) + 1
-        
-        # Get our database counts
+        # Get our database counts by platform
         pipeline = [
+            {"$match": {"quarter": quarter.upper(), "year": year}},
             {"$group": {"_id": "$platform", "count": {"$sum": 1}}},
             {"$sort": {"count": -1}}
         ]
         db_counts = await db.customer_reviews.aggregate(pipeline).to_list(20)
-        db_platform_counts = {r['_id']: r['count'] for r in db_counts}
         
-        # Compare
-        all_platforms = set(api_platform_counts.keys()) | set(db_platform_counts.keys())
-        for platform in all_platforms:
-            api_count = api_platform_counts.get(platform, 0)
-            db_count = db_platform_counts.get(platform, 0)
-            diff = db_count - api_count
-            
+        for item in db_counts:
+            platform = item['_id']
+            count = item['count']
             audit_results["platform_comparison"][platform] = {
-                "api_count": api_count,
-                "db_count": db_count,
-                "difference": diff,
-                "status": "MATCH" if diff == 0 else ("EXTRA" if diff > 0 else "MISSING")
+                "db_count": count,
+                "status": "LOADED",
+                "source": "manual_upload"
             }
-            
-            if diff != 0:
-                audit_results["status"] = "WARNING"
-                audit_results["issues"].append(f"{platform}: {abs(diff)} {'extra' if diff > 0 else 'missing'} reviews")
         
-        # 2. Verify mention counts
-        # Get mention counts from reviews
-        mention_pipeline = [
-            {"$match": {"employee_mentions": {"$exists": True, "$ne": []}}},
-            {"$unwind": "$employee_mentions"},
-            {"$group": {"_id": "$employee_mentions.name", "count": {"$sum": 1}}},
-            {"$sort": {"count": -1}}
-        ]
-        review_mentions = await db.customer_reviews.aggregate(mention_pipeline).to_list(100)
-        review_mention_counts = {r["_id"]: r["count"] for r in review_mentions}
-        
-        # Get employee stored counts
+        # Get employee mention summary
         employees = await db.employees_v2.find(
             {"quarter": quarter.upper(), "year": year},
-            {"name": 1, "review_mentions": 1, "review_tracker_bonus": 1}
+            {"_id": 0, "name": 1, "rt_mentions": 1, "cv_promoters": 1, "cv_detractors": 1}
         ).to_list(100)
         
         for emp in employees:
-            name = emp["name"]
-            stored_mentions = emp.get("review_mentions", 0) or 0
-            calculated_mentions = review_mention_counts.get(name, 0)
-            expected_bonus = round(calculated_mentions * 0.2, 1)
-            stored_bonus = emp.get("review_tracker_bonus", 0) or 0
-            
-            status = "PASS"
-            if stored_mentions != calculated_mentions:
-                status = "MISMATCH"
-                audit_results["status"] = "FAIL"
-                audit_results["issues"].append(
-                    f"{name}: stored={stored_mentions}, calculated={calculated_mentions}"
-                )
-            
-            audit_results["mention_verification"][name] = {
-                "stored_mentions": stored_mentions,
-                "calculated_mentions": calculated_mentions,
-                "stored_bonus": stored_bonus,
-                "expected_bonus": expected_bonus,
-                "status": status
+            audit_results["mention_verification"][emp["name"]] = {
+                "rt_mentions": emp.get("rt_mentions", 0),
+                "cv_promoters": emp.get("cv_promoters", 0),
+                "cv_detractors": emp.get("cv_detractors", 0),
+                "status": "FROM_MANUAL_DATA"
             }
         
-        # 3. Generate recommendations
-        if api_platform_counts != db_platform_counts:
-            audit_results["recommendations"].append(
-                "Run 'Sync ReviewTrackers' to update review data from API"
-            )
-        
-        mention_mismatches = [
-            k for k, v in audit_results["mention_verification"].items() 
-            if v["status"] != "PASS"
-        ]
-        if mention_mismatches:
-            audit_results["recommendations"].append(
-                "Run 'Sync NPS & Reviews' on Scoring Audit page to fix mention counts"
-            )
-        
-        audit_results["summary"] = {
-            "api_total_reviews": len(api_reviews),
-            "db_total_reviews": sum(db_platform_counts.values()),
-            "platforms_matched": sum(1 for p in audit_results["platform_comparison"].values() if p["status"] == "MATCH"),
-            "platforms_total": len(audit_results["platform_comparison"]),
-            "employees_verified": len(employees),
-            "mention_mismatches": len(mention_mismatches)
-        }
+        return audit_results
         
     except Exception as e:
-        audit_results["status"] = "ERROR"
-        audit_results["error"] = str(e)
-    
-    return audit_results
+        logging.error(f"Audit error: {e}")
+        return {
+            "status": "ERROR",
+            "error": str(e)
+        }
 
 
 @api_router.post("/v2/audit/fix-all-discrepancies")
 async def fix_all_discrepancies(quarter: str = "Q1", year: int = 2026):
     """
     One-click fix for all data discrepancies:
-    1. Sync reviews from ReviewTrackers API
-    2. Re-detect employee mentions
+    1. Sync CV feedback from cv_feedback collection (manual uploads)
+    2. Re-detect employee mentions from existing reviews
     3. Update employee mention counts
     4. Recalculate scores
+    
+    NOTE: This now works with manually uploaded data only (scrapers deprecated).
     """
     import re
-    from reviewtrackers_integration import ReviewTrackersClient
     
     results = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -7782,15 +7706,10 @@ async def fix_all_discrepancies(quarter: str = "Q1", year: int = 2026):
     }
     
     try:
-        # Step 1: Sync reviews from RT API
-        rt_client = ReviewTrackersClient()
-        await rt_client.authenticate()
-        api_reviews = await rt_client.get_all_reviews()
-        
         # Get employee names for detection
         employees = await db.employees_v2.find(
             {"quarter": quarter.upper(), "year": year},
-            {"name": 1}
+            {"_id": 1, "name": 1}
         ).to_list(100)
         
         first_to_full = {}
@@ -7819,61 +7738,29 @@ async def fix_all_discrepancies(quarter: str = "Q1", year: int = 2026):
                     mentioned_names.add(full_name)
             return mentioned
         
-        new_reviews = 0
-        updated_reviews = 0
+        # Step 1: Re-detect mentions in existing reviews (no scraper needed - use existing data)
+        existing_reviews = await db.customer_reviews.find(
+            {"quarter": quarter.upper(), "year": year}
+        ).to_list(1000)
         
-        for r in api_reviews:
-            review_id = str(r.get('id') or r.get('review_id'))
-            if not review_id:
-                continue
-            
-            source = r.get('source_name') or r.get('source_code') or 'Unknown'
-            source_lower = source.lower()
-            if 'google' in source_lower:
-                platform = 'Google'
-            elif 'yelp' in source_lower:
-                platform = 'Yelp'
-            elif 'tripadvisor' in source_lower:
-                platform = 'TripAdvisor'
-            elif 'opentable' in source_lower:
-                platform = 'OpenTable'
-            else:
-                platform = source
-            
-            review_text = r.get('content') or r.get('text') or ''
+        updated_reviews = 0
+        for review in existing_reviews:
+            review_text = review.get('text', '') or ''
             mentions = detect_mentions(review_text)
             
-            existing = await db.customer_reviews.find_one({"review_id": review_id})
-            
-            if existing:
-                await db.customer_reviews.update_one(
-                    {"_id": existing["_id"]},
-                    {"$set": {
-                        "employee_mentions": mentions,
-                        "updated_at": datetime.now(timezone.utc).isoformat()
-                    }}
-                )
-                updated_reviews += 1
-            else:
-                await db.customer_reviews.insert_one({
-                    "review_id": review_id,
-                    "platform": platform,
-                    "text": review_text,
-                    "rating": r.get('rating'),
-                    "author": r.get('author'),
-                    "review_date": r.get('published_at'),
+            await db.customer_reviews.update_one(
+                {"_id": review["_id"]},
+                {"$set": {
                     "employee_mentions": mentions,
-                    "source": "reviewtrackers",
-                    "quarter": quarter.upper(),
-                    "year": year,
-                    "created_at": datetime.now(timezone.utc).isoformat()
-                })
-                new_reviews += 1
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                }}
+            )
+            updated_reviews += 1
         
         results["steps"].append({
             "step": "sync_reviews",
-            "new_reviews": new_reviews,
-            "updated_reviews": updated_reviews
+            "updated": updated_reviews,
+            "source": "existing_data"
         })
         
         # Step 2: Aggregate mention counts
