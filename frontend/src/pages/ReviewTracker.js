@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Star, Plus, Search, Filter, Trash2, Edit2, MessageSquare, TrendingUp, Award, X, Check, AlertCircle, CheckCircle, Ban, Undo2, Upload } from "lucide-react";
+import { Star, Plus, Search, Filter, Trash2, Edit2, MessageSquare, TrendingUp, Award, X, Check, AlertCircle, CheckCircle, Ban, Undo2, Upload, FileText } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { toast } from "sonner";
@@ -235,26 +235,37 @@ export default function ReviewTracker() {
               </p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              {/* Server Performance CSV Upload */}
+              {/* Customer Voice CSV Upload */}
               <label className="cursor-pointer">
                 <input
                   type="file"
-                  accept=".csv"
+                  accept=".csv,.xlsx"
                   onChange={handleServerPerfUpload}
                   className="hidden"
-                  data-testid="server-perf-upload-input"
+                  data-testid="cv-upload-input"
                 />
                 <Button
                   variant="outline"
-                  className="border-orange-400 text-orange-600 hover:bg-orange-50 pointer-events-none"
+                  className="border-orange-400 text-orange-400 hover:bg-orange-500/10 pointer-events-none"
                   asChild
                 >
                   <span>
                     <Upload className="w-4 h-4 mr-2" />
-                    Upload Server Report
+                    Upload Customer Voice
                   </span>
                 </Button>
               </label>
+              
+              {/* Review Tracker Template Download */}
+              <Button
+                variant="outline"
+                className="border-green-500 text-green-500 hover:bg-green-500/10"
+                onClick={() => window.open(`${API_URL}/api/v2/rt/template`, '_blank')}
+                data-testid="rt-template-btn"
+              >
+                <FileText className="w-4 h-4 mr-2" />
+                RT Template
+              </Button>
               
               <Button
                 onClick={() => setShowAddModal(true)}

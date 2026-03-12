@@ -539,9 +539,12 @@ Updated Customer Voice scoring to use spec NPS scale with current promoter logic
 **QR Track Hub Integration & Review Tracker Cleanup**
 - ✅ **Fixed QR Track Hub Sidebar Navigation**: Added "qr" to default expanded groups so the QR Track Hub section is visible by default in the sidebar
 - ✅ **Removed Sync Functions from Review Tracker**: Removed "Sync Customer Voice" and "Sync ReviewTrackers" buttons and their associated functions. The app now uses manual uploads only via the Data Uploads page.
+- ✅ **Renamed Upload Button**: Changed "Upload Server Report" to "Upload Customer Voice" for clarity
+- ✅ **Added RT Template Button**: Added "RT Template" download button to Review Tracker page header
+- ✅ **Fixed Sidebar Scroll Behavior**: Sidebar scroll position is now preserved when expanding/collapsing navigation groups (using useRef and requestAnimationFrame)
 - **Files Modified**: 
-  - `/app/frontend/src/components/SidebarLayout.jsx` (added "qr" to expandedGroups)
-  - `/app/frontend/src/pages/ReviewTracker.js` (removed handleSync, handleSyncCV, and sync buttons)
+  - `/app/frontend/src/components/SidebarLayout.jsx` (added "qr" to expandedGroups, added scroll preservation logic with useRef)
+  - `/app/frontend/src/pages/ReviewTracker.js` (removed sync functions, renamed upload button, added RT template button)
 
 ### December 9, 2025
 **P0 Bug Fix: Clean POS Parser LBW/LSC Extraction**

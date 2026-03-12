@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { 
   Home, 
@@ -96,14 +96,25 @@ export const SidebarLayout = ({ children }) => {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState(["performance", "feedback", "exports", "team", "qr"]);
   const { theme, toggleTheme } = useTheme();
+  const navRef = useRef(null);
 
-  const toggleGroup = (groupId) => {
+  const toggleGroup = useCallback((groupId) => {
+    // Store current scroll position before state update
+    const scrollTop = navRef.current?.scrollTop || 0;
+    
     setExpandedGroups(prev => 
       prev.includes(groupId) 
         ? prev.filter(id => id !== groupId)
         : [...prev, groupId]
     );
-  };
+    
+    // Restore scroll position after a micro-delay to allow DOM update
+    requestAnimationFrame(() => {
+      if (navRef.current) {
+        navRef.current.scrollTop = scrollTop;
+      }
+    });
+  }, []);
 
   const isActive = (path) => location.pathname === path;
 
@@ -155,7 +166,7 @@ export const SidebarLayout = ({ children }) => {
       </div>
 
       {/* Navigation Groups */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+      <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
         {navGroups.map((group) => (
           <div key={group.id} className="mb-2">
             {group.label && !isCollapsed && (
