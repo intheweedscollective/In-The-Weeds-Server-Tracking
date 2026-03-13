@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useLocation } from "react-router-dom";
 import { Trophy, TrendingUp, TrendingDown, Minus, Flame, Star, Crown, Award, Download, ChevronDown, ChevronUp, Search, RefreshCw, Info } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
@@ -219,6 +220,9 @@ export default function LeaderboardRankings() {
   const [selectedQuarter, setSelectedQuarter] = useState("Q1");
   const [searchQuery, setSearchQuery] = useState("");
   const [downloading, setDownloading] = useState(false);
+  
+  // Use location to detect route changes
+  const location = useLocation();
 
   // Filter rankings by search
   const filteredRankings = useMemo(() => {
@@ -334,6 +338,18 @@ export default function LeaderboardRankings() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Refresh when navigating to this page or when window gains focus
+  useEffect(() => {
+    fetchData();
+    
+    const handleFocus = () => {
+      fetchData();
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [location.key, fetchData]);
 
   // Get employee details
   const getEmployeeDetails = (employeeId) => {

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useLocation } from "react-router-dom";
 import { Trophy, Calendar, Filter, ChevronDown, ChevronUp, Download, FileText, Medal, Award, Star, Users, Image, MessageCircle, RefreshCw, Edit3, Check, X, Search, TrendingUp, TrendingDown, Target, ArrowUp, Info } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
@@ -51,6 +52,9 @@ export default function FullRankings() {
   const [pendingJobTitle, setPendingJobTitle] = useState(""); // new job title value
   const [savingJobTitle, setSavingJobTitle] = useState(false);
   const [searchQuery, setSearchQuery] = useState(""); // Employee search
+  
+  // Use location to detect route changes
+  const location = useLocation();
 
   // Filter rankings by search query
   const filteredRankings = useMemo(() => {
@@ -213,6 +217,18 @@ export default function FullRankings() {
   useEffect(() => {
     fetchRankings();
   }, [fetchRankings]);
+
+  // Refresh when navigating to this page or when window gains focus
+  useEffect(() => {
+    fetchRankings();
+    
+    const handleFocus = () => {
+      fetchRankings();
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [location.key, fetchRankings]);
 
   // Sync NPS from Loyalty Voice
   const handleSyncNps = async () => {

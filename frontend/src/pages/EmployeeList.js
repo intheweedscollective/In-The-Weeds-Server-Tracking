@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useLocation } from "react-router-dom";
 import { Trash2, Eye, FileText, Search, Filter, Users, X, Calendar, Target, Plus, Pencil, Save } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
@@ -45,6 +46,9 @@ export default function EmployeeList() {
   // V2 Quarter Selection
   const [selectedYear, setSelectedYear] = useState(2026);
   const [selectedQuarter, setSelectedQuarter] = useState("Q1");
+  
+  // Use location to detect route changes and refresh data
+  const location = useLocation();
 
   const fetchEmployees = useCallback(async () => {
     setLoading(true);
@@ -62,6 +66,20 @@ export default function EmployeeList() {
   useEffect(() => {
     fetchEmployees();
   }, [fetchEmployees]);
+
+  // Refresh when navigating to this page or when window gains focus
+  useEffect(() => {
+    // Refresh on route change to this page
+    fetchEmployees();
+    
+    // Refresh when window gains focus (user returns to tab)
+    const handleFocus = () => {
+      fetchEmployees();
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [location.key, fetchEmployees]);
 
   const deleteEmployee = async () => {
     if (!employeeToDelete) return;
