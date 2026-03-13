@@ -529,8 +529,10 @@ export default function LeaderboardRankings() {
                       {/* Guest Reputation Score */}
                       <div className="col-span-2 text-center">
                         <div className="text-white font-semibold text-lg">{guestRepScore.toFixed(1)}</div>
-                        <ScoreBar value={guestRepScore} max={25} benchmark={15} />
-                        <div className="text-xs text-slate-300 mt-1">CV + Reviews</div>
+                        <ScoreBar value={Math.max(0, guestRepScore)} max={25} benchmark={15} />
+                        <div className="text-xs text-slate-400 mt-1">
+                          CV: {(empData.cv_score || 0).toFixed(1)} | RT: +{(empData.review_tracker_bonus || 0).toFixed(1)}
+                        </div>
                       </div>
                       
                       {/* Benchmark Bonus */}
