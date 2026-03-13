@@ -249,6 +249,9 @@ async def sync_employees_to_most_recent_snapshot(quarter: str, year: int):
         logging.info(f"No employees found for {quarter} {year} - skipping sync")
         return None
     
+    # Sort employees by total_score descending before storing in snapshot
+    employees.sort(key=lambda x: x.get('total_score') or x.get('pre_dar_score') or 0, reverse=True)
+    
     # Prepare employee data for snapshot (ensure datetime is serialized)
     snapshot_employees = []
     for emp in employees:
@@ -3878,6 +3881,15 @@ async def list_snapshots(year: Optional[int] = None):
         query["year"] = year
     
     snapshots = await db.snapshots.find(query, {"_id": 0}).sort("snapshot_date", -1).to_list(100)
+    
+    # Sort employees within each snapshot by total_score descending
+    for snapshot in snapshots:
+        if "employees" in snapshot and snapshot["employees"]:
+            snapshot["employees"].sort(
+                key=lambda x: x.get('total_score') or x.get('pre_dar_score') or 0, 
+                reverse=True
+            )
+    
     return snapshots
 
 
@@ -3893,6 +3905,14 @@ async def get_snapshot(snapshot_id: str):
     snapshot = await db.snapshots.find_one({"id": snapshot_id}, {"_id": 0})
     if not snapshot:
         raise HTTPException(status_code=404, detail="Snapshot not found")
+    
+    # Sort employees by total_score descending
+    if "employees" in snapshot and snapshot["employees"]:
+        snapshot["employees"].sort(
+            key=lambda x: x.get('total_score') or x.get('pre_dar_score') or 0, 
+            reverse=True
+        )
+    
     return snapshot
 
 
