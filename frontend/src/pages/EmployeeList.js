@@ -614,36 +614,54 @@ export default function EmployeeList() {
                       </div>
                     </div>
 
-                    {/* Customer Voice - 15% weight, max 20 pts */}
+                    {/* Customer Voice - Direct Points (not weighted) */}
                     <div className="p-4 bg-slate-700/50 rounded-lg border border-yellow-500/30">
                       <div className="flex items-center justify-between mb-2">
                         <div>
-                          <span className="font-semibold text-white">Customer Voice & Reviews</span>
-                          <span className="ml-2 text-xs bg-yellow-600 text-white px-2 py-0.5 rounded-full">15% weight</span>
+                          <span className="font-semibold text-white">Customer Voice</span>
+                          <span className="ml-2 text-xs bg-yellow-600 text-white px-2 py-0.5 rounded-full">Direct Points</span>
                         </div>
                         <div className="text-right">
-                          <span className="font-bold text-yellow-400 text-lg">{formatNumber(Math.min((selectedEmployee.score_cv || 0), 100) * 0.15)}</span>
-                          <span className="text-slate-400 text-sm"> / 20 pts</span>
+                          <span className={`font-bold text-lg ${(selectedEmployee.cv_score || 0) >= 0 ? 'text-yellow-400' : 'text-red-400'}`}>
+                            {(selectedEmployee.cv_score || 0) >= 0 ? '+' : ''}{formatNumber(selectedEmployee.cv_score || 0)}
+                          </span>
+                          <span className="text-slate-400 text-sm"> pts</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-4 text-sm flex-wrap">
-                        <span className="text-slate-200">CV Score: {selectedEmployee.cv_score > 0 ? '+' : ''}{formatNumber(selectedEmployee.cv_score || 0)}</span>
+                        <span className="text-green-400">+{selectedEmployee.cv_promoters || 0} promoters ({(selectedEmployee.cv_promoters || 0)} pts)</span>
                         <span className="text-slate-500">|</span>
-                        <span className="text-slate-200">Normalized: {formatNumber(selectedEmployee.score_cv || 0)}%</span>
-                        {(selectedEmployee.review_tracker_bonus || 0) > 0 && (
+                        <span className="text-red-400">{selectedEmployee.cv_detractors || 0} detractors ({(selectedEmployee.cv_detractors || 0) * -2} pts)</span>
+                        {(selectedEmployee.nps_score_pts || 0) > 0 && (
                           <>
                             <span className="text-slate-500">|</span>
-                            <span className="text-green-400 font-medium">+{formatNumber(selectedEmployee.review_tracker_bonus)} review bonus</span>
+                            <span className="text-cyan-400">NPS Bonus: +{formatNumber(selectedEmployee.nps_score_pts || 0)}</span>
                           </>
                         )}
                       </div>
-                      <div className="mt-2 h-2 bg-slate-600 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-yellow-500 rounded-full transition-all" 
-                          style={{ width: `${Math.min(100, (selectedEmployee.score_cv || 0))}%` }}
-                        />
+                      <div className="mt-2 text-xs text-slate-400">
+                        Formula: Promoters × 1pt + Detractors × -2pts + NPS Bonus
                       </div>
                     </div>
+
+                    {/* Review Tracker Bonus */}
+                    {(selectedEmployee.review_tracker_bonus || 0) > 0 && (
+                      <div className="p-4 bg-slate-700/50 rounded-lg border border-green-500/30">
+                        <div className="flex items-center justify-between mb-2">
+                          <div>
+                            <span className="font-semibold text-white">Review Tracker Bonus</span>
+                            <span className="ml-2 text-xs bg-green-600 text-white px-2 py-0.5 rounded-full">+0.2 per mention</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="font-bold text-green-400 text-lg">+{formatNumber(selectedEmployee.review_tracker_bonus || 0)}</span>
+                            <span className="text-slate-400 text-sm"> pts</span>
+                          </div>
+                        </div>
+                        <div className="text-sm text-slate-300">
+                          {selectedEmployee.review_mentions || selectedEmployee.rt_mentions || 0} mentions × 0.2 pts each
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -652,8 +670,14 @@ export default function EmployeeList() {
                   <h4 className="font-serif font-bold text-white mb-3">Score Summary</h4>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between py-1 border-b border-slate-600">
-                      <span className="text-slate-300">Weighted Score (base)</span>
+                      <span className="text-slate-300">Weighted POS Score (PPA+LSC+LBW+Glass)</span>
                       <span className="font-medium text-white">{formatNumber(selectedEmployee.weighted_score || 0)}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-slate-600">
+                      <span className="text-slate-300">Customer Voice Score</span>
+                      <span className={`font-medium ${(selectedEmployee.cv_score || 0) >= 0 ? 'text-yellow-400' : 'text-red-400'}`}>
+                        {(selectedEmployee.cv_score || 0) >= 0 ? '+' : ''}{formatNumber(selectedEmployee.cv_score || 0)}
+                      </span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-slate-600">
                       <span className="text-slate-300">Metric Bonuses</span>
