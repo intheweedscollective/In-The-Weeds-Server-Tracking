@@ -116,16 +116,17 @@ def get_cell_color(value: float, is_total: bool = False) -> Tuple[int, int, int]
 
 def get_rt_color(value: float) -> Tuple[int, int, int]:
     """Get Review Tracker bonus color.
+    0.5 pts per mention, capped at 15 pts
     0 = red
-    0.1-2.5 = yellow
-    2.6-5 = green
-    5.1+ = blue
+    0.5-2.5 = yellow (1-5 mentions)
+    3.0-5.0 = green (6-10 mentions)
+    5.5-15 = blue (11-30 mentions, capped)
     """
-    if value >= 5.1:
+    if value >= 5.5:
         return COLORS["blue"]
-    elif value >= 2.6:
+    elif value >= 3.0:
         return COLORS["green"]
-    elif value >= 0.1:
+    elif value >= 0.5:
         return COLORS["yellow"]
     return COLORS["red"]
 
@@ -320,12 +321,13 @@ def generate_snapshot_slide(
     
     # Calculate CV score and RT bonus separately for each employee
     for emp in sorted_emps:
-        # CV Score: promoters × 0.5 - detractors × 1 (stored as cv_score)
+        # CV Score: NPS%/10 + promoters × 0.5 - detractors × 1 (stored as cv_score)
         cv_score = float(emp.get("cv_score", 0) or 0)
         emp["cv_score"] = cv_score
         
-        # RT Bonus: mentions × 0.2 (stored as review_tracker_bonus or review_bonus)
+        # RT Bonus: mentions × 0.5, capped at 15 (stored as review_tracker_bonus or review_bonus)
         rt_bonus = float(emp.get("review_tracker_bonus", 0) or emp.get("review_bonus", 0) or 0)
+        rt_bonus = min(rt_bonus, 15)  # Ensure cap
         emp["rt_bonus"] = rt_bonus
         
         # Calculate trend from previous snapshot data if available

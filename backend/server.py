@@ -5623,13 +5623,13 @@ async def download_rt_template():
         "Instructions:",
         "1. Fill in the 'Mentions' column with each employee's mention count",
         "2. Employee names are pre-filled from the most recent snapshot",
-        "3. Each mention = +0.2 points (uncapped)",
+        "3. Each mention = +0.5 points (capped at 15 pts)",
         "",
         "Scoring Color Thresholds:",
         "  0 mentions = 0 pts (Red)",
-        "  1-12 mentions = 0.2-2.4 pts (Yellow)",
-        "  13-25 mentions = 2.6-5.0 pts (Green)",
-        "  26+ mentions = 5.2+ pts (Blue)",
+        "  1-5 mentions = 0.5-2.5 pts (Yellow)",
+        "  6-10 mentions = 3.0-5.0 pts (Green)",
+        "  11+ mentions = 5.5-15 pts (Blue, capped at 15)",
     ]
     for idx, line in enumerate(instructions, 1):
         ws_inst.cell(row=idx, column=1, value=line)
@@ -5689,8 +5689,8 @@ async def upload_rt_data(
                 errors.append(f"Row {row_idx}: Employee '{employee_name}' not found")
                 continue
             
-            # Update rt_mentions
-            rt_bonus = mentions * 0.2  # 0.2 pts per mention
+            # Update rt_mentions (0.5 pts per mention, capped at 15)
+            rt_bonus = min(mentions * 0.5, 15)  # 0.5 pts per mention, max 15
             
             await db.employees_v2.update_one(
                 {"_id": employee["_id"]},
@@ -8046,10 +8046,10 @@ async def sync_nps_to_employees(quarter: str = "Q1", year: int = 2026):
             })
             nps_updated += 1
         
-        # Check for review mentions
+        # Check for review mentions (0.5 pts per mention, capped at 15)
         mentions = mention_counts.get(emp_name, 0)
         if mentions > 0:
-            rt_bonus = round(mentions * 0.2, 1)
+            rt_bonus = round(min(mentions * 0.5, 15), 1)
             updates.update({
                 "review_mentions": mentions,
                 "review_tracker_bonus": rt_bonus,
@@ -8270,7 +8270,7 @@ async def fix_all_discrepancies(quarter: str = "Q1", year: int = 2026):
             old_mentions = current.get("review_mentions", 0) or 0
             
             if mentions != old_mentions:
-                rt_bonus = round(mentions * 0.2, 1)
+                rt_bonus = round(min(mentions * 0.5, 15), 1)  # 0.5 pts, capped at 15
                 old_rt = current.get("review_tracker_bonus", 0) or 0
                 old_total = current.get("total_score", 0) or 0
                 new_total = round(old_total - old_rt + rt_bonus, 2)

@@ -658,7 +658,8 @@ export default function FullRankings() {
                           <TooltipContent className="bg-slate-800 text-white p-3 max-w-xs">
                             <div className="text-xs space-y-1">
                               <div className="font-bold mb-1">Review Tracker Bonus:</div>
-                              <div>• Each mention = +0.2 pts</div>
+                              <div>• Each mention = +0.5 pts</div>
+                              <div>• Capped at 15 pts max</div>
                               <div className="mt-1 text-slate-400">From ReviewTrackers.com</div>
                             </div>
                           </TooltipContent>
@@ -796,7 +797,7 @@ export default function FullRankings() {
                                 <TooltipContent className="bg-slate-800 text-white p-3 max-w-xs border border-slate-600">
                                   <div className="text-xs">
                                     <div className="font-bold text-primary mb-1">Review Tracker</div>
-                                    <div>{employee.review_mentions || 0} mentions × 0.2 pts = +{formatNumber(employee.review_bonus || 0)} pts</div>
+                                    <div>{employee.review_mentions || 0} mentions × 0.5 pts = +{formatNumber(employee.review_bonus || 0)} pts (max 15)</div>
                                   </div>
                                 </TooltipContent>
                               </Tooltip>

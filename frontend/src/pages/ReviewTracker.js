@@ -471,7 +471,7 @@ export default function ReviewTracker() {
               Employee Mention Counts
             </h2>
             <p className="text-xs md:text-sm text-slate-400 mt-1">
-              Each mention = +0.2 points
+              Each mention = +0.5 pts (capped at 15)
             </p>
           </div>
           
@@ -494,7 +494,7 @@ export default function ReviewTracker() {
                 </thead>
                 <tbody className="divide-y divide-slate-700">
                   {filteredMentions.map((emp, idx) => {
-                    const rtPoints = (emp.mentions || 0) * 0.2;
+                    const rtPoints = Math.min((emp.mentions || 0) * 0.5, 15);
                     return (
                       <tr key={emp.name} className="hover:bg-slate-700/30 transition-colors">
                         <td className="px-3 md:px-4 py-2 md:py-3">

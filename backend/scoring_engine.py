@@ -11,7 +11,7 @@ SCORING MODEL (Hybrid - Spec NPS + Current Promoter Logic):
    - LBW: 15%
    - Glassware: 10%
 
-2. REVIEW TRACKER: +0.2 pts per mention (uncapped bonus)
+2. REVIEW TRACKER: +0.5 pts per mention (capped at 15 pts)
 
 3. CUSTOMER VOICE (NPS from Spec + Promoters from Current):
    
@@ -57,7 +57,8 @@ CV_DETRACTOR_POINTS = -1  # -1 per detractor (6 or below)
 NPS_MAX_POINTS = 10
 
 # Review Tracker Bonus
-RT_POINTS_PER_MENTION = 0.2  # Each mention = 0.2 points (uncapped)
+RT_POINTS_PER_MENTION = 0.5  # Each mention = 0.5 points
+RT_MAX_POINTS = 15  # Cap at 15 points (30 mentions)
 
 # Metric Bonus Settings (User Confirmed)
 # 5 pts max per metric, linear scale from 100%-120%
@@ -476,10 +477,11 @@ def calculate_review_tracker_bonus(employee: EmployeeV2) -> EmployeeV2:
     """
     Calculate Review Tracker bonus from external review mentions.
     
-    Formula: RT mentions × 0.2 points each
-    This is a SEPARATE bonus on top of base score.
+    Formula: RT mentions × 0.5 points each, capped at 15 points
     """
-    review_bonus = (employee.review_mentions or 0) * 0.2
+    review_bonus = (employee.review_mentions or 0) * RT_POINTS_PER_MENTION
+    # Cap at 15 points
+    review_bonus = min(review_bonus, RT_MAX_POINTS)
     employee.review_tracker_bonus = round(review_bonus, 2)
     
     return employee
@@ -606,7 +608,7 @@ def calculate_total_score(employee: EmployeeV2, settings: QuarterSettings) -> Em
        - LBW: 15%
        - Glassware: 10%
     
-    2. REVIEW TRACKER: +0.2 pts per mention (uncapped bonus)
+    2. REVIEW TRACKER: +0.5 pts per mention (capped at 15 pts)
     
     3. CUSTOMER VOICE (NO CAP - highly incentivized):
        - NPS% Bonus: 5 pts (100%), 2.5 pts (75-99.9%), 0 pts (<75%)
@@ -640,7 +642,7 @@ def calculate_total_score(employee: EmployeeV2, settings: QuarterSettings) -> Em
     # Get CV score (NPS bonus + survey points, NO CAP)
     cv_score = employee.cv_score or 0
     
-    # Get Review Tracker bonus (0.2 pts per mention)
+    # Get Review Tracker bonus (0.5 pts per mention, capped at 15)
     review_bonus = employee.review_tracker_bonus or 0
     
     # Get metric bonuses (up to 20 pts total)
@@ -1068,9 +1070,9 @@ def generate_hierarchy_rankings(employees: List[EmployeeV2], settings: QuarterSe
         
         emp = item["employee"]
         
-        # Review Bonus: RT mentions × 0.2 (separate from NPS)
+        # Review Bonus: RT mentions × 0.5 (capped at 15 pts)
         review_mentions = emp.review_mentions or 0
-        review_bonus = review_mentions * 0.2
+        review_bonus = min(review_mentions * 0.5, 15)
         
         # Metric Bonus: bonuses from exceeding benchmarks in metrics (PPA, LBW, LSC, Glass)
         metric_bonus = emp.total_metric_bonus or 0

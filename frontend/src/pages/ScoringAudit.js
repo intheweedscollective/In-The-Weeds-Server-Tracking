@@ -329,7 +329,7 @@ export default function ScoringAudit() {
             <p><span className="text-white">Total Score</span> = Weighted POS + CV Score + Metric Bonus + RT Bonus</p>
             <p><span className="text-slate-300">Weighted POS:</span> PPA×25% + LSC×25% + LBW×20% + Glass×15%</p>
             <p><span className="text-slate-300">CV Score:</span> NPS%÷10 + (Promoters×0.5) - (Detractors×1)</p>
-            <p><span className="text-slate-300">RT Bonus:</span> Mentions × 0.2 pts</p>
+            <p><span className="text-slate-300">RT Bonus:</span> Mentions × 0.5 pts (max 15)</p>
           </div>
         </div>
       </div>
