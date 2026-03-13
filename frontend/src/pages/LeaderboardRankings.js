@@ -40,7 +40,7 @@ const MomentumIndicator = ({ trend, change }) => {
             </span>
           </TooltipTrigger>
           <TooltipContent className="bg-slate-800 text-white">
-            <p>Fastest Improvement! +{change?.toFixed(1)} pts</p>
+            <p>On Fire! +{change?.toFixed(1)} pts</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -73,6 +73,22 @@ const MomentumIndicator = ({ trend, change }) => {
           </TooltipTrigger>
           <TooltipContent className="bg-slate-800 text-white">
             <p>Declining {change?.toFixed(1)} pts</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+  if (trend === "new") {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger>
+            <span className="flex items-center gap-1 text-blue-400">
+              <Star className="w-4 h-4" />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent className="bg-slate-800 text-white">
+            <p>New to leaderboard</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -255,10 +271,11 @@ export default function LeaderboardRankings() {
     };
   }, [employees]);
 
-  // Calculate momentum (trend) based on snapshots
-  const calculateMomentum = useCallback((employeeId, currentScore) => {
-    const prevScore = previousScores[employeeId];
-    if (prevScore === undefined) return { trend: "stable", change: 0 };
+  // Calculate momentum (trend) based on snapshots - uses employee name for matching
+  const calculateMomentum = useCallback((employeeName, currentScore) => {
+    const nameLower = employeeName?.toLowerCase().trim();
+    const prevScore = previousScores[nameLower];
+    if (prevScore === undefined) return { trend: "new", change: 0 };
     
     const change = currentScore - prevScore;
     
@@ -318,12 +335,18 @@ export default function LeaderboardRankings() {
       setEmployees(sortedEmployees);
       setSnapshots(snapshotsRes.data || []);
       
-      // Build previous scores from second-latest snapshot for momentum
+      // Build previous scores from second-latest snapshot for momentum/trend
+      // Match by name since employee IDs may differ between snapshots
       if (snapshotsRes.data?.length > 1) {
-        const prevSnapshot = snapshotsRes.data[1];
+        const prevSnapshot = snapshotsRes.data[1]; // Second most recent snapshot
         const prevScoresMap = {};
-        (prevSnapshot.employees_data || []).forEach(emp => {
-          prevScoresMap[emp.id] = emp.total_score || emp.pre_dar_score || 0;
+        const prevEmployees = prevSnapshot.employees || prevSnapshot.employees_data || [];
+        prevEmployees.forEach(emp => {
+          // Use name as key for more reliable matching
+          const name = emp.name?.toLowerCase().trim();
+          if (name) {
+            prevScoresMap[name] = emp.total_score || emp.pre_dar_score || 0;
+          }
         });
         setPreviousScores(prevScoresMap);
       }
@@ -475,7 +498,6 @@ export default function LeaderboardRankings() {
               <div className="divide-y divide-slate-600/50">
                 {filteredRankings.map((employee, idx) => {
                   const empData = getEmployeeDetails(employee.employee_id);
-                  const momentum = calculateMomentum(employee.employee_id, employee.score);
                   const isTop5 = employee.position <= 5;
                   const reviewMentions = empData.review_mentions || 0;
                   
@@ -483,7 +505,10 @@ export default function LeaderboardRankings() {
                   const operationalScore = empData.weighted_score || 0;
                   const guestRepScore = (empData.cv_score || 0) + (empData.review_tracker_bonus || 0);
                   const bonusScore = empData.total_metric_bonus || 0;
-                  const finalScore = empData.pre_dar_score || empData.total_score || employee.score || 0;
+                  const finalScore = empData.pre_dar_score || empData.total_score || employee.total_score || 0;
+                  
+                  // Calculate trend/momentum based on previous snapshot (match by name)
+                  const momentum = calculateMomentum(employee.name, finalScore);
                   
                   return (
                     <div 
