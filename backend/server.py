@@ -1,5 +1,5 @@
 from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException, BackgroundTasks
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -5468,6 +5468,173 @@ async def sync_from_reviewtrackers(
         "message": "This sync endpoint has been deprecated. Please use the manual upload feature at /api/v2/rt/upload or navigate to the Data Uploads page to upload ReviewTracker data.",
         "alternative": "/api/v2/rt/upload"
     }
+
+
+# ============================================================================
+# REVIEWTRACKERS MANUAL UPLOAD
+# ============================================================================
+
+@api_router.get("/v2/rt/template")
+async def download_rt_template():
+    """
+    Download the Review Tracker upload template (XLSX).
+    Template has columns: Employee Name, Mentions
+    """
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "RT Mentions"
+    
+    # Header styling
+    header_fill = PatternFill(start_color="1E40AF", end_color="1E40AF", fill_type="solid")
+    header_font = Font(color="FFFFFF", bold=True)
+    thin_border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin')
+    )
+    
+    # Headers
+    headers = ["Employee Name", "Mentions"]
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+    
+    # Example rows with current employees
+    employees = await db.employees_v2.find({}, {"name": 1}).to_list(100)
+    for idx, emp in enumerate(employees[:10], 2):
+        ws.cell(row=idx, column=1, value=emp.get("name", ""))
+        ws.cell(row=idx, column=2, value=0)
+    
+    # Column widths
+    ws.column_dimensions['A'].width = 30
+    ws.column_dimensions['B'].width = 15
+    
+    # Instructions sheet
+    ws_inst = wb.create_sheet("Instructions")
+    instructions = [
+        "Review Tracker Upload Template",
+        "",
+        "1. Fill in the 'RT Mentions' sheet with employee names and their mention counts",
+        "2. Employee names must match exactly with names in the system",
+        "3. Mentions column should contain the total number of mentions for the quarter",
+        "4. Each mention = +0.2 points (uncapped)",
+        "",
+        "Scoring:",
+        "  0 mentions = 0 pts (Red)",
+        "  1-12 mentions = 0.2-2.4 pts (Yellow)",
+        "  13-25 mentions = 2.6-5.0 pts (Green)",
+        "  26+ mentions = 5.2+ pts (Blue)",
+    ]
+    for idx, line in enumerate(instructions, 1):
+        ws_inst.cell(row=idx, column=1, value=line)
+    ws_inst.column_dimensions['A'].width = 70
+    
+    # Save to buffer
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=RT_Upload_Template.xlsx"}
+    )
+
+
+@api_router.post("/v2/rt/upload")
+async def upload_rt_data(
+    file: UploadFile = File(...),
+    quarter: str = "Q1",
+    year: int = 2026
+):
+    """
+    Upload Review Tracker mention counts from XLSX file.
+    Updates employee rt_mentions field and recalculates scores.
+    """
+    import openpyxl
+    
+    if not file.filename.endswith('.xlsx'):
+        raise HTTPException(status_code=400, detail="Please upload an XLSX file")
+    
+    try:
+        content = await file.read()
+        wb = openpyxl.load_workbook(io.BytesIO(content))
+        ws = wb.active
+        
+        updated_count = 0
+        errors = []
+        
+        # Process rows (skip header)
+        for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), 2):
+            if not row or not row[0]:
+                continue
+                
+            employee_name = str(row[0]).strip()
+            mentions = int(row[1]) if row[1] is not None else 0
+            
+            # Find employee by name (case-insensitive)
+            employee = await db.employees_v2.find_one({
+                "name": {"$regex": f"^{employee_name}$", "$options": "i"},
+                "quarter": quarter,
+                "year": year
+            })
+            
+            if not employee:
+                errors.append(f"Row {row_idx}: Employee '{employee_name}' not found")
+                continue
+            
+            # Update rt_mentions
+            rt_bonus = mentions * 0.2  # 0.2 pts per mention
+            
+            await db.employees_v2.update_one(
+                {"_id": employee["_id"]},
+                {"$set": {
+                    "rt_mentions": mentions,
+                    "review_tracker_bonus": rt_bonus,
+                    "review_mentions": mentions,
+                    "updated_at": datetime.now(timezone.utc)
+                }}
+            )
+            updated_count += 1
+        
+        # Recalculate scores for all updated employees
+        if updated_count > 0:
+            # Trigger score recalculation
+            employees = await db.employees_v2.find({
+                "quarter": quarter,
+                "year": year
+            }).to_list(100)
+            
+            for emp in employees:
+                # Recalculate total score
+                weighted_score = emp.get("weighted_score", 0) or 0
+                cv_score = emp.get("cv_score", 0) or 0
+                total_metric_bonus = emp.get("total_metric_bonus", 0) or 0
+                rt_bonus = emp.get("review_tracker_bonus", 0) or 0
+                
+                total_score = weighted_score + cv_score + total_metric_bonus + rt_bonus
+                
+                await db.employees_v2.update_one(
+                    {"_id": emp["_id"]},
+                    {"$set": {"total_score": round(total_score, 2)}}
+                )
+        
+        return {
+            "success": True,
+            "employees_updated": updated_count,
+            "errors": errors if errors else None,
+            "message": f"Updated {updated_count} employee mention counts"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 
 @api_router.get("/v2/reviews/sync/status")
