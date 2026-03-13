@@ -182,6 +182,64 @@ def _merge_pdfs(pdf1_bytes: bytes, pdf2_bytes: bytes) -> bytes:
 
 
 # ============================================================================
+# SNAPSHOT SYNC HELPER
+# ============================================================================
+
+async def sync_employees_to_most_recent_snapshot(quarter: str, year: int):
+    """
+    Sync all employees_v2 data to the most recent snapshot for the given quarter/year.
+    This should be called after any upload (POS, CV, RT) to keep snapshot in sync.
+    
+    Returns the snapshot ID that was updated, or None if no snapshot exists.
+    """
+    # Find the most recent snapshot for this quarter/year
+    latest_snapshot = await db.snapshots.find_one(
+        {"quarter": quarter.upper(), "year": year},
+        {"_id": 0, "id": 1, "snapshot_date": 1, "title": 1},
+        sort=[("snapshot_date", -1)]
+    )
+    
+    if not latest_snapshot:
+        logging.info(f"No snapshot found for {quarter} {year} - skipping sync")
+        return None
+    
+    snapshot_id = latest_snapshot["id"]
+    
+    # Get all current employees for this quarter/year
+    employees = await db.employees_v2.find(
+        {"quarter": quarter.upper(), "year": year},
+        {"_id": 0}
+    ).to_list(500)
+    
+    if not employees:
+        logging.info(f"No employees found for {quarter} {year} - skipping sync")
+        return None
+    
+    # Prepare employee data for snapshot (ensure datetime is serialized)
+    snapshot_employees = []
+    for emp in employees:
+        emp_copy = emp.copy()
+        if isinstance(emp_copy.get('created_at'), datetime):
+            emp_copy['created_at'] = emp_copy['created_at'].isoformat()
+        snapshot_employees.append(emp_copy)
+    
+    # Update the most recent snapshot with the new employee data
+    result = await db.snapshots.update_one(
+        {"id": snapshot_id},
+        {
+            "$set": {
+                "employees": snapshot_employees,
+                "employee_count": len(snapshot_employees),
+                "last_synced_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    logging.info(f"Synced {len(snapshot_employees)} employees to snapshot '{latest_snapshot.get('title', snapshot_id)}'")
+    return snapshot_id
+
+
+# ============================================================================
 # V2 REVIEW GENERATION (Uses EmployeeV2 with Q1 2026 scoring model)
 # ============================================================================
 
@@ -1438,6 +1496,9 @@ async def upload_employees_v2(
             }}
         )
         
+        # Sync updated employees to the most recent snapshot
+        snapshot_id = await sync_employees_to_most_recent_snapshot(quarter, year)
+        
         return {
             "success": True,
             "message": f"Imported and scored {len(scored_employees)} employees for {quarter} {year}",
@@ -1446,7 +1507,8 @@ async def upload_employees_v2(
             "review_data_updated": review_updated,
             "quarter": quarter,
             "year": year,
-            "settings_locked": True
+            "settings_locked": True,
+            "snapshot_synced": snapshot_id
         }
         
     except HTTPException:
@@ -2905,10 +2967,15 @@ async def update_employee_cv_stats(employee_id: str, data: dict):
             "cv_detractors": cv_detractors,
             "nps_score_pts": nps_pts,
             "cv_score": new_cv_score,
+            "cv_raw_points": round(promo_detr_bonus, 2),
             "total_score": round(new_total_score, 2),
+            "pre_dar_score": round(new_total_score, 2),
             "updated_at": datetime.now(timezone.utc)
         }}
     )
+    
+    # Sync updated employee to the most recent snapshot
+    snapshot_id = await sync_employees_to_most_recent_snapshot(quarter, year)
     
     return {
         "success": True,
@@ -2920,7 +2987,8 @@ async def update_employee_cv_stats(employee_id: str, data: dict):
         "promo_detr_bonus": round(promo_detr_bonus, 2),
         "new_cv_score": new_cv_score,
         "new_total_score": round(new_total_score, 2),
-        "message": f"Updated CV stats for {employee.get('name')}"
+        "snapshot_synced": snapshot_id,
+        "message": f"Updated CV stats for {employee.get('name')} and synced to snapshot"
     }
 
 
@@ -5722,14 +5790,18 @@ async def upload_rt_data(
                 
                 await db.employees_v2.update_one(
                     {"_id": emp["_id"]},
-                    {"$set": {"total_score": round(total_score, 2)}}
+                    {"$set": {"total_score": round(total_score, 2), "pre_dar_score": round(total_score, 2)}}
                 )
+        
+        # Sync updated employees to the most recent snapshot
+        snapshot_id = await sync_employees_to_most_recent_snapshot(quarter, year)
         
         return {
             "success": True,
             "employees_updated": updated_count,
             "errors": errors if errors else None,
-            "message": f"Updated {updated_count} employee mention counts"
+            "snapshot_synced": snapshot_id,
+            "message": f"Updated {updated_count} employee mention counts and synced to snapshot"
         }
         
     except Exception as e:
@@ -6564,9 +6636,12 @@ async def upload_server_performance_csv(
             upsert=True
         )
         
+        # Sync updated employees to the most recent snapshot
+        snapshot_id = await sync_employees_to_most_recent_snapshot(quarter, year)
+        
         return {
             "success": True,
-            "message": f"Processed {len(records_processed)} records, updated {employees_updated} employees",
+            "message": f"Processed {len(records_processed)} records, updated {employees_updated} employees and synced to snapshot",
             "summary": {
                 "total_records": len(records_processed),
                 "employees_updated": employees_updated,
@@ -6577,7 +6652,8 @@ async def upload_server_performance_csv(
             },
             "records": records_processed,
             "quarter": quarter,
-            "year": year
+            "year": year,
+            "snapshot_synced": snapshot_id
         }
         
     except HTTPException:
