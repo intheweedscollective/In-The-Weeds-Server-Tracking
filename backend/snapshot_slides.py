@@ -114,6 +114,39 @@ def get_cell_color(value: float, is_total: bool = False) -> Tuple[int, int, int]
     return COLORS["red"]
 
 
+def get_rt_color(value: float) -> Tuple[int, int, int]:
+    """Get Review Tracker bonus color.
+    0 = red
+    0.1-2.5 = yellow
+    2.6-5 = green
+    5.1+ = blue
+    """
+    if value >= 5.1:
+        return COLORS["blue"]
+    elif value >= 2.6:
+        return COLORS["green"]
+    elif value >= 0.1:
+        return COLORS["yellow"]
+    return COLORS["red"]
+
+
+def get_cv_color(value: float) -> Tuple[int, int, int]:
+    """Get Customer Voice score color.
+    CV Score = NPS points (0-10) + promoter/detractor points (+0.5/-1 each)
+    0-5 = red
+    5.1-10 = yellow
+    10.1-15 = green
+    15.1+ = blue
+    """
+    if value >= 15.1:
+        return COLORS["blue"]
+    elif value >= 10.1:
+        return COLORS["green"]
+    elif value >= 5.1:
+        return COLORS["yellow"]
+    return COLORS["red"]
+
+
 def generate_snapshot_slide(
     employees: List[Dict[str, Any]],
     benchmarks: Dict[str, float],
@@ -465,21 +498,16 @@ def generate_snapshot_slide(
             cy = y + 4
             
             # Determine color and format
-            if key == "combined_review_bonus":
-                # Combined Review Bonus (RT + NPS): 0=Red, 1-5=Yellow, 5-10=Green, +10=Blue
-                if val >= 10:
-                    color = COLORS["blue"]
-                    text_color = COLORS["white"]  # White text on blue
-                elif val >= 5:
-                    color = COLORS["green"]
-                    text_color = (0, 0, 0)  # Black text
-                elif val >= 1:
-                    color = COLORS["yellow"]
-                    text_color = (0, 0, 0)  # Black text
-                else:
-                    color = COLORS["red"]
-                    text_color = (0, 0, 0)  # Black text
-                text = f"+{val:.1f}"
+            if key == "cv_score":
+                # Customer Voice: 0-5=Red, 5.1-10=Yellow, 10.1-15=Green, 15.1+=Blue
+                color = get_cv_color(val)
+                text_color = COLORS["white"] if color == COLORS["blue"] else (0, 0, 0)
+                text = f"+{val:.1f}" if val > 0 else f"{val:.1f}"
+            elif key == "rt_bonus":
+                # Review Tracker: 0=Red, 0.1-2.5=Yellow, 2.6-5=Green, 5.1+=Blue
+                color = get_rt_color(val)
+                text_color = COLORS["white"] if color == COLORS["blue"] else (0, 0, 0)
+                text = f"+{val:.1f}" if val > 0 else f"{val:.1f}"
             elif key == "total_metric_bonus":
                 # Metric Bonus: 0=Red, +1=Green, +10=Blue
                 if val >= 10:
@@ -491,17 +519,17 @@ def generate_snapshot_slide(
                 else:
                     color = COLORS["red"]
                     text_color = (0, 0, 0)  # Black text
-                text = f"{val:.2f}"
+                text = f"+{val:.1f}"
             elif key == "total_score":
                 # Total score - colored based on value
                 color = get_cell_color(val)
                 text_color = COLORS["white"] if color == COLORS["blue"] else (0, 0, 0)
-                text = f"{val:.2f}"
+                text = f"{val:.1f}"
             else:
                 # Metric scores - colored cells
                 color = get_cell_color(val)
                 text_color = COLORS["white"] if color == COLORS["blue"] else (0, 0, 0)
-                text = f"{val:.2f}"
+                text = f"{val:.0f}%"
             
             # Draw colored cell
             draw.rectangle([cx, cy, cx + cw, cy + ch], fill=color)
