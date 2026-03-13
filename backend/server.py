@@ -249,8 +249,12 @@ async def sync_employees_to_most_recent_snapshot(quarter: str, year: int):
         logging.info(f"No employees found for {quarter} {year} - skipping sync")
         return None
     
-    # Sort employees by total_score descending before storing in snapshot
-    employees.sort(key=lambda x: x.get('total_score') or x.get('pre_dar_score') or 0, reverse=True)
+    # Sort employees by tier first, then by total_score descending before storing in snapshot
+    tier_order = {"Trainer": 0, "Bartender": 1, "A-Server": 2, "B-Server": 3, "C-Server": 4}
+    employees.sort(key=lambda x: (
+        tier_order.get(x.get('tier_label', 'C-Server'), 4),
+        -(x.get('total_score') or x.get('pre_dar_score') or 0)
+    ))
     
     # Prepare employee data for snapshot (ensure datetime is serialized)
     snapshot_employees = []
@@ -3882,12 +3886,15 @@ async def list_snapshots(year: Optional[int] = None):
     
     snapshots = await db.snapshots.find(query, {"_id": 0}).sort("snapshot_date", -1).to_list(100)
     
-    # Sort employees within each snapshot by total_score descending
+    # Sort employees within each snapshot by tier first, then by total_score descending
+    tier_order = {"Trainer": 0, "Bartender": 1, "A-Server": 2, "B-Server": 3, "C-Server": 4}
     for snapshot in snapshots:
         if "employees" in snapshot and snapshot["employees"]:
             snapshot["employees"].sort(
-                key=lambda x: x.get('total_score') or x.get('pre_dar_score') or 0, 
-                reverse=True
+                key=lambda x: (
+                    tier_order.get(x.get('tier_label', 'C-Server'), 4),
+                    -(x.get('total_score') or x.get('pre_dar_score') or 0)
+                )
             )
     
     return snapshots
@@ -3906,11 +3913,14 @@ async def get_snapshot(snapshot_id: str):
     if not snapshot:
         raise HTTPException(status_code=404, detail="Snapshot not found")
     
-    # Sort employees by total_score descending
+    # Sort employees by tier first, then by total_score descending
+    tier_order = {"Trainer": 0, "Bartender": 1, "A-Server": 2, "B-Server": 3, "C-Server": 4}
     if "employees" in snapshot and snapshot["employees"]:
         snapshot["employees"].sort(
-            key=lambda x: x.get('total_score') or x.get('pre_dar_score') or 0, 
-            reverse=True
+            key=lambda x: (
+                tier_order.get(x.get('tier_label', 'C-Server'), 4),
+                -(x.get('total_score') or x.get('pre_dar_score') or 0)
+            )
         )
     
     return snapshot

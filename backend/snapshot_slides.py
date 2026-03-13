@@ -203,13 +203,19 @@ def generate_snapshot_slide(
     
     draw = ImageDraw.Draw(img)
     
-    # Sort employees
+    # Sort employees by tier first, then by score within tier
     tier_order = {"Trainer": 0, "Bartender": 1, "A-Server": 2, "B-Server": 3, "C-Server": 4}
     sorted_emps = sorted(employees, key=lambda x: (
         tier_order.get(x.get("tier_label", "C-Server"), 4),
-        -(x.get("total_score", 0) or 0)
+        -(x.get("total_score") or x.get("pre_dar_score") or 0)
     ))
     num_emps = len(sorted_emps)
+    
+    # Debug: Print sort order
+    import logging
+    logging.info(f"Snapshot slide employee order after sorting:")
+    for i, emp in enumerate(sorted_emps[:10], 1):
+        logging.info(f"  {i}. {emp.get('name')} | tier: {emp.get('tier_label')} | score: {emp.get('total_score')}")
     
     # ===== LEFT PANEL - WIDER to give more space for legend =====
     left_width = 480
