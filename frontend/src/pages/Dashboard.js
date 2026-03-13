@@ -717,14 +717,14 @@ export default function Dashboard() {
                       <div className="flex-1">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <h3 className="font-serif font-bold text-lg">{emp.name}</h3>
+                            <h3 className="font-serif font-bold text-lg text-gray-900">{emp.name}</h3>
                             <span className="px-2 py-0.5 bg-green-100 text-green-800 text-xs font-bold rounded-full">
                               +{((score - avgScore) / avgScore * 100).toFixed(0)}% vs avg
                             </span>
                           </div>
                           <span className="text-xl font-bold text-green-600">{score.toFixed(1)}</span>
                         </div>
-                        <p className="text-sm text-gray-500 capitalize mb-2">{emp.job_title || 'Server'}</p>
+                        <p className="text-sm text-gray-600 capitalize mb-2">{emp.job_title || 'Server'}</p>
                         <p className="text-sm text-gray-700 italic">"{justification}"</p>
                         {top2Metrics.length > 0 && (
                           <div className="flex gap-2 mt-2">
