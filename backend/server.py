@@ -4576,30 +4576,85 @@ async def generate_snapshot_slide_endpoint(
     
     # Find the previous snapshot to calculate trends
     current_date = snapshot_date
+    import logging
+    logging.info(f"Looking for previous snapshot before {current_date} in Q{snapshot.get('quarter')} {snapshot.get('year')}")
+    
+    # Use correct Motor syntax for sort
     previous_snapshot = await db.snapshots.find_one(
         {
             "quarter": snapshot.get("quarter"),
             "year": snapshot.get("year"),
             "snapshot_date": {"$lt": current_date}
         },
-        {"_id": 0, "employees": 1},
+        {"_id": 0, "employees": 1, "snapshot_date": 1},
         sort=[("snapshot_date", -1)]
     )
     
-    # Build a lookup of previous scores by employee name
+    logging.info(f"Previous snapshot found: {previous_snapshot.get('snapshot_date') if previous_snapshot else 'None'}")
+    
+    # Build a lookup of previous scores by employee name (with fuzzy matching)
     previous_scores = {}
+    previous_names_map = {}  # For fuzzy matching
     if previous_snapshot and previous_snapshot.get("employees"):
         for prev_emp in previous_snapshot["employees"]:
             name = prev_emp.get("name", "")
             score = prev_emp.get("total_score", 0)
             if name:
+                # Store exact lowercase match
                 previous_scores[name.lower()] = score
+                # Also store by last name for fuzzy matching
+                parts = name.split()
+                if len(parts) >= 2:
+                    last_name = parts[-1].lower()
+                    first_name = parts[0].lower()
+                    first_initial = first_name[0] if first_name else ""
+                    # Create keys for fuzzy matching
+                    previous_names_map[f"{first_initial}_{last_name}"] = (name, score)
+                    previous_names_map[last_name] = (name, score)
+                    # Store first 3-4 chars of first name + last name for nickname matching
+                    if len(first_name) >= 3:
+                        previous_names_map[f"{first_name[:3]}_{last_name}"] = (name, score)
+                        previous_names_map[f"{first_name[:4]}_{last_name}"] = (name, score)
+        logging.info(f"Built previous scores lookup with {len(previous_scores)} employees")
     
     # Add previous_score to each employee for trend calculation
+    trends_added = 0
     for emp in employees:
         emp_name = emp.get("name", "").lower()
+        prev_score = None
+        
+        # Try exact match first
         if emp_name in previous_scores:
-            emp["previous_score"] = previous_scores[emp_name]
+            prev_score = previous_scores[emp_name]
+        else:
+            # Try fuzzy match by last name + first name variants
+            parts = emp.get("name", "").split()
+            if len(parts) >= 2:
+                last_name = parts[-1].lower()
+                first_name = parts[0].lower()
+                first_initial = first_name[0] if first_name else ""
+                
+                # Try first initial + last name
+                key = f"{first_initial}_{last_name}"
+                if key in previous_names_map:
+                    prev_score = previous_names_map[key][1]
+                # Try first 3-4 chars + last name (for nicknames like Matt/Matthew)
+                elif len(first_name) >= 3:
+                    key3 = f"{first_name[:3]}_{last_name}"
+                    key4 = f"{first_name[:4]}_{last_name}"
+                    if key3 in previous_names_map:
+                        prev_score = previous_names_map[key3][1]
+                    elif key4 in previous_names_map:
+                        prev_score = previous_names_map[key4][1]
+                # Try just last name (if unique enough)
+                if prev_score is None and last_name in previous_names_map and len(last_name) > 5:
+                    prev_score = previous_names_map[last_name][1]
+        
+        if prev_score is not None:
+            emp["previous_score"] = prev_score
+            trends_added += 1
+    
+    logging.info(f"Added previous_score to {trends_added} employees")
     
     # Format date nicely
     try:
