@@ -5479,6 +5479,7 @@ async def download_rt_template():
     """
     Download the Review Tracker upload template (XLSX).
     Template has columns: Employee Name, Mentions
+    Automatically includes all employees from the most recent snapshot.
     """
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -5506,11 +5507,30 @@ async def download_rt_template():
         cell.alignment = Alignment(horizontal='center')
         cell.border = thin_border
     
-    # Example rows with current employees
-    employees = await db.employees_v2.find({}, {"name": 1}).to_list(100)
-    for idx, emp in enumerate(employees[:10], 2):
-        ws.cell(row=idx, column=1, value=emp.get("name", ""))
-        ws.cell(row=idx, column=2, value=0)
+    # Get employees from the most recent snapshot
+    latest_snapshot = await db.snapshots.find_one(
+        {},
+        sort=[("created_at", -1)]
+    )
+    
+    employees = []
+    if latest_snapshot and "employees" in latest_snapshot:
+        # Sort employees by name for easier filling
+        employees = sorted(latest_snapshot["employees"], key=lambda e: e.get("name", ""))
+    
+    # If no snapshot, fall back to employees_v2
+    if not employees:
+        emp_docs = await db.employees_v2.find({}, {"name": 1}).to_list(100)
+        employees = [{"name": e.get("name", "")} for e in emp_docs]
+    
+    # Add all employees to template
+    for idx, emp in enumerate(employees, 2):
+        name_cell = ws.cell(row=idx, column=1, value=emp.get("name", ""))
+        mentions_cell = ws.cell(row=idx, column=2, value=0)
+        # Light styling for data rows
+        name_cell.border = thin_border
+        mentions_cell.border = thin_border
+        mentions_cell.alignment = Alignment(horizontal='center')
     
     # Column widths
     ws.column_dimensions['A'].width = 30
@@ -5518,15 +5538,21 @@ async def download_rt_template():
     
     # Instructions sheet
     ws_inst = wb.create_sheet("Instructions")
+    snapshot_name = latest_snapshot.get("name", "N/A") if latest_snapshot else "N/A"
+    snapshot_date = latest_snapshot.get("created_at", "N/A") if latest_snapshot else "N/A"
     instructions = [
         "Review Tracker Upload Template",
         "",
-        "1. Fill in the 'RT Mentions' sheet with employee names and their mention counts",
-        "2. Employee names must match exactly with names in the system",
-        "3. Mentions column should contain the total number of mentions for the quarter",
-        "4. Each mention = +0.2 points (uncapped)",
+        f"Employees from snapshot: {snapshot_name}",
+        f"Snapshot date: {snapshot_date}",
+        f"Total employees: {len(employees)}",
         "",
-        "Scoring:",
+        "Instructions:",
+        "1. Fill in the 'Mentions' column with each employee's mention count",
+        "2. Employee names are pre-filled from the most recent snapshot",
+        "3. Each mention = +0.2 points (uncapped)",
+        "",
+        "Scoring Color Thresholds:",
         "  0 mentions = 0 pts (Red)",
         "  1-12 mentions = 0.2-2.4 pts (Yellow)",
         "  13-25 mentions = 2.6-5.0 pts (Green)",
