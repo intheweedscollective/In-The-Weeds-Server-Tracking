@@ -75,7 +75,19 @@ Build a comprehensive performance review application for restaurant employees (B
 - ✅ ReviewTrackers.com API integration
 - ✅ Self-Checking Scoring Audit System
 
-### Recent Changes (Mar 10, 2026) - P0 Circular Bug Fix + Automated Reconciliation
+### Recent Changes (Mar 13, 2026) - Fixed `fix-all-discrepancies` Endpoint Bug
+
+- ✅ **Fixed Python Error in `fix-all-discrepancies` Endpoint**:
+  - **Problem**: The `POST /api/v2/audit/fix-all-discrepancies` endpoint crashed with `NameError: name 'new_reviews' is not defined`
+  - **Root Cause**: The results message referenced an undefined variable `new_reviews` (legacy from scraper code that was deprecated)
+  - **Solution**: Updated the message string in `fix_all_discrepancies` function (line 8035) to remove reference to `new_reviews`
+  - **Files Modified**: `backend/server.py` (line 8035)
+  - **Result**: 
+    - Endpoint now executes successfully
+    - All 27 employees pass the audit (27/27 PASS)
+    - Scoring formula verified: Total = Weighted POS + CV Score + Metric Bonus + RT Bonus
+
+### Previous Changes (Mar 10, 2026) - P0 Circular Bug Fix + Automated Reconciliation
 
 - ✅ **Fixed Circular Bug with "Fix All" and "Remove Excess" Actions**:
   - **Problem**: Running "Fix All" created excess reviews above the 202 cap, but "Remove Excess Reviews" deleted records without updating employee `rt_mentions` counts, causing the audit to fail again - an impossible loop.

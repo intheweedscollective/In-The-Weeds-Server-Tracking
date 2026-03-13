@@ -8032,7 +8032,7 @@ async def fix_all_discrepancies(quarter: str = "Q1", year: int = 2026):
         })
         
         results["success"] = True
-        results["message"] = f"Fixed {new_reviews} new reviews, {updated_reviews} updated, {updated_employees} employees mentions, {cv_feedback_updated} CV feedback synced"
+        results["message"] = f"Updated {updated_reviews} reviews, {updated_employees} employee mentions, {cv_feedback_updated} CV feedback synced"
         
     except Exception as e:
         results["success"] = False
