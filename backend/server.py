@@ -185,6 +185,37 @@ def _merge_pdfs(pdf1_bytes: bytes, pdf2_bytes: bytes) -> bytes:
 # SNAPSHOT SYNC HELPER
 # ============================================================================
 
+async def recalculate_peer_ranks(quarter: str, year: int):
+    """
+    Recalculate peer_rank for all employees based on their current total_score.
+    Should be called after any score changes to keep rankings accurate.
+    """
+    # Get all employees for this quarter/year
+    all_employees = await db.employees_v2.find(
+        {"quarter": quarter.upper(), "year": year}
+    ).to_list(500)
+    
+    if not all_employees:
+        return 0
+    
+    # Sort by total_score (or pre_dar_score) descending
+    sorted_emps = sorted(
+        all_employees, 
+        key=lambda x: x.get('total_score') or x.get('pre_dar_score', 0) or 0, 
+        reverse=True
+    )
+    
+    # Update peer_rank for each employee
+    for rank, emp in enumerate(sorted_emps, 1):
+        await db.employees_v2.update_one(
+            {"_id": emp["_id"]},
+            {"$set": {"peer_rank": rank}}
+        )
+    
+    logging.info(f"Recalculated peer ranks for {len(sorted_emps)} employees in {quarter} {year}")
+    return len(sorted_emps)
+
+
 async def sync_employees_to_most_recent_snapshot(quarter: str, year: int):
     """
     Sync all employees_v2 data to the most recent snapshot for the given quarter/year.
@@ -192,6 +223,9 @@ async def sync_employees_to_most_recent_snapshot(quarter: str, year: int):
     
     Returns the snapshot ID that was updated, or None if no snapshot exists.
     """
+    # First recalculate peer ranks to ensure they're accurate
+    await recalculate_peer_ranks(quarter, year)
+    
     # Find the most recent snapshot for this quarter/year
     latest_snapshot = await db.snapshots.find_one(
         {"quarter": quarter.upper(), "year": year},
@@ -205,7 +239,7 @@ async def sync_employees_to_most_recent_snapshot(quarter: str, year: int):
     
     snapshot_id = latest_snapshot["id"]
     
-    # Get all current employees for this quarter/year
+    # Get all current employees for this quarter/year (with updated ranks)
     employees = await db.employees_v2.find(
         {"quarter": quarter.upper(), "year": year},
         {"_id": 0}
