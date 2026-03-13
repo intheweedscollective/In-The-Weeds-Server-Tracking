@@ -4574,6 +4574,33 @@ async def generate_snapshot_slide_endpoint(
     snapshot_date = snapshot.get("snapshot_date", "")
     title = snapshot.get("title")
     
+    # Find the previous snapshot to calculate trends
+    current_date = snapshot_date
+    previous_snapshot = await db.snapshots.find_one(
+        {
+            "quarter": snapshot.get("quarter"),
+            "year": snapshot.get("year"),
+            "snapshot_date": {"$lt": current_date}
+        },
+        {"_id": 0, "employees": 1},
+        sort=[("snapshot_date", -1)]
+    )
+    
+    # Build a lookup of previous scores by employee name
+    previous_scores = {}
+    if previous_snapshot and previous_snapshot.get("employees"):
+        for prev_emp in previous_snapshot["employees"]:
+            name = prev_emp.get("name", "")
+            score = prev_emp.get("total_score", 0)
+            if name:
+                previous_scores[name.lower()] = score
+    
+    # Add previous_score to each employee for trend calculation
+    for emp in employees:
+        emp_name = emp.get("name", "").lower()
+        if emp_name in previous_scores:
+            emp["previous_score"] = previous_scores[emp_name]
+    
     # Format date nicely
     try:
         date_obj = datetime.strptime(snapshot_date, "%Y-%m-%d")

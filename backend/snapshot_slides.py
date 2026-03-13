@@ -270,17 +270,18 @@ def generate_snapshot_slide(
     row_h = available_height // max(num_emps, 1)
     row_h = max(28, min(42, row_h))  # Between 28-42px
     
-    # Columns
+    # Columns - Added Trend column
     columns = [
-        {"name": "Rank", "width": 70},
-        {"name": "Employee Name", "width": 180},
-        {"name": "PPA", "width": 100, "key": "score_ppa"},
-        {"name": "LBW", "width": 100, "key": "score_lbw"},
-        {"name": "GLASS", "width": 100, "key": "score_glass"},
-        {"name": "LSC", "width": 100, "key": "score_lsc"},
-        {"name": "Review Bonus", "width": 120, "key": "combined_review_bonus", "is_bonus": True},
-        {"name": "Metric Bonus", "width": 120, "key": "total_metric_bonus", "is_bonus": True},
-        {"name": "Total Score", "width": 120, "key": "total_score"},
+        {"name": "Rank", "width": 60},
+        {"name": "Name", "width": 150},
+        {"name": "Trend", "width": 50, "key": "trend"},
+        {"name": "PPA", "width": 85, "key": "score_ppa"},
+        {"name": "LBW", "width": 85, "key": "score_lbw"},
+        {"name": "GLASS", "width": 85, "key": "score_glass"},
+        {"name": "LSC", "width": 85, "key": "score_lsc"},
+        {"name": "Review", "width": 90, "key": "combined_review_bonus", "is_bonus": True},
+        {"name": "Bonus", "width": 90, "key": "total_metric_bonus", "is_bonus": True},
+        {"name": "Score", "width": 100, "key": "total_score"},
     ]
     
     # Pre-calculate combined review bonus (Review Tracker + NPS points) for each employee
@@ -288,6 +289,24 @@ def generate_snapshot_slide(
         rt_bonus = float(emp.get("review_tracker_bonus", 0) or emp.get("review_bonus", 0) or 0)
         nps_pts = float(emp.get("nps_points", 0) or emp.get("cv_score", 0) or 0)
         emp["combined_review_bonus"] = rt_bonus + nps_pts
+        
+        # Calculate trend from previous snapshot data if available
+        prev_score = emp.get("previous_score")
+        current_score = emp.get("total_score", 0) or 0
+        if prev_score is not None:
+            diff = current_score - prev_score
+            if diff > 1:
+                emp["trend"] = "↑"
+                emp["trend_color"] = "green"
+            elif diff < -1:
+                emp["trend"] = "↓"
+                emp["trend_color"] = "red"
+            else:
+                emp["trend"] = "→"
+                emp["trend_color"] = "gray"
+        else:
+            emp["trend"] = "•"
+            emp["trend_color"] = "gray"
     
     # Scale columns
     total_col_w = sum(c["width"] for c in columns)
@@ -379,6 +398,23 @@ def generate_snapshot_slide(
         for i, col in enumerate(columns[2:], start=2):
             key = col.get("key")
             if not key:
+                continue
+            
+            # Special handling for trend column
+            if key == "trend":
+                trend_symbol = emp.get("trend", "•")
+                trend_color_name = emp.get("trend_color", "gray")
+                if trend_color_name == "green":
+                    trend_text_color = (0, 180, 0)  # Green
+                elif trend_color_name == "red":
+                    trend_text_color = (220, 50, 50)  # Red
+                else:
+                    trend_text_color = (128, 128, 128)  # Gray
+                
+                # Draw trend arrow centered in column
+                trend_font = get_font(20, "bold")
+                draw.text((col_x[i] + columns[i]["width"] // 2, row_cy), trend_symbol,
+                          font=trend_font, fill=trend_text_color, anchor="mm")
                 continue
             
             # Get value - combined_review_bonus is already calculated above
