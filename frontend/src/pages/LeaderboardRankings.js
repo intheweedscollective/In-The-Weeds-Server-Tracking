@@ -109,11 +109,11 @@ const RecognitionBadge = ({ mentions }) => {
         <Tooltip>
           <TooltipTrigger>
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 text-xs font-bold">
-              <Award className="w-3 h-3" /> Favorite
+              <Award className="w-3 h-3" /> Top Reviewed
             </span>
           </TooltipTrigger>
           <TooltipContent className="bg-slate-800 text-white">
-            <p>Guest Favorite - {mentions} review mentions!</p>
+            <p>Top Reviewed - {mentions} review mentions!</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -461,13 +461,13 @@ export default function LeaderboardRankings() {
             {/* Leaderboard Table */}
             <div className="rounded-xl overflow-hidden border border-slate-600" style={{ backgroundColor: COLORS.backgroundAlt }}>
               {/* Table Header */}
-              <div className="grid grid-cols-12 gap-2 px-4 py-3 bg-slate-900 text-sm font-bold uppercase tracking-wider text-slate-200 border-b border-slate-600">
+              <div className="grid grid-cols-12 gap-2 px-4 py-3 bg-slate-900 text-sm font-semibold uppercase tracking-wider text-slate-300 border-b border-slate-600">
                 <div className="col-span-1 text-center">Rank</div>
                 <div className="col-span-3">Employee</div>
-                <div className="col-span-2 text-center">Operational</div>
-                <div className="col-span-2 text-center">Guest Rep</div>
-                <div className="col-span-1 text-center">Bonus</div>
-                <div className="col-span-2 text-center">Final Score</div>
+                <div className="col-span-2 text-center">Metrics</div>
+                <div className="col-span-2 text-center">Reviews</div>
+                <div className="col-span-1 text-center">Metric Bonus</div>
+                <div className="col-span-2 text-center">Total</div>
                 <div className="col-span-1 text-center">Trend</div>
               </div>
 
@@ -519,14 +519,14 @@ export default function LeaderboardRankings() {
                         </div>
                       </div>
                       
-                      {/* Operational Score */}
+                      {/* Metrics Score */}
                       <div className="col-span-2 text-center">
                         <div className="text-white font-semibold text-lg">{operationalScore.toFixed(1)}</div>
                         <ScoreBar value={operationalScore} max={75} benchmark={75} />
-                        <div className="text-xs text-slate-300 mt-1">of 75 pts</div>
+                        <div className="text-xs text-slate-400 mt-1">of 75 max</div>
                       </div>
                       
-                      {/* Guest Reputation Score */}
+                      {/* Reviews Score */}
                       <div className="col-span-2 text-center">
                         <div className="text-white font-semibold text-lg">{guestRepScore.toFixed(1)}</div>
                         <ScoreBar value={Math.max(0, guestRepScore)} max={25} benchmark={15} />
@@ -535,14 +535,14 @@ export default function LeaderboardRankings() {
                         </div>
                       </div>
                       
-                      {/* Benchmark Bonus */}
+                      {/* Metric Bonus */}
                       <div className="col-span-1 text-center">
                         <div className={`font-medium ${bonusScore > 0 ? "text-green-400" : "text-slate-500"}`}>
                           {bonusScore > 0 ? `+${bonusScore.toFixed(1)}` : "0"}
                         </div>
                       </div>
                       
-                      {/* Final Score */}
+                      {/* Total Score */}
                       <div className="col-span-2 text-center">
                         <div className={`text-3xl font-bold ${
                           employee.position === 1 ? "text-yellow-400" :
@@ -612,15 +612,15 @@ export default function LeaderboardRankings() {
               </h3>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between text-slate-400">
-                  <span>Operational (75 max)</span>
+                  <span>Metrics (75 max)</span>
                   <span className="text-blue-400">PPA, LSC, LBW, Glass</span>
                 </div>
                 <div className="flex justify-between text-slate-400">
-                  <span>Guest Rep (25 max)</span>
-                  <span className="text-green-400">NPS + Reviews</span>
+                  <span>Reviews (25 max)</span>
+                  <span className="text-green-400">CV + RT</span>
                 </div>
                 <div className="flex justify-between text-slate-400">
-                  <span>Benchmark Bonus</span>
+                  <span>Metric Bonus</span>
                   <span className="text-yellow-400">+20 max</span>
                 </div>
               </div>
@@ -630,15 +630,15 @@ export default function LeaderboardRankings() {
                 <div className="space-y-1 text-xs">
                   <div className="flex items-center gap-2">
                     <Star className="w-3 h-3 text-blue-400" />
-                    <span className="text-slate-400">5+ mentions = Review Star</span>
+                    <span className="text-slate-400">5+ mentions = Star</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Award className="w-3 h-3 text-purple-400" />
-                    <span className="text-slate-400">10+ mentions = Guest Favorite</span>
+                    <span className="text-slate-400">10+ mentions = Top Reviewed</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Crown className="w-3 h-3 text-yellow-400" />
-                    <span className="text-slate-400">20+ mentions = Hospitality Leader</span>
+                    <span className="text-slate-400">20+ mentions = Leader</span>
                   </div>
                 </div>
               </div>
