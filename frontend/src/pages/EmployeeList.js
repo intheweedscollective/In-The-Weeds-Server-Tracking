@@ -191,13 +191,39 @@ export default function EmployeeList() {
     return { text: "Below Expectations", class: "performance-below" };
   };
 
-  const filteredEmployees = employees.filter(employee => {
-    const matchesSearch = employee.name.toLowerCase().includes(searchTerm.toLowerCase());
-    const performance = getPerformanceLevelLocal(employee.performance_tier, employee.total_score || employee.cumulative_score);
-    const matchesPerformance = performanceFilter === "all" || 
-                              performance.text.toLowerCase().includes(performanceFilter.toLowerCase());
-    return matchesSearch && matchesPerformance;
-  });
+  // Tier hierarchy for sorting (lower number = higher rank)
+  const TIER_ORDER = {
+    'trainer': 1,
+    'bartender': 2,
+    'a-server': 3,
+    'b-server': 4,
+    'c-server': 5,
+    'server': 6  // Default/unclassified servers
+  };
+
+  const getTierOrder = (jobTitle) => {
+    if (!jobTitle) return 99;
+    const normalized = jobTitle.toLowerCase().trim();
+    return TIER_ORDER[normalized] || 99;
+  };
+
+  const filteredEmployees = employees
+    .filter(employee => {
+      const matchesSearch = employee.name.toLowerCase().includes(searchTerm.toLowerCase());
+      const performance = getPerformanceLevelLocal(employee.performance_tier, employee.total_score || employee.cumulative_score);
+      const matchesPerformance = performanceFilter === "all" || 
+                                performance.text.toLowerCase().includes(performanceFilter.toLowerCase());
+      return matchesSearch && matchesPerformance;
+    })
+    .sort((a, b) => {
+      // First sort by tier hierarchy
+      const tierDiff = getTierOrder(a.job_title) - getTierOrder(b.job_title);
+      if (tierDiff !== 0) return tierDiff;
+      // Within same tier, sort by score (highest first)
+      const scoreA = a.total_score || a.pre_dar_score || 0;
+      const scoreB = b.total_score || b.pre_dar_score || 0;
+      return scoreB - scoreA;
+    });
 
   if (loading) {
     return (
