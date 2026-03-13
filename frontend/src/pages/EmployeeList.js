@@ -629,18 +629,14 @@ export default function EmployeeList() {
                         </div>
                       </div>
                       <div className="flex items-center gap-4 text-sm flex-wrap">
-                        <span className="text-green-400">+{selectedEmployee.cv_promoters || 0} promoters ({(selectedEmployee.cv_promoters || 0)} pts)</span>
+                        <span className="text-cyan-400">NPS {selectedEmployee.nps_score || 0}% = {((selectedEmployee.nps_score || 0) / 10).toFixed(1)} pts</span>
                         <span className="text-slate-500">|</span>
-                        <span className="text-red-400">{selectedEmployee.cv_detractors || 0} detractors ({(selectedEmployee.cv_detractors || 0) * -2} pts)</span>
-                        {(selectedEmployee.nps_score_pts || 0) > 0 && (
-                          <>
-                            <span className="text-slate-500">|</span>
-                            <span className="text-cyan-400">NPS Bonus: +{formatNumber(selectedEmployee.nps_score_pts || 0)}</span>
-                          </>
-                        )}
+                        <span className="text-green-400">{selectedEmployee.cv_promoters || 0} promoters (+{((selectedEmployee.cv_promoters || 0) * 0.5).toFixed(1)} pts)</span>
+                        <span className="text-slate-500">|</span>
+                        <span className="text-red-400">{selectedEmployee.cv_detractors || 0} detractors ({(selectedEmployee.cv_detractors || 0) * -1} pts)</span>
                       </div>
                       <div className="mt-2 text-xs text-slate-400">
-                        Formula: Promoters × 1pt + Detractors × -2pts + NPS Bonus
+                        Formula: NPS%÷10 + Promoters×0.5 + Detractors×-1
                       </div>
                     </div>
 
@@ -695,14 +691,19 @@ export default function EmployeeList() {
                 </div>
 
                 {/* Customer Voice Breakdown */}
-                {(selectedEmployee.cv_promoters > 0 || selectedEmployee.cv_passives > 0 || selectedEmployee.cv_detractors > 0) && (
+                {(selectedEmployee.cv_promoters > 0 || selectedEmployee.cv_passives > 0 || selectedEmployee.cv_detractors > 0 || selectedEmployee.nps_score > 0) && (
                   <div className="mb-6">
                     <h4 className="font-serif font-bold text-white mb-3">Customer Voice Breakdown</h4>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      <div className="text-center p-3 bg-cyan-900/30 rounded-lg border border-cyan-500/30">
+                        <div className="text-xl font-bold text-cyan-400">{selectedEmployee.nps_score || 0}%</div>
+                        <div className="text-xs text-slate-300">NPS Score</div>
+                        <div className="text-xs text-cyan-400 font-medium">+{((selectedEmployee.nps_score || 0) / 10).toFixed(1)} pts</div>
+                      </div>
                       <div className="text-center p-3 bg-green-900/30 rounded-lg border border-green-500/30">
                         <div className="text-xl font-bold text-green-400">{selectedEmployee.cv_promoters || 0}</div>
                         <div className="text-xs text-slate-300">Promoters</div>
-                        <div className="text-xs text-green-400 font-medium">+{(selectedEmployee.cv_promoters || 0) * 1} pts</div>
+                        <div className="text-xs text-green-400 font-medium">+{((selectedEmployee.cv_promoters || 0) * 0.5).toFixed(1)} pts</div>
                       </div>
                       <div className="text-center p-3 bg-slate-700/50 rounded-lg border border-slate-600">
                         <div className="text-xl font-bold text-slate-300">{selectedEmployee.cv_passives || 0}</div>
@@ -712,7 +713,7 @@ export default function EmployeeList() {
                       <div className="text-center p-3 bg-red-900/30 rounded-lg border border-red-500/30">
                         <div className="text-xl font-bold text-red-400">{selectedEmployee.cv_detractors || 0}</div>
                         <div className="text-xs text-slate-300">Detractors</div>
-                        <div className="text-xs text-red-400 font-medium">{(selectedEmployee.cv_detractors || 0) * -2} pts</div>
+                        <div className="text-xs text-red-400 font-medium">{(selectedEmployee.cv_detractors || 0) * -1} pts</div>
                       </div>
                     </div>
                   </div>
@@ -918,10 +919,10 @@ export default function EmployeeList() {
                   <div className="text-sm text-slate-300">
                     <span>CV Points: </span>
                     <span className="font-bold">
-                      {(formData.cv_promoters * 1) + (formData.review_mentions * 0.2) - (formData.cv_detractors * 2)}
+                      {((formData.nps_score || 0) / 10 + (formData.cv_promoters * 0.5) - (formData.cv_detractors * 1)).toFixed(1)}
                     </span>
                     <span className="text-gray-400 ml-2">
-                      ({formData.cv_promoters}×1 + {formData.review_mentions}×0.2 - {formData.cv_detractors}×2)
+                      (NPS {formData.nps_score || 0}%÷10 + {formData.cv_promoters}×0.5 - {formData.cv_detractors}×1)
                     </span>
                   </div>
                 </div>

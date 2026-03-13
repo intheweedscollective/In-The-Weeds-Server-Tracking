@@ -48,13 +48,12 @@ import pandas as pd
 # SCORING CONSTANTS
 # ============================================================================
 
-# Customer Voice scoring (Hybrid Model)
-CV_PROMOTER_POINTS = 1    # +1 per promoter (9-10 rating) - NO CAP
+# Customer Voice scoring
+CV_PROMOTER_POINTS = 0.5  # +0.5 per promoter (9-10 rating)
 CV_PASSIVE_POINTS = 0     # 0 for passive (7-8)
-CV_DETRACTOR_POINTS = -2  # -2 per detractor (6 or below)
+CV_DETRACTOR_POINTS = -1  # -1 per detractor (6 or below)
 
-# NPS Score Scale (from Spec - max 10 pts)
-# NPS 90-100 = 10 pts, 80-89 = 9 pts, etc.
+# NPS Score: Direct ratio (77% = 7.7 pts, max 10 pts)
 NPS_MAX_POINTS = 10
 
 # Review Tracker Bonus
@@ -449,27 +448,16 @@ def calculate_customer_voice_score(employee: EmployeeV2) -> EmployeeV2:
     
     Review Tracker mentions are handled separately as Review Bonus.
     """
-    # 1. Calculate NPS Score using SPEC scale (max 10 pts)
+    # 1. Calculate NPS Score - DIRECTLY PROPORTIONAL (77% = 7.7 pts, max 10 pts)
     nps = employee.nps_score or 0
     
-    if nps >= 90:
-        nps_score_pts = 10.0
-    elif nps >= 80:
-        nps_score_pts = 9.0
-    elif nps >= 70:
-        nps_score_pts = 8.0
-    elif nps >= 60:
-        nps_score_pts = 7.0
-    elif nps >= 50:
-        nps_score_pts = 6.0
-    elif nps > 0:
-        # Below 50: scale proportionally (e.g., NPS 40 = 4 pts, NPS 25 = 2.5 pts)
-        nps_score_pts = round((nps / 50) * 5, 1)
-    else:
-        # NPS 0 or negative
-        nps_score_pts = 0.0
+    # Direct ratio: NPS% / 10 = points (e.g., 77% = 7.7 pts)
+    nps_score_pts = round(nps / 10, 1) if nps > 0 else 0.0
+    # Cap at 10 points max
+    nps_score_pts = min(nps_score_pts, 10.0)
     
-    # 2. Calculate Promoter/Detractor Points (Current Implementation - NO CAP)
+    # 2. Calculate Promoter/Detractor Points
+    # +0.5 per promoter (9-10 rating), -1 per detractor (≤6)
     promoters = employee.cv_promoters or 0
     detractors = employee.cv_detractors or 0
     survey_points = (promoters * CV_PROMOTER_POINTS) + (detractors * CV_DETRACTOR_POINTS)

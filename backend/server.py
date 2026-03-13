@@ -2857,7 +2857,10 @@ async def update_employee_cv_stats(employee_id: str, data: dict):
     Manually update an employee's CV (Customer Voice) statistics.
     Allows adjusting promoter and detractor counts directly.
     
-    CV Score = (promoters × 0.5) - (detractors × 1)
+    CV Score = NPS pts (0-10) + Promoter/Detractor Bonus
+    - NPS pts: NPS% / 10 (e.g., 77% = 7.7 pts)
+    - Promoter bonus: +0.5 per promoter (9-10 rating)
+    - Detractor penalty: -1 per detractor (≤6 rating)
     """
     quarter = data.get("quarter", "Q1")
     year = data.get("year", 2026)
@@ -2874,8 +2877,18 @@ async def update_employee_cv_stats(employee_id: str, data: dict):
     if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")
     
-    # Calculate new CV score: promoters × 0.5 - detractors × 1
-    new_cv_score = (cv_promoters * 0.5) - (cv_detractors * 1)
+    # Get current NPS score
+    nps_score = employee.get("nps_score", 0) or 0
+    
+    # Calculate NPS points: direct ratio (77% = 7.7 pts, max 10)
+    nps_pts = round(nps_score / 10, 1) if nps_score > 0 else 0.0
+    nps_pts = min(nps_pts, 10.0)
+    
+    # Calculate Promoter/Detractor bonus: +0.5 per promoter, -1 per detractor
+    promo_detr_bonus = (cv_promoters * 0.5) - (cv_detractors * 1)
+    
+    # Total CV Score = NPS pts + Promoter/Detractor bonus
+    new_cv_score = round(nps_pts + promo_detr_bonus, 2)
     
     # Recalculate total score
     weighted_score = employee.get("weighted_score", 0) or 0
@@ -2890,7 +2903,8 @@ async def update_employee_cv_stats(employee_id: str, data: dict):
         {"$set": {
             "cv_promoters": cv_promoters,
             "cv_detractors": cv_detractors,
-            "cv_score": round(new_cv_score, 2),
+            "nps_score_pts": nps_pts,
+            "cv_score": new_cv_score,
             "total_score": round(new_total_score, 2),
             "updated_at": datetime.now(timezone.utc)
         }}
@@ -2899,9 +2913,12 @@ async def update_employee_cv_stats(employee_id: str, data: dict):
     return {
         "success": True,
         "employee_name": employee.get("name"),
+        "nps_score": nps_score,
+        "nps_pts": nps_pts,
         "cv_promoters": cv_promoters,
         "cv_detractors": cv_detractors,
-        "new_cv_score": round(new_cv_score, 2),
+        "promo_detr_bonus": round(promo_detr_bonus, 2),
+        "new_cv_score": new_cv_score,
         "new_total_score": round(new_total_score, 2),
         "message": f"Updated CV stats for {employee.get('name')}"
     }
@@ -6459,8 +6476,16 @@ async def upload_server_performance_csv(
             detractors = max(0, detractors)
             passives = max(0, passives)
             
-            # Calculate CV bonus (used in scoring)
-            cv_bonus = (promoters * 0.5) - (detractors * 1.0)
+            # Calculate CV Score:
+            # 1. NPS Points: Direct ratio (77% = 7.7 pts, max 10)
+            nps_pts = round(nps_score / 10, 1) if nps_score > 0 else 0.0
+            nps_pts = min(nps_pts, 10.0)
+            
+            # 2. Promoter/Detractor Bonus: +0.5 per promoter, -1 per detractor
+            promo_detr_bonus = (promoters * 0.5) - (detractors * 1.0)
+            
+            # Total CV Score = NPS pts + Promoter/Detractor bonus
+            cv_score = round(nps_pts + promo_detr_bonus, 2)
             
             # Find matching employee in database
             employee = await db.employees_v2.find_one({
@@ -6477,24 +6502,25 @@ async def upload_server_performance_csv(
             if employee:
                 # Update employee with CV data
                 old_score = employee.get('total_score', 0) or 0
-                old_cv_bonus = employee.get('cv_bonus', 0) or employee.get('cv_score', 0) or 0
+                old_cv_score = employee.get('cv_score', 0) or 0
                 
                 # Recalculate total score
                 weighted = employee.get('weighted_score', 0) or 0
-                metric_bonus = min(employee.get('total_metric_bonus', 0) or 0, 20)
-                new_total = round(weighted + metric_bonus + cv_bonus, 2)
+                metric_bonus = employee.get('total_metric_bonus', 0) or 0
+                rt_bonus = employee.get('review_tracker_bonus', 0) or 0
+                new_total = round(weighted + metric_bonus + cv_score + rt_bonus, 2)
                 
                 await db.employees_v2.update_one(
                     {"_id": employee["_id"]},
                     {"$set": {
                         "nps_score": nps_score,
+                        "nps_score_pts": nps_pts,
                         "cv_surveys_sent": sent,
                         "cv_surveys_received": received,
                         "cv_promoters": promoters,
                         "cv_passives": passives,
                         "cv_detractors": detractors,
-                        "cv_score": cv_bonus,
-                        "cv_bonus": cv_bonus,
+                        "cv_score": cv_score,
                         "cv_avg_rating": avg_rating,
                         "total_score": new_total,
                         "pre_dar_score": new_total,
