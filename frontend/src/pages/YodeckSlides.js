@@ -74,7 +74,7 @@ export default function YodeckSlides() {
     setLoading(true);
     try {
       const response = await api.get(
-        `${BACKEND_URL}/v2/yodeck/${selectedYear}/${selectedQuarter}/all`
+        `/v2/yodeck/${selectedYear}/${selectedQuarter}/all`
       );
       setSlideManifest(response.data);
       
@@ -84,7 +84,7 @@ export default function YodeckSlides() {
       
       // Also fetch current theme settings
       const settingsResponse = await api.get(
-        `${BACKEND_URL}/v2/quarter-settings/${selectedYear}/${selectedQuarter}`
+        `/v2/quarter-settings/${selectedYear}/${selectedQuarter}`
       );
       if (settingsResponse.data) {
         setThemeSettings({
@@ -216,7 +216,7 @@ export default function YodeckSlides() {
     setSavingTheme(true);
     try {
       await api.put(
-        `${BACKEND_URL}/v2/quarter-settings/${selectedYear}/${selectedQuarter}`,
+        `/v2/quarter-settings/${selectedYear}/${selectedQuarter}`,
         themeSettings
       );
       toast.success("Theme settings saved!");

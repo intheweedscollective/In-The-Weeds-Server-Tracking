@@ -61,7 +61,7 @@ export default function ReviewGeneration() {
       
       // Use V2 API endpoint - returns JSON with pdf_base64
       const response = await api.post(
-        `${BACKEND_URL}/v2/employees/${employeeId}/generate-review`,
+        `/v2/employees/${employeeId}/generate-review`,
         { quarter: selectedQuarter, year: parseInt(selectedYear) }
       );
       
@@ -363,7 +363,7 @@ export default function ReviewGeneration() {
                               📊 Quarter Comparison Chart
                             </h4>
                             <img 
-                              src={`${BACKEND_URL}/v2/trends/${selectedYear}/${selectedQuarter}/employee/${employee.id}?chart_type=comparison`}
+                              src={`${BACKEND_URL}/api/v2/trends/${selectedYear}/${selectedQuarter}/employee/${employee.id}?chart_type=comparison`}
                               alt={`${employee.name} trend chart`}
                               className="w-full rounded-lg"
                               data-testid={`trend-chart-${employee.id}`}

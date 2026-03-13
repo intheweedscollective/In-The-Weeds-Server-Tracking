@@ -109,6 +109,17 @@ export default function OnboardingGuide({ onComplete }) {
     }
   }, []);
 
+  // Handle Escape key to close modal
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape' && isOpen) {
+        handleSkip();
+      }
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [isOpen]);
+
   const handleComplete = () => {
     localStorage.setItem('hasSeenOnboarding', 'true');
     setHasSeenOnboarding(true);
