@@ -400,21 +400,51 @@ def generate_snapshot_slide(
             if not key:
                 continue
             
-            # Special handling for trend column
+            # Special handling for trend column - draw arrows manually
             if key == "trend":
-                trend_symbol = emp.get("trend", "•")
                 trend_color_name = emp.get("trend_color", "gray")
                 if trend_color_name == "green":
-                    trend_text_color = (0, 180, 0)  # Green
+                    arrow_color = (34, 197, 94)  # Bright green
                 elif trend_color_name == "red":
-                    trend_text_color = (220, 50, 50)  # Red
+                    arrow_color = (239, 68, 68)  # Bright red
                 else:
-                    trend_text_color = (128, 128, 128)  # Gray
+                    arrow_color = (156, 163, 175)  # Gray
                 
-                # Draw trend arrow centered in column
-                trend_font = get_font(20, "bold")
-                draw.text((col_x[i] + columns[i]["width"] // 2, row_cy), trend_symbol,
-                          font=trend_font, fill=trend_text_color, anchor="mm")
+                # Center point for the arrow
+                center_x = col_x[i] + columns[i]["width"] // 2
+                center_y = row_cy
+                arrow_size = 8  # Half the arrow size
+                
+                trend_type = emp.get("trend", "•")
+                
+                if trend_type == "↑":
+                    # Draw UP arrow (triangle pointing up)
+                    points = [
+                        (center_x, center_y - arrow_size),      # Top point
+                        (center_x - arrow_size, center_y + arrow_size),  # Bottom left
+                        (center_x + arrow_size, center_y + arrow_size),  # Bottom right
+                    ]
+                    draw.polygon(points, fill=arrow_color)
+                elif trend_type == "↓":
+                    # Draw DOWN arrow (triangle pointing down)
+                    points = [
+                        (center_x, center_y + arrow_size),      # Bottom point
+                        (center_x - arrow_size, center_y - arrow_size),  # Top left
+                        (center_x + arrow_size, center_y - arrow_size),  # Top right
+                    ]
+                    draw.polygon(points, fill=arrow_color)
+                elif trend_type == "→":
+                    # Draw horizontal line/dash for no change
+                    draw.rectangle(
+                        [center_x - arrow_size, center_y - 2, center_x + arrow_size, center_y + 2],
+                        fill=arrow_color
+                    )
+                else:
+                    # Draw a small dot for no data
+                    draw.ellipse(
+                        [center_x - 4, center_y - 4, center_x + 4, center_y + 4],
+                        fill=arrow_color
+                    )
                 continue
             
             # Get value - combined_review_bonus is already calculated above
