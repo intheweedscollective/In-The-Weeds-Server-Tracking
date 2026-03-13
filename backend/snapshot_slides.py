@@ -440,9 +440,9 @@ def generate_snapshot_slide(
                         fill=arrow_color
                     )
                 else:
-                    # Draw a small dot for no data
-                    draw.ellipse(
-                        [center_x - 4, center_y - 4, center_x + 4, center_y + 4],
+                    # Draw a horizontal dash for no data (same as no change)
+                    draw.rectangle(
+                        [center_x - arrow_size, center_y - 2, center_x + arrow_size, center_y + 2],
                         fill=arrow_color
                     )
                 continue
