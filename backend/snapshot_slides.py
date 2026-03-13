@@ -270,25 +270,30 @@ def generate_snapshot_slide(
     row_h = available_height // max(num_emps, 1)
     row_h = max(28, min(42, row_h))  # Between 28-42px
     
-    # Columns - Added Trend column
+    # Columns - Added Trend column, split Review into CV and RT
     columns = [
-        {"name": "Rank", "width": 60},
-        {"name": "Name", "width": 150},
-        {"name": "Trend", "width": 50, "key": "trend"},
-        {"name": "PPA", "width": 85, "key": "score_ppa"},
-        {"name": "LBW", "width": 85, "key": "score_lbw"},
-        {"name": "GLASS", "width": 85, "key": "score_glass"},
-        {"name": "LSC", "width": 85, "key": "score_lsc"},
-        {"name": "Review", "width": 90, "key": "combined_review_bonus", "is_bonus": True},
-        {"name": "Bonus", "width": 90, "key": "total_metric_bonus", "is_bonus": True},
+        {"name": "Rank", "width": 55},
+        {"name": "Name", "width": 140},
+        {"name": "Trend", "width": 45, "key": "trend"},
+        {"name": "PPA", "width": 80, "key": "score_ppa"},
+        {"name": "LBW", "width": 80, "key": "score_lbw"},
+        {"name": "GLASS", "width": 80, "key": "score_glass"},
+        {"name": "LSC", "width": 80, "key": "score_lsc"},
+        {"name": "CV", "width": 70, "key": "cv_score", "is_bonus": True},
+        {"name": "RT", "width": 70, "key": "rt_bonus", "is_bonus": True},
+        {"name": "Bonus", "width": 80, "key": "total_metric_bonus", "is_bonus": True},
         {"name": "Score", "width": 100, "key": "total_score"},
     ]
     
-    # Pre-calculate combined review bonus (Review Tracker + NPS points) for each employee
+    # Calculate CV score and RT bonus separately for each employee
     for emp in sorted_emps:
+        # CV Score: promoters × 0.5 - detractors × 1 (stored as cv_score)
+        cv_score = float(emp.get("cv_score", 0) or 0)
+        emp["cv_score"] = cv_score
+        
+        # RT Bonus: mentions × 0.2 (stored as review_tracker_bonus or review_bonus)
         rt_bonus = float(emp.get("review_tracker_bonus", 0) or emp.get("review_bonus", 0) or 0)
-        nps_pts = float(emp.get("nps_points", 0) or emp.get("cv_score", 0) or 0)
-        emp["combined_review_bonus"] = rt_bonus + nps_pts
+        emp["rt_bonus"] = rt_bonus
         
         # Calculate trend from previous snapshot data if available
         prev_score = emp.get("previous_score")
