@@ -3889,8 +3889,23 @@ async def upload_snapshot_data(snapshot_id: str, file: UploadFile = File(...)):
                     
                     emp = calculate_total_score(emp, settings)
                     
-                    # Determine tier label
-                    if emp.total_score >= settings.a_server_min_score:
+                    # Look up employee's actual job_title from employees_v2
+                    existing_emp = await db.employees_v2.find_one(
+                        {"name": name, "quarter": snapshot["quarter"], "year": snapshot["year"]},
+                        {"_id": 0, "job_title": 1}
+                    )
+                    
+                    actual_job_title = "Server"
+                    if existing_emp and existing_emp.get("job_title"):
+                        actual_job_title = existing_emp["job_title"]
+                    
+                    # Determine tier label based on job_title first, then score for servers
+                    job_lower = actual_job_title.lower()
+                    if job_lower == "trainer":
+                        tier_label = "Trainer"
+                    elif job_lower == "bartender":
+                        tier_label = "Bartender"
+                    elif emp.total_score >= settings.a_server_min_score:
                         tier_label = "A-Server"
                     elif emp.total_score >= settings.b_server_min_score:
                         tier_label = "B-Server"
@@ -3899,6 +3914,7 @@ async def upload_snapshot_data(snapshot_id: str, file: UploadFile = File(...)):
                     
                     emp_dict = emp.model_dump()
                     emp_dict["tier_label"] = tier_label
+                    emp_dict["job_title"] = actual_job_title
                     employees.append(emp_dict)
                 
                 # Update snapshot
@@ -4357,6 +4373,14 @@ async def recalculate_snapshot(snapshot_id: str):
         return 0
     
     recalculated_employees = []
+    
+    # Get actual job titles from employees_v2 for reference
+    all_emp_data = await db.employees_v2.find(
+        {"quarter": snapshot["quarter"], "year": snapshot["year"]},
+        {"_id": 0, "name": 1, "job_title": 1}
+    ).to_list(500)
+    job_title_lookup = {e["name"].lower(): e.get("job_title", "Server") for e in all_emp_data}
+    
     for emp_data in employees_data:
         try:
             emp_name = emp_data.get("name", "Unknown")
@@ -4373,12 +4397,15 @@ async def recalculate_snapshot(snapshot_id: str):
             # Get review mentions for this employee (with partial name matching)
             review_mentions = get_review_mentions_for_employee(emp_name)
             
+            # Look up actual job_title from employees_v2
+            actual_job_title = job_title_lookup.get(emp_name_lower, emp_data.get("job_title", "Server"))
+            
             # Create EmployeeV2 from existing data
             # Use CV data from cv_nps collection (not from snapshot which may be stale)
             emp = EmployeeV2(
                 id=emp_data.get("id", str(uuid.uuid4())),
                 name=emp_name,
-                job_title=emp_data.get("job_title", "Server"),
+                job_title=actual_job_title,
                 guests=emp_data.get("guests", 0),
                 net_sales=emp_data.get("net_sales", 0),
                 liquor_sales=emp_data.get("liquor_sales", 0),
