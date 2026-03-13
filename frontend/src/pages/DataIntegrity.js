@@ -1,191 +1,98 @@
 import { useState, useEffect, useCallback } from "react";
-import { ShieldCheck, AlertTriangle, CheckCircle, XCircle, RefreshCw, Trash2, Database, FileWarning, Users, MessageSquare } from "lucide-react";
+import { ShieldCheck, AlertTriangle, CheckCircle, XCircle, RefreshCw, Trash2, Database, Users, Star, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { Button } from "../components/ui/button";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-
-const StatusBadge = ({ status }) => {
-  if (status === "healthy") {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-500/20 text-green-400 text-sm font-medium">
-        <CheckCircle className="w-4 h-4" />
-        Healthy
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-yellow-500/20 text-yellow-400 text-sm font-medium">
-      <AlertTriangle className="w-4 h-4" />
-      Needs Attention
-    </span>
-  );
-};
-
-const IntegrityCard = ({ title, icon: Icon, children, status }) => (
-  <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-6">
-    <div className="flex items-center justify-between mb-4">
-      <div className="flex items-center gap-3">
-        <div className={`p-2 rounded-lg ${status === "error" ? "bg-red-500/20" : status === "warning" ? "bg-yellow-500/20" : "bg-green-500/20"}`}>
-          <Icon className={`w-5 h-5 ${status === "error" ? "text-red-400" : status === "warning" ? "text-yellow-400" : "text-green-400"}`} />
-        </div>
-        <h3 className="font-semibold text-white">{title}</h3>
-      </div>
-      {status === "error" && <XCircle className="w-5 h-5 text-red-400" />}
-      {status === "warning" && <AlertTriangle className="w-5 h-5 text-yellow-400" />}
-      {status === "ok" && <CheckCircle className="w-5 h-5 text-green-400" />}
-    </div>
-    {children}
-  </div>
-);
-
 export default function DataIntegrity() {
-  const [summary, setSummary] = useState(null);
-  const [fullReport, setFullReport] = useState(null);
+  const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState({});
+  const [quarter] = useState("Q1");
+  const [year] = useState(2026);
 
-  const fetchSummary = useCallback(async () => {
+  const fetchStats = useCallback(async () => {
     try {
-      const response = await api.get(`/v2/admin/data-integrity/summary`);
-      setSummary(response.data);
-    } catch (error) {
-      toast.error("Failed to fetch integrity summary");
-    }
-  }, []);
-
-  const runFullCheck = async () => {
-    setRunning(prev => ({ ...prev, fullCheck: true }));
-    try {
-      const response = await api.get(`/v2/admin/data-integrity/check`);
-      setFullReport(response.data);
-      toast.success(`Integrity check complete - ${response.data.issues_found} issues found`);
-    } catch (error) {
-      toast.error("Failed to run integrity check");
-    } finally {
-      setRunning(prev => ({ ...prev, fullCheck: false }));
-    }
-  };
-
-  const removeDuplicates = async (dryRun = true) => {
-    setRunning(prev => ({ ...prev, duplicates: true }));
-    try {
-      const response = await api.post(`/v2/admin/data-integrity/remove-duplicates?dry_run=${dryRun}`);
-      if (dryRun) {
-        toast.info(`Found ${response.data.duplicates_found} duplicate reviews`);
-      } else {
-        toast.success(`Removed ${response.data.duplicates_removed} duplicate reviews`);
-        fetchSummary();
-      }
-    } catch (error) {
-      toast.error("Failed to remove duplicates");
-    } finally {
-      setRunning(prev => ({ ...prev, duplicates: false }));
-    }
-  };
-
-  const flagInvalidCV = async (dryRun = true) => {
-    setRunning(prev => ({ ...prev, invalidCV: true }));
-    try {
-      const response = await api.post(`/v2/admin/data-integrity/flag-invalid-cv?dry_run=${dryRun}`);
-      if (dryRun) {
-        toast.info(`Found ${response.data.missing_found} CV entries without server names`);
-      } else {
-        toast.success(`Flagged ${response.data.flagged_count} invalid CV entries`);
-        fetchSummary();
-      }
-    } catch (error) {
-      toast.error("Failed to flag invalid CV");
-    } finally {
-      setRunning(prev => ({ ...prev, invalidCV: false }));
-    }
-  };
-
-  const deleteInvalidCV = async () => {
-    if (!window.confirm("Are you sure you want to delete all CV feedback entries without server names? This cannot be undone.")) {
-      return;
-    }
-    
-    setRunning(prev => ({ ...prev, deleteCV: true }));
-    try {
-      const response = await api.delete(`/v2/admin/data-integrity/invalid-cv-feedback`);
-      toast.success(`Deleted ${response.data.deleted_count} invalid CV entries`);
-      fetchSummary();
-      runFullCheck();
-    } catch (error) {
-      toast.error("Failed to delete invalid CV feedback");
-    } finally {
-      setRunning(prev => ({ ...prev, deleteCV: false }));
-    }
-  };
-
-  const recalculateNPS = async () => {
-    setRunning(prev => ({ ...prev, recalculate: true }));
-    try {
-      const response = await api.post(`/v2/admin/data-integrity/recalculate-cv-nps`);
-      toast.success(`Recalculated NPS for ${response.data.employees_processed} employees`);
-      fetchSummary();
-      runFullCheck();
-    } catch (error) {
-      toast.error("Failed to recalculate NPS");
-    } finally {
-      setRunning(prev => ({ ...prev, recalculate: false }));
-    }
-  };
-
-  const deleteOrphanedRecords = async () => {
-    if (!window.confirm("Delete all orphaned CV NPS records? These are records for employees not in the current roster.")) {
-      return;
-    }
-    
-    setRunning(prev => ({ ...prev, orphaned: true }));
-    try {
-      const response = await api.delete(`/v2/admin/data-integrity/orphaned-records`);
-      toast.success(`Deleted ${response.data.deleted_count} orphaned records`);
-      fetchSummary();
-      runFullCheck();
-    } catch (error) {
-      toast.error("Failed to delete orphaned records");
-    } finally {
-      setRunning(prev => ({ ...prev, orphaned: false }));
-    }
-  };
-
-  const fixAllIssues = async () => {
-    if (!window.confirm("This will:\n• Recalculate all NPS values\n• Delete orphaned records\n• Remove duplicate reviews\n\nContinue?")) {
-      return;
-    }
-    
-    setRunning(prev => ({ ...prev, fixAll: true }));
-    try {
-      // Fix NPS mismatches
-      await api.post(`/v2/admin/data-integrity/recalculate-cv-nps`);
+      // Fetch basic stats
+      const [employeesRes, cvRes, rtRes] = await Promise.all([
+        api.get(`/v2/employees?quarter=${quarter}&year=${year}`),
+        api.get(`/v2/cv/stats?quarter=${quarter}&year=${year}`).catch(() => ({ data: {} })),
+        api.get(`/v2/reviews/stats?quarter=${quarter}&year=${year}`).catch(() => ({ data: {} }))
+      ]);
       
-      // Delete orphaned records
-      const orphanedResponse = await api.delete(`/v2/admin/data-integrity/orphaned-records`);
-      
-      // Remove duplicates
-      await api.post(`/v2/admin/data-integrity/remove-duplicates?dry_run=false`);
-      
-      toast.success(`All issues fixed! Deleted ${orphanedResponse.data.deleted_count || 0} orphaned records`);
-      fetchSummary();
-      runFullCheck();
+      setStats({
+        employees: employeesRes.data?.length || 0,
+        cv: {
+          responses: cvRes.data?.total_responses || 0,
+          promoters: cvRes.data?.promoter_count || 0,
+          detractors: cvRes.data?.detractor_count || 0,
+          nps: cvRes.data?.avg_nps || 0
+        },
+        rt: {
+          mentions: rtRes.data?.total_mentions || 0,
+          employees: rtRes.data?.top_mentioned?.length || 0
+        }
+      });
     } catch (error) {
-      toast.error("Failed to fix all issues");
+      toast.error("Failed to fetch data stats");
+    }
+  }, [quarter, year]);
+
+  // Clear all CV data
+  const clearCVData = async () => {
+    if (!window.confirm("Delete ALL Customer Voice data? This cannot be undone.")) return;
+    
+    setRunning(prev => ({ ...prev, clearCV: true }));
+    try {
+      await api.delete(`/v2/admin/clear-cv-data?quarter=${quarter}&year=${year}`);
+      toast.success("Customer Voice data cleared");
+      fetchStats();
+    } catch (error) {
+      toast.error("Failed to clear CV data");
     } finally {
-      setRunning(prev => ({ ...prev, fixAll: false }));
+      setRunning(prev => ({ ...prev, clearCV: false }));
+    }
+  };
+
+  // Clear all RT data
+  const clearRTData = async () => {
+    if (!window.confirm("Reset ALL Review Tracker mention counts to 0? This cannot be undone.")) return;
+    
+    setRunning(prev => ({ ...prev, clearRT: true }));
+    try {
+      await api.delete(`/v2/admin/clear-rt-data?quarter=${quarter}&year=${year}`);
+      toast.success("Review Tracker data cleared");
+      fetchStats();
+    } catch (error) {
+      toast.error("Failed to clear RT data");
+    } finally {
+      setRunning(prev => ({ ...prev, clearRT: false }));
+    }
+  };
+
+  // Recalculate all scores
+  const recalculateScores = async () => {
+    setRunning(prev => ({ ...prev, recalc: true }));
+    toast.info("Recalculating all scores...");
+    try {
+      const response = await api.post(`/v2/audit/fix-all-discrepancies?quarter=${quarter}&year=${year}`);
+      toast.success(response.data.message || "All scores recalculated!");
+      fetchStats();
+    } catch (error) {
+      toast.error("Failed to recalculate scores");
+    } finally {
+      setRunning(prev => ({ ...prev, recalc: false }));
     }
   };
 
   useEffect(() => {
     const init = async () => {
       setLoading(true);
-      await fetchSummary();
+      await fetchStats();
       setLoading(false);
     };
     init();
-  }, [fetchSummary]);
+  }, [fetchStats]);
 
   if (loading) {
     return (
@@ -196,353 +103,162 @@ export default function DataIntegrity() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 p-6">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen bg-slate-900 p-3 md:p-6">
+      <div className="max-w-3xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-blue-500/20 rounded-xl">
-              <ShieldCheck className="w-8 h-8 text-blue-400" />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 md:p-3 bg-blue-500/20 rounded-xl shrink-0">
+              <Database className="w-5 h-5 md:w-7 md:h-7 text-blue-400" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-white">Data Integrity Panel</h1>
-              <p className="text-slate-400">Admin controls for data accuracy verification</p>
+              <h1 className="text-lg md:text-2xl font-bold text-white">Data Integrity</h1>
+              <p className="text-xs md:text-sm text-slate-400">{quarter} {year} • Manage uploaded data</p>
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
-            {summary && <StatusBadge status={summary.status} />}
-            <Button
-              onClick={runFullCheck}
-              disabled={running.fullCheck}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              {running.fullCheck ? (
-                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <ShieldCheck className="w-4 h-4 mr-2" />
-              )}
-              Run Full Check
-            </Button>
+          <Button
+            onClick={recalculateScores}
+            disabled={running.recalc}
+            className="bg-blue-600 hover:bg-blue-700"
+            size="sm"
+          >
+            {running.recalc ? (
+              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="w-4 h-4 mr-2" />
+            )}
+            Recalculate All
+          </Button>
+        </div>
+
+        {/* Stats Overview */}
+        <div className="grid grid-cols-3 gap-2 md:gap-4 mb-6">
+          <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-3 md:p-4 text-center">
+            <Users className="w-5 h-5 md:w-6 md:h-6 text-blue-400 mx-auto mb-1" />
+            <div className="text-xl md:text-3xl font-bold text-white">{stats?.employees || 0}</div>
+            <div className="text-xs text-slate-400">Employees</div>
+          </div>
+          
+          <div className="bg-slate-800/50 rounded-xl border border-orange-500/30 p-3 md:p-4 text-center">
+            <Star className="w-5 h-5 md:w-6 md:h-6 text-orange-400 mx-auto mb-1" />
+            <div className="text-xl md:text-3xl font-bold text-orange-400">{stats?.cv?.responses || 0}</div>
+            <div className="text-xs text-slate-400">CV Responses</div>
+          </div>
+          
+          <div className="bg-slate-800/50 rounded-xl border border-purple-500/30 p-3 md:p-4 text-center">
+            <MessageSquare className="w-5 h-5 md:w-6 md:h-6 text-purple-400 mx-auto mb-1" />
+            <div className="text-xl md:text-3xl font-bold text-purple-400">{stats?.rt?.mentions || 0}</div>
+            <div className="text-xs text-slate-400">RT Mentions</div>
           </div>
         </div>
 
-        {/* Summary Cards */}
-        {summary && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <MessageSquare className="w-5 h-5 text-blue-400" />
-                <span className="text-slate-400">Customer Reviews</span>
-              </div>
-              <div className="text-3xl font-bold text-white">{summary.reviews?.total || 0}</div>
-              <div className="text-sm text-slate-500">Total reviews in system</div>
-            </div>
-
-            <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <Users className="w-5 h-5 text-green-400" />
-                <span className="text-slate-400">CV Feedback</span>
-              </div>
-              <div className="text-3xl font-bold text-white">{summary.cv_feedback?.total || 0}</div>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-sm text-green-400">{summary.cv_feedback?.valid || 0} valid</span>
-                {summary.cv_feedback?.invalid > 0 && (
-                  <span className="text-sm text-red-400">{summary.cv_feedback?.invalid} invalid</span>
-                )}
-              </div>
-              <div className="text-sm text-slate-500 mt-1">
-                {summary.cv_feedback?.attribution_rate}% attribution rate
-              </div>
-            </div>
-
-            <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <Database className="w-5 h-5 text-purple-400" />
-                <span className="text-slate-400">CV NPS Records</span>
-              </div>
-              <div className="text-3xl font-bold text-white">{summary.cv_nps?.total || 0}</div>
-              <div className="text-sm text-slate-500">Aggregated NPS records</div>
-            </div>
-          </div>
-        )}
-
-        {/* Action Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <IntegrityCard
-            title="Review Duplicates"
-            icon={FileWarning}
-            status={fullReport?.checks?.review_duplicates?.duplicates_found > 0 ? "warning" : "ok"}
-          >
-            <div className="space-y-3">
-              {fullReport?.checks?.review_duplicates && (
-                <div className="text-sm text-slate-400">
-                  <div>Total Reviews: {fullReport.checks.review_duplicates.total_reviews}</div>
-                  <div>Duplicates Found: {fullReport.checks.review_duplicates.duplicates_found}</div>
+        {/* Data Management Cards */}
+        <div className="space-y-4">
+          {/* Customer Voice */}
+          <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-4 md:p-6">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-orange-500/20 rounded-lg shrink-0">
+                  <Star className="w-5 h-5 text-orange-400" />
                 </div>
-              )}
-              <div className="flex gap-2">
-                <Button
-                  onClick={() => removeDuplicates(true)}
-                  disabled={running.duplicates}
-                  variant="outline"
-                  size="sm"
-                  className="border-slate-600 text-slate-300"
-                >
-                  Check for Duplicates
-                </Button>
-                <Button
-                  onClick={() => removeDuplicates(false)}
-                  disabled={running.duplicates}
-                  variant="destructive"
-                  size="sm"
-                >
-                  Remove Duplicates
-                </Button>
-              </div>
-            </div>
-          </IntegrityCard>
-
-          <IntegrityCard
-            title="CV Server Attribution"
-            icon={Users}
-            status={summary?.cv_feedback?.invalid > 0 ? "error" : "ok"}
-          >
-            <div className="space-y-3">
-              {summary?.cv_feedback && (
-                <div className="text-sm text-slate-400">
-                  <div>Valid Entries: {summary.cv_feedback.valid}</div>
-                  <div className={summary.cv_feedback.invalid > 0 ? "text-red-400" : ""}>
-                    Invalid (No Server): {summary.cv_feedback.invalid}
-                  </div>
-                  <div>Attribution Rate: {summary.cv_feedback.attribution_rate}%</div>
+                <div>
+                  <h3 className="font-semibold text-white">Customer Voice Data</h3>
+                  <p className="text-xs md:text-sm text-slate-400">
+                    {stats?.cv?.responses || 0} responses • 
+                    <span className="text-green-400 ml-1">{stats?.cv?.promoters || 0} promoters</span> • 
+                    <span className="text-red-400 ml-1">{stats?.cv?.detractors || 0} detractors</span>
+                  </p>
                 </div>
-              )}
-              <div className="flex gap-2">
-                <Button
-                  onClick={() => flagInvalidCV(true)}
-                  disabled={running.invalidCV}
-                  variant="outline"
-                  size="sm"
-                  className="border-slate-600 text-slate-300"
-                >
-                  Check Invalid
-                </Button>
-                <Button
-                  onClick={deleteInvalidCV}
-                  disabled={running.deleteCV || summary?.cv_feedback?.invalid === 0}
-                  variant="destructive"
-                  size="sm"
-                >
-                  <Trash2 className="w-4 h-4 mr-1" />
-                  Delete Invalid
-                </Button>
               </div>
-            </div>
-          </IntegrityCard>
-
-          <IntegrityCard
-            title="NPS Calculation Validation"
-            icon={CheckCircle}
-            status={fullReport?.checks?.cv_nps_validation?.mismatches > 0 ? "warning" : "ok"}
-          >
-            <div className="space-y-3">
-              {fullReport?.checks?.cv_nps_validation && (
-                <div className="text-sm text-slate-400">
-                  <div>Records Validated: {fullReport.checks.cv_nps_validation.validated}</div>
-                  <div className={fullReport.checks.cv_nps_validation.mismatches > 0 ? "text-yellow-400" : ""}>
-                    Mismatches: {fullReport.checks.cv_nps_validation.mismatches}
-                  </div>
-                </div>
-              )}
+              
               <Button
-                onClick={recalculateNPS}
-                disabled={running.recalculate}
-                className="bg-green-600 hover:bg-green-700"
+                onClick={clearCVData}
+                disabled={running.clearCV}
+                variant="outline"
                 size="sm"
+                className="border-red-500/50 text-red-400 hover:bg-red-500/20 shrink-0"
               >
-                {running.recalculate ? (
-                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                {running.clearCV ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
                 ) : (
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                )}
-                Recalculate All NPS
-              </Button>
-            </div>
-          </IntegrityCard>
-
-          <IntegrityCard
-            title="Orphaned Records"
-            icon={Database}
-            status={fullReport?.checks?.orphaned_records?.orphaned_count > 0 ? "warning" : "ok"}
-          >
-            <div className="space-y-3">
-              {fullReport?.checks?.orphaned_records && (
-                <div className="text-sm text-slate-400">
-                  <div className={fullReport.checks.orphaned_records.orphaned_count > 0 ? "text-yellow-400" : ""}>
-                    Orphaned CV NPS Records: {fullReport.checks.orphaned_records.orphaned_count}
-                  </div>
-                </div>
-              )}
-              <div className="text-xs text-slate-500">
-                Orphaned records are CV NPS entries for employees not in the current quarter's roster.
-              </div>
-              {fullReport?.checks?.orphaned_records?.orphaned_count > 0 && (
-                <Button
-                  onClick={deleteOrphanedRecords}
-                  disabled={running.orphaned}
-                  variant="destructive"
-                  size="sm"
-                >
-                  {running.orphaned ? (
-                    <RefreshCw className="w-4 h-4 mr-1 animate-spin" />
-                  ) : (
+                  <>
                     <Trash2 className="w-4 h-4 mr-1" />
-                  )}
-                  Delete Orphaned Records
-                </Button>
-              )}
-            </div>
-          </IntegrityCard>
-        </div>
-
-        {/* Detailed Issues List */}
-        {fullReport && fullReport.issues_found > 0 && (
-          <div className="bg-slate-800/50 rounded-xl border border-red-500/30 p-6 mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-red-400 flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5" />
-                {fullReport.issues_found} Issues Requiring Attention
-              </h3>
-              <Button
-                onClick={fixAllIssues}
-                disabled={running.fixAll}
-                className="bg-red-600 hover:bg-red-700"
-                size="sm"
-              >
-                {running.fixAll ? (
-                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <CheckCircle className="w-4 h-4 mr-2" />
+                    <span className="hidden sm:inline">Clear</span>
+                  </>
                 )}
-                Fix All Issues
               </Button>
             </div>
             
-            <div className="space-y-4">
-              {/* NPS Mismatches */}
-              {fullReport.checks?.cv_nps_validation?.mismatch_details?.length > 0 && (
-                <div className="bg-slate-900/50 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="font-medium text-yellow-400">
-                      NPS Calculation Mismatches ({fullReport.checks.cv_nps_validation.mismatches})
-                    </h4>
-                    <Button
-                      onClick={recalculateNPS}
-                      disabled={running.recalculate}
-                      size="sm"
-                      className="bg-green-600 hover:bg-green-700"
-                    >
-                      Fix NPS
-                    </Button>
-                  </div>
-                  <div className="max-h-48 overflow-y-auto space-y-2">
-                    {fullReport.checks.cv_nps_validation.mismatch_details.map((m, i) => (
-                      <div key={i} className="text-xs bg-slate-800/50 rounded p-2 border border-slate-700/50">
-                        <div className="font-medium text-white">{m.employee}</div>
-                        <div className="flex gap-4 mt-1">
-                          <span className="text-red-400">
-                            Stored: P={m.stored.promoters}, D={m.stored.detractors}, NPS={m.stored.nps}%
-                          </span>
-                          <span className="text-green-400">
-                            Should be: P={m.actual.promoters}, D={m.actual.detractors}, NPS={m.actual.nps}%
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+            {stats?.cv?.responses > 0 && (
+              <div className="mt-4 pt-4 border-t border-slate-700/50">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-400">NPS Score:</span>
+                  <span className={`font-bold ${stats?.cv?.nps >= 70 ? 'text-green-400' : stats?.cv?.nps >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                    {stats?.cv?.nps || 0}%
+                  </span>
                 </div>
-              )}
-              
-              {/* Orphaned Records */}
-              {fullReport.checks?.orphaned_records?.orphaned_count > 0 && (
-                <div className="bg-slate-900/50 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="font-medium text-yellow-400">
-                      Orphaned NPS Records ({fullReport.checks.orphaned_records.orphaned_count})
-                    </h4>
-                    <Button
-                      onClick={deleteOrphanedRecords}
-                      disabled={running.orphaned}
-                      size="sm"
-                      variant="destructive"
-                    >
-                      Delete All
-                    </Button>
-                  </div>
-                  <p className="text-xs text-slate-500 mb-2">
-                    These are CV NPS records for employees not in the current roster. They may be from previous quarters or deleted employees.
-                  </p>
-                  <div className="max-h-48 overflow-y-auto">
-                    <div className="flex flex-wrap gap-2">
-                      {[...new Set(fullReport.checks.orphaned_records.orphaned_details)].map((name, i) => {
-                        const count = fullReport.checks.orphaned_records.orphaned_details.filter(n => n === name).length;
-                        return (
-                          <span key={i} className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded">
-                            {name} ({count})
-                          </span>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              {/* Duplicate Reviews */}
-              {fullReport.checks?.review_duplicates?.duplicates_found > 0 && (
-                <div className="bg-slate-900/50 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="font-medium text-yellow-400">
-                      Duplicate Reviews ({fullReport.checks.review_duplicates.duplicates_found})
-                    </h4>
-                    <Button
-                      onClick={() => removeDuplicates(false)}
-                      disabled={running.duplicates}
-                      size="sm"
-                      variant="destructive"
-                    >
-                      Remove Duplicates
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Full Report Summary */}
-        {fullReport && fullReport.issues_found === 0 && (
-          <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-6 mb-8">
-            <div className="flex items-center gap-3">
-              <CheckCircle className="w-6 h-6 text-green-400" />
-              <div>
-                <h3 className="font-semibold text-green-400">All Checks Passed!</h3>
-                <p className="text-sm text-slate-400">
-                  No data integrity issues found. Last checked: {new Date(fullReport.timestamp).toLocaleString()}
-                </p>
               </div>
-            </div>
+            )}
           </div>
-        )}
 
-        {/* Instructions */}
-        <div className="mt-8 bg-blue-500/10 border border-blue-500/30 rounded-xl p-6">
-          <h3 className="font-semibold text-blue-400 mb-3">Data Accuracy Guidelines</h3>
-          <ul className="text-sm text-slate-400 space-y-2">
-            <li>• <strong>CV Feedback</strong>: All entries MUST have a server name. Entries without attribution cannot be counted.</li>
-            <li>• <strong>Reviews</strong>: Duplicate reviews are identified by content hash and should be removed.</li>
-            <li>• <strong>NPS Validation</strong>: NPS records should exactly match the sum of promoters/detractors in raw feedback.</li>
-            <li>• <strong>Verification Mode</strong>: Compare stored data against fresh scrape before finalizing scores.</li>
+          {/* Review Tracker */}
+          <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-4 md:p-6">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-purple-500/20 rounded-lg shrink-0">
+                  <MessageSquare className="w-5 h-5 text-purple-400" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-white">Review Tracker Data</h3>
+                  <p className="text-xs md:text-sm text-slate-400">
+                    {stats?.rt?.mentions || 0} total mentions • 
+                    {stats?.rt?.employees || 0} employees with mentions
+                  </p>
+                </div>
+              </div>
+              
+              <Button
+                onClick={clearRTData}
+                disabled={running.clearRT}
+                variant="outline"
+                size="sm"
+                className="border-red-500/50 text-red-400 hover:bg-red-500/20 shrink-0"
+              >
+                {running.clearRT ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4 mr-1" />
+                    <span className="hidden sm:inline">Clear</span>
+                  </>
+                )}
+              </Button>
+            </div>
+            
+            {stats?.rt?.mentions > 0 && (
+              <div className="mt-4 pt-4 border-t border-slate-700/50">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-400">Avg mentions/employee:</span>
+                  <span className="font-bold text-purple-400">
+                    {stats?.rt?.employees > 0 ? (stats?.rt?.mentions / stats?.rt?.employees).toFixed(1) : 0}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Help Text */}
+        <div className="mt-6 p-4 bg-slate-800/30 rounded-xl border border-slate-700/50">
+          <h3 className="font-semibold text-white text-sm mb-2 flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-blue-400" />
+            Data Management
+          </h3>
+          <ul className="text-xs text-slate-400 space-y-1 list-disc list-inside">
+            <li><strong>Recalculate All:</strong> Re-syncs all employee scores from current data</li>
+            <li><strong>Clear CV:</strong> Removes all Customer Voice data (use before re-upload)</li>
+            <li><strong>Clear RT:</strong> Resets all review mention counts to zero</li>
           </ul>
         </div>
       </div>

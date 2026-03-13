@@ -5719,6 +5719,110 @@ async def upload_rt_data(
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 
+# ============================================================================
+# DATA CLEARING ENDPOINTS
+# ============================================================================
+
+@api_router.delete("/v2/admin/clear-cv-data")
+async def clear_cv_data(quarter: str = "Q1", year: int = 2026):
+    """
+    Clear all Customer Voice data and reset employee CV scores.
+    """
+    try:
+        # Clear cv_feedback collection
+        cv_result = await db.cv_feedback.delete_many({})
+        
+        # Clear cv_nps collection
+        nps_result = await db.cv_nps.delete_many({})
+        
+        # Reset CV fields on all employees for this quarter/year
+        emp_result = await db.employees_v2.update_many(
+            {"quarter": quarter, "year": year},
+            {"$set": {
+                "cv_promoters": 0,
+                "cv_detractors": 0,
+                "cv_score": 0,
+                "nps_score": 0,
+                "nps_score_pts": 0
+            }}
+        )
+        
+        # Recalculate total scores
+        employees = await db.employees_v2.find({
+            "quarter": quarter,
+            "year": year
+        }).to_list(200)
+        
+        for emp in employees:
+            weighted_score = emp.get("weighted_score", 0) or 0
+            total_metric_bonus = emp.get("total_metric_bonus", 0) or 0
+            rt_bonus = emp.get("review_tracker_bonus", 0) or 0
+            # CV is now 0
+            total_score = weighted_score + total_metric_bonus + rt_bonus
+            
+            await db.employees_v2.update_one(
+                {"_id": emp["_id"]},
+                {"$set": {"total_score": round(total_score, 2)}}
+            )
+        
+        return {
+            "success": True,
+            "cv_feedback_deleted": cv_result.deleted_count,
+            "cv_nps_deleted": nps_result.deleted_count,
+            "employees_reset": emp_result.modified_count,
+            "message": "Customer Voice data cleared"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to clear CV data: {str(e)}")
+
+
+@api_router.delete("/v2/admin/clear-rt-data")
+async def clear_rt_data(quarter: str = "Q1", year: int = 2026):
+    """
+    Clear all Review Tracker data and reset employee RT mention counts.
+    """
+    try:
+        # Clear customer_reviews collection
+        reviews_result = await db.customer_reviews.delete_many({})
+        
+        # Reset RT fields on all employees for this quarter/year
+        emp_result = await db.employees_v2.update_many(
+            {"quarter": quarter, "year": year},
+            {"$set": {
+                "rt_mentions": 0,
+                "review_mentions": 0,
+                "review_tracker_bonus": 0
+            }}
+        )
+        
+        # Recalculate total scores
+        employees = await db.employees_v2.find({
+            "quarter": quarter,
+            "year": year
+        }).to_list(200)
+        
+        for emp in employees:
+            weighted_score = emp.get("weighted_score", 0) or 0
+            cv_score = emp.get("cv_score", 0) or 0
+            total_metric_bonus = emp.get("total_metric_bonus", 0) or 0
+            # RT is now 0
+            total_score = weighted_score + cv_score + total_metric_bonus
+            
+            await db.employees_v2.update_one(
+                {"_id": emp["_id"]},
+                {"$set": {"total_score": round(total_score, 2)}}
+            )
+        
+        return {
+            "success": True,
+            "reviews_deleted": reviews_result.deleted_count,
+            "employees_reset": emp_result.modified_count,
+            "message": "Review Tracker data cleared"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to clear RT data: {str(e)}")
+
+
 @api_router.get("/v2/reviews/sync/status")
 async def get_sync_status():
     """Get ReviewTrackers sync configuration status."""
