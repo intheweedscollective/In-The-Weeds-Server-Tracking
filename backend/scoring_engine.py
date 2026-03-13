@@ -1118,6 +1118,10 @@ def generate_hierarchy_rankings(employees: List[EmployeeV2], settings: QuarterSe
             # NPS data
             "nps_score": nps_score,
             "nps_points": round(nps_points, 2),
+            # Customer Voice data (for separate CV Score column)
+            "cv_promoters": emp.cv_promoters or 0,
+            "cv_detractors": emp.cv_detractors or 0,
+            "cv_score": emp.cv_score or 0,  # Promoters × 0.5 - Detractors × 1
             # Review data
             "review_mentions": review_mentions,
             "ppa_points": {
