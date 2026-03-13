@@ -2851,6 +2851,62 @@ async def delete_employee(employee_id: str):
     return {"success": True, "message": "Employee deleted"}
 
 
+@api_router.put("/v2/employees/{employee_id}/cv-stats")
+async def update_employee_cv_stats(employee_id: str, data: dict):
+    """
+    Manually update an employee's CV (Customer Voice) statistics.
+    Allows adjusting promoter and detractor counts directly.
+    
+    CV Score = (promoters × 0.5) - (detractors × 1)
+    """
+    quarter = data.get("quarter", "Q1")
+    year = data.get("year", 2026)
+    cv_promoters = int(data.get("cv_promoters", 0))
+    cv_detractors = int(data.get("cv_detractors", 0))
+    
+    # Find employee
+    employee = await db.employees_v2.find_one({
+        "id": employee_id,
+        "quarter": quarter,
+        "year": year
+    })
+    
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    # Calculate new CV score: promoters × 0.5 - detractors × 1
+    new_cv_score = (cv_promoters * 0.5) - (cv_detractors * 1)
+    
+    # Recalculate total score
+    weighted_score = employee.get("weighted_score", 0) or 0
+    total_metric_bonus = employee.get("total_metric_bonus", 0) or 0
+    rt_bonus = employee.get("review_tracker_bonus", 0) or 0
+    
+    new_total_score = weighted_score + new_cv_score + total_metric_bonus + rt_bonus
+    
+    # Update employee
+    await db.employees_v2.update_one(
+        {"_id": employee["_id"]},
+        {"$set": {
+            "cv_promoters": cv_promoters,
+            "cv_detractors": cv_detractors,
+            "cv_score": round(new_cv_score, 2),
+            "total_score": round(new_total_score, 2),
+            "updated_at": datetime.now(timezone.utc)
+        }}
+    )
+    
+    return {
+        "success": True,
+        "employee_name": employee.get("name"),
+        "cv_promoters": cv_promoters,
+        "cv_detractors": cv_detractors,
+        "new_cv_score": round(new_cv_score, 2),
+        "new_total_score": round(new_total_score, 2),
+        "message": f"Updated CV stats for {employee.get('name')}"
+    }
+
+
 @api_router.delete("/v2/employees")
 async def clear_employees_v2(year: Optional[int] = None, quarter: Optional[str] = None):
     """Clear V2 employees (optionally for specific quarter)"""
