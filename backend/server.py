@@ -2919,15 +2919,27 @@ async def update_employee(employee_id: str, data: EmployeeUpdate):
         },
         {
             "$set": {
+                "employees.$.name": emp_dict.get('name', ''),
                 "employees.$.job_title": emp_dict['job_title'],
                 "employees.$.tier_label": tier_label,
                 "employees.$.total_score": emp_dict.get('total_score', 0),
                 "employees.$.pre_dar_score": emp_dict.get('pre_dar_score', 0),
-                "employees.$.weighted_score": emp_dict.get('weighted_score', 0)
+                "employees.$.weighted_score": emp_dict.get('weighted_score', 0),
+                "employees.$.cv_score": emp_dict.get('cv_score', 0),
+                "employees.$.cv_promoters": emp_dict.get('cv_promoters', 0),
+                "employees.$.cv_detractors": emp_dict.get('cv_detractors', 0),
+                "employees.$.review_tracker_bonus": emp_dict.get('review_tracker_bonus', 0),
+                "employees.$.review_mentions": emp_dict.get('review_mentions', 0),
+                "employees.$.total_metric_bonus": emp_dict.get('total_metric_bonus', 0),
+                "employees.$.nps_score": emp_dict.get('nps_score', 0)
             }
         }
     )
-    logging.info(f"Updated employee {employee.name} job_title to {emp_dict['job_title']} in both employees_v2 and snapshots")
+    
+    # Sync all employees to snapshot to ensure proper sorting
+    await sync_employees_to_most_recent_snapshot(emp_doc['quarter'], emp_doc['year'])
+    
+    logging.info(f"Updated employee {employee.name} in both employees_v2 and snapshots")
     
     # Recalculate peer rankings
     all_employees = await db.employees_v2.find(
