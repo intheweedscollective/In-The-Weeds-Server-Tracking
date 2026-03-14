@@ -52,6 +52,7 @@ Metric Bonus (up to 20 pts):
 - **Batch Score Fix**: Fixed 19 employees with incorrect CV scores
 - **Data Preservation**: Added logic to preserve existing CV/RT data when raw feedback tables are empty
 - **Scoring Formula Alignment**: Unified all scoring functions to use the correct formula
+- **Reports Tab Fixed**: Corrected broken download buttons (Top 10 Slide, Rankings PDF, Complete Rankings) - all verified working
 
 ## Known Issues / Technical Debt
 
