@@ -37,7 +37,7 @@ export default function Reports() {
   };
 
   const downloadRankingsPDF = () => {
-    window.open(`${BACKEND_URL}/api/v2/reports/rankings-pdf/${selectedYear}/${selectedQuarter}`, '_blank');
+    window.open(`${BACKEND_URL}/api/v2/yodeck/${selectedYear}/${selectedQuarter}/printable-rankings`, '_blank');
   };
 
   const downloadYodeckSlide = (type) => {
@@ -204,7 +204,7 @@ export default function Reports() {
               <Button
                 variant="outline"
                 className="justify-start h-auto py-3 border-slate-600 hover:bg-slate-700"
-                onClick={() => downloadYodeckSlide('top-10')}
+                onClick={() => downloadYodeckSlide('top10')}
                 data-testid="download-top10-slide"
               >
                 <div className="flex items-center gap-3">
