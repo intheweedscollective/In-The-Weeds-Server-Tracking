@@ -3045,6 +3045,91 @@ async def update_employee_cv_stats(employee_id: str, data: dict):
     }
 
 
+
+@api_router.post("/v2/admin/clear-all-detractors")
+async def clear_all_detractors(year: int = 2026, quarter: str = "Q1"):
+    """
+    Clear all detractor counts for all employees and recalculate their scores.
+    Detractors should only be added manually via DAR entry or employee edit function.
+    
+    This endpoint:
+    1. Sets cv_detractors to 0 for all employees
+    2. Recalculates cv_score (removing detractor penalty)
+    3. Recalculates total_score
+    4. Syncs changes to the most recent snapshot
+    """
+    quarter = quarter.upper()
+    
+    # Find all employees with detractors > 0
+    employees_with_detractors = await db.employees_v2.find({
+        "quarter": quarter,
+        "year": year,
+        "cv_detractors": {"$gt": 0}
+    }).to_list(length=None)
+    
+    updated_employees = []
+    
+    for emp in employees_with_detractors:
+        old_detractors = emp.get("cv_detractors", 0)
+        old_cv_score = emp.get("cv_score", 0)
+        old_total = emp.get("total_score", 0)
+        
+        # Recalculate CV score without detractors
+        nps_score = emp.get("nps_score", 0) or 0
+        nps_pts = round(nps_score / 10, 1) if nps_score > 0 else 0.0
+        nps_pts = min(nps_pts, 10.0)
+        
+        cv_promoters = emp.get("cv_promoters", 0) or 0
+        # Promoter bonus only, no detractor penalty
+        promo_bonus = cv_promoters * 0.5
+        new_cv_score = round(nps_pts + promo_bonus, 2)
+        
+        # Recalculate total score
+        weighted_score = emp.get("weighted_score", 0) or 0
+        total_metric_bonus = emp.get("total_metric_bonus", 0) or 0
+        rt_bonus = emp.get("review_tracker_bonus", 0) or 0
+        new_total = round(weighted_score + new_cv_score + total_metric_bonus + rt_bonus, 2)
+        
+        # Update employee
+        await db.employees_v2.update_one(
+            {"_id": emp["_id"]},
+            {"$set": {
+                "cv_detractors": 0,
+                "cv_score": new_cv_score,
+                "cv_raw_points": round(promo_bonus, 2),
+                "total_score": new_total,
+                "pre_dar_score": new_total,
+                "updated_at": datetime.now(timezone.utc)
+            }}
+        )
+        
+        updated_employees.append({
+            "name": emp.get("name"),
+            "old_detractors": old_detractors,
+            "old_cv_score": old_cv_score,
+            "new_cv_score": new_cv_score,
+            "score_change": round(new_total - old_total, 2)
+        })
+    
+    # Sync to most recent snapshot
+    snapshot_id = None
+    if updated_employees:
+        snapshot_id = await sync_employees_to_most_recent_snapshot(quarter, year)
+        
+        # Recalculate ranks and tiers
+        await recalculate_all_peer_ranks(quarter, year)
+        await recalculate_all_tier_labels(quarter, year)
+    
+    return {
+        "success": True,
+        "employees_updated": len(updated_employees),
+        "details": updated_employees,
+        "snapshot_synced": snapshot_id,
+        "message": f"Cleared detractors for {len(updated_employees)} employees. Scores recalculated and snapshot synced."
+    }
+
+
+
 @api_router.delete("/v2/employees")
 async def clear_employees_v2(year: Optional[int] = None, quarter: Optional[str] = None):
     """Clear V2 employees (optionally for specific quarter)"""
@@ -6563,9 +6648,9 @@ async def upload_server_performance_csv(
     
     Expected columns: Name, Location, Sent, Received, Response Rate, Avg Rating, NPS
     
-    This calculates promoters/detractors using the correct NPS formula:
+    This calculates promoters from NPS formula:
     - Promoters = Received × (100 + NPS) / 200
-    - Detractors = Received × (100 - NPS) / 200
+    - Detractors are NOT calculated - they must be manually entered via DAR or employee edit
     
     Then updates employee CV scores in the database.
     """
@@ -6612,16 +6697,16 @@ async def upload_server_performance_csv(
                 })
                 continue
             
-            # Calculate promoters/detractors using correct NPS formula
+            # Calculate promoters from NPS formula
             # NPS = ((P - D) / R) * 100
-            # Solving: P = R × (100 + NPS) / 200, D = R × (100 - NPS) / 200
+            # For promoters only (detractors are manually entered via DARs):
+            # Assume D=0, so P = R × (100 + NPS) / 200
             promoters = round(received * (100 + nps_score) / 200)
-            detractors = round(received * (100 - nps_score) / 200)
-            passives = received - promoters - detractors
-            
-            # Ensure non-negative values
             promoters = max(0, promoters)
-            detractors = max(0, detractors)
+            
+            # Detractors are NOT assumed - they must be manually entered via DAR or employee edit
+            detractors = 0
+            passives = received - promoters  # All non-promoters are passives until DARs are entered
             passives = max(0, passives)
             
             # Calculate CV Score:
@@ -6629,8 +6714,8 @@ async def upload_server_performance_csv(
             nps_pts = round(nps_score / 10, 1) if nps_score > 0 else 0.0
             nps_pts = min(nps_pts, 10.0)
             
-            # 2. Promoter/Detractor Bonus: +0.5 per promoter, -1 per detractor
-            promo_detr_bonus = (promoters * 0.5) - (detractors * 1.0)
+            # 2. Promoter Bonus only (detractors added manually via DARs)
+            promo_detr_bonus = (promoters * 0.5)  # No detractor penalty until manually added
             
             # Total CV Score = NPS pts + Promoter/Detractor bonus
             cv_score = round(nps_pts + promo_detr_bonus, 2)
