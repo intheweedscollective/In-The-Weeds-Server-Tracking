@@ -53,7 +53,7 @@ Metric Bonus (up to 20 pts):
 - **Data Preservation**: Added logic to preserve existing CV/RT data when raw feedback tables are empty
 - **Scoring Formula Alignment**: Unified all scoring functions to use the correct formula
 - **Reports Tab Fixed**: Corrected broken download buttons (Top 10 Slide, Rankings PDF, Complete Rankings) - all verified working
-- **Detractors Now Manual Only**: Removed automatic detractor calculation from CV uploads. Detractors must be manually entered via DAR or employee edit. Created `/api/v2/admin/clear-all-detractors` endpoint to clear existing detractors.
+- **Detractors Now Manual Only**: Removed automatic detractor calculation from CV uploads. Detractors must be manually entered via DAR or employee edit. Created `/api/v2/admin/clear-all-detractors` endpoint to clear existing detractors. Cleared all 4 detractors from official CV stats.
 
 ## Known Issues / Technical Debt
 
