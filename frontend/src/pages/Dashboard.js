@@ -5,6 +5,9 @@ import { toast } from "sonner";
 import api from "../lib/api";
 import FinalizeQuarterModal from "../components/FinalizeQuarterModal";
 import QRTopClicksCard from "../components/QRTopClicksCard";
+import StoreHealthScore from "../components/StoreHealthScore";
+import CoachingRadar from "../components/CoachingRadar";
+import ReviewImpactTracker from "../components/ReviewImpactTracker";
 import { formatNumber } from "../utils/formatters";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -315,6 +318,19 @@ export default function Dashboard() {
             </button>
           </div>
         )}
+
+        {/* Executive Insights Section - Store Health, Coaching Radar, Review Impact */}
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <h2 className="text-lg font-bold text-white">Executive Insights</h2>
+            <span className="px-2 py-0.5 bg-cyan-500/20 text-cyan-400 text-xs rounded-full">NEW</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <StoreHealthScore quarter={selectedQuarter} year={selectedYear} />
+            <CoachingRadar quarter={selectedQuarter} year={selectedYear} />
+            <ReviewImpactTracker quarter={selectedQuarter} year={selectedYear} />
+          </div>
+        </div>
 
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

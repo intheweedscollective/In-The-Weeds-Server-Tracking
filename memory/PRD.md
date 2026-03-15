@@ -55,6 +55,10 @@ Metric Bonus (up to 20 pts):
 - **Reports Tab Fixed**: Corrected broken download buttons (Top 10 Slide, Rankings PDF, Complete Rankings) - all verified working
 - **Detractors Now Manual Only**: Removed automatic detractor calculation from CV uploads. Detractors must be manually entered via DAR or employee edit. Created `/api/v2/admin/clear-all-detractors` endpoint to clear existing detractors. Cleared all 4 detractors from official CV stats.
 - **Audit Formula Fixed**: Corrected the scoring audit to properly calculate cv_score (NPS pts + promoter bonus - detractor penalty) and removed NPS from weighted_score (which is POS metrics + RT only). All 27 employees now pass audit.
+- **Executive Insights Dashboard**: Added three new strategic panels:
+  1. **Store Performance Index** - Executive view of store health (Sales Execution, Upsell Performance, Loyalty Engagement, Guest Experience)
+  2. **Coaching Radar** - High-impact coaching opportunities with revenue potential estimates
+  3. **Guest Impact Tracker** - Review mentions linked to revenue influence
 
 ## Known Issues / Technical Debt
 
