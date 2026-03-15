@@ -6771,7 +6771,7 @@ async def upload_server_performance_csv(
                 "promoters": promoters,
                 "detractors": detractors,
                 "passives": passives,
-                "cv_bonus": cv_bonus,
+                "promo_bonus": promo_detr_bonus,
                 "matched_employee": employee.get("name") if employee else None,
                 "status": record_status
             })
@@ -7596,33 +7596,24 @@ async def audit_employee_score(employee_name: str, quarter: str = "Q1", year: in
     cv_source = employee.get("cv_source", "")
     stored_nps_for_weight = employee.get("nps_score", 0) or 0
     
-    # NPS % contribution (10% weight) - normalize NPS (-100 to 100) to 0-100 scale
-    # For manual uploads, use stored NPS; otherwise use raw from cv_feedback
-    if cv_source == "manual_upload":
-        nps_for_weight = stored_nps_for_weight
-    else:
-        nps_for_weight = raw_nps if raw_nps else 0
-    
-    nps_normalized = max(0, (nps_for_weight + 100) / 2)
-    nps_contribution = round(min(nps_normalized, 100) * 0.10, 2)
-    
-    # Review Tracker contribution (15% weight) - 0.5 pts per mention, max 15 pts
+    # NPS % is NOT part of weighted_score - it's part of cv_score
+    # Review Tracker contribution - 0.5 pts per mention, max 15 pts (added to weighted)
     rt_source = employee.get("rt_source", "")
     rt_mentions = employee.get("review_mentions", 0) or 0
     rt_contribution = min(rt_mentions * 0.5, 15)
     
-    # Base weighted: PPA(25%) + LSC(25%) + LBW(15%) + Glass(10%) + NPS%(10%) + RT(15%) = 100%
-    expected_weighted = round(capped_ppa * 0.25 + capped_lsc * 0.25 + capped_lbw * 0.15 + capped_glass * 0.10 + nps_contribution + rt_contribution, 2)
+    # Base weighted: PPA(25%) + LSC(25%) + LBW(15%) + Glass(10%) + RT (max 15 pts)
+    # NPS is NOT included here - it's part of cv_score as nps_pts
+    expected_weighted = round(capped_ppa * 0.25 + capped_lsc * 0.25 + capped_lbw * 0.15 + capped_glass * 0.10 + rt_contribution, 2)
     stored_weighted = employee.get("weighted_score", 0)
     
     audit["calculations"]["weighted_score"] = {
-        "formula": f"PPA({capped_ppa}×0.25) + LSC({capped_lsc}×0.25) + LBW({capped_lbw}×0.15) + Glass({capped_glass}×0.10) + NPS({nps_contribution}) + RT({rt_contribution})",
+        "formula": f"PPA({capped_ppa}×0.25) + LSC({capped_lsc}×0.25) + LBW({capped_lbw}×0.15) + Glass({capped_glass}×0.10) + RT({rt_contribution})",
         "breakdown": {
             "ppa_contribution": round(capped_ppa * 0.25, 2),
             "lsc_contribution": round(capped_lsc * 0.25, 2),
             "lbw_contribution": round(capped_lbw * 0.15, 2),
             "glass_contribution": round(capped_glass * 0.10, 2),
-            "nps_contribution": nps_contribution,
             "rt_contribution": rt_contribution
         },
         "expected": expected_weighted,
@@ -7648,8 +7639,11 @@ async def audit_employee_score(employee_name: str, quarter: str = "Q1", year: in
         audit_detractors = raw_detractors
         audit_nps = raw_nps
     
-    # CV Bonus: Promoters +0.5 each, Detractors -1 each (no cap)
-    expected_cv_bonus = (audit_promoters * 0.5) - (audit_detractors * 1)
+    # CV Score: NPS pts (nps/10, max 10) + Promoters +0.5 each - Detractors -1 each
+    # This is separate from NPS contribution in weighted_score
+    audit_nps_pts = round(audit_nps / 10, 1) if audit_nps > 0 else 0.0
+    audit_nps_pts = min(audit_nps_pts, 10.0)
+    expected_cv_bonus = audit_nps_pts + (audit_promoters * 0.5) - (audit_detractors * 1)
     
     audit["data_trail"]["customer_voice"] = {
         "raw_feedback_count": raw_total,
@@ -7672,6 +7666,11 @@ async def audit_employee_score(employee_name: str, quarter: str = "Q1", year: in
     }
     
     audit["calculations"]["customer_voice"] = {
+        "nps_points": {
+            "formula": f"NPS {audit_nps}% / 10 = {audit_nps_pts} pts (max 10)",
+            "expected": audit_nps_pts,
+            "match": True
+        },
         "promoter_points": {
             "formula": f"{audit_promoters} promoters × +0.5 pt",
             "expected": audit_promoters * 0.5,
@@ -7682,8 +7681,8 @@ async def audit_employee_score(employee_name: str, quarter: str = "Q1", year: in
             "expected": audit_detractors * -1,
             "match": True
         },
-        "total_cv_bonus": {
-            "formula": f"({audit_promoters} × 0.5) - ({audit_detractors} × 1)",
+        "total_cv_score": {
+            "formula": f"NPS pts({audit_nps_pts}) + ({audit_promoters} × 0.5) - ({audit_detractors} × 1)",
             "expected": round(expected_cv_bonus, 2),
             "stored": stored_cv_score,
             "match": abs(expected_cv_bonus - stored_cv_score) < 0.5
@@ -7770,16 +7769,16 @@ async def audit_employee_score(employee_name: str, quarter: str = "Q1", year: in
     }
     
     # === FINAL SCORE AUDIT ===
-    # Final = Base Weighted (includes NPS% and RT) + Metric Bonus + CV Bonus
+    # Final = Weighted (POS + RT) + Metric Bonus + CV Score (NPS pts + promoter/detractor bonus)
     expected_final = round(expected_weighted + expected_total_bonus + expected_cv_bonus, 2)
     stored_final = employee.get("pre_dar_score") or employee.get("total_score", 0)
     
     audit["calculations"]["final_score"] = {
-        "formula": f"Weighted({expected_weighted}) + MetricBonus({expected_total_bonus}) + CVBonus({expected_cv_bonus})",
+        "formula": f"Weighted({expected_weighted}) + MetricBonus({expected_total_bonus}) + CVScore({round(expected_cv_bonus, 2)})",
         "breakdown": {
             "weighted_base_score": expected_weighted,
             "metric_bonus": expected_total_bonus,
-            "cv_bonus": round(expected_cv_bonus, 2)
+            "cv_score": round(expected_cv_bonus, 2)
         },
         "expected": expected_final,
         "stored": stored_final,
