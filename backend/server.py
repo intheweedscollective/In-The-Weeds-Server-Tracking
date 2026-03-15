@@ -5553,14 +5553,33 @@ async def get_review_stats_endpoint(quarter: str = "Q1", year: int = 2026):
         {"_id": 0}
     ).to_list(1000)
     
-    # Get employee names from the database
+    # Get employee data including RT mentions from manual uploads
     employees = await db.employees_v2.find(
         {"quarter": quarter.upper(), "year": year},
-        {"name": 1, "_id": 0}
+        {"_id": 0, "name": 1, "rt_mentions": 1, "review_mentions": 1, "review_tracker_bonus": 1}
     ).to_list(500)
     employee_names = [e["name"] for e in employees]
     
     stats = get_review_stats(reviews, employee_names)
+    
+    # If customer_reviews is empty but employees have rt_mentions (from manual upload),
+    # populate the stats from employee records
+    if len(reviews) == 0:
+        total_mentions = 0
+        for emp in employees:
+            mentions = emp.get("rt_mentions") or emp.get("review_mentions") or 0
+            points = emp.get("review_tracker_bonus") or min(mentions * 0.5, 15)
+            if mentions > 0:
+                stats["by_employee"][emp["name"]] = {
+                    "mentions": mentions,
+                    "positive": 0,
+                    "negative": 0,
+                    "neutral": mentions,  # Assume neutral since we don't have sentiment data
+                    "points": points
+                }
+                total_mentions += mentions
+        stats["total_reviews"] = total_mentions
+        stats["note"] = "Data from manual RT upload (employee records)"
     
     # Add top mentioned employees
     sorted_employees = sorted(
@@ -5573,6 +5592,10 @@ async def get_review_stats_endpoint(quarter: str = "Q1", year: int = 2026):
         for name, data in sorted_employees[:10] 
         if data["mentions"] > 0
     ]
+    
+    # Add total mentions count for the header display
+    stats["total_mentions"] = sum(e.get("mentions", 0) for e in stats["top_mentioned"])
+    stats["employees_with_mentions"] = len([e for e in stats["top_mentioned"] if e.get("mentions", 0) > 0])
     
     return stats
 
