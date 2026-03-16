@@ -61,48 +61,48 @@ export default function ReviewImpactTracker({ quarter = "Q1", year = 2026 }) {
   };
 
   return (
-    <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl border border-slate-700 p-6" data-testid="review-impact-tracker">
+    <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl border border-slate-700 p-6 overflow-hidden" data-testid="review-impact-tracker">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center flex-shrink-0">
             <Sparkles className="w-5 h-5 text-purple-400" />
           </div>
-          <div>
-            <h3 className="font-bold text-white">Guest Impact</h3>
-            <p className="text-xs text-slate-400">Revenue Influence from Reviews</p>
+          <div className="min-w-0">
+            <h3 className="font-bold text-white truncate">Guest Impact</h3>
+            <p className="text-xs text-slate-400 truncate">Revenue Influence from Reviews</p>
           </div>
         </div>
       </div>
 
       {/* Total Impact Banner */}
-      <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 rounded-xl p-4 mb-4 border border-purple-500/20">
-        <div className="grid grid-cols-3 gap-4 text-center">
-          <div>
-            <p className="text-2xl font-bold text-purple-400">{totals.total_mentions}</p>
-            <p className="text-xs text-slate-400">RT Mentions</p>
+      <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 rounded-xl p-3 mb-4 border border-purple-500/20">
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <div className="min-w-0">
+            <p className="text-xl font-bold text-purple-400 truncate">{totals.total_mentions}</p>
+            <p className="text-xs text-slate-400 truncate">RT Mentions</p>
           </div>
-          <div>
-            <p className="text-2xl font-bold text-pink-400">{totals.total_promoters}</p>
-            <p className="text-xs text-slate-400">CV Promoters</p>
+          <div className="min-w-0">
+            <p className="text-xl font-bold text-pink-400 truncate">{totals.total_promoters}</p>
+            <p className="text-xs text-slate-400 truncate">CV Promoters</p>
           </div>
-          <div>
-            <p className="text-2xl font-bold text-emerald-400">{formatCurrency(totals.total_revenue_influence)}</p>
-            <p className="text-xs text-slate-400">Influence</p>
+          <div className="min-w-0">
+            <p className="text-lg font-bold text-emerald-400 truncate">{formatCurrency(totals.total_revenue_influence)}</p>
+            <p className="text-xs text-slate-400 truncate">Influence</p>
           </div>
         </div>
       </div>
 
       {/* Top Influencers */}
-      <div className="space-y-2">
+      <div className="space-y-2 overflow-hidden">
         <p className="text-xs text-slate-400 uppercase tracking-wide mb-2">Top Guest Influencers</p>
         {topPerformers.map((emp, idx) => (
           <div
             key={idx}
-            className="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition-colors"
+            className="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition-colors gap-2"
           >
-            <div className="flex items-center gap-3">
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
                 idx === 0 ? 'bg-amber-500 text-white' :
                 idx === 1 ? 'bg-slate-400 text-white' :
                 idx === 2 ? 'bg-amber-700 text-white' :
@@ -110,25 +110,25 @@ export default function ReviewImpactTracker({ quarter = "Q1", year = 2026 }) {
               }`}>
                 {idx + 1}
               </div>
-              <div>
-                <p className="text-sm font-medium text-white">{emp.employee_name}</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-white truncate">{emp.employee_name}</p>
                 <div className="flex items-center gap-2 text-xs">
                   <span className="flex items-center gap-1 text-slate-400">
-                    <MessageSquare className="w-3 h-3" />
+                    <MessageSquare className="w-3 h-3 flex-shrink-0" />
                     {emp.review_mentions}
                   </span>
                   <span className="flex items-center gap-1 text-slate-400">
-                    <ThumbsUp className="w-3 h-3" />
+                    <ThumbsUp className="w-3 h-3 flex-shrink-0" />
                     {emp.cv_promoters}
                   </span>
                 </div>
               </div>
             </div>
-            <div className="text-right">
-              <p className="text-sm font-bold text-emerald-400">
+            <div className="text-right flex-shrink-0">
+              <p className="text-sm font-bold text-emerald-400 whitespace-nowrap">
                 {formatCurrency(emp.total_revenue_influence)}
               </p>
-              <span className={`text-xs px-1.5 py-0.5 rounded ${getSatisfactionColor(emp.satisfaction_color)}`}>
+              <span className={`text-xs px-1.5 py-0.5 rounded whitespace-nowrap ${getSatisfactionColor(emp.satisfaction_color)}`}>
                 {emp.satisfaction_level}
               </span>
             </div>
@@ -138,8 +138,8 @@ export default function ReviewImpactTracker({ quarter = "Q1", year = 2026 }) {
 
       {/* Methodology Note */}
       <div className="mt-4 pt-4 border-t border-slate-700/50">
-        <p className="text-xs text-slate-500 text-center">
-          Revenue influence: {formatCurrency(data.methodology?.revenue_per_mention || 550)}/mention + {formatCurrency(data.methodology?.revenue_per_promoter || 800)}/promoter
+        <p className="text-xs text-slate-500 text-center truncate">
+          {formatCurrency(data.methodology?.revenue_per_mention || 550)}/mention + {formatCurrency(data.methodology?.revenue_per_promoter || 800)}/promoter
         </p>
       </div>
     </div>
