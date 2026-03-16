@@ -59,6 +59,7 @@ Metric Bonus (up to 20 pts):
   1. **Store Performance Index** - Executive view of store health (Sales Execution, Upsell Performance, Loyalty Engagement, Guest Experience)
   2. **Coaching Radar** - High-impact coaching opportunities with revenue potential estimates
   3. **Guest Impact Tracker** - Review mentions linked to revenue influence
+- **New POS Upload Format Support**: Added support for consolidated "SSD One-Paste Engine" Excel format with Master_Summary sheet containing pre-calculated Employee, Food, Liquor, Beer, Wine, Loyalty $, Bar Glassware $, Net Sales, Total Guests, LBW Total, Loyalty Qty columns
 
 ## Known Issues / Technical Debt
 

@@ -474,15 +474,24 @@ def _deduplicate_employees(employees: List[Dict[str, Any]]) -> List[Dict[str, An
 def extract_pos_data_from_xlsx(xlsx_bytes: bytes) -> Dict[str, Any]:
     """
     Extract employee performance data from an XLSX file.
-    Each employee has their own sheet/tab with the Aloha Server Sales Detail format.
     
-    XLSX Structure (per sheet):
+    Supports TWO formats:
+    1. Multi-sheet format: Each employee has their own sheet/tab
+    2. Consolidated format: All employees on a single sheet (new format)
+    
+    Multi-sheet Structure (per sheet):
     - Row 5, Column F: Employee Name (yellow cell)
     - Row 10-37: Category rows (Food, Liquor, Beer, Wine, Bar Glassware, Loyalty, etc.)
     - Row 16 (Loyalty): Net Sales / 25 = LSC Count
     - Row 31 (Bar Glassware): Net Sales for glassware
     - Row 38: Totals row with Net Sales
     - Row 42: Total Guests
+    
+    Consolidated Structure (single sheet):
+    - "Server Sales Page X of Y" headers with employee names
+    - SALES BY CATEGORY sections
+    - Total Guests per employee block
+    - Loyalty $ and Loyalty Qty rows
     
     Args:
         xlsx_bytes: Raw XLSX file bytes
@@ -493,16 +502,120 @@ def extract_pos_data_from_xlsx(xlsx_bytes: bytes) -> Dict[str, Any]:
     import openpyxl
     from io import BytesIO
     import logging
+    import tempfile
+    import os
     
     try:
         logging.info("Starting XLSX extraction with openpyxl...")
         workbook = openpyxl.load_workbook(BytesIO(xlsx_bytes), data_only=True)
         
+        logging.info(f"XLSX has {len(workbook.sheetnames)} sheets: {workbook.sheetnames[:5]}...")
+        
+        # Check for "SSD Engine" / Summary format - has Master_Summary or similar sheets
+        summary_sheet_names = ['Master_Summary', 'Summary', 'Parsed_Data']
+        has_summary_sheet = any(sheet in workbook.sheetnames for sheet in summary_sheet_names)
+        
+        # Check if this is a consolidated format (few sheets OR has known summary sheet)
+        is_consolidated = False
+        if has_summary_sheet:
+            logging.info(f"Detected summary sheet format - found one of {summary_sheet_names}")
+            is_consolidated = True
+        elif len(workbook.sheetnames) <= 5:
+            # Check first sheet for consolidated format markers (Server Sales blocks)
+            first_sheet = workbook[workbook.sheetnames[0]]
+            markers_found = 0
+            for row in range(1, min(100, first_sheet.max_row + 1)):
+                for col in range(1, min(20, first_sheet.max_column + 1)):
+                    cell_val = first_sheet.cell(row=row, column=col).value
+                    if cell_val:
+                        cell_str = str(cell_val).lower()
+                        if 'server sales' in cell_str and 'page' in cell_str:
+                            markers_found += 1
+                        if markers_found >= 2:
+                            is_consolidated = True
+                            break
+                if is_consolidated:
+                    break
+        
+        if is_consolidated:
+            logging.info("Detected CONSOLIDATED format - using specialized parser")
+            workbook.close()
+            
+            # Use the consolidated parser from pos_report_parser
+            from pos_report_parser import parse_consolidated_pos_report
+            import tempfile
+            
+            # Save bytes to temp file for the parser
+            with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as tmp:
+                tmp.write(xlsx_bytes)
+                tmp_path = tmp.name
+            
+            try:
+                parsed_employees = parse_consolidated_pos_report(tmp_path)
+            finally:
+                os.unlink(tmp_path)
+            
+            if not parsed_employees:
+                return {
+                    "error": "No employee data found in consolidated XLSX file.",
+                    "extraction_notes": "Consolidated format detected but no data extracted",
+                    "employees": []
+                }
+            
+            # Transform to expected output format
+            all_employees = []
+            for emp in parsed_employees:
+                guest_count = emp.get('guests', 0) or 1  # Avoid division by zero
+                net_sales = emp.get('net_sales', 0) or 0
+                lbw_total = emp.get('lbw', 0) or 0
+                glassware = emp.get('glassware', 0) or 0
+                loyalty_sales = emp.get('loyalty_sales', 0) or 0
+                lsc_count = emp.get('lsc_count', 0) or 0
+                
+                # Calculate derived values
+                ppa = net_sales / guest_count if guest_count > 0 else 0
+                lbw_per_guest = lbw_total / guest_count if guest_count > 0 else 0
+                glassware_per_guest = glassware / guest_count if guest_count > 0 else 0
+                guests_per_lsc = guest_count / lsc_count if lsc_count > 0 else None
+                
+                employee_data = {
+                    "name": emp.get('name'),
+                    "ppa": round(ppa, 2) if ppa else None,
+                    "lbw_per_guest": round(lbw_per_guest, 2) if lbw_per_guest else None,
+                    "glassware_per_guest": round(glassware_per_guest, 2) if glassware_per_guest else None,
+                    "guest_count": guest_count,
+                    "net_sales": round(net_sales, 2) if net_sales else None,
+                    "guests_per_lsc": round(guests_per_lsc, 2) if guests_per_lsc else None,
+                    "loyalty_sales": round(loyalty_sales, 2) if loyalty_sales else None,
+                    "lsc_count": lsc_count,
+                    "_raw": {
+                        "food_sales": round(emp.get('food', 0), 2),
+                        "liquor_sales": round(emp.get('liquor', 0), 2),
+                        "beer_sales": round(emp.get('beer', 0), 2),
+                        "wine_sales": round(emp.get('wine', 0), 2),
+                        "bar_glassware_sales": round(glassware, 2),
+                        "lbw_total": round(lbw_total, 2),
+                        "lsc_count": lsc_count
+                    }
+                }
+                all_employees.append(employee_data)
+                logging.info(f"Extracted (consolidated): {emp.get('name')} - Guests: {guest_count}, Net: ${net_sales:.2f}, PPA: ${ppa:.2f}, LSC: {lsc_count}")
+            
+            return {
+                "report_date": None,
+                "report_type": "server_sales_consolidated",
+                "employees": all_employees,
+                "extraction_notes": f"Extracted {len(all_employees)} employees from consolidated format",
+                "sheets_processed": 1,
+                "employee_count": len(all_employees)
+            }
+        
+        # Original multi-sheet processing
+        logging.info("Using MULTI-SHEET format parser")
         all_employees = []
         extraction_notes = []
         report_date = None
         
-        logging.info(f"XLSX has {len(workbook.sheetnames)} sheets: {workbook.sheetnames[:5]}...")
         skipped_sheets = []
         
         for sheet_name in workbook.sheetnames:
