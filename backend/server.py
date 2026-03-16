@@ -1246,6 +1246,279 @@ async def upload_pos_report_file(file: UploadFile = File(...)):
         )
 
 
+# ============================================================================
+# UNIFIED DATA UPLOAD - Single Source of Truth
+# ============================================================================
+
+@api_router.post("/v2/data/upload-pos")
+async def unified_pos_upload(
+    file: UploadFile = File(...),
+    quarter: str = "Q1",
+    year: int = 2026
+):
+    """
+    UNIFIED POS DATA UPLOAD - Single source of truth.
+    
+    This endpoint:
+    1. Parses POS data from XLSX (SSD Engine or standard format)
+    2. Updates/creates employees directly in employees_v2
+    3. Auto-creates/updates snapshot for the current date
+    4. Recalculates all scores
+    
+    Use this for ALL POS data uploads. Dashboard and Snapshots will stay in sync.
+    """
+    quarter = quarter.upper()
+    
+    # Check quarter settings
+    settings_doc = await db.quarter_settings.find_one(
+        {"year": year, "quarter": quarter},
+        {"_id": 0}
+    )
+    if not settings_doc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Quarter settings must exist for {quarter} {year}. Go to Settings first."
+        )
+    
+    settings = QuarterSettings(**settings_doc)
+    
+    # Read and parse file
+    contents = await file.read()
+    filename = file.filename.lower()
+    
+    if not filename.endswith(('.xlsx', '.xls', '.csv')):
+        raise HTTPException(status_code=400, detail="Only Excel (.xlsx, .xls) or CSV files allowed")
+    
+    try:
+        from pos_report_parser import is_consolidated_format, parse_consolidated_pos_report
+        from clean_pos_parser import parse_clean_pos_report
+        import tempfile
+        
+        parsed_employees = []
+        parse_method = "unknown"
+        
+        # Save to temp file for format detection
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
+            tmp.write(contents)
+            tmp_path = tmp.name
+        
+        try:
+            # Try consolidated format (SSD Engine) first
+            if not filename.endswith('.csv') and is_consolidated_format(tmp_path):
+                logging.info("UNIFIED UPLOAD: Detected SSD Engine format")
+                parsed_employees = parse_consolidated_pos_report(tmp_path)
+                parse_method = "ssd_engine"
+            else:
+                # Try clean POS format
+                clean_result = parse_clean_pos_report(contents, filename)
+                if clean_result["success"] and clean_result["employees"]:
+                    parsed_employees = clean_result["employees"]
+                    parse_method = "clean_pos"
+                else:
+                    # Fall back to pandas for standard CSV/XLSX
+                    if filename.endswith('.csv'):
+                        df = pd.read_csv(io.BytesIO(contents))
+                    else:
+                        df = pd.read_excel(io.BytesIO(contents))
+                    
+                    # Map columns
+                    column_validation = validate_upload_columns(list(df.columns))
+                    if column_validation["valid"]:
+                        mapping = column_validation["mapping"]
+                        for _, row in df.iterrows():
+                            name = str(row.get(mapping.get("name", ""), "")).strip()
+                            if not name or name == "nan":
+                                continue
+                            
+                            guests = int(float(row.get(mapping.get("guests", ""), 0) or 0))
+                            net_sales = float(row.get(mapping.get("net_sales", ""), 0) or 0)
+                            liquor = float(row.get(mapping.get("liquor_sales", ""), 0) or 0)
+                            beer = float(row.get(mapping.get("beer_sales", ""), 0) or 0)
+                            wine = float(row.get(mapping.get("wine_sales", ""), 0) or 0)
+                            lbw = liquor + beer + wine
+                            glassware = float(row.get(mapping.get("glassware_sales", ""), 0) or 0)
+                            lsc = int(float(row.get(mapping.get("lsc_count", ""), 0) or 0))
+                            
+                            parsed_employees.append({
+                                "name": name,
+                                "guests": guests,
+                                "net_sales": net_sales,
+                                "lbw": lbw,
+                                "glassware": glassware,
+                                "lsc_count": lsc
+                            })
+                        parse_method = "standard_csv"
+        finally:
+            import os
+            os.unlink(tmp_path)
+        
+        if not parsed_employees:
+            raise HTTPException(status_code=400, detail="No valid employee data found in file")
+        
+        # Process each employee: update or create in employees_v2
+        updated_count = 0
+        created_count = 0
+        
+        for emp_data in parsed_employees:
+            name = emp_data.get('name', '')
+            if not name:
+                continue
+            
+            guests = emp_data.get('guests', 0) or emp_data.get('total_guests', 0) or 0
+            net_sales = emp_data.get('net_sales', 0) or emp_data.get('totals', 0) or 0
+            lbw = emp_data.get('lbw', 0) or 0
+            
+            # If lbw not provided, calculate from components
+            if lbw == 0:
+                liquor = emp_data.get('liquor', 0) or 0
+                beer = emp_data.get('beer', 0) or 0
+                wine = emp_data.get('wine', 0) or 0
+                lbw = liquor + beer + wine
+            
+            glassware = emp_data.get('glassware', 0) or emp_data.get('glassware_sales', 0) or emp_data.get('bar_glassware', 0) or 0
+            lsc_count = emp_data.get('lsc_count', 0) or 0
+            
+            # If lsc from loyalty sales
+            if lsc_count == 0 and emp_data.get('loyalty'):
+                lsc_count = int(emp_data.get('loyalty', 0) / 25)
+            
+            # Calculate derived metrics
+            ppa = net_sales / guests if guests > 0 else 0
+            lbw_per_guest = lbw / guests if guests > 0 else 0
+            glassware_per_guest = glassware / guests if guests > 0 else 0
+            guests_per_lsc = guests / lsc_count if lsc_count > 0 else None
+            
+            # Calculate scores using benchmarks
+            benchmark_ppa = settings.benchmark_ppa or 55
+            benchmark_lbw = settings.benchmark_lbw or 8
+            benchmark_glass = settings.benchmark_glass or 1.25
+            benchmark_lsc = settings.benchmark_lsc or 100
+            
+            score_ppa = (ppa / benchmark_ppa) * 100 if benchmark_ppa > 0 else 0
+            score_lbw = (lbw_per_guest / benchmark_lbw) * 100 if benchmark_lbw > 0 else 0
+            score_glass = (glassware_per_guest / benchmark_glass) * 100 if benchmark_glass > 0 else 0
+            score_lsc = (benchmark_lsc / guests_per_lsc) * 100 if guests_per_lsc and guests_per_lsc > 0 else 0
+            
+            # Calculate weighted base score (capped at 100 each)
+            capped_ppa = min(score_ppa, 100)
+            capped_lbw = min(score_lbw, 100)
+            capped_glass = min(score_glass, 100)
+            capped_lsc = min(score_lsc, 100)
+            
+            weighted_score = (
+                capped_ppa * 0.25 +
+                capped_lsc * 0.25 +
+                capped_lbw * 0.15 +
+                capped_glass * 0.10
+            )
+            
+            # Find existing employee
+            existing = await db.employees_v2.find_one({
+                "name": {"$regex": f"^{name}$", "$options": "i"},
+                "quarter": quarter,
+                "year": year
+            })
+            
+            if existing:
+                # Preserve existing CV/RT data when updating POS data
+                cv_score = existing.get("cv_score", 0) or 0
+                rt_mentions = existing.get("rt_mentions", 0) or 0
+                rt_contribution = min(rt_mentions * 0.5, 15)
+                total_metric_bonus = existing.get("total_metric_bonus", 0) or 0
+                
+                # Recalculate weighted with RT
+                weighted_with_rt = weighted_score + rt_contribution
+                total_score = weighted_with_rt + cv_score + total_metric_bonus
+                
+                update_fields = {
+                    "guests": guests,
+                    "net_sales": round(net_sales, 2),
+                    "lbw": round(lbw, 2),
+                    "glassware_sales": round(glassware, 2),
+                    "lsc_count": lsc_count,
+                    "ppa": round(ppa, 2),
+                    "lbw_per_guest": round(lbw_per_guest, 2),
+                    "glassware_per_guest": round(glassware_per_guest, 2),
+                    "guests_per_lsc": round(guests_per_lsc, 2) if guests_per_lsc else None,
+                    "score_ppa": round(score_ppa, 2),
+                    "score_lbw": round(score_lbw, 2),
+                    "score_glass": round(score_glass, 2),
+                    "score_lsc": round(score_lsc, 2),
+                    "weighted_score": round(weighted_with_rt, 2),
+                    "total_score": round(total_score, 2),
+                    "pre_dar_score": round(total_score, 2),
+                    "updated_at": datetime.now(timezone.utc)
+                }
+                
+                await db.employees_v2.update_one(
+                    {"_id": existing["_id"]},
+                    {"$set": update_fields}
+                )
+                updated_count += 1
+            else:
+                # Create new employee
+                new_emp = {
+                    "id": str(uuid.uuid4()),
+                    "name": name,
+                    "quarter": quarter,
+                    "year": year,
+                    "job_title": "Server",
+                    "guests": guests,
+                    "net_sales": round(net_sales, 2),
+                    "lbw": round(lbw, 2),
+                    "glassware_sales": round(glassware, 2),
+                    "lsc_count": lsc_count,
+                    "ppa": round(ppa, 2),
+                    "lbw_per_guest": round(lbw_per_guest, 2),
+                    "glassware_per_guest": round(glassware_per_guest, 2),
+                    "guests_per_lsc": round(guests_per_lsc, 2) if guests_per_lsc else None,
+                    "score_ppa": round(score_ppa, 2),
+                    "score_lbw": round(score_lbw, 2),
+                    "score_glass": round(score_glass, 2),
+                    "score_lsc": round(score_lsc, 2),
+                    "weighted_score": round(weighted_score, 2),
+                    "total_score": round(weighted_score, 2),
+                    "pre_dar_score": round(weighted_score, 2),
+                    "nps_score": 0,
+                    "cv_score": 0,
+                    "cv_promoters": 0,
+                    "cv_detractors": 0,
+                    "rt_mentions": 0,
+                    "review_tracker_bonus": 0,
+                    "created_at": datetime.now(timezone.utc),
+                    "updated_at": datetime.now(timezone.utc)
+                }
+                await db.employees_v2.insert_one(new_emp)
+                created_count += 1
+        
+        # Recalculate peer ranks
+        await recalculate_peer_ranks(quarter, year)
+        
+        # Auto-sync to most recent snapshot (or create one)
+        await sync_employees_to_most_recent_snapshot(quarter, year)
+        
+        return {
+            "success": True,
+            "message": f"POS data uploaded successfully",
+            "employees_updated": updated_count,
+            "employees_created": created_count,
+            "total_processed": updated_count + created_count,
+            "parse_method": parse_method,
+            "quarter": quarter,
+            "year": year,
+            "note": "Dashboard and Snapshots are now synced"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Unified POS upload failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Upload failed: {str(e)}"
+        )
+
+
 @api_router.post("/v2/upload/validate")
 async def validate_upload_file(file: UploadFile = File(...)):
     """
@@ -7456,9 +7729,12 @@ async def upload_review_tracker_data(
             upsert=True
         )
         
+        # Sync updated employees to the most recent snapshot
+        snapshot_id = await sync_employees_to_most_recent_snapshot(quarter, year)
+        
         return {
             "success": True,
-            "message": f"Processed {len(records_processed)} records, updated {employees_updated} employees",
+            "message": f"Processed {len(records_processed)} records, updated {employees_updated} employees and synced to snapshot",
             "summary": {
                 "total_records": len(records_processed),
                 "employees_updated": employees_updated,
@@ -7466,7 +7742,8 @@ async def upload_review_tracker_data(
             },
             "records": records_processed,
             "quarter": quarter,
-            "year": year
+            "year": year,
+            "snapshot_synced": snapshot_id
         }
         
     except HTTPException:

@@ -51,7 +51,7 @@ export default function DataUploads() {
     fetchDataStatus();
   }, [quarter, year]);
 
-  // POS Upload
+  // POS Upload - UNIFIED (saves directly to database, syncs dashboard & snapshots)
   const handlePosUpload = async () => {
     if (!posFile) return;
     setPosUploading(true);
@@ -61,15 +61,18 @@ export default function DataUploads() {
     formData.append('file', posFile);
     
     try {
-      const response = await fetch(`${BACKEND_URL}/api/v2/pos-ocr/upload`, {
+      // Use the new unified endpoint that saves directly to employees_v2
+      const response = await fetch(`${BACKEND_URL}/api/v2/data/upload-pos?quarter=${quarter}&year=${year}`, {
         method: 'POST',
         body: formData
       });
       const data = await response.json();
       
-      if (response.ok) {
+      if (response.ok && data.success) {
         setPosResult({ success: true, data });
-        toast.success(`Extracted ${data.employees?.length || 0} employees from POS report`);
+        toast.success(`Updated ${data.employees_updated || 0} employees, created ${data.employees_created || 0} new`, {
+          description: "Dashboard and Snapshots are now synced"
+        });
         fetchDataStatus();
       } else {
         setPosResult({ success: false, error: data.detail });
@@ -131,7 +134,9 @@ export default function DataUploads() {
       
       if (response.ok && data.success) {
         setRtResult({ success: true, data });
-        toast.success(`Updated ${data.employees_updated || 0} employees with RT data`);
+        toast.success(`Updated ${data.summary?.employees_updated || 0} employees with RT data`, {
+          description: "Dashboard and Snapshots are now synced"
+        });
         fetchDataStatus();
       } else {
         setRtResult({ success: false, error: data.detail || "Upload failed" });
@@ -345,15 +350,18 @@ export default function DataUploads() {
         </div>
 
         {/* Upload Order Guide - Compact on mobile */}
-        <div className="mb-4 md:mb-6 p-3 md:p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
+        <div className="mb-4 md:mb-6 p-3 md:p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl">
           <div className="flex items-start gap-2 md:gap-3">
-            <AlertTriangle className="w-4 h-4 md:w-5 md:h-5 text-blue-400 mt-0.5 shrink-0" />
+            <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-emerald-400 mt-0.5 shrink-0" />
             <div>
-              <h4 className="font-medium text-blue-400 text-sm mb-1">Upload Order</h4>
-              <ol className="text-xs md:text-sm text-slate-300 space-y-0.5 list-decimal list-inside">
-                <li><strong>POS</strong> - Creates employees with metrics</li>
-                <li><strong>CV/NPS</strong> - Adds Customer Voice scores</li>
-                <li><strong>RT</strong> - Adds review mention bonuses</li>
+              <h4 className="font-medium text-emerald-400 text-sm mb-1">Single Source of Truth</h4>
+              <p className="text-xs md:text-sm text-slate-300 mb-2">
+                All uploads update the <strong>Dashboard</strong> and <strong>Snapshots</strong> automatically.
+              </p>
+              <ol className="text-xs md:text-sm text-slate-400 space-y-0.5 list-decimal list-inside">
+                <li><strong className="text-white">POS</strong> - Employee metrics (PPA, LBW, LSC, Glass)</li>
+                <li><strong className="text-white">CV/NPS</strong> - Customer Voice scores</li>
+                <li><strong className="text-white">RT</strong> - Review mention bonuses</li>
               </ol>
             </div>
           </div>
@@ -363,15 +371,15 @@ export default function DataUploads() {
         <div className="space-y-4 md:space-y-6">
           {/* POS Upload */}
           <UploadCard
-            title="1. POS Data"
-            description="Upload POS report with PPA, LBW, LSC, Glassware"
+            title="1. POS Data (SSD Engine / XLSX)"
+            description="Directly updates Dashboard & Snapshots"
             icon={FileSpreadsheet}
             file={posFile}
             setFile={setPosFile}
             onUpload={handlePosUpload}
             uploading={posUploading}
             result={posResult}
-            acceptTypes=".xlsx,.xls,.csv,.pdf,.png,.jpg,.jpeg"
+            acceptTypes=".xlsx,.xls,.csv"
             colorClass="blue"
           />
 
@@ -408,7 +416,15 @@ export default function DataUploads() {
         {/* Post-Upload Actions */}
         <div className="mt-6 md:mt-8 p-3 md:p-4 bg-slate-800/50 rounded-xl border border-slate-700/50">
           <h3 className="font-semibold text-white text-sm md:text-base mb-3">After Uploading</h3>
-          <div className="grid grid-cols-3 gap-2 md:flex md:flex-wrap md:gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 md:flex md:flex-wrap md:gap-3">
+            <Button
+              onClick={() => window.location.href = '/'}
+              variant="default"
+              size="sm"
+              className="bg-emerald-600 hover:bg-emerald-700 text-xs md:text-sm"
+            >
+              Dashboard
+            </Button>
             <Button
               onClick={() => window.location.href = '/scoring-audit'}
               variant="outline"

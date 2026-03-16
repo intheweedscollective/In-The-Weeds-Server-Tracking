@@ -31,6 +31,24 @@ Metric Bonus (up to 20 pts):
 - Linear scale from 100%-120%
 ```
 
+## DATA ARCHITECTURE (SIMPLIFIED - March 16, 2026)
+
+### Single Source of Truth
+All data uploads now go directly to `employees_v2` collection. This is the MASTER data.
+
+**Data Flow:**
+1. **Upload** → `/api/v2/data/upload-pos` → `employees_v2` (master)
+2. **Sync** → Auto-syncs to latest snapshot
+3. **Dashboard** → Reads from `employees_v2`
+
+**Upload Endpoints (All update `employees_v2` + sync to snapshots):**
+- `POST /api/v2/data/upload-pos` - Unified POS upload (NEW)
+- `POST /api/v2/cv/server-performance/upload` - Customer Voice data
+- `POST /api/v2/rt/upload` - Review Tracker data
+
+### Previous Architecture (DEPRECATED)
+Previously, data could be uploaded to snapshots separately, causing sync issues between Dashboard and Snapshots. This has been fixed.
+
 ## Tech Stack
 - Frontend: React with Shadcn/UI components
 - Backend: FastAPI (Python)
@@ -47,19 +65,21 @@ Metric Bonus (up to 20 pts):
 - QR code generation for employees
 - AI-powered performance review generation
 
-### Recent Session (March 2026) ✅
+### March 16, 2026 Session ✅
+- **UNIFIED DATA UPLOAD**: Created new `/api/v2/data/upload-pos` endpoint that saves directly to `employees_v2` and auto-syncs to snapshots
+- **Dashboard/Snapshot Sync**: All three upload endpoints (POS, CV, RT) now automatically sync `employees_v2` to the latest snapshot
+- **"Single Source of Truth" UI**: Updated Data Uploads page to clearly show that all uploads update Dashboard and Snapshots automatically
+- **Simplified Data Flow**: Removed confusion about where to upload data - now there's ONE place for each data type
+
+### Earlier Session (March 2026) ✅
 - **CV Score Bug Fixed**: Corrected multiple functions that were missing NPS points in cv_score calculation
 - **Batch Score Fix**: Fixed 19 employees with incorrect CV scores
 - **Data Preservation**: Added logic to preserve existing CV/RT data when raw feedback tables are empty
 - **Scoring Formula Alignment**: Unified all scoring functions to use the correct formula
-- **Reports Tab Fixed**: Corrected broken download buttons (Top 10 Slide, Rankings PDF, Complete Rankings) - all verified working
-- **Detractors Now Manual Only**: Removed automatic detractor calculation from CV uploads. Detractors must be manually entered via DAR or employee edit. Created `/api/v2/admin/clear-all-detractors` endpoint to clear existing detractors. Cleared all 4 detractors from official CV stats.
-- **Audit Formula Fixed**: Corrected the scoring audit to properly calculate cv_score (NPS pts + promoter bonus - detractor penalty) and removed NPS from weighted_score (which is POS metrics + RT only). All 27 employees now pass audit.
-- **Executive Insights Dashboard**: Added three new strategic panels:
-  1. **Store Performance Index** - Executive view of store health (Sales Execution, Upsell Performance, Loyalty Engagement, Guest Experience)
-  2. **Coaching Radar** - High-impact coaching opportunities with revenue potential estimates
-  3. **Guest Impact Tracker** - Review mentions linked to revenue influence
-- **New POS Upload Format Support**: Added support for consolidated "SSD One-Paste Engine" Excel format with Master_Summary sheet containing pre-calculated Employee, Food, Liquor, Beer, Wine, Loyalty $, Bar Glassware $, Net Sales, Total Guests, LBW Total, Loyalty Qty columns
+- **Reports Tab Fixed**: Corrected broken download buttons (Top 10 Slide, Rankings PDF, Complete Rankings)
+- **Detractors Now Manual Only**: Removed automatic detractor calculation from CV uploads
+- **Audit Formula Fixed**: All 27 employees now pass audit
+- **Executive Insights Dashboard**: Added Store Performance Index, Coaching Radar, Guest Impact Tracker panels
 
 ## Known Issues / Technical Debt
 
@@ -67,12 +87,12 @@ Metric Bonus (up to 20 pts):
 - None currently
 
 ### P1 (High Priority)
-- Onboarding modal blocks UI interactions (needs dismiss mechanism)
 - Employees not yet associated with stores (Store Leaderboard non-functional)
+- Trend indicators not yet on main dashboard
 
 ### P2 (Medium Priority)
-- Trend indicators not yet on main dashboard
-- server.py is 9k+ lines and needs refactoring into smaller modules
+- Onboarding modal can be dismissed but reappears on fresh browser sessions
+- server.py is 10k+ lines and needs refactoring into smaller modules
 
 ### P3 (Low Priority)
 - Background task queue not implemented (long operations could timeout)
