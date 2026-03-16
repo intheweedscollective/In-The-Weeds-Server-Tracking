@@ -310,19 +310,28 @@ async def _sync_snapshot_to_employees_v2(snapshot_id: str, quarter: str, year: i
         
         if existing:
             # Update existing employee with snapshot data (POS metrics)
+            # Use snapshot values if they exist (not None), otherwise keep existing
+            # IMPORTANT: Don't use `or` because 0 is a valid value for numeric fields
+            def get_val(snap_key, exist_key=None):
+                exist_key = exist_key or snap_key
+                snap_val = snap_emp.get(snap_key)
+                if snap_val is not None:
+                    return snap_val
+                return existing.get(exist_key)
+            
             update_fields = {
-                "guests": snap_emp.get("guests") or existing.get("guests"),
-                "net_sales": snap_emp.get("net_sales") or existing.get("net_sales"),
-                "ppa": snap_emp.get("ppa") or existing.get("ppa"),
-                "lbw": snap_emp.get("lbw") or existing.get("lbw"),
-                "lbw_per_guest": snap_emp.get("lbw_per_guest") or existing.get("lbw_per_guest"),
-                "glassware_sales": snap_emp.get("glassware_sales") or existing.get("glassware_sales"),
-                "glassware_per_guest": snap_emp.get("glassware_per_guest") or existing.get("glassware_per_guest"),
-                "lsc_count": snap_emp.get("lsc_count") if snap_emp.get("lsc_count") is not None else existing.get("lsc_count"),
-                "score_ppa": snap_emp.get("score_ppa") or existing.get("score_ppa"),
-                "score_lbw": snap_emp.get("score_lbw") or existing.get("score_lbw"),
-                "score_glass": snap_emp.get("score_glass") or existing.get("score_glass"),
-                "score_lsc": snap_emp.get("score_lsc") or existing.get("score_lsc"),
+                "guests": get_val("guests"),
+                "net_sales": get_val("net_sales"),
+                "ppa": get_val("ppa"),
+                "lbw": get_val("lbw"),
+                "lbw_per_guest": get_val("lbw_per_guest"),
+                "glassware_sales": get_val("glassware_sales"),
+                "glassware_per_guest": get_val("glassware_per_guest"),
+                "lsc_count": get_val("lsc_count"),
+                "score_ppa": get_val("score_ppa"),
+                "score_lbw": get_val("score_lbw"),
+                "score_glass": get_val("score_glass"),
+                "score_lsc": get_val("score_lsc"),
                 "updated_at": datetime.now(timezone.utc)
             }
             
