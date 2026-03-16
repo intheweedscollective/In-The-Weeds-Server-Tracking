@@ -80,11 +80,11 @@ export default function ReviewImpactTracker({ quarter = "Q1", year = 2026 }) {
         <div className="grid grid-cols-3 gap-4 text-center">
           <div>
             <p className="text-2xl font-bold text-purple-400">{totals.total_mentions}</p>
-            <p className="text-xs text-slate-400">Mentions</p>
+            <p className="text-xs text-slate-400">RT Mentions</p>
           </div>
           <div>
             <p className="text-2xl font-bold text-pink-400">{totals.total_promoters}</p>
-            <p className="text-xs text-slate-400">Promoters</p>
+            <p className="text-xs text-slate-400">CV Promoters</p>
           </div>
           <div>
             <p className="text-2xl font-bold text-emerald-400">{formatCurrency(totals.total_revenue_influence)}</p>

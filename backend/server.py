@@ -9791,7 +9791,7 @@ async def get_coaching_radar(quarter: str = "Q1", year: int = 2026):
                 "gap": round(gap, 2),
                 "impact_type": "revenue",
                 "potential_monthly": round(potential_increase / 12, 0),
-                "description": f"Check average ${ppa:.2f} vs ${benchmarks['ppa']:.2f} benchmark",
+                "description": f"Guest average ${ppa:.2f} vs ${benchmarks['ppa']:.2f} benchmark",
                 "action": "Focus on upselling premium items and suggesting add-ons"
             })
         
