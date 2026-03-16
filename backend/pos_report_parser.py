@@ -391,14 +391,34 @@ def is_pos_report_format(file_path: str) -> bool:
 
 def is_consolidated_format(file_path: str) -> bool:
     """
-    Check if a POS report is in consolidated format (all employees on one sheet)
+    Check if a POS report is in consolidated format (all employees on one sheet/summary)
     vs multi-sheet format (one sheet per employee).
+    
+    Consolidated formats include:
+    - SSD Engine format with Master_Summary sheet (4 sheets: Instructions, Paste_Raw, Parsed_Data, Master_Summary)
+    - Single-sheet "Server Sales" block format
     """
     try:
         xlsx = pd.ExcelFile(file_path)
-        # Consolidated format has 1-3 sheets; multi-sheet has many more
-        return len(xlsx.sheet_names) <= 3
-    except:
+        sheet_names = xlsx.sheet_names
+        
+        # Check for known summary sheet names (SSD Engine format)
+        summary_sheets = ['Master_Summary', 'Summary', 'Parsed_Data']
+        has_summary = any(sheet in sheet_names for sheet in summary_sheets)
+        
+        if has_summary:
+            logger.info(f"Detected consolidated format - found summary sheet in {sheet_names}")
+            return True
+        
+        # Multi-sheet format typically has many sheets (one per employee)
+        # Consolidated is typically 1-5 sheets
+        if len(sheet_names) <= 5:
+            logger.info(f"Detected consolidated format - only {len(sheet_names)} sheets")
+            return True
+        
+        return False
+    except Exception as e:
+        logger.error(f"Error checking consolidated format: {e}")
         return False
 
 

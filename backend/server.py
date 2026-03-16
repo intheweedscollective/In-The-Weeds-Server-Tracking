@@ -4105,8 +4105,8 @@ async def upload_snapshot_data(snapshot_id: str, file: UploadFile = File(...)):
     filename = file.filename.lower()
     
     try:
-        # First, try the Clean POS format (simplified single-sheet format)
-        from clean_pos_parser import parse_clean_pos_report
+        # First check for SSD Engine / consolidated format (has Master_Summary sheet)
+        from pos_report_parser import is_pos_report_format, is_consolidated_format, parse_pos_report, parse_consolidated_pos_report
         import tempfile
         
         # Save to temp file
@@ -4114,7 +4114,110 @@ async def upload_snapshot_data(snapshot_id: str, file: UploadFile = File(...)):
             tmp.write(contents)
             tmp_path = tmp.name
         
-        # Try clean format first (if it's an xlsx)
+        # Try consolidated format FIRST (SSD Engine with Master_Summary)
+        if not filename.endswith('.csv') and is_consolidated_format(tmp_path):
+            logging.info("Detected CONSOLIDATED format - using specialized parser (SSD Engine)")
+            pos_employees = parse_consolidated_pos_report(tmp_path)
+            
+            import os
+            os.unlink(tmp_path)  # Clean up temp file
+            
+            if pos_employees and len(pos_employees) > 1:
+                logging.info(f"Found {len(pos_employees)} employees from consolidated format")
+                
+                # Get settings for scoring
+                settings_doc = await db.quarter_settings.find_one(
+                    {"year": snapshot["year"], "quarter": snapshot["quarter"]},
+                    {"_id": 0}
+                )
+                settings = QuarterSettings(**(settings_doc or {}))
+                
+                employees = []
+                for emp_data in pos_employees:
+                    name = emp_data['name']
+                    guests = emp_data.get('guests', 0) or 0
+                    net_sales = emp_data.get('net_sales', 0) or 0
+                    lbw = emp_data.get('lbw', 0) or 0
+                    glassware_sales = emp_data.get('glassware', 0) or 0
+                    lsc_count = emp_data.get('lsc_count', 0) or 0
+                    
+                    # Skip if no meaningful data
+                    if net_sales <= 0 and lbw <= 0:
+                        logging.info(f"Skipping {name} - no sales data")
+                        continue
+                    
+                    # Calculate derived values
+                    ppa = net_sales / guests if guests > 0 else 0
+                    lbw_per_guest = lbw / guests if guests > 0 else 0
+                    glassware_per_guest = glassware_sales / guests if guests > 0 else 0
+                    guests_per_lsc = guests / lsc_count if lsc_count > 0 else None
+                    
+                    # Calculate scores using benchmarks
+                    benchmark_ppa = settings.benchmark_ppa or 55
+                    benchmark_lbw = settings.benchmark_lbw or 8
+                    benchmark_glass = settings.benchmark_glass or 1.25
+                    benchmark_lsc = settings.benchmark_lsc or 100
+                    
+                    score_ppa = (ppa / benchmark_ppa) * 100 if benchmark_ppa > 0 else 0
+                    score_lbw = (lbw_per_guest / benchmark_lbw) * 100 if benchmark_lbw > 0 else 0
+                    score_glass = (glassware_per_guest / benchmark_glass) * 100 if benchmark_glass > 0 else 0
+                    score_lsc = (benchmark_lsc / guests_per_lsc) * 100 if guests_per_lsc and guests_per_lsc > 0 else 0
+                    
+                    # Calculate weighted base score (capped at 100 each)
+                    capped_ppa = min(score_ppa, 100)
+                    capped_lbw = min(score_lbw, 100)
+                    capped_glass = min(score_glass, 100)
+                    capped_lsc = min(score_lsc, 100)
+                    
+                    base_score = (
+                        capped_ppa * 0.25 +
+                        capped_lsc * 0.25 +
+                        capped_lbw * 0.15 +
+                        capped_glass * 0.10
+                    )
+                    
+                    total_score = round(base_score, 2)
+                    
+                    emp = {
+                        "name": name,
+                        "guests": guests,
+                        "net_sales": round(net_sales, 2),
+                        "lbw": round(lbw, 2),
+                        "glassware_sales": round(glassware_sales, 2),
+                        "lsc_count": lsc_count,
+                        "ppa": round(ppa, 2),
+                        "lbw_per_guest": round(lbw_per_guest, 2),
+                        "glassware_per_guest": round(glassware_per_guest, 2),
+                        "guests_per_lsc": round(guests_per_lsc, 2) if guests_per_lsc else None,
+                        "score_ppa": round(score_ppa, 2),
+                        "score_lbw": round(score_lbw, 2),
+                        "score_glass": round(score_glass, 2),
+                        "score_lsc": round(score_lsc, 2),
+                        "total_score": total_score
+                    }
+                    employees.append(emp)
+                
+                # Update snapshot
+                await db.snapshots.update_one(
+                    {"id": snapshot_id},
+                    {"$set": {
+                        "employees": employees,
+                        "employee_count": len(employees),
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                        "parse_method": "ssd_engine_consolidated"
+                    }}
+                )
+                
+                return {
+                    "message": f"Parsed {len(employees)} employees using SSD Engine format",
+                    "employee_count": len(employees),
+                    "parse_method": "ssd_engine_consolidated"
+                }
+        
+        # Next, try the Clean POS format (simplified single-sheet format)
+        from clean_pos_parser import parse_clean_pos_report
+        
+        # Try clean format (if it's an xlsx)
         if not filename.endswith('.csv'):
             clean_result = parse_clean_pos_report(contents, filename)
             
@@ -4242,13 +4345,26 @@ async def upload_snapshot_data(snapshot_id: str, file: UploadFile = File(...)):
                     "stats": clean_result["stats"]
                 }
         
-        # Fall back to original POS report format
-        from pos_report_parser import is_pos_report_format, parse_pos_report
+        # Fall back to original POS report format (multi-sheet)
+        # Re-create temp file if needed
+        tmp_path_exists = 'tmp_path' in dir() and os.path.exists(tmp_path) if 'os' in dir() else False
+        if not tmp_path_exists:
+            import os
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
+                tmp.write(contents)
+                tmp_path = tmp.name
         
         if not filename.endswith('.csv') and is_pos_report_format(tmp_path):
             # Use specialized POS report parser
-            logging.info("Detected POS report format - using specialized parser")
-            pos_employees = parse_pos_report(tmp_path)
+            logging.info("Detected POS report format")
+            
+            # Check if consolidated format (SSD Engine / Master_Summary)
+            if is_consolidated_format(tmp_path):
+                logging.info("Using CONSOLIDATED format parser (SSD Engine)")
+                pos_employees = parse_consolidated_pos_report(tmp_path)
+            else:
+                logging.info("Using multi-sheet format parser")
+                pos_employees = parse_pos_report(tmp_path)
             
             import os
             os.unlink(tmp_path)  # Clean up temp file
@@ -4266,14 +4382,16 @@ async def upload_snapshot_data(snapshot_id: str, file: UploadFile = File(...)):
             employees = []
             for emp_data in pos_employees:
                 name = emp_data['name']
-                guests = emp_data.get('guests', 0)
-                net_sales = emp_data.get('net_sales', 0)
-                lbw = emp_data.get('lbw', 0)
-                glassware_sales = emp_data.get('glassware_sales', 0)
-                lsc_count = emp_data.get('lsc_count', 0)
+                guests = emp_data.get('guests', 0) or 0
+                net_sales = emp_data.get('net_sales', 0) or 0
+                lbw = emp_data.get('lbw', 0) or 0
+                # Support both field names from different parsers
+                glassware_sales = emp_data.get('glassware_sales', 0) or emp_data.get('glassware', 0) or 0
+                lsc_count = emp_data.get('lsc_count', 0) or 0
                 
                 # Skip if no meaningful data
                 if net_sales <= 0 and lbw <= 0:
+                    logging.info(f"Skipping {name} - no sales data")
                     continue
                 
                 # Calculate derived values
