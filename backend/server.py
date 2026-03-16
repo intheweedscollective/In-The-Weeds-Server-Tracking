@@ -280,6 +280,128 @@ async def sync_employees_to_most_recent_snapshot(quarter: str, year: int):
     return snapshot_id
 
 
+async def _sync_snapshot_to_employees_v2(snapshot_id: str, quarter: str, year: int):
+    """
+    Sync snapshot employee data BACK to employees_v2 collection.
+    
+    This is the reverse of sync_employees_to_most_recent_snapshot.
+    Use after uploading data to a snapshot to update the main employee records.
+    """
+    # Get the snapshot
+    snapshot = await db.snapshots.find_one({"id": snapshot_id})
+    if not snapshot or not snapshot.get("employees"):
+        logging.info(f"No employees in snapshot {snapshot_id} - skipping reverse sync")
+        return 0
+    
+    snapshot_employees = snapshot.get("employees", [])
+    updated_count = 0
+    
+    for snap_emp in snapshot_employees:
+        emp_name = snap_emp.get("name")
+        if not emp_name:
+            continue
+        
+        # Find matching employee in employees_v2
+        existing = await db.employees_v2.find_one({
+            "name": {"$regex": f"^{emp_name}$", "$options": "i"},
+            "quarter": quarter.upper(),
+            "year": year
+        })
+        
+        if existing:
+            # Update existing employee with snapshot data (POS metrics)
+            update_fields = {
+                "guests": snap_emp.get("guests") or existing.get("guests"),
+                "net_sales": snap_emp.get("net_sales") or existing.get("net_sales"),
+                "ppa": snap_emp.get("ppa") or existing.get("ppa"),
+                "lbw": snap_emp.get("lbw") or existing.get("lbw"),
+                "lbw_per_guest": snap_emp.get("lbw_per_guest") or existing.get("lbw_per_guest"),
+                "glassware_sales": snap_emp.get("glassware_sales") or existing.get("glassware_sales"),
+                "glassware_per_guest": snap_emp.get("glassware_per_guest") or existing.get("glassware_per_guest"),
+                "lsc_count": snap_emp.get("lsc_count") if snap_emp.get("lsc_count") is not None else existing.get("lsc_count"),
+                "score_ppa": snap_emp.get("score_ppa") or existing.get("score_ppa"),
+                "score_lbw": snap_emp.get("score_lbw") or existing.get("score_lbw"),
+                "score_glass": snap_emp.get("score_glass") or existing.get("score_glass"),
+                "score_lsc": snap_emp.get("score_lsc") or existing.get("score_lsc"),
+                "updated_at": datetime.now(timezone.utc)
+            }
+            
+            # Recalculate weighted_score (POS portion only)
+            capped_ppa = min(update_fields.get("score_ppa", 0) or 0, 100)
+            capped_lbw = min(update_fields.get("score_lbw", 0) or 0, 100)
+            capped_glass = min(update_fields.get("score_glass", 0) or 0, 100)
+            capped_lsc = min(update_fields.get("score_lsc", 0) or 0, 100)
+            
+            # RT contribution
+            rt_mentions = existing.get("rt_mentions", 0) or 0
+            rt_contribution = min(rt_mentions * 0.5, 15)
+            
+            weighted_score = (
+                capped_ppa * 0.25 +
+                capped_lsc * 0.25 +
+                capped_lbw * 0.15 +
+                capped_glass * 0.10 +
+                rt_contribution
+            )
+            update_fields["weighted_score"] = round(weighted_score, 2)
+            
+            # Recalculate total score
+            cv_score = existing.get("cv_score", 0) or 0
+            total_metric_bonus = existing.get("total_metric_bonus", 0) or 0
+            
+            total_score = weighted_score + cv_score + total_metric_bonus
+            update_fields["total_score"] = round(total_score, 2)
+            update_fields["pre_dar_score"] = round(total_score, 2)
+            
+            await db.employees_v2.update_one(
+                {"_id": existing["_id"]},
+                {"$set": update_fields}
+            )
+            updated_count += 1
+        else:
+            # Create new employee from snapshot data
+            import uuid
+            new_emp = {
+                "id": str(uuid.uuid4()),
+                "name": emp_name,
+                "quarter": quarter.upper(),
+                "year": year,
+                "guests": snap_emp.get("guests", 0),
+                "net_sales": snap_emp.get("net_sales", 0),
+                "ppa": snap_emp.get("ppa", 0),
+                "lbw": snap_emp.get("lbw", 0),
+                "lbw_per_guest": snap_emp.get("lbw_per_guest", 0),
+                "glassware_sales": snap_emp.get("glassware_sales", 0),
+                "glassware_per_guest": snap_emp.get("glassware_per_guest", 0),
+                "lsc_count": snap_emp.get("lsc_count", 0),
+                "score_ppa": snap_emp.get("score_ppa", 0),
+                "score_lbw": snap_emp.get("score_lbw", 0),
+                "score_glass": snap_emp.get("score_glass", 0),
+                "score_lsc": snap_emp.get("score_lsc", 0),
+                "weighted_score": snap_emp.get("total_score", 0),
+                "total_score": snap_emp.get("total_score", 0),
+                "pre_dar_score": snap_emp.get("total_score", 0),
+                "nps_score": 0,
+                "cv_score": 0,
+                "cv_promoters": 0,
+                "cv_detractors": 0,
+                "rt_mentions": 0,
+                "review_tracker_bonus": 0,
+                "created_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc)
+            }
+            await db.employees_v2.insert_one(new_emp)
+            updated_count += 1
+    
+    # Recalculate ranks after update
+    await recalculate_peer_ranks(quarter.upper(), year)
+    
+    logging.info(f"Reverse-synced {updated_count} employees from snapshot to employees_v2")
+    return updated_count
+
+
+
+
 # ============================================================================
 # V2 REVIEW GENERATION (Uses EmployeeV2 with Q1 2026 scoring model)
 # ============================================================================
@@ -4217,6 +4339,9 @@ async def upload_snapshot_data(snapshot_id: str, file: UploadFile = File(...)):
                         "parse_method": "ssd_engine_consolidated"
                     }}
                 )
+                
+                # Sync snapshot employees to employees_v2 for dashboard metrics
+                await _sync_snapshot_to_employees_v2(snapshot_id, snapshot["quarter"], snapshot["year"])
                 
                 return {
                     "message": f"Parsed {len(employees)} employees using SSD Engine format",
