@@ -6024,42 +6024,199 @@ async def upload_rt_data(
     year: int = 2026
 ):
     """
-    Upload Review Tracker mention counts from XLSX file.
+    Upload Review Tracker mention counts from XLSX or CSV file.
     Updates employee rt_mentions field and recalculates scores.
-    """
-    import openpyxl
     
-    if not file.filename.endswith('.xlsx'):
-        raise HTTPException(status_code=400, detail="Please upload an XLSX file")
+    Supported formats:
+    1. XLSX with columns: Employee Name, Mentions
+    2. CSV with columns: Keyword, Positive Mentions, Negative Mentions, Total Mentions
+    
+    Uses fuzzy matching to match keywords/names to employees.
+    """
+    from thefuzz import fuzz
+    import csv
+    
+    filename = file.filename.lower()
+    
+    if not filename.endswith('.xlsx') and not filename.endswith('.csv'):
+        raise HTTPException(status_code=400, detail="Please upload an XLSX or CSV file")
     
     try:
         content = await file.read()
-        wb = openpyxl.load_workbook(io.BytesIO(content))
-        ws = wb.active
         
-        updated_count = 0
-        errors = []
+        # Get all employees for matching
+        all_employees = await db.employees_v2.find({
+            "quarter": quarter.upper(),
+            "year": year
+        }).to_list(500)
         
-        # Process rows (skip header)
-        for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), 2):
-            if not row or not row[0]:
+        if not all_employees:
+            raise HTTPException(status_code=400, detail=f"No employees found for {quarter} {year}")
+        
+        # Build a mapping of name variations to employees
+        employee_lookup = {}
+        for emp in all_employees:
+            name = emp.get("name", "").strip()
+            if not name:
                 continue
-                
-            employee_name = str(row[0]).strip()
-            mentions = int(row[1]) if row[1] is not None else 0
             
-            # Find employee by name (case-insensitive)
-            employee = await db.employees_v2.find_one({
-                "name": {"$regex": f"^{employee_name}$", "$options": "i"},
-                "quarter": quarter,
-                "year": year
-            })
+            # Add full name (lowercase)
+            employee_lookup[name.lower()] = emp
+            
+            # Add first name only
+            first_name = name.split()[0].lower() if name.split() else ""
+            if first_name and len(first_name) > 2:
+                if first_name not in employee_lookup:
+                    employee_lookup[first_name] = emp
+            
+            # Add nickname variations
+            # Handle names like "Starwars Mckinnon-Herrera" -> "star", "starwar", "starwars"
+            for i in range(3, len(first_name) + 1):
+                prefix = first_name[:i]
+                if prefix not in employee_lookup:
+                    employee_lookup[prefix] = emp
+        
+        # Parse file based on type
+        mention_data = []
+        
+        if filename.endswith('.csv'):
+            # Parse CSV format: Keyword, Positive Mentions, Negative Mentions, Total Mentions
+            content_str = content.decode('utf-8')
+            reader = csv.DictReader(io.StringIO(content_str))
+            
+            for row in reader:
+                keyword = row.get('Keyword', '').strip().lower()
+                if not keyword:
+                    continue
+                
+                # Try to get mentions - prefer Total Mentions, fall back to Positive
+                total_mentions = row.get('Total Mentions', row.get('total_mentions', ''))
+                positive_mentions = row.get('Positive Mentions', row.get('positive_mentions', ''))
+                negative_mentions = row.get('Negative Mentions', row.get('negative_mentions', '0'))
+                
+                try:
+                    mentions = int(total_mentions) if total_mentions else int(positive_mentions) if positive_mentions else 0
+                    positive = int(positive_mentions) if positive_mentions else mentions
+                    negative = int(negative_mentions) if negative_mentions else 0
+                except ValueError:
+                    mentions = 0
+                    positive = 0
+                    negative = 0
+                
+                mention_data.append({
+                    'keyword': keyword,
+                    'mentions': mentions,
+                    'positive': positive,
+                    'negative': negative
+                })
+        else:
+            # Parse XLSX format
+            import openpyxl
+            wb = openpyxl.load_workbook(io.BytesIO(content))
+            ws = wb.active
+            
+            for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), 2):
+                if not row or not row[0]:
+                    continue
+                    
+                keyword = str(row[0]).strip().lower()
+                mentions = int(row[1]) if row[1] is not None else 0
+                positive = int(row[2]) if len(row) > 2 and row[2] is not None else mentions
+                negative = int(row[3]) if len(row) > 3 and row[3] is not None else 0
+                
+                mention_data.append({
+                    'keyword': keyword,
+                    'mentions': mentions,
+                    'positive': positive,
+                    'negative': negative
+                })
+        
+        # Match keywords to employees using fuzzy matching
+        # Aggregate by employee to avoid duplicate counts
+        employee_mentions = {}  # employee_id -> {mentions, positive, negative, keywords}
+        matched = []
+        unmatched = []
+        
+        for item in mention_data:
+            keyword = item['keyword']
+            mentions = item['mentions']
+            positive = item['positive']
+            negative = item['negative']
+            
+            # Try exact match first
+            employee = employee_lookup.get(keyword)
+            match_type = "exact"
+            
+            # Try fuzzy match if no exact match
+            if not employee:
+                best_match = None
+                best_score = 0
+                
+                for emp in all_employees:
+                    emp_name = emp.get("name", "").lower()
+                    first_name = emp_name.split()[0] if emp_name.split() else ""
+                    
+                    # Check if keyword is contained in name or first name
+                    if keyword in emp_name or keyword in first_name:
+                        score = 95  # High score for substring match
+                        if score > best_score:
+                            best_score = score
+                            best_match = emp
+                            match_type = "substring"
+                    else:
+                        # Use fuzzy matching with higher threshold
+                        score = max(
+                            fuzz.ratio(keyword, first_name),
+                            fuzz.partial_ratio(keyword, emp_name),
+                            fuzz.token_set_ratio(keyword, first_name)
+                        )
+                        # Require higher score (80+) for fuzzy match to avoid false positives
+                        if score > best_score and score >= 80:
+                            best_score = score
+                            best_match = emp
+                            match_type = f"fuzzy({score})"
+                
+                employee = best_match
             
             if not employee:
-                errors.append(f"Row {row_idx}: Employee '{employee_name}' not found")
+                unmatched.append({
+                    'keyword': keyword,
+                    'mentions': mentions
+                })
                 continue
             
-            # Update rt_mentions (0.5 pts per mention, capped at 15)
+            # Aggregate mentions by employee (avoid double counting)
+            emp_id = str(employee.get("_id"))
+            emp_name = employee.get("name")
+            
+            if emp_id not in employee_mentions:
+                employee_mentions[emp_id] = {
+                    'employee': employee,
+                    'employee_name': emp_name,
+                    'mentions': 0,
+                    'positive': 0,
+                    'negative': 0,
+                    'keywords': []
+                }
+            
+            employee_mentions[emp_id]['mentions'] += mentions
+            employee_mentions[emp_id]['positive'] += positive
+            employee_mentions[emp_id]['negative'] += negative
+            employee_mentions[emp_id]['keywords'].append({
+                'keyword': keyword,
+                'mentions': mentions,
+                'match_type': match_type
+            })
+        
+        # Update each employee with aggregated mentions
+        updated_count = 0
+        for emp_id, data in employee_mentions.items():
+            employee = data['employee']
+            mentions = data['mentions']
+            positive = data['positive']
+            negative = data['negative']
+            
+            # Update employee RT mentions
             rt_bonus = min(mentions * 0.5, 15)  # 0.5 pts per mention, max 15
             
             await db.employees_v2.update_one(
@@ -6068,21 +6225,31 @@ async def upload_rt_data(
                     "rt_mentions": mentions,
                     "review_tracker_bonus": rt_bonus,
                     "review_mentions": mentions,
+                    "rt_positive": positive,
+                    "rt_negative": negative,
+                    "rt_source": "manual_upload",
                     "updated_at": datetime.now(timezone.utc)
                 }}
             )
             updated_count += 1
+            
+            # Track matched keywords
+            for kw in data['keywords']:
+                matched.append({
+                    'keyword': kw['keyword'],
+                    'employee': data['employee_name'],
+                    'mentions': kw['mentions'],
+                    'match_type': kw['match_type']
+                })
         
-        # Recalculate scores for all updated employees
+        # Recalculate scores for all employees
         if updated_count > 0:
-            # Trigger score recalculation
             employees = await db.employees_v2.find({
-                "quarter": quarter,
+                "quarter": quarter.upper(),
                 "year": year
             }).to_list(100)
             
             for emp in employees:
-                # Recalculate total score
                 weighted_score = emp.get("weighted_score", 0) or 0
                 cv_score = emp.get("cv_score", 0) or 0
                 total_metric_bonus = emp.get("total_metric_bonus", 0) or 0
@@ -6094,19 +6261,26 @@ async def upload_rt_data(
                     {"_id": emp["_id"]},
                     {"$set": {"total_score": round(total_score, 2), "pre_dar_score": round(total_score, 2)}}
                 )
+            
+            # Recalculate ranks
+            await recalculate_peer_ranks(quarter.upper(), year)
         
         # Sync updated employees to the most recent snapshot
-        snapshot_id = await sync_employees_to_most_recent_snapshot(quarter, year)
+        snapshot_id = await sync_employees_to_most_recent_snapshot(quarter.upper(), year)
         
         return {
             "success": True,
             "employees_updated": updated_count,
-            "errors": errors if errors else None,
+            "matched": matched,
+            "unmatched": unmatched if unmatched else None,
             "snapshot_synced": snapshot_id,
             "message": f"Updated {updated_count} employee mention counts and synced to snapshot"
         }
         
     except Exception as e:
+        logging.error(f"RT upload error: {str(e)}")
+        import traceback
+        logging.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 

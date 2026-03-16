@@ -392,14 +392,14 @@ export default function DataUploads() {
           {/* ReviewTracker Upload */}
           <UploadCard
             title="3. ReviewTracker"
-            description="Employee review mention counts"
+            description="Employee review mention counts (XLSX or CSV)"
             icon={Star}
             file={rtFile}
             setFile={setRtFile}
             onUpload={handleRtUpload}
             uploading={rtUploading}
             result={rtResult}
-            acceptTypes=".xlsx"
+            acceptTypes=".xlsx,.csv"
             downloadTemplate={downloadRtTemplate}
             colorClass="yellow"
           />
