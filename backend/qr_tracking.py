@@ -269,8 +269,10 @@ async def download_all_qr_codes_zip():
     import qrcode
     from io import BytesIO
     import zipfile
-    from fastapi.responses import Response
+    from fastapi.responses import StreamingResponse
     import re
+    import tempfile
+    import os
     
     # Get settings
     settings = await _db.qr_settings.find_one({}, {"_id": 0})
@@ -286,77 +288,89 @@ async def download_all_qr_codes_zip():
     employees = await _db.qr_employees.find({}, {"_id": 0}).to_list(500)
     
     if not employees:
-        return Response(
-            content=b"No employees found",
-            status_code=404,
-            media_type="text/plain"
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            content={"error": "No employees found"},
+            status_code=404
         )
     
     # Get base URL from environment or use default
-    import os
     base_url = os.environ.get("REACT_APP_BACKEND_URL", "https://staff-score-engine.preview.emergentagent.com")
     
-    # Create ZIP in memory
-    zip_buffer = BytesIO()
+    # Create a temporary file for the ZIP
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
     
-    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-        for emp in employees:
-            emp_id = emp.get("id")
-            emp_name = emp.get("name", "Unknown")
-            
-            # Create safe filename
-            safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', emp_name)
-            
-            # Generate Yelp QR
-            yelp_tracking_url = f"{base_url}/api/qr/scan/{emp_id}/yelp"
-            yelp_qr = qrcode.QRCode(
-                version=1,
-                error_correction=qrcode.constants.ERROR_CORRECT_H,
-                box_size=10,
-                border=2
-            )
-            yelp_qr.add_data(yelp_tracking_url)
-            yelp_qr.make(fit=True)
-            yelp_img = yelp_qr.make_image(fill_color=settings.get("qr_color", "#000000"), 
-                                          back_color=settings.get("qr_bg_color", "#FFFFFF"))
-            
-            yelp_buffer = BytesIO()
-            yelp_img.save(yelp_buffer, format='PNG')
-            zip_file.writestr(f"{safe_name}_yelp_qr.png", yelp_buffer.getvalue())
-            
-            # Generate Google QR
-            google_tracking_url = f"{base_url}/api/qr/scan/{emp_id}/google"
-            google_qr = qrcode.QRCode(
-                version=1,
-                error_correction=qrcode.constants.ERROR_CORRECT_H,
-                box_size=10,
-                border=2
-            )
-            google_qr.add_data(google_tracking_url)
-            google_qr.make(fit=True)
-            google_img = google_qr.make_image(fill_color=settings.get("qr_color", "#000000"),
+    try:
+        with zipfile.ZipFile(temp_file.name, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for emp in employees:
+                emp_id = emp.get("id")
+                emp_name = emp.get("name", "Unknown")
+                
+                # Create safe filename
+                safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', emp_name)
+                
+                # Generate Yelp QR
+                yelp_tracking_url = f"{base_url}/api/qr/scan/{emp_id}/yelp"
+                yelp_qr = qrcode.QRCode(
+                    version=1,
+                    error_correction=qrcode.constants.ERROR_CORRECT_H,
+                    box_size=10,
+                    border=2
+                )
+                yelp_qr.add_data(yelp_tracking_url)
+                yelp_qr.make(fit=True)
+                yelp_img = yelp_qr.make_image(fill_color=settings.get("qr_color", "#000000"), 
                                               back_color=settings.get("qr_bg_color", "#FFFFFF"))
-            
-            google_buffer = BytesIO()
-            google_img.save(google_buffer, format='PNG')
-            zip_file.writestr(f"{safe_name}_google_qr.png", google_buffer.getvalue())
-    
-    zip_buffer.seek(0)
-    zip_data = zip_buffer.getvalue()
-    
-    # Return with headers that force download on iOS Safari
-    return Response(
-        content=zip_data,
-        media_type="application/zip",
-        headers={
-            "Content-Disposition": "attachment; filename=qr_codes_all_employees.zip",
-            "Content-Type": "application/zip",
-            "Content-Length": str(len(zip_data)),
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Pragma": "no-cache",
-            "Expires": "0"
-        }
-    )
+                
+                yelp_buffer = BytesIO()
+                yelp_img.save(yelp_buffer, format='PNG')
+                zip_file.writestr(f"{safe_name}_yelp_qr.png", yelp_buffer.getvalue())
+                
+                # Generate Google QR
+                google_tracking_url = f"{base_url}/api/qr/scan/{emp_id}/google"
+                google_qr = qrcode.QRCode(
+                    version=1,
+                    error_correction=qrcode.constants.ERROR_CORRECT_H,
+                    box_size=10,
+                    border=2
+                )
+                google_qr.add_data(google_tracking_url)
+                google_qr.make(fit=True)
+                google_img = google_qr.make_image(fill_color=settings.get("qr_color", "#000000"),
+                                                  back_color=settings.get("qr_bg_color", "#FFFFFF"))
+                
+                google_buffer = BytesIO()
+                google_img.save(google_buffer, format='PNG')
+                zip_file.writestr(f"{safe_name}_google_qr.png", google_buffer.getvalue())
+        
+        # Read the file and create streaming response
+        def iterfile():
+            with open(temp_file.name, mode="rb") as file_like:
+                yield from file_like
+            # Clean up temp file after streaming
+            os.unlink(temp_file.name)
+        
+        file_size = os.path.getsize(temp_file.name)
+        
+        return StreamingResponse(
+            iterfile(),
+            media_type="application/octet-stream",
+            headers={
+                "Content-Disposition": 'attachment; filename="qr_codes.zip"',
+                "Content-Length": str(file_size),
+                "Content-Type": "application/octet-stream",
+                "Cache-Control": "private, no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+                "X-Content-Type-Options": "nosniff",
+                "Accept-Ranges": "bytes"
+            }
+        )
+    except Exception as e:
+        # Clean up on error
+        if os.path.exists(temp_file.name):
+            os.unlink(temp_file.name)
+        raise
 
 
 def register_qr_routes(app_router, db):

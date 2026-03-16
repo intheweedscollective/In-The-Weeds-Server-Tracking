@@ -139,26 +139,45 @@ export default function QREmployees() {
     }
 
     setDownloading(true);
-    toast.info(`Generating ${employees.length * 2} QR codes...`);
-
-    try {
-      // Direct window open for iOS Safari - this forces proper download behavior
-      const downloadUrl = `${BACKEND_URL}/api/qr/download-all-zip`;
-      
-      // For iOS Safari, opening the URL directly in the same window works best
-      // The Content-Disposition header will trigger download
+    
+    const downloadUrl = `${BACKEND_URL}/api/qr/download-all-zip`;
+    
+    // Detect iOS
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    
+    if (isIOS && navigator.share) {
+      // Use Web Share API on iOS if available
+      try {
+        toast.info("Opening share menu...");
+        
+        // Fetch the file first
+        const response = await fetch(downloadUrl);
+        const blob = await response.blob();
+        const file = new File([blob], "qr_codes.zip", { type: "application/zip" });
+        
+        await navigator.share({
+          files: [file],
+          title: "QR Codes",
+        });
+        
+        toast.success("Shared successfully!");
+      } catch (error) {
+        // Share was cancelled or failed, fall back to direct link
+        console.log("Share cancelled, opening direct link");
+        window.open(downloadUrl, '_blank');
+        toast.info("Tap the share icon to save to Files", { duration: 5000 });
+      }
+    } else if (isIOS) {
+      // For iOS without Web Share: Open in new tab
+      window.open(downloadUrl, '_blank');
+      toast.info("Tap the share/download icon in Safari to save", { duration: 5000 });
+    } else {
+      // For desktop/Android: Direct navigation works
       window.location.href = downloadUrl;
-      
-      // Give some time before showing success
-      setTimeout(() => {
-        toast.success(`Download started for ${employees.length * 2} QR codes`);
-        setDownloading(false);
-      }, 2000);
-    } catch (error) {
-      console.error("ZIP generation error:", error);
-      toast.error("Failed to generate ZIP");
-      setDownloading(false);
+      toast.success("Download started!");
     }
+    
+    setTimeout(() => setDownloading(false), 2000);
   };
 
   return (
@@ -186,7 +205,19 @@ export default function QREmployees() {
                 <Archive className="w-4 h-4 mr-2" />
               )}
               <span className="hidden sm:inline">Download All</span>
-              <span className="sm:hidden">All ZIP</span>
+              <span className="sm:hidden">ZIP</span>
+            </Button>
+            <Button 
+              onClick={() => {
+                const url = `${BACKEND_URL}/api/qr/download-all-zip`;
+                navigator.clipboard.writeText(url);
+                toast.success("Link copied! Open in Safari to download", { duration: 4000 });
+              }}
+              variant="outline"
+              className="border-slate-600 text-sm px-2"
+              title="Copy download link (for iOS)"
+            >
+              <Copy className="w-4 h-4" />
             </Button>
             <Button 
               onClick={syncFromMain} 
