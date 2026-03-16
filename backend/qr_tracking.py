@@ -258,6 +258,107 @@ async def sync_qr_from_main_employees(quarter: str = "Q1", year: int = 2026):
     return {"success": True, "synced": created, "total_main": len(main_employees)}
 
 
+# ==================== DOWNLOAD ALL QR CODES ====================
+
+@qr_router.get("/download-all-zip")
+async def download_all_qr_codes_zip():
+    """
+    Generate and download a ZIP file containing all QR codes.
+    This endpoint serves the file with proper headers for iOS Safari compatibility.
+    """
+    import qrcode
+    from io import BytesIO
+    import zipfile
+    from fastapi.responses import Response
+    import re
+    
+    # Get settings
+    settings = await _db.qr_settings.find_one({}, {"_id": 0})
+    if not settings:
+        settings = {
+            "yelp_url": "",
+            "google_url": "",
+            "qr_color": "#000000",
+            "qr_bg_color": "#FFFFFF"
+        }
+    
+    # Get all employees
+    employees = await _db.qr_employees.find({}, {"_id": 0}).to_list(500)
+    
+    if not employees:
+        return Response(
+            content=b"No employees found",
+            status_code=404,
+            media_type="text/plain"
+        )
+    
+    # Get base URL from environment or use default
+    import os
+    base_url = os.environ.get("REACT_APP_BACKEND_URL", "https://staff-score-engine.preview.emergentagent.com")
+    
+    # Create ZIP in memory
+    zip_buffer = BytesIO()
+    
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        for emp in employees:
+            emp_id = emp.get("id")
+            emp_name = emp.get("name", "Unknown")
+            
+            # Create safe filename
+            safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', emp_name)
+            
+            # Generate Yelp QR
+            yelp_tracking_url = f"{base_url}/api/qr/scan/{emp_id}/yelp"
+            yelp_qr = qrcode.QRCode(
+                version=1,
+                error_correction=qrcode.constants.ERROR_CORRECT_H,
+                box_size=10,
+                border=2
+            )
+            yelp_qr.add_data(yelp_tracking_url)
+            yelp_qr.make(fit=True)
+            yelp_img = yelp_qr.make_image(fill_color=settings.get("qr_color", "#000000"), 
+                                          back_color=settings.get("qr_bg_color", "#FFFFFF"))
+            
+            yelp_buffer = BytesIO()
+            yelp_img.save(yelp_buffer, format='PNG')
+            zip_file.writestr(f"{safe_name}_yelp_qr.png", yelp_buffer.getvalue())
+            
+            # Generate Google QR
+            google_tracking_url = f"{base_url}/api/qr/scan/{emp_id}/google"
+            google_qr = qrcode.QRCode(
+                version=1,
+                error_correction=qrcode.constants.ERROR_CORRECT_H,
+                box_size=10,
+                border=2
+            )
+            google_qr.add_data(google_tracking_url)
+            google_qr.make(fit=True)
+            google_img = google_qr.make_image(fill_color=settings.get("qr_color", "#000000"),
+                                              back_color=settings.get("qr_bg_color", "#FFFFFF"))
+            
+            google_buffer = BytesIO()
+            google_img.save(google_buffer, format='PNG')
+            zip_file.writestr(f"{safe_name}_google_qr.png", google_buffer.getvalue())
+    
+    zip_buffer.seek(0)
+    zip_data = zip_buffer.getvalue()
+    
+    # Return with headers that force download on iOS Safari
+    return Response(
+        content=zip_data,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": "attachment; filename=qr_codes_all_employees.zip",
+            "Content-Type": "application/zip",
+            "Content-Length": str(len(zip_data)),
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0"
+        }
+    )
+
+
 def register_qr_routes(app_router, db):
     """Set up the QR tracking module"""
     set_qr_db(db)

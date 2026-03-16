@@ -131,7 +131,7 @@ export default function QREmployees() {
     }
   };
 
-  // Download All QR codes as ZIP
+  // Download All QR codes as ZIP - uses backend endpoint for iOS Safari compatibility
   const downloadAllQRs = async () => {
     if (employees.length === 0) {
       toast.error("No employees to download");
@@ -142,34 +142,23 @@ export default function QREmployees() {
     toast.info(`Generating ${employees.length * 2} QR codes...`);
 
     try {
-      const zip = new JSZip();
+      // Direct window open for iOS Safari - this forces proper download behavior
+      const downloadUrl = `${BACKEND_URL}/api/qr/download-all-zip`;
       
-      for (const emp of employees) {
-        // Sanitize name for filename
-        const safeName = emp.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
-        
-        // Generate Yelp QR
-        const yelpUrl = generateQRUrl(emp.id, 'yelp');
-        const yelpBlob = await generateQRBlob(yelpUrl);
-        zip.file(`${safeName}_yelp_qr.png`, yelpBlob);
-        
-        // Generate Google QR
-        const googleUrl = generateQRUrl(emp.id, 'google');
-        const googleBlob = await generateQRBlob(googleUrl);
-        zip.file(`${safeName}_google_qr.png`, googleBlob);
-      }
-
-      // Generate and download ZIP using file-saver for better mobile compatibility
-      const zipBlob = await zip.generateAsync({ type: "blob" });
-      saveAs(zipBlob, "qr_codes_all_employees.zip");
+      // For iOS Safari, opening the URL directly in the same window works best
+      // The Content-Disposition header will trigger download
+      window.location.href = downloadUrl;
       
-      toast.success(`Downloaded ${employees.length * 2} QR codes`);
+      // Give some time before showing success
+      setTimeout(() => {
+        toast.success(`Download started for ${employees.length * 2} QR codes`);
+        setDownloading(false);
+      }, 2000);
     } catch (error) {
       console.error("ZIP generation error:", error);
       toast.error("Failed to generate ZIP");
+      setDownloading(false);
     }
-
-    setDownloading(false);
   };
 
   return (
