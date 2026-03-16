@@ -6,6 +6,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import QRCode from "qrcode";
 import JSZip from "jszip";
+import { saveAs } from "file-saver";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -158,12 +159,9 @@ export default function QREmployees() {
         zip.file(`${safeName}_google_qr.png`, googleBlob);
       }
 
-      // Generate and download ZIP
+      // Generate and download ZIP using file-saver for better mobile compatibility
       const zipBlob = await zip.generateAsync({ type: "blob" });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(zipBlob);
-      link.download = `qr_codes_all_employees.zip`;
-      link.click();
+      saveAs(zipBlob, "qr_codes_all_employees.zip");
       
       toast.success(`Downloaded ${employees.length * 2} QR codes`);
     } catch (error) {
