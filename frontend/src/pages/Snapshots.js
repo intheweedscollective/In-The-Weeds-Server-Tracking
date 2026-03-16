@@ -31,7 +31,7 @@ export default function Snapshots() {
   });
   
   // Selected background for preview
-  const [selectedBackground, setSelectedBackground] = useState("midnight_blue");
+  const [selectedBackground, setSelectedBackground] = useState("dark");
 
   const fetchSnapshots = useCallback(async () => {
     try {
@@ -45,13 +45,16 @@ export default function Snapshots() {
     try {
       const res = await api.get(`/v2/snapshots/backgrounds`);
       setBackgrounds(res.data);
+      // Set default to first available background if current selection isn't valid
+      if (res.data.length > 0 && !res.data.some(bg => bg.key === selectedBackground)) {
+        setSelectedBackground(res.data[0].key);
+      }
     } catch (error) {
-      // Fallback backgrounds
+      // Fallback backgrounds matching backend
       setBackgrounds([
-        { key: "midnight_blue", name: "Midnight Blue" },
-        { key: "ocean_wave", name: "Ocean Wave" },
-        { key: "sunset_gradient", name: "Sunset Gradient" },
-        { key: "bubba_red", name: "Bubba Gump Red" },
+        { key: "dark", name: "Dark Navy" },
+        { key: "rainbow_bokeh", name: "Rainbow Bokeh" },
+        { key: "cosmic_lights", name: "Cosmic Lights" },
       ]);
     }
   }, []);
@@ -118,6 +121,9 @@ export default function Snapshots() {
   const generateSlide = async (snapshot) => {
     setGenerating(snapshot.id);
     try {
+      // Get the selected background name for the toast message
+      const bgName = backgrounds.find(bg => bg.key === selectedBackground)?.name || selectedBackground;
+      
       const response = await api.get(
         `/v2/snapshots/${snapshot.id}/slide?background=${selectedBackground}`,
         { responseType: 'blob' }
@@ -126,14 +132,14 @@ export default function Snapshots() {
       // Create download link with explicit PNG type
       const blob = new Blob([response.data], { type: 'image/png' });
       const url = window.URL.createObjectURL(blob);
-      const filename = `snapshot_${snapshot.snapshot_date}.png`;
+      const filename = `snapshot_${snapshot.snapshot_date}_${selectedBackground}.png`;
       
       // iOS/Safari compatible download
       if (navigator.userAgent.match(/iPhone|iPad|iPod/i)) {
         // For iOS, open in new tab (will allow saving via share sheet)
         const newTab = window.open(url, '_blank');
         if (newTab) {
-          toast({ title: "Image Opened", description: "Tap and hold to save the image" });
+          toast({ title: "Image Opened", description: `Slide with "${bgName}" background - tap and hold to save` });
         } else {
           // Fallback: create link anyway
           const link = document.createElement('a');
@@ -151,7 +157,7 @@ export default function Snapshots() {
         document.body.appendChild(link);
         link.click();
         link.remove();
-        toast({ title: "Success", description: "Snapshot slide downloaded!" });
+        toast({ title: "Success", description: `Downloaded with "${bgName}" background` });
       }
       
       // Cleanup URL after short delay
