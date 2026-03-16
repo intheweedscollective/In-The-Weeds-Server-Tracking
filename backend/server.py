@@ -2754,6 +2754,7 @@ class EmployeeUpdate(BaseModel):
     lbw: Optional[float] = None
     glassware_sales: Optional[float] = None
     lsc_count: Optional[int] = None
+    nps_score: Optional[float] = None  # NPS % score (0-100)
     cv_promoters: Optional[int] = None
     cv_passives: Optional[int] = None
     cv_detractors: Optional[int] = None
@@ -2970,7 +2971,7 @@ async def delete_employee(employee_id: str):
 async def update_employee_cv_stats(employee_id: str, data: dict):
     """
     Manually update an employee's CV (Customer Voice) statistics.
-    Allows adjusting promoter and detractor counts directly.
+    Allows adjusting NPS score, promoter and detractor counts directly.
     
     CV Score = NPS pts (0-10) + Promoter/Detractor Bonus
     - NPS pts: NPS% / 10 (e.g., 77% = 7.7 pts)
@@ -2981,6 +2982,7 @@ async def update_employee_cv_stats(employee_id: str, data: dict):
     year = data.get("year", 2026)
     cv_promoters = int(data.get("cv_promoters", 0))
     cv_detractors = int(data.get("cv_detractors", 0))
+    cv_passives = int(data.get("cv_passives", 0))
     
     # Find employee
     employee = await db.employees_v2.find_one({
@@ -2992,8 +2994,13 @@ async def update_employee_cv_stats(employee_id: str, data: dict):
     if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")
     
-    # Get current NPS score
-    nps_score = employee.get("nps_score", 0) or 0
+    # Get NPS score - use provided value if present, otherwise use existing
+    if "nps_score" in data and data.get("nps_score") is not None:
+        nps_score = float(data.get("nps_score", 0))
+        # Clamp to 0-100
+        nps_score = max(0, min(100, nps_score))
+    else:
+        nps_score = employee.get("nps_score", 0) or 0
     
     # Calculate NPS points: direct ratio (77% = 7.7 pts, max 10)
     nps_pts = round(nps_score / 10, 1) if nps_score > 0 else 0.0
@@ -3016,7 +3023,9 @@ async def update_employee_cv_stats(employee_id: str, data: dict):
     await db.employees_v2.update_one(
         {"_id": employee["_id"]},
         {"$set": {
+            "nps_score": nps_score,
             "cv_promoters": cv_promoters,
+            "cv_passives": cv_passives,
             "cv_detractors": cv_detractors,
             "nps_score_pts": nps_pts,
             "cv_score": new_cv_score,
@@ -3036,6 +3045,7 @@ async def update_employee_cv_stats(employee_id: str, data: dict):
         "nps_score": nps_score,
         "nps_pts": nps_pts,
         "cv_promoters": cv_promoters,
+        "cv_passives": cv_passives,
         "cv_detractors": cv_detractors,
         "promo_detr_bonus": round(promo_detr_bonus, 2),
         "new_cv_score": new_cv_score,

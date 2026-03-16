@@ -21,6 +21,7 @@ const emptyEmployee = {
   lbw: 0,
   glassware_sales: 0,
   lsc_count: 0,
+  nps_score: 0,
   cv_promoters: 0,
   cv_passives: 0,
   cv_detractors: 0,
@@ -114,6 +115,7 @@ export default function EmployeeList() {
       lbw: employee.lbw || 0,
       glassware_sales: employee.glassware_sales || 0,
       lsc_count: employee.lsc_count || 0,
+      nps_score: employee.nps_score || 0,
       cv_promoters: employee.cv_promoters || 0,
       cv_passives: employee.cv_passives || 0,
       cv_detractors: employee.cv_detractors || 0,
@@ -914,9 +916,25 @@ export default function EmployeeList() {
                 {/* Customer Voice */}
                 <div className="mb-6">
                   <h3 className="font-semibold text-slate-200 mb-3">Customer Voice & Reviews</h3>
+                  
+                  {/* NPS Score - Full width at top */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-cyan-400 mb-1">NPS Score % (0-100)</label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={formData.nps_score}
+                      onChange={(e) => handleFormChange('nps_score', Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)))}
+                      placeholder="0"
+                      className="border-cyan-200 focus:border-cyan-500 max-w-xs"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">NPS% ÷ 10 = points (e.g., 80% = 8 pts)</p>
+                  </div>
+                  
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-green-600 mb-1">CV Promoters (+1 pt)</label>
+                      <label className="block text-sm font-medium text-green-600 mb-1">CV Promoters (+0.5 pt each)</label>
                       <Input
                         type="number"
                         value={formData.cv_promoters}
@@ -935,7 +953,7 @@ export default function EmployeeList() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-red-600 mb-1">CV Detractors (-2 pt)</label>
+                      <label className="block text-sm font-medium text-red-600 mb-1">CV Detractors (-1 pt each)</label>
                       <Input
                         type="number"
                         value={formData.cv_detractors}
@@ -945,7 +963,7 @@ export default function EmployeeList() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-blue-600 mb-1">Review Mentions (0.2 pt)</label>
+                      <label className="block text-sm font-medium text-blue-600 mb-1">RT Mentions (+0.5 pt each)</label>
                       <Input
                         type="number"
                         value={formData.review_mentions}
