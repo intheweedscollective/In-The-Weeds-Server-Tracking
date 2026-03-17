@@ -110,7 +110,7 @@ async def reset_qr_employee_clicks(employee_id: str):
 @qr_router.get("/scan/{employee_id}/{platform}")
 async def track_scan(employee_id: str, platform: str):
     """Track a QR code scan and redirect to review page"""
-    from fastapi.responses import RedirectResponse
+    from fastapi.responses import RedirectResponse, HTMLResponse
     
     if platform not in ['yelp', 'google']:
         return {"error": "Invalid platform"}
@@ -138,9 +138,41 @@ async def track_scan(employee_id: str, platform: str):
     if settings:
         redirect_url = settings.get(f"{platform}_url", "")
         if redirect_url:
-            return RedirectResponse(url=redirect_url)
+            return RedirectResponse(url=redirect_url, status_code=302)
     
-    return {"success": True, "message": f"Recorded {platform} scan for {employee.get('name')}"}
+    # If no URL configured, show a helpful message
+    platform_name = "Google" if platform == "google" else "Yelp"
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Thanks for scanning!</title>
+        <style>
+            body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; 
+                   background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+                   color: white; min-height: 100vh; margin: 0;
+                   display: flex; align-items: center; justify-content: center; }}
+            .card {{ background: rgba(255,255,255,0.1); border-radius: 16px;
+                    padding: 32px; text-align: center; max-width: 320px; }}
+            h1 {{ font-size: 24px; margin-bottom: 16px; }}
+            p {{ color: #94a3b8; line-height: 1.6; }}
+            .name {{ color: #22c55e; font-weight: bold; }}
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <h1>✓ Scan Recorded!</h1>
+            <p>Thank you for scanning <span class="name">{employee.get('name')}</span>'s QR code.</p>
+            <p style="margin-top: 16px; font-size: 14px;">
+                {platform_name} review link not configured yet.<br>
+                Please contact the manager.
+            </p>
+        </div>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
 
 @qr_router.get("/scans")
 async def get_recent_scans(limit: int = 50):
