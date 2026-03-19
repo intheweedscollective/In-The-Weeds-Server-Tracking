@@ -6680,7 +6680,10 @@ async def upload_rt_data(
                     'negative': negative
                 })
         
-        # Match keywords to employees using fuzzy matching
+        # Match keywords to employees using intelligent fuzzy matching
+        # Import the name matcher
+        from name_matcher import find_best_match, calculate_name_similarity
+        
         # Aggregate by employee to avoid duplicate counts
         employee_mentions = {}  # employee_id -> {mentions, positive, negative, keywords}
         matched = []
@@ -6692,55 +6695,25 @@ async def upload_rt_data(
             positive = item['positive']
             negative = item['negative']
             
-            # Try exact match first
-            employee = employee_lookup.get(keyword)
-            match_type = "exact"
+            # Use intelligent fuzzy matching (same as POS upload)
+            match, score, reason = find_best_match(keyword, all_employees, threshold=70.0)
             
-            # Try fuzzy match if no exact match
-            if not employee:
-                best_match = None
-                best_score = 0
-                
-                for emp in all_employees:
-                    emp_name = emp.get("name", "").lower()
-                    first_name = emp_name.split()[0] if emp_name.split() else ""
-                    
-                    # Check if keyword is contained in name or first name
-                    if keyword in emp_name or keyword in first_name:
-                        score = 95  # High score for substring match
-                        if score > best_score:
-                            best_score = score
-                            best_match = emp
-                            match_type = "substring"
-                    else:
-                        # Use fuzzy matching with higher threshold
-                        score = max(
-                            fuzz.ratio(keyword, first_name),
-                            fuzz.partial_ratio(keyword, emp_name),
-                            fuzz.token_set_ratio(keyword, first_name)
-                        )
-                        # Require higher score (80+) for fuzzy match to avoid false positives
-                        if score > best_score and score >= 80:
-                            best_score = score
-                            best_match = emp
-                            match_type = f"fuzzy({score})"
-                
-                employee = best_match
-            
-            if not employee:
+            if not match:
                 unmatched.append({
                     'keyword': keyword,
                     'mentions': mentions
                 })
                 continue
             
+            match_type = f"{reason}({score:.0f})"
+            
             # Aggregate mentions by employee (avoid double counting)
-            emp_id = employee.get("id") or str(employee.get("_id"))
-            emp_name = employee.get("name")
+            emp_id = match.get("id")
+            emp_name = match.get("name")
             
             if emp_id not in employee_mentions:
                 employee_mentions[emp_id] = {
-                    'employee': employee,
+                    'employee': match,
                     'employee_id': emp_id,
                     'employee_name': emp_name,
                     'mentions': 0,
