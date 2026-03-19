@@ -510,11 +510,11 @@ def _parse_summary_table(file_path: str, sheet_name, header_row: int = 3) -> Lis
             'bar glassware $': None, 'glassware': None, 'bar glassware': None,
             'net sales': None, 'net_sales': None,
             'total guests': None, 'guests': None, 'guest_count': None,
-            'lbw total': None, 'lbw': None,
+            'lbw total': None, 'lbw': None, 'lbw $': None,
             'loyalty qty': None, 'lsc_count': None, 'lsc': None,
-            'ppa': None,
-            'lbw/guest': None,
-            'glassware/guest': None,
+            'ppa': None, 'ppa $': None,
+            'lbw/guest': None, 'lbw / guest': None, 'lbw / guest $': None,
+            'glassware/guest': None, 'glassware / guest': None, 'glassware / guest $': None,
         }
         
         for col_idx, header in headers.items():
@@ -572,7 +572,7 @@ def _parse_summary_table(file_path: str, sheet_name, header_row: int = 3) -> Lis
                 'glassware': get_val(['bar glassware $', 'glassware', 'bar glassware']),
                 'net_sales': get_val(['net sales', 'net_sales']),
                 'guests': int(get_val(['total guests', 'guests', 'guest_count'])),
-                'lbw': get_val(['lbw total', 'lbw']),
+                'lbw': get_val(['lbw $', 'lbw total', 'lbw']),
                 'lsc_count': int(get_val(['loyalty qty', 'lsc_count', 'lsc'])),
             }
             
