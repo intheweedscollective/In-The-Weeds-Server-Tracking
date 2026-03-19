@@ -217,9 +217,9 @@ class QuarterSettings(BaseModel):
     bonus_cap: float = 5.0   # Max bonus per metric
     
     # === SERVER TIER THRESHOLDS (Settings-driven) ===
-    a_server_min_score: float = 80.0   # Total Score >= this = A-Server
-    b_server_min_score: float = 70.0   # Total Score >= this AND < A-Server = B-Server
-    # C-Server: Total Score < B-Server min
+    a_server_min_score: float = 85.0   # Total Score >= 85 = A-Server
+    b_server_min_score: float = 70.0   # Total Score >= 70 AND < 85 = B-Server
+    # C-Server: Total Score < 70
     
     # === PREVIOUS QUARTER AVERAGES (for benchmark suggestions) ===
     prev_avg_ppa: Optional[float] = None
