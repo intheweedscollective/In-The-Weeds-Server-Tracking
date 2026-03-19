@@ -216,6 +216,71 @@ async def recalculate_peer_ranks(quarter: str, year: int):
     return len(sorted_emps)
 
 
+async def recalculate_all_tier_labels(quarter: str, year: int):
+    """
+    Recalculate tier_label for all employees based on their job_title and total_score.
+    Tier thresholds:
+    - Trainer: job_title contains 'trainer'
+    - Bartender: job_title contains 'bartender' or 'bar'
+    - A-Server: score >= 85
+    - B-Server: score >= 70 and < 85
+    - C-Server: score < 70
+    """
+    # Get quarter settings for thresholds
+    settings = await db.quarter_settings.find_one(
+        {"quarter": quarter.upper(), "year": year},
+        {"_id": 0}
+    )
+    
+    a_min = settings.get('a_server_min_score', 85.0) if settings else 85.0
+    b_min = settings.get('b_server_min_score', 70.0) if settings else 70.0
+    
+    # Get all employees
+    all_employees = await db.employees_v2.find(
+        {"quarter": quarter.upper(), "year": year}
+    ).to_list(500)
+    
+    if not all_employees:
+        return 0
+    
+    updated_count = 0
+    for emp in all_employees:
+        job_title = (emp.get('job_title') or '').lower()
+        score = emp.get('total_score') or emp.get('pre_dar_score', 0) or 0
+        
+        # Determine correct tier
+        if 'trainer' in job_title:
+            correct_tier = 'Trainer'
+            tier_sort = 1
+        elif 'bartender' in job_title or job_title == 'bar':
+            correct_tier = 'Bartender'
+            tier_sort = 2
+        elif score >= a_min:
+            correct_tier = 'A-Server'
+            tier_sort = 3
+        elif score >= b_min:
+            correct_tier = 'B-Server'
+            tier_sort = 4
+        else:
+            correct_tier = 'C-Server'
+            tier_sort = 5
+        
+        # Update if different
+        if emp.get('tier_label') != correct_tier:
+            await db.employees_v2.update_one(
+                {"_id": emp["_id"]},
+                {"$set": {
+                    "tier_label": correct_tier,
+                    "tier_sort_order": tier_sort
+                }}
+            )
+            updated_count += 1
+            logging.info(f"Updated tier for {emp.get('name')}: {emp.get('tier_label')} -> {correct_tier}")
+    
+    logging.info(f"Recalculated tier labels for {len(all_employees)} employees, {updated_count} changed")
+    return updated_count
+
+
 async def sync_employees_to_most_recent_snapshot(quarter: str, year: int):
     """
     Sync all employees_v2 data to the most recent snapshot for the given quarter/year.
@@ -468,6 +533,40 @@ async def sync_snapshot_from_employees(snapshot_id: str, quarter: str = "Q1", ye
                 "cv_score": emp.get("cv_score", 0)
             }
             for i, emp in enumerate(snapshot_employees[:10])
+        ]
+    }
+
+
+@api_router.post("/v2/employees/recalculate-tiers")
+async def recalculate_employee_tiers(quarter: str = "Q1", year: int = 2026):
+    """
+    Recalculate tier labels for all employees based on current scores.
+    Tier thresholds: A-Server >= 85, B-Server >= 70, C-Server < 70
+    """
+    # Recalculate tiers
+    tiers_updated = await recalculate_all_tier_labels(quarter.upper(), year)
+    
+    # Recalculate peer ranks
+    ranks_updated = await recalculate_peer_ranks(quarter.upper(), year)
+    
+    # Get updated employee list
+    employees = await db.employees_v2.find(
+        {"quarter": quarter.upper(), "year": year},
+        {"_id": 0, "name": 1, "tier_label": 1, "total_score": 1, "peer_rank": 1}
+    ).sort("peer_rank", 1).to_list(100)
+    
+    return {
+        "status": "success",
+        "tiers_updated": tiers_updated,
+        "ranks_updated": ranks_updated,
+        "employees": [
+            {
+                "rank": emp.get("peer_rank"),
+                "name": emp.get("name"),
+                "tier": emp.get("tier_label"),
+                "score": round(emp.get("total_score", 0), 1)
+            }
+            for emp in employees
         ]
     }
 
