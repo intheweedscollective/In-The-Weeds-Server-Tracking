@@ -700,6 +700,99 @@ async def fix_all_employee_scores(quarter: str = "Q1", year: int = 2026):
     }
 
 
+@api_router.post("/v2/admin/sync-employees-from-json")
+async def sync_employees_from_json(
+    quarter: str = "Q1",
+    year: int = 2026,
+    delete_existing: bool = True
+):
+    """
+    Sync employees from the exported JSON file.
+    This is used to sync preview data to production.
+    
+    WARNING: If delete_existing=True, this will DELETE all existing employees
+    for this quarter/year before importing!
+    """
+    import json
+    
+    # Read the exported employees
+    try:
+        with open('/tmp/correct_employees.json', 'r') as f:
+            employees_to_import = json.load(f)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Export file not found. Run export first.")
+    
+    if not employees_to_import:
+        raise HTTPException(status_code=400, detail="No employees in export file")
+    
+    results = {
+        "deleted": 0,
+        "imported": 0,
+        "errors": []
+    }
+    
+    # Delete existing if requested
+    if delete_existing:
+        delete_result = await db.employees_v2.delete_many({
+            "quarter": quarter.upper(),
+            "year": year
+        })
+        results["deleted"] = delete_result.deleted_count
+        logging.info(f"Deleted {delete_result.deleted_count} existing employees")
+    
+    # Import each employee
+    for emp in employees_to_import:
+        try:
+            # Remove _id if present (let MongoDB generate new one)
+            emp.pop('_id', None)
+            emp.pop('id', None)
+            
+            # Ensure quarter/year match
+            emp['quarter'] = quarter.upper()
+            emp['year'] = year
+            
+            await db.employees_v2.insert_one(emp)
+            results["imported"] += 1
+        except Exception as e:
+            results["errors"].append(f"{emp.get('name')}: {str(e)}")
+    
+    logging.info(f"Imported {results['imported']} employees")
+    
+    return {
+        "status": "success",
+        "quarter": quarter,
+        "year": year,
+        "deleted_count": results["deleted"],
+        "imported_count": results["imported"],
+        "errors": results["errors"] if results["errors"] else None
+    }
+
+
+@api_router.delete("/v2/admin/delete-all-employees")
+async def delete_all_employees(quarter: str = "Q1", year: int = 2026, confirm: str = ""):
+    """
+    Delete ALL employees for a specific quarter/year.
+    Requires confirm='YES_DELETE_ALL' to proceed.
+    """
+    if confirm != "YES_DELETE_ALL":
+        raise HTTPException(
+            status_code=400, 
+            detail="Must pass confirm='YES_DELETE_ALL' to delete all employees"
+        )
+    
+    result = await db.employees_v2.delete_many({
+        "quarter": quarter.upper(),
+        "year": year
+    })
+    
+    return {
+        "status": "deleted",
+        "deleted_count": result.deleted_count,
+        "quarter": quarter,
+        "year": year
+    }
+
+
 
 
 # ============================================================================
