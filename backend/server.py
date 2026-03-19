@@ -571,6 +571,108 @@ async def recalculate_employee_tiers(quarter: str = "Q1", year: int = 2026):
     }
 
 
+@api_router.post("/v2/employees/fix-all-scores")
+async def fix_all_employee_scores(quarter: str = "Q1", year: int = 2026):
+    """
+    Recalculate ALL employee scores using the CORRECT formula.
+    
+    CORRECT FORMULA:
+    - weighted_score = PPA×25% + LSC×25% + LBW×15% + Glass×10% (POS only, 75 pts max)
+    - total_score = weighted_score + RT_bonus + CV_score + metric_bonus
+    
+    This fixes the bug where RT was being double-counted.
+    """
+    employees = await db.employees_v2.find(
+        {"quarter": quarter.upper(), "year": year}
+    ).to_list(500)
+    
+    if not employees:
+        return {"success": False, "error": f"No employees found for {quarter} {year}"}
+    
+    fixed = []
+    
+    for emp in employees:
+        # Get raw scores
+        score_ppa = emp.get('score_ppa', 0) or 0
+        score_lsc = emp.get('score_lsc', 0) or 0
+        score_lbw = emp.get('score_lbw', 0) or 0
+        score_glass = emp.get('score_glass', 0) or 0
+        
+        # Cap each metric at 100 before applying weight
+        capped_ppa = min(score_ppa, 100)
+        capped_lsc = min(score_lsc, 100)
+        capped_lbw = min(score_lbw, 100)
+        capped_glass = min(score_glass, 100)
+        
+        # CORRECT weighted_score: POS metrics only (75 pts max)
+        correct_weighted = round(
+            capped_ppa * 0.25 +
+            capped_lsc * 0.25 +
+            capped_lbw * 0.15 +
+            capped_glass * 0.10,
+            2
+        )
+        
+        # Get other score components
+        rt_bonus = emp.get('review_tracker_bonus', 0) or 0
+        cv_score = emp.get('cv_score', 0) or 0
+        metric_bonus = emp.get('total_metric_bonus', 0) or 0
+        
+        # CORRECT total: weighted + RT + CV + metric_bonus
+        correct_total = round(correct_weighted + rt_bonus + cv_score + metric_bonus, 2)
+        
+        old_weighted = emp.get('weighted_score', 0) or 0
+        old_total = emp.get('total_score', 0) or 0
+        
+        # Check if update needed
+        if abs(correct_weighted - old_weighted) > 0.01 or abs(correct_total - old_total) > 0.01:
+            await db.employees_v2.update_one(
+                {"_id": emp["_id"]},
+                {"$set": {
+                    "weighted_score": correct_weighted,
+                    "pre_dar_score": correct_total,
+                    "total_score": correct_total
+                }}
+            )
+            fixed.append({
+                "name": emp.get("name"),
+                "old_weighted": old_weighted,
+                "new_weighted": correct_weighted,
+                "old_total": old_total,
+                "new_total": correct_total
+            })
+    
+    # Recalculate tiers and ranks after fixing scores
+    await recalculate_all_tier_labels(quarter.upper(), year)
+    await recalculate_peer_ranks(quarter.upper(), year)
+    
+    # Get final results
+    final_employees = await db.employees_v2.find(
+        {"quarter": quarter.upper(), "year": year},
+        {"_id": 0, "name": 1, "tier_label": 1, "total_score": 1, "peer_rank": 1,
+         "weighted_score": 1, "review_tracker_bonus": 1, "cv_score": 1, "total_metric_bonus": 1}
+    ).sort("peer_rank", 1).to_list(100)
+    
+    return {
+        "status": "success",
+        "fixed_count": len(fixed),
+        "fixed_employees": fixed,
+        "final_scores": [
+            {
+                "rank": emp.get("peer_rank"),
+                "name": emp.get("name"),
+                "tier": emp.get("tier_label"),
+                "weighted": emp.get("weighted_score"),
+                "rt_bonus": emp.get("review_tracker_bonus"),
+                "cv_score": emp.get("cv_score"),
+                "metric_bonus": emp.get("total_metric_bonus"),
+                "total": emp.get("total_score")
+            }
+            for emp in final_employees
+        ]
+    }
+
+
 
 
 # ============================================================================
