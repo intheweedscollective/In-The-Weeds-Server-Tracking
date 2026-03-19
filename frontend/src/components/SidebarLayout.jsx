@@ -21,7 +21,8 @@ import {
   Moon,
   Upload,
   QrCode,
-  Building2
+  Building2,
+  Filter
 } from "lucide-react";
 import { useTheme } from "../context/ThemeContext";
 
@@ -90,6 +91,7 @@ const navGroups = [
     label: "Admin",
     items: [
       { path: "/scoring-audit", label: "Scoring Audit", icon: ClipboardCheck },
+      { path: "/cv-adjustment", label: "CV NPS Adjustment", icon: Filter },
       { path: "/data-integrity", label: "Data Integrity", icon: ShieldCheck }
     ]
   }

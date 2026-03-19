@@ -24,6 +24,7 @@ import QRSettings from "./pages/QRSettings";
 import StoreManagement from "./pages/StoreManagement";
 import StoreLeaderboard from "./pages/StoreLeaderboard";
 import StoreDetails from "./pages/StoreDetails";
+import CVAdjustment from "./pages/CVAdjustment";
 import OnboardingGuide from "./components/OnboardingGuide";
 import "./App.css";
 
@@ -47,6 +48,7 @@ function App() {
               <Route path="/settings" element={<QuarterSettings />} />
               <Route path="/data-integrity" element={<DataIntegrity />} />
               <Route path="/scoring-audit" element={<ScoringAudit />} />
+              <Route path="/cv-adjustment" element={<CVAdjustment />} />
               <Route path="/help" element={<HelpCenter />} />
               <Route path="/reports" element={<Reports />} />
               {/* QR Track Hub - Isolated Module */}

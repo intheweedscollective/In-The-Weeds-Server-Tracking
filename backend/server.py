@@ -8086,6 +8086,317 @@ async def delete_orphaned_records(quarter: str = "Q1", year: int = 2026):
     }
 
 
+# ==================== CV NPS ADJUSTMENT ENDPOINTS ====================
+
+@api_router.post("/v2/cv/adjustment/upload")
+async def upload_cv_adjustment_reports(
+    feedback_file: UploadFile = File(...),
+    transaction_file: UploadFile = File(None),
+    quarter: str = "Q1",
+    year: int = 2026
+):
+    """
+    Upload Feedback Report and Transaction Report for CV NPS adjustment.
+    
+    This tool:
+    1. Parses both reports and matches them by check number
+    2. Auto-detects feedback that's likely NOT the server's fault
+    3. Returns all passives/detractors for manual review
+    4. Calculates original and adjusted NPS
+    
+    Expected files:
+    - Feedback Report: Contains Id, Customer Name, Check Number, Rating, Comment
+    - Transaction Report (optional): Contains CheckNumber, CustomerName, etc.
+    """
+    from cv_adjustment import process_cv_reports
+    
+    try:
+        # Read feedback file
+        feedback_contents = await feedback_file.read()
+        if feedback_file.filename.lower().endswith('.csv'):
+            feedback_df = pd.read_csv(io.BytesIO(feedback_contents))
+        else:
+            feedback_df = pd.read_excel(io.BytesIO(feedback_contents))
+        
+        # Read transaction file if provided
+        transaction_df = None
+        if transaction_file:
+            trans_contents = await transaction_file.read()
+            if transaction_file.filename.lower().endswith('.csv'):
+                transaction_df = pd.read_csv(io.BytesIO(trans_contents))
+            else:
+                transaction_df = pd.read_excel(io.BytesIO(trans_contents))
+        
+        # Process the reports
+        result = process_cv_reports(feedback_df, transaction_df)
+        
+        # Store the adjustment session in the database
+        session_id = str(uuid.uuid4())
+        await db.cv_adjustment_sessions.insert_one({
+            "_id": session_id,
+            "quarter": quarter.upper(),
+            "year": year,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "feedback_items": result['feedback_items'],
+            "original_nps": result['original_nps'],
+            "adjusted_nps": result['adjusted_nps'],
+            "status": "pending_review"
+        })
+        
+        return {
+            "status": "success",
+            "session_id": session_id,
+            "summary": result['summary'],
+            "original_nps": result['original_nps'],
+            "adjusted_nps": result['adjusted_nps'],
+            "excluded_count": result['excluded_count'],
+            "feedback_items": result['feedback_items'],
+            "message": f"Processed {result['summary']['total_feedback']} feedback items. {result['excluded_count']['total']} auto-flagged for review."
+        }
+        
+    except Exception as e:
+        logging.exception("Error processing CV adjustment reports")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/v2/cv/adjustment/sessions")
+async def get_cv_adjustment_sessions(quarter: str = "Q1", year: int = 2026):
+    """
+    Get all CV adjustment sessions for a quarter.
+    """
+    sessions = await db.cv_adjustment_sessions.find({
+        "quarter": quarter.upper(),
+        "year": year
+    }).sort("created_at", -1).to_list(length=100)
+    
+    return [{
+        "session_id": s["_id"],
+        "created_at": s.get("created_at"),
+        "status": s.get("status"),
+        "original_nps": s.get("original_nps"),
+        "adjusted_nps": s.get("adjusted_nps"),
+        "total_items": len(s.get("feedback_items", []))
+    } for s in sessions]
+
+
+@api_router.get("/v2/cv/adjustment/session/{session_id}")
+async def get_cv_adjustment_session(session_id: str):
+    """
+    Get a specific CV adjustment session with all feedback items.
+    """
+    session = await db.cv_adjustment_sessions.find_one({"_id": session_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    return {
+        "session_id": session["_id"],
+        "quarter": session.get("quarter"),
+        "year": session.get("year"),
+        "created_at": session.get("created_at"),
+        "status": session.get("status"),
+        "original_nps": session.get("original_nps"),
+        "adjusted_nps": session.get("adjusted_nps"),
+        "feedback_items": session.get("feedback_items", [])
+    }
+
+
+@api_router.post("/v2/cv/adjustment/session/{session_id}/update-item")
+async def update_cv_adjustment_item(
+    session_id: str,
+    item_id: str,
+    excluded: bool,
+    exclusion_reason: str = ""
+):
+    """
+    Update exclusion status for a specific feedback item.
+    """
+    from cv_adjustment import calculate_nps
+    
+    session = await db.cv_adjustment_sessions.find_one({"_id": session_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Update the specific item
+    feedback_items = session.get("feedback_items", [])
+    item_found = False
+    for item in feedback_items:
+        if item.get("id") == item_id:
+            item["excluded"] = excluded
+            item["exclusion_reason"] = exclusion_reason if excluded else ""
+            item_found = True
+            break
+    
+    if not item_found:
+        raise HTTPException(status_code=404, detail="Feedback item not found")
+    
+    # Recalculate adjusted NPS
+    adjusted_nps = calculate_nps(feedback_items, exclude_flagged=True)
+    
+    # Update session in database
+    await db.cv_adjustment_sessions.update_one(
+        {"_id": session_id},
+        {"$set": {
+            "feedback_items": feedback_items,
+            "adjusted_nps": adjusted_nps,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # Count excluded items
+    excluded_passives = len([i for i in feedback_items if i.get('excluded') and i.get('nps_category') == 'passive'])
+    excluded_detractors = len([i for i in feedback_items if i.get('excluded') and i.get('nps_category') == 'detractor'])
+    
+    return {
+        "status": "updated",
+        "adjusted_nps": adjusted_nps,
+        "excluded_count": {
+            "passives": excluded_passives,
+            "detractors": excluded_detractors,
+            "total": excluded_passives + excluded_detractors
+        }
+    }
+
+
+@api_router.post("/v2/cv/adjustment/session/{session_id}/apply")
+async def apply_cv_adjustment(session_id: str, quarter: str = "Q1", year: int = 2026):
+    """
+    Apply the CV adjustments to employee records.
+    
+    This:
+    1. Updates employee cv_promoters, cv_passives, cv_detractors with adjusted counts
+    2. Recalculates cv_score and nps_score for each employee
+    3. Marks the session as applied
+    """
+    from cv_adjustment import calculate_nps
+    from name_matcher import find_best_match
+    
+    session = await db.cv_adjustment_sessions.find_one({"_id": session_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    if session.get("status") == "applied":
+        raise HTTPException(status_code=400, detail="Adjustments already applied")
+    
+    feedback_items = session.get("feedback_items", [])
+    
+    # Get all employees for matching
+    all_employees = await db.employees_v2.find({
+        "quarter": quarter.upper(),
+        "year": year
+    }).to_list(length=None)
+    
+    employee_dicts = [{
+        'id': str(emp.get('_id')),
+        'name': emp.get('name', ''),
+        'display_name': emp.get('display_name', ''),
+        'report_name': emp.get('report_name', ''),
+        'aliases': emp.get('aliases', []),
+        '_doc': emp
+    } for emp in all_employees]
+    
+    # Aggregate feedback by employee (using server name detection from comments)
+    employee_feedback = {}
+    
+    for item in feedback_items:
+        if item.get('excluded'):
+            continue  # Skip excluded items
+        
+        # Try to detect server name from comment
+        comment = item.get('comment', '')
+        
+        # First, try to match customer name to employee (in case there's overlap)
+        # Then try to find server name mentioned in comment
+        server_name = None
+        
+        # Look for employee names mentioned in comment
+        for emp in employee_dicts:
+            emp_first = emp['name'].split()[0].lower()
+            if emp_first in comment.lower():
+                server_name = emp['name']
+                break
+        
+        if server_name:
+            if server_name not in employee_feedback:
+                employee_feedback[server_name] = {
+                    'promoters': 0, 'passives': 0, 'detractors': 0, 'total': 0
+                }
+            
+            cat = item.get('nps_category')
+            employee_feedback[server_name]['total'] += 1
+            if cat == 'promoter':
+                employee_feedback[server_name]['promoters'] += 1
+            elif cat == 'passive':
+                employee_feedback[server_name]['passives'] += 1
+            elif cat == 'detractor':
+                employee_feedback[server_name]['detractors'] += 1
+    
+    # Update employees with adjusted feedback counts
+    employees_updated = 0
+    for emp_name, counts in employee_feedback.items():
+        result = await db.employees_v2.update_one(
+            {"name": emp_name, "quarter": quarter.upper(), "year": year},
+            {"$set": {
+                "cv_promoters_adjusted": counts['promoters'],
+                "cv_passives_adjusted": counts['passives'],
+                "cv_detractors_adjusted": counts['detractors'],
+                "cv_total_adjusted": counts['total'],
+                "cv_adjustment_applied": True,
+                "cv_adjustment_session_id": session_id
+            }}
+        )
+        if result.modified_count > 0:
+            employees_updated += 1
+    
+    # Mark session as applied
+    await db.cv_adjustment_sessions.update_one(
+        {"_id": session_id},
+        {"$set": {
+            "status": "applied",
+            "applied_at": datetime.now(timezone.utc).isoformat(),
+            "employees_updated": employees_updated
+        }}
+    )
+    
+    return {
+        "status": "applied",
+        "employees_updated": employees_updated,
+        "adjusted_nps": session.get("adjusted_nps"),
+        "message": f"Applied adjustments to {employees_updated} employees"
+    }
+
+
+@api_router.get("/v2/cv/adjustment/keywords")
+async def get_cv_adjustment_keywords():
+    """
+    Get the list of keywords used for auto-detection of non-server issues.
+    """
+    from cv_adjustment import NON_SERVER_KEYWORDS, SERVER_KEYWORDS
+    
+    return {
+        "non_server_keywords": NON_SERVER_KEYWORDS,
+        "server_keywords": SERVER_KEYWORDS
+    }
+
+
+@api_router.post("/v2/cv/adjustment/test-detection")
+async def test_cv_detection(comment: str):
+    """
+    Test the auto-detection algorithm on a specific comment.
+    """
+    from cv_adjustment import detect_non_server_issues
+    
+    is_non_server, reasons, category = detect_non_server_issues(comment)
+    
+    return {
+        "comment": comment,
+        "is_non_server_issue": is_non_server,
+        "reasons": reasons,
+        "category": category
+    }
+
+
+
+
 @api_router.get("/v2/admin/name-matching/preview")
 async def preview_name_matching(quarter: str = "Q1", year: int = 2026):
     """
