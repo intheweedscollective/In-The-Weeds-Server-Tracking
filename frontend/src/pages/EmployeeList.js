@@ -229,13 +229,10 @@ export default function EmployeeList() {
       return matchesSearch && matchesPerformance;
     })
     .sort((a, b) => {
-      // First sort by tier hierarchy
-      const tierDiff = getTierOrder(a.job_title) - getTierOrder(b.job_title);
-      if (tierDiff !== 0) return tierDiff;
-      // Within same tier, sort by score (highest first)
-      const scoreA = a.total_score || a.pre_dar_score || 0;
-      const scoreB = b.total_score || b.pre_dar_score || 0;
-      return scoreB - scoreA;
+      // Sort alphabetically by name
+      const nameA = (a.name || '').toLowerCase();
+      const nameB = (b.name || '').toLowerCase();
+      return nameA.localeCompare(nameB);
     });
 
   if (loading) {
