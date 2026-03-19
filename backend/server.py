@@ -578,9 +578,10 @@ async def fix_all_employee_scores(quarter: str = "Q1", year: int = 2026):
     
     CORRECT FORMULA:
     - weighted_score = PPA×25% + LSC×25% + LBW×15% + Glass×10% (POS only, 75 pts max)
+    - metric_bonus = sum of bonuses for each metric over 100%
     - total_score = weighted_score + RT_bonus + CV_score + metric_bonus
     
-    This fixes the bug where RT was being double-counted.
+    This fixes bugs where RT was double-counted or metric bonuses weren't calculated.
     """
     employees = await db.employees_v2.find(
         {"quarter": quarter.upper(), "year": year}
@@ -588,6 +589,12 @@ async def fix_all_employee_scores(quarter: str = "Q1", year: int = 2026):
     
     if not employees:
         return {"success": False, "error": f"No employees found for {quarter} {year}"}
+    
+    def calc_metric_bonus(score):
+        """Calculate bonus for scores over 100%: (score-100)/20 * 5, capped at 5"""
+        if score is None or score <= 100:
+            return 0
+        return min((score - 100) / 20 * 5, 5.0)
     
     fixed = []
     
@@ -613,23 +620,41 @@ async def fix_all_employee_scores(quarter: str = "Q1", year: int = 2026):
             2
         )
         
+        # CORRECT metric bonuses
+        bonus_ppa = round(calc_metric_bonus(score_ppa), 2)
+        bonus_lsc = round(calc_metric_bonus(score_lsc), 2)
+        bonus_lbw = round(calc_metric_bonus(score_lbw), 2)
+        bonus_glass = round(calc_metric_bonus(score_glass), 2)
+        correct_metric_bonus = round(bonus_ppa + bonus_lsc + bonus_lbw + bonus_glass, 2)
+        
         # Get other score components
         rt_bonus = emp.get('review_tracker_bonus', 0) or 0
         cv_score = emp.get('cv_score', 0) or 0
-        metric_bonus = emp.get('total_metric_bonus', 0) or 0
         
         # CORRECT total: weighted + RT + CV + metric_bonus
-        correct_total = round(correct_weighted + rt_bonus + cv_score + metric_bonus, 2)
+        correct_total = round(correct_weighted + rt_bonus + cv_score + correct_metric_bonus, 2)
         
         old_weighted = emp.get('weighted_score', 0) or 0
+        old_metric_bonus = emp.get('total_metric_bonus', 0) or 0
         old_total = emp.get('total_score', 0) or 0
         
         # Check if update needed
-        if abs(correct_weighted - old_weighted) > 0.01 or abs(correct_total - old_total) > 0.01:
+        needs_update = (
+            abs(correct_weighted - old_weighted) > 0.01 or 
+            abs(correct_metric_bonus - old_metric_bonus) > 0.01 or
+            abs(correct_total - old_total) > 0.01
+        )
+        
+        if needs_update:
             await db.employees_v2.update_one(
                 {"_id": emp["_id"]},
                 {"$set": {
                     "weighted_score": correct_weighted,
+                    "bonus_ppa": bonus_ppa,
+                    "bonus_lsc": bonus_lsc,
+                    "bonus_lbw": bonus_lbw,
+                    "bonus_glass": bonus_glass,
+                    "total_metric_bonus": correct_metric_bonus,
                     "pre_dar_score": correct_total,
                     "total_score": correct_total
                 }}
@@ -638,6 +663,8 @@ async def fix_all_employee_scores(quarter: str = "Q1", year: int = 2026):
                 "name": emp.get("name"),
                 "old_weighted": old_weighted,
                 "new_weighted": correct_weighted,
+                "old_metric_bonus": old_metric_bonus,
+                "new_metric_bonus": correct_metric_bonus,
                 "old_total": old_total,
                 "new_total": correct_total
             })
