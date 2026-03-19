@@ -1,12 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
-import { Camera, Upload, Download, Trash2, Plus, Calendar, Image, RefreshCw, ScanLine } from "lucide-react";
+import { Camera, Download, Trash2, Plus, Calendar, Image, RefreshCw, ScanLine } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { useToast } from "../hooks/use-toast";
-import { POSUploadModal } from "../components/POSUploadModal";
 import api from "../lib/api";
 
 export default function Snapshots() {
@@ -15,11 +14,8 @@ export default function Snapshots() {
   const [backgrounds, setBackgrounds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
-  const [uploading, setUploading] = useState(null);
   const [generating, setGenerating] = useState(null);
   const [recalculating, setRecalculating] = useState(null);
-  const [showPOSUpload, setShowPOSUpload] = useState(false);
-  const [posUploadSnapshotId, setPosUploadSnapshotId] = useState(null);
   
   // New snapshot form
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -94,28 +90,6 @@ export default function Snapshots() {
       });
     }
     setCreating(false);
-  };
-
-  const uploadData = async (snapshotId, file) => {
-    setUploading(snapshotId);
-    const formData = new FormData();
-    formData.append("file", file);
-    
-    try {
-      const res = await api.post(`/v2/snapshots/${snapshotId}/upload`, formData);
-      toast({ 
-        title: "Success", 
-        description: `Uploaded ${res.data.employee_count} employees. Dashboard & Rankings updated!` 
-      });
-      await fetchSnapshots();
-    } catch (error) {
-      toast({
-        title: "Upload Failed",
-        description: error.response?.data?.detail || "Error uploading data",
-        variant: "destructive"
-      });
-    }
-    setUploading(null);
   };
 
   const generateSlide = async (snapshot) => {
@@ -461,31 +435,6 @@ export default function Snapshots() {
                   </div>
                   
                   <div className="flex flex-wrap gap-2">
-                    {/* Upload Data (CSV) */}
-                    <label className="cursor-pointer">
-                      <input
-                        type="file"
-                        accept=".csv,.xlsx,.xls"
-                        className="hidden"
-                        onChange={(e) => {
-                          if (e.target.files?.[0]) {
-                            uploadData(snapshot.id, e.target.files[0]);
-                          }
-                        }}
-                        disabled={uploading === snapshot.id}
-                      />
-                      <Button
-                        variant="outline"
-                        className="pointer-events-none"
-                        disabled={uploading === snapshot.id}
-                      >
-                        <Upload className="w-4 h-4 mr-2" />
-                        {uploading === snapshot.id ? "Uploading..." : "Upload CSV"}
-                      </Button>
-                    </label>
-                    
-                    {/* Scan POS Report - REMOVED: Use Upload CSV for XLSX files */}
-                    
                     {/* Generate Slide */}
                     <Button
                       onClick={() => generateSlide(snapshot)}
