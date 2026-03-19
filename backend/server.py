@@ -6593,11 +6593,11 @@ async def upload_rt_data(
     try:
         content = await file.read()
         
-        # Get all employees for matching
-        all_employees = await db.employees_v2.find({
-            "quarter": quarter.upper(),
-            "year": year
-        }).to_list(500)
+        # Get all employees for matching (exclude _id to avoid serialization issues)
+        all_employees = await db.employees_v2.find(
+            {"quarter": quarter.upper(), "year": year},
+            {"_id": 0}
+        ).to_list(500)
         
         if not all_employees:
             raise HTTPException(status_code=400, detail=f"No employees found for {quarter} {year}")
@@ -6735,12 +6735,13 @@ async def upload_rt_data(
                 continue
             
             # Aggregate mentions by employee (avoid double counting)
-            emp_id = str(employee.get("_id"))
+            emp_id = employee.get("id") or str(employee.get("_id"))
             emp_name = employee.get("name")
             
             if emp_id not in employee_mentions:
                 employee_mentions[emp_id] = {
                     'employee': employee,
+                    'employee_id': emp_id,
                     'employee_name': emp_name,
                     'mentions': 0,
                     'positive': 0,
@@ -6761,15 +6762,16 @@ async def upload_rt_data(
         updated_count = 0
         for emp_id, data in employee_mentions.items():
             employee = data['employee']
+            employee_id = data.get('employee_id') or employee.get('id')
             mentions = data['mentions']
             positive = data['positive']
             negative = data['negative']
             
-            # Update employee RT mentions
+            # Update employee RT mentions using 'id' field
             rt_bonus = min(mentions * 0.5, 15)  # 0.5 pts per mention, max 15
             
-            await db.employees_v2.update_one(
-                {"_id": employee["_id"]},
+            result = await db.employees_v2.update_one(
+                {"id": employee_id},
                 {"$set": {
                     "rt_mentions": mentions,
                     "review_tracker_bonus": rt_bonus,
@@ -6780,7 +6782,9 @@ async def upload_rt_data(
                     "updated_at": datetime.now(timezone.utc)
                 }}
             )
-            updated_count += 1
+            if result.modified_count > 0:
+                updated_count += 1
+                logging.info(f"RT UPDATE: {data['employee_name']} - {mentions} mentions")
             
             # Track matched keywords
             for kw in data['keywords']:
