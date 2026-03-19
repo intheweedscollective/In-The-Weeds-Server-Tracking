@@ -1,361 +1,332 @@
 """
-Smart Name Matcher for Employee CV Attribution
-Handles nickname/legal name variations automatically.
+Intelligent Name Matching System
+
+This module provides fuzzy name matching to handle:
+- OCR errors (Dhaka! vs Dhakal, CrandaH vs Crandall)
+- Nicknames (Trey vs Treyanna, Tad vs Thaddeus)
+- Typos and variations (Starwars vs Stanvars)
+- First name / last name matching
 """
 
-from typing import Dict, List, Optional, Tuple
-from difflib import SequenceMatcher
+from rapidfuzz import fuzz, process
+from typing import Optional, List, Dict, Tuple
 import re
+import logging
 
-# Common nickname to legal name mappings
+logger = logging.getLogger(__name__)
+
+
+# Common nickname mappings
 NICKNAME_MAP = {
-    # First names
-    "trey": ["treyanna", "tre"],
-    "tad": ["thaddeus"],
-    "tk": ["thomas", "t.k."],
-    "abby": ["abigail"],
-    "ikey": ["eric", "ike"],
-    "keisha": ["lakeisha", "lakiesha", "kiesha"],
-    "sheri": ["sheridan", "sherry"],
-    "kelsey": ["keisey"],  # typo variant
-    "keisey": ["kelsey"],
-    "matt": ["matthew"],
-    "mike": ["michael"],
-    "rob": ["robert"],
-    "bob": ["robert"],
-    "dan": ["daniel"],
-    "danny": ["daniel"],
-    "dave": ["david"],
-    "ed": ["edward", "eduardo", "eddie"],
-    "eddie": ["edward", "eduardo", "ed"],
-    "joe": ["joseph", "jose"],
-    "jose": ["joseph"],
-    "alex": ["alexander", "alejandro", "alexandra"],
-    "sam": ["samuel", "samantha"],
-    "chris": ["christopher", "christina", "christine"],
-    "nick": ["nicholas", "nicolas"],
-    "tom": ["thomas"],
-    "tommy": ["thomas"],
-    "will": ["william"],
-    "bill": ["william"],
-    "jim": ["james"],
-    "jimmy": ["james"],
-    "jake": ["jacob"],
-    "tony": ["anthony", "antonio"],
-    "steve": ["steven", "stephen"],
-    "andy": ["andrew", "andrea"],
-    "drew": ["andrew"],
-    "ben": ["benjamin"],
-    "liz": ["elizabeth"],
-    "beth": ["elizabeth"],
-    "kate": ["katherine", "kathryn", "catherine"],
-    "katie": ["katherine", "kathryn", "catherine"],
-    "jen": ["jennifer"],
-    "jenny": ["jennifer"],
-    "meg": ["megan", "margaret"],
-    "maggie": ["margaret"],
-    "sue": ["susan", "suzanne"],
-    "pat": ["patricia", "patrick"],
-    "rick": ["richard", "ricardo"],
-    "dick": ["richard"],
-    "rich": ["richard"],
-    "ted": ["theodore", "edward"],
-    "theo": ["theodore"],
-    "max": ["maxwell", "maximilian"],
-    "charlie": ["charles"],
-    "chuck": ["charles"],
-    "greg": ["gregory"],
-    "tim": ["timothy"],
-    "jon": ["jonathan", "john"],
-    "johnny": ["john", "jonathan"],
-    "larry": ["lawrence"],
-    "terry": ["terrence", "teresa"],
-    "jerry": ["gerald", "jerome"],
-    "ray": ["raymond"],
-    "ron": ["ronald"],
-    "don": ["donald"],
-    "doug": ["douglas"],
-    "jeff": ["jeffrey"],
-    "josh": ["joshua"],
-    "zach": ["zachary"],
-    "zack": ["zachary"],
-    "nate": ["nathan", "nathaniel"],
-    "lex": ["alexis", "alexander"],
-    "ash": ["ashley", "ashton"],
-    "jay": ["jason", "james"],
-    "bri": ["brianna", "brian"],
-    "tiff": ["tiffany"],
-    "vince": ["vincent"],
-    "vic": ["victor", "victoria"],
+    # Short -> Full names
+    "trey": ["treyanna", "trey"],
+    "tad": ["thaddeus", "tad"],
+    "terry": ["terrance", "terry"],
+    "mike": ["michael", "mike"],
+    "bob": ["robert", "bob"],
+    "rob": ["robert", "rob"],
+    "bill": ["william", "bill"],
+    "will": ["william", "will"],
+    "jim": ["james", "jim"],
+    "jimmy": ["james", "jimmy"],
+    "tom": ["thomas", "tom"],
+    "tommy": ["thomas", "tommy"],
+    "dan": ["daniel", "dan"],
+    "danny": ["daniel", "danny"],
+    "joe": ["joseph", "joe"],
+    "joey": ["joseph", "joey"],
+    "chris": ["christopher", "christian", "chris"],
+    "matt": ["matthew", "matt"],
+    "nick": ["nicholas", "nick"],
+    "tony": ["anthony", "tony"],
+    "alex": ["alexander", "alexandra", "alex"],
+    "sam": ["samuel", "samantha", "sam"],
+    "ben": ["benjamin", "ben"],
+    "jen": ["jennifer", "jen"],
+    "kate": ["katherine", "kate"],
+    "liz": ["elizabeth", "liz"],
+    "beth": ["elizabeth", "beth"],
+    "meg": ["megan", "margaret", "meg"],
+    "pat": ["patrick", "patricia", "pat"],
+    "rick": ["richard", "rick"],
+    "dick": ["richard", "dick"],
+    "ed": ["edward", "eddie", "ed"],
+    "eddie": ["edward", "eddie", "ed"],
+    "steve": ["steven", "stephen", "steve"],
+    "dave": ["david", "dave"],
+    "max": ["maxwell", "maximilian", "max"],
+    "jake": ["jacob", "jake"],
+    "jack": ["john", "jackson", "jack"],
+    "jon": ["jonathan", "jon"],
+    "andy": ["andrew", "andy"],
+    "drew": ["andrew", "drew"],
 }
 
-# Build reverse mapping (legal name -> nicknames)
-LEGAL_TO_NICKNAME = {}
-for nickname, legal_names in NICKNAME_MAP.items():
-    for legal in legal_names:
-        if legal not in LEGAL_TO_NICKNAME:
-            LEGAL_TO_NICKNAME[legal] = []
-        if nickname not in LEGAL_TO_NICKNAME[legal]:
-            LEGAL_TO_NICKNAME[legal].append(nickname)
+# Build reverse map (full -> short)
+FULL_TO_NICKNAME = {}
+for short, fulls in NICKNAME_MAP.items():
+    for full in fulls:
+        if full not in FULL_TO_NICKNAME:
+            FULL_TO_NICKNAME[full] = []
+        FULL_TO_NICKNAME[full].append(short)
 
 
-def normalize_name(name: str) -> str:
-    """Normalize a name for comparison."""
+def clean_name(name: str) -> str:
+    """
+    Clean a name for comparison:
+    - Remove special characters (!@#$%^&*) 
+    - Normalize whitespace
+    - Handle common OCR errors
+    """
     if not name:
         return ""
-    # Remove extra whitespace, lowercase
-    name = " ".join(name.lower().split())
-    # Remove common suffixes
-    name = re.sub(r'\s+(jr|sr|ii|iii|iv)\.?$', '', name)
-    return name
-
-
-def get_first_name(name: str) -> str:
-    """Extract first name from full name."""
-    parts = normalize_name(name).split()
-    return parts[0] if parts else ""
-
-
-def get_last_name(name: str) -> str:
-    """Extract last name from full name."""
-    parts = normalize_name(name).split()
-    return parts[-1] if len(parts) > 1 else ""
-
-
-def get_name_variations(first_name: str) -> List[str]:
-    """Get all possible variations of a first name."""
-    first_lower = first_name.lower()
-    variations = {first_lower}
     
-    # Add nickname mappings
-    if first_lower in NICKNAME_MAP:
-        variations.update(NICKNAME_MAP[first_lower])
+    # Convert to lowercase
+    cleaned = name.lower().strip()
     
-    # Add reverse mappings (if this is a legal name, get nicknames)
-    if first_lower in LEGAL_TO_NICKNAME:
-        variations.update(LEGAL_TO_NICKNAME[first_lower])
+    # Remove trailing punctuation (!, ?, etc.)
+    cleaned = re.sub(r'[!?.,;:]+$', '', cleaned)
     
-    # Also check if any legal name starts with our name
-    for legal, nicks in LEGAL_TO_NICKNAME.items():
-        if legal.startswith(first_lower) and len(first_lower) >= 3:
-            variations.add(legal)
-            variations.update(nicks)
+    # Replace common OCR errors
+    ocr_fixes = {
+        'h$': 'll',  # CrandaH -> Crandall
+        '!': 'l',    # Dhaka! -> Dhakal
+        '0': 'o',    # R0bert -> Robert
+        '1': 'l',    # Wi1son -> Wilson
+        '|': 'l',    # Wi|son -> Wilson
+        '—': '-',    # em-dash to hyphen
+        '–': '-',    # en-dash to hyphen
+    }
     
-    return list(variations)
+    for bad, good in ocr_fixes.items():
+        if bad == 'h$':
+            # Only replace H at end of word
+            cleaned = re.sub(r'H\b', 'll', cleaned, flags=re.IGNORECASE)
+        else:
+            cleaned = cleaned.replace(bad, good)
+    
+    # Normalize whitespace
+    cleaned = ' '.join(cleaned.split())
+    
+    return cleaned
 
 
-def similarity_score(s1: str, s2: str) -> float:
-    """Calculate similarity between two strings (0-1)."""
-    return SequenceMatcher(None, s1.lower(), s2.lower()).ratio()
+def get_name_parts(name: str) -> Dict[str, str]:
+    """Split a name into first, middle, last parts"""
+    parts = clean_name(name).split()
+    
+    if len(parts) == 0:
+        return {"first": "", "last": "", "full": ""}
+    elif len(parts) == 1:
+        return {"first": parts[0], "last": "", "full": parts[0]}
+    elif len(parts) == 2:
+        return {"first": parts[0], "last": parts[1], "full": " ".join(parts)}
+    else:
+        return {
+            "first": parts[0], 
+            "last": parts[-1], 
+            "middle": " ".join(parts[1:-1]),
+            "full": " ".join(parts)
+        }
 
 
-def match_employee_to_cv_name(
-    employee_name: str,
-    cv_names: List[str],
-    threshold: float = 0.6
-) -> Tuple[Optional[str], float, str]:
+def get_nickname_variants(name: str) -> List[str]:
+    """Get possible nickname variants for a name"""
+    name_lower = name.lower()
+    variants = [name_lower]
+    
+    # Check if this is a nickname -> get full names
+    if name_lower in NICKNAME_MAP:
+        variants.extend(NICKNAME_MAP[name_lower])
+    
+    # Check if this is a full name -> get nicknames
+    if name_lower in FULL_TO_NICKNAME:
+        variants.extend(FULL_TO_NICKNAME[name_lower])
+    
+    return list(set(variants))
+
+
+def calculate_name_similarity(name1: str, name2: str) -> float:
     """
-    Match an employee name to the best CV name.
-    
-    Returns: (matched_cv_name, confidence_score, match_reason)
+    Calculate similarity between two names using multiple strategies.
+    Returns a score from 0-100.
     """
-    if not employee_name or not cv_names:
-        return None, 0.0, "no_input"
+    if not name1 or not name2:
+        return 0.0
     
-    emp_normalized = normalize_name(employee_name)
-    emp_first = get_first_name(employee_name)
-    emp_last = get_last_name(employee_name)
-    emp_variations = get_name_variations(emp_first)
+    clean1 = clean_name(name1)
+    clean2 = clean_name(name2)
     
+    # Exact match after cleaning
+    if clean1 == clean2:
+        return 100.0
+    
+    # Get name parts
+    parts1 = get_name_parts(name1)
+    parts2 = get_name_parts(name2)
+    
+    scores = []
+    
+    # Full name fuzzy match
+    full_score = fuzz.ratio(clean1, clean2)
+    scores.append(full_score)
+    
+    # Token sort ratio (handles word order differences)
+    token_sort = fuzz.token_sort_ratio(clean1, clean2)
+    scores.append(token_sort)
+    
+    # Partial ratio (handles substring matches)
+    partial = fuzz.partial_ratio(clean1, clean2)
+    scores.append(partial * 0.9)  # Slightly penalize partial matches
+    
+    # First name + last name matching
+    if parts1["first"] and parts2["first"] and parts1["last"] and parts2["last"]:
+        first_score = fuzz.ratio(parts1["first"], parts2["first"])
+        last_score = fuzz.ratio(parts1["last"], parts2["last"])
+        
+        # Check nickname variants for first name
+        first_variants1 = get_nickname_variants(parts1["first"])
+        first_variants2 = get_nickname_variants(parts2["first"])
+        
+        # Check if any variants match
+        for v1 in first_variants1:
+            for v2 in first_variants2:
+                if v1 == v2:
+                    first_score = 100
+                    break
+        
+        # Combined first + last score
+        name_parts_score = (first_score * 0.4) + (last_score * 0.6)
+        scores.append(name_parts_score)
+    
+    # Return the best score
+    return max(scores)
+
+
+def find_best_match(
+    search_name: str, 
+    candidates: List[Dict], 
+    threshold: float = 75.0
+) -> Tuple[Optional[Dict], float, str]:
+    """
+    Find the best matching employee from a list of candidates.
+    
+    Args:
+        search_name: The name to search for
+        candidates: List of employee dicts with 'name', 'display_name', 'report_name', 'aliases'
+        threshold: Minimum score to consider a match (0-100)
+    
+    Returns:
+        Tuple of (best_match_employee, score, match_reason)
+    """
+    if not search_name or not candidates:
+        return None, 0.0, "no_candidates"
+    
+    clean_search = clean_name(search_name)
     best_match = None
     best_score = 0.0
-    best_reason = "no_match"
+    match_reason = "no_match"
     
-    for cv_name in cv_names:
-        cv_normalized = normalize_name(cv_name)
-        cv_first = get_first_name(cv_name)
-        cv_last = get_last_name(cv_name)
+    for candidate in candidates:
+        candidate_names = []
         
-        # 1. Exact full name match
-        if emp_normalized == cv_normalized:
-            return cv_name, 1.0, "exact_match"
+        # Collect all possible names for this candidate
+        if candidate.get('report_name'):
+            candidate_names.append(('report_name', candidate['report_name']))
+        if candidate.get('name'):
+            candidate_names.append(('name', candidate['name']))
+        if candidate.get('display_name'):
+            candidate_names.append(('display_name', candidate['display_name']))
         
-        # 2. Last name matches + first name variation
-        if emp_last and cv_last and emp_last == cv_last:
-            # Check if first names are variations
-            cv_variations = get_name_variations(cv_first)
-            if emp_first in cv_variations or cv_first in emp_variations:
-                return cv_name, 0.95, "last_name_match_with_nickname"
+        # Include aliases
+        aliases = candidate.get('aliases', []) or []
+        for alias in aliases:
+            candidate_names.append(('alias', alias))
+        
+        # Score against each candidate name
+        for name_type, candidate_name in candidate_names:
+            # Exact match (after cleaning)
+            if clean_name(candidate_name) == clean_search:
+                return candidate, 100.0, f"exact_{name_type}"
             
-            # Check similarity of first names
-            first_sim = similarity_score(emp_first, cv_first)
-            if first_sim > 0.7:
-                if first_sim > best_score:
-                    best_match = cv_name
-                    best_score = first_sim
-                    best_reason = "last_name_match_similar_first"
-        
-        # 3. First name is a known variation (regardless of last name)
-        cv_variations = get_name_variations(cv_first)
-        if emp_first in cv_variations or cv_first in emp_variations:
-            # Check last name similarity
-            if emp_last and cv_last:
-                last_sim = similarity_score(emp_last, cv_last)
-                if last_sim > 0.7:
-                    score = 0.9 + (last_sim * 0.1)
-                    if score > best_score:
-                        best_match = cv_name
-                        best_score = score
-                        best_reason = "nickname_match_with_similar_last"
-            else:
-                # No last name to compare, but first name matches
-                if 0.85 > best_score:
-                    best_match = cv_name
-                    best_score = 0.85
-                    best_reason = "nickname_match_only"
-        
-        # 4. First name starts with same letters (min 3)
-        if len(emp_first) >= 3 and len(cv_first) >= 3:
-            if emp_first[:3] == cv_first[:3]:
-                # Check if last names match
-                if emp_last and cv_last and emp_last == cv_last:
-                    if 0.88 > best_score:
-                        best_match = cv_name
-                        best_score = 0.88
-                        best_reason = "prefix_match_same_last"
-                elif emp_last and cv_last and similarity_score(emp_last, cv_last) > 0.8:
-                    if 0.82 > best_score:
-                        best_match = cv_name
-                        best_score = 0.82
-                        best_reason = "prefix_match_similar_last"
-        
-        # 5. Full name similarity check
-        full_sim = similarity_score(emp_normalized, cv_normalized)
-        if full_sim > threshold and full_sim > best_score:
-            best_match = cv_name
-            best_score = full_sim
-            best_reason = "fuzzy_match"
+            # Fuzzy match
+            score = calculate_name_similarity(search_name, candidate_name)
+            
+            if score > best_score:
+                best_score = score
+                best_match = candidate
+                match_reason = f"fuzzy_{name_type}"
     
+    # Only return if above threshold
     if best_score >= threshold:
-        return best_match, best_score, best_reason
+        return best_match, best_score, match_reason
     
     return None, best_score, "below_threshold"
 
 
-def build_name_mapping(
-    employee_names: List[str],
-    cv_names: List[str]
+def match_employees_batch(
+    upload_names: List[str],
+    existing_employees: List[Dict],
+    threshold: float = 75.0
 ) -> Dict[str, Dict]:
     """
-    Build a complete mapping between employee names and CV names.
+    Match a batch of uploaded names to existing employees.
     
-    Returns dict of:
-    {
-        employee_name: {
-            "cv_name": matched CV name or None,
-            "confidence": float 0-1,
-            "reason": str explaining match type
-        }
+    Returns a dict mapping upload_name -> {
+        'matched': True/False,
+        'employee': employee dict or None,
+        'score': match score,
+        'reason': match reason,
+        'action': 'update' or 'create'
     }
     """
-    mapping = {}
-    used_cv_names = set()
+    results = {}
     
-    # First pass: high confidence matches
-    for emp_name in employee_names:
-        cv_name, confidence, reason = match_employee_to_cv_name(
-            emp_name, 
-            [n for n in cv_names if n not in used_cv_names]
+    for upload_name in upload_names:
+        match, score, reason = find_best_match(
+            upload_name, 
+            existing_employees, 
+            threshold
         )
-        if confidence >= 0.85:
-            mapping[emp_name] = {
-                "cv_name": cv_name,
-                "confidence": confidence,
-                "reason": reason
+        
+        if match:
+            results[upload_name] = {
+                'matched': True,
+                'employee': match,
+                'score': score,
+                'reason': reason,
+                'action': 'update',
+                'matched_to': match.get('name') or match.get('display_name')
             }
-            if cv_name:
-                used_cv_names.add(cv_name)
+            logger.info(f"Matched '{upload_name}' -> '{match.get('name')}' (score: {score:.1f}, {reason})")
+        else:
+            results[upload_name] = {
+                'matched': False,
+                'employee': None,
+                'score': score,
+                'reason': reason,
+                'action': 'create',
+                'matched_to': None
+            }
+            logger.info(f"No match for '{upload_name}' (best score: {score:.1f})")
     
-    # Second pass: lower confidence matches for remaining
-    for emp_name in employee_names:
-        if emp_name in mapping:
-            continue
-        cv_name, confidence, reason = match_employee_to_cv_name(
-            emp_name,
-            [n for n in cv_names if n not in used_cv_names],
-            threshold=0.6
-        )
-        mapping[emp_name] = {
-            "cv_name": cv_name,
-            "confidence": confidence,
-            "reason": reason
-        }
-        if cv_name and confidence >= 0.6:
-            used_cv_names.add(cv_name)
-    
-    return mapping
+    return results
 
 
-def get_nps_for_employee_smart(
-    employee_name: str,
-    nps_lookup: Dict[str, dict],
-    employee_aliases: List[str] = None
-) -> Tuple[dict, str]:
-    """
-    Smart NPS lookup that handles nickname variations.
+# Test function
+if __name__ == "__main__":
+    # Test cases
+    test_pairs = [
+        ("Sheridan Dhaka!", "Sheriden Dhakal"),
+        ("Starwars Mckinnon-Herrera", "Stanvars McKinnon-Herrera"),
+        ("Lexi CrandaH", "Lexi Crandall"),
+        ("Trey Quick", "Treyanna Quick"),
+        ("Tad Hashey", "Thaddeus Hashey"),
+        ("Terry Kott", "Terrance Kott"),
+        ("Robert Smith", "Bob Smith"),
+        ("Michael Johnson", "Mike Johnson"),
+    ]
     
-    Args:
-        employee_name: The employee's name in employees_v2
-        nps_lookup: Dict of {cv_name_lower: nps_data}
-        employee_aliases: Optional list of known aliases
-    
-    Returns: (nps_data_dict, match_reason)
-    """
-    emp_normalized = normalize_name(employee_name)
-    emp_first = get_first_name(employee_name)
-    emp_last = get_last_name(employee_name)
-    
-    # 1. Try exact match first
-    if emp_normalized in nps_lookup:
-        return nps_lookup[emp_normalized], "exact_match"
-    
-    # 2. Try aliases if provided
-    if employee_aliases:
-        for alias in employee_aliases:
-            alias_lower = normalize_name(alias)
-            if alias_lower in nps_lookup:
-                return nps_lookup[alias_lower], f"alias_match:{alias}"
-    
-    # 3. Get all variations of employee's first name
-    emp_variations = get_name_variations(emp_first)
-    
-    # 4. Search through CV names
-    for cv_name_lower, nps_data in nps_lookup.items():
-        cv_first = get_first_name(cv_name_lower)
-        cv_last = get_last_name(cv_name_lower)
-        
-        # Check if first names match via variations
-        cv_variations = get_name_variations(cv_first)
-        first_name_matches = (
-            emp_first in cv_variations or 
-            cv_first in emp_variations or
-            emp_first == cv_first
-        )
-        
-        if first_name_matches:
-            # Check last name
-            if emp_last and cv_last:
-                if emp_last == cv_last:
-                    return nps_data, f"nickname_match:{cv_name_lower}"
-                if similarity_score(emp_last, cv_last) > 0.75:
-                    return nps_data, f"nickname_similar_last:{cv_name_lower}"
-            else:
-                # No last name but first matches via nickname
-                return nps_data, f"nickname_only:{cv_name_lower}"
-        
-        # 5. Check if starts with same prefix + same last name
-        if len(emp_first) >= 3 and len(cv_first) >= 3:
-            if emp_first[:3] == cv_first[:3] and emp_last == cv_last:
-                return nps_data, f"prefix_match:{cv_name_lower}"
-    
-    return {}, "no_match"
+    for name1, name2 in test_pairs:
+        score = calculate_name_similarity(name1, name2)
+        print(f"'{name1}' vs '{name2}': {score:.1f}")

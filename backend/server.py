@@ -1365,6 +1365,19 @@ async def unified_pos_upload(
         if not parsed_employees:
             raise HTTPException(status_code=400, detail="No valid employee data found in file")
         
+        # Get all existing employees once before processing (for intelligent matching)
+        all_existing = await db.employees_v2.find(
+            {"quarter": quarter, "year": year},
+            {"_id": 0}
+        ).to_list(500)
+        
+        # Import the intelligent name matcher
+        from name_matcher import find_best_match
+        
+        # Track which employees have been matched to prevent duplicates
+        matched_employee_ids = set()
+        match_log = []
+        
         # Process each employee: update or create in employees_v2
         updated_count = 0
         created_count = 0
@@ -1422,30 +1435,35 @@ async def unified_pos_upload(
                 capped_glass * 0.10
             )
             
-            # Find existing employee - match on report_name, name, or aliases
-            existing = await db.employees_v2.find_one({
-                "$or": [
-                    {"report_name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}},
-                    {"name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}},
-                    {"aliases": {"$elemMatch": {"$regex": f"^{re.escape(name)}$", "$options": "i"}}}
-                ],
-                "quarter": quarter,
-                "year": year
-            })
+            # INTELLIGENT FUZZY NAME MATCHING
+            # Filter out already-matched employees to prevent double-matching
+            available_employees = [e for e in all_existing if e.get('id') not in matched_employee_ids]
             
-            if existing:
+            match, score, reason = find_best_match(name, available_employees, threshold=70.0)
+            
+            if match:
+                # Found a match - update existing employee
+                matched_employee_ids.add(match.get('id'))
+                match_log.append({
+                    "upload_name": name,
+                    "matched_to": match.get('name'),
+                    "score": round(score, 1),
+                    "reason": reason
+                })
+                logging.info(f"MATCH: '{name}' -> '{match.get('name')}' (score: {score:.1f})")
+                
                 # Preserve existing CV/RT data AND display_name when updating POS data
-                cv_score = existing.get("cv_score", 0) or 0
-                rt_mentions = existing.get("rt_mentions", 0) or 0
+                cv_score = match.get("cv_score", 0) or 0
+                rt_mentions = match.get("rt_mentions", 0) or 0
                 rt_contribution = min(rt_mentions * 0.5, 15)
-                total_metric_bonus = existing.get("total_metric_bonus", 0) or 0
+                total_metric_bonus = match.get("total_metric_bonus", 0) or 0
                 
                 # Recalculate weighted with RT
                 weighted_with_rt = weighted_score + rt_contribution
                 total_score = weighted_with_rt + cv_score + total_metric_bonus
                 
                 update_fields = {
-                    "report_name": name,  # Always update report_name to latest from POS
+                    "report_name": name,  # Update report_name to latest from POS
                     "guests": guests,
                     "net_sales": round(net_sales, 2),
                     "lbw": round(lbw, 2),
@@ -1467,7 +1485,7 @@ async def unified_pos_upload(
                 # NOTE: display_name is NOT updated - it's preserved from manual changes
                 
                 await db.employees_v2.update_one(
-                    {"_id": existing["_id"]},
+                    {"id": match.get('id')},
                     {"$set": update_fields}
                 )
                 updated_count += 1
@@ -1525,7 +1543,8 @@ async def unified_pos_upload(
             "parse_method": parse_method,
             "quarter": quarter,
             "year": year,
-            "note": "Dashboard and Snapshots are now synced"
+            "note": "Dashboard and Snapshots are now synced",
+            "matches": match_log[:10] if match_log else []  # Return first 10 matches for transparency
         }
         
     except HTTPException:
