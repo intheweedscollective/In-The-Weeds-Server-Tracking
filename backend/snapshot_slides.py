@@ -343,6 +343,25 @@ def generate_snapshot_slide(
         rt_bonus = min(rt_bonus, 15)  # Ensure cap
         emp["rt_bonus"] = rt_bonus
         
+        # Metric Bonus: Check if pre-calculated, otherwise calculate from scores
+        # Bonus is earned for scores exceeding 100%: 0 at 100%, up to 5 pts at 120%
+        total_metric_bonus = float(emp.get("total_metric_bonus", 0) or 0)
+        if total_metric_bonus == 0:
+            # Calculate from individual scores
+            def calc_bonus(score):
+                if score is None or score <= 100:
+                    return 0
+                excess_percent = score - 100
+                bonus = (excess_percent / 20) * 5  # 5 pts max at 20% over
+                return min(bonus, 5.0)
+            
+            bonus_ppa = calc_bonus(emp.get("score_ppa"))
+            bonus_lbw = calc_bonus(emp.get("score_lbw"))
+            bonus_glass = calc_bonus(emp.get("score_glass"))
+            bonus_lsc = calc_bonus(emp.get("score_lsc"))
+            total_metric_bonus = round(bonus_ppa + bonus_lbw + bonus_glass + bonus_lsc, 2)
+        emp["total_metric_bonus"] = total_metric_bonus
+        
         # Calculate trend from previous snapshot data if available
         prev_score = emp.get("previous_score")
         current_score = emp.get("total_score", 0) or 0
