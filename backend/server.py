@@ -1421,15 +1421,19 @@ async def unified_pos_upload(
                 capped_glass * 0.10
             )
             
-            # Find existing employee
+            # Find existing employee - match on report_name, name, or aliases
             existing = await db.employees_v2.find_one({
-                "name": {"$regex": f"^{name}$", "$options": "i"},
+                "$or": [
+                    {"report_name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}},
+                    {"name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}},
+                    {"aliases": {"$elemMatch": {"$regex": f"^{re.escape(name)}$", "$options": "i"}}}
+                ],
                 "quarter": quarter,
                 "year": year
             })
             
             if existing:
-                # Preserve existing CV/RT data when updating POS data
+                # Preserve existing CV/RT data AND display_name when updating POS data
                 cv_score = existing.get("cv_score", 0) or 0
                 rt_mentions = existing.get("rt_mentions", 0) or 0
                 rt_contribution = min(rt_mentions * 0.5, 15)
@@ -1440,6 +1444,7 @@ async def unified_pos_upload(
                 total_score = weighted_with_rt + cv_score + total_metric_bonus
                 
                 update_fields = {
+                    "report_name": name,  # Always update report_name to latest from POS
                     "guests": guests,
                     "net_sales": round(net_sales, 2),
                     "lbw": round(lbw, 2),
@@ -1458,6 +1463,7 @@ async def unified_pos_upload(
                     "pre_dar_score": round(total_score, 2),
                     "updated_at": datetime.now(timezone.utc)
                 }
+                # NOTE: display_name is NOT updated - it's preserved from manual changes
                 
                 await db.employees_v2.update_one(
                     {"_id": existing["_id"]},
@@ -1469,6 +1475,9 @@ async def unified_pos_upload(
                 new_emp = {
                     "id": str(uuid.uuid4()),
                     "name": name,
+                    "display_name": name,  # Initially same as name, can be changed later
+                    "report_name": name,   # Original name from POS report
+                    "aliases": [],         # For alternate name matching
                     "quarter": quarter,
                     "year": year,
                     "job_title": "Server",
@@ -3151,6 +3160,8 @@ class EmployeeCreate(BaseModel):
 class EmployeeUpdate(BaseModel):
     """Model for updating an employee"""
     name: Optional[str] = None
+    display_name: Optional[str] = None  # Custom name shown in dashboards/reports
+    report_name: Optional[str] = None   # Original name from POS reports (used for matching)
     job_title: Optional[str] = None
     aliases: Optional[List[str]] = None  # Nicknames for name matching
     guests: Optional[float] = None
@@ -3369,6 +3380,107 @@ async def delete_employee(employee_id: str):
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Employee not found")
     return {"success": True, "message": "Employee deleted"}
+
+
+@api_router.put("/v2/employees/{employee_id}/display-name")
+async def update_employee_display_name(employee_id: str, data: dict):
+    """
+    Update an employee's display name (the name shown in dashboards and reports).
+    The report_name (from POS) is preserved for matching future uploads.
+    
+    Body: { "display_name": "Their Preferred Name" }
+    """
+    display_name = data.get("display_name", "").strip()
+    if not display_name:
+        raise HTTPException(status_code=400, detail="display_name is required")
+    
+    employee = await db.employees_v2.find_one({"id": employee_id})
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    # Set report_name if not already set (for backward compatibility)
+    current_name = employee.get("name", "")
+    report_name = employee.get("report_name") or current_name
+    
+    await db.employees_v2.update_one(
+        {"id": employee_id},
+        {"$set": {
+            "display_name": display_name,
+            "report_name": report_name,
+            "updated_at": datetime.now(timezone.utc)
+        }}
+    )
+    
+    # Also update the main "name" field if you want display_name to be primary
+    # Uncomment below if you want 'name' to also be the display name
+    # await db.employees_v2.update_one(
+    #     {"id": employee_id},
+    #     {"$set": {"name": display_name}}
+    # )
+    
+    return {
+        "success": True,
+        "message": f"Updated display name to '{display_name}'",
+        "employee_id": employee_id,
+        "display_name": display_name,
+        "report_name": report_name
+    }
+
+
+@api_router.post("/v2/admin/fix-display-names")
+async def batch_fix_display_names(data: dict):
+    """
+    Batch update display names for employees with OCR/typo issues.
+    
+    Body: {
+        "quarter": "Q1",
+        "year": 2026,
+        "fixes": {
+            "Sheridan Dhaka!": "Sheriden Dhakal",
+            "Starwars Mckinnon-Herrera": "Stanvars McKinnon-Herrera"
+        }
+    }
+    """
+    import re
+    quarter = data.get("quarter", "Q1").upper()
+    year = data.get("year", 2026)
+    fixes = data.get("fixes", {})
+    
+    if not fixes:
+        raise HTTPException(status_code=400, detail="No fixes provided")
+    
+    updated = []
+    not_found = []
+    
+    for old_name, new_display_name in fixes.items():
+        # Find employee by current name
+        employee = await db.employees_v2.find_one({
+            "name": {"$regex": f"^{re.escape(old_name)}$", "$options": "i"},
+            "quarter": quarter,
+            "year": year
+        })
+        
+        if employee:
+            # Update with new display name, preserve report_name
+            await db.employees_v2.update_one(
+                {"id": employee["id"]},
+                {"$set": {
+                    "display_name": new_display_name,
+                    "report_name": employee.get("report_name") or employee.get("name"),
+                    "name": new_display_name,  # Also update main name for display
+                    "updated_at": datetime.now(timezone.utc)
+                }}
+            )
+            updated.append({"old": old_name, "new": new_display_name})
+        else:
+            not_found.append(old_name)
+    
+    return {
+        "success": True,
+        "updated": updated,
+        "not_found": not_found,
+        "message": f"Updated {len(updated)} employee names"
+    }
 
 
 @api_router.put("/v2/employees/{employee_id}/cv-stats")
