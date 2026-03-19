@@ -14,6 +14,8 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 // Default values for new employee form
 const emptyEmployee = {
   name: "",
+  display_name: "",  // Custom name for dashboards/reports
+  report_name: "",   // Original POS name for matching
   job_title: "server",
   aliases: "",  // Comma-separated aliases
   guests: 0,
@@ -108,6 +110,8 @@ export default function EmployeeList() {
     setEditingEmployee(employee);
     setFormData({
       name: employee.name || "",
+      display_name: employee.display_name || employee.name || "",
+      report_name: employee.report_name || "",
       job_title: employee.job_title || "server",
       aliases: (employee.aliases || []).join(", "),  // Convert array to comma-separated string
       guests: employee.guests || 0,
@@ -135,7 +139,7 @@ export default function EmployeeList() {
   // Save employee (create or update)
   const saveEmployee = async () => {
     if (!formData.name.trim()) {
-      toast.error("Employee name is required");
+      toast.error("Display name is required");
       return;
     }
     
@@ -144,8 +148,15 @@ export default function EmployeeList() {
       ? formData.aliases.split(",").map(a => a.trim()).filter(a => a)
       : [];
     
+    // Add report_name to aliases for better matching
+    const reportName = formData.report_name?.trim();
+    if (reportName && !aliasesArray.includes(reportName)) {
+      aliasesArray.push(reportName);
+    }
+    
     const dataToSave = {
       ...formData,
+      display_name: formData.name,  // Display name = main name field
       aliases: aliasesArray
     };
     
@@ -822,13 +833,14 @@ export default function EmployeeList() {
                   <h3 className="font-semibold text-slate-200 mb-3">Basic Information</h3>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1">Name *</label>
+                      <label className="block text-sm font-medium text-slate-300 mb-1">Display Name *</label>
                       <Input
                         value={formData.name}
                         onChange={(e) => handleFormChange('name', e.target.value)}
-                        placeholder="Employee name"
+                        placeholder="Name shown in dashboards"
                         className="w-full"
                       />
+                      <p className="text-xs text-slate-500 mt-1">Shown in reports & leaderboards</p>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-300 mb-1">Job Title</label>
@@ -842,16 +854,26 @@ export default function EmployeeList() {
                         <option value="trainer">Trainer</option>
                       </select>
                     </div>
-                    <div className="md:col-span-2">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-1">Report Name (POS)</label>
+                      <Input
+                        value={formData.report_name}
+                        onChange={(e) => handleFormChange('report_name', e.target.value)}
+                        placeholder="Name in POS system"
+                        className="w-full bg-slate-800"
+                      />
+                      <p className="text-xs text-slate-500 mt-1">Used for matching uploads</p>
+                    </div>
+                    <div>
                       <label className="block text-sm font-medium text-slate-300 mb-1">Aliases (Nicknames)</label>
                       <Input
                         type="text"
                         value={formData.aliases}
                         onChange={(e) => handleFormChange('aliases', e.target.value)}
-                        placeholder="Trey, T.Q., Tre (comma-separated)"
+                        placeholder="Trey, T.Q. (comma-separated)"
                         className="w-full"
                       />
-                      <p className="text-xs text-slate-500 mt-1">Used for matching names in reviews & CV data</p>
+                      <p className="text-xs text-slate-500 mt-1">Additional names for matching</p>
                     </div>
                   </div>
                 </div>
