@@ -1276,6 +1276,7 @@ async def unified_pos_upload(
     
     Use this for ALL POS data uploads. Dashboard and Snapshots will stay in sync.
     """
+    import re
     quarter = quarter.upper()
     
     # Check quarter settings
