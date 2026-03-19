@@ -7558,6 +7558,28 @@ async def upload_server_performance_csv(
         records_processed = []
         employees_updated = 0
         
+        # Pre-fetch all employees for this quarter (optimization - fetch once, not per row)
+        from name_matcher import find_best_match
+        
+        all_employees = await db.employees_v2.find({
+            "quarter": quarter.upper(),
+            "year": year
+        }).to_list(length=None)
+        
+        # Convert to list of dicts for the matcher
+        employee_dicts = []
+        for emp in all_employees:
+            employee_dicts.append({
+                'id': str(emp.get('_id')),
+                'name': emp.get('name', ''),
+                'display_name': emp.get('display_name', ''),
+                'report_name': emp.get('report_name', ''),
+                'aliases': emp.get('aliases', []),
+                '_doc': emp  # Keep original doc for update
+            })
+        
+        logging.info(f"CV Upload: Loaded {len(employee_dicts)} employees for matching")
+        
         for _, row in df.iterrows():
             server_name = str(row.get('Name', '')).strip()
             if not server_name or server_name == 'nan' or 'Manager App' in server_name:
@@ -7603,15 +7625,14 @@ async def upload_server_performance_csv(
             # Total CV Score = NPS pts + Promoter/Detractor bonus
             cv_score = round(nps_pts + promo_detr_bonus, 2)
             
-            # Find matching employee in database
-            employee = await db.employees_v2.find_one({
-                "quarter": quarter.upper(),
-                "year": year,
-                "$or": [
-                    {"name": {"$regex": f"^{server_name}$", "$options": "i"}},
-                    {"name": {"$regex": f"^{server_name.split()[0]}", "$options": "i"}} if ' ' in server_name else {"name": server_name}
-                ]
-            })
+            # Use intelligent matching with aliases support
+            matched_emp, match_score, match_reason = find_best_match(
+                server_name, 
+                employee_dicts, 
+                threshold=70.0  # Lower threshold for CV names
+            )
+            
+            employee = matched_emp['_doc'] if matched_emp else None
             
             record_status = "no_match"
             
@@ -7656,6 +7677,8 @@ async def upload_server_performance_csv(
                 "passives": passives,
                 "promo_bonus": promo_detr_bonus,
                 "matched_employee": employee.get("name") if employee else None,
+                "match_score": match_score if matched_emp else 0,
+                "match_reason": match_reason,
                 "status": record_status
             })
         
