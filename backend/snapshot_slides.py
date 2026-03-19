@@ -331,8 +331,15 @@ def generate_snapshot_slide(
         cv_score = float(emp.get("cv_score", 0) or 0)
         emp["cv_score"] = cv_score
         
-        # RT Bonus: mentions × 0.5, capped at 15 (stored as review_tracker_bonus or review_bonus)
+        # RT Bonus: Check multiple possible field names
+        # - review_tracker_bonus: pre-calculated bonus
+        # - review_bonus: alternative name
+        # - rt_mentions: raw count (needs to be multiplied by 0.5)
         rt_bonus = float(emp.get("review_tracker_bonus", 0) or emp.get("review_bonus", 0) or 0)
+        if rt_bonus == 0:
+            # Calculate from mentions if bonus field not present
+            rt_mentions = float(emp.get("rt_mentions", 0) or emp.get("review_mentions", 0) or 0)
+            rt_bonus = rt_mentions * 0.5
         rt_bonus = min(rt_bonus, 15)  # Ensure cap
         emp["rt_bonus"] = rt_bonus
         
