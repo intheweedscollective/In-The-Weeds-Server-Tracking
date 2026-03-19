@@ -71,7 +71,7 @@ export default function DataUploads() {
       if (response.ok && data.success) {
         setPosResult({ success: true, data });
         toast.success(`Updated ${data.employees_updated || 0} employees, created ${data.employees_created || 0} new`, {
-          description: "Dashboard and Snapshots are now synced"
+          description: "Dashboard updated. Create a Snapshot to capture this data."
         });
         fetchDataStatus();
       } else {
@@ -134,8 +134,8 @@ export default function DataUploads() {
       
       if (response.ok && data.success) {
         setRtResult({ success: true, data });
-        toast.success(`Updated ${data.summary?.employees_updated || 0} employees with RT data`, {
-          description: "Dashboard and Snapshots are now synced"
+        toast.success(`Updated ${data.employees_updated || 0} employees with RT data`, {
+          description: "Dashboard updated. Create a Snapshot to capture this data."
         });
         fetchDataStatus();
       } else {
@@ -350,13 +350,13 @@ export default function DataUploads() {
         </div>
 
         {/* Upload Order Guide - Compact on mobile */}
-        <div className="mb-4 md:mb-6 p-3 md:p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl">
+        <div className="mb-4 md:mb-6 p-3 md:p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
           <div className="flex items-start gap-2 md:gap-3">
-            <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-emerald-400 mt-0.5 shrink-0" />
+            <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-blue-400 mt-0.5 shrink-0" />
             <div>
-              <h4 className="font-medium text-emerald-400 text-sm mb-1">Single Source of Truth</h4>
+              <h4 className="font-medium text-blue-400 text-sm mb-1">How It Works</h4>
               <p className="text-xs md:text-sm text-slate-300 mb-2">
-                All uploads update the <strong>Dashboard</strong> and <strong>Snapshots</strong> automatically.
+                Uploads update the <strong>Dashboard</strong> immediately. Create a <strong>Snapshot</strong> to capture point-in-time data for reports.
               </p>
               <ol className="text-xs md:text-sm text-slate-400 space-y-0.5 list-decimal list-inside">
                 <li><strong className="text-white">POS</strong> - Employee metrics (PPA, LBW, LSC, Glass)</li>

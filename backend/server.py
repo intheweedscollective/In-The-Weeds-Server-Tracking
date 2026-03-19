@@ -1531,8 +1531,8 @@ async def unified_pos_upload(
         # Recalculate peer ranks
         await recalculate_peer_ranks(quarter, year)
         
-        # Auto-sync to most recent snapshot (or create one)
-        await sync_employees_to_most_recent_snapshot(quarter, year)
+        # NOTE: Snapshots are NOT auto-updated. They capture point-in-time data.
+        # To update a snapshot, create a new one from the Snapshots page.
         
         return {
             "success": True,
@@ -1543,7 +1543,7 @@ async def unified_pos_upload(
             "parse_method": parse_method,
             "quarter": quarter,
             "year": year,
-            "note": "Dashboard and Snapshots are now synced",
+            "note": "Dashboard updated. Create a new Snapshot to capture this data.",
             "matches": match_log[:10] if match_log else []  # Return first 10 matches for transparency
         }
         
@@ -4604,7 +4604,7 @@ async def parse_clean_pos_preview(file: UploadFile = File(...)):
 
 @api_router.post("/v2/snapshots")
 async def create_snapshot(data: SnapshotCreate):
-    """Create a new empty snapshot for the given date."""
+    """Create a new snapshot capturing the current state of employee data."""
     snapshot_id = str(uuid.uuid4())
     
     # Get benchmarks from quarter settings
@@ -4622,20 +4622,64 @@ async def create_snapshot(data: SnapshotCreate):
         "total_benchmark": settings.get("total_benchmark", 100) if settings else 100,
     }
     
+    # Pull current employee data from employees_v2 (point-in-time capture)
+    current_employees = await db.employees_v2.find(
+        {"quarter": data.quarter.upper(), "year": data.year},
+        {"_id": 0}
+    ).to_list(500)
+    
+    # Format employees for snapshot storage
+    snapshot_employees = []
+    for emp in current_employees:
+        snapshot_employees.append({
+            "id": emp.get("id"),
+            "name": emp.get("display_name") or emp.get("name"),
+            "report_name": emp.get("report_name"),
+            "job_title": emp.get("job_title", "Server"),
+            "guests": emp.get("guests", 0),
+            "net_sales": emp.get("net_sales", 0),
+            "ppa": emp.get("ppa", 0),
+            "lbw": emp.get("lbw", 0),
+            "lbw_per_guest": emp.get("lbw_per_guest", 0),
+            "glassware_sales": emp.get("glassware_sales", 0),
+            "glassware_per_guest": emp.get("glassware_per_guest", 0),
+            "lsc_count": emp.get("lsc_count", 0),
+            "guests_per_lsc": emp.get("guests_per_lsc"),
+            "nps_score": emp.get("nps_score", 0),
+            "cv_score": emp.get("cv_score", 0),
+            "cv_promoters": emp.get("cv_promoters", 0),
+            "cv_detractors": emp.get("cv_detractors", 0),
+            "rt_mentions": emp.get("rt_mentions", 0),
+            "score_ppa": emp.get("score_ppa", 0),
+            "score_lbw": emp.get("score_lbw", 0),
+            "score_glass": emp.get("score_glass", 0),
+            "score_lsc": emp.get("score_lsc", 0),
+            "weighted_score": emp.get("weighted_score", 0),
+            "total_score": emp.get("total_score", 0),
+            "rank": emp.get("rank"),
+            "peer_rank": emp.get("peer_rank"),
+        })
+    
     snapshot = {
         "id": snapshot_id,
         "snapshot_date": data.snapshot_date,
         "title": data.title,
         "year": data.year,
         "quarter": data.quarter.upper(),
-        "employees": [],
+        "employees": snapshot_employees,
         "benchmarks": benchmarks,
-        "employee_count": 0,
+        "employee_count": len(snapshot_employees),
         "created_at": datetime.now(timezone.utc).isoformat(),
+        "data_source": "employees_v2",
+        "captured_at": datetime.now(timezone.utc).isoformat(),
     }
     
     await db.snapshots.insert_one(snapshot)
-    return {"id": snapshot_id, "message": "Snapshot created successfully"}
+    return {
+        "id": snapshot_id, 
+        "message": f"Snapshot created with {len(snapshot_employees)} employees",
+        "employee_count": len(snapshot_employees)
+    }
 
 
 @api_router.post("/v2/snapshots/{snapshot_id}/upload")
@@ -6791,16 +6835,14 @@ async def upload_rt_data(
             # Recalculate ranks
             await recalculate_peer_ranks(quarter.upper(), year)
         
-        # Sync updated employees to the most recent snapshot
-        snapshot_id = await sync_employees_to_most_recent_snapshot(quarter.upper(), year)
+        # NOTE: Snapshots are NOT auto-updated. Create a new snapshot to capture this data.
         
         return {
             "success": True,
             "employees_updated": updated_count,
             "matched": matched,
             "unmatched": unmatched if unmatched else None,
-            "snapshot_synced": snapshot_id,
-            "message": f"Updated {updated_count} employee mention counts and synced to snapshot"
+            "message": f"Updated {updated_count} employee mention counts. Create a new Snapshot to capture this data."
         }
         
     except Exception as e:
@@ -7638,12 +7680,11 @@ async def upload_server_performance_csv(
             upsert=True
         )
         
-        # Sync updated employees to the most recent snapshot
-        snapshot_id = await sync_employees_to_most_recent_snapshot(quarter, year)
+        # NOTE: Snapshots are NOT auto-updated. Create a new snapshot to capture this data.
         
         return {
             "success": True,
-            "message": f"Processed {len(records_processed)} records, updated {employees_updated} employees and synced to snapshot",
+            "message": f"Processed {len(records_processed)} records, updated {employees_updated} employees. Create a new Snapshot to capture this data.",
             "summary": {
                 "total_records": len(records_processed),
                 "employees_updated": employees_updated,
@@ -7654,8 +7695,7 @@ async def upload_server_performance_csv(
             },
             "records": records_processed,
             "quarter": quarter,
-            "year": year,
-            "snapshot_synced": snapshot_id
+            "year": year
         }
         
     except HTTPException:
