@@ -409,6 +409,69 @@ async def _sync_snapshot_to_employees_v2(snapshot_id: str, quarter: str, year: i
     return updated_count
 
 
+@api_router.post("/v2/snapshots/{snapshot_id}/sync-from-employees")
+async def sync_snapshot_from_employees(snapshot_id: str, quarter: str = "Q1", year: int = 2026):
+    """
+    Re-sync a specific snapshot with fresh data from employees_v2.
+    This updates the snapshot with current CV scores, RT data, and recalculates sorting.
+    """
+    # Get all current employees
+    employees = await db.employees_v2.find(
+        {"quarter": quarter.upper(), "year": year},
+        {"_id": 0}
+    ).to_list(500)
+    
+    if not employees:
+        raise HTTPException(status_code=404, detail=f"No employees found for {quarter} {year}")
+    
+    # Sort by tier, then by score
+    tier_order = {"Trainer": 0, "Bartender": 1, "A-Server": 2, "B-Server": 3, "C-Server": 4}
+    employees.sort(key=lambda x: (
+        tier_order.get(x.get('tier_label', 'C-Server'), 4),
+        -(x.get('total_score') or 0)
+    ))
+    
+    # Serialize dates
+    snapshot_employees = []
+    for emp in employees:
+        emp_copy = emp.copy()
+        if isinstance(emp_copy.get('created_at'), datetime):
+            emp_copy['created_at'] = emp_copy['created_at'].isoformat()
+        snapshot_employees.append(emp_copy)
+    
+    # Update snapshot
+    result = await db.snapshots.update_one(
+        {"id": snapshot_id},
+        {
+            "$set": {
+                "employees": snapshot_employees,
+                "employee_count": len(snapshot_employees),
+                "last_synced_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail=f"Snapshot {snapshot_id} not found")
+    
+    # Return summary with sort order verification
+    return {
+        "status": "synced",
+        "snapshot_id": snapshot_id,
+        "employee_count": len(snapshot_employees),
+        "sort_order_preview": [
+            {
+                "rank": i+1,
+                "name": emp.get("name"),
+                "tier": emp.get("tier_label"),
+                "score": emp.get("total_score"),
+                "cv_score": emp.get("cv_score", 0)
+            }
+            for i, emp in enumerate(snapshot_employees[:10])
+        ]
+    }
+
+
 
 
 # ============================================================================
