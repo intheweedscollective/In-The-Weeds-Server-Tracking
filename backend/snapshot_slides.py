@@ -343,11 +343,12 @@ def generate_snapshot_slide(
         rt_bonus = min(rt_bonus, 15)  # Ensure cap
         emp["rt_bonus"] = rt_bonus
         
-        # Metric Bonus: Check if pre-calculated, otherwise calculate from scores
+        # Metric Bonus: Use stored value if present, otherwise calculate from scores
         # Bonus is earned for scores exceeding 100%: 0 at 100%, up to 5 pts at 120%
-        total_metric_bonus = float(emp.get("total_metric_bonus", 0) or 0)
-        if total_metric_bonus == 0:
-            # Calculate from individual scores
+        if "total_metric_bonus" in emp and emp.get("total_metric_bonus") is not None:
+            total_metric_bonus = float(emp.get("total_metric_bonus", 0))
+        else:
+            # Calculate from individual scores only if field is missing
             def calc_bonus(score):
                 if score is None or score <= 100:
                     return 0
