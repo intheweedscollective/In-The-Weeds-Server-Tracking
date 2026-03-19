@@ -331,6 +331,9 @@ def generate_snapshot_slide(
         cv_score = float(emp.get("cv_score", 0) or 0)
         emp["cv_score"] = cv_score
         
+        # Debug log CV score
+        logging.info(f"CV Score for {emp.get('name')}: stored={emp.get('cv_score')} -> using={cv_score}")
+        
         # RT Bonus: Check multiple possible field names
         # - review_tracker_bonus: pre-calculated bonus
         # - review_bonus: alternative name
