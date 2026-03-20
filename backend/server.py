@@ -793,6 +793,40 @@ async def delete_all_employees(quarter: str = "Q1", year: int = 2026, confirm: s
     }
 
 
+@api_router.post("/v2/admin/bulk-import-employees")
+async def bulk_import_employees(employees: List[dict], quarter: str = "Q1", year: int = 2026):
+    """
+    Bulk import employees from a JSON array.
+    Used to sync data between preview and production.
+    """
+    if not employees:
+        raise HTTPException(status_code=400, detail="No employees provided")
+    
+    imported = 0
+    errors = []
+    
+    for emp in employees:
+        try:
+            # Remove MongoDB _id if present
+            emp.pop('_id', None)
+            emp.pop('id', None)
+            
+            # Ensure quarter/year match
+            emp['quarter'] = quarter.upper()
+            emp['year'] = year
+            
+            await db.employees_v2.insert_one(emp)
+            imported += 1
+        except Exception as e:
+            errors.append(f"{emp.get('name', 'Unknown')}: {str(e)}")
+    
+    return {
+        "status": "success",
+        "imported": imported,
+        "errors": errors if errors else None
+    }
+
+
 
 
 # ============================================================================
