@@ -811,6 +811,9 @@ async def bulk_import_employees(employees: List[dict], quarter: str = "Q1", year
             emp.pop('_id', None)
             emp.pop('id', None)
             
+            # Generate new ID
+            emp['id'] = str(uuid.uuid4())
+            
             # Ensure quarter/year match
             emp['quarter'] = quarter.upper()
             emp['year'] = year
@@ -825,6 +828,37 @@ async def bulk_import_employees(employees: List[dict], quarter: str = "Q1", year
         "imported": imported,
         "errors": errors if errors else None
     }
+
+
+@api_router.post("/v2/admin/import-employee-raw")
+async def import_employee_raw(employee: dict, quarter: str = "Q1", year: int = 2026):
+    """
+    Import a single employee with ALL fields preserved (no recalculation).
+    Used to sync exact data between preview and production.
+    """
+    try:
+        # Remove MongoDB _id if present
+        employee.pop('_id', None)
+        employee.pop('id', None)
+        
+        # Generate new ID
+        employee['id'] = str(uuid.uuid4())
+        
+        # Ensure quarter/year match
+        employee['quarter'] = quarter.upper()
+        employee['year'] = year
+        
+        await db.employees_v2.insert_one(employee)
+        
+        return {
+            "status": "success",
+            "name": employee.get('name'),
+            "total_score": employee.get('total_score'),
+            "rt_mentions": employee.get('rt_mentions'),
+            "cv_score": employee.get('cv_score')
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 
