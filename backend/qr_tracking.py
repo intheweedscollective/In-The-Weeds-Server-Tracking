@@ -95,6 +95,68 @@ async def delete_qr_employee(employee_id: str):
     result = await _db.qr_employees.delete_one({"id": employee_id})
     return {"deleted": result.deleted_count > 0}
 
+@qr_router.post("/employees/cleanup")
+async def cleanup_qr_employees():
+    """
+    Clean up invalid QR employees:
+    - Remove entries like 'TOTAL', 'OVERALL'
+    - Remove OCR error duplicates
+    - Keep only valid employee names
+    """
+    employees = await _db.qr_employees.find({}, {"_id": 0}).to_list(500)
+    
+    # Invalid names to delete
+    invalid_patterns = ['total', 'overall', 'total / overall']
+    
+    # OCR error patterns
+    ocr_errors = ['planoarte', 'dhaka!', 'crandah', 'crandah']
+    
+    to_delete = []
+    seen_normalized = set()
+    
+    for emp in employees:
+        name = emp.get('name', '').strip()
+        name_lower = name.lower()
+        
+        # Check if invalid
+        if name_lower in invalid_patterns:
+            to_delete.append({'id': emp['id'], 'name': name, 'reason': 'Invalid name'})
+            continue
+        
+        # Check for OCR errors
+        has_error = False
+        for error in ocr_errors:
+            if error in name_lower:
+                to_delete.append({'id': emp['id'], 'name': name, 'reason': 'OCR error'})
+                has_error = True
+                break
+        if has_error:
+            continue
+        
+        # Normalize name for duplicate check
+        normalized = name_lower.replace('—', '-').replace('–', '-').replace('é', 'e')
+        
+        if normalized in seen_normalized:
+            to_delete.append({'id': emp['id'], 'name': name, 'reason': 'Duplicate'})
+            continue
+        
+        seen_normalized.add(normalized)
+    
+    # Delete invalid entries
+    deleted_count = 0
+    for item in to_delete:
+        result = await _db.qr_employees.delete_one({"id": item['id']})
+        if result.deleted_count > 0:
+            deleted_count += 1
+    
+    remaining = await _db.qr_employees.count_documents({})
+    
+    return {
+        "deleted_count": deleted_count,
+        "deleted_items": to_delete,
+        "remaining_count": remaining
+    }
+
 @qr_router.post("/employees/{employee_id}/reset")
 async def reset_qr_employee_clicks(employee_id: str):
     """Reset an employee's click counts"""
