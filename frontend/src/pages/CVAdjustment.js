@@ -365,80 +365,96 @@ export default function CVAdjustment() {
                   {filteredItems.map(item => (
                     <div 
                       key={item.id}
-                      className={`border rounded-lg p-4 transition-all ${
+                      className={`border rounded-lg overflow-hidden transition-all ${
                         item.excluded 
-                          ? 'bg-slate-100 border-slate-300 opacity-60' 
+                          ? 'bg-slate-50 border-slate-300' 
                           : item.auto_flagged_non_server 
                             ? 'bg-amber-50 border-amber-200'
                             : 'bg-white border-slate-200'
                       }`}
                       data-testid={`feedback-item-${item.id}`}
                     >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start gap-3 flex-1">
+                      {/* Header Row */}
+                      <div className={`px-3 py-2 border-b ${
+                        item.excluded ? 'border-slate-200 bg-slate-100' : item.auto_flagged_non_server ? 'border-amber-200 bg-amber-100/50' : 'border-slate-100 bg-slate-50'
+                      }`}>
+                        {/* Top line: Checkbox, Icon, Rating, Name, Date */}
+                        <div className="flex items-center gap-2">
                           <Checkbox
                             checked={item.excluded}
                             onCheckedChange={() => handleToggleExclusion(item.id, item.excluded)}
                             data-testid={`exclude-checkbox-${item.id}`}
+                            className="h-4 w-4 shrink-0"
                           />
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              {getCategoryIcon(item.nps_category)}
-                              <Badge className={getRatingColor(item.rating)}>
-                                Rating: {item.rating}
+                          <div className="shrink-0">{getCategoryIcon(item.nps_category)}</div>
+                          <Badge className={`${getRatingColor(item.rating)} text-xs px-1.5 py-0 shrink-0`}>
+                            Rating: {item.rating}
+                          </Badge>
+                          <span className="text-sm font-medium text-slate-700 truncate flex-1">
+                            {item.customer_name}
+                          </span>
+                          <span className="text-xs text-slate-500 shrink-0">
+                            {item.response_date}
+                          </span>
+                        </div>
+                        
+                        {/* Status badges - second line if present */}
+                        {(item.auto_flagged_non_server || item.excluded) && (
+                          <div className="flex items-center gap-1.5 mt-1.5 ml-6">
+                            {item.auto_flagged_non_server && (
+                              <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-300 text-xs px-1.5 py-0">
+                                <AlertTriangle className="w-3 h-3 mr-0.5" />
+                                Auto-flagged
                               </Badge>
-                              <span className="text-sm text-slate-600">
-                                {item.customer_name} • {item.response_date}
-                              </span>
-                              {item.auto_flagged_non_server && (
-                                <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300">
-                                  <AlertTriangle className="w-3 h-3 mr-1" />
-                                  Auto-flagged
-                                </Badge>
-                              )}
-                              {item.excluded && (
-                                <Badge variant="outline" className="bg-slate-200 text-slate-700">
-                                  Excluded
-                                </Badge>
-                              )}
-                            </div>
-                            
-                            {/* Comment preview or full */}
-                            {item.comment && (
-                              <div className="mt-2">
-                                <p className={`text-sm text-slate-700 ${
-                                  expandedItems.has(item.id) ? '' : 'line-clamp-2'
-                                }`}>
-                                  {item.comment}
-                                </p>
-                                {item.comment.length > 150 && (
-                                  <button
-                                    className="text-sm text-blue-600 hover:text-blue-800 mt-1 flex items-center"
-                                    onClick={() => toggleExpand(item.id)}
-                                  >
-                                    {expandedItems.has(item.id) ? (
-                                      <><ChevronUp className="w-4 h-4 mr-1" /> Show less</>
-                                    ) : (
-                                      <><ChevronDown className="w-4 h-4 mr-1" /> Show more</>
-                                    )}
-                                  </button>
-                                )}
-                              </div>
                             )}
-
-                            {/* Auto-flag reasons */}
-                            {item.auto_flagged_non_server && item.auto_flag_reasons?.length > 0 && (
-                              <div className="mt-2 flex flex-wrap gap-1">
-                                {item.auto_flag_reasons.map((reason, idx) => (
-                                  <Badge key={idx} variant="outline" className="text-xs bg-amber-50">
-                                    {reason}
-                                  </Badge>
-                                ))}
-                              </div>
+                            {item.excluded && (
+                              <Badge variant="outline" className="bg-slate-200 text-slate-600 border-slate-300 text-xs px-1.5 py-0">
+                                Excluded
+                              </Badge>
                             )}
                           </div>
-                        </div>
+                        )}
                       </div>
+                      
+                      {/* Content Row - Comment */}
+                      <div className="px-3 py-2.5">
+                        {item.comment ? (
+                          <div>
+                            <p className={`text-sm text-slate-700 leading-relaxed ${
+                              expandedItems.has(item.id) ? '' : 'line-clamp-2'
+                            } ${item.excluded ? 'opacity-60' : ''}`}>
+                              {item.comment}
+                            </p>
+                            {item.comment.length > 100 && (
+                              <button
+                                className="text-xs text-blue-600 hover:text-blue-800 mt-1.5 flex items-center font-medium"
+                                onClick={() => toggleExpand(item.id)}
+                              >
+                                {expandedItems.has(item.id) ? (
+                                  <><ChevronUp className="w-3.5 h-3.5 mr-0.5" /> Show less</>
+                                ) : (
+                                  <><ChevronDown className="w-3.5 h-3.5 mr-0.5" /> Show more</>
+                                )}
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-slate-400 italic">No comment provided</p>
+                        )}
+                      </div>
+
+                      {/* Footer Row - Auto-flag reasons (if any) */}
+                      {item.auto_flagged_non_server && item.auto_flag_reasons?.length > 0 && (
+                        <div className={`px-3 py-2 border-t ${item.excluded ? 'border-slate-200 bg-slate-100/50' : 'border-amber-200 bg-amber-50/50'}`}>
+                          <div className="flex flex-wrap gap-1">
+                            {item.auto_flag_reasons.map((reason, idx) => (
+                              <Badge key={idx} variant="outline" className="text-xs bg-white/80 text-slate-600 border-slate-300 px-1.5 py-0">
+                                {reason}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
 
