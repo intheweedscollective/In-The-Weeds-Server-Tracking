@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Upload, FileSpreadsheet, Download, CheckCircle, XCircle, AlertTriangle, RefreshCw, Users, MessageSquare, Star, FileText, Eye, Import } from "lucide-react";
+import { Upload, FileSpreadsheet, Download, CheckCircle, XCircle, AlertTriangle, RefreshCw, Users, MessageSquare, Star, FileText, Eye, Import, Filter, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { Button } from "../components/ui/button";
@@ -556,18 +556,109 @@ export default function DataUploads() {
           </div>
 
           {/* CV/NPS Upload */}
-          <UploadCard
-            title="2. Customer Voice / NPS"
-            description="Server Performance Report from Loyalty Voice"
-            icon={MessageSquare}
-            file={cvFile}
-            setFile={setCvFile}
-            onUpload={handleCvUpload}
-            uploading={cvUploading}
-            result={cvResult}
-            acceptTypes=".xlsx,.xls,.csv"
-            colorClass="green"
-          />
+          <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 overflow-hidden">
+            <div className="p-4 md:p-6 border-b border-slate-700/50">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-green-500/20 rounded-lg">
+                    <MessageSquare className="w-5 h-5 text-green-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-white text-sm md:text-base">2. Customer Voice / NPS</h3>
+                    <p className="text-slate-400 text-xs md:text-sm">Server Performance Report from Loyalty Voice</p>
+                  </div>
+                </div>
+                <Button
+                  onClick={() => window.location.href = '/cv-adjustment'}
+                  variant="outline"
+                  size="sm"
+                  className="border-green-500/50 text-green-400 hover:bg-green-500/10"
+                >
+                  <Filter className="w-4 h-4 mr-2" />
+                  NPS Adjustment Tool
+                </Button>
+              </div>
+            </div>
+            
+            <div className="p-4 md:p-6 space-y-4">
+              {/* Quick Upload */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+                <label className="flex-1">
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    onChange={(e) => setCvFile(e.target.files?.[0] || null)}
+                    className="hidden"
+                  />
+                  <div className={`flex items-center justify-center gap-2 p-3 md:p-4 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${
+                    cvFile 
+                      ? 'border-green-500/50 bg-green-500/10' 
+                      : 'border-slate-600 hover:border-slate-500 hover:bg-slate-800/50'
+                  }`}>
+                    {cvFile ? (
+                      <>
+                        <FileSpreadsheet className="w-5 h-5 text-green-400 shrink-0" />
+                        <span className="text-green-400 font-medium truncate text-sm">{cvFile.name}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-5 h-5 text-slate-400" />
+                        <span className="text-slate-400 text-sm">Quick upload (no adjustment)</span>
+                      </>
+                    )}
+                  </div>
+                </label>
+                <Button
+                  onClick={handleCvUpload}
+                  disabled={!cvFile || cvUploading}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  {cvUploading ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4 mr-2" />
+                      Upload
+                    </>
+                  )}
+                </Button>
+              </div>
+              
+              {/* Result Display */}
+              {cvResult && (
+                <div className={`p-3 md:p-4 rounded-lg ${cvResult.success ? 'bg-green-500/10 border border-green-500/30' : 'bg-red-500/10 border border-red-500/30'}`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    {cvResult.success ? (
+                      <CheckCircle className="w-4 h-4 text-green-400" />
+                    ) : (
+                      <XCircle className="w-4 h-4 text-red-400" />
+                    )}
+                    <span className={`text-sm ${cvResult.success ? 'text-green-400' : 'text-red-400'}`}>
+                      {cvResult.success ? 'Upload Successful' : 'Upload Failed'}
+                    </span>
+                  </div>
+                  {cvResult.success && cvResult.data?.summary && (
+                    <div className="text-xs md:text-sm text-slate-300 space-y-1">
+                      <p>Total responses: <span className="text-white font-medium">{cvResult.data.summary.total_responses}</span></p>
+                      <p>Promoters: <span className="text-green-400 font-medium">{cvResult.data.summary.total_promoters}</span> | Detractors: <span className="text-red-400 font-medium">{cvResult.data.summary.total_detractors}</span></p>
+                    </div>
+                  )}
+                  {cvResult.error && (
+                    <p className="text-xs md:text-sm text-red-300">{cvResult.error}</p>
+                  )}
+                </div>
+              )}
+              
+              {/* Info about adjustment tool */}
+              <div className="p-3 bg-slate-900/50 rounded-lg border border-slate-700/50">
+                <p className="text-xs text-slate-400">
+                  <strong className="text-slate-300">Need to exclude non-server feedback?</strong> Use the{' '}
+                  <a href="/cv-adjustment" className="text-green-400 hover:underline">NPS Adjustment Tool</a>{' '}
+                  to review and filter out feedback about food quality, environment, or other non-server issues before calculating NPS scores.
+                </p>
+              </div>
+            </div>
+          </div>
 
           {/* ReviewTracker Upload */}
           <UploadCard
