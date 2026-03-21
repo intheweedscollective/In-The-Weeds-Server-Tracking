@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { ShieldCheck, AlertTriangle, CheckCircle, XCircle, RefreshCw, Trash2, Database, Users, Star, MessageSquare } from "lucide-react";
+import { ShieldCheck, AlertTriangle, CheckCircle, XCircle, RefreshCw, Trash2, Database, Users, Star, MessageSquare, UserMinus, Search } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { Button } from "../components/ui/button";
+import { Checkbox } from "../components/ui/checkbox";
 
 export default function DataIntegrity() {
   const [stats, setStats] = useState(null);
@@ -10,6 +11,12 @@ export default function DataIntegrity() {
   const [running, setRunning] = useState({});
   const [quarter] = useState("Q1");
   const [year] = useState(2026);
+  
+  // Employee cleanup state
+  const [cleanupData, setCleanupData] = useState(null);
+  const [cleanupLoading, setCleanupLoading] = useState(false);
+  const [selectedForDeletion, setSelectedForDeletion] = useState(new Set());
+  const [showCleanupSection, setShowCleanupSection] = useState(false);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -82,6 +89,68 @@ export default function DataIntegrity() {
       toast.error("Failed to recalculate scores");
     } finally {
       setRunning(prev => ({ ...prev, recalc: false }));
+    }
+  };
+
+  // Analyze employees for cleanup
+  const analyzeEmployees = async () => {
+    setCleanupLoading(true);
+    setShowCleanupSection(true);
+    try {
+      const response = await api.get('/v2/employees/cleanup/analyze');
+      setCleanupData(response.data);
+      // Pre-select all duplicates and test data for deletion
+      const toDelete = new Set([
+        ...response.data.potential_duplicates.map(e => e.id),
+        ...response.data.test_data.map(e => e.id)
+      ]);
+      setSelectedForDeletion(toDelete);
+    } catch (error) {
+      toast.error("Failed to analyze employees");
+    } finally {
+      setCleanupLoading(false);
+    }
+  };
+
+  // Toggle selection for deletion
+  const toggleSelection = (id) => {
+    setSelectedForDeletion(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  // Delete selected employees
+  const deleteSelected = async () => {
+    if (selectedForDeletion.size === 0) {
+      toast.error("No employees selected for deletion");
+      return;
+    }
+    
+    if (!window.confirm(`Delete ${selectedForDeletion.size} employee(s)? This cannot be undone.`)) {
+      return;
+    }
+    
+    setRunning(prev => ({ ...prev, deleteEmployees: true }));
+    try {
+      const response = await api.post('/v2/employees/cleanup/delete', {
+        employee_ids: Array.from(selectedForDeletion)
+      });
+      
+      toast.success(`Deleted ${response.data.deleted_count} employees`);
+      setSelectedForDeletion(new Set());
+      
+      // Refresh data
+      await Promise.all([fetchStats(), analyzeEmployees()]);
+    } catch (error) {
+      toast.error("Failed to delete employees");
+    } finally {
+      setRunning(prev => ({ ...prev, deleteEmployees: false }));
     }
   };
 
@@ -247,6 +316,139 @@ export default function DataIntegrity() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Employee Cleanup Section */}
+        <div className="mt-6 bg-slate-800/50 rounded-xl border border-slate-700/50 p-4 md:p-6">
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-red-500/20 rounded-lg shrink-0">
+                <UserMinus className="w-5 h-5 text-red-400" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-white">Employee Cleanup</h3>
+                <p className="text-xs md:text-sm text-slate-400">
+                  Find and remove duplicate or test employees
+                </p>
+              </div>
+            </div>
+            
+            <Button
+              onClick={analyzeEmployees}
+              disabled={cleanupLoading}
+              variant="outline"
+              size="sm"
+              className="border-blue-500/50 text-blue-400 hover:bg-blue-500/20 shrink-0"
+            >
+              {cleanupLoading ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  <Search className="w-4 h-4 mr-1" />
+                  <span className="hidden sm:inline">Analyze</span>
+                </>
+              )}
+            </Button>
+          </div>
+          
+          {showCleanupSection && cleanupData && (
+            <div className="space-y-4">
+              {/* Summary */}
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="bg-green-500/10 rounded-lg p-2 border border-green-500/30">
+                  <div className="text-lg font-bold text-green-400">{cleanupData.valid_count}</div>
+                  <div className="text-xs text-slate-400">Valid</div>
+                </div>
+                <div className="bg-yellow-500/10 rounded-lg p-2 border border-yellow-500/30">
+                  <div className="text-lg font-bold text-yellow-400">{cleanupData.duplicate_count}</div>
+                  <div className="text-xs text-slate-400">Duplicates</div>
+                </div>
+                <div className="bg-red-500/10 rounded-lg p-2 border border-red-500/30">
+                  <div className="text-lg font-bold text-red-400">{cleanupData.test_data_count}</div>
+                  <div className="text-xs text-slate-400">Test Data</div>
+                </div>
+              </div>
+              
+              {/* Employees to delete */}
+              {(cleanupData.potential_duplicates.length > 0 || cleanupData.test_data.length > 0) && (
+                <>
+                  <div className="border-t border-slate-700/50 pt-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-sm font-medium text-white">
+                        Employees flagged for removal ({cleanupData.potential_duplicates.length + cleanupData.test_data.length})
+                      </h4>
+                      <Button
+                        onClick={deleteSelected}
+                        disabled={selectedForDeletion.size === 0 || running.deleteEmployees}
+                        size="sm"
+                        className="bg-red-600 hover:bg-red-700"
+                      >
+                        {running.deleteEmployees ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <>
+                            <Trash2 className="w-4 h-4 mr-1" />
+                            Delete Selected ({selectedForDeletion.size})
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    
+                    <div className="max-h-64 overflow-auto space-y-1">
+                      {/* Test Data */}
+                      {cleanupData.test_data.map(emp => (
+                        <div 
+                          key={emp.id}
+                          className={`flex items-center gap-3 p-2 rounded-lg ${
+                            selectedForDeletion.has(emp.id) ? 'bg-red-500/20' : 'bg-slate-700/30'
+                          }`}
+                        >
+                          <Checkbox
+                            checked={selectedForDeletion.has(emp.id)}
+                            onCheckedChange={() => toggleSelection(emp.id)}
+                            className="h-4 w-4"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm text-white truncate">{emp.name}</div>
+                            <div className="text-xs text-red-400">{emp.reason}</div>
+                          </div>
+                          <span className="text-xs text-slate-500 shrink-0">Score: {emp.score?.toFixed(1) || 0}</span>
+                        </div>
+                      ))}
+                      
+                      {/* Duplicates */}
+                      {cleanupData.potential_duplicates.map(emp => (
+                        <div 
+                          key={emp.id}
+                          className={`flex items-center gap-3 p-2 rounded-lg ${
+                            selectedForDeletion.has(emp.id) ? 'bg-yellow-500/20' : 'bg-slate-700/30'
+                          }`}
+                        >
+                          <Checkbox
+                            checked={selectedForDeletion.has(emp.id)}
+                            onCheckedChange={() => toggleSelection(emp.id)}
+                            className="h-4 w-4"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm text-white truncate">{emp.name}</div>
+                            <div className="text-xs text-yellow-400">{emp.reason}</div>
+                          </div>
+                          <span className="text-xs text-slate-500 shrink-0">Score: {emp.score?.toFixed(1) || 0}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+              
+              {cleanupData.potential_duplicates.length === 0 && cleanupData.test_data.length === 0 && (
+                <div className="text-center py-4 text-green-400 flex items-center justify-center gap-2">
+                  <CheckCircle className="w-5 h-5" />
+                  <span>All employees look valid! No cleanup needed.</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Help Text */}

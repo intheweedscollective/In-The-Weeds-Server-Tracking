@@ -4117,6 +4117,147 @@ async def delete_employee(employee_id: str):
     return {"success": True, "message": "Employee deleted"}
 
 
+
+# ==================== EMPLOYEE CLEANUP TOOL ====================
+
+class EmployeeCleanupRequest(BaseModel):
+    """Request model for employee cleanup"""
+    employee_ids: List[str] = Field(description="List of employee IDs to delete")
+
+
+@api_router.get("/v2/employees/cleanup/analyze")
+async def analyze_employees_for_cleanup():
+    """
+    Analyze employees and identify potential duplicates and test data.
+    
+    Returns:
+    - valid_employees: Employees that should be kept (full names from POS reports)
+    - potential_duplicates: First-name-only entries that may be duplicates
+    - test_data: Entries that look like test/fake data
+    """
+    all_employees = await db.employees_v2.find({}, {"_id": 0}).to_list(1000)
+    
+    # Known test name patterns
+    test_name_patterns = [
+        'alice johnson', 'bob smith', 'carol davis', 'david wilson', 
+        'emma davis', 'frank brown', 'grace lee', 'henry garcia',
+        'isabella thomas', 'jack thompson', 'jake thompson', 'liam wilson',
+        'marcus williams', 'mason anderson', 'mia chen', 'noah martinez',
+        'olivia brown', 'sofia rodriguez', 'sophia white', 'ava taylor',
+        'charlotte martin', 'ethan jackson', 'eva martinez', 'ivy chen',
+        'ryan', 'tyler johnson', 'aiden harris'
+    ]
+    
+    valid_employees = []
+    potential_duplicates = []
+    test_data = []
+    
+    # Build a map of full names for duplicate detection
+    full_names = {}
+    for emp in all_employees:
+        name = emp.get('name', '').strip()
+        name_lower = name.lower()
+        
+        # Count words in name
+        words = name.split()
+        
+        if len(words) >= 2:
+            full_names[name_lower] = emp
+    
+    for emp in all_employees:
+        name = emp.get('name', '').strip()
+        name_lower = name.lower()
+        words = name.split()
+        
+        # Check if it's test data
+        if name_lower in test_name_patterns:
+            test_data.append({
+                "id": emp.get('id'),
+                "name": name,
+                "reason": "Matches known test name pattern",
+                "guests": emp.get('guests', 0),
+                "score": emp.get('total_score', 0)
+            })
+            continue
+        
+        # Check if it's a first-name-only duplicate
+        if len(words) == 1:
+            # Look for a full name that starts with this first name
+            matching_full_name = None
+            for full_name in full_names.keys():
+                if full_name.startswith(name_lower + ' '):
+                    matching_full_name = full_names[full_name].get('name')
+                    break
+            
+            if matching_full_name:
+                potential_duplicates.append({
+                    "id": emp.get('id'),
+                    "name": name,
+                    "reason": f"Possible duplicate of '{matching_full_name}'",
+                    "guests": emp.get('guests', 0),
+                    "score": emp.get('total_score', 0)
+                })
+            else:
+                # First name only but no matching full name - still suspicious
+                potential_duplicates.append({
+                    "id": emp.get('id'),
+                    "name": name,
+                    "reason": "First name only - no matching full name found",
+                    "guests": emp.get('guests', 0),
+                    "score": emp.get('total_score', 0)
+                })
+            continue
+        
+        # Valid employee
+        valid_employees.append({
+            "id": emp.get('id'),
+            "name": name,
+            "guests": emp.get('guests', 0),
+            "score": emp.get('total_score', 0)
+        })
+    
+    return {
+        "total_employees": len(all_employees),
+        "valid_count": len(valid_employees),
+        "duplicate_count": len(potential_duplicates),
+        "test_data_count": len(test_data),
+        "valid_employees": sorted(valid_employees, key=lambda x: x['name']),
+        "potential_duplicates": sorted(potential_duplicates, key=lambda x: x['name']),
+        "test_data": sorted(test_data, key=lambda x: x['name'])
+    }
+
+
+@api_router.post("/v2/employees/cleanup/delete")
+async def delete_employees_bulk(request: EmployeeCleanupRequest):
+    """
+    Delete multiple employees by ID.
+    Use this after reviewing the analyze endpoint results.
+    """
+    if not request.employee_ids:
+        raise HTTPException(status_code=400, detail="No employee IDs provided")
+    
+    deleted_count = 0
+    errors = []
+    
+    for emp_id in request.employee_ids:
+        try:
+            result = await db.employees_v2.delete_one({"id": emp_id})
+            if result.deleted_count > 0:
+                deleted_count += 1
+            else:
+                errors.append(f"Employee {emp_id} not found")
+        except Exception as e:
+            errors.append(f"Error deleting {emp_id}: {str(e)}")
+    
+    return {
+        "success": True,
+        "deleted_count": deleted_count,
+        "requested_count": len(request.employee_ids),
+        "errors": errors if errors else None
+    }
+
+
+
 @api_router.put("/v2/employees/{employee_id}/display-name")
 async def update_employee_display_name(employee_id: str, data: dict):
     """
