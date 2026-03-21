@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Upload, FileSpreadsheet, Download, CheckCircle, XCircle, AlertTriangle, RefreshCw, Users, MessageSquare, Star } from "lucide-react";
+import { Upload, FileSpreadsheet, Download, CheckCircle, XCircle, AlertTriangle, RefreshCw, Users, MessageSquare, Star, FileText, Eye, Import } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { Button } from "../components/ui/button";
@@ -23,6 +23,13 @@ export default function DataUploads() {
   const [posResult, setPosResult] = useState(null);
   const [cvResult, setCvResult] = useState(null);
   const [rtResult, setRtResult] = useState(null);
+  
+  // Scanned PDF states
+  const [pdfFile, setPdfFile] = useState(null);
+  const [pdfParsing, setPdfParsing] = useState(false);
+  const [pdfParsedData, setPdfParsedData] = useState(null);
+  const [pdfImporting, setPdfImporting] = useState(false);
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
   
   // Current data status
   const [dataStatus, setDataStatus] = useState(null);
@@ -153,6 +160,67 @@ export default function DataUploads() {
   const downloadRtTemplate = () => {
     window.open(`${BACKEND_URL}/api/v2/rt/template`, '_blank');
     toast.success("Template download started");
+  };
+
+  // Parse scanned PDF
+  const handlePdfParse = async () => {
+    if (!pdfFile) return;
+    setPdfParsing(true);
+    setPdfParsedData(null);
+    
+    const formData = new FormData();
+    formData.append('file', pdfFile);
+    
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/v2/pos-pdf/parse`, {
+        method: 'POST',
+        body: formData
+      });
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
+        setPdfParsedData(data);
+        setShowPdfPreview(true);
+        toast.success(`Parsed ${data.employee_count} employees from PDF`);
+      } else {
+        toast.error(data.error || "PDF parsing failed");
+      }
+    } catch (error) {
+      toast.error("PDF parsing failed: " + error.message);
+    }
+    setPdfParsing(false);
+  };
+
+  // Import parsed PDF data
+  const handlePdfImport = async () => {
+    if (!pdfFile) return;
+    setPdfImporting(true);
+    
+    const formData = new FormData();
+    formData.append('file', pdfFile);
+    
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/v2/pos-pdf/import?quarter=${quarter}&year=${year}`, {
+        method: 'POST',
+        body: formData
+      });
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
+        toast.success(`Imported ${data.total_processed} employees`, {
+          description: `${data.matched} matched, ${data.created} created`
+        });
+        setPdfFile(null);
+        setPdfParsedData(null);
+        setShowPdfPreview(false);
+        fetchDataStatus();
+      } else {
+        toast.error(data.detail || "Import failed");
+      }
+    } catch (error) {
+      toast.error("Import failed: " + error.message);
+    }
+    setPdfImporting(false);
   };
 
   const UploadCard = ({ 
@@ -411,6 +479,122 @@ export default function DataUploads() {
             downloadTemplate={downloadRtTemplate}
             colorClass="yellow"
           />
+
+          {/* Scanned PDF Upload */}
+          <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 overflow-hidden">
+            <div className="p-4 md:p-6 border-b border-slate-700/50">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 bg-purple-500/20 rounded-lg">
+                  <FileText className="w-5 h-5 text-purple-400" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-white text-sm md:text-base">4. Scanned POS Report (PDF)</h3>
+                  <p className="text-slate-400 text-xs md:text-sm">Server Sales Report PDFs with automatic OCR error correction</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-4 md:p-6 space-y-4">
+              {/* File Select */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+                <label className="flex-1">
+                  <input
+                    type="file"
+                    accept=".pdf"
+                    onChange={(e) => {
+                      setPdfFile(e.target.files?.[0] || null);
+                      setPdfParsedData(null);
+                      setShowPdfPreview(false);
+                    }}
+                    className="hidden"
+                  />
+                  <div className={`flex items-center justify-center gap-2 p-3 md:p-4 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${
+                    pdfFile 
+                      ? 'border-purple-500/50 bg-purple-500/10' 
+                      : 'border-slate-600 hover:border-slate-500 hover:bg-slate-800/50'
+                  }`}>
+                    {pdfFile ? (
+                      <>
+                        <FileText className="w-5 h-5 text-purple-400 shrink-0" />
+                        <span className="text-purple-400 font-medium truncate text-sm">{pdfFile.name}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-5 h-5 text-slate-400" />
+                        <span className="text-slate-400 text-sm">Select PDF file</span>
+                      </>
+                    )}
+                  </div>
+                </label>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handlePdfParse}
+                    disabled={!pdfFile || pdfParsing}
+                    className="bg-purple-600 hover:bg-purple-700"
+                  >
+                    {pdfParsing ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Eye className="w-4 h-4 mr-2" />
+                        Preview
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Preview Table */}
+              {showPdfPreview && pdfParsedData?.employees && (
+                <div className="bg-slate-900/50 rounded-lg border border-slate-700/50 overflow-hidden">
+                  <div className="p-3 border-b border-slate-700/50 flex items-center justify-between">
+                    <span className="text-sm text-slate-300">
+                      <span className="text-white font-medium">{pdfParsedData.employee_count}</span> employees found
+                    </span>
+                    <Button
+                      onClick={handlePdfImport}
+                      disabled={pdfImporting}
+                      size="sm"
+                      className="bg-emerald-600 hover:bg-emerald-700"
+                    >
+                      {pdfImporting ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <>
+                          <Import className="w-4 h-4 mr-2" />
+                          Import All
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  <div className="max-h-80 overflow-auto">
+                    <table className="w-full text-xs md:text-sm">
+                      <thead className="bg-slate-800/50 sticky top-0">
+                        <tr className="text-slate-400">
+                          <th className="text-left px-3 py-2 font-medium">Name</th>
+                          <th className="text-right px-3 py-2 font-medium">Food</th>
+                          <th className="text-right px-3 py-2 font-medium">LBW</th>
+                          <th className="text-right px-3 py-2 font-medium">Glass</th>
+                          <th className="text-right px-3 py-2 font-medium">Guests</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-700/50">
+                        {pdfParsedData.employees.map((emp, idx) => (
+                          <tr key={idx} className="text-slate-300 hover:bg-slate-800/30">
+                            <td className="px-3 py-2 text-white">{emp.name}</td>
+                            <td className="px-3 py-2 text-right">${emp.food_sales?.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                            <td className="px-3 py-2 text-right">${emp.lbw_total?.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                            <td className="px-3 py-2 text-right">${emp.bar_glassware_sales?.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                            <td className="px-3 py-2 text-right">{emp.guest_count?.toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Post-Upload Actions */}
