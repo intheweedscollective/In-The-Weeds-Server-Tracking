@@ -1860,11 +1860,14 @@ async def import_pos_pdf_data(
             name_index = {}
             for emp in existing_employees:
                 # Index by name, report_name, and aliases
+                emp_id = emp.get('id') or emp.get('employee_id')
+                if not emp_id:
+                    continue
                 for field in ['name', 'report_name', 'display_name']:
                     if emp.get(field):
-                        name_index[emp[field].lower()] = emp['employee_id']
+                        name_index[emp[field].lower()] = emp_id
                 for alias in emp.get('aliases', []):
-                    name_index[alias.lower()] = emp['employee_id']
+                    name_index[alias.lower()] = emp_id
             
             # Process each extracted employee
             results = {
@@ -1907,15 +1910,15 @@ async def import_pos_pdf_data(
                         }
                         
                         await db.employees_v2.update_one(
-                            {"employee_id": matched_id},
+                            {"id": matched_id},
                             {"$set": update_data}
                         )
-                        results["matched"].append({"name": emp_name, "employee_id": matched_id})
+                        results["matched"].append({"name": emp_name, "id": matched_id})
                     else:
                         # Create new employee
                         new_id = str(uuid.uuid4())
                         new_employee = {
-                            "employee_id": new_id,
+                            "id": new_id,
                             "name": emp_name,
                             "display_name": emp_name,
                             "report_name": emp_name,
@@ -1935,7 +1938,7 @@ async def import_pos_pdf_data(
                             "updated_at": datetime.now(timezone.utc)
                         }
                         await db.employees_v2.insert_one(new_employee)
-                        results["created"].append({"name": emp_name, "employee_id": new_id})
+                        results["created"].append({"name": emp_name, "id": new_id})
                         
                         # Add to index for subsequent matches
                         name_index[emp_name_lower] = new_id
@@ -1943,8 +1946,8 @@ async def import_pos_pdf_data(
                 except Exception as e:
                     results["errors"].append({"name": emp_name, "error": str(e)})
             
-            # Recalculate all scores
-            await recalculate_all_employees_scores(quarter, year, settings)
+            # Recalculate all scores using the fix_all_employee_scores function
+            await fix_all_employee_scores(quarter, year)
             
             return {
                 "success": True,
