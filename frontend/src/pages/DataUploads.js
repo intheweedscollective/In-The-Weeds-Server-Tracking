@@ -437,58 +437,15 @@ export default function DataUploads() {
 
         {/* Upload Cards */}
         <div className="space-y-4 md:space-y-6">
-          {/* POS Upload */}
-          <UploadCard
-            title="1. POS Data (SSD Engine / XLSX)"
-            description="Directly updates Dashboard & Snapshots"
-            icon={FileSpreadsheet}
-            file={posFile}
-            setFile={setPosFile}
-            onUpload={handlePosUpload}
-            uploading={posUploading}
-            result={posResult}
-            acceptTypes=".xlsx,.xls,.csv"
-            colorClass="blue"
-          />
-
-          {/* CV/NPS Upload */}
-          <UploadCard
-            title="2. Customer Voice / NPS"
-            description="Server Performance Report from Loyalty Voice"
-            icon={MessageSquare}
-            file={cvFile}
-            setFile={setCvFile}
-            onUpload={handleCvUpload}
-            uploading={cvUploading}
-            result={cvResult}
-            acceptTypes=".xlsx,.xls,.csv"
-            colorClass="green"
-          />
-
-          {/* ReviewTracker Upload */}
-          <UploadCard
-            title="3. ReviewTracker"
-            description="Employee review mention counts (XLSX or CSV)"
-            icon={Star}
-            file={rtFile}
-            setFile={setRtFile}
-            onUpload={handleRtUpload}
-            uploading={rtUploading}
-            result={rtResult}
-            acceptTypes=".xlsx,.csv"
-            downloadTemplate={downloadRtTemplate}
-            colorClass="yellow"
-          />
-
-          {/* Scanned PDF Upload */}
-          <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 overflow-hidden">
+          {/* POS Scanned PDF Upload - PRIMARY */}
+          <div className="bg-slate-800/50 rounded-xl border border-blue-500/30 overflow-hidden">
             <div className="p-4 md:p-6 border-b border-slate-700/50">
               <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 bg-purple-500/20 rounded-lg">
-                  <FileText className="w-5 h-5 text-purple-400" />
+                <div className="p-2 bg-blue-500/20 rounded-lg">
+                  <FileText className="w-5 h-5 text-blue-400" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-white text-sm md:text-base">4. Scanned POS Report (PDF)</h3>
+                  <h3 className="font-semibold text-white text-sm md:text-base">1. POS Data (Scanned PDF)</h3>
                   <p className="text-slate-400 text-xs md:text-sm">Server Sales Report PDFs with automatic OCR error correction</p>
                 </div>
               </div>
@@ -510,13 +467,13 @@ export default function DataUploads() {
                   />
                   <div className={`flex items-center justify-center gap-2 p-3 md:p-4 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${
                     pdfFile 
-                      ? 'border-purple-500/50 bg-purple-500/10' 
+                      ? 'border-blue-500/50 bg-blue-500/10' 
                       : 'border-slate-600 hover:border-slate-500 hover:bg-slate-800/50'
                   }`}>
                     {pdfFile ? (
                       <>
-                        <FileText className="w-5 h-5 text-purple-400 shrink-0" />
-                        <span className="text-purple-400 font-medium truncate text-sm">{pdfFile.name}</span>
+                        <FileText className="w-5 h-5 text-blue-400 shrink-0" />
+                        <span className="text-blue-400 font-medium truncate text-sm">{pdfFile.name}</span>
                       </>
                     ) : (
                       <>
@@ -530,7 +487,7 @@ export default function DataUploads() {
                   <Button
                     onClick={handlePdfParse}
                     disabled={!pdfFile || pdfParsing}
-                    className="bg-purple-600 hover:bg-purple-700"
+                    className="bg-blue-600 hover:bg-blue-700"
                   >
                     {pdfParsing ? (
                       <RefreshCw className="w-4 h-4 animate-spin" />
@@ -574,6 +531,7 @@ export default function DataUploads() {
                           <th className="text-left px-3 py-2 font-medium">Name</th>
                           <th className="text-right px-3 py-2 font-medium">Food</th>
                           <th className="text-right px-3 py-2 font-medium">LBW</th>
+                          <th className="text-right px-3 py-2 font-medium">LSC</th>
                           <th className="text-right px-3 py-2 font-medium">Glass</th>
                           <th className="text-right px-3 py-2 font-medium">Guests</th>
                         </tr>
@@ -584,6 +542,7 @@ export default function DataUploads() {
                             <td className="px-3 py-2 text-white">{emp.name}</td>
                             <td className="px-3 py-2 text-right">${emp.food_sales?.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                             <td className="px-3 py-2 text-right">${emp.lbw_total?.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                            <td className="px-3 py-2 text-right">${emp.loyalty_sales?.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                             <td className="px-3 py-2 text-right">${emp.bar_glassware_sales?.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                             <td className="px-3 py-2 text-right">{emp.guest_count?.toLocaleString()}</td>
                           </tr>
@@ -595,6 +554,35 @@ export default function DataUploads() {
               )}
             </div>
           </div>
+
+          {/* CV/NPS Upload */}
+          <UploadCard
+            title="2. Customer Voice / NPS"
+            description="Server Performance Report from Loyalty Voice"
+            icon={MessageSquare}
+            file={cvFile}
+            setFile={setCvFile}
+            onUpload={handleCvUpload}
+            uploading={cvUploading}
+            result={cvResult}
+            acceptTypes=".xlsx,.xls,.csv"
+            colorClass="green"
+          />
+
+          {/* ReviewTracker Upload */}
+          <UploadCard
+            title="3. ReviewTracker"
+            description="Employee review mention counts (XLSX or CSV)"
+            icon={Star}
+            file={rtFile}
+            setFile={setRtFile}
+            onUpload={handleRtUpload}
+            uploading={rtUploading}
+            result={rtResult}
+            acceptTypes=".xlsx,.csv"
+            downloadTemplate={downloadRtTemplate}
+            colorClass="yellow"
+          />
         </div>
 
         {/* Post-Upload Actions */}
