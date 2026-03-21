@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
-import { ShieldCheck, AlertTriangle, CheckCircle, XCircle, RefreshCw, Trash2, Database, Users, Star, MessageSquare, UserMinus, Search } from "lucide-react";
+import { ShieldCheck, AlertTriangle, CheckCircle, XCircle, RefreshCw, Trash2, Database, Users, Star, MessageSquare, UserMinus, Search, Download, Upload } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { Button } from "../components/ui/button";
 import { Checkbox } from "../components/ui/checkbox";
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 export default function DataIntegrity() {
   const [stats, setStats] = useState(null);
@@ -17,6 +19,10 @@ export default function DataIntegrity() {
   const [cleanupLoading, setCleanupLoading] = useState(false);
   const [selectedForDeletion, setSelectedForDeletion] = useState(new Set());
   const [showCleanupSection, setShowCleanupSection] = useState(false);
+  
+  // Import state
+  const [importFile, setImportFile] = useState(null);
+  const [importing, setImporting] = useState(false);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -151,6 +157,53 @@ export default function DataIntegrity() {
       toast.error("Failed to delete employees");
     } finally {
       setRunning(prev => ({ ...prev, deleteEmployees: false }));
+    }
+  };
+
+  // Export data
+  const exportData = async () => {
+    setRunning(prev => ({ ...prev, export: true }));
+    try {
+      const response = await api.get(`/v2/data/export?quarter=${quarter}&year=${year}`);
+      const data = response.data;
+      
+      // Download as JSON file
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `employee_data_${quarter}_${year}_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      toast.success(`Exported ${data.employee_count} employees`);
+    } catch (error) {
+      toast.error("Failed to export data");
+    } finally {
+      setRunning(prev => ({ ...prev, export: false }));
+    }
+  };
+
+  // Import data
+  const importData = async () => {
+    if (!importFile) return;
+    
+    setImporting(true);
+    try {
+      const text = await importFile.text();
+      const data = JSON.parse(text);
+      
+      const response = await api.post('/v2/data/import', data);
+      
+      toast.success(`Imported ${response.data.employees_imported} employees, ${response.data.qr_employees_imported} QR employees`);
+      setImportFile(null);
+      fetchStats();
+    } catch (error) {
+      toast.error("Failed to import data: " + (error.message || "Invalid file"));
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -449,6 +502,92 @@ export default function DataIntegrity() {
               )}
             </div>
           )}
+        </div>
+
+        {/* Data Export/Import Section */}
+        <div className="mt-6 bg-slate-800/50 rounded-xl border border-slate-700/50 p-4 md:p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 bg-purple-500/20 rounded-lg shrink-0">
+              <Database className="w-5 h-5 text-purple-400" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-white">Data Export / Import</h3>
+              <p className="text-xs md:text-sm text-slate-400">
+                Backup data or migrate between environments
+              </p>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Export */}
+            <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700/50">
+              <h4 className="text-sm font-medium text-white mb-2 flex items-center gap-2">
+                <Download className="w-4 h-4 text-green-400" />
+                Export Data
+              </h4>
+              <p className="text-xs text-slate-400 mb-3">
+                Download all employees and QR data as JSON
+              </p>
+              <Button
+                onClick={exportData}
+                disabled={running.export}
+                className="w-full bg-green-600 hover:bg-green-700"
+                size="sm"
+              >
+                {running.export ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <Download className="w-4 h-4 mr-2" />
+                    Export to JSON
+                  </>
+                )}
+              </Button>
+            </div>
+            
+            {/* Import */}
+            <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700/50">
+              <h4 className="text-sm font-medium text-white mb-2 flex items-center gap-2">
+                <Upload className="w-4 h-4 text-blue-400" />
+                Import Data
+              </h4>
+              <p className="text-xs text-slate-400 mb-3">
+                Upload exported JSON to restore data
+              </p>
+              <div className="space-y-2">
+                <label className="block">
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                    className="hidden"
+                  />
+                  <div className={`flex items-center justify-center gap-2 p-2 border border-dashed rounded-lg cursor-pointer transition-colors text-sm ${
+                    importFile 
+                      ? 'border-blue-500/50 bg-blue-500/10 text-blue-400' 
+                      : 'border-slate-600 hover:border-slate-500 text-slate-400'
+                  }`}>
+                    {importFile ? importFile.name : 'Select JSON file'}
+                  </div>
+                </label>
+                <Button
+                  onClick={importData}
+                  disabled={!importFile || importing}
+                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  size="sm"
+                >
+                  {importing ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4 mr-2" />
+                      Import Data
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Help Text */}

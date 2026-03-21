@@ -4258,6 +4258,118 @@ async def delete_employees_bulk(request: EmployeeCleanupRequest):
 
 
 
+
+# ==================== DATA EXPORT/IMPORT ====================
+
+@api_router.get("/v2/data/export")
+async def export_all_data(quarter: str = "Q1", year: int = 2026):
+    """
+    Export all employee data for backup or migration to another environment.
+    Returns JSON that can be imported via /v2/data/import
+    """
+    # Get all employees
+    employees = await db.employees_v2.find(
+        {"quarter": quarter, "year": year},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    # Get QR employees
+    qr_employees = await db.qr_employees.find({}, {"_id": 0}).to_list(500)
+    
+    # Get quarter settings
+    settings = await db.quarter_settings.find_one(
+        {"quarter": quarter, "year": year},
+        {"_id": 0}
+    )
+    
+    export_data = {
+        "export_date": datetime.now(timezone.utc).isoformat(),
+        "quarter": quarter,
+        "year": year,
+        "employee_count": len(employees),
+        "qr_employee_count": len(qr_employees),
+        "employees": employees,
+        "qr_employees": qr_employees,
+        "quarter_settings": settings
+    }
+    
+    return export_data
+
+
+@api_router.post("/v2/data/import")
+async def import_all_data(data: dict):
+    """
+    Import employee data from an export.
+    WARNING: This will replace existing data for the specified quarter/year.
+    """
+    quarter = data.get("quarter", "Q1")
+    year = data.get("year", 2026)
+    employees = data.get("employees", [])
+    qr_employees = data.get("qr_employees", [])
+    settings = data.get("quarter_settings")
+    
+    results = {
+        "employees_imported": 0,
+        "qr_employees_imported": 0,
+        "settings_imported": False,
+        "errors": []
+    }
+    
+    # Import employees
+    if employees:
+        # Clear existing employees for this quarter/year
+        await db.employees_v2.delete_many({"quarter": quarter, "year": year})
+        
+        for emp in employees:
+            try:
+                # Ensure required fields
+                if not emp.get("id"):
+                    emp["id"] = str(uuid.uuid4())
+                emp["quarter"] = quarter
+                emp["year"] = year
+                emp["updated_at"] = datetime.now(timezone.utc)
+                
+                await db.employees_v2.insert_one(emp)
+                results["employees_imported"] += 1
+            except Exception as e:
+                results["errors"].append(f"Employee {emp.get('name', '?')}: {str(e)}")
+    
+    # Import QR employees
+    if qr_employees:
+        # Clear existing QR employees
+        await db.qr_employees.delete_many({})
+        
+        for qr_emp in qr_employees:
+            try:
+                if not qr_emp.get("id"):
+                    qr_emp["id"] = str(uuid.uuid4())
+                
+                await db.qr_employees.insert_one(qr_emp)
+                results["qr_employees_imported"] += 1
+            except Exception as e:
+                results["errors"].append(f"QR Employee {qr_emp.get('name', '?')}: {str(e)}")
+    
+    # Import quarter settings
+    if settings:
+        try:
+            await db.quarter_settings.update_one(
+                {"quarter": quarter, "year": year},
+                {"$set": settings},
+                upsert=True
+            )
+            results["settings_imported"] = True
+        except Exception as e:
+            results["errors"].append(f"Settings: {str(e)}")
+    
+    return {
+        "success": True,
+        "quarter": quarter,
+        "year": year,
+        **results
+    }
+
+
+
 @api_router.put("/v2/employees/{employee_id}/display-name")
 async def update_employee_display_name(employee_id: str, data: dict):
     """
