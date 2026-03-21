@@ -152,8 +152,13 @@ def extract_sales_data(text: str) -> Dict[str, float]:
         'barglassware': 'glassware',
         'bar glassware': 'glassware',
         'loyalty': 'loyalty',
-        'loyany': 'loyalty',
-        'loyaity': 'loyalty'
+        'loyany': 'loyalty',   # OCR error
+        'loyaity': 'loyalty',  # OCR error
+        'loyahy': 'loyalty',   # OCR error - 'lt' read as 'h'
+        'loyaiy': 'loyalty',   # OCR error
+        'loyalhy': 'loyalty',  # OCR error
+        'ioyalty': 'loyalty',  # OCR error - 'L' read as 'I'
+        'loyaltv': 'loyalty',  # OCR error - 'y' read as 'v'
     }
     
     for line in lines:
