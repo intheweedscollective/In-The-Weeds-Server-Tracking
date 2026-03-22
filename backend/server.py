@@ -4137,7 +4137,7 @@ async def analyze_employees_for_cleanup():
     """
     all_employees = await db.employees_v2.find({}, {"_id": 0}).to_list(1000)
     
-    # Known test name patterns
+    # Known test name patterns (exact match)
     test_name_patterns = [
         'alice johnson', 'bob smith', 'carol davis', 'david wilson', 
         'emma davis', 'frank brown', 'grace lee', 'henry garcia',
@@ -4147,11 +4147,17 @@ async def analyze_employees_for_cleanup():
         'charlotte martin', 'ethan jackson', 'eva martinez', 'ivy chen',
         'ryan', 'tyler johnson', 'aiden harris', 'total', 'overall',
         'total / overall', 'server sales', 'server sales report',
-        'server sales re', 'server sales re  ort'
+        'server sales re', 'server sales re  ort', 'test', 'test employee',
+        'demo', 'demo user', 'sample', 'example', 'n/a', 'na', 'none',
+        'unknown', 'anonymous', 'guest', 'temp', 'temporary'
     ]
     
-    # Invalid name patterns (partial matches)
-    invalid_patterns = ['server sales', 'total', 'overall', 'report']
+    # Invalid name patterns (partial matches - catches variations like "Server Sales Detail")
+    invalid_patterns = [
+        'server sales', 'total', 'overall', 'report', 'detail', 
+        'summary', 'test', 'demo', 'sample', 'example', 'template',
+        'n/a', 'unknown', 'anonymous', 'void', 'null', 'blank'
+    ]
     
     valid_employees = []
     potential_duplicates = []

@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "react-router-dom";
-import { Trash2, Eye, FileText, Search, Filter, Users, X, Calendar, Target, Plus, Pencil, Save } from "lucide-react";
+import { Trash2, Eye, FileText, Search, Filter, Users, X, Calendar, Target, Plus, Pencil, Save, CheckSquare, Square, XSquare } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { Checkbox } from "../components/ui/checkbox";
 import { formatCurrency, formatLSCRatio, formatNumber } from "../utils/formatters";
 import ConfirmDialog from "../components/ConfirmDialog";
 
@@ -39,6 +40,12 @@ export default function EmployeeList() {
   const [showDetails, setShowDetails] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [employeeToDelete, setEmployeeToDelete] = useState(null);
+  
+  // Multi-select state
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [selectMode, setSelectMode] = useState(false);
+  const [confirmBulkDeleteOpen, setConfirmBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   
   // Edit/Add modal state
   const [showEditModal, setShowEditModal] = useState(false);
@@ -95,6 +102,56 @@ export default function EmployeeList() {
     } finally {
       setConfirmDeleteOpen(false);
       setEmployeeToDelete(null);
+    }
+  };
+
+  // Multi-select handlers
+  const toggleSelectMode = () => {
+    setSelectMode(!selectMode);
+    setSelectedIds(new Set());
+  };
+
+  const toggleEmployeeSelection = (empId) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(empId)) {
+      newSelected.delete(empId);
+    } else {
+      newSelected.add(empId);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const selectAll = () => {
+    const allIds = new Set(filteredEmployees.map(emp => emp.id));
+    setSelectedIds(allIds);
+  };
+
+  const deselectAll = () => {
+    setSelectedIds(new Set());
+  };
+
+  const bulkDeleteEmployees = async () => {
+    if (selectedIds.size === 0) return;
+    
+    setBulkDeleting(true);
+    try {
+      const response = await api.post('/v2/employees/cleanup/delete', {
+        employee_ids: Array.from(selectedIds)
+      });
+      
+      if (response.data.success) {
+        toast.success(`Deleted ${response.data.deleted_count} employees`);
+        setSelectedIds(new Set());
+        setSelectMode(false);
+        fetchEmployees();
+      } else {
+        toast.error("Some employees could not be deleted");
+      }
+    } catch (error) {
+      toast.error("Error deleting employees");
+    } finally {
+      setBulkDeleting(false);
+      setConfirmBulkDeleteOpen(false);
     }
   };
 
@@ -261,29 +318,95 @@ export default function EmployeeList() {
         variant="destructive"
       />
       
+      {/* Bulk Delete Confirm Dialog */}
+      <ConfirmDialog
+        open={confirmBulkDeleteOpen}
+        onOpenChange={setConfirmBulkDeleteOpen}
+        title={`Delete ${selectedIds.size} crew members?`}
+        description="This will permanently delete all selected employee records. This action cannot be undone."
+        confirmText={bulkDeleting ? "Deleting..." : `Delete ${selectedIds.size} Employees`}
+        cancelText="Cancel"
+        onConfirm={bulkDeleteEmployees}
+        variant="destructive"
+      />
+      
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-3 mb-2">
               <Users className="w-8 h-8 text-secondary" />
               <h1 className="text-3xl font-serif font-black text-foreground" data-testid="page-title">
                 Crew Management
               </h1>
             </div>
-            <Button
-              onClick={openNewEmployeeModal}
-              className="bg-green-600 hover:bg-green-700 text-white"
-              data-testid="add-employee-btn"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              New Employee
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={toggleSelectMode}
+                variant={selectMode ? "default" : "outline"}
+                className={selectMode ? "bg-blue-600 hover:bg-blue-700 text-white" : "border-slate-600 hover:bg-slate-700"}
+                data-testid="select-mode-btn"
+              >
+                {selectMode ? <XSquare className="w-4 h-4 mr-2" /> : <CheckSquare className="w-4 h-4 mr-2" />}
+                {selectMode ? "Cancel Selection" : "Select Multiple"}
+              </Button>
+              <Button
+                onClick={openNewEmployeeModal}
+                className="bg-green-600 hover:bg-green-700 text-white"
+                data-testid="add-employee-btn"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                New Employee
+              </Button>
+            </div>
           </div>
           <p className="text-slate-400" data-testid="page-subtitle">
             View and manage all crew performance data
           </p>
         </div>
+
+        {/* Bulk Action Bar - Only visible in select mode */}
+        {selectMode && (
+          <div className="bubba-card mb-4 bg-blue-900/30 border-blue-500/30" data-testid="bulk-action-bar">
+            <div className="p-4 flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-4">
+                <span className="text-slate-200 font-medium">
+                  {selectedIds.size} of {filteredEmployees.length} selected
+                </span>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={selectAll}
+                    variant="outline"
+                    size="sm"
+                    className="border-slate-500 text-slate-200 hover:bg-slate-700"
+                    data-testid="select-all-btn"
+                  >
+                    Select All
+                  </Button>
+                  <Button
+                    onClick={deselectAll}
+                    variant="outline"
+                    size="sm"
+                    className="border-slate-500 text-slate-200 hover:bg-slate-700"
+                    data-testid="deselect-all-btn"
+                  >
+                    Deselect All
+                  </Button>
+                </div>
+              </div>
+              <Button
+                onClick={() => setConfirmBulkDeleteOpen(true)}
+                disabled={selectedIds.size === 0}
+                variant="destructive"
+                className="bg-red-600 hover:bg-red-700"
+                data-testid="bulk-delete-btn"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete Selected ({selectedIds.size})
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Filters */}
         <div className="bubba-card mb-8" data-testid="filters-card">
@@ -402,9 +525,32 @@ export default function EmployeeList() {
               const cvScore = employee.cv_score || 0;
               
               return (
-                <div key={employee.id} className="bubba-card" data-testid={`employee-card-${employee.id}`}>
+                <div 
+                  key={employee.id} 
+                  className={`bubba-card relative ${selectMode && selectedIds.has(employee.id) ? 'ring-2 ring-blue-500 bg-blue-900/20' : ''}`} 
+                  data-testid={`employee-card-${employee.id}`}
+                  onClick={selectMode ? () => toggleEmployeeSelection(employee.id) : undefined}
+                  style={selectMode ? { cursor: 'pointer' } : {}}
+                >
+                  {/* Checkbox overlay in select mode */}
+                  {selectMode && (
+                    <div className="absolute top-2 left-2 z-10">
+                      <div 
+                        className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-colors ${
+                          selectedIds.has(employee.id) 
+                            ? 'bg-blue-600 border-blue-600 text-white' 
+                            : 'bg-slate-700 border-slate-500 hover:border-blue-400'
+                        }`}
+                        data-testid={`employee-checkbox-${employee.id}`}
+                      >
+                        {selectedIds.has(employee.id) && (
+                          <CheckSquare className="w-4 h-4" />
+                        )}
+                      </div>
+                    </div>
+                  )}
                   <div className="tape" style={{ top: '-8px', left: '50%', transform: 'translateX(-50%) rotate(1deg)' }} />
-                  <div className="p-5 pt-7">
+                  <div className={`p-5 pt-7 ${selectMode ? 'pl-10' : ''}`}>
                     <div className="flex items-start justify-between mb-4">
                       <div>
                         <h3 className="text-lg font-serif font-bold text-foreground" data-testid={`employee-name-${employee.id}`}>
@@ -450,44 +596,48 @@ export default function EmployeeList() {
                       </div>
                     </div>
                     
-                    {/* Actions */}
-                    <div className="flex gap-2">
-                      <Button 
-                        onClick={() => openEditModal(employee)}
-                        variant="outline" 
-                        size="sm" 
-                        className="flex-1 border-2 border-blue-200 hover:bg-blue-50"
-                        data-testid={`edit-employee-btn-${employee.id}`}
-                      >
-                        <Pencil className="w-4 h-4 mr-2" />
-                        Edit
-                      </Button>
-                      <Button 
-                        onClick={() => {
-                          setSelectedEmployee(employee);
-                          setShowDetails(true);
-                        }}
-                        variant="outline" 
-                        size="sm" 
-                        className="flex-1 border-2"
-                        data-testid={`view-details-btn-${employee.id}`}
-                      >
-                        <Eye className="w-4 h-4 mr-2" />
-                        Details
-                      </Button>
-                      
-                      <Button 
-                        onClick={() => {
-                          setEmployeeToDelete(employee.id);
-                          setConfirmDeleteOpen(true);
-                        }}
-                        variant="destructive" 
-                        size="sm"
-                        data-testid={`delete-employee-btn-${employee.id}`}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
+                    {/* Actions - hidden in select mode */}
+                    {!selectMode && (
+                      <div className="flex gap-2">
+                        <Button 
+                          onClick={(e) => { e.stopPropagation(); openEditModal(employee); }}
+                          variant="outline" 
+                          size="sm" 
+                          className="flex-1 border-2 border-blue-200 hover:bg-blue-50"
+                          data-testid={`edit-employee-btn-${employee.id}`}
+                        >
+                          <Pencil className="w-4 h-4 mr-2" />
+                          Edit
+                        </Button>
+                        <Button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedEmployee(employee);
+                            setShowDetails(true);
+                          }}
+                          variant="outline" 
+                          size="sm" 
+                          className="flex-1 border-2"
+                          data-testid={`view-details-btn-${employee.id}`}
+                        >
+                          <Eye className="w-4 h-4 mr-2" />
+                          Details
+                        </Button>
+                        
+                        <Button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEmployeeToDelete(employee.id);
+                            setConfirmDeleteOpen(true);
+                          }}
+                          variant="destructive" 
+                          size="sm"
+                          data-testid={`delete-employee-btn-${employee.id}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
