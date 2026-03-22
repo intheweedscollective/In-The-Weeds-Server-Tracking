@@ -75,7 +75,7 @@ export default function StyledQRCode({
         // Draw QR code
         ctx.drawImage(tempCanvas, qrX, qrY, size, size);
 
-        // Draw center logo
+        // Draw center logo with form-fitting white outline
         if (logoUrl) {
           const img = new Image();
           img.crossOrigin = "anonymous";
@@ -84,8 +84,43 @@ export default function StyledQRCode({
             const logoX = totalSize / 2 - logoSize / 2;
             const logoY = totalSize / 2 - logoSize / 2;
             
-            // No background shape - logo sits directly on QR code
-            // The image's own transparency/background will show
+            // Create form-fitting white outline by drawing white versions offset in all directions
+            const outlineSize = 3; // White outline thickness
+            ctx.globalCompositeOperation = 'source-over';
+            
+            // Draw white outline by rendering the image multiple times with offsets
+            // This creates a stroke effect that follows the image's shape
+            for (let x = -outlineSize; x <= outlineSize; x++) {
+              for (let y = -outlineSize; y <= outlineSize; y++) {
+                if (x === 0 && y === 0) continue; // Skip center
+                // Draw at offset position
+                ctx.drawImage(img, logoX + x, logoY + y, logoSize, logoSize);
+              }
+            }
+            
+            // Now we need to make those offset copies white
+            // Create a temporary canvas to process the outline
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = totalSize;
+            tempCanvas.height = totalSize;
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            // Draw white filled version for outline
+            for (let x = -outlineSize; x <= outlineSize; x++) {
+              for (let y = -outlineSize; y <= outlineSize; y++) {
+                tempCtx.drawImage(img, logoX + x, logoY + y, logoSize, logoSize);
+              }
+            }
+            
+            // Make the outline white by using composite operations
+            tempCtx.globalCompositeOperation = 'source-in';
+            tempCtx.fillStyle = '#FFFFFF';
+            tempCtx.fillRect(0, 0, totalSize, totalSize);
+            
+            // Draw the white outline onto main canvas
+            ctx.drawImage(tempCanvas, 0, 0);
+            
+            // Draw the actual logo on top
             ctx.drawImage(img, logoX, logoY, logoSize, logoSize);
           };
           
@@ -218,7 +253,7 @@ export async function generateStyledQRDataUrl(url, options = {}) {
       
       // No background shape - logo sits directly on QR code for form-fitting look
 
-      // Load and draw shrimp logo
+      // Load and draw shrimp logo with form-fitting white outline
       if (logoUrl) {
         const img = new Image();
         img.crossOrigin = "anonymous";
@@ -227,11 +262,42 @@ export async function generateStyledQRDataUrl(url, options = {}) {
           img.onload = () => {
             const logoX = centerX - logoSize / 2;
             const logoY = centerY - logoSize / 2;
+            
+            // Create form-fitting white outline
+            const outlineSize = 4; // White outline thickness for downloads
+            
+            // Create a temporary canvas for the white outline
+            const tempCanvas2 = document.createElement('canvas');
+            tempCanvas2.width = totalSize;
+            tempCanvas2.height = totalSize;
+            const tempCtx = tempCanvas2.getContext('2d');
+            
+            // Draw logo at multiple offsets
+            for (let x = -outlineSize; x <= outlineSize; x++) {
+              for (let y = -outlineSize; y <= outlineSize; y++) {
+                tempCtx.drawImage(img, logoX + x, logoY + y, logoSize, logoSize);
+              }
+            }
+            
+            // Make the outline white
+            tempCtx.globalCompositeOperation = 'source-in';
+            tempCtx.fillStyle = '#FFFFFF';
+            tempCtx.fillRect(0, 0, totalSize, totalSize);
+            
+            // Draw white outline onto main canvas
+            ctx.drawImage(tempCanvas2, 0, 0);
+            
+            // Draw the actual logo on top
             ctx.drawImage(img, logoX, logoY, logoSize, logoSize);
+            
             imgResolve();
           };
           img.onerror = () => {
             // Fallback to "BG" text if image fails
+            ctx.fillStyle = bgColor;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, logoSize / 2, 0, Math.PI * 2);
+            ctx.fill();
             ctx.fillStyle = "#C41E3A";
             ctx.beginPath();
             ctx.arc(centerX, centerY, logoSize / 2 - 4, 0, Math.PI * 2);
