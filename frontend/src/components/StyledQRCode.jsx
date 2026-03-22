@@ -16,7 +16,7 @@ export default function StyledQRCode({
   url,
   size = 280,
   logoUrl = SHRIMP_LOGO_URL, // Default to shrimp logo
-  logoSize = 60,
+  logoSize = 85, // Bigger logo to preserve details
   qrColor = "#000000",
   bgColor = "#FFFFFF",
   frameColor = "#1a1a2e",
@@ -168,7 +168,7 @@ export async function generateStyledQRDataUrl(url, options = {}) {
   const {
     size = 400,
     logoUrl = SHRIMP_LOGO_URL,
-    logoSize = 80,
+    logoSize = 110, // Bigger logo for downloads to preserve details
     qrColor = "#000000",
     bgColor = "#FFFFFF",
     frameColor = "#1a1a2e",
