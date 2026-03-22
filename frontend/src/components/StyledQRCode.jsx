@@ -84,10 +84,10 @@ export default function StyledQRCode({
             const logoX = totalSize / 2 - logoSize / 2;
             const logoY = totalSize / 2 - logoSize / 2;
             
-            // Draw white circle background for logo - minimal padding
+            // Draw white background - form fitting with 1px padding
             ctx.fillStyle = bgColor;
             ctx.beginPath();
-            ctx.arc(totalSize / 2, totalSize / 2, logoSize / 2 + 4, 0, Math.PI * 2);
+            ctx.arc(totalSize / 2, totalSize / 2, logoSize / 2 + 1, 0, Math.PI * 2);
             ctx.fill();
             
             // Draw logo (keeping aspect ratio, centered)
@@ -221,10 +221,10 @@ export async function generateStyledQRDataUrl(url, options = {}) {
       const centerX = totalSize / 2;
       const centerY = totalSize / 2;
       
-      // White circle background for logo - minimal padding
+      // White background - form fitting with 1px padding
       ctx.fillStyle = bgColor;
       ctx.beginPath();
-      ctx.arc(centerX, centerY, logoSize / 2 + 4, 0, Math.PI * 2);
+      ctx.arc(centerX, centerY, logoSize / 2 + 1, 0, Math.PI * 2);
       ctx.fill();
 
       // Load and draw shrimp logo

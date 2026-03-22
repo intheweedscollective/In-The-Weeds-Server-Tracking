@@ -487,19 +487,18 @@ export default function LeaderboardRankings() {
               <div className="hidden md:grid grid-cols-12 gap-2 px-4 py-3 bg-slate-900 text-sm font-semibold uppercase tracking-wider text-slate-300 border-b border-slate-600">
                 <div className="col-span-1 text-center">Rank</div>
                 <div className="col-span-3">Employee</div>
-                <div className="col-span-2 text-center">Metrics</div>
+                <div className="col-span-2 text-center">Base Score</div>
                 <div className="col-span-2 text-center">Reviews</div>
-                <div className="col-span-1 text-center">Bonus</div>
+                <div className="col-span-1 text-center">Bonuses</div>
                 <div className="col-span-2 text-center">Total</div>
                 <div className="col-span-1 text-center">Trend</div>
               </div>
               
               {/* Table Header - Mobile */}
-              <div className="md:hidden grid grid-cols-6 gap-1 px-2 py-2 bg-slate-900 text-xs font-semibold uppercase tracking-wider text-slate-300 border-b border-slate-600">
+              <div className="md:hidden grid grid-cols-5 gap-1 px-2 py-2 bg-slate-900 text-xs font-semibold uppercase tracking-wider text-slate-300 border-b border-slate-600">
                 <div className="col-span-1 text-center">#</div>
                 <div className="col-span-2">Name</div>
-                <div className="col-span-1 text-center">Score</div>
-                <div className="col-span-1 text-center">Bonus</div>
+                <div className="col-span-1 text-center">Base</div>
                 <div className="col-span-1 text-center">Total</div>
               </div>
 
@@ -510,10 +509,13 @@ export default function LeaderboardRankings() {
                   const isTop5 = employee.position <= 5;
                   const reviewMentions = empData.review_mentions || 0;
                   
-                  // Calculate component scores
-                  const operationalScore = empData.weighted_score || 0;
-                  const guestRepScore = (empData.cv_score || 0) + (empData.review_tracker_bonus || 0);
-                  const bonusScore = empData.total_metric_bonus || 0;
+                  // Score breakdown that adds up:
+                  // Total = Base (weighted POS) + Reviews (CV + RT) + Bonuses (metric)
+                  const baseScore = empData.weighted_score || 0;  // POS metrics weighted
+                  const cvScore = empData.cv_score || 0;          // Customer Voice points
+                  const rtBonus = empData.review_tracker_bonus || 0; // RT mentions bonus
+                  const reviewScore = cvScore + rtBonus;          // Total review points
+                  const metricBonus = empData.total_metric_bonus || 0; // Benchmark bonuses
                   const finalScore = empData.pre_dar_score || empData.total_score || employee.total_score || 0;
                   
                   // Calculate trend/momentum based on previous snapshot (match by name)
@@ -555,26 +557,27 @@ export default function LeaderboardRankings() {
                           </div>
                         </div>
                         
-                        {/* Metrics Score */}
+                        {/* Base Score (Weighted POS) */}
                         <div className="col-span-2 text-center">
-                          <div className="text-white font-semibold text-lg">{operationalScore.toFixed(1)}</div>
-                          <ScoreBar value={operationalScore} max={75} benchmark={75} />
-                          <div className="text-xs text-slate-400 mt-1">of 75 max</div>
+                          <div className="text-white font-semibold text-lg">{baseScore.toFixed(1)}</div>
+                          <ScoreBar value={baseScore} max={75} benchmark={75} />
+                          <div className="text-xs text-slate-400 mt-1">POS metrics</div>
                         </div>
                         
-                        {/* Reviews Score */}
+                        {/* Reviews (CV + RT) */}
                         <div className="col-span-2 text-center">
-                          <div className="text-white font-semibold text-lg">{guestRepScore.toFixed(1)}</div>
-                          <ScoreBar value={Math.max(0, guestRepScore)} max={25} benchmark={15} />
+                          <div className={`font-semibold text-lg ${reviewScore >= 0 ? 'text-white' : 'text-red-400'}`}>
+                            {reviewScore >= 0 ? '+' : ''}{reviewScore.toFixed(1)}
+                          </div>
                           <div className="text-xs text-slate-400 mt-1">
-                            CV: {(empData.cv_score || 0).toFixed(1)} | RT: +{(empData.review_tracker_bonus || 0).toFixed(1)}
+                            CV: {cvScore >= 0 ? '+' : ''}{cvScore.toFixed(1)} | RT: +{rtBonus.toFixed(1)}
                           </div>
                         </div>
                         
-                        {/* Metric Bonus */}
+                        {/* Metric Bonuses */}
                         <div className="col-span-1 text-center">
-                          <div className={`font-medium ${bonusScore > 0 ? "text-green-400" : "text-slate-500"}`}>
-                            {bonusScore > 0 ? `+${bonusScore.toFixed(1)}` : "0"}
+                          <div className={`font-medium ${metricBonus > 0 ? "text-green-400" : "text-slate-500"}`}>
+                            {metricBonus > 0 ? `+${metricBonus.toFixed(1)}` : "0"}
                           </div>
                         </div>
                         
@@ -588,6 +591,9 @@ export default function LeaderboardRankings() {
                           }`}>
                             {finalScore.toFixed(1)}
                           </div>
+                          <div className="text-xs text-slate-500 mt-1">
+                            = {baseScore.toFixed(0)} + {reviewScore.toFixed(0)} + {metricBonus.toFixed(0)}
+                          </div>
                         </div>
                         
                         {/* Momentum */}
@@ -597,7 +603,7 @@ export default function LeaderboardRankings() {
                       </div>
                       
                       {/* Mobile Layout */}
-                      <div className="md:hidden grid grid-cols-6 gap-1 px-2 py-3 items-center">
+                      <div className="md:hidden grid grid-cols-5 gap-1 px-2 py-3 items-center">
                         {/* Rank */}
                         <div className="col-span-1 flex justify-center">
                           <RankBadge position={employee.position} tier={employee.tier_label} />
@@ -617,17 +623,10 @@ export default function LeaderboardRankings() {
                           </span>
                         </div>
                         
-                        {/* Operational Score */}
+                        {/* Base Score */}
                         <div className="col-span-1 text-center">
-                          <div className="text-white font-semibold text-sm">{operationalScore.toFixed(1)}</div>
-                          <ScoreBar value={operationalScore} max={75} benchmark={75} />
-                        </div>
-                        
-                        {/* Bonus */}
-                        <div className="col-span-1 text-center">
-                          <div className={`text-xs font-medium ${bonusScore > 0 ? "text-green-400" : "text-slate-500"}`}>
-                            {bonusScore > 0 ? `+${bonusScore.toFixed(1)}` : "0"}
-                          </div>
+                          <div className="text-white font-semibold text-sm">{baseScore.toFixed(1)}</div>
+                          <ScoreBar value={baseScore} max={75} benchmark={75} />
                         </div>
                         
                         {/* Total Score */}
