@@ -169,72 +169,113 @@ async def reset_qr_employee_clicks(employee_id: str):
 
 # ==================== SCAN TRACKING ====================
 
+# Hardcoded Google review URL as fallback - ALWAYS use this if no settings
+GOOGLE_REVIEW_URL = "https://search.google.com/local/writereview?placeid=ChIJB6hQQjHEyIARLUX1F3jayRo"
+
 @qr_router.get("/scan/{employee_id}/{platform}")
 async def track_scan(employee_id: str, platform: str):
     """Track a QR code scan and redirect to review page"""
-    from fastapi.responses import RedirectResponse, HTMLResponse
+    from fastapi.responses import RedirectResponse
     
+    # Always default to Google if platform is invalid
     if platform not in ['yelp', 'google']:
-        return {"error": "Invalid platform"}
+        platform = 'google'
     
-    employee = await _db.qr_employees.find_one({"id": employee_id})
-    if not employee:
-        return {"error": "Employee not found"}
+    # Try to track the scan (but don't fail if employee not found)
+    try:
+        employee = await _db.qr_employees.find_one({"id": employee_id})
+        if employee:
+            field = f"{platform}_clicks"
+            await _db.qr_employees.update_one(
+                {"id": employee_id},
+                {"$inc": {field: 1}}
+            )
+            
+            scan = {
+                "id": str(uuid.uuid4()),
+                "employee_id": employee_id,
+                "employee_name": employee.get("name", "Unknown"),
+                "platform": platform,
+                "scanned_at": datetime.now(timezone.utc).isoformat()
+            }
+            await _db.qr_scans.insert_one(scan)
+    except Exception as e:
+        # Log but don't fail - redirect is more important
+        logging.error(f"Failed to track scan: {e}")
     
-    field = f"{platform}_clicks"
-    await _db.qr_employees.update_one(
-        {"id": employee_id},
-        {"$inc": {field: 1}}
-    )
+    # Get redirect URL - use settings if available, otherwise hardcoded fallback
+    redirect_url = GOOGLE_REVIEW_URL  # Default fallback
     
-    scan = {
-        "id": str(uuid.uuid4()),
-        "employee_id": employee_id,
-        "employee_name": employee.get("name", "Unknown"),
-        "platform": platform,
-        "scanned_at": datetime.now(timezone.utc).isoformat()
-    }
-    await _db.qr_scans.insert_one(scan)
+    try:
+        settings = await _db.qr_settings.find_one({"id": "global_settings"})
+        if settings:
+            url = settings.get(f"{platform}_url", "")
+            if url:
+                redirect_url = url
+    except Exception as e:
+        logging.error(f"Failed to get settings: {e}")
     
-    settings = await _db.qr_settings.find_one({"id": "global_settings"})
-    if settings:
-        redirect_url = settings.get(f"{platform}_url", "")
-        if redirect_url:
-            return RedirectResponse(url=redirect_url, status_code=302)
-    
-    # If no URL configured, show a helpful message
-    platform_name = "Google" if platform == "google" else "Yelp"
-    html_content = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Thanks for scanning!</title>
-        <style>
-            body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; 
-                   background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-                   color: white; min-height: 100vh; margin: 0;
-                   display: flex; align-items: center; justify-content: center; }}
-            .card {{ background: rgba(255,255,255,0.1); border-radius: 16px;
-                    padding: 32px; text-align: center; max-width: 320px; }}
-            h1 {{ font-size: 24px; margin-bottom: 16px; }}
-            p {{ color: #94a3b8; line-height: 1.6; }}
-            .name {{ color: #22c55e; font-weight: bold; }}
-        </style>
-    </head>
-    <body>
-        <div class="card">
-            <h1>✓ Scan Recorded!</h1>
-            <p>Thank you for scanning <span class="name">{employee.get('name')}</span>'s QR code.</p>
-            <p style="margin-top: 16px; font-size: 14px;">
-                {platform_name} review link not configured yet.<br>
-                Please contact the manager.
-            </p>
-        </div>
-    </body>
-    </html>
+    # ALWAYS redirect - never show an error page
+    return RedirectResponse(url=redirect_url, status_code=302)
+
+
+@qr_router.get("/go/{employee_id}")
+async def quick_scan_redirect(employee_id: str):
     """
-    return HTMLResponse(content=html_content)
+    Simplified QR scan endpoint - always redirects to Google reviews.
+    Use this for maximum compatibility on all devices.
+    """
+    from fastapi.responses import RedirectResponse
+    
+    # Try to track (non-blocking)
+    try:
+        employee = await _db.qr_employees.find_one({"id": employee_id})
+        if employee:
+            await _db.qr_employees.update_one(
+                {"id": employee_id},
+                {"$inc": {"google_clicks": 1}}
+            )
+            await _db.qr_scans.insert_one({
+                "id": str(uuid.uuid4()),
+                "employee_id": employee_id,
+                "employee_name": employee.get("name", "Unknown"),
+                "platform": "google",
+                "scanned_at": datetime.now(timezone.utc).isoformat()
+            })
+    except:
+        pass  # Never fail, always redirect
+    
+    # Get URL from settings or use hardcoded fallback
+    try:
+        settings = await _db.qr_settings.find_one({"id": "global_settings"})
+        if settings and settings.get("google_url"):
+            return RedirectResponse(url=settings["google_url"], status_code=302)
+    except:
+        pass
+    
+    return RedirectResponse(url=GOOGLE_REVIEW_URL, status_code=302)
+
+
+@qr_router.get("/r/{employee_id}")
+async def ultra_simple_redirect(employee_id: str):
+    """
+    Ultra-simple redirect - minimal processing for maximum compatibility.
+    Shortest possible URL path for QR codes.
+    """
+    from fastapi.responses import RedirectResponse
+    
+    # Track asynchronously without waiting
+    try:
+        await _db.qr_scans.insert_one({
+            "id": str(uuid.uuid4()),
+            "employee_id": employee_id,
+            "platform": "google",
+            "scanned_at": datetime.now(timezone.utc).isoformat()
+        })
+    except:
+        pass
+    
+    return RedirectResponse(url=GOOGLE_REVIEW_URL, status_code=302)
 
 @qr_router.get("/scans")
 async def get_recent_scans(limit: int = 50):
@@ -403,25 +444,9 @@ async def download_all_qr_codes_zip():
                 # Create safe filename
                 safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', emp_name)
                 
-                # Generate Yelp QR
-                yelp_tracking_url = f"{base_url}/api/qr/scan/{emp_id}/yelp"
-                yelp_qr = qrcode.QRCode(
-                    version=1,
-                    error_correction=qrcode.constants.ERROR_CORRECT_H,
-                    box_size=10,
-                    border=2
-                )
-                yelp_qr.add_data(yelp_tracking_url)
-                yelp_qr.make(fit=True)
-                yelp_img = yelp_qr.make_image(fill_color=settings.get("qr_color", "#000000"), 
-                                              back_color=settings.get("qr_bg_color", "#FFFFFF"))
-                
-                yelp_buffer = BytesIO()
-                yelp_img.save(yelp_buffer, format='PNG')
-                zip_file.writestr(f"{safe_name}_yelp_qr.png", yelp_buffer.getvalue())
-                
-                # Generate Google QR
-                google_tracking_url = f"{base_url}/api/qr/scan/{emp_id}/google"
+                # Generate Google QR using simplified endpoint for maximum compatibility
+                # Using /go/ endpoint which is shorter and always redirects to Google
+                google_tracking_url = f"{base_url}/api/qr/go/{emp_id}"
                 google_qr = qrcode.QRCode(
                     version=1,
                     error_correction=qrcode.constants.ERROR_CORRECT_H,
@@ -435,7 +460,7 @@ async def download_all_qr_codes_zip():
                 
                 google_buffer = BytesIO()
                 google_img.save(google_buffer, format='PNG')
-                zip_file.writestr(f"{safe_name}_google_qr.png", google_buffer.getvalue())
+                zip_file.writestr(f"{safe_name}_qr.png", google_buffer.getvalue())
         
         # Read the file and create streaming response
         def iterfile():
