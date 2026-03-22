@@ -85,7 +85,7 @@ export default function StyledQRCode({
             const logoY = totalSize / 2 - logoSize / 2;
             
             // Create form-fitting white outline by drawing white versions offset in all directions
-            const outlineSize = 4; // White outline thickness (increased by 1px)
+            const outlineSize = 6; // White outline thickness
             ctx.globalCompositeOperation = 'source-over';
             
             // Draw white outline by rendering the image multiple times with offsets
@@ -264,7 +264,7 @@ export async function generateStyledQRDataUrl(url, options = {}) {
             const logoY = centerY - logoSize / 2;
             
             // Create form-fitting white outline
-            const outlineSize = 5; // White outline thickness for downloads (increased by 1px)
+            const outlineSize = 7; // White outline thickness for downloads
             
             // Create a temporary canvas for the white outline
             const tempCanvas2 = document.createElement('canvas');
