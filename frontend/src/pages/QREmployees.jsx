@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
-import { QrCode, Plus, Trash2, RefreshCw, Download, Copy, ExternalLink, Users, Archive, Loader2 } from "lucide-react";
+import { QrCode, Plus, Trash2, RefreshCw, Download, Copy, ExternalLink, Users, Archive, Loader2, Eye, X } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
-import QRCode from "qrcode";
+import StyledQRCode, { generateStyledQRDataUrl } from "../components/StyledQRCode";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
 
@@ -17,6 +17,10 @@ export default function QREmployees() {
   const [newName, setNewName] = useState("");
   const [syncing, setSyncing] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  
+  // QR Preview Modal
+  const [previewEmployee, setPreviewEmployee] = useState(null);
+  const [previewPlatform, setPreviewPlatform] = useState("google");
 
   const fetchData = async () => {
     try {
@@ -83,6 +87,10 @@ export default function QREmployees() {
   };
 
   const generateQRUrl = (employeeId, platform) => {
+    // Use the simple /go/ endpoint for Google (more reliable)
+    if (platform === 'google') {
+      return `${BACKEND_URL}/api/qr/go/${employeeId}`;
+    }
     return `${BACKEND_URL}/api/qr/scan/${employeeId}/${platform}`;
   };
 
@@ -91,47 +99,36 @@ export default function QREmployees() {
     toast.success("URL copied!");
   };
 
-  // Generate QR as blob for ZIP
-  const generateQRBlob = async (url) => {
-    const qrDataUrl = await QRCode.toDataURL(url, {
-      width: settings?.qr_size || 300,
-      margin: 2,
-      color: {
-        dark: settings?.qr_color || '#000000',
-        light: settings?.qr_bg_color || '#FFFFFF'
-      }
-    });
-    
-    // Convert data URL to blob
-    const response = await fetch(qrDataUrl);
-    return await response.blob();
-  };
-
+  // Download styled QR code
   const downloadQR = async (employeeId, employeeName, platform) => {
     const url = generateQRUrl(employeeId, platform);
     try {
-      const qrDataUrl = await QRCode.toDataURL(url, {
-        width: settings?.qr_size || 300,
-        margin: 2,
-        color: {
-          dark: settings?.qr_color || '#000000',
-          light: settings?.qr_bg_color || '#FFFFFF'
-        }
+      toast.info("Generating styled QR...");
+      
+      const qrDataUrl = await generateStyledQRDataUrl(url, {
+        size: 400,
+        logoSize: 80,
+        qrColor: settings?.qr_color || '#000000',
+        bgColor: settings?.qr_bg_color || '#FFFFFF',
+        frameColor: '#1a1a2e',
+        frameWidth: 20,
+        frameRadius: 32,
+        showFrame: true
       });
       
       const link = document.createElement('a');
-      // Sanitize name for filename
       const safeName = employeeName.toLowerCase().replace(/[^a-z0-9]/g, '_');
       link.download = `${safeName}_${platform}_qr.png`;
       link.href = qrDataUrl;
       link.click();
       toast.success(`Downloaded ${platform} QR for ${employeeName}`);
     } catch (error) {
+      console.error("QR generation error:", error);
       toast.error("Failed to generate QR");
     }
   };
 
-  // Download All QR codes as ZIP - uses backend endpoint for iOS Safari compatibility
+  // Download All QR codes as ZIP with styled QRs
   const downloadAllQRs = async () => {
     if (employees.length === 0) {
       toast.error("No employees to download");
@@ -139,45 +136,50 @@ export default function QREmployees() {
     }
 
     setDownloading(true);
-    
-    const downloadUrl = `${BACKEND_URL}/api/qr/download-all-zip`;
-    
-    // Detect iOS
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    
-    if (isIOS && navigator.share) {
-      // Use Web Share API on iOS if available
-      try {
-        toast.info("Opening share menu...");
+    toast.info(`Generating ${employees.length} styled QR codes...`);
+
+    try {
+      const zip = new JSZip();
+      
+      for (let i = 0; i < employees.length; i++) {
+        const emp = employees[i];
+        const safeName = emp.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
         
-        // Fetch the file first
-        const response = await fetch(downloadUrl);
-        const blob = await response.blob();
-        const file = new File([blob], "qr_codes.zip", { type: "application/zip" });
-        
-        await navigator.share({
-          files: [file],
-          title: "QR Codes",
+        // Generate Google QR (primary)
+        const googleUrl = generateQRUrl(emp.id, 'google');
+        const googleQR = await generateStyledQRDataUrl(googleUrl, {
+          size: 400,
+          logoSize: 80,
+          frameColor: '#1a1a2e',
+          showFrame: true
         });
         
-        toast.success("Shared successfully!");
-      } catch (error) {
-        // Share was cancelled or failed, fall back to direct link
-        console.log("Share cancelled, opening direct link");
-        window.open(downloadUrl, '_blank');
-        toast.info("Tap the share icon to save to Files", { duration: 5000 });
+        // Convert data URL to blob
+        const googleBlob = await (await fetch(googleQR)).blob();
+        zip.file(`${safeName}_google_qr.png`, googleBlob);
+        
+        // Update progress
+        if ((i + 1) % 5 === 0) {
+          toast.info(`Processing ${i + 1} of ${employees.length}...`);
+        }
       }
-    } else if (isIOS) {
-      // For iOS without Web Share: Open in new tab
-      window.open(downloadUrl, '_blank');
-      toast.info("Tap the share/download icon in Safari to save", { duration: 5000 });
-    } else {
-      // For desktop/Android: Direct navigation works
-      window.location.href = downloadUrl;
-      toast.success("Download started!");
+      
+      // Generate and download ZIP
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      saveAs(zipBlob, "styled_qr_codes.zip");
+      toast.success(`Downloaded ${employees.length} styled QR codes!`);
+    } catch (error) {
+      console.error("ZIP generation error:", error);
+      toast.error("Failed to generate ZIP");
     }
     
-    setTimeout(() => setDownloading(false), 2000);
+    setDownloading(false);
+  };
+
+  // Open preview modal
+  const openPreview = (employee, platform = "google") => {
+    setPreviewEmployee(employee);
+    setPreviewPlatform(platform);
   };
 
   return (
@@ -190,7 +192,7 @@ export default function QREmployees() {
               <QrCode className="w-7 h-7 md:w-8 md:h-8 text-purple-400" />
               QR Codes
             </h1>
-            <p className="text-slate-400 text-sm mt-1">Manage employee QR codes</p>
+            <p className="text-slate-400 text-sm mt-1">Professional styled QR codes for your team</p>
           </div>
           <div className="flex gap-2">
             <Button 
@@ -204,20 +206,8 @@ export default function QREmployees() {
               ) : (
                 <Archive className="w-4 h-4 mr-2" />
               )}
-              <span className="hidden sm:inline">Download All</span>
+              <span className="hidden sm:inline">Download All (Styled)</span>
               <span className="sm:hidden">ZIP</span>
-            </Button>
-            <Button 
-              onClick={() => {
-                const url = `${BACKEND_URL}/api/qr/download-all-zip`;
-                navigator.clipboard.writeText(url);
-                toast.success("Link copied! Open in Safari to download", { duration: 4000 });
-              }}
-              variant="outline"
-              className="border-slate-600 text-sm px-2"
-              title="Copy download link (for iOS)"
-            >
-              <Copy className="w-4 h-4" />
             </Button>
             <Button 
               onClick={syncFromMain} 
@@ -249,11 +239,11 @@ export default function QREmployees() {
         {/* Employee Count */}
         {employees.length > 0 && (
           <div className="text-slate-400 text-sm mb-4">
-            {employees.length} employees • {employees.length * 2} QR codes total
+            {employees.length} employees • Click "Preview" to see styled QR code
           </div>
         )}
 
-        {/* Employee List - Mobile Optimized */}
+        {/* Employee List */}
         <div className="space-y-3">
           {employees.map((emp) => (
             <div key={emp.id} className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
@@ -262,7 +252,7 @@ export default function QREmployees() {
                 <div className="flex items-center gap-2 md:gap-4 min-w-0">
                   <span className="text-base md:text-xl font-semibold text-white truncate">{emp.name}</span>
                   <span className="text-xs md:text-sm text-slate-400 shrink-0">
-                    Total: <span className="text-blue-400 font-bold">{emp.yelp_clicks + emp.google_clicks}</span>
+                    Scans: <span className="text-blue-400 font-bold">{emp.yelp_clicks + emp.google_clicks}</span>
                   </span>
                 </div>
                 <div className="flex items-center gap-1 md:gap-2 shrink-0">
@@ -271,6 +261,7 @@ export default function QREmployees() {
                     variant="outline" 
                     className="border-slate-600 h-8 w-8 p-0"
                     onClick={() => resetClicks(emp.id, emp.name)}
+                    title="Reset clicks"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
                   </Button>
@@ -279,82 +270,75 @@ export default function QREmployees() {
                     variant="outline" 
                     className="border-red-600 text-red-400 hover:bg-red-600/20 h-8 w-8 p-0"
                     onClick={() => deleteEmployee(emp.id, emp.name)}
+                    title="Delete employee"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </Button>
                 </div>
               </div>
               
-              {/* QR Code Options - Stack on Mobile */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 sm:divide-x divide-y sm:divide-y-0 divide-white/10">
-                {/* Yelp */}
-                <div className="p-3 md:p-4">
-                  <div className="flex items-center justify-between mb-2 md:mb-3">
-                    <span className="text-red-400 font-semibold text-sm md:text-base">Yelp QR</span>
-                    <span className="text-red-400 font-bold text-sm">{emp.yelp_clicks} clicks</span>
-                  </div>
-                  <div className="flex gap-1.5 md:gap-2">
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      className="flex-1 border-red-500/50 text-red-400 text-xs md:text-sm h-8 md:h-9"
-                      onClick={() => downloadQR(emp.id, emp.name, 'yelp')}
-                    >
-                      <Download className="w-3.5 h-3.5 mr-1" />
-                      Download
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      className="border-slate-600 h-8 md:h-9 w-8 md:w-9 p-0"
-                      onClick={() => copyUrl(generateQRUrl(emp.id, 'yelp'))}
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      className="border-slate-600 h-8 md:h-9 w-8 md:w-9 p-0"
-                      onClick={() => window.open(generateQRUrl(emp.id, 'yelp'), '_blank')}
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
+              {/* QR Actions */}
+              <div className="p-3 md:p-4">
+                <div className="flex flex-wrap gap-2">
+                  {/* Preview Button */}
+                  <Button 
+                    size="sm" 
+                    className="bg-purple-600 hover:bg-purple-700 text-xs md:text-sm"
+                    onClick={() => openPreview(emp, 'google')}
+                  >
+                    <Eye className="w-3.5 h-3.5 mr-1.5" />
+                    Preview QR
+                  </Button>
+                  
+                  {/* Download Google QR */}
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="border-green-500/50 text-green-400 text-xs md:text-sm"
+                    onClick={() => downloadQR(emp.id, emp.name, 'google')}
+                  >
+                    <Download className="w-3.5 h-3.5 mr-1" />
+                    Google QR
+                  </Button>
+                  
+                  {/* Download Yelp QR */}
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="border-red-500/50 text-red-400 text-xs md:text-sm"
+                    onClick={() => downloadQR(emp.id, emp.name, 'yelp')}
+                  >
+                    <Download className="w-3.5 h-3.5 mr-1" />
+                    Yelp QR
+                  </Button>
+                  
+                  {/* Copy URL */}
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="border-slate-600 text-xs md:text-sm"
+                    onClick={() => copyUrl(generateQRUrl(emp.id, 'google'))}
+                  >
+                    <Copy className="w-3.5 h-3.5 mr-1" />
+                    Copy URL
+                  </Button>
+                  
+                  {/* Test Link */}
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="border-slate-600 text-xs md:text-sm"
+                    onClick={() => window.open(generateQRUrl(emp.id, 'google'), '_blank')}
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 mr-1" />
+                    Test
+                  </Button>
                 </div>
                 
-                {/* Google */}
-                <div className="p-3 md:p-4">
-                  <div className="flex items-center justify-between mb-2 md:mb-3">
-                    <span className="text-green-400 font-semibold text-sm md:text-base">Google QR</span>
-                    <span className="text-green-400 font-bold text-sm">{emp.google_clicks} clicks</span>
-                  </div>
-                  <div className="flex gap-1.5 md:gap-2">
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      className="flex-1 border-green-500/50 text-green-400 text-xs md:text-sm h-8 md:h-9"
-                      onClick={() => downloadQR(emp.id, emp.name, 'google')}
-                    >
-                      <Download className="w-3.5 h-3.5 mr-1" />
-                      Download
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      className="border-slate-600 h-8 md:h-9 w-8 md:w-9 p-0"
-                      onClick={() => copyUrl(generateQRUrl(emp.id, 'google'))}
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      className="border-slate-600 h-8 md:h-9 w-8 md:w-9 p-0"
-                      onClick={() => window.open(generateQRUrl(emp.id, 'google'), '_blank')}
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
+                {/* Click Stats */}
+                <div className="flex gap-4 mt-3 text-xs text-slate-400">
+                  <span>Google: <span className="text-green-400 font-medium">{emp.google_clicks}</span></span>
+                  <span>Yelp: <span className="text-red-400 font-medium">{emp.yelp_clicks}</span></span>
                 </div>
               </div>
             </div>
@@ -376,6 +360,84 @@ export default function QREmployees() {
           )}
         </div>
       </div>
+
+      {/* QR Preview Modal */}
+      {previewEmployee && (
+        <div 
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onClick={() => setPreviewEmployee(null)}
+        >
+          <div 
+            className="bg-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl border border-slate-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-xl font-bold text-white">{previewEmployee.name}</h3>
+                <p className="text-sm text-slate-400">Google Review QR Code</p>
+              </div>
+              <Button 
+                size="sm" 
+                variant="outline" 
+                className="border-slate-600 h-8 w-8 p-0"
+                onClick={() => setPreviewEmployee(null)}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            
+            {/* QR Code Preview */}
+            <div className="flex justify-center mb-4 bg-slate-900 rounded-xl p-6">
+              <StyledQRCode
+                url={generateQRUrl(previewEmployee.id, previewPlatform)}
+                size={280}
+                logoSize={60}
+                qrColor={settings?.qr_color || '#000000'}
+                bgColor={settings?.qr_bg_color || '#FFFFFF'}
+                frameColor="#1a1a2e"
+                frameWidth={16}
+                frameRadius={24}
+                showFrame={true}
+              />
+            </div>
+            
+            {/* Scan Stats */}
+            <div className="text-center mb-4">
+              <span className="text-slate-400 text-sm">
+                Total Scans: <span className="text-blue-400 font-bold">{previewEmployee.google_clicks}</span>
+              </span>
+            </div>
+            
+            {/* Action Buttons */}
+            <div className="flex gap-2">
+              <Button 
+                className="flex-1 bg-green-600 hover:bg-green-700"
+                onClick={() => downloadQR(previewEmployee.id, previewEmployee.name, 'google')}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Download PNG
+              </Button>
+              <Button 
+                variant="outline" 
+                className="border-slate-600"
+                onClick={() => copyUrl(generateQRUrl(previewEmployee.id, 'google'))}
+              >
+                <Copy className="w-4 h-4 mr-2" />
+                Copy URL
+              </Button>
+            </div>
+            
+            {/* URL Display */}
+            <div className="mt-4 p-3 bg-slate-900 rounded-lg">
+              <p className="text-xs text-slate-500 mb-1">Tracking URL:</p>
+              <p className="text-xs text-slate-300 break-all font-mono">
+                {generateQRUrl(previewEmployee.id, 'google')}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
