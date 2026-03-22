@@ -107,7 +107,7 @@ export default function QREmployees() {
       
       const qrDataUrl = await generateStyledQRDataUrl(url, {
         size: 400,
-        logoSize: 120, // Bigger logo to preserve details
+        logoSize: 140, // Large logo for printed QR codes
         qrColor: settings?.qr_color || '#000000',
         bgColor: settings?.qr_bg_color || '#FFFFFF',
         frameColor: '#1a1a2e',
@@ -392,7 +392,7 @@ export default function QREmployees() {
               <StyledQRCode
                 url={generateQRUrl(previewEmployee.id, previewPlatform)}
                 size={280}
-                logoSize={90}
+                logoSize={105}
                 qrColor={settings?.qr_color || '#000000'}
                 bgColor={settings?.qr_bg_color || '#FFFFFF'}
                 frameColor="#1a1a2e"

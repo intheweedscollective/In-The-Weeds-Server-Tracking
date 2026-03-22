@@ -16,7 +16,7 @@ export default function StyledQRCode({
   url,
   size = 280,
   logoUrl = SHRIMP_LOGO_URL, // Default to shrimp logo
-  logoSize = 85, // Bigger logo to preserve details
+  logoSize = 100, // Larger logo
   qrColor = "#000000",
   bgColor = "#FFFFFF",
   frameColor = "#1a1a2e",
@@ -84,10 +84,10 @@ export default function StyledQRCode({
             const logoX = totalSize / 2 - logoSize / 2;
             const logoY = totalSize / 2 - logoSize / 2;
             
-            // Draw white circle background for logo
+            // Draw white circle background for logo - minimal padding
             ctx.fillStyle = bgColor;
             ctx.beginPath();
-            ctx.arc(totalSize / 2, totalSize / 2, logoSize / 2 + 8, 0, Math.PI * 2);
+            ctx.arc(totalSize / 2, totalSize / 2, logoSize / 2 + 4, 0, Math.PI * 2);
             ctx.fill();
             
             // Draw logo (keeping aspect ratio, centered)
@@ -168,7 +168,7 @@ export async function generateStyledQRDataUrl(url, options = {}) {
   const {
     size = 400,
     logoUrl = SHRIMP_LOGO_URL,
-    logoSize = 110, // Bigger logo for downloads to preserve details
+    logoSize = 130, // Even larger for downloads
     qrColor = "#000000",
     bgColor = "#FFFFFF",
     frameColor = "#1a1a2e",
@@ -221,10 +221,10 @@ export async function generateStyledQRDataUrl(url, options = {}) {
       const centerX = totalSize / 2;
       const centerY = totalSize / 2;
       
-      // White circle background for logo
+      // White circle background for logo - minimal padding
       ctx.fillStyle = bgColor;
       ctx.beginPath();
-      ctx.arc(centerX, centerY, logoSize / 2 + 10, 0, Math.PI * 2);
+      ctx.arc(centerX, centerY, logoSize / 2 + 4, 0, Math.PI * 2);
       ctx.fill();
 
       // Load and draw shrimp logo
