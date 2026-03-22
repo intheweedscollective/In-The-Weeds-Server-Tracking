@@ -92,10 +92,20 @@ Previously, data could be uploaded to snapshots separately, causing sync issues 
 
 ### P2 (Medium Priority)
 - Onboarding modal can be dismissed but reappears on fresh browser sessions
-- server.py is 10k+ lines and needs refactoring into smaller modules
+- server.py is 11k+ lines and needs refactoring into smaller modules
 
 ### P3 (Low Priority)
 - Background task queue not implemented (long operations could timeout)
+
+### December 2026 Session ✅
+- **Employee Cleanup Tool Enhanced**: Expanded invalid pattern detection to catch more test/invalid entries like "Server Sales", "Total", "Demo User", "Test Employee", and many more patterns
+- **Multi-Select Delete Feature**: Added bulk selection and delete functionality to Employees page:
+  - "Select Multiple" button toggles select mode
+  - Checkboxes on all employee cards when in select mode
+  - "Select All" / "Deselect All" buttons
+  - "Delete Selected" with confirmation dialog
+  - Bulk delete via `/api/v2/employees/cleanup/delete` endpoint
+- **Testing**: All features verified with 100% pass rate (backend: 11/11 tests, frontend: all multi-select features working)
 
 ## File Structure
 ```
@@ -123,6 +133,8 @@ Previously, data could be uploaded to snapshots separately, causing sync issues 
 - `POST /api/v2/cv/server-performance/upload` - Upload CV data
 - `POST /api/v2/rt/upload` - Upload RT data
 - `PUT /api/v2/employees/{id}/cv-stats` - Manual CV stat update
+- `GET /api/v2/employees/cleanup/analyze` - Analyze employees for test/invalid data
+- `POST /api/v2/employees/cleanup/delete` - Bulk delete employees by ID
 
 ## Credentials
 - Loyalty Voice: Bglv@ldry.com / EZMoney2026
