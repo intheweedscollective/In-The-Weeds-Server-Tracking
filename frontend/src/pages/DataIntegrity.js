@@ -160,30 +160,59 @@ export default function DataIntegrity() {
     }
   };
 
-  // Export data
+  // Export data - mobile friendly
   const exportData = async () => {
     setRunning(prev => ({ ...prev, export: true }));
     try {
       const response = await api.get(`/v2/data/export?quarter=${quarter}&year=${year}`);
       const data = response.data;
       
-      // Download as JSON file
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `employee_data_${quarter}_${year}_${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      // Download as JSON file - mobile friendly approach
+      const jsonStr = JSON.stringify(data, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const filename = `employee_data_${quarter}_${year}_${new Date().toISOString().split('T')[0]}.json`;
       
-      toast.success(`Exported ${data.employee_count} employees`);
+      // Check if we can use the native share API (mobile)
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [new File([blob], filename, { type: 'application/json' })] })) {
+        try {
+          await navigator.share({
+            files: [new File([blob], filename, { type: 'application/json' })],
+            title: 'Employee Data Export',
+          });
+          toast.success(`Exported ${data.employee_count} employees`);
+        } catch (shareError) {
+          // User cancelled or share failed, fall back to download
+          downloadFile(blob, filename);
+          toast.success(`Exported ${data.employee_count} employees`);
+        }
+      } else {
+        // Desktop or unsupported mobile - use download
+        downloadFile(blob, filename);
+        toast.success(`Exported ${data.employee_count} employees`);
+      }
     } catch (error) {
+      console.error("Export error:", error);
       toast.error("Failed to export data");
     } finally {
       setRunning(prev => ({ ...prev, export: false }));
     }
+  };
+  
+  // Helper function to trigger download
+  const downloadFile = (blob, filename) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    
+    // Use setTimeout to ensure the element is in DOM
+    setTimeout(() => {
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 100);
   };
 
   // Import data

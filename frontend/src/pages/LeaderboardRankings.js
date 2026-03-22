@@ -483,15 +483,24 @@ export default function LeaderboardRankings() {
 
             {/* Leaderboard Table */}
             <div className="rounded-xl overflow-hidden border border-slate-600" style={{ backgroundColor: COLORS.backgroundAlt }}>
-              {/* Table Header */}
-              <div className="grid grid-cols-12 gap-2 px-4 py-3 bg-slate-900 text-sm font-semibold uppercase tracking-wider text-slate-300 border-b border-slate-600">
+              {/* Table Header - Desktop */}
+              <div className="hidden md:grid grid-cols-12 gap-2 px-4 py-3 bg-slate-900 text-sm font-semibold uppercase tracking-wider text-slate-300 border-b border-slate-600">
                 <div className="col-span-1 text-center">Rank</div>
                 <div className="col-span-3">Employee</div>
                 <div className="col-span-2 text-center">Metrics</div>
                 <div className="col-span-2 text-center">Reviews</div>
-                <div className="col-span-1 text-center">Metric Bonus</div>
+                <div className="col-span-1 text-center">Bonus</div>
                 <div className="col-span-2 text-center">Total</div>
                 <div className="col-span-1 text-center">Trend</div>
+              </div>
+              
+              {/* Table Header - Mobile */}
+              <div className="md:hidden grid grid-cols-6 gap-1 px-2 py-2 bg-slate-900 text-xs font-semibold uppercase tracking-wider text-slate-300 border-b border-slate-600">
+                <div className="col-span-1 text-center">#</div>
+                <div className="col-span-2">Name</div>
+                <div className="col-span-1 text-center">Score</div>
+                <div className="col-span-1 text-center">Bonus</div>
+                <div className="col-span-1 text-center">Total</div>
               </div>
 
               {/* Table Body */}
@@ -513,75 +522,126 @@ export default function LeaderboardRankings() {
                   return (
                     <div 
                       key={employee.employee_id}
-                      className={`grid grid-cols-12 gap-2 px-4 py-4 items-center transition-all duration-200 hover:bg-slate-600/40 ${
+                      className={`transition-all duration-200 hover:bg-slate-600/40 ${
                         idx % 2 === 0 ? "bg-slate-800/50" : "bg-slate-700/30"
                       } ${isTop5 ? "border-l-4 border-green-400" : ""}`}
                       data-testid={`leaderboard-row-${employee.position}`}
                     >
-                      {/* Rank */}
-                      <div className="col-span-1 flex justify-center">
-                        <RankBadge position={employee.position} tier={employee.tier_label} />
-                      </div>
-                      
-                      {/* Employee Name & Recognition */}
-                      <div className="col-span-3">
-                        <div className="flex items-center gap-3">
-                          <div>
-                            <div className="font-bold text-white text-lg">{employee.name}</div>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${
-                                employee.tier_label?.includes("Trainer") ? "bg-purple-600/30 text-purple-300 border-purple-500/50" :
-                                employee.tier_label?.includes("Bartender") ? "bg-blue-600/30 text-blue-300 border-blue-500/50" :
-                                employee.tier_label?.includes("A-") ? "bg-green-600/30 text-green-300 border-green-500/50" :
-                                employee.tier_label?.includes("B-") ? "bg-yellow-600/30 text-yellow-300 border-yellow-500/50" :
-                                "bg-red-600/30 text-red-300 border-red-500/50"
-                              }`}>
-                                {employee.tier_label || employee.job_title}
-                              </span>
-                              <RecognitionBadge mentions={reviewMentions} />
+                      {/* Desktop Layout */}
+                      <div className="hidden md:grid grid-cols-12 gap-2 px-4 py-4 items-center">
+                        {/* Rank */}
+                        <div className="col-span-1 flex justify-center">
+                          <RankBadge position={employee.position} tier={employee.tier_label} />
+                        </div>
+                        
+                        {/* Employee Name & Recognition */}
+                        <div className="col-span-3">
+                          <div className="flex items-center gap-3">
+                            <div>
+                              <div className="font-bold text-white text-lg">{employee.name}</div>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${
+                                  employee.tier_label?.includes("Trainer") ? "bg-purple-600/30 text-purple-300 border-purple-500/50" :
+                                  employee.tier_label?.includes("Bartender") ? "bg-blue-600/30 text-blue-300 border-blue-500/50" :
+                                  employee.tier_label?.includes("A-") ? "bg-green-600/30 text-green-300 border-green-500/50" :
+                                  employee.tier_label?.includes("B-") ? "bg-yellow-600/30 text-yellow-300 border-yellow-500/50" :
+                                  "bg-red-600/30 text-red-300 border-red-500/50"
+                                }`}>
+                                  {employee.tier_label || employee.job_title}
+                                </span>
+                                <RecognitionBadge mentions={reviewMentions} />
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                      
-                      {/* Metrics Score */}
-                      <div className="col-span-2 text-center">
-                        <div className="text-white font-semibold text-lg">{operationalScore.toFixed(1)}</div>
-                        <ScoreBar value={operationalScore} max={75} benchmark={75} />
-                        <div className="text-xs text-slate-400 mt-1">of 75 max</div>
-                      </div>
-                      
-                      {/* Reviews Score */}
-                      <div className="col-span-2 text-center">
-                        <div className="text-white font-semibold text-lg">{guestRepScore.toFixed(1)}</div>
-                        <ScoreBar value={Math.max(0, guestRepScore)} max={25} benchmark={15} />
-                        <div className="text-xs text-slate-400 mt-1">
-                          CV: {(empData.cv_score || 0).toFixed(1)} | RT: +{(empData.review_tracker_bonus || 0).toFixed(1)}
+                        
+                        {/* Metrics Score */}
+                        <div className="col-span-2 text-center">
+                          <div className="text-white font-semibold text-lg">{operationalScore.toFixed(1)}</div>
+                          <ScoreBar value={operationalScore} max={75} benchmark={75} />
+                          <div className="text-xs text-slate-400 mt-1">of 75 max</div>
+                        </div>
+                        
+                        {/* Reviews Score */}
+                        <div className="col-span-2 text-center">
+                          <div className="text-white font-semibold text-lg">{guestRepScore.toFixed(1)}</div>
+                          <ScoreBar value={Math.max(0, guestRepScore)} max={25} benchmark={15} />
+                          <div className="text-xs text-slate-400 mt-1">
+                            CV: {(empData.cv_score || 0).toFixed(1)} | RT: +{(empData.review_tracker_bonus || 0).toFixed(1)}
+                          </div>
+                        </div>
+                        
+                        {/* Metric Bonus */}
+                        <div className="col-span-1 text-center">
+                          <div className={`font-medium ${bonusScore > 0 ? "text-green-400" : "text-slate-500"}`}>
+                            {bonusScore > 0 ? `+${bonusScore.toFixed(1)}` : "0"}
+                          </div>
+                        </div>
+                        
+                        {/* Total Score */}
+                        <div className="col-span-2 text-center">
+                          <div className={`text-3xl font-bold ${
+                            employee.position === 1 ? "text-yellow-400" :
+                            employee.position <= 3 ? "text-slate-300" :
+                            isTop5 ? "text-green-400" :
+                            "text-white"
+                          }`}>
+                            {finalScore.toFixed(1)}
+                          </div>
+                        </div>
+                        
+                        {/* Momentum */}
+                        <div className="col-span-1 flex justify-center">
+                          <MomentumIndicator trend={momentum.trend} change={momentum.change} />
                         </div>
                       </div>
                       
-                      {/* Metric Bonus */}
-                      <div className="col-span-1 text-center">
-                        <div className={`font-medium ${bonusScore > 0 ? "text-green-400" : "text-slate-500"}`}>
-                          {bonusScore > 0 ? `+${bonusScore.toFixed(1)}` : "0"}
+                      {/* Mobile Layout */}
+                      <div className="md:hidden grid grid-cols-6 gap-1 px-2 py-3 items-center">
+                        {/* Rank */}
+                        <div className="col-span-1 flex justify-center">
+                          <RankBadge position={employee.position} tier={employee.tier_label} />
                         </div>
-                      </div>
-                      
-                      {/* Total Score */}
-                      <div className="col-span-2 text-center">
-                        <div className={`text-3xl font-bold ${
-                          employee.position === 1 ? "text-yellow-400" :
-                          employee.position <= 3 ? "text-slate-300" :
-                          isTop5 ? "text-green-400" :
-                          "text-white"
-                        }`}>
-                          {finalScore.toFixed(1)}
+                        
+                        {/* Employee Name */}
+                        <div className="col-span-2">
+                          <div className="font-bold text-white text-sm truncate">{employee.name}</div>
+                          <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                            employee.tier_label?.includes("Trainer") ? "bg-purple-600/30 text-purple-300" :
+                            employee.tier_label?.includes("Bartender") ? "bg-blue-600/30 text-blue-300" :
+                            employee.tier_label?.includes("A-") ? "bg-green-600/30 text-green-300" :
+                            employee.tier_label?.includes("B-") ? "bg-yellow-600/30 text-yellow-300" :
+                            "bg-red-600/30 text-red-300"
+                          }`}>
+                            {employee.tier_label || employee.job_title}
+                          </span>
                         </div>
-                      </div>
-                      
-                      {/* Momentum */}
-                      <div className="col-span-1 flex justify-center">
-                        <MomentumIndicator trend={momentum.trend} change={momentum.change} />
+                        
+                        {/* Operational Score */}
+                        <div className="col-span-1 text-center">
+                          <div className="text-white font-semibold text-sm">{operationalScore.toFixed(1)}</div>
+                          <ScoreBar value={operationalScore} max={75} benchmark={75} />
+                        </div>
+                        
+                        {/* Bonus */}
+                        <div className="col-span-1 text-center">
+                          <div className={`text-xs font-medium ${bonusScore > 0 ? "text-green-400" : "text-slate-500"}`}>
+                            {bonusScore > 0 ? `+${bonusScore.toFixed(1)}` : "0"}
+                          </div>
+                        </div>
+                        
+                        {/* Total Score */}
+                        <div className="col-span-1 text-center">
+                          <div className={`text-lg font-bold ${
+                            employee.position === 1 ? "text-yellow-400" :
+                            employee.position <= 3 ? "text-slate-300" :
+                            isTop5 ? "text-green-400" :
+                            "text-white"
+                          }`}>
+                            {finalScore.toFixed(1)}
+                          </div>
+                          <MomentumIndicator trend={momentum.trend} change={momentum.change} />
+                        </div>
                       </div>
                     </div>
                   );
