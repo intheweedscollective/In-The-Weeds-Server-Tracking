@@ -4145,8 +4145,13 @@ async def analyze_employees_for_cleanup():
         'marcus williams', 'mason anderson', 'mia chen', 'noah martinez',
         'olivia brown', 'sofia rodriguez', 'sophia white', 'ava taylor',
         'charlotte martin', 'ethan jackson', 'eva martinez', 'ivy chen',
-        'ryan', 'tyler johnson', 'aiden harris'
+        'ryan', 'tyler johnson', 'aiden harris', 'total', 'overall',
+        'total / overall', 'server sales', 'server sales report',
+        'server sales re', 'server sales re  ort'
     ]
+    
+    # Invalid name patterns (partial matches)
+    invalid_patterns = ['server sales', 'total', 'overall', 'report']
     
     valid_employees = []
     potential_duplicates = []
@@ -4169,15 +4174,31 @@ async def analyze_employees_for_cleanup():
         name_lower = name.lower()
         words = name.split()
         
-        # Check if it's test data
+        # Check if it's test data (exact match)
         if name_lower in test_name_patterns:
             test_data.append({
                 "id": emp.get('id'),
                 "name": name,
                 "reason": "Matches known test name pattern",
-                "guests": emp.get('guests', 0),
+                "guests": emp.get('guest_count', emp.get('guests', 0)),
                 "score": emp.get('total_score', 0)
             })
+            continue
+        
+        # Check for invalid patterns (partial match)
+        is_invalid = False
+        for pattern in invalid_patterns:
+            if pattern in name_lower:
+                test_data.append({
+                    "id": emp.get('id'),
+                    "name": name,
+                    "reason": f"Contains invalid pattern: '{pattern}'",
+                    "guests": emp.get('guest_count', emp.get('guests', 0)),
+                    "score": emp.get('total_score', 0)
+                })
+                is_invalid = True
+                break
+        if is_invalid:
             continue
         
         # Check if it's a first-name-only duplicate
@@ -4194,7 +4215,7 @@ async def analyze_employees_for_cleanup():
                     "id": emp.get('id'),
                     "name": name,
                     "reason": f"Possible duplicate of '{matching_full_name}'",
-                    "guests": emp.get('guests', 0),
+                    "guests": emp.get('guest_count', emp.get('guests', 0)),
                     "score": emp.get('total_score', 0)
                 })
             else:
@@ -4203,7 +4224,7 @@ async def analyze_employees_for_cleanup():
                     "id": emp.get('id'),
                     "name": name,
                     "reason": "First name only - no matching full name found",
-                    "guests": emp.get('guests', 0),
+                    "guests": emp.get('guest_count', emp.get('guests', 0)),
                     "score": emp.get('total_score', 0)
                 })
             continue
@@ -4212,7 +4233,7 @@ async def analyze_employees_for_cleanup():
         valid_employees.append({
             "id": emp.get('id'),
             "name": name,
-            "guests": emp.get('guests', 0),
+            "guests": emp.get('guest_count', emp.get('guests', 0)),
             "score": emp.get('total_score', 0)
         })
     
