@@ -1,18 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 
+// Default shrimp logo for Bubba Gump (served from local public folder)
+const SHRIMP_LOGO_URL = "/images/shrimp-logo.png";
+
 /**
  * Styled QR Code Component
  * Generates professional-looking QR codes with:
  * - Rounded corner frame
- * - Center logo
+ * - Center shrimp logo
  * - Custom colors
  * - High error correction for logo overlay
  */
 export default function StyledQRCode({
   url,
   size = 280,
-  logoUrl = null, // URL or data URI for center logo
+  logoUrl = SHRIMP_LOGO_URL, // Default to shrimp logo
   logoSize = 60,
   qrColor = "#000000",
   bgColor = "#FFFFFF",
@@ -72,7 +75,7 @@ export default function StyledQRCode({
         // Draw QR code
         ctx.drawImage(tempCanvas, qrX, qrY, size, size);
 
-        // Draw center logo if provided
+        // Draw center logo
         if (logoUrl) {
           const img = new Image();
           img.crossOrigin = "anonymous";
@@ -84,27 +87,22 @@ export default function StyledQRCode({
             // Draw white circle background for logo
             ctx.fillStyle = bgColor;
             ctx.beginPath();
-            ctx.arc(totalSize / 2, totalSize / 2, logoSize / 2 + 6, 0, Math.PI * 2);
+            ctx.arc(totalSize / 2, totalSize / 2, logoSize / 2 + 8, 0, Math.PI * 2);
             ctx.fill();
             
-            // Draw logo
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(totalSize / 2, totalSize / 2, logoSize / 2, 0, Math.PI * 2);
-            ctx.clip();
+            // Draw logo (keeping aspect ratio, centered)
             ctx.drawImage(img, logoX, logoY, logoSize, logoSize);
-            ctx.restore();
           };
           
           img.onerror = () => {
-            // If logo fails to load, draw a placeholder
-            drawPlaceholderLogo(ctx, totalSize, logoSize, bgColor);
+            // If logo fails to load, draw a simple "BG" fallback
+            drawFallbackLogo(ctx, totalSize, logoSize, bgColor, frameColor);
           };
           
           img.src = logoUrl;
         } else {
-          // Draw default shrimp-inspired logo
-          drawDefaultLogo(ctx, totalSize, logoSize, bgColor, frameColor);
+          // Draw fallback logo if no URL provided
+          drawFallbackLogo(ctx, totalSize, logoSize, bgColor, frameColor);
         }
 
         setError(null);
@@ -117,8 +115,8 @@ export default function StyledQRCode({
     generateQR();
   }, [url, size, logoUrl, logoSize, qrColor, bgColor, frameColor, frameWidth, frameRadius, showFrame]);
 
-  // Draw a stylized "BG" logo (Bubba Gump initials)
-  const drawDefaultLogo = (ctx, totalSize, logoSize, bgColor, accentColor) => {
+  // Draw a fallback "BG" logo if image fails to load
+  const drawFallbackLogo = (ctx, totalSize, logoSize, bgColor, accentColor) => {
     const centerX = totalSize / 2;
     const centerY = totalSize / 2;
     
@@ -127,13 +125,6 @@ export default function StyledQRCode({
     ctx.beginPath();
     ctx.arc(centerX, centerY, logoSize / 2 + 8, 0, Math.PI * 2);
     ctx.fill();
-    
-    // Outer ring
-    ctx.strokeStyle = accentColor;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, logoSize / 2 + 2, 0, Math.PI * 2);
-    ctx.stroke();
     
     // Inner circle with accent color
     ctx.fillStyle = "#C41E3A"; // Bubba Gump red
@@ -147,21 +138,6 @@ export default function StyledQRCode({
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("BG", centerX, centerY + 2);
-  };
-
-  const drawPlaceholderLogo = (ctx, totalSize, logoSize, bgColor) => {
-    const centerX = totalSize / 2;
-    const centerY = totalSize / 2;
-    
-    ctx.fillStyle = bgColor;
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, logoSize / 2 + 4, 0, Math.PI * 2);
-    ctx.fill();
-    
-    ctx.fillStyle = "#C41E3A";
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, logoSize / 2 - 2, 0, Math.PI * 2);
-    ctx.fill();
   };
 
   if (error) {
@@ -191,7 +167,7 @@ export default function StyledQRCode({
 export async function generateStyledQRDataUrl(url, options = {}) {
   const {
     size = 400,
-    logoUrl = null,
+    logoUrl = SHRIMP_LOGO_URL,
     logoSize = 80,
     qrColor = "#000000",
     bgColor = "#FFFFFF",
@@ -245,31 +221,40 @@ export async function generateStyledQRDataUrl(url, options = {}) {
       const centerX = totalSize / 2;
       const centerY = totalSize / 2;
       
-      // White circle background
+      // White circle background for logo
       ctx.fillStyle = bgColor;
       ctx.beginPath();
-      ctx.arc(centerX, centerY, logoSize / 2 + 8, 0, Math.PI * 2);
+      ctx.arc(centerX, centerY, logoSize / 2 + 10, 0, Math.PI * 2);
       ctx.fill();
-      
-      // Outer ring
-      ctx.strokeStyle = frameColor;
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, logoSize / 2 + 2, 0, Math.PI * 2);
-      ctx.stroke();
-      
-      // Inner circle
-      ctx.fillStyle = "#C41E3A";
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, logoSize / 2 - 4, 0, Math.PI * 2);
-      ctx.fill();
-      
-      // Text
-      ctx.fillStyle = "#FFFFFF";
-      ctx.font = `bold ${logoSize * 0.45}px Arial, sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("BG", centerX, centerY + 2);
+
+      // Load and draw shrimp logo
+      if (logoUrl) {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        
+        await new Promise((imgResolve, imgReject) => {
+          img.onload = () => {
+            const logoX = centerX - logoSize / 2;
+            const logoY = centerY - logoSize / 2;
+            ctx.drawImage(img, logoX, logoY, logoSize, logoSize);
+            imgResolve();
+          };
+          img.onerror = () => {
+            // Fallback to "BG" text if image fails
+            ctx.fillStyle = "#C41E3A";
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, logoSize / 2 - 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "#FFFFFF";
+            ctx.font = `bold ${logoSize * 0.45}px Arial, sans-serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("BG", centerX, centerY + 2);
+            imgResolve();
+          };
+          img.src = logoUrl;
+        });
+      }
 
       resolve(canvas.toDataURL("image/png"));
     } catch (err) {
