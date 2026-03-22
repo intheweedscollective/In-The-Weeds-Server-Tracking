@@ -105,6 +105,9 @@ Previously, data could be uploaded to snapshots separately, causing sync issues 
   - "Select All" / "Deselect All" buttons
   - "Delete Selected" with confirmation dialog
   - Bulk delete via `/api/v2/employees/cleanup/delete` endpoint
+- **Fixed "Not Assessed" on Analytics Page**: Performance tiers were missing from database. Fixed by:
+  1. Running a one-time migration script to populate existing employee tiers
+  2. Added fallback tier calculation in `get_employees_v2` API so tiers are computed on-the-fly if missing
 - **Testing**: All features verified with 100% pass rate (backend: 11/11 tests, frontend: all multi-select features working)
 
 ## File Structure

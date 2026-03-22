@@ -2718,11 +2718,29 @@ async def get_employees_v2(year: Optional[int] = None, quarter: Optional[str] = 
     
     employees = await db.employees_v2.find(query, {"_id": 0}).to_list(5000)
     
-    for emp in employees:
+    # Sort by score for tier calculation
+    employees_sorted = sorted(employees, key=lambda x: x.get('pre_dar_score') or x.get('total_score') or 0, reverse=True)
+    total = len(employees_sorted)
+    
+    for i, emp in enumerate(employees_sorted):
         if isinstance(emp.get('created_at'), str):
             emp['created_at'] = datetime.fromisoformat(emp['created_at'])
+        
+        # Calculate performance tier if missing
+        if not emp.get('performance_tier'):
+            rank = i + 1
+            percentile = ((total - rank) / total) * 100 if total > 0 else 0
+            
+            if percentile >= 75:
+                emp['performance_tier'] = "Top Performer"
+            elif percentile >= 50:
+                emp['performance_tier'] = "Above Average"
+            elif percentile >= 25:
+                emp['performance_tier'] = "Below Average"
+            else:
+                emp['performance_tier'] = "Needs Immediate Improvement"
     
-    return employees
+    return employees_sorted
 
 
 @api_router.get("/v2/employees/{employee_id}")
