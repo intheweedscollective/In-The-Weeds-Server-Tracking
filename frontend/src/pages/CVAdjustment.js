@@ -34,8 +34,8 @@ export default function CVAdjustment() {
   const fetchSessions = async () => {
     try {
       const response = await fetch(`${API_URL}/api/v2/cv/adjustment/sessions?quarter=${quarter}&year=${year}`);
+      const data = await response.json();
       if (response.ok) {
-        const data = await response.json();
         setSessions(data);
       }
     } catch (error) {
@@ -62,18 +62,18 @@ export default function CVAdjustment() {
         { method: 'POST', body: formData }
       );
 
+      const data = await response.json();
+      
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Upload failed');
+        throw new Error(data.detail || 'Upload failed');
       }
 
-      const data = await response.json();
       setSession(data);
       setFeedbackItems(data.feedback_items || []);
       toast.success(`Processed ${data.summary.total_feedback} feedback items`);
       fetchSessions();
     } catch (error) {
-      toast.error(error.message);
+      toast.error(error.message || 'Upload failed');
     } finally {
       setLoading(false);
     }
@@ -88,9 +88,11 @@ export default function CVAdjustment() {
         { method: 'POST' }
       );
 
-      if (!response.ok) throw new Error('Failed to update');
-
       const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.detail || 'Failed to update');
+      }
       
       // Update local state
       setFeedbackItems(prev => prev.map(item => 
@@ -114,13 +116,16 @@ export default function CVAdjustment() {
     setLoading(true);
     try {
       const response = await fetch(`${API_URL}/api/v2/cv/adjustment/session/${sessionId}`);
-      if (!response.ok) throw new Error('Failed to load session');
-      
       const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.detail || 'Failed to load session');
+      }
+      
       setSession(data);
       setFeedbackItems(data.feedback_items || []);
     } catch (error) {
-      toast.error(error.message);
+      toast.error(error.message || 'Failed to load session');
     } finally {
       setLoading(false);
     }
