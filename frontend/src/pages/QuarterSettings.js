@@ -33,6 +33,7 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export default function QuarterSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [fixingRankings, setFixingRankings] = useState(false);
   const [allSettings, setAllSettings] = useState([]);
   const [selectedYear, setSelectedYear] = useState(2026);
   const [selectedQuarter, setSelectedQuarter] = useState("Q1");
@@ -226,6 +227,24 @@ export default function QuarterSettings() {
       toast.error(error.response?.data?.detail || "Error saving settings");
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Emergency fix for all rankings
+  const handleFixAllRankings = async () => {
+    if (!window.confirm("This will recalculate ALL employee rankings and update ALL snapshots. Continue?")) {
+      return;
+    }
+    
+    setFixingRankings(true);
+    try {
+      const response = await api.post(`/v2/admin/fix-all-rankings?quarter=${selectedQuarter}&year=${selectedYear}`);
+      const data = response.data;
+      toast.success(`Fixed ${data.employees_fixed} employees and ${data.snapshots_fixed} snapshots!`);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Error fixing rankings");
+    } finally {
+      setFixingRankings(false);
     }
   };
 
@@ -855,7 +874,28 @@ export default function QuarterSettings() {
         </div>
 
         {/* Save Button - Always show (theme settings can be saved even when locked) */}
-        <div className="flex justify-end">
+        <div className="flex justify-between items-center">
+          {/* Fix All Rankings Button */}
+          <Button
+            onClick={handleFixAllRankings}
+            disabled={fixingRankings}
+            variant="destructive"
+            className="bg-red-600 hover:bg-red-700"
+            data-testid="fix-rankings-btn"
+          >
+            {fixingRankings ? (
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                Fixing Rankings...
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" />
+                Fix All Rankings
+              </div>
+            )}
+          </Button>
+          
           <Button
             onClick={handleSave}
             disabled={saving || (!settings?.is_locked && !weightsValid)}

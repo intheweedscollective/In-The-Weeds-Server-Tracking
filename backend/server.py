@@ -6582,6 +6582,107 @@ async def delete_snapshot(snapshot_id: str):
     return {"message": "Snapshot deleted successfully"}
 
 
+@api_router.post("/v2/admin/fix-all-rankings")
+async def fix_all_rankings(quarter: str = "Q1", year: int = 2026):
+    """
+    EMERGENCY FIX: Recalculate ALL employee rankings and sync to ALL snapshots.
+    This will:
+    1. Recalculate tier assignments for all employees
+    2. Recalculate peer ranks
+    3. Update all snapshots with corrected data
+    """
+    import logging
+    logging.info(f"=== FIXING ALL RANKINGS for {quarter} {year} ===")
+    
+    # Get settings
+    settings_doc = await db.quarter_settings.find_one(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    )
+    if not settings_doc:
+        raise HTTPException(status_code=404, detail=f"Settings not found for {quarter} {year}")
+    
+    settings = QuarterSettings(**settings_doc)
+    
+    # Get all employees
+    employees_docs = await db.employees_v2.find(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    ).to_list(500)
+    
+    if not employees_docs:
+        return {"error": "No employees found", "fixed": 0}
+    
+    # Convert to EmployeeV2 objects
+    employees = [EmployeeV2(**doc) for doc in employees_docs]
+    
+    # Run full scoring pipeline
+    employees = run_full_scoring(employees, settings)
+    
+    # Update each employee in database
+    updated_count = 0
+    for emp in employees:
+        emp_dict = emp.model_dump()
+        # Remove None values
+        emp_dict = {k: v for k, v in emp_dict.items() if v is not None}
+        
+        result = await db.employees_v2.update_one(
+            {"id": emp.id},
+            {"$set": emp_dict}
+        )
+        if result.modified_count > 0:
+            updated_count += 1
+    
+    logging.info(f"Updated {updated_count} employees")
+    
+    # Now fix ALL snapshots for this quarter
+    snapshots = await db.snapshots.find(
+        {"year": year, "quarter": quarter.upper()}
+    ).to_list(100)
+    
+    snapshot_count = 0
+    for snapshot in snapshots:
+        snapshot_id = snapshot.get("id")
+        if not snapshot_id:
+            continue
+            
+        # Get fresh employee data
+        fresh_employees = await db.employees_v2.find(
+            {"year": year, "quarter": quarter.upper()},
+            {"_id": 0}
+        ).to_list(500)
+        
+        # Sort by tier then score
+        tier_order = {"Trainer": 0, "Bartender": 1, "A-Server": 2, "B-Server": 3, "C-Server": 4}
+        fresh_employees.sort(
+            key=lambda x: (
+                tier_order.get(x.get('tier_label', 'C-Server'), 4),
+                -(x.get('pre_dar_score') or x.get('total_score') or 0)
+            )
+        )
+        
+        # Update snapshot
+        await db.snapshots.update_one(
+            {"id": snapshot_id},
+            {"$set": {
+                "employees": fresh_employees,
+                "employee_count": len(fresh_employees),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        snapshot_count += 1
+    
+    logging.info(f"Updated {snapshot_count} snapshots")
+    
+    return {
+        "success": True,
+        "employees_fixed": updated_count,
+        "snapshots_fixed": snapshot_count,
+        "total_employees": len(employees),
+        "message": f"Fixed {updated_count} employees and {snapshot_count} snapshots"
+    }
+
+
 @api_router.get("/v2/snapshots/{snapshot_id}/slide")
 async def generate_snapshot_slide_endpoint(
     snapshot_id: str,
