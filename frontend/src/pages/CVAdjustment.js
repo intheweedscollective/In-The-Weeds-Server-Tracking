@@ -62,17 +62,29 @@ export default function CVAdjustment() {
         { method: 'POST', body: formData }
       );
 
-      const data = await response.json();
+      // Clone response before reading to avoid "body already read" errors
+      const responseClone = response.clone();
+      
+      let data;
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        // If JSON parsing fails, try to get text from clone
+        const text = await responseClone.text();
+        console.error('Response was not JSON:', text);
+        throw new Error('Server returned an invalid response');
+      }
       
       if (!response.ok) {
-        throw new Error(data.detail || 'Upload failed');
+        throw new Error(data.detail || data.message || 'Upload failed');
       }
 
       setSession(data);
       setFeedbackItems(data.feedback_items || []);
-      toast.success(`Processed ${data.summary.total_feedback} feedback items`);
+      toast.success(`Processed ${data.summary?.total_feedback || 0} feedback items`);
       fetchSessions();
     } catch (error) {
+      console.error('Upload error:', error);
       toast.error(error.message || 'Upload failed');
     } finally {
       setLoading(false);
