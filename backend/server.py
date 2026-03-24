@@ -6585,11 +6585,8 @@ async def delete_snapshot(snapshot_id: str):
 @api_router.post("/v2/admin/fix-all-rankings")
 async def fix_all_rankings(quarter: str = "Q1", year: int = 2026):
     """
-    EMERGENCY FIX: Recalculate ALL employee rankings and sync to ALL snapshots.
-    This will:
-    1. Recalculate tier assignments for all employees
-    2. Recalculate peer ranks
-    3. Update all snapshots with corrected data
+    EMERGENCY FIX: Recalculate ALL employee rankings and sync to ONLY the most recent snapshot.
+    Historical snapshots are preserved for comparison.
     """
     import logging
     logging.info(f"=== FIXING ALL RANKINGS for {quarter} {year} ===")
@@ -6635,17 +6632,17 @@ async def fix_all_rankings(quarter: str = "Q1", year: int = 2026):
     
     logging.info(f"Updated {updated_count} employees")
     
-    # Now fix ALL snapshots for this quarter
-    snapshots = await db.snapshots.find(
-        {"year": year, "quarter": quarter.upper()}
-    ).to_list(100)
+    # Find ONLY the most recent snapshot for this quarter
+    latest_snapshot = await db.snapshots.find_one(
+        {"year": year, "quarter": quarter.upper()},
+        sort=[("snapshot_date", -1)]
+    )
     
     snapshot_count = 0
-    for snapshot in snapshots:
-        snapshot_id = snapshot.get("id")
-        if not snapshot_id:
-            continue
-            
+    if latest_snapshot:
+        snapshot_id = latest_snapshot.get("id")
+        snapshot_date = latest_snapshot.get("snapshot_date", "unknown")
+        
         # Get fresh employee data
         fresh_employees = await db.employees_v2.find(
             {"year": year, "quarter": quarter.upper()},
@@ -6661,7 +6658,7 @@ async def fix_all_rankings(quarter: str = "Q1", year: int = 2026):
             )
         )
         
-        # Update snapshot
+        # Update ONLY the most recent snapshot
         await db.snapshots.update_one(
             {"id": snapshot_id},
             {"$set": {
@@ -6670,16 +6667,15 @@ async def fix_all_rankings(quarter: str = "Q1", year: int = 2026):
                 "updated_at": datetime.now(timezone.utc).isoformat()
             }}
         )
-        snapshot_count += 1
-    
-    logging.info(f"Updated {snapshot_count} snapshots")
+        snapshot_count = 1
+        logging.info(f"Updated most recent snapshot: {snapshot_date}")
     
     return {
         "success": True,
         "employees_fixed": updated_count,
         "snapshots_fixed": snapshot_count,
         "total_employees": len(employees),
-        "message": f"Fixed {updated_count} employees and {snapshot_count} snapshots"
+        "message": f"Fixed {updated_count} employees and updated most recent snapshot only (historical data preserved)"
     }
 
 
