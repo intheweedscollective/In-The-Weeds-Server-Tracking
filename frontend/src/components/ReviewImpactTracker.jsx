@@ -77,18 +77,18 @@ export default function ReviewImpactTracker({ quarter = "Q1", year = 2026 }) {
 
       {/* Total Impact Banner */}
       <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 rounded-xl p-3 mb-4 border border-purple-500/20">
-        <div className="grid grid-cols-3 gap-2 text-center">
-          <div className="min-w-0">
-            <p className="text-xl font-bold text-purple-400 truncate">{totals.total_mentions}</p>
-            <p className="text-xs text-slate-400 truncate">RT Mentions</p>
+        <div className="grid grid-cols-3 gap-1 text-center">
+          <div className="min-w-0 px-1">
+            <p className="text-lg md:text-xl font-bold text-purple-400">{totals.total_mentions || 0}</p>
+            <p className="text-xs text-slate-400">RT Mentions</p>
           </div>
-          <div className="min-w-0">
-            <p className="text-xl font-bold text-pink-400 truncate">{totals.total_promoters}</p>
-            <p className="text-xs text-slate-400 truncate">CV Promoters</p>
+          <div className="min-w-0 px-1">
+            <p className="text-lg md:text-xl font-bold text-pink-400">{totals.total_promoters || 0}</p>
+            <p className="text-xs text-slate-400">CV Promoters</p>
           </div>
-          <div className="min-w-0">
-            <p className="text-lg font-bold text-emerald-400 truncate">{formatCurrency(totals.total_revenue_influence)}</p>
-            <p className="text-xs text-slate-400 truncate">Influence</p>
+          <div className="min-w-0 px-1">
+            <p className="text-sm md:text-lg font-bold text-emerald-400">{formatCurrency(totals.total_revenue_influence || 0)}</p>
+            <p className="text-xs text-slate-400">Influence</p>
           </div>
         </div>
       </div>
