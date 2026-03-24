@@ -96,6 +96,94 @@ async def delete_qr_employee(employee_id: str):
     result = await _db.qr_employees.delete_one({"id": employee_id})
     return {"deleted": result.deleted_count > 0}
 
+@qr_router.put("/employees/{employee_id}/rename")
+async def rename_qr_employee(employee_id: str, new_name: str):
+    """Rename a QR employee (preserves click counts)"""
+    result = await _db.qr_employees.update_one(
+        {"id": employee_id},
+        {"$set": {"name": new_name}}
+    )
+    return {"updated": result.modified_count > 0, "new_name": new_name}
+
+@qr_router.post("/employees/sync-names-from-main")
+async def sync_qr_names_from_main(quarter: str = "Q1", year: int = 2026):
+    """
+    Sync QR employee names to match main employee list.
+    Matches by first name and updates to full name.
+    Preserves all click counts.
+    """
+    # Get main employees
+    main_employees = await _db.employees_v2.find(
+        {"quarter": quarter.upper(), "year": year},
+        {"name": 1}
+    ).to_list(100)
+    
+    # Build first name -> full name mapping
+    first_to_full = {}
+    for emp in main_employees:
+        full_name = emp.get('name', '')
+        if ' ' in full_name:
+            first_name = full_name.split()[0].lower()
+            first_to_full[first_name] = full_name
+    
+    # Special cases for nicknames
+    special_cases = {
+        'keisha': 'Lakeisha Martin',
+        'starwars': 'Starwars McKinnon-Herrera'
+    }
+    first_to_full.update(special_cases)
+    
+    # Get QR employees
+    qr_employees = await _db.qr_employees.find({}).to_list(500)
+    
+    updated = []
+    added = []
+    
+    for emp in qr_employees:
+        qr_name = emp.get('name', '')
+        qr_name_lower = qr_name.lower().strip()
+        
+        # If first-name only, try to match to full name
+        if ' ' not in qr_name and qr_name_lower in first_to_full:
+            new_name = first_to_full[qr_name_lower]
+            await _db.qr_employees.update_one(
+                {"id": emp["id"]},
+                {"$set": {"name": new_name}}
+            )
+            updated.append({
+                "old": qr_name,
+                "new": new_name,
+                "clicks": emp.get('google_clicks', 0) + emp.get('yelp_clicks', 0)
+            })
+    
+    # Check for missing employees and add them
+    qr_names_lower = set()
+    for emp in await _db.qr_employees.find({}).to_list(500):
+        qr_names_lower.add(emp.get('name', '').lower())
+    
+    for emp in main_employees:
+        full_name = emp.get('name', '')
+        if full_name.lower() not in qr_names_lower:
+            new_emp = {
+                "id": str(uuid.uuid4()),
+                "name": full_name,
+                "yelp_clicks": 0,
+                "google_clicks": 0,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            await _db.qr_employees.insert_one(new_emp)
+            added.append(full_name)
+    
+    return {
+        "success": True,
+        "renamed": len(updated),
+        "added": len(added),
+        "details": {
+            "renamed_employees": updated,
+            "added_employees": added
+        }
+    }
+
 @qr_router.post("/employees/cleanup")
 async def cleanup_qr_employees():
     """
