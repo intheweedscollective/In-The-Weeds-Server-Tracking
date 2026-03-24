@@ -33,20 +33,28 @@ export default function DataIntegrity() {
         api.get(`/v2/reviews/stats?quarter=${quarter}&year=${year}`).catch(() => ({ data: {} }))
       ]);
       
+      const cvData = cvRes.data || {};
+      const rtData = rtRes.data || {};
+      
       setStats({
         employees: employeesRes.data?.length || 0,
         cv: {
-          responses: cvRes.data?.total_responses || 0,
-          promoters: cvRes.data?.promoter_count || 0,
-          detractors: cvRes.data?.detractor_count || 0,
-          nps: cvRes.data?.avg_nps || 0
+          responses: cvData.total_surveys || cvData.total_responses || 0,
+          promoters: cvData.promoter_count || 0,
+          passives: cvData.passive_count || 0,
+          detractors: cvData.detractor_count || 0,
+          nps: cvData.avg_nps || cvData.store_nps || 0
         },
         rt: {
-          mentions: rtRes.data?.total_mentions || 0,
-          employees: rtRes.data?.top_mentioned?.length || 0
+          mentions: rtData.total_mentions || 0,
+          employees: rtData.employees_with_mentions || rtData.top_mentioned?.length || 0,
+          avgPerEmployee: rtData.total_mentions && rtData.employees_with_mentions 
+            ? (rtData.total_mentions / rtData.employees_with_mentions).toFixed(1) 
+            : 0
         }
       });
     } catch (error) {
+      console.error("Stats error:", error);
       toast.error("Failed to fetch data stats");
     }
   }, [quarter, year]);
