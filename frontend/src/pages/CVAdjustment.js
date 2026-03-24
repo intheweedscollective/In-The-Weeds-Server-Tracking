@@ -4,7 +4,6 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import { Checkbox } from '../components/ui/checkbox';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
 import { 
   Upload, AlertTriangle, CheckCircle, XCircle, RefreshCw, 
@@ -14,13 +13,39 @@ import {
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
+// Safe fetch helper that handles JSON parsing errors
+async function safeFetch(url, options = {}) {
+  const response = await fetch(url, options);
+  
+  let data = null;
+  const contentType = response.headers.get('content-type');
+  
+  if (contentType && contentType.includes('application/json')) {
+    try {
+      data = await response.json();
+    } catch (e) {
+      console.error('Failed to parse JSON:', e);
+      data = { error: 'Invalid server response' };
+    }
+  } else {
+    const text = await response.text();
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      data = { error: text || 'Unknown error' };
+    }
+  }
+  
+  return { ok: response.ok, status: response.status, data };
+}
+
 export default function CVAdjustment() {
   const [feedbackFile, setFeedbackFile] = useState(null);
   const [transactionFile, setTransactionFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [session, setSession] = useState(null);
   const [feedbackItems, setFeedbackItems] = useState([]);
-  const [filter, setFilter] = useState('all'); // all, detractors, passives, promoters, flagged
+  const [filter, setFilter] = useState('all');
   const [expandedItems, setExpandedItems] = useState(new Set());
   const [sessions, setSessions] = useState([]);
   
@@ -33,9 +58,10 @@ export default function CVAdjustment() {
 
   const fetchSessions = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/v2/cv/adjustment/sessions?quarter=${quarter}&year=${year}`);
-      const data = await response.json();
-      if (response.ok) {
+      const { ok, data } = await safeFetch(
+        `${API_URL}/api/v2/cv/adjustment/sessions?quarter=${quarter}&year=${year}`
+      );
+      if (ok && Array.isArray(data)) {
         setSessions(data);
       }
     } catch (error) {
@@ -57,32 +83,23 @@ export default function CVAdjustment() {
     }
 
     try {
-      const response = await fetch(
+      const { ok, data } = await safeFetch(
         `${API_URL}/api/v2/cv/adjustment/upload?quarter=${quarter}&year=${year}`,
         { method: 'POST', body: formData }
       );
-
-      // Clone response before reading to avoid "body already read" errors
-      const responseClone = response.clone();
       
-      let data;
-      try {
-        data = await response.json();
-      } catch (jsonError) {
-        // If JSON parsing fails, try to get text from clone
-        const text = await responseClone.text();
-        console.error('Response was not JSON:', text);
-        throw new Error('Server returned an invalid response');
-      }
-      
-      if (!response.ok) {
-        throw new Error(data.detail || data.message || 'Upload failed');
+      if (!ok) {
+        throw new Error(data?.detail || data?.message || data?.error || 'Upload failed');
       }
 
       setSession(data);
       setFeedbackItems(data.feedback_items || []);
       toast.success(`Processed ${data.summary?.total_feedback || 0} feedback items`);
       fetchSessions();
+      
+      // Clear file inputs
+      setFeedbackFile(null);
+      setTransactionFile(null);
     } catch (error) {
       console.error('Upload error:', error);
       toast.error(error.message || 'Upload failed');
@@ -95,15 +112,13 @@ export default function CVAdjustment() {
     if (!session?.session_id) return;
 
     try {
-      const response = await fetch(
+      const { ok, data } = await safeFetch(
         `${API_URL}/api/v2/cv/adjustment/session/${session.session_id}/update-item?item_id=${itemId}&excluded=${!currentlyExcluded}`,
         { method: 'POST' }
       );
-
-      const data = await response.json();
       
-      if (!response.ok) {
-        throw new Error(data.detail || 'Failed to update');
+      if (!ok) {
+        throw new Error(data?.detail || 'Failed to update');
       }
       
       // Update local state
@@ -127,17 +142,42 @@ export default function CVAdjustment() {
   const loadSession = async (sessionId) => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/api/v2/cv/adjustment/session/${sessionId}`);
-      const data = await response.json();
+      const { ok, data } = await safeFetch(
+        `${API_URL}/api/v2/cv/adjustment/session/${sessionId}`
+      );
       
-      if (!response.ok) {
-        throw new Error(data.detail || 'Failed to load session');
+      if (!ok) {
+        throw new Error(data?.detail || 'Failed to load session');
       }
       
       setSession(data);
       setFeedbackItems(data.feedback_items || []);
     } catch (error) {
       toast.error(error.message || 'Failed to load session');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const applyAdjustments = async () => {
+    if (!session?.session_id) return;
+    
+    setLoading(true);
+    try {
+      const { ok, data } = await safeFetch(
+        `${API_URL}/api/v2/cv/adjustment/session/${session.session_id}/apply`,
+        { method: 'POST' }
+      );
+      
+      if (!ok) {
+        throw new Error(data?.detail || 'Failed to apply adjustments');
+      }
+      
+      toast.success('Adjustments applied! Employee scores updated.');
+      setSession(prev => ({ ...prev, status: 'applied' }));
+      fetchSessions();
+    } catch (error) {
+      toast.error(error.message || 'Failed to apply adjustments');
     } finally {
       setLoading(false);
     }
@@ -180,14 +220,30 @@ export default function CVAdjustment() {
     return 'bg-red-100 text-red-800 border-red-300';
   };
 
+  // Calculate current NPS stats
+  const calculateStats = () => {
+    if (!feedbackItems || feedbackItems.length === 0) {
+      return { promoters: 0, passives: 0, detractors: 0, total: 0, nps: '0.0', excluded: 0 };
+    }
+    const included = feedbackItems.filter(item => !item.excluded);
+    const promoters = included.filter(i => i.nps_category === 'promoter').length;
+    const passives = included.filter(i => i.nps_category === 'passive').length;
+    const detractors = included.filter(i => i.nps_category === 'detractor').length;
+    const total = promoters + passives + detractors;
+    const nps = total > 0 ? ((promoters - detractors) / total * 100).toFixed(1) : '0.0';
+    return { promoters, passives, detractors, total, nps, excluded: feedbackItems.length - included.length };
+  };
+
+  const stats = session ? calculateStats() : { promoters: 0, passives: 0, detractors: 0, total: 0, nps: '0.0', excluded: 0 };
+
   return (
-    <div className="min-h-screen bg-slate-50 p-6" data-testid="cv-adjustment-page">
+    <div className="min-h-screen bg-slate-50 p-4 md:p-6" data-testid="cv-adjustment-page">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900">CV NPS Adjustment Tool</h1>
-            <p className="text-slate-600 mt-1">
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900">CV NPS Adjustment Tool</h1>
+            <p className="text-slate-600 mt-1 text-sm md:text-base">
               Remove feedback that isn't the server's fault and recalculate NPS
             </p>
           </div>
@@ -213,7 +269,7 @@ export default function CVAdjustment() {
                 <Input
                   type="file"
                   accept=".xlsx,.xls,.csv"
-                  onChange={(e) => setFeedbackFile(e.target.files[0])}
+                  onChange={(e) => setFeedbackFile(e.target.files?.[0] || null)}
                   data-testid="feedback-file-input"
                 />
                 <p className="text-xs text-slate-500 mt-1">Contains ratings, comments, and customer info</p>
@@ -225,7 +281,7 @@ export default function CVAdjustment() {
                 <Input
                   type="file"
                   accept=".xlsx,.xls,.csv"
-                  onChange={(e) => setTransactionFile(e.target.files[0])}
+                  onChange={(e) => setTransactionFile(e.target.files?.[0] || null)}
                   data-testid="transaction-file-input"
                 />
                 <p className="text-xs text-slate-500 mt-1">Links check numbers to additional data</p>
@@ -250,20 +306,23 @@ export default function CVAdjustment() {
           <Card>
             <CardHeader>
               <CardTitle>Previous Sessions</CardTitle>
+              <CardDescription>Resume a previous adjustment session</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {sessions.map(s => (
+                {sessions.map((s) => (
                   <div 
-                    key={s.session_id}
-                    className="flex items-center justify-between p-3 bg-slate-100 rounded-lg cursor-pointer hover:bg-slate-200"
+                    key={s.session_id} 
+                    className="flex items-center justify-between p-3 bg-slate-100 rounded-lg hover:bg-slate-200 cursor-pointer transition-colors"
                     onClick={() => loadSession(s.session_id)}
                   >
                     <div>
-                      <p className="font-medium">{new Date(s.created_at).toLocaleString()}</p>
-                      <p className="text-sm text-slate-600">{s.total_items} items | NPS: {s.original_nps?.nps_score} → {s.adjusted_nps?.nps_score}</p>
+                      <div className="font-medium">{new Date(s.created_at).toLocaleDateString()}</div>
+                      <div className="text-sm text-slate-500">
+                        {s.total_items} items • Status: {s.status}
+                      </div>
                     </div>
-                    <Badge variant={s.status === 'applied' ? 'default' : 'secondary'}>
+                    <Badge variant={s.status === 'applied' ? 'default' : 'outline'}>
                       {s.status}
                     </Badge>
                   </div>
@@ -273,235 +332,200 @@ export default function CVAdjustment() {
           </Card>
         )}
 
-        {/* Results Section */}
+        {/* Active Session */}
         {session && (
           <>
-            {/* NPS Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card className="border-2 border-slate-200">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg">Original NPS</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-4xl font-bold text-slate-900">
-                    {session.original_nps?.nps_score?.toFixed(1)}
-                  </div>
-                  <div className="flex gap-4 mt-2 text-sm">
-                    <span className="text-green-600">
-                      <ThumbsUp className="w-4 h-4 inline mr-1" />
-                      {session.original_nps?.promoters} Promoters
-                    </span>
-                    <span className="text-yellow-600">
-                      <Minus className="w-4 h-4 inline mr-1" />
-                      {session.original_nps?.passives} Passives
-                    </span>
-                    <span className="text-red-600">
-                      <ThumbsDown className="w-4 h-4 inline mr-1" />
-                      {session.original_nps?.detractors} Detractors
-                    </span>
+            {/* NPS Summary */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <Card className="bg-white">
+                <CardContent className="pt-6">
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-slate-900">
+                      {typeof session.original_nps === 'number' ? session.original_nps.toFixed(1) : '0.0'}
+                    </div>
+                    <div className="text-sm text-slate-500">Original NPS</div>
+                    <div className="text-xs text-slate-400 mt-1">
+                      {session.summary?.promoter_count ?? 0} Promoters, {session.summary?.passive_count ?? 0} Passives, {session.summary?.detractor_count ?? 0} Detractors
+                    </div>
                   </div>
                 </CardContent>
               </Card>
-
-              <Card className="border-2 border-green-200 bg-green-50">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg text-green-800">Adjusted NPS</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-4xl font-bold text-green-700">
-                    {session.adjusted_nps?.nps_score?.toFixed(1)}
+              
+              <Card className="bg-green-50 border-green-200">
+                <CardContent className="pt-6">
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-green-700">{stats.nps}</div>
+                    <div className="text-sm text-green-600">Adjusted NPS</div>
+                    <div className="text-xs text-green-500 mt-1">
+                      {stats.promoters} Promoters, {stats.passives} Passives, {stats.detractors} Detractors, {stats.excluded} excluded
+                    </div>
                   </div>
-                  <div className="flex gap-4 mt-2 text-sm">
-                    <span className="text-green-600">
-                      {session.adjusted_nps?.promoters} Promoters
-                    </span>
-                    <span className="text-yellow-600">
-                      {session.adjusted_nps?.passives} Passives
-                    </span>
-                    <span className="text-red-600">
-                      {session.adjusted_nps?.detractors} Detractors
-                    </span>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-slate-900">{feedbackItems.length}</div>
+                    <div className="text-sm text-slate-500">Total Items</div>
                   </div>
-                  <p className="text-sm text-green-700 mt-2">
-                    {session.excluded_count?.total || 0} items excluded
-                  </p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-orange-600">{stats.excluded}</div>
+                    <div className="text-sm text-slate-500">Excluded</div>
+                  </div>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Feedback Review */}
+            {/* Filter & Actions */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div className="flex flex-wrap gap-2">
+                <Badge 
+                  variant={filter === 'all' ? 'default' : 'outline'} 
+                  className="cursor-pointer"
+                  onClick={() => setFilter('all')}
+                >
+                  All ({feedbackItems.length})
+                </Badge>
+                <Badge 
+                  variant={filter === 'detractors' ? 'destructive' : 'outline'} 
+                  className="cursor-pointer"
+                  onClick={() => setFilter('detractors')}
+                >
+                  Detractors ({feedbackItems.filter(i => i.nps_category === 'detractor').length})
+                </Badge>
+                <Badge 
+                  variant={filter === 'passives' ? 'secondary' : 'outline'} 
+                  className="cursor-pointer"
+                  onClick={() => setFilter('passives')}
+                >
+                  Passives ({feedbackItems.filter(i => i.nps_category === 'passive').length})
+                </Badge>
+                <Badge 
+                  variant={filter === 'promoters' ? 'default' : 'outline'} 
+                  className="cursor-pointer bg-green-500"
+                  onClick={() => setFilter('promoters')}
+                >
+                  Promoters ({feedbackItems.filter(i => i.nps_category === 'promoter').length})
+                </Badge>
+                <Badge 
+                  variant={filter === 'excluded' ? 'default' : 'outline'} 
+                  className="cursor-pointer"
+                  onClick={() => setFilter('excluded')}
+                >
+                  Excluded ({stats.excluded})
+                </Badge>
+              </div>
+              
+              {session.status !== 'applied' && (
+                <Button 
+                  onClick={applyAdjustments}
+                  disabled={loading}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  {loading ? (
+                    <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Applying...</>
+                  ) : (
+                    <><CheckCircle className="w-4 h-4 mr-2" /> Apply Adjustments</>
+                  )}
+                </Button>
+              )}
+            </div>
+
+            {/* Feedback Items */}
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Review Feedback</CardTitle>
-                  <div className="flex gap-2">
-                    <Button
-                      variant={filter === 'all' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setFilter('all')}
-                    >
-                      All ({feedbackItems.length})
-                    </Button>
-                    <Button
-                      variant={filter === 'detractors' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setFilter('detractors')}
-                    >
-                      <ThumbsDown className="w-4 h-4 mr-1" />
-                      Detractors
-                    </Button>
-                    <Button
-                      variant={filter === 'passives' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setFilter('passives')}
-                    >
-                      <Minus className="w-4 h-4 mr-1" />
-                      Passives
-                    </Button>
-                    <Button
-                      variant={filter === 'flagged' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setFilter('flagged')}
-                    >
-                      <AlertTriangle className="w-4 h-4 mr-1" />
-                      Auto-Flagged
-                    </Button>
-                    <Button
-                      variant={filter === 'excluded' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setFilter('excluded')}
-                    >
-                      <XCircle className="w-4 h-4 mr-1" />
-                      Excluded
-                    </Button>
-                  </div>
-                </div>
+                <CardTitle className="flex items-center gap-2">
+                  <Filter className="w-5 h-5" />
+                  Review Feedback ({filteredItems.length} items)
+                </CardTitle>
+                <CardDescription>
+                  Check/uncheck items to exclude them from NPS calculation
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {filteredItems.map(item => (
+                  {filteredItems.map((item) => (
                     <div 
                       key={item.id}
-                      className={`border rounded-lg overflow-hidden transition-all ${
+                      className={`p-4 rounded-lg border transition-all ${
                         item.excluded 
-                          ? 'bg-slate-50 border-slate-300' 
-                          : item.auto_flagged_non_server 
-                            ? 'bg-amber-50 border-amber-200'
+                          ? 'bg-slate-100 border-slate-300 opacity-60' 
+                          : item.auto_flagged_non_server
+                            ? 'bg-yellow-50 border-yellow-300'
                             : 'bg-white border-slate-200'
                       }`}
-                      data-testid={`feedback-item-${item.id}`}
                     >
-                      {/* Header Row */}
-                      <div className={`px-3 py-2 border-b ${
-                        item.excluded ? 'border-slate-200 bg-slate-100' : item.auto_flagged_non_server ? 'border-amber-200 bg-amber-100/50' : 'border-slate-100 bg-slate-50'
-                      }`}>
-                        {/* Top line: Checkbox, Icon, Rating, Name, Date */}
-                        <div className="flex items-center gap-2">
-                          <Checkbox
-                            checked={item.excluded}
-                            onCheckedChange={() => handleToggleExclusion(item.id, item.excluded)}
-                            data-testid={`exclude-checkbox-${item.id}`}
-                            className="h-4 w-4 shrink-0"
-                          />
-                          <div className="shrink-0">{getCategoryIcon(item.nps_category)}</div>
-                          <Badge className={`${getRatingColor(item.rating)} text-xs px-1.5 py-0 shrink-0`}>
-                            Rating: {item.rating}
-                          </Badge>
-                          <span className="text-sm font-medium text-slate-700 truncate flex-1">
-                            {item.customer_name}
-                          </span>
-                          <span className="text-xs text-slate-500 shrink-0">
-                            {item.response_date}
-                          </span>
-                        </div>
+                      <div className="flex items-start gap-3">
+                        <Checkbox
+                          checked={!item.excluded}
+                          onCheckedChange={() => handleToggleExclusion(item.id, item.excluded)}
+                          className="mt-1"
+                        />
                         
-                        {/* Status badges - second line if present */}
-                        {(item.auto_flagged_non_server || item.excluded) && (
-                          <div className="flex items-center gap-1.5 mt-1.5 ml-6">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 mb-2">
+                            {getCategoryIcon(item.nps_category)}
+                            <Badge className={getRatingColor(item.rating)}>
+                              Rating: {item.rating}
+                            </Badge>
+                            {item.customer_name && (
+                              <span className="text-sm font-medium text-slate-700">{item.customer_name}</span>
+                            )}
                             {item.auto_flagged_non_server && (
-                              <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-300 text-xs px-1.5 py-0">
-                                <AlertTriangle className="w-3 h-3 mr-0.5" />
+                              <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
+                                <AlertTriangle className="w-3 h-3 mr-1" />
                                 Auto-flagged
                               </Badge>
                             )}
                             {item.excluded && (
-                              <Badge variant="outline" className="bg-slate-200 text-slate-600 border-slate-300 text-xs px-1.5 py-0">
+                              <Badge variant="outline" className="bg-slate-200">
                                 Excluded
                               </Badge>
                             )}
                           </div>
-                        )}
-                      </div>
-                      
-                      {/* Content Row - Comment */}
-                      <div className="px-3 py-2.5">
-                        {item.comment ? (
-                          <div>
-                            <p className={`text-sm text-slate-700 leading-relaxed ${
-                              expandedItems.has(item.id) ? '' : 'line-clamp-2'
-                            } ${item.excluded ? 'opacity-60' : ''}`}>
-                              {item.comment}
+                          
+                          {item.comment && (
+                            <p className={`text-sm ${item.excluded ? 'text-slate-400 line-through' : 'text-slate-600'}`}>
+                              "{item.comment}"
                             </p>
-                            {item.comment.length > 100 && (
-                              <button
-                                className="text-xs text-blue-600 hover:text-blue-800 mt-1.5 flex items-center font-medium"
-                                onClick={() => toggleExpand(item.id)}
-                              >
-                                {expandedItems.has(item.id) ? (
-                                  <><ChevronUp className="w-3.5 h-3.5 mr-0.5" /> Show less</>
-                                ) : (
-                                  <><ChevronDown className="w-3.5 h-3.5 mr-0.5" /> Show more</>
-                                )}
-                              </button>
-                            )}
-                          </div>
-                        ) : (
-                          <p className="text-sm text-slate-400 italic">No comment provided</p>
-                        )}
-                      </div>
-
-                      {/* Footer Row - Auto-flag reasons (if any) */}
-                      {item.auto_flagged_non_server && item.auto_flag_reasons?.length > 0 && (
-                        <div className={`px-3 py-2 border-t ${item.excluded ? 'border-slate-200 bg-slate-100/50' : 'border-amber-200 bg-amber-50/50'}`}>
-                          <div className="flex flex-wrap gap-1">
-                            {item.auto_flag_reasons.map((reason, idx) => (
-                              <Badge key={idx} variant="outline" className="text-xs bg-white/80 text-slate-600 border-slate-300 px-1.5 py-0">
-                                {reason}
-                              </Badge>
-                            ))}
-                          </div>
+                          )}
+                          
+                          {item.flag_reason && (
+                            <div className="mt-2 text-xs text-yellow-700 bg-yellow-100 px-2 py-1 rounded inline-block">
+                              <Info className="w-3 h-3 inline mr-1" />
+                              {item.flag_reason}
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </div>
                     </div>
                   ))}
-
+                  
                   {filteredItems.length === 0 && (
                     <div className="text-center py-8 text-slate-500">
-                      No feedback items match the current filter
+                      No items match the current filter
                     </div>
                   )}
                 </div>
               </CardContent>
             </Card>
 
-            {/* Info Card */}
-            <Card className="bg-blue-50 border-blue-200">
-              <CardContent className="p-4">
-                <div className="flex gap-3">
-                  <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                  <div className="text-sm text-blue-800">
-                    <p className="font-medium mb-1">How Exclusions Work</p>
-                    <ul className="list-disc list-inside space-y-1">
-                      <li>Check the box next to any feedback that isn't the server's fault</li>
-                      <li>Auto-flagged items are suggestions based on keywords (food issues, environment, etc.)</li>
-                      <li>Only passives and detractors can be excluded</li>
-                      <li>The adjusted NPS recalculates automatically as you make changes</li>
-                      <li>Formula: NPS = (Promoters - Detractors) / Total Responses × 100</li>
-                    </ul>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            {/* Back Button */}
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setSession(null);
+                setFeedbackItems([]);
+              }}
+            >
+              Back to Upload
+            </Button>
           </>
         )}
       </div>
