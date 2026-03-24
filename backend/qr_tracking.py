@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone
 import uuid
+import logging
 
 # Pydantic models
 class QREmployee(BaseModel):
