@@ -110,11 +110,25 @@ Previously, data could be uploaded to snapshots separately, causing sync issues 
   2. Added fallback tier calculation in `get_employees_v2` API so tiers are computed on-the-fly if missing
 - **Testing**: All features verified with 100% pass rate (backend: 11/11 tests, frontend: all multi-select features working)
 
+### December 2026 Session (Continued) ✅
+- **Scoring Guide Page Added**: Created comprehensive `/scoring-guide` page with collapsible sections explaining:
+  - Score Formula overview (POS Metrics + Bonuses + CV Score + RT Bonus)
+  - Weighted POS Metrics breakdown (PPA 25%, LSC 25%, LBW 15%, Glassware 10%)
+  - Metric Bonuses (up to 20 pts)
+  - Customer Voice scoring (NPS + Promoter/Detractor points - UNCAPPED)
+  - Review Tracker bonus (0.5 pts per mention, max 15)
+  - DAR Penalties (admin-only)
+  - Store Health Index
+  - Performance Tiers
+- **Navigation Updated**: Added "Scoring Guide" link to sidebar (under EXPORTS section)
+- **Data Integrity Verified**: All 29 employees now pass scoring audit (VERIFIED status)
+- **Circular Bug Status**: The `enforce_data_caps` endpoint already includes logic to sync `rt_mentions` after removing excess reviews via `sync_employee_review_mentions()` function
+
 ## File Structure
 ```
 /app/
 ├── backend/
-│   ├── server.py              # Main API (9k+ lines - needs refactoring)
+│   ├── server.py              # Main API (12k+ lines - needs refactoring)
 │   ├── scoring_engine.py      # Scoring constants and models
 │   ├── snapshot_slides.py     # Slide generation
 │   └── pos_report_parser.py   # POS data parsing
@@ -126,8 +140,11 @@ Previously, data could be uploaded to snapshots separately, causing sync issues 
         │   ├── Leaderboard.js
         │   ├── DataUploads.js
         │   ├── ReviewTracker.js
+        │   ├── ScoringGuide.js    # NEW: Detailed scoring explanation page
         │   └── ...
         └── components/
+            ├── SidebarLayout.jsx  # Navigation with Scoring Guide link
+            └── ...
 ```
 
 ## Key API Endpoints
