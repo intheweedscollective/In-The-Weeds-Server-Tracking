@@ -1,9 +1,20 @@
 import { useState, useEffect } from "react";
-import { Settings, Save, ExternalLink } from "lucide-react";
+import { Settings, Save, ExternalLink, Trash2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "../components/ui/alert-dialog";
 
 export default function QRSettings() {
   const [settings, setSettings] = useState({
@@ -15,17 +26,24 @@ export default function QRSettings() {
     qr_size: 300
   });
   const [saving, setSaving] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [stats, setStats] = useState({ total_scans: 0, total_employees: 0 });
+
+  const fetchData = async () => {
+    try {
+      const [settingsRes, statsRes] = await Promise.all([
+        api.get('/qr/settings'),
+        api.get('/qr/stats')
+      ]);
+      setSettings(settingsRes.data);
+      setStats(statsRes.data);
+    } catch (error) {
+      console.error("Failed to load data");
+    }
+  };
 
   useEffect(() => {
-    const fetchSettings = async () => {
-      try {
-        const res = await api.get('/qr/settings');
-        setSettings(res.data);
-      } catch (error) {
-        console.error("Failed to load settings");
-      }
-    };
-    fetchSettings();
+    fetchData();
   }, []);
 
   const saveSettings = async () => {
@@ -37,6 +55,18 @@ export default function QRSettings() {
       toast.error("Failed to save settings");
     }
     setSaving(false);
+  };
+
+  const resetAllScans = async () => {
+    setResetting(true);
+    try {
+      const res = await api.delete('/qr/scans/reset-all');
+      toast.success(`Reset complete! Deleted ${res.data.scans_deleted} scans, reset ${res.data.employees_reset} employees.`);
+      fetchData(); // Refresh stats
+    } catch (error) {
+      toast.error("Failed to reset scan data");
+    }
+    setResetting(false);
   };
 
   return (
@@ -164,6 +194,57 @@ export default function QRSettings() {
             <Save className={`w-4 h-4 mr-2 ${saving ? 'animate-spin' : ''}`} />
             Save Settings
           </Button>
+
+          {/* Danger Zone */}
+          <div className="bg-red-500/10 rounded-xl p-6 border border-red-500/30 mt-8">
+            <h2 className="text-lg font-semibold text-red-400 mb-2 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" />
+              Danger Zone
+            </h2>
+            <p className="text-sm text-slate-400 mb-4">
+              Reset all QR scan tracking data. This will delete all scan records and reset all employee click counts to zero.
+              Current stats: <span className="text-white font-medium">{stats.total_scans} total scans</span> across <span className="text-white font-medium">{stats.total_employees} employees</span>.
+            </p>
+            
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button 
+                  variant="destructive"
+                  className="bg-red-600 hover:bg-red-700"
+                  disabled={resetting}
+                >
+                  <Trash2 className={`w-4 h-4 mr-2 ${resetting ? 'animate-spin' : ''}`} />
+                  Reset All QR Scans
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent className="bg-slate-900 border-slate-700">
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="text-white flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-red-500" />
+                    Are you absolutely sure?
+                  </AlertDialogTitle>
+                  <AlertDialogDescription className="text-slate-400">
+                    This action <span className="text-red-400 font-semibold">cannot be undone</span>. This will permanently delete:
+                    <ul className="list-disc list-inside mt-2 space-y-1">
+                      <li><span className="text-white">{stats.total_scans}</span> scan records</li>
+                      <li>All click counts for <span className="text-white">{stats.total_employees}</span> employees</li>
+                    </ul>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel className="bg-slate-700 border-slate-600 text-white hover:bg-slate-600">
+                    Cancel
+                  </AlertDialogCancel>
+                  <AlertDialogAction 
+                    onClick={resetAllScans}
+                    className="bg-red-600 hover:bg-red-700"
+                  >
+                    Yes, Reset All Scans
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </div>
       </div>
     </div>
