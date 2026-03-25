@@ -20,8 +20,8 @@ export default function StyledQRCode({
   qrColor = "#000000",
   bgColor = "#FFFFFF",
   frameColor = "#1a1a2e",
-  frameWidth = 16,
-  frameRadius = 24,
+  frameWidth = 6,
+  frameRadius = 12,
   showFrame = true,
   className = ""
 }) {
