@@ -16,13 +16,13 @@ export default function StyledQRCode({
   url,
   size = 280,
   logoUrl = SHRIMP_LOGO_URL, // Default to shrimp logo
-  logoSize = 100, // Larger logo
+  logoSize = 120, // Bigger logo
   qrColor = "#000000",
   bgColor = "#FFFFFF",
   frameColor = "#1a1a2e",
-  frameWidth = 6,
-  frameRadius = 12,
-  showFrame = true,
+  frameWidth = 0,
+  frameRadius = 0,
+  showFrame = false,
   className = ""
 }) {
   const canvasRef = useRef(null);

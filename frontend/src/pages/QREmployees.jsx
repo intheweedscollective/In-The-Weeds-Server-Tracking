@@ -110,10 +110,7 @@ export default function QREmployees() {
         logoSize: 140, // Large logo for printed QR codes
         qrColor: settings?.qr_color || '#000000',
         bgColor: settings?.qr_bg_color || '#FFFFFF',
-        frameColor: '#1a1a2e',
-        frameWidth: 20,
-        frameRadius: 32,
-        showFrame: true
+        showFrame: false
       });
       
       const link = document.createElement('a');
@@ -149,9 +146,8 @@ export default function QREmployees() {
         const googleUrl = generateQRUrl(emp.id, 'google');
         const googleQR = await generateStyledQRDataUrl(googleUrl, {
           size: 400,
-          logoSize: 80,
-          frameColor: '#1a1a2e',
-          showFrame: true
+          logoSize: 160,
+          showFrame: false
         });
         
         // Convert data URL to blob
@@ -392,13 +388,10 @@ export default function QREmployees() {
               <StyledQRCode
                 url={generateQRUrl(previewEmployee.id, previewPlatform)}
                 size={280}
-                logoSize={105}
+                logoSize={120}
                 qrColor={settings?.qr_color || '#000000'}
                 bgColor={settings?.qr_bg_color || '#FFFFFF'}
-                frameColor="#1a1a2e"
-                frameWidth={16}
-                frameRadius={24}
-                showFrame={true}
+                showFrame={false}
               />
             </div>
             
