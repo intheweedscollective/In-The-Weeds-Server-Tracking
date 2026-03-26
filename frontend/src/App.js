@@ -38,6 +38,7 @@ function App() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/uploads" element={<DataUploads />} />
+              <Route path="/data-uploads" element={<DataUploads />} />
               <Route path="/rankings" element={<FullRankings />} />
               <Route path="/leaderboard" element={<LeaderboardRankings />} />
               <Route path="/employees" element={<EmployeeList />} />
