@@ -9044,6 +9044,224 @@ async def upload_review_tracker_data(
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 
+@api_router.post("/v2/review-tracker/upload-feedback")
+async def upload_review_feedback_csv(
+    file: UploadFile = File(...),
+    quarter: str = "Q1",
+    year: int = 2026
+):
+    """
+    Upload raw ReviewTracker feedback CSV (Reviews-feedback.csv format).
+    Extracts employee names from review text using fuzzy matching.
+    
+    Expected columns: Review (contains review text), Rating, Source, Published
+    
+    This endpoint:
+    1. Scans each review for employee name mentions
+    2. Counts positive mentions per employee
+    3. Updates employee review_mentions and recalculates RT bonus
+    """
+    import re
+    from collections import defaultdict
+    
+    try:
+        contents = await file.read()
+        
+        # Support both CSV and XLSX
+        if file.filename.lower().endswith('.csv'):
+            df = pd.read_csv(io.BytesIO(contents))
+        else:
+            df = pd.read_excel(io.BytesIO(contents))
+        
+        # Clean column names
+        df.columns = [str(col).strip() for col in df.columns]
+        
+        # Find the review text column
+        review_col = None
+        rating_col = None
+        date_col = None
+        
+        for col in df.columns:
+            col_lower = col.lower()
+            if col_lower == 'review' or 'review' in col_lower and 'id' not in col_lower:
+                review_col = col
+            elif 'rating' in col_lower:
+                rating_col = col
+            elif 'published' in col_lower or 'date' in col_lower:
+                date_col = col
+        
+        if not review_col:
+            raise HTTPException(status_code=400, detail="Could not find Review column in CSV")
+        
+        # Get all employees for this quarter
+        employees = await db.employees_v2.find(
+            {"quarter": quarter.upper(), "year": year}
+        ).to_list(500)
+        
+        if not employees:
+            raise HTTPException(status_code=400, detail=f"No employees found for {quarter} {year}")
+        
+        # Build name lookup: first names, nicknames, and full names
+        name_to_employee = {}
+        for emp in employees:
+            full_name = emp.get('name', '')
+            full_lower = full_name.lower()
+            
+            # Match full name
+            name_to_employee[full_lower] = emp
+            
+            # Match first name
+            parts = full_lower.split()
+            if parts:
+                first = parts[0]
+                name_to_employee[first] = emp
+        
+        # Add common nicknames/aliases
+        nickname_map = {
+            'keisha': 'lakeisha martin',
+            'abby': 'abby ostro',
+            'tad': 'tad hashey',
+            'thaddeus': 'tad hashey',
+            'matt': 'matt spath',
+            'matthew': 'matt spath',
+            'rob': 'robert mckinnon',
+            'bobby': 'robert mckinnon',
+            'dan': 'daniel mayorga',
+            'eddie': 'eddie garcia',
+            'ed': 'eddie garcia',
+            'lexi': 'lexi harreau',
+            'alex': 'lexi harreau',
+        }
+        
+        for nick, full in nickname_map.items():
+            if full in name_to_employee:
+                name_to_employee[nick] = name_to_employee[full]
+        
+        # Count mentions per employee
+        mention_counts = defaultdict(int)
+        reviews_processed = 0
+        reviews_with_mentions = 0
+        sample_matches = []
+        
+        for _, row in df.iterrows():
+            review_text = str(row.get(review_col, '')).lower()
+            if not review_text or review_text == 'nan':
+                continue
+            
+            reviews_processed += 1
+            rating = float(row.get(rating_col, 5) or 5) if rating_col else 5
+            
+            # Only count positive reviews (4+ stars)
+            if rating < 4:
+                continue
+            
+            found_names = set()
+            for name_key, emp in name_to_employee.items():
+                # Match as whole word
+                pattern = r'\b' + re.escape(name_key) + r'\b'
+                if re.search(pattern, review_text):
+                    emp_name = emp.get('name', '')
+                    if emp_name not in found_names:
+                        found_names.add(emp_name)
+                        mention_counts[emp_name] += 1
+            
+            if found_names:
+                reviews_with_mentions += 1
+                if len(sample_matches) < 5:
+                    sample_matches.append({
+                        "review_snippet": review_text[:100] + "...",
+                        "employees_found": list(found_names),
+                        "rating": rating
+                    })
+        
+        # Update employees with mention counts
+        employees_updated = 0
+        update_details = []
+        total_mentions = sum(mention_counts.values())
+        
+        for emp in employees:
+            emp_name = emp.get('name', '')
+            mentions = mention_counts.get(emp_name, 0)
+            
+            # Calculate RT bonus
+            rt_bonus = round(min(mentions * 0.5, 15), 2)
+            
+            # Get current values
+            old_mentions = emp.get('review_mentions', 0) or emp.get('rt_mentions', 0) or 0
+            old_rt_bonus = emp.get('review_tracker_bonus', 0) or 0
+            
+            # Recalculate total score
+            capped_ppa = min(emp.get('score_ppa', 0) or 0, 100)
+            capped_lsc = min(emp.get('score_lsc', 0) or 0, 100)
+            capped_lbw = min(emp.get('score_lbw', 0) or 0, 100)
+            capped_glass = min(emp.get('score_glass', 0) or 0, 100)
+            nps_score = emp.get('nps_score', 0) or 0
+            
+            nps_normalized = max(0, (nps_score + 100) / 2)
+            nps_contribution = min(nps_normalized, 100) * 0.10
+            
+            new_weighted = (capped_ppa * 0.25) + (capped_lsc * 0.25) + (capped_lbw * 0.15) + (capped_glass * 0.10) + nps_contribution + rt_bonus
+            
+            metric_bonus = min(emp.get('total_metric_bonus', 0) or 0, 20)
+            cv_bonus = emp.get('cv_bonus', 0) or emp.get('cv_score', 0) or 0
+            new_total = round(new_weighted + metric_bonus + cv_bonus, 2)
+            
+            if mentions > 0 or old_mentions > 0:
+                await db.employees_v2.update_one(
+                    {"_id": emp["_id"]},
+                    {"$set": {
+                        "review_mentions": mentions,
+                        "rt_mentions": mentions,
+                        "review_tracker_bonus": rt_bonus,
+                        "weighted_score": round(new_weighted, 2),
+                        "total_score": new_total,
+                        "pre_dar_score": new_total,
+                        "rt_source": "feedback_csv_upload",
+                        "rt_updated_at": datetime.now(timezone.utc).isoformat()
+                    }}
+                )
+                employees_updated += 1
+                
+                update_details.append({
+                    "name": emp_name,
+                    "old_mentions": old_mentions,
+                    "new_mentions": mentions,
+                    "rt_bonus": rt_bonus,
+                    "score_change": round(new_total - (emp.get('total_score', 0) or 0), 2)
+                })
+        
+        # Sync to snapshot
+        snapshot_id = await sync_employees_to_most_recent_snapshot(quarter, year)
+        
+        return {
+            "success": True,
+            "message": f"Extracted mentions from {reviews_with_mentions} reviews, updated {employees_updated} employees",
+            "summary": {
+                "total_reviews": reviews_processed,
+                "reviews_with_mentions": reviews_with_mentions,
+                "total_mentions": total_mentions,
+                "employees_updated": employees_updated
+            },
+            "top_mentioned": sorted(
+                [{"name": k, "mentions": v, "rt_bonus": min(v * 0.5, 15)} for k, v in mention_counts.items()],
+                key=lambda x: -x["mentions"]
+            )[:15],
+            "sample_matches": sample_matches,
+            "update_details": update_details,
+            "quarter": quarter,
+            "year": year,
+            "snapshot_synced": snapshot_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Feedback CSV upload error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+
 # ============================================================================
 # DATA INTEGRITY ENDPOINTS (Admin Only)
 # ============================================================================
