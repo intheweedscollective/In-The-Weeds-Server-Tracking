@@ -84,7 +84,7 @@ Previously, data could be uploaded to snapshots separately, causing sync issues 
 ## Known Issues / Technical Debt
 
 ### P0 (Critical)
-- None currently
+- ✅ **FIXED (Dec 2026)**: Production PDF parsing crashes (HTTP 520) on large PDFs - Switched from `pdfplumber` to AI/OCR extraction
 
 ### P1 (High Priority)
 - Employees not yet associated with stores (Store Leaderboard non-functional)
@@ -92,7 +92,7 @@ Previously, data could be uploaded to snapshots separately, causing sync issues 
 
 ### P2 (Medium Priority)
 - Onboarding modal can be dismissed but reappears on fresh browser sessions
-- server.py is 11k+ lines and needs refactoring into smaller modules
+- server.py is 12.5k+ lines and needs refactoring into smaller modules
 
 ### P3 (Low Priority)
 - Background task queue not implemented (long operations could timeout)
@@ -123,6 +123,16 @@ Previously, data could be uploaded to snapshots separately, causing sync issues 
 - **Navigation Updated**: Added "Scoring Guide" link to sidebar (under EXPORTS section)
 - **Data Integrity Verified**: All 29 employees now pass scoring audit (VERIFIED status)
 - **Circular Bug Status**: The `enforce_data_caps` endpoint already includes logic to sync `rt_mentions` after removing excess reviews via `sync_employee_review_mentions()` function
+
+### December 2026 - PDF Parsing Fix ✅
+- **CRITICAL FIX**: Production PDF parsing was crashing with HTTP 520 errors on large PDFs (29 pages, 13MB)
+- **Root Cause**: The `/v2/pos-pdf/parse` and `/v2/pos-pdf/import` endpoints were using `pdfplumber` for text extraction, which consumed too much memory in the production container
+- **Solution**: Switched both endpoints to use the existing `extract_pos_data_from_pdf()` function from `pos_ocr.py` which uses AI/OCR extraction via GPT-4o. This method was already working successfully in `/v2/pos-ocr/upload`
+- **Key Changes**:
+  1. Rewrote `/v2/pos-pdf/parse` to use `pos_ocr.extract_pos_data_from_pdf()` instead of `pdf_pos_parser.parse_pos_pdf()`
+  2. Rewrote `/v2/pos-pdf/import` similarly with the same AI/OCR approach
+  3. Both endpoints now return consistent response formats with `extraction_notes` indicating AI/OCR was used
+- **Files Modified**: `/app/backend/server.py` (PDF endpoint rewrites)
 
 ## File Structure
 ```

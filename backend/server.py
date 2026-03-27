@@ -1726,19 +1726,10 @@ async def test_pdf_endpoint(file: UploadFile = File(...)):
 @api_router.post("/v2/pos-pdf/parse")
 async def parse_pos_pdf_scan(file: UploadFile = File(...)):
     """
-    Parse a scanned POS report PDF using optimized text extraction.
+    Parse a scanned POS report PDF using AI-powered OCR extraction.
+    This method is more reliable for production environments with memory constraints.
     """
-    import traceback
-    import gc
-    
-    try:
-        from pdf_pos_parser import parse_pos_pdf, is_pos_pdf_format
-    except ImportError as e:
-        logging.error(f"Import error for pdf_pos_parser: {e}")
-        raise HTTPException(status_code=500, detail=f"PDF parser module not available: {str(e)}")
-    
-    import tempfile
-    import os as os_module
+    from pos_ocr import extract_pos_data_from_pdf, validate_extracted_data
     
     # Validate file type
     is_pdf = file.content_type == "application/pdf" or (file.filename and file.filename.lower().endswith('.pdf'))
@@ -1754,90 +1745,66 @@ async def parse_pos_pdf_scan(file: UploadFile = File(...)):
     if len(contents) > 50 * 1024 * 1024:  # 50MB limit
         raise HTTPException(status_code=400, detail="File too large. Maximum 50MB")
     
-    tmp_path = None
     try:
-        # Save to temp file for processing
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
-            tmp.write(contents)
-            tmp_path = tmp.name
+        logging.info(f"Processing PDF with AI/OCR: {file.filename}, size: {len(contents)} bytes")
         
-        # Free memory immediately
-        file_size = len(contents)
-        del contents
-        gc.collect()
+        # Use the AI/OCR-based extraction which is production-stable
+        raw_data = await extract_pos_data_from_pdf(contents)
         
-        logging.info(f"PDF saved to temp file: {tmp_path}, size: {file_size} bytes")
-        
-        # Check if it's a POS report format
-        if not is_pos_pdf_format(tmp_path):
+        if "error" in raw_data and not raw_data.get("employees"):
             return {
                 "success": False,
-                "error": "File does not appear to be a Server Sales Report PDF",
-                "employees": []
+                "error": raw_data.get("error", "Failed to extract data from PDF"),
+                "employees": [],
+                "extraction_notes": raw_data.get("extraction_notes", "")
             }
         
-        # Get page count first
-        import fitz
-        doc = fitz.open(tmp_path)
-        total_pages = len(doc)
-        doc.close()
-        del doc
-        gc.collect()
+        # Validate and clean extracted data
+        validated_data = validate_extracted_data(raw_data)
         
-        # Parse the PDF directly - the parser handles pages efficiently
-        employees = parse_pos_pdf(tmp_path)
-        gc.collect()
-        
-        if not employees:
+        if not validated_data.get("employees"):
             return {
                 "success": False,
                 "error": "No employee data could be extracted from the PDF",
-                "employees": []
+                "employees": [],
+                "extraction_notes": validated_data.get("extraction_notes", "")
             }
         
-        # Format the response
+        # Format response to match expected structure
         formatted_employees = []
-        for emp in employees:
+        for emp in validated_data.get("employees", []):
+            raw_data_fields = emp.get("_raw", {})
             formatted_employees.append({
-                "name": emp['name'],
-                "guest_count": emp['guests'],
-                "net_sales": round(emp['net_sales'], 2),
-                "food_sales": round(emp['food'], 2),
-                "liquor_sales": round(emp['liquor'], 2),
-                "beer_sales": round(emp['beer'], 2),
-                "wine_sales": round(emp['wine'], 2),
-                "lbw_total": round(emp['lbw'], 2),
-                "bar_glassware_sales": round(emp['glassware'], 2),
-                "loyalty_sales": round(emp.get('loyalty_sales', 0), 2)
+                "name": emp.get("name", "Unknown"),
+                "guest_count": emp.get("guest_count", 0),
+                "net_sales": round(emp.get("net_sales", 0) or 0, 2),
+                "food_sales": round(raw_data_fields.get("food_sales", 0) or 0, 2),
+                "liquor_sales": round(raw_data_fields.get("liquor_sales", 0) or 0, 2),
+                "beer_sales": round(raw_data_fields.get("beer_sales", 0) or 0, 2),
+                "wine_sales": round(raw_data_fields.get("wine_sales", 0) or 0, 2),
+                "lbw_total": round((raw_data_fields.get("liquor_sales", 0) or 0) + 
+                                   (raw_data_fields.get("beer_sales", 0) or 0) + 
+                                   (raw_data_fields.get("wine_sales", 0) or 0), 2),
+                "bar_glassware_sales": round(raw_data_fields.get("bar_glassware_sales", 0) or 0, 2),
+                "loyalty_sales": round(emp.get("loyalty_sales", 0) or 0, 2)
             })
-        
-        del employees
-        gc.collect()
         
         return {
             "success": True,
             "filename": file.filename,
             "employee_count": len(formatted_employees),
-            "total_pages": total_pages,
+            "total_pages": raw_data.get("pages_processed", raw_data.get("total_pages", 1)),
             "employees": formatted_employees,
-            "extraction_notes": f"Successfully extracted data for {len(formatted_employees)} employees from {total_pages} pages"
+            "extraction_notes": f"AI/OCR extracted {len(formatted_employees)} employees. {validated_data.get('extraction_notes', '')}"
         }
             
     except HTTPException:
         raise
     except Exception as e:
         logging.error(f"PDF parsing error: {str(e)}")
+        import traceback
         logging.error(traceback.format_exc())
-        gc.collect()
         raise HTTPException(status_code=500, detail=f"PDF parsing failed: {str(e)}")
-    finally:
-        # Always clean up temp file
-        if tmp_path:
-            try:
-                os_module.unlink(tmp_path)
-            except:
-                pass
-        gc.collect()
 
 
 @api_router.post("/v2/pos-pdf/import")
@@ -1848,17 +1815,16 @@ async def import_pos_pdf_data(
 ):
     """
     Parse and import scanned POS PDF data into the employee database.
+    Uses AI/OCR extraction which is production-stable for large PDFs.
     
     This endpoint:
-    1. Parses the PDF using the optimized text parser
+    1. Parses the PDF using AI-powered OCR extraction
     2. Matches employees using fuzzy name matching
     3. Updates existing employees or creates new ones
     4. Recalculates all scores
     """
-    from pdf_pos_parser import parse_pos_pdf, is_pos_pdf_format
+    from pos_ocr import extract_pos_data_from_pdf, validate_extracted_data
     from rapidfuzz import fuzz, process
-    import tempfile
-    import os as os_module
     
     quarter = quarter.upper()
     
@@ -1883,133 +1849,153 @@ async def import_pos_pdf_data(
     contents = await file.read()
     
     try:
-        # Save to temp file for processing
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
-            tmp.write(contents)
-            tmp_path = tmp.name
+        logging.info(f"Processing PDF import with AI/OCR: {file.filename}, size: {len(contents)} bytes")
         
-        try:
-            # Parse the PDF
-            employees_data = parse_pos_pdf(tmp_path)
+        # Use AI/OCR-based extraction which is production-stable
+        raw_data = await extract_pos_data_from_pdf(contents)
+        
+        if "error" in raw_data and not raw_data.get("employees"):
+            raise HTTPException(status_code=400, detail=raw_data.get("error", "No employee data found in PDF"))
+        
+        # Validate and clean extracted data
+        validated_data = validate_extracted_data(raw_data)
+        
+        if not validated_data.get("employees"):
+            raise HTTPException(status_code=400, detail="No employee data could be extracted from PDF")
+        
+        # Transform OCR data to standard format
+        employees_data = []
+        for emp in validated_data.get("employees", []):
+            raw_fields = emp.get("_raw", {})
+            employees_data.append({
+                'name': emp.get("name", "Unknown"),
+                'guests': emp.get("guest_count", 0) or 0,
+                'net_sales': emp.get("net_sales", 0) or 0,
+                'food': raw_fields.get("food_sales", 0) or 0,
+                'liquor': raw_fields.get("liquor_sales", 0) or 0,
+                'beer': raw_fields.get("beer_sales", 0) or 0,
+                'wine': raw_fields.get("wine_sales", 0) or 0,
+                'lbw': (raw_fields.get("liquor_sales", 0) or 0) + 
+                       (raw_fields.get("beer_sales", 0) or 0) + 
+                       (raw_fields.get("wine_sales", 0) or 0),
+                'glassware': raw_fields.get("bar_glassware_sales", 0) or 0,
+                'loyalty_sales': emp.get("loyalty_sales", 0) or 0
+            })
+        
+        # Get existing employees for matching
+        existing_employees = await db.employees_v2.find({
+            "quarter": quarter,
+            "year": year
+        }, {"_id": 0}).to_list(1000)
+        
+        # Build name matching index
+        name_index = {}
+        for emp in existing_employees:
+            emp_id = emp.get('id') or emp.get('employee_id')
+            if not emp_id:
+                continue
+            for field in ['name', 'report_name', 'display_name']:
+                if emp.get(field):
+                    name_index[emp[field].lower()] = emp_id
+            for alias in emp.get('aliases', []):
+                name_index[alias.lower()] = emp_id
+        
+        # Process each extracted employee
+        results = {
+            "matched": [],
+            "created": [],
+            "errors": []
+        }
+        
+        for emp_data in employees_data:
+            emp_name = emp_data['name']
+            emp_name_lower = emp_name.lower()
             
-            if not employees_data:
-                raise HTTPException(status_code=400, detail="No employee data found in PDF")
+            # Try exact match first
+            matched_id = name_index.get(emp_name_lower)
             
-            # Get existing employees for matching
-            existing_employees = await db.employees_v2.find({
-                "quarter": quarter,
-                "year": year
-            }, {"_id": 0}).to_list(1000)
+            # Try fuzzy match if no exact match
+            if not matched_id and name_index:
+                best_match = process.extractOne(
+                    emp_name_lower,
+                    list(name_index.keys()),
+                    scorer=fuzz.token_sort_ratio
+                )
+                if best_match and best_match[1] >= 85:
+                    matched_id = name_index[best_match[0]]
             
-            # Build name matching index
-            name_index = {}
-            for emp in existing_employees:
-                # Index by name, report_name, and aliases
-                emp_id = emp.get('id') or emp.get('employee_id')
-                if not emp_id:
-                    continue
-                for field in ['name', 'report_name', 'display_name']:
-                    if emp.get(field):
-                        name_index[emp[field].lower()] = emp_id
-                for alias in emp.get('aliases', []):
-                    name_index[alias.lower()] = emp_id
-            
-            # Process each extracted employee
-            results = {
-                "matched": [],
-                "created": [],
-                "errors": []
-            }
-            
-            for emp_data in employees_data:
-                emp_name = emp_data['name']
-                emp_name_lower = emp_name.lower()
-                
-                # Try exact match first
-                matched_id = name_index.get(emp_name_lower)
-                
-                # Try fuzzy match if no exact match
-                if not matched_id and name_index:
-                    best_match = process.extractOne(
-                        emp_name_lower,
-                        list(name_index.keys()),
-                        scorer=fuzz.token_sort_ratio
+            try:
+                if matched_id:
+                    # Update existing employee
+                    update_data = {
+                        "guest_count": emp_data['guests'],
+                        "net_sales": emp_data['net_sales'],
+                        "food_sales": emp_data['food'],
+                        "liquor_sales": emp_data['liquor'],
+                        "beer_sales": emp_data['beer'],
+                        "wine_sales": emp_data['wine'],
+                        "lbw_total": emp_data['lbw'],
+                        "bar_glassware_sales": emp_data['glassware'],
+                        "loyalty_sales": emp_data.get('loyalty_sales', 0),
+                        "updated_at": datetime.now(timezone.utc)
+                    }
+                    
+                    await db.employees_v2.update_one(
+                        {"id": matched_id},
+                        {"$set": update_data}
                     )
-                    if best_match and best_match[1] >= 85:
-                        matched_id = name_index[best_match[0]]
-                
-                try:
-                    if matched_id:
-                        # Update existing employee
-                        update_data = {
-                            "guest_count": emp_data['guests'],
-                            "net_sales": emp_data['net_sales'],
-                            "food_sales": emp_data['food'],
-                            "liquor_sales": emp_data['liquor'],
-                            "beer_sales": emp_data['beer'],
-                            "wine_sales": emp_data['wine'],
-                            "lbw_total": emp_data['lbw'],
-                            "bar_glassware_sales": emp_data['glassware'],
-                            "loyalty_sales": emp_data.get('loyalty_sales', 0),
-                            "updated_at": datetime.now(timezone.utc)
-                        }
-                        
-                        await db.employees_v2.update_one(
-                            {"id": matched_id},
-                            {"$set": update_data}
-                        )
-                        results["matched"].append({"name": emp_name, "id": matched_id})
-                    else:
-                        # Create new employee
-                        new_id = str(uuid.uuid4())
-                        new_employee = {
-                            "id": new_id,
-                            "name": emp_name,
-                            "display_name": emp_name,
-                            "report_name": emp_name,
-                            "aliases": [],
-                            "quarter": quarter,
-                            "year": year,
-                            "guest_count": emp_data['guests'],
-                            "net_sales": emp_data['net_sales'],
-                            "food_sales": emp_data['food'],
-                            "liquor_sales": emp_data['liquor'],
-                            "beer_sales": emp_data['beer'],
-                            "wine_sales": emp_data['wine'],
-                            "lbw_total": emp_data['lbw'],
-                            "bar_glassware_sales": emp_data['glassware'],
-                            "loyalty_sales": emp_data.get('loyalty_sales', 0),
-                            "created_at": datetime.now(timezone.utc),
-                            "updated_at": datetime.now(timezone.utc)
-                        }
-                        await db.employees_v2.insert_one(new_employee)
-                        results["created"].append({"name": emp_name, "id": new_id})
-                        
-                        # Add to index for subsequent matches
-                        name_index[emp_name_lower] = new_id
-                        
-                except Exception as e:
-                    results["errors"].append({"name": emp_name, "error": str(e)})
-            
-            # Recalculate all scores using the fix_all_employee_scores function
-            await fix_all_employee_scores(quarter, year)
-            
-            return {
-                "success": True,
-                "total_processed": len(employees_data),
-                "matched": len(results["matched"]),
-                "created": len(results["created"]),
-                "errors": len(results["errors"]),
-                "details": results
-            }
-            
-        finally:
-            os_module.unlink(tmp_path)
+                    results["matched"].append({"name": emp_name, "id": matched_id})
+                else:
+                    # Create new employee
+                    new_id = str(uuid.uuid4())
+                    new_employee = {
+                        "id": new_id,
+                        "name": emp_name,
+                        "display_name": emp_name,
+                        "report_name": emp_name,
+                        "aliases": [],
+                        "quarter": quarter,
+                        "year": year,
+                        "guest_count": emp_data['guests'],
+                        "net_sales": emp_data['net_sales'],
+                        "food_sales": emp_data['food'],
+                        "liquor_sales": emp_data['liquor'],
+                        "beer_sales": emp_data['beer'],
+                        "wine_sales": emp_data['wine'],
+                        "lbw_total": emp_data['lbw'],
+                        "bar_glassware_sales": emp_data['glassware'],
+                        "loyalty_sales": emp_data.get('loyalty_sales', 0),
+                        "created_at": datetime.now(timezone.utc),
+                        "updated_at": datetime.now(timezone.utc)
+                    }
+                    await db.employees_v2.insert_one(new_employee)
+                    results["created"].append({"name": emp_name, "id": new_id})
+                    
+                    # Add to index for subsequent matches
+                    name_index[emp_name_lower] = new_id
+                    
+            except Exception as e:
+                results["errors"].append({"name": emp_name, "error": str(e)})
+        
+        # Recalculate all scores using the fix_all_employee_scores function
+        await fix_all_employee_scores(quarter, year)
+        
+        return {
+            "success": True,
+            "total_processed": len(employees_data),
+            "matched": len(results["matched"]),
+            "created": len(results["created"]),
+            "errors": len(results["errors"]),
+            "details": results,
+            "extraction_notes": f"AI/OCR processed {raw_data.get('pages_processed', 'N/A')} pages"
+        }
             
     except HTTPException:
         raise
     except Exception as e:
         logging.error(f"PDF import error: {str(e)}")
+        import traceback
+        logging.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
 
 
