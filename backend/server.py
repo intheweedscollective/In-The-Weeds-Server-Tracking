@@ -1728,13 +1728,7 @@ async def parse_pos_pdf_scan(file: UploadFile = File(...)):
     """
     Parse a scanned POS report PDF using optimized text extraction.
     
-    This parser uses pdfplumber for text extraction and handles common OCR errors:
-    - O/0 confusion in numbers
-    - Missing decimal points in merged numbers
-    - Spaces in numbers
-    
-    Returns extracted employee data without updating the database.
-    Use the /v2/pos-pdf/import endpoint to actually import the data.
+    For large PDFs (>10 pages), processes in chunks to avoid timeouts.
     """
     import traceback
     
@@ -1778,8 +1772,49 @@ async def parse_pos_pdf_scan(file: UploadFile = File(...)):
                     "employees": []
                 }
             
-            # Parse the PDF
-            employees = parse_pos_pdf(tmp_path)
+            # Check page count - if large, process in chunks
+            import fitz
+            doc = fitz.open(tmp_path)
+            total_pages = len(doc)
+            doc.close()
+            
+            all_employees = []
+            MAX_PAGES_PER_CHUNK = 10
+            
+            if total_pages > MAX_PAGES_PER_CHUNK:
+                logging.info(f"Large PDF ({total_pages} pages) - processing in chunks")
+                
+                # Process in chunks
+                for start_page in range(0, total_pages, MAX_PAGES_PER_CHUNK):
+                    end_page = min(start_page + MAX_PAGES_PER_CHUNK, total_pages)
+                    
+                    # Create a temp PDF with just this chunk
+                    chunk_doc = fitz.open(tmp_path)
+                    new_doc = fitz.open()
+                    
+                    for i in range(start_page, end_page):
+                        new_doc.insert_pdf(chunk_doc, from_page=i, to_page=i)
+                    
+                    chunk_path = tmp_path + f'_chunk_{start_page}.pdf'
+                    new_doc.save(chunk_path)
+                    new_doc.close()
+                    chunk_doc.close()
+                    
+                    # Parse this chunk
+                    try:
+                        chunk_employees = parse_pos_pdf(chunk_path)
+                        all_employees.extend(chunk_employees)
+                        logging.info(f"Chunk {start_page}-{end_page}: Found {len(chunk_employees)} employees")
+                    finally:
+                        try:
+                            os_module.unlink(chunk_path)
+                        except:
+                            pass
+                
+                employees = all_employees
+            else:
+                # Small PDF - process normally
+                employees = parse_pos_pdf(tmp_path)
             
             if not employees:
                 return {
@@ -1808,8 +1843,9 @@ async def parse_pos_pdf_scan(file: UploadFile = File(...)):
                 "success": True,
                 "filename": file.filename,
                 "employee_count": len(formatted_employees),
+                "total_pages": total_pages,
                 "employees": formatted_employees,
-                "extraction_notes": f"Successfully extracted data for {len(formatted_employees)} employees using optimized text parser"
+                "extraction_notes": f"Successfully extracted data for {len(formatted_employees)} employees from {total_pages} pages"
             }
             
         finally:
