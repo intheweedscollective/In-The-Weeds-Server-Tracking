@@ -6582,6 +6582,92 @@ async def delete_snapshot(snapshot_id: str):
     return {"message": "Snapshot deleted successfully"}
 
 
+async def fix_ppa_values(quarter: str, year: int) -> int:
+    """
+    Recalculate PPA for all employees from net_sales / guest_count.
+    Also syncs 'guests' field from 'guest_count' to fix data inconsistency.
+    Returns number of employees updated.
+    """
+    employees = await db.employees_v2.find(
+        {"quarter": quarter.upper(), "year": year}
+    ).to_list(500)
+    
+    updated = 0
+    for emp in employees:
+        net_sales = emp.get('net_sales', 0) or 0
+        # Use guest_count as the source of truth (from latest upload)
+        guests = emp.get('guest_count', 0) or emp.get('guests', 0) or 0
+        
+        if guests > 0:
+            correct_ppa = round(net_sales / guests, 2)
+            stored_ppa = emp.get('ppa', 0) or 0
+            stored_guests = emp.get('guests', 0) or 0
+            
+            # Update if PPA is different OR guests field doesn't match guest_count
+            if abs(correct_ppa - stored_ppa) > 0.01 or stored_guests != guests:
+                await db.employees_v2.update_one(
+                    {"_id": emp["_id"]},
+                    {"$set": {
+                        "ppa": correct_ppa,
+                        "guests": guests  # Sync guests from guest_count
+                    }}
+                )
+                updated += 1
+    
+    return updated
+
+
+@api_router.post("/v2/admin/fix-ppa")
+async def fix_ppa_endpoint(quarter: str = "Q1", year: int = 2026):
+    """
+    Recalculate all PPA values from net_sales / guest_count.
+    PPA = Net Sales / Number of Guests
+    """
+    # Get before stats
+    employees_before = await db.employees_v2.find(
+        {"quarter": quarter.upper(), "year": year}
+    ).to_list(500)
+    
+    ppa_before = [e.get('ppa', 0) or 0 for e in employees_before]
+    avg_before = sum(ppa_before) / len(ppa_before) if ppa_before else 0
+    
+    # Fix PPA values
+    updated = await fix_ppa_values(quarter, year)
+    
+    # Get after stats
+    employees_after = await db.employees_v2.find(
+        {"quarter": quarter.upper(), "year": year}
+    ).to_list(500)
+    
+    ppa_after = [e.get('ppa', 0) or 0 for e in employees_after]
+    avg_after = sum(ppa_after) / len(ppa_after) if ppa_after else 0
+    
+    # Build details
+    details = []
+    for before, after in zip(
+        sorted(employees_before, key=lambda x: x.get('name', '')),
+        sorted(employees_after, key=lambda x: x.get('name', ''))
+    ):
+        old_ppa = before.get('ppa', 0) or 0
+        new_ppa = after.get('ppa', 0) or 0
+        if abs(old_ppa - new_ppa) > 0.01:
+            details.append({
+                "name": after.get('name'),
+                "old_ppa": old_ppa,
+                "new_ppa": new_ppa,
+                "change": round(new_ppa - old_ppa, 2)
+            })
+    
+    return {
+        "success": True,
+        "employees_updated": updated,
+        "avg_ppa_before": round(avg_before, 2),
+        "avg_ppa_after": round(avg_after, 2),
+        "change": round(avg_after - avg_before, 2),
+        "details": sorted(details, key=lambda x: abs(x['change']), reverse=True)
+    }
+
+
 @api_router.post("/v2/admin/fix-all-rankings")
 async def fix_all_rankings(quarter: str = "Q1", year: int = 2026):
     """
@@ -6590,6 +6676,10 @@ async def fix_all_rankings(quarter: str = "Q1", year: int = 2026):
     """
     import logging
     logging.info(f"=== FIXING ALL RANKINGS for {quarter} {year} ===")
+    
+    # First, fix PPA values
+    ppa_fixed = await fix_ppa_values(quarter, year)
+    logging.info(f"Fixed PPA for {ppa_fixed} employees")
     
     # Get settings
     settings_doc = await db.quarter_settings.find_one(
