@@ -1779,37 +1779,39 @@ async def parse_pos_pdf_scan(file: UploadFile = File(...)):
             doc.close()
             
             all_employees = []
-            MAX_PAGES_PER_CHUNK = 10
+            MAX_PAGES_PER_CHUNK = 5  # Smaller chunks for production stability
             
             if total_pages > MAX_PAGES_PER_CHUNK:
-                logging.info(f"Large PDF ({total_pages} pages) - processing in chunks")
+                logging.info(f"Large PDF ({total_pages} pages) - processing in chunks of {MAX_PAGES_PER_CHUNK}")
                 
-                # Process in chunks
-                for start_page in range(0, total_pages, MAX_PAGES_PER_CHUNK):
-                    end_page = min(start_page + MAX_PAGES_PER_CHUNK, total_pages)
-                    
-                    # Create a temp PDF with just this chunk
-                    chunk_doc = fitz.open(tmp_path)
-                    new_doc = fitz.open()
-                    
-                    for i in range(start_page, end_page):
-                        new_doc.insert_pdf(chunk_doc, from_page=i, to_page=i)
-                    
-                    chunk_path = tmp_path + f'_chunk_{start_page}.pdf'
-                    new_doc.save(chunk_path)
-                    new_doc.close()
-                    chunk_doc.close()
-                    
-                    # Parse this chunk
-                    try:
-                        chunk_employees = parse_pos_pdf(chunk_path)
-                        all_employees.extend(chunk_employees)
-                        logging.info(f"Chunk {start_page}-{end_page}: Found {len(chunk_employees)} employees")
-                    finally:
+                # Process in chunks - open source doc once for all chunks
+                source_doc = fitz.open(tmp_path)
+                
+                try:
+                    for start_page in range(0, total_pages, MAX_PAGES_PER_CHUNK):
+                        end_page = min(start_page + MAX_PAGES_PER_CHUNK, total_pages)
+                        
+                        # Create a temp PDF with just this chunk
+                        new_doc = fitz.open()
+                        for i in range(start_page, end_page):
+                            new_doc.insert_pdf(source_doc, from_page=i, to_page=i)
+                        
+                        chunk_path = tmp_path + f'_chunk_{start_page}.pdf'
+                        new_doc.save(chunk_path)
+                        new_doc.close()
+                        
+                        # Parse this chunk
                         try:
-                            os_module.unlink(chunk_path)
-                        except:
-                            pass
+                            chunk_employees = parse_pos_pdf(chunk_path)
+                            all_employees.extend(chunk_employees)
+                            logging.info(f"Chunk {start_page}-{end_page}: Found {len(chunk_employees)} employees")
+                        finally:
+                            try:
+                                os_module.unlink(chunk_path)
+                            except:
+                                pass
+                finally:
+                    source_doc.close()
                 
                 employees = all_employees
             else:
