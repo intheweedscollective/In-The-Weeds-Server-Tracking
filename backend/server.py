@@ -1727,8 +1727,6 @@ async def test_pdf_endpoint(file: UploadFile = File(...)):
 async def parse_pos_pdf_scan(file: UploadFile = File(...)):
     """
     Parse a scanned POS report PDF using optimized text extraction.
-    
-    For large PDFs (>10 pages), processes in chunks to avoid timeouts.
     """
     import traceback
     import gc
@@ -1756,6 +1754,7 @@ async def parse_pos_pdf_scan(file: UploadFile = File(...)):
     if len(contents) > 50 * 1024 * 1024:  # 50MB limit
         raise HTTPException(status_code=400, detail="File too large. Maximum 50MB")
     
+    tmp_path = None
     try:
         # Save to temp file for processing
         with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
@@ -1769,106 +1768,60 @@ async def parse_pos_pdf_scan(file: UploadFile = File(...)):
         
         logging.info(f"PDF saved to temp file: {tmp_path}, size: {file_size} bytes")
         
-        try:
-            # Check if it's a POS report format
-            if not is_pos_pdf_format(tmp_path):
-                return {
-                    "success": False,
-                    "error": "File does not appear to be a Server Sales Report PDF",
-                    "employees": []
-                }
-            
-            # Check page count - if large, process in chunks
-            import fitz
-            doc = fitz.open(tmp_path)
-            total_pages = len(doc)
-            doc.close()
-            del doc
-            gc.collect()
-            
-            all_employees = []
-            MAX_PAGES_PER_CHUNK = 3  # Small chunks for memory efficiency
-            
-            if total_pages > MAX_PAGES_PER_CHUNK:
-                logging.info(f"Large PDF ({total_pages} pages) - processing in chunks of {MAX_PAGES_PER_CHUNK}")
-                
-                for start_page in range(0, total_pages, MAX_PAGES_PER_CHUNK):
-                    end_page = min(start_page + MAX_PAGES_PER_CHUNK, total_pages)
-                    chunk_path = None
-                    
-                    try:
-                        # Open source fresh for each chunk to avoid memory buildup
-                        source_doc = fitz.open(tmp_path)
-                        new_doc = fitz.open()
-                        
-                        for i in range(start_page, end_page):
-                            new_doc.insert_pdf(source_doc, from_page=i, to_page=i)
-                        
-                        chunk_path = tmp_path + f'_chunk_{start_page}.pdf'
-                        new_doc.save(chunk_path)
-                        new_doc.close()
-                        source_doc.close()
-                        del new_doc, source_doc
-                        gc.collect()
-                        
-                        # Parse this chunk
-                        chunk_employees = parse_pos_pdf(chunk_path)
-                        all_employees.extend(chunk_employees)
-                        logging.info(f"Chunk {start_page}-{end_page}: Found {len(chunk_employees)} employees")
-                        del chunk_employees
-                        gc.collect()
-                        
-                    finally:
-                        if chunk_path:
-                            try:
-                                os_module.unlink(chunk_path)
-                            except:
-                                pass
-                
-                employees = all_employees
-            else:
-                # Small PDF - process normally
-                employees = parse_pos_pdf(tmp_path)
-            
-            if not employees:
-                return {
-                    "success": False,
-                    "error": "No employee data could be extracted from the PDF",
-                    "employees": []
-                }
-            
-            # Format the response
-            formatted_employees = []
-            for emp in employees:
-                formatted_employees.append({
-                    "name": emp['name'],
-                    "guest_count": emp['guests'],
-                    "net_sales": round(emp['net_sales'], 2),
-                    "food_sales": round(emp['food'], 2),
-                    "liquor_sales": round(emp['liquor'], 2),
-                    "beer_sales": round(emp['beer'], 2),
-                    "wine_sales": round(emp['wine'], 2),
-                    "lbw_total": round(emp['lbw'], 2),
-                    "bar_glassware_sales": round(emp['glassware'], 2),
-                    "loyalty_sales": round(emp.get('loyalty_sales', 0), 2)
-                })
-            
+        # Check if it's a POS report format
+        if not is_pos_pdf_format(tmp_path):
             return {
-                "success": True,
-                "filename": file.filename,
-                "employee_count": len(formatted_employees),
-                "total_pages": total_pages,
-                "employees": formatted_employees,
-                "extraction_notes": f"Successfully extracted data for {len(formatted_employees)} employees from {total_pages} pages"
+                "success": False,
+                "error": "File does not appear to be a Server Sales Report PDF",
+                "employees": []
             }
-            
-        finally:
-            # Clean up temp file
-            try:
-                os_module.unlink(tmp_path)
-            except:
-                pass
-            gc.collect()
+        
+        # Get page count first
+        import fitz
+        doc = fitz.open(tmp_path)
+        total_pages = len(doc)
+        doc.close()
+        del doc
+        gc.collect()
+        
+        # Parse the PDF directly - the parser handles pages efficiently
+        employees = parse_pos_pdf(tmp_path)
+        gc.collect()
+        
+        if not employees:
+            return {
+                "success": False,
+                "error": "No employee data could be extracted from the PDF",
+                "employees": []
+            }
+        
+        # Format the response
+        formatted_employees = []
+        for emp in employees:
+            formatted_employees.append({
+                "name": emp['name'],
+                "guest_count": emp['guests'],
+                "net_sales": round(emp['net_sales'], 2),
+                "food_sales": round(emp['food'], 2),
+                "liquor_sales": round(emp['liquor'], 2),
+                "beer_sales": round(emp['beer'], 2),
+                "wine_sales": round(emp['wine'], 2),
+                "lbw_total": round(emp['lbw'], 2),
+                "bar_glassware_sales": round(emp['glassware'], 2),
+                "loyalty_sales": round(emp.get('loyalty_sales', 0), 2)
+            })
+        
+        del employees
+        gc.collect()
+        
+        return {
+            "success": True,
+            "filename": file.filename,
+            "employee_count": len(formatted_employees),
+            "total_pages": total_pages,
+            "employees": formatted_employees,
+            "extraction_notes": f"Successfully extracted data for {len(formatted_employees)} employees from {total_pages} pages"
+        }
             
     except HTTPException:
         raise
@@ -1877,6 +1830,14 @@ async def parse_pos_pdf_scan(file: UploadFile = File(...)):
         logging.error(traceback.format_exc())
         gc.collect()
         raise HTTPException(status_code=500, detail=f"PDF parsing failed: {str(e)}")
+    finally:
+        # Always clean up temp file
+        if tmp_path:
+            try:
+                os_module.unlink(tmp_path)
+            except:
+                pass
+        gc.collect()
 
 
 @api_router.post("/v2/pos-pdf/import")
