@@ -9131,11 +9131,21 @@ async def upload_review_feedback_csv(
             'ed': 'eddie garcia',
             'lexi': 'lexi harreau',
             'alex': 'lexi harreau',
+            # Starwars variations
+            'star': 'starwars mckinnon-herrera',
+            'starwars': 'starwars mckinnon-herrera',
         }
         
         for nick, full in nickname_map.items():
             if full in name_to_employee:
                 name_to_employee[nick] = name_to_employee[full]
+        
+        # Special multi-word patterns (handle "Star Wars" with space)
+        special_patterns = []
+        starwars_emp = name_to_employee.get('starwars mckinnon-herrera')
+        if starwars_emp:
+            special_patterns.append((r'\bstar\s*wars\b', starwars_emp))  # "star wars", "star  wars"
+            special_patterns.append((r'\bstar\s*\(wars\)', starwars_emp))  # "star(wars)"
         
         # Count mentions per employee
         mention_counts = defaultdict(int)
@@ -9156,11 +9166,25 @@ async def upload_review_feedback_csv(
                 continue
             
             found_names = set()
+            
+            # First check special multi-word patterns (like "Star Wars")
+            for pattern, emp in special_patterns:
+                if re.search(pattern, review_text):
+                    emp_name = emp.get('name', '')
+                    if emp_name not in found_names:
+                        found_names.add(emp_name)
+                        mention_counts[emp_name] += 1
+            
+            # Then check single-word name matches
             for name_key, emp in name_to_employee.items():
+                # Skip if already found via special pattern
+                emp_name = emp.get('name', '')
+                if emp_name in found_names:
+                    continue
+                    
                 # Match as whole word
                 pattern = r'\b' + re.escape(name_key) + r'\b'
                 if re.search(pattern, review_text):
-                    emp_name = emp.get('name', '')
                     if emp_name not in found_names:
                         found_names.add(emp_name)
                         mention_counts[emp_name] += 1
