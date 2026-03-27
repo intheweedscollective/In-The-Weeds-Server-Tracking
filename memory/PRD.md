@@ -134,6 +134,16 @@ Previously, data could be uploaded to snapshots separately, causing sync issues 
   3. Both endpoints now return consistent response formats with `extraction_notes` indicating AI/OCR was used
 - **Files Modified**: `/app/backend/server.py` (PDF endpoint rewrites)
 
+### December 2026 - UX Enhancement: AI Processing Indicator ✅
+- **Added**: Real-time progress indicator for PDF uploads showing:
+  - Live stage updates ("Uploading PDF...", "Converting pages to images...", "AI analyzing employee data...")
+  - Elapsed time counter
+  - Gradient progress bar with pulse animation
+  - AI badge indicating GPT-4o processing
+  - Time estimate message ("Large PDFs typically take 30-90 seconds to process via AI")
+- **Import Progress**: Similar indicator for the import process with stage-specific messages
+- **Files Modified**: `/app/frontend/src/pages/DataUploads.js`
+
 ## File Structure
 ```
 /app/

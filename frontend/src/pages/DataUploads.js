@@ -30,6 +30,7 @@ export default function DataUploads() {
   const [pdfParsedData, setPdfParsedData] = useState(null);
   const [pdfImporting, setPdfImporting] = useState(false);
   const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const [pdfProgress, setPdfProgress] = useState({ stage: '', elapsed: 0 });
   
   // Current data status
   const [dataStatus, setDataStatus] = useState(null);
@@ -167,6 +168,23 @@ export default function DataUploads() {
     if (!pdfFile) return;
     setPdfParsing(true);
     setPdfParsedData(null);
+    setPdfProgress({ stage: 'Uploading PDF...', elapsed: 0 });
+    
+    // Estimate processing time based on file size (rough: 2 seconds per MB for AI processing)
+    const fileSizeMB = pdfFile.size / (1024 * 1024);
+    const estimatedSeconds = Math.max(15, Math.round(fileSizeMB * 3)); // At least 15 seconds, ~3s per MB
+    
+    // Start elapsed time counter
+    const startTime = Date.now();
+    const progressInterval = setInterval(() => {
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
+      const stage = elapsed < 3 
+        ? 'Uploading PDF...' 
+        : elapsed < 8 
+          ? 'Converting pages to images...'
+          : 'AI analyzing employee data...';
+      setPdfProgress({ stage, elapsed });
+    }, 1000);
     
     const formData = new FormData();
     formData.append('file', pdfFile);
@@ -178,23 +196,42 @@ export default function DataUploads() {
       });
       const data = await response.json();
       
+      clearInterval(progressInterval);
+      
       if (response.ok && data.success) {
         setPdfParsedData(data);
         setShowPdfPreview(true);
-        toast.success(`Parsed ${data.employee_count} employees from PDF`);
+        toast.success(`Parsed ${data.employee_count} employees from PDF`, {
+          description: data.extraction_notes || `Processed via AI/OCR`
+        });
       } else {
-        toast.error(data.error || "PDF parsing failed");
+        toast.error(data.error || data.detail || "PDF parsing failed");
       }
     } catch (error) {
+      clearInterval(progressInterval);
       toast.error("PDF parsing failed: " + error.message);
     }
     setPdfParsing(false);
+    setPdfProgress({ stage: '', elapsed: 0 });
   };
 
   // Import parsed PDF data
   const handlePdfImport = async () => {
     if (!pdfFile) return;
     setPdfImporting(true);
+    setPdfProgress({ stage: 'Importing data to database...', elapsed: 0 });
+    
+    // Start elapsed time counter for import
+    const startTime = Date.now();
+    const progressInterval = setInterval(() => {
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
+      const stage = elapsed < 5 
+        ? 'Re-processing PDF via AI...' 
+        : elapsed < 15 
+          ? 'Matching employees...'
+          : 'Updating database & recalculating scores...';
+      setPdfProgress({ stage, elapsed });
+    }, 1000);
     
     const formData = new FormData();
     formData.append('file', pdfFile);
@@ -205,6 +242,8 @@ export default function DataUploads() {
         body: formData
       });
       const data = await response.json();
+      
+      clearInterval(progressInterval);
       
       if (response.ok && data.success) {
         toast.success(`Imported ${data.total_processed} employees`, {
@@ -218,9 +257,11 @@ export default function DataUploads() {
         toast.error(data.detail || "Import failed");
       }
     } catch (error) {
+      clearInterval(progressInterval);
       toast.error("Import failed: " + error.message);
     }
     setPdfImporting(false);
+    setPdfProgress({ stage: '', elapsed: 0 });
   };
 
   const UploadCard = ({ 
@@ -501,6 +542,40 @@ export default function DataUploads() {
                 </div>
               </div>
 
+              {/* AI Processing Progress Indicator */}
+              {pdfParsing && (
+                <div className="bg-gradient-to-r from-blue-900/30 to-purple-900/30 rounded-xl border border-blue-500/30 p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="relative">
+                      <div className="w-10 h-10 rounded-full border-2 border-blue-500/30 flex items-center justify-center">
+                        <RefreshCw className="w-5 h-5 text-blue-400 animate-spin" />
+                      </div>
+                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center">
+                        <span className="text-[10px] text-white font-bold">AI</span>
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-blue-300 font-medium text-sm">{pdfProgress.stage}</span>
+                        <span className="text-blue-400 text-xs font-mono">{pdfProgress.elapsed}s</span>
+                      </div>
+                      <div className="h-1.5 bg-slate-700/50 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full transition-all duration-1000"
+                          style={{ 
+                            width: `${Math.min(95, (pdfProgress.elapsed / 60) * 100)}%`,
+                            animation: 'pulse 2s ease-in-out infinite'
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-400 ml-13">
+                    <span className="text-slate-500">⏱</span> Large PDFs typically take 30-90 seconds to process via AI
+                  </p>
+                </div>
+              )}
+
               {/* Preview Table */}
               {showPdfPreview && pdfParsedData?.employees && (
                 <div className="bg-slate-900/50 rounded-lg border border-slate-700/50 overflow-hidden">
@@ -524,6 +599,18 @@ export default function DataUploads() {
                       )}
                     </Button>
                   </div>
+                  
+                  {/* Import Progress Indicator */}
+                  {pdfImporting && (
+                    <div className="mt-3 bg-gradient-to-r from-emerald-900/30 to-blue-900/30 rounded-lg border border-emerald-500/30 p-3">
+                      <div className="flex items-center gap-2">
+                        <RefreshCw className="w-4 h-4 text-emerald-400 animate-spin" />
+                        <span className="text-emerald-300 text-sm font-medium">{pdfProgress.stage}</span>
+                        <span className="text-emerald-400 text-xs font-mono ml-auto">{pdfProgress.elapsed}s</span>
+                      </div>
+                    </div>
+                  )}
+                  
                   <div className="max-h-80 overflow-auto">
                     <table className="w-full text-xs md:text-sm">
                       <thead className="bg-slate-800/50 sticky top-0">
