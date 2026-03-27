@@ -7904,19 +7904,45 @@ async def upload_rt_data(
         mention_data = []
         
         if filename.endswith('.csv'):
-            # Parse CSV format: Keyword, Positive Mentions, Negative Mentions, Total Mentions
+            # Parse CSV format - flexible column name matching
+            content_str = content.decode('utf-8')
+            reader = csv.DictReader(io.StringIO(content_str))
+            
+            # Get actual column names for debugging
+            actual_columns = reader.fieldnames if reader.fieldnames else []
+            logging.info(f"RT CSV Upload: Found columns: {actual_columns}")
+            
+            # Find columns flexibly (case-insensitive)
+            def find_column(possible_names, columns):
+                for name in possible_names:
+                    for col in columns:
+                        if name.lower() in col.lower():
+                            return col
+                return None
+            
+            keyword_col = find_column(['keyword', 'name', 'employee', 'server'], actual_columns)
+            total_col = find_column(['total mentions', 'total', 'mentions'], actual_columns)
+            positive_col = find_column(['positive mentions', 'positive'], actual_columns)
+            negative_col = find_column(['negative mentions', 'negative'], actual_columns)
+            
+            logging.info(f"RT CSV: Mapped columns - keyword={keyword_col}, total={total_col}, positive={positive_col}, negative={negative_col}")
+            
+            if not keyword_col:
+                raise HTTPException(status_code=400, detail=f"Could not find 'Keyword' column. Found columns: {actual_columns}")
+            
+            # Re-read file with column mapping
             content_str = content.decode('utf-8')
             reader = csv.DictReader(io.StringIO(content_str))
             
             for row in reader:
-                keyword = row.get('Keyword', '').strip().lower()
+                keyword = row.get(keyword_col, '').strip().lower()
                 if not keyword:
                     continue
                 
                 # Try to get mentions - prefer Total Mentions, fall back to Positive
-                total_mentions = row.get('Total Mentions', row.get('total_mentions', ''))
-                positive_mentions = row.get('Positive Mentions', row.get('positive_mentions', ''))
-                negative_mentions = row.get('Negative Mentions', row.get('negative_mentions', '0'))
+                total_mentions = row.get(total_col, '') if total_col else ''
+                positive_mentions = row.get(positive_col, '') if positive_col else ''
+                negative_mentions = row.get(negative_col, '0') if negative_col else '0'
                 
                 try:
                     mentions = int(total_mentions) if total_mentions else int(positive_mentions) if positive_mentions else 0
@@ -7927,12 +7953,16 @@ async def upload_rt_data(
                     positive = 0
                     negative = 0
                 
-                mention_data.append({
-                    'keyword': keyword,
-                    'mentions': mentions,
-                    'positive': positive,
-                    'negative': negative
-                })
+                if mentions > 0 or positive > 0:  # Only include non-zero entries
+                    mention_data.append({
+                        'keyword': keyword,
+                        'mentions': mentions,
+                        'positive': positive,
+                        'negative': negative
+                    })
+                    logging.info(f"RT CSV: Parsed keyword '{keyword}' with {mentions} mentions")
+            
+            logging.info(f"RT CSV: Total entries with mentions: {len(mention_data)}")
         else:
             # Parse XLSX format
             import openpyxl
