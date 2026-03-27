@@ -3,6 +3,7 @@ QR Track Hub - Isolated module for QR code tracking
 Tracks employee QR code scans for Yelp and Google reviews
 """
 
+import os
 from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import Optional, List
@@ -258,8 +259,8 @@ async def reset_qr_employee_clicks(employee_id: str):
 
 # ==================== SCAN TRACKING ====================
 
-# Hardcoded Google review URL as fallback - ALWAYS use this if no settings
-GOOGLE_REVIEW_URL = "https://search.google.com/local/writereview?placeid=ChIJB6hQQjHEyIARLUX1F3jayRo"
+# Google review URL - read from environment, with fallback
+GOOGLE_REVIEW_URL = os.environ.get("GOOGLE_REVIEW_URL", "https://search.google.com/local/writereview?placeid=ChIJB6hQQjHEyIARLUX1F3jayRo")
 
 @qr_router.get("/scan/{employee_id}/{platform}")
 async def track_scan(employee_id: str, platform: str):
@@ -565,8 +566,8 @@ async def download_all_qr_codes_zip():
             status_code=404
         )
     
-    # Get base URL from environment or use default
-    base_url = os.environ.get("REACT_APP_BACKEND_URL", "https://staff-score-engine.preview.emergentagent.com")
+    # Get base URL from environment (try BACKEND_URL first, then REACT_APP_BACKEND_URL)
+    base_url = os.environ.get("BACKEND_URL") or os.environ.get("REACT_APP_BACKEND_URL", "")
     
     # Create a temporary file for the ZIP
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')

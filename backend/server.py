@@ -4980,10 +4980,10 @@ async def get_analytics_pdf_v2(year: int, quarter: str):
     
     # Get frontend URL from environment
     frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
-    # Use the preview URL for capturing
-    preview_url = os.environ.get("REACT_APP_BACKEND_URL", "https://staff-score-engine.preview.emergentagent.com")
-    if "preview.emergentagent.com" in preview_url:
-        frontend_url = preview_url.replace("/api", "").rstrip("/")
+    # Use the backend URL for capturing (handles both preview and production)
+    backend_url = os.environ.get("BACKEND_URL") or os.environ.get("REACT_APP_BACKEND_URL", "")
+    if backend_url:
+        frontend_url = backend_url.replace("/api", "").rstrip("/")
     
     analytics_url = f"{frontend_url}/analytics?year={year}&quarter={quarter}"
     
