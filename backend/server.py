@@ -1711,6 +1711,18 @@ async def upload_pos_report_file(file: UploadFile = File(...)):
 # SCANNED PDF PARSER - Accurate OCR-corrected text extraction
 # ============================================================================
 
+@api_router.post("/v2/pos-pdf/test")
+async def test_pdf_endpoint(file: UploadFile = File(...)):
+    """Simple test endpoint to check if PDF upload works at all"""
+    contents = await file.read()
+    return {
+        "success": True,
+        "filename": file.filename,
+        "size": len(contents),
+        "content_type": file.content_type
+    }
+
+
 @api_router.post("/v2/pos-pdf/parse")
 async def parse_pos_pdf_scan(file: UploadFile = File(...)):
     """
@@ -1724,7 +1736,14 @@ async def parse_pos_pdf_scan(file: UploadFile = File(...)):
     Returns extracted employee data without updating the database.
     Use the /v2/pos-pdf/import endpoint to actually import the data.
     """
-    from pdf_pos_parser import parse_pos_pdf, is_pos_pdf_format
+    import traceback
+    
+    try:
+        from pdf_pos_parser import parse_pos_pdf, is_pos_pdf_format
+    except ImportError as e:
+        logging.error(f"Import error for pdf_pos_parser: {e}")
+        raise HTTPException(status_code=500, detail=f"PDF parser module not available: {str(e)}")
+    
     import tempfile
     import os as os_module
     
@@ -1733,7 +1752,12 @@ async def parse_pos_pdf_scan(file: UploadFile = File(...)):
     if not is_pdf:
         raise HTTPException(status_code=400, detail="File must be a PDF")
     
-    contents = await file.read()
+    try:
+        contents = await file.read()
+    except Exception as e:
+        logging.error(f"Error reading file: {e}")
+        raise HTTPException(status_code=400, detail=f"Error reading file: {str(e)}")
+        
     if len(contents) > 50 * 1024 * 1024:  # 50MB limit
         raise HTTPException(status_code=400, detail="File too large. Maximum 50MB")
     
@@ -1742,6 +1766,8 @@ async def parse_pos_pdf_scan(file: UploadFile = File(...)):
         with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
             tmp.write(contents)
             tmp_path = tmp.name
+        
+        logging.info(f"PDF saved to temp file: {tmp_path}, size: {len(contents)} bytes")
         
         try:
             # Check if it's a POS report format
@@ -1788,10 +1814,16 @@ async def parse_pos_pdf_scan(file: UploadFile = File(...)):
             
         finally:
             # Clean up temp file
-            os_module.unlink(tmp_path)
+            try:
+                os_module.unlink(tmp_path)
+            except:
+                pass
             
+    except HTTPException:
+        raise
     except Exception as e:
         logging.error(f"PDF parsing error: {str(e)}")
+        logging.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"PDF parsing failed: {str(e)}")
 
 
