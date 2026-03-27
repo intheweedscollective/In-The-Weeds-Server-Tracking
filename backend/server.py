@@ -1731,6 +1731,7 @@ async def parse_pos_pdf_scan(file: UploadFile = File(...)):
     For large PDFs (>10 pages), processes in chunks to avoid timeouts.
     """
     import traceback
+    import gc
     
     try:
         from pdf_pos_parser import parse_pos_pdf, is_pos_pdf_format
@@ -1761,7 +1762,12 @@ async def parse_pos_pdf_scan(file: UploadFile = File(...)):
             tmp.write(contents)
             tmp_path = tmp.name
         
-        logging.info(f"PDF saved to temp file: {tmp_path}, size: {len(contents)} bytes")
+        # Free memory immediately
+        file_size = len(contents)
+        del contents
+        gc.collect()
+        
+        logging.info(f"PDF saved to temp file: {tmp_path}, size: {file_size} bytes")
         
         try:
             # Check if it's a POS report format
@@ -1777,41 +1783,47 @@ async def parse_pos_pdf_scan(file: UploadFile = File(...)):
             doc = fitz.open(tmp_path)
             total_pages = len(doc)
             doc.close()
+            del doc
+            gc.collect()
             
             all_employees = []
-            MAX_PAGES_PER_CHUNK = 5  # Smaller chunks for production stability
+            MAX_PAGES_PER_CHUNK = 3  # Small chunks for memory efficiency
             
             if total_pages > MAX_PAGES_PER_CHUNK:
                 logging.info(f"Large PDF ({total_pages} pages) - processing in chunks of {MAX_PAGES_PER_CHUNK}")
                 
-                # Process in chunks - open source doc once for all chunks
-                source_doc = fitz.open(tmp_path)
-                
-                try:
-                    for start_page in range(0, total_pages, MAX_PAGES_PER_CHUNK):
-                        end_page = min(start_page + MAX_PAGES_PER_CHUNK, total_pages)
-                        
-                        # Create a temp PDF with just this chunk
+                for start_page in range(0, total_pages, MAX_PAGES_PER_CHUNK):
+                    end_page = min(start_page + MAX_PAGES_PER_CHUNK, total_pages)
+                    chunk_path = None
+                    
+                    try:
+                        # Open source fresh for each chunk to avoid memory buildup
+                        source_doc = fitz.open(tmp_path)
                         new_doc = fitz.open()
+                        
                         for i in range(start_page, end_page):
                             new_doc.insert_pdf(source_doc, from_page=i, to_page=i)
                         
                         chunk_path = tmp_path + f'_chunk_{start_page}.pdf'
                         new_doc.save(chunk_path)
                         new_doc.close()
+                        source_doc.close()
+                        del new_doc, source_doc
+                        gc.collect()
                         
                         # Parse this chunk
-                        try:
-                            chunk_employees = parse_pos_pdf(chunk_path)
-                            all_employees.extend(chunk_employees)
-                            logging.info(f"Chunk {start_page}-{end_page}: Found {len(chunk_employees)} employees")
-                        finally:
+                        chunk_employees = parse_pos_pdf(chunk_path)
+                        all_employees.extend(chunk_employees)
+                        logging.info(f"Chunk {start_page}-{end_page}: Found {len(chunk_employees)} employees")
+                        del chunk_employees
+                        gc.collect()
+                        
+                    finally:
+                        if chunk_path:
                             try:
                                 os_module.unlink(chunk_path)
                             except:
                                 pass
-                finally:
-                    source_doc.close()
                 
                 employees = all_employees
             else:
@@ -1856,12 +1868,14 @@ async def parse_pos_pdf_scan(file: UploadFile = File(...)):
                 os_module.unlink(tmp_path)
             except:
                 pass
+            gc.collect()
             
     except HTTPException:
         raise
     except Exception as e:
         logging.error(f"PDF parsing error: {str(e)}")
         logging.error(traceback.format_exc())
+        gc.collect()
         raise HTTPException(status_code=500, detail=f"PDF parsing failed: {str(e)}")
 
 
