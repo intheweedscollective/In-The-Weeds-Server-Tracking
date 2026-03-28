@@ -230,10 +230,12 @@ export default function DataUploads() {
               clearInterval(progressInterval);
               
               if (statusData.result?.success) {
-                setPdfParsedData(statusData.result);
+                // Deep clone to ensure serializable data
+                const cleanData = JSON.parse(JSON.stringify(statusData.result));
+                setPdfParsedData(cleanData);
                 setShowPdfPreview(true);
-                toast.success(`Parsed ${statusData.result.employee_count} employees from PDF`, {
-                  description: statusData.result.extraction_notes || 'Processed via AI/OCR'
+                toast.success(`Parsed ${cleanData.employee_count} employees from PDF`, {
+                  description: cleanData.extraction_notes || 'Processed via AI/OCR'
                 });
               } else {
                 toast.error(statusData.result?.error || 'PDF parsing failed');
