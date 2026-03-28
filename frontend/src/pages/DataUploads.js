@@ -192,10 +192,17 @@ export default function DataUploads() {
     formData.append('file', pdfFile);
     
     try {
+      // Create abort controller with 5-minute timeout for large PDFs
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutes
+      
       const response = await fetch(`${BACKEND_URL}/api/v2/pos-pdf/parse`, {
         method: 'POST',
-        body: formData
+        body: formData,
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
       const data = await response.json();
       
       clearInterval(progressInterval);
@@ -211,7 +218,11 @@ export default function DataUploads() {
       }
     } catch (error) {
       clearInterval(progressInterval);
-      toast.error("PDF parsing failed: " + error.message);
+      if (error.name === 'AbortError') {
+        toast.error("PDF parsing timed out. The file may be too large.");
+      } else {
+        toast.error("PDF parsing failed: " + error.message);
+      }
     }
     setPdfParsing(false);
     setPdfProgress({ stage: '', elapsed: 0 });
@@ -239,10 +250,17 @@ export default function DataUploads() {
     formData.append('file', pdfFile);
     
     try {
+      // Create abort controller with 5-minute timeout for large PDFs
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutes
+      
       const response = await fetch(`${BACKEND_URL}/api/v2/pos-pdf/import?quarter=${quarter}&year=${year}`, {
         method: 'POST',
-        body: formData
+        body: formData,
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
       const data = await response.json();
       
       clearInterval(progressInterval);
@@ -260,7 +278,11 @@ export default function DataUploads() {
       }
     } catch (error) {
       clearInterval(progressInterval);
-      toast.error("Import failed: " + error.message);
+      if (error.name === 'AbortError') {
+        toast.error("Import timed out. Please try again.");
+      } else {
+        toast.error("Import failed: " + error.message);
+      }
     }
     setPdfImporting(false);
     setPdfProgress({ stage: '', elapsed: 0 });
