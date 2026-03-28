@@ -143,8 +143,9 @@ export default function DataUploads() {
       
       if (response.ok && data.success) {
         setRtResult({ success: true, data });
-        toast.success(`Found ${data.total_mentions || 0} employee mentions in ${data.reviews_with_mentions || 0} reviews`, {
-          description: `Updated ${data.employees_updated || 0} employees. Create a Snapshot to capture this data.`
+        const summary = data.summary || {};
+        toast.success(`Found ${summary.total_mentions || 0} employee mentions in ${summary.reviews_with_mentions || 0} reviews`, {
+          description: `Updated ${summary.employees_updated || 0} employees. Create a Snapshot to capture this data.`
         });
         fetchDataStatus();
       } else {

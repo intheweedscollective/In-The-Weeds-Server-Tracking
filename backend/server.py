@@ -9229,6 +9229,9 @@ async def upload_review_feedback_csv(
         # Clean column names
         df.columns = [str(col).strip() for col in df.columns]
         
+        logging.info(f"RT Feedback: CSV columns = {list(df.columns)}")
+        logging.info(f"RT Feedback: CSV has {len(df)} rows")
+        
         # Find the review text column
         review_col = None
         rating_col = None
@@ -9236,7 +9239,7 @@ async def upload_review_feedback_csv(
         
         for col in df.columns:
             col_lower = col.lower()
-            if col_lower == 'review' or 'review' in col_lower and 'id' not in col_lower:
+            if col_lower == 'review' or ('review' in col_lower and 'id' not in col_lower):
                 review_col = col
             elif 'rating' in col_lower:
                 rating_col = col
@@ -9244,12 +9247,17 @@ async def upload_review_feedback_csv(
                 date_col = col
         
         if not review_col:
-            raise HTTPException(status_code=400, detail="Could not find Review column in CSV")
+            logging.error(f"RT Feedback: Could not find Review column. Available: {list(df.columns)}")
+            raise HTTPException(status_code=400, detail=f"Could not find Review column in CSV. Columns found: {list(df.columns)}")
+        
+        logging.info(f"RT Feedback: Found review column '{review_col}', rating column '{rating_col}'")
         
         # Get all employees for this quarter
         employees = await db.employees_v2.find(
             {"quarter": quarter.upper(), "year": year}
         ).to_list(500)
+        
+        logging.info(f"RT Feedback: Found {len(employees)} employees for {quarter} {year}")
         
         if not employees:
             raise HTTPException(status_code=400, detail=f"No employees found for {quarter} {year}")
@@ -9300,6 +9308,8 @@ async def upload_review_feedback_csv(
             special_patterns.append((r'\bstar\s*wars\b', starwars_emp))  # "star wars", "star  wars"
             special_patterns.append((r'\bstar\s*\(wars\)', starwars_emp))  # "star(wars)"
         
+        logging.info(f"RT Feedback: Built name lookup with {len(name_to_employee)} names")
+        
         # Count mentions per employee
         mention_counts = defaultdict(int)
         reviews_processed = 0
@@ -9308,7 +9318,11 @@ async def upload_review_feedback_csv(
         
         for _, row in df.iterrows():
             review_text = str(row.get(review_col, '')).lower()
-            if not review_text or review_text == 'nan':
+            # Also check Title column which often has names
+            title_text = str(row.get('Title', '')).lower() if 'Title' in df.columns else ''
+            combined_text = review_text + ' ' + title_text
+            
+            if not combined_text.strip() or combined_text.strip() == 'nan':
                 continue
             
             reviews_processed += 1
@@ -9322,7 +9336,7 @@ async def upload_review_feedback_csv(
             
             # First check special multi-word patterns (like "Star Wars")
             for pattern, emp in special_patterns:
-                if re.search(pattern, review_text):
+                if re.search(pattern, combined_text):
                     emp_name = emp.get('name', '')
                     if emp_name not in found_names:
                         found_names.add(emp_name)
@@ -9337,7 +9351,7 @@ async def upload_review_feedback_csv(
                     
                 # Match as whole word
                 pattern = r'\b' + re.escape(name_key) + r'\b'
-                if re.search(pattern, review_text):
+                if re.search(pattern, combined_text):
                     if emp_name not in found_names:
                         found_names.add(emp_name)
                         mention_counts[emp_name] += 1
@@ -9346,10 +9360,12 @@ async def upload_review_feedback_csv(
                 reviews_with_mentions += 1
                 if len(sample_matches) < 5:
                     sample_matches.append({
-                        "review_snippet": review_text[:100] + "...",
+                        "review_snippet": combined_text[:100] + "...",
                         "employees_found": list(found_names),
                         "rating": rating
                     })
+        
+        logging.info(f"RT Feedback: Processed {reviews_processed} reviews, found {reviews_with_mentions} with mentions, total {sum(mention_counts.values())} mentions")
         
         # Update employees with mention counts
         employees_updated = 0
