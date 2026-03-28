@@ -749,8 +749,8 @@ export default function DataUploads() {
 
           {/* ReviewTracker Upload */}
           <UploadCard
-            title="3. ReviewTracker"
-            description="Employee review mention counts (XLSX or CSV)"
+            title="3. ReviewTracker (Public Reviews)"
+            description="Keyword mention counts from ReviewTrackers export"
             icon={Star}
             file={rtFile}
             setFile={setRtFile}
