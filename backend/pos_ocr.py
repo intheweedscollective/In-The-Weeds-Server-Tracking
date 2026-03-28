@@ -28,14 +28,14 @@ CRITICAL INSTRUCTIONS:
 
 REQUIRED DATA TO EXTRACT (ALL fields are mandatory):
 1. **name** - Employee name at top of page
-2. **guest_count** - "Total Guests" from summary section (integer)
+2. **guest_count** - "Total Guests" or "Ttl Guests" from summary section (integer)
 3. **net_sales** - Total/Grand Total row from Net Sls column (this is the sum of all categories)
 4. **food_sales** - "Food" row from Net Sls column
 5. **liquor_sales** - "Liquor" row from Net Sls column  
 6. **beer_sales** - "Beer" row from Net Sls column
 7. **wine_sales** - "Wine" row from Net Sls column
-8. **bar_glassware_sales** - "Bar Glassware" or "Glassware" row from Net Sls column
-9. **loyalty_sales** - "Loyalty" or "LSC" row from Net Sls column
+8. **bar_glassware_sales** - Look for "Bar Glassware", "Glassware", "Bar Glass", or "Brglswre" row from Net Sls column
+9. **loyalty_sales** - Look for "Loyalty", "LSC", "Loyany", "Loyalt", or "Loyal" row from Net Sls column (LSC cards sold at $25 each)
 
 DO NOT calculate derived values - just extract raw numbers from the report.
 
