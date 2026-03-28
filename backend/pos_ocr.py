@@ -364,19 +364,21 @@ async def extract_pos_data_from_pdf(pdf_bytes: bytes, max_pages: int = 60) -> Di
         if total_pages > max_pages:
             logging.warning(f"PDF has {total_pages} pages, limiting to {max_pages}")
         
-        # Convert all pages to images first
+        # Convert all pages to images first - use lower DPI for faster processing
         page_images = []
         for page_num in range(pages_to_process):
             page = pdf_document[page_num]
-            mat = fitz.Matrix(150/72, 150/72)  # 150 DPI
+            # Use 100 DPI instead of 150 for faster upload/processing while maintaining readability
+            mat = fitz.Matrix(100/72, 100/72)
             pix = page.get_pixmap(matrix=mat)
+            # Use JPEG with quality setting for smaller file size
             img_bytes = pix.tobytes("jpeg")
             image_base64 = base64.b64encode(img_bytes).decode('utf-8')
             page_images.append((page_num, image_base64))
         
         pdf_document.close()
         
-        # Process pages in parallel (3 at a time to avoid rate limits)
+        # Process pages in parallel (5 at a time for speed while staying under rate limits)
         all_employees = []
         extraction_notes = []
         report_date = None
@@ -386,8 +388,8 @@ async def extract_pos_data_from_pdf(pdf_bytes: bytes, max_pages: int = 60) -> Di
             logging.info(f"Processing page {page_num + 1}/{pages_to_process}...")
             return page_num, await extract_pos_data_from_image(image_base64, "image/jpeg")
         
-        # Process in batches of 3
-        batch_size = 3
+        # Process in batches of 5 for faster completion (stay under rate limits)
+        batch_size = 5
         for i in range(0, len(page_images), batch_size):
             batch = page_images[i:i+batch_size]
             tasks = [process_page(page_num, img) for page_num, img in batch]
