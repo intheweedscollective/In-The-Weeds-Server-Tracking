@@ -199,26 +199,53 @@ export default function DataUploads() {
       const response = await fetch(`${BACKEND_URL}/api/v2/pos-pdf/parse`, {
         method: 'POST',
         body: formData,
-        signal: controller.signal
+        signal: controller.signal,
+        // Prevent caching issues
+        cache: 'no-store',
+        headers: {
+          'Accept': 'application/json',
+        }
       });
       
       clearTimeout(timeoutId);
       clearInterval(progressInterval);
       
-      // Safe JSON parsing - read as text first to avoid "body disturbed" errors
-      const responseText = await response.text();
-      let data;
-      try {
-        data = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error('Failed to parse response:', responseText);
-        toast.error("Server returned invalid response");
+      // Check if response is ok before trying to parse
+      if (!response.ok) {
+        let errorMessage = `Server error: ${response.status}`;
+        try {
+          const errorText = await response.text();
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.detail || errorData.error || errorMessage;
+        } catch (e) {
+          // Ignore parse errors for error responses
+        }
+        toast.error(errorMessage);
         setPdfParsing(false);
         setPdfProgress({ stage: '', elapsed: 0 });
         return;
       }
       
-      if (response.ok && data.success) {
+      // Clone response to safely read body
+      const responseClone = response.clone();
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        // Try reading as text from clone
+        try {
+          const responseText = await responseClone.text();
+          console.error('Failed to parse JSON response:', responseText?.substring(0, 500));
+        } catch (e) {
+          console.error('Could not read response body');
+        }
+        toast.error("Server returned invalid response format");
+        setPdfParsing(false);
+        setPdfProgress({ stage: '', elapsed: 0 });
+        return;
+      }
+      
+      if (data.success) {
         setPdfParsedData(data);
         setShowPdfPreview(true);
         toast.success(`Parsed ${data.employee_count} employees from PDF`, {
@@ -229,8 +256,13 @@ export default function DataUploads() {
       }
     } catch (error) {
       clearInterval(progressInterval);
+      console.error('PDF parse error:', error);
       if (error.name === 'AbortError') {
         toast.error("PDF parsing timed out. The file may be too large.");
+      } else if (error.message?.includes('Body is disturbed') || error.message?.includes('locked')) {
+        toast.error("Connection interrupted. Please try again.");
+      } else if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
+        toast.error("Network error. Please check your connection and try again.");
       } else {
         toast.error("PDF parsing failed: " + error.message);
       }

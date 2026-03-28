@@ -1729,7 +1729,32 @@ async def parse_pos_pdf_scan(file: UploadFile = File(...)):
     Parse a scanned POS report PDF using AI-powered OCR extraction.
     This method is more reliable for production environments with memory constraints.
     """
+    import math
     from pos_ocr import extract_pos_data_from_pdf, validate_extracted_data
+    
+    def safe_float(val, default=0):
+        """Convert value to float safely, handling NaN/None/invalid values."""
+        if val is None:
+            return default
+        try:
+            result = float(val)
+            if math.isnan(result) or math.isinf(result):
+                return default
+            return round(result, 2)
+        except (ValueError, TypeError):
+            return default
+    
+    def safe_int(val, default=0):
+        """Convert value to int safely."""
+        if val is None:
+            return default
+        try:
+            result = float(val)
+            if math.isnan(result) or math.isinf(result):
+                return default
+            return int(result)
+        except (ValueError, TypeError):
+            return default
     
     # Validate file type
     is_pdf = file.content_type == "application/pdf" or (file.filename and file.filename.lower().endswith('.pdf'))
@@ -1770,30 +1795,32 @@ async def parse_pos_pdf_scan(file: UploadFile = File(...)):
                 "extraction_notes": validated_data.get("extraction_notes", "")
             }
         
-        # Format response to match expected structure
+        # Format response to match expected structure - with safe value handling
         formatted_employees = []
         for emp in validated_data.get("employees", []):
             raw_data_fields = emp.get("_raw", {})
             formatted_employees.append({
-                "name": emp.get("name", "Unknown"),
-                "guest_count": emp.get("guest_count", 0),
-                "net_sales": round(emp.get("net_sales", 0) or 0, 2),
-                "food_sales": round(raw_data_fields.get("food_sales", 0) or 0, 2),
-                "liquor_sales": round(raw_data_fields.get("liquor_sales", 0) or 0, 2),
-                "beer_sales": round(raw_data_fields.get("beer_sales", 0) or 0, 2),
-                "wine_sales": round(raw_data_fields.get("wine_sales", 0) or 0, 2),
-                "lbw_total": round((raw_data_fields.get("liquor_sales", 0) or 0) + 
-                                   (raw_data_fields.get("beer_sales", 0) or 0) + 
-                                   (raw_data_fields.get("wine_sales", 0) or 0), 2),
-                "bar_glassware_sales": round(raw_data_fields.get("bar_glassware_sales", 0) or 0, 2),
-                "loyalty_sales": round(emp.get("loyalty_sales", 0) or 0, 2)
+                "name": str(emp.get("name", "Unknown") or "Unknown"),
+                "guest_count": safe_int(emp.get("guest_count", 0)),
+                "net_sales": safe_float(emp.get("net_sales", 0)),
+                "food_sales": safe_float(raw_data_fields.get("food_sales", 0)),
+                "liquor_sales": safe_float(raw_data_fields.get("liquor_sales", 0)),
+                "beer_sales": safe_float(raw_data_fields.get("beer_sales", 0)),
+                "wine_sales": safe_float(raw_data_fields.get("wine_sales", 0)),
+                "lbw_total": safe_float(
+                    (raw_data_fields.get("liquor_sales") or 0) + 
+                    (raw_data_fields.get("beer_sales") or 0) + 
+                    (raw_data_fields.get("wine_sales") or 0)
+                ),
+                "bar_glassware_sales": safe_float(raw_data_fields.get("bar_glassware_sales", 0)),
+                "loyalty_sales": safe_float(emp.get("loyalty_sales", 0))
             })
         
         return {
             "success": True,
             "filename": file.filename,
             "employee_count": len(formatted_employees),
-            "total_pages": raw_data.get("pages_processed", raw_data.get("total_pages", 1)),
+            "total_pages": safe_int(raw_data.get("pages_processed", raw_data.get("total_pages", 1)), 1),
             "employees": formatted_employees,
             "extraction_notes": f"AI/OCR extracted {len(formatted_employees)} employees. {validated_data.get('extraction_notes', '')}"
         }
