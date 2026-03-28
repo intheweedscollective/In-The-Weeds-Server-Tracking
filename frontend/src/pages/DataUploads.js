@@ -134,7 +134,8 @@ export default function DataUploads() {
     formData.append('file', rtFile);
     
     try {
-      const response = await fetch(`${BACKEND_URL}/api/v2/rt/upload?quarter=${quarter}&year=${year}`, {
+      // Use review-tracker/upload-feedback which scans review text for employee names
+      const response = await fetch(`${BACKEND_URL}/api/v2/review-tracker/upload-feedback?quarter=${quarter}&year=${year}`, {
         method: 'POST',
         body: formData
       });
@@ -142,8 +143,8 @@ export default function DataUploads() {
       
       if (response.ok && data.success) {
         setRtResult({ success: true, data });
-        toast.success(`Updated ${data.employees_updated || 0} employees with RT data`, {
-          description: "Dashboard updated. Create a Snapshot to capture this data."
+        toast.success(`Found ${data.total_mentions || 0} employee mentions in ${data.reviews_with_mentions || 0} reviews`, {
+          description: `Updated ${data.employees_updated || 0} employees. Create a Snapshot to capture this data.`
         });
         fetchDataStatus();
       } else {
@@ -750,7 +751,7 @@ export default function DataUploads() {
           {/* ReviewTracker Upload */}
           <UploadCard
             title="3. ReviewTracker (Public Reviews)"
-            description="Keyword mention counts from ReviewTrackers export"
+            description="Raw review export - AI scans for employee name mentions"
             icon={Star}
             file={rtFile}
             setFile={setRtFile}
@@ -758,7 +759,6 @@ export default function DataUploads() {
             uploading={rtUploading}
             result={rtResult}
             acceptTypes=".xlsx,.csv"
-            downloadTemplate={downloadRtTemplate}
             colorClass="yellow"
           />
         </div>
