@@ -16,34 +16,30 @@ load_dotenv()
 POS_EXTRACTION_PROMPT = """You are an expert at extracting employee performance data from Aloha POS Server Sales Detail Reports.
 
 REPORT STRUCTURE - Server Sales Detail Report:
-- Employee name at the TOP of the page
+- Employee name at the TOP of the page (look for a person's name like "Terrance Kott" or "Kitti Smith")
 - Table with columns: Category | Qty Sold | Gross Sls | Net Sls | Void | Comp | Promo | Emp Disc
-- Categories include: Food, Liquor, Beer, Wine, Bar Glassware, Loyalty, etc.
-- Summary section at bottom with "Total Guests"
+- Each row shows a different sales category (Food, Liquor, Beer, Wine, Bar Glassware, Loyalty, etc.)
+- Summary section at bottom with "Total Guests" count
 
-CRITICAL: Extract values from the "Net Sls" column ONLY (not Gross Sls).
+CRITICAL INSTRUCTIONS:
+1. ALWAYS extract ALL of the following fields for EVERY employee
+2. Use the "Net Sls" column values (NOT Gross Sls)
+3. Each row in the table is a different category - find and extract each one
 
-DATA TO EXTRACT:
-1. **Employee Name** - At top of page (e.g., "Terrance Kott", "Kitti Smith")
-2. **Total Guests** - From summary section at bottom (number of guests served)
-3. **Net Sales by Category** - From the "Net Sls" column for each row:
-   - **Food** → food_sales
-   - **Liquor** → liquor_sales  
-   - **Beer** → beer_sales
-   - **Wine** → wine_sales
-   - **Bar Glassware** → bar_glassware_sales
-   - **Loyalty** → loyalty_sales
-   - **Total (grand total row)** → net_sales
+REQUIRED DATA TO EXTRACT (ALL fields are mandatory):
+1. **name** - Employee name at top of page
+2. **guest_count** - "Total Guests" from summary section (integer)
+3. **net_sales** - Total/Grand Total row from Net Sls column (this is the sum of all categories)
+4. **food_sales** - "Food" row from Net Sls column
+5. **liquor_sales** - "Liquor" row from Net Sls column  
+6. **beer_sales** - "Beer" row from Net Sls column
+7. **wine_sales** - "Wine" row from Net Sls column
+8. **bar_glassware_sales** - "Bar Glassware" or "Glassware" row from Net Sls column
+9. **loyalty_sales** - "Loyalty" or "LSC" row from Net Sls column
 
-FORMULAS (DO NOT calculate these - I will calculate them):
-- PPA = net_sales / guest_count
-- LBW per guest = (liquor_sales + beer_sales + wine_sales) / guest_count
-- Glassware per guest = bar_glassware_sales / guest_count
-- Guests per LSC = guest_count / (loyalty_sales / 25)
+DO NOT calculate derived values - just extract raw numbers from the report.
 
-Return RAW extracted values - do NOT pre-calculate PPA, LBW per guest, etc.
-
-JSON FORMAT:
+JSON FORMAT (use EXACTLY this structure):
 {
   "report_date": "YYYY-MM-DD or null",
   "report_type": "server_sales_detail",
@@ -64,10 +60,11 @@ JSON FORMAT:
 }
 
 IMPORTANT:
-- Use "Net Sls" column values, NOT "Gross Sls"
-- Extract numbers as-is without $ signs or commas
-- If a category row doesn't exist, use null
-- Do NOT calculate derived values like PPA or LBW/guest
+- Extract ALL 9 fields for every employee - do not skip any
+- Use 0 if a category has no sales (not null)
+- Remove $ signs and commas from numbers
+- If you cannot find a specific category row, use 0 for that field
+- Each page typically contains data for ONE employee"""
 
 Return ONLY valid JSON."""
 
