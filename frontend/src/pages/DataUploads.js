@@ -326,23 +326,25 @@ export default function DataUploads() {
     const emp = pdfParsedData.employees[index];
     setEditingEmployee(index);
     setEditForm({
-      guest_count: emp.guest_count || 0,
-      net_sales: emp.net_sales || 0,
-      food_sales: emp.food_sales || 0,
-      liquor_sales: emp.liquor_sales || 0,
-      beer_sales: emp.beer_sales || 0,
-      wine_sales: emp.wine_sales || 0,
-      bar_glassware_sales: emp.bar_glassware_sales || 0,
-      loyalty_sales: emp.loyalty_sales || 0
+      guest_count: String(emp.guest_count || 0),
+      net_sales: String(emp.net_sales || 0),
+      food_sales: String(emp.food_sales || 0),
+      liquor_sales: String(emp.liquor_sales || 0),
+      beer_sales: String(emp.beer_sales || 0),
+      wine_sales: String(emp.wine_sales || 0),
+      bar_glassware_sales: String(emp.bar_glassware_sales || 0),
+      loyalty_sales: String(emp.loyalty_sales || 0)
     });
   };
 
   const saveEditEmployee = () => {
-    if (editingEmployee === null) return;
+    if (editingEmployee === null || !pdfParsedData) return;
     
-    const updatedEmployees = [...pdfParsedData.employees];
-    updatedEmployees[editingEmployee] = {
-      ...updatedEmployees[editingEmployee],
+    // Deep clone to avoid mutation issues
+    const newData = JSON.parse(JSON.stringify(pdfParsedData));
+    
+    newData.employees[editingEmployee] = {
+      ...newData.employees[editingEmployee],
       guest_count: parseInt(editForm.guest_count) || 0,
       net_sales: parseFloat(editForm.net_sales) || 0,
       food_sales: parseFloat(editForm.food_sales) || 0,
@@ -356,10 +358,7 @@ export default function DataUploads() {
                  (parseFloat(editForm.wine_sales) || 0)
     };
     
-    setPdfParsedData({
-      ...pdfParsedData,
-      employees: updatedEmployees
-    });
+    setPdfParsedData(newData);
     setEditingEmployee(null);
     setEditForm({});
     toast.success("Employee data updated");
