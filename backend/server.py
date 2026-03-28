@@ -1845,6 +1845,10 @@ async def process_pdf_in_background(job_id: str, contents: bytes, filename: str)
         formatted_employees = []
         for emp in validated_data.get("employees", []):
             raw_data_fields = emp.get("_raw", {})
+            
+            # Log what we're getting
+            logging.info(f"PDF Extract - {emp.get('name')}: net_sales={emp.get('net_sales')}, _raw={raw_data_fields}")
+            
             formatted_employees.append({
                 "name": str(emp.get("name", "Unknown") or "Unknown"),
                 "guest_count": safe_int(emp.get("guest_count", 0)),
