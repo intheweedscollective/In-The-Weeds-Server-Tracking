@@ -203,9 +203,20 @@ export default function DataUploads() {
       });
       
       clearTimeout(timeoutId);
-      const data = await response.json();
-      
       clearInterval(progressInterval);
+      
+      // Safe JSON parsing - read as text first to avoid "body disturbed" errors
+      const responseText = await response.text();
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('Failed to parse response:', responseText);
+        toast.error("Server returned invalid response");
+        setPdfParsing(false);
+        setPdfProgress({ stage: '', elapsed: 0 });
+        return;
+      }
       
       if (response.ok && data.success) {
         setPdfParsedData(data);
@@ -261,9 +272,20 @@ export default function DataUploads() {
       });
       
       clearTimeout(timeoutId);
-      const data = await response.json();
-      
       clearInterval(progressInterval);
+      
+      // Safe JSON parsing - read as text first to avoid "body disturbed" errors
+      const responseText = await response.text();
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('Failed to parse response:', responseText);
+        toast.error("Server returned invalid response");
+        setPdfImporting(false);
+        setPdfProgress({ stage: '', elapsed: 0 });
+        return;
+      }
       
       if (response.ok && data.success) {
         toast.success(`Imported ${data.total_processed} employees`, {
@@ -274,7 +296,7 @@ export default function DataUploads() {
         setShowPdfPreview(false);
         fetchDataStatus();
       } else {
-        toast.error(data.detail || "Import failed");
+        toast.error(data.detail || data.error || "Import failed");
       }
     } catch (error) {
       clearInterval(progressInterval);
