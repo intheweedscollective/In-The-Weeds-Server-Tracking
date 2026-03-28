@@ -64,7 +64,7 @@ IMPORTANT:
 - Use 0 if a category has no sales (not null)
 - Remove $ signs and commas from numbers
 - If you cannot find a specific category row, use 0 for that field
-- Each page typically contains data for ONE employee"""
+- Each page typically contains data for ONE employee
 
 Return ONLY valid JSON."""
 
@@ -625,7 +625,7 @@ def extract_pos_data_from_xlsx(xlsx_bytes: bytes) -> Dict[str, Any]:
                 employee_name = None
                 
                 def is_valid_name(val):
-                    """Check if a value looks like a person's name (not date, number, or address)"""
+                    """Check if a value looks like a person name (not date, number, or address)"""
                     if not val or len(val) < 3:
                         return False
                     val = str(val).strip()
