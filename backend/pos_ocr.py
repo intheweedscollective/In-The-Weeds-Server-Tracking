@@ -15,31 +15,37 @@ load_dotenv()
 # System prompt for extracting POS data
 POS_EXTRACTION_PROMPT = """You are an expert at extracting employee performance data from Aloha POS Server Sales Detail Reports.
 
-REPORT STRUCTURE - Server Sales Detail Report:
-- Employee name at the TOP of the page (look for a person's name like "Terrance Kott" or "Kitti Smith")
+REPORT STRUCTURE:
+- Employee name at TOP of the page (e.g., "Chase Winston", "Starwars Mckinnon-Herrera")
 - Table with columns: Category | Qty Sold | Gross Sls | Net Sls | Void | Comp | Promo | Emp Disc
-- Each row shows a different sales category (Food, Liquor, Beer, Wine, Bar Glassware, Loyalty, etc.)
-- Summary section at bottom with "Total Guests" count
+- Each row is a sales category. ALWAYS look for these rows in the table:
+  * Food
+  * Liquor
+  * Beer
+  * Wine
+  * Bar Glassware (may appear as "Brglswre", "Bar Glass", "Glassware")
+  * Loyalty (may appear as "Loyany", "LSC", "Loyal" - this is CRITICAL, don't miss it!)
+- Summary section at bottom with "Total Guests" or "Ttl Guests"
 
-CRITICAL INSTRUCTIONS:
-1. ALWAYS extract ALL of the following fields for EVERY employee
-2. Use the "Net Sls" column values (NOT Gross Sls)
-3. Each row in the table is a different category - find and extract each one
+CRITICAL - LOYALTY ROW:
+The Loyalty row is often near the bottom of the category table, sometimes between other rows.
+- Look for ANY row containing "Loyal", "LSC", "Loyany", "Loyalty"
+- The Net Sls value = number of cards × $25 (e.g., 2 cards = $50.00, 11 cards = $275.00)
+- If you see Qty Sold = 2 and Net Sls = 50.00, that's the Loyalty row
+- DO NOT return 0 unless you are 100% certain there is NO Loyalty row
 
-REQUIRED DATA TO EXTRACT (ALL fields are mandatory):
-1. **name** - Employee name at top of page
-2. **guest_count** - "Total Guests" or "Ttl Guests" from summary section (integer)
-3. **net_sales** - Total/Grand Total row from Net Sls column (this is the sum of all categories)
-4. **food_sales** - "Food" row from Net Sls column
-5. **liquor_sales** - "Liquor" row from Net Sls column  
-6. **beer_sales** - "Beer" row from Net Sls column
-7. **wine_sales** - "Wine" row from Net Sls column
-8. **bar_glassware_sales** - Look for "Bar Glassware", "Glassware", "Bar Glass", or "Brglswre" row from Net Sls column
-9. **loyalty_sales** - Look for "Loyalty", "LSC", "Loyany", "Loyalt", or "Loyal" row from Net Sls column (LSC cards sold at $25 each)
+EXTRACT THESE VALUES (use Net Sls column):
+1. **name** - Employee name at top
+2. **guest_count** - "Total Guests" number
+3. **net_sales** - Grand Total row (sum of all categories)
+4. **food_sales** - Food row
+5. **liquor_sales** - Liquor row
+6. **beer_sales** - Beer row
+7. **wine_sales** - Wine row
+8. **bar_glassware_sales** - Bar Glassware/Brglswre row
+9. **loyalty_sales** - Loyalty/LSC row (VERY IMPORTANT - scan entire table carefully!)
 
-DO NOT calculate derived values - just extract raw numbers from the report.
-
-JSON FORMAT (use EXACTLY this structure):
+JSON FORMAT:
 {
   "report_date": "YYYY-MM-DD or null",
   "report_type": "server_sales_detail",
@@ -56,15 +62,13 @@ JSON FORMAT (use EXACTLY this structure):
       "loyalty_sales": 250.00
     }
   ],
-  "extraction_notes": "Any issues or notes"
+  "extraction_notes": "Describe what you found"
 }
 
 IMPORTANT:
-- Extract ALL 9 fields for every employee - do not skip any
-- Use 0 if a category has no sales (not null)
+- Scan the ENTIRE table for the Loyalty row - it's easy to miss
+- Use 0 ONLY if you're certain the row doesn't exist
 - Remove $ signs and commas from numbers
-- If you cannot find a specific category row, use 0 for that field
-- Each page typically contains data for ONE employee
 
 Return ONLY valid JSON."""
 
