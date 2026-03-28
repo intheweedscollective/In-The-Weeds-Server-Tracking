@@ -31,6 +31,8 @@ export default function DataUploads() {
   const [pdfImporting, setPdfImporting] = useState(false);
   const [showPdfPreview, setShowPdfPreview] = useState(false);
   const [pdfProgress, setPdfProgress] = useState({ stage: '', elapsed: 0 });
+  const [editingEmployee, setEditingEmployee] = useState(null);
+  const [editForm, setEditForm] = useState({});
   
   // Current data status
   const [dataStatus, setDataStatus] = useState(null);
@@ -317,6 +319,55 @@ export default function DataUploads() {
     }
     setPdfImporting(false);
     setPdfProgress({ stage: '', elapsed: 0 });
+  };
+
+  // Edit employee in preview
+  const startEditEmployee = (index) => {
+    const emp = pdfParsedData.employees[index];
+    setEditingEmployee(index);
+    setEditForm({
+      guest_count: emp.guest_count || 0,
+      net_sales: emp.net_sales || 0,
+      food_sales: emp.food_sales || 0,
+      liquor_sales: emp.liquor_sales || 0,
+      beer_sales: emp.beer_sales || 0,
+      wine_sales: emp.wine_sales || 0,
+      bar_glassware_sales: emp.bar_glassware_sales || 0,
+      loyalty_sales: emp.loyalty_sales || 0
+    });
+  };
+
+  const saveEditEmployee = () => {
+    if (editingEmployee === null) return;
+    
+    const updatedEmployees = [...pdfParsedData.employees];
+    updatedEmployees[editingEmployee] = {
+      ...updatedEmployees[editingEmployee],
+      guest_count: parseInt(editForm.guest_count) || 0,
+      net_sales: parseFloat(editForm.net_sales) || 0,
+      food_sales: parseFloat(editForm.food_sales) || 0,
+      liquor_sales: parseFloat(editForm.liquor_sales) || 0,
+      beer_sales: parseFloat(editForm.beer_sales) || 0,
+      wine_sales: parseFloat(editForm.wine_sales) || 0,
+      bar_glassware_sales: parseFloat(editForm.bar_glassware_sales) || 0,
+      loyalty_sales: parseFloat(editForm.loyalty_sales) || 0,
+      lbw_total: (parseFloat(editForm.liquor_sales) || 0) + 
+                 (parseFloat(editForm.beer_sales) || 0) + 
+                 (parseFloat(editForm.wine_sales) || 0)
+    };
+    
+    setPdfParsedData({
+      ...pdfParsedData,
+      employees: updatedEmployees
+    });
+    setEditingEmployee(null);
+    setEditForm({});
+    toast.success("Employee data updated");
+  };
+
+  const cancelEditEmployee = () => {
+    setEditingEmployee(null);
+    setEditForm({});
   };
 
   const UploadCard = ({ 
@@ -666,32 +717,97 @@ export default function DataUploads() {
                     </div>
                   )}
                   
-                  <div className="max-h-80 overflow-auto">
-                    <table className="w-full text-xs md:text-sm">
+                  <div className="max-h-96 overflow-auto">
+                    <table className="w-full text-xs">
                       <thead className="bg-slate-800/50 sticky top-0">
                         <tr className="text-slate-400">
-                          <th className="text-left px-3 py-2 font-medium">Name</th>
-                          <th className="text-right px-3 py-2 font-medium">Food</th>
-                          <th className="text-right px-3 py-2 font-medium">LBW</th>
-                          <th className="text-right px-3 py-2 font-medium">LSC</th>
-                          <th className="text-right px-3 py-2 font-medium">Glass</th>
-                          <th className="text-right px-3 py-2 font-medium">Guests</th>
+                          <th className="text-left px-2 py-2 font-medium">Name</th>
+                          <th className="text-right px-2 py-2 font-medium">Guests</th>
+                          <th className="text-right px-2 py-2 font-medium">Food</th>
+                          <th className="text-right px-2 py-2 font-medium">LBW</th>
+                          <th className="text-right px-2 py-2 font-medium">LSC</th>
+                          <th className="text-right px-2 py-2 font-medium">Glass</th>
+                          <th className="text-center px-2 py-2 font-medium">Edit</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-700/50">
                         {pdfParsedData.employees.map((emp, idx) => (
-                          <tr key={idx} className="text-slate-300 hover:bg-slate-800/30">
-                            <td className="px-3 py-2 text-white">{emp.name}</td>
-                            <td className="px-3 py-2 text-right">${emp.food_sales?.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                            <td className="px-3 py-2 text-right">${emp.lbw_total?.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                            <td className="px-3 py-2 text-right">${emp.loyalty_sales?.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                            <td className="px-3 py-2 text-right">${emp.bar_glassware_sales?.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                            <td className="px-3 py-2 text-right">{emp.guest_count?.toLocaleString()}</td>
+                          <tr key={idx} className={`text-slate-300 hover:bg-slate-800/30 ${editingEmployee === idx ? 'bg-blue-900/20' : ''}`}>
+                            {editingEmployee === idx ? (
+                              <>
+                                <td className="px-2 py-1 text-white font-medium">{emp.name}</td>
+                                <td className="px-1 py-1">
+                                  <input 
+                                    type="number" 
+                                    value={editForm.guest_count}
+                                    onChange={(e) => setEditForm({...editForm, guest_count: e.target.value})}
+                                    className="w-16 bg-slate-700 border border-slate-600 rounded px-1 py-0.5 text-right text-white text-xs"
+                                  />
+                                </td>
+                                <td className="px-1 py-1">
+                                  <input 
+                                    type="number" 
+                                    step="0.01"
+                                    value={editForm.food_sales}
+                                    onChange={(e) => setEditForm({...editForm, food_sales: e.target.value})}
+                                    className="w-20 bg-slate-700 border border-slate-600 rounded px-1 py-0.5 text-right text-white text-xs"
+                                  />
+                                </td>
+                                <td className="px-1 py-1 text-right text-slate-400">
+                                  ${((parseFloat(editForm.liquor_sales)||0) + (parseFloat(editForm.beer_sales)||0) + (parseFloat(editForm.wine_sales)||0)).toFixed(0)}
+                                </td>
+                                <td className="px-1 py-1">
+                                  <input 
+                                    type="number" 
+                                    step="0.01"
+                                    value={editForm.loyalty_sales}
+                                    onChange={(e) => setEditForm({...editForm, loyalty_sales: e.target.value})}
+                                    className="w-16 bg-yellow-900/50 border border-yellow-600 rounded px-1 py-0.5 text-right text-yellow-300 text-xs"
+                                    placeholder="LSC $"
+                                  />
+                                </td>
+                                <td className="px-1 py-1">
+                                  <input 
+                                    type="number" 
+                                    step="0.01"
+                                    value={editForm.bar_glassware_sales}
+                                    onChange={(e) => setEditForm({...editForm, bar_glassware_sales: e.target.value})}
+                                    className="w-16 bg-slate-700 border border-slate-600 rounded px-1 py-0.5 text-right text-white text-xs"
+                                  />
+                                </td>
+                                <td className="px-1 py-1 text-center">
+                                  <button onClick={saveEditEmployee} className="text-green-400 hover:text-green-300 px-1">Save</button>
+                                  <button onClick={cancelEditEmployee} className="text-slate-400 hover:text-slate-300 px-1">X</button>
+                                </td>
+                              </>
+                            ) : (
+                              <>
+                                <td className="px-2 py-2 text-white">{emp.name}</td>
+                                <td className="px-2 py-2 text-right">{emp.guest_count?.toLocaleString()}</td>
+                                <td className="px-2 py-2 text-right">${emp.food_sales?.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+                                <td className="px-2 py-2 text-right">${emp.lbw_total?.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+                                <td className={`px-2 py-2 text-right ${emp.loyalty_sales === 0 ? 'text-red-400' : 'text-green-400'}`}>
+                                  ${emp.loyalty_sales?.toLocaleString(undefined, {maximumFractionDigits: 0})}
+                                </td>
+                                <td className="px-2 py-2 text-right">${emp.bar_glassware_sales?.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+                                <td className="px-2 py-2 text-center">
+                                  <button 
+                                    onClick={() => startEditEmployee(idx)}
+                                    className="text-blue-400 hover:text-blue-300 text-xs underline"
+                                  >
+                                    Edit
+                                  </button>
+                                </td>
+                              </>
+                            )}
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
+                  <p className="text-xs text-slate-500 px-3 py-2 border-t border-slate-700/50">
+                    <span className="text-red-400">Red</span> = $0 (click Edit to fix). Loyalty = $25 per card (e.g., 2 cards = $50)
+                  </p>
                 </div>
               )}
             </div>
