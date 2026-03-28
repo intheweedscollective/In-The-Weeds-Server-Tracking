@@ -630,8 +630,11 @@ async def fix_all_employee_scores(quarter: str = "Q1", year: int = 2026):
         bonus_glass = round(calc_metric_bonus(score_glass), 2)
         correct_metric_bonus = round(bonus_ppa + bonus_lsc + bonus_lbw + bonus_glass, 2)
         
-        # Get other score components
-        rt_bonus = emp.get('review_tracker_bonus', 0) or 0
+        # Calculate RT bonus from rt_mentions (0.5 pts per mention, capped at 15)
+        rt_mentions = emp.get('rt_mentions', 0) or emp.get('review_mentions', 0) or 0
+        rt_bonus = min(rt_mentions * 0.5, 15)
+        
+        # Get CV score
         cv_score = emp.get('cv_score', 0) or 0
         
         # CORRECT total: weighted + RT + CV + metric_bonus
@@ -640,12 +643,14 @@ async def fix_all_employee_scores(quarter: str = "Q1", year: int = 2026):
         old_weighted = emp.get('weighted_score', 0) or 0
         old_metric_bonus = emp.get('total_metric_bonus', 0) or 0
         old_total = emp.get('total_score', 0) or 0
+        old_rt_bonus = emp.get('review_tracker_bonus', 0) or 0
         
         # Check if update needed
         needs_update = (
             abs(correct_weighted - old_weighted) > 0.01 or 
             abs(correct_metric_bonus - old_metric_bonus) > 0.01 or
-            abs(correct_total - old_total) > 0.01
+            abs(correct_total - old_total) > 0.01 or
+            abs(rt_bonus - old_rt_bonus) > 0.01
         )
         
         if needs_update:
@@ -658,6 +663,8 @@ async def fix_all_employee_scores(quarter: str = "Q1", year: int = 2026):
                     "bonus_lbw": bonus_lbw,
                     "bonus_glass": bonus_glass,
                     "total_metric_bonus": correct_metric_bonus,
+                    "review_tracker_bonus": rt_bonus,
+                    "review_mentions": rt_mentions,
                     "pre_dar_score": correct_total,
                     "total_score": correct_total
                 }}
@@ -11487,26 +11494,39 @@ async def fix_all_discrepancies(quarter: str = "Q1", year: int = 2026):
         mention_results = await db.customer_reviews.aggregate(mention_pipeline).to_list(100)
         mention_counts = {r["_id"]: r["count"] for r in mention_results}
         
-        # Step 3: Update employees
+        # Step 3: Update employees with RT mentions
+        # Use BOTH: existing rt_mentions field (from RT upload) AND customer_reviews aggregation
         updated_employees = 0
         for emp in employees:
             name = emp["name"]
-            mentions = mention_counts.get(name, 0)
             
             current = await db.employees_v2.find_one({"_id": emp["_id"]})
-            old_mentions = current.get("review_mentions", 0) or 0
             
-            if mentions != old_mentions:
-                rt_bonus = round(min(mentions * 0.5, 15), 1)  # 0.5 pts, capped at 15
-                old_rt = current.get("review_tracker_bonus", 0) or 0
+            # Get mentions from customer_reviews aggregation
+            review_mentions = mention_counts.get(name, 0)
+            
+            # Also check if there are rt_mentions already set (from RT upload)
+            rt_mentions_uploaded = current.get("rt_mentions", 0) or 0
+            
+            # Use the higher of the two (prefer uploaded data)
+            final_mentions = max(review_mentions, rt_mentions_uploaded)
+            
+            old_mentions = current.get("review_mentions", 0) or 0
+            old_rt_bonus = current.get("review_tracker_bonus", 0) or 0
+            
+            # Calculate new RT bonus
+            new_rt_bonus = round(min(final_mentions * 0.5, 15), 2)  # 0.5 pts, capped at 15
+            
+            if final_mentions != old_mentions or abs(new_rt_bonus - old_rt_bonus) > 0.01:
                 old_total = current.get("total_score", 0) or 0
-                new_total = round(old_total - old_rt + rt_bonus, 2)
+                new_total = round(old_total - old_rt_bonus + new_rt_bonus, 2)
                 
                 await db.employees_v2.update_one(
                     {"_id": emp["_id"]},
                     {"$set": {
-                        "review_mentions": mentions,
-                        "review_tracker_bonus": rt_bonus,
+                        "review_mentions": final_mentions,
+                        "rt_mentions": final_mentions,
+                        "review_tracker_bonus": new_rt_bonus,
                         "total_score": new_total,
                         "pre_dar_score": new_total
                     }}
