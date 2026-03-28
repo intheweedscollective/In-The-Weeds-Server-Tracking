@@ -9215,6 +9215,8 @@ async def upload_review_feedback_csv(
     import re
     from collections import defaultdict
     
+    logging.info(f"=== REVIEW-TRACKER UPLOAD-FEEDBACK ENDPOINT HIT === File: {file.filename}")
+    
     try:
         contents = await file.read()
         
