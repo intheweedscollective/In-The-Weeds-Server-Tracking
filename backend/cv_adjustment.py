@@ -107,10 +107,27 @@ def parse_feedback_report(df: pd.DataFrame) -> List[Dict]:
     """
     Parse the Feedback Report into a structured list of feedback items.
     """
+    import math
+    
+    def safe_str(val):
+        """Convert value to string safely, handling NaN/None."""
+        if val is None or (isinstance(val, float) and math.isnan(val)):
+            return ''
+        return str(val)
+    
+    def safe_int(val, default=0):
+        """Convert value to int safely."""
+        if val is None or (isinstance(val, float) and math.isnan(val)):
+            return default
+        try:
+            return int(val)
+        except:
+            return default
+    
     feedback_items = []
     
     for _, row in df.iterrows():
-        rating = int(row.get('Rating', 0))
+        rating = safe_int(row.get('Rating', 0))
         
         # Determine category (promoter/passive/detractor)
         if rating >= 9:
@@ -129,19 +146,19 @@ def parse_feedback_report(df: pd.DataFrame) -> List[Dict]:
         is_non_server, reasons, issue_category = detect_non_server_issues(str(comment))
         
         feedback_items.append({
-            'id': str(row.get('Id', '')),
-            'customer_name': row.get('Customer Name', ''),
-            'check_number': str(row.get('Check Number', '')),
+            'id': safe_str(row.get('Id', '')),
+            'customer_name': safe_str(row.get('Customer Name', '')),
+            'check_number': safe_str(row.get('Check Number', '')),
             'rating': rating,
             'nps_category': nps_category,
-            'response_date': str(row.get('Response Date', '')),
-            'date_of_business': str(row.get('Date Of Business', '')),
-            'shift': row.get('Shift', ''),
-            'revenue_center': row.get('Revenue Center', ''),
-            'comment': str(comment) if comment else '',
-            'lsc_account': str(row.get('LSC Account Number', '')),
-            'store_name': row.get('Store Name', ''),
-            'store_id': row.get('Store Id', ''),
+            'response_date': safe_str(row.get('Response Date', '')),
+            'date_of_business': safe_str(row.get('Date Of Business', '')),
+            'shift': safe_str(row.get('Shift', '')),
+            'revenue_center': safe_str(row.get('Revenue Center', '')),
+            'comment': safe_str(comment) if comment else '',
+            'lsc_account': safe_str(row.get('LSC Account Number', '')),
+            'store_name': safe_str(row.get('Store Name', '')),
+            'store_id': safe_str(row.get('Store Id', '')),
             # Auto-detection fields
             'auto_flagged_non_server': is_non_server,
             'auto_flag_reasons': reasons,
