@@ -121,31 +121,31 @@ export default function ReviewTracker() {
     event.target.value = '';
   };
 
-  // Upload Review Tracker XLSX
+  // Upload Review Tracker XLSX/CSV
   const handleRTUpload = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
     
-    if (!file.name.endsWith('.xlsx')) {
-      toast.error("Please upload an XLSX file");
+    if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.csv')) {
+      toast.error("Please upload an XLSX or CSV file");
       return;
     }
     
-    toast.info("Uploading Review Tracker data...");
+    toast.info("Scanning reviews for employee mentions...");
     
     try {
       const formData = new FormData();
       formData.append('file', file);
       
       const res = await fetch(
-        `${API_URL}/api/v2/rt/upload?quarter=${selectedQuarter}&year=${selectedYear}`,
+        `${API_URL}/api/v2/review-tracker/upload-feedback?quarter=${selectedQuarter}&year=${selectedYear}`,
         { method: "POST", body: formData }
       );
       
       const data = await res.json();
       
       if (data.success) {
-        toast.success(`Updated ${data.employees_updated} employee mention counts`);
+        toast.success(`Found ${data.summary?.total_mentions || 0} mentions in ${data.summary?.reviews_with_mentions || 0} reviews`);
         fetchData();
       } else {
         toast.error(data.message || data.detail || "Upload failed");
@@ -281,7 +281,7 @@ export default function ReviewTracker() {
             <label className="cursor-pointer">
               <input
                 type="file"
-                accept=".xlsx"
+                accept=".xlsx,.csv"
                 onChange={handleRTUpload}
                 className="hidden"
                 data-testid="rt-upload-input"
