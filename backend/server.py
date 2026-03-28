@@ -29,6 +29,9 @@ from pypdf import PdfReader, PdfWriter
 from pdf_full_rankings import build_full_rankings_pdf
 from qr_tracking import register_qr_routes
 from store_management import register_store_routes
+
+# In-memory job storage for PDF processing
+pdf_jobs = {}  # job_id -> {status, progress, result, error}
 from yodeck_slides import (
     generate_top_10_slide, generate_tier_slide,
     generate_most_improved_slide, generate_promotion_watchlist_slide, generate_at_risk_slide,
@@ -1724,37 +1727,12 @@ async def test_pdf_endpoint(file: UploadFile = File(...)):
 
 
 @api_router.post("/v2/pos-pdf/parse")
-async def parse_pos_pdf_scan(file: UploadFile = File(...)):
+async def parse_pos_pdf_scan(file: UploadFile = File(...), background_tasks: BackgroundTasks = None):
     """
     Parse a scanned POS report PDF using AI-powered OCR extraction.
-    This method is more reliable for production environments with memory constraints.
+    Returns a job_id immediately - poll /v2/pos-pdf/job/{job_id} for results.
     """
     import math
-    from pos_ocr import extract_pos_data_from_pdf, validate_extracted_data
-    
-    def safe_float(val, default=0):
-        """Convert value to float safely, handling NaN/None/invalid values."""
-        if val is None:
-            return default
-        try:
-            result = float(val)
-            if math.isnan(result) or math.isinf(result):
-                return default
-            return round(result, 2)
-        except (ValueError, TypeError):
-            return default
-    
-    def safe_int(val, default=0):
-        """Convert value to int safely."""
-        if val is None:
-            return default
-        try:
-            result = float(val)
-            if math.isnan(result) or math.isinf(result):
-                return default
-            return int(result)
-        except (ValueError, TypeError):
-            return default
     
     # Validate file type
     is_pdf = file.content_type == "application/pdf" or (file.filename and file.filename.lower().endswith('.pdf'))
@@ -1770,32 +1748,93 @@ async def parse_pos_pdf_scan(file: UploadFile = File(...)):
     if len(contents) > 50 * 1024 * 1024:  # 50MB limit
         raise HTTPException(status_code=400, detail="File too large. Maximum 50MB")
     
+    # Create a job ID and start background processing
+    job_id = str(uuid.uuid4())
+    pdf_jobs[job_id] = {
+        "status": "processing",
+        "progress": 0,
+        "filename": file.filename,
+        "result": None,
+        "error": None,
+        "started_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    # Start background processing
+    asyncio.create_task(process_pdf_in_background(job_id, contents, file.filename))
+    
+    return {
+        "success": True,
+        "job_id": job_id,
+        "status": "processing",
+        "message": "PDF processing started. Poll /api/v2/pos-pdf/job/{job_id} for results."
+    }
+
+
+async def process_pdf_in_background(job_id: str, contents: bytes, filename: str):
+    """Background task to process PDF and update job status."""
+    import math
+    from pos_ocr import extract_pos_data_from_pdf, validate_extracted_data
+    
+    def safe_float(val, default=0):
+        if val is None:
+            return default
+        try:
+            result = float(val)
+            if math.isnan(result) or math.isinf(result):
+                return default
+            return round(result, 2)
+        except (ValueError, TypeError):
+            return default
+    
+    def safe_int(val, default=0):
+        if val is None:
+            return default
+        try:
+            result = float(val)
+            if math.isnan(result) or math.isinf(result):
+                return default
+            return int(result)
+        except (ValueError, TypeError):
+            return default
+    
     try:
-        logging.info(f"Processing PDF with AI/OCR: {file.filename}, size: {len(contents)} bytes")
+        logging.info(f"Background PDF processing started for job {job_id}")
         
-        # Use the AI/OCR-based extraction which is production-stable
+        # Use the AI/OCR-based extraction
         raw_data = await extract_pos_data_from_pdf(contents)
         
         if "error" in raw_data and not raw_data.get("employees"):
-            return {
-                "success": False,
-                "error": raw_data.get("error", "Failed to extract data from PDF"),
-                "employees": [],
-                "extraction_notes": raw_data.get("extraction_notes", "")
+            pdf_jobs[job_id] = {
+                **pdf_jobs[job_id],
+                "status": "completed",
+                "progress": 100,
+                "result": {
+                    "success": False,
+                    "error": raw_data.get("error", "Failed to extract data from PDF"),
+                    "employees": [],
+                    "extraction_notes": raw_data.get("extraction_notes", "")
+                }
             }
+            return
         
         # Validate and clean extracted data
         validated_data = validate_extracted_data(raw_data)
         
         if not validated_data.get("employees"):
-            return {
-                "success": False,
-                "error": "No employee data could be extracted from the PDF",
-                "employees": [],
-                "extraction_notes": validated_data.get("extraction_notes", "")
+            pdf_jobs[job_id] = {
+                **pdf_jobs[job_id],
+                "status": "completed",
+                "progress": 100,
+                "result": {
+                    "success": False,
+                    "error": "No employee data could be extracted from the PDF",
+                    "employees": [],
+                    "extraction_notes": validated_data.get("extraction_notes", "")
+                }
             }
+            return
         
-        # Format response to match expected structure - with safe value handling
+        # Format response
         formatted_employees = []
         for emp in validated_data.get("employees", []):
             raw_data_fields = emp.get("_raw", {})
@@ -1816,22 +1855,191 @@ async def parse_pos_pdf_scan(file: UploadFile = File(...)):
                 "loyalty_sales": safe_float(emp.get("loyalty_sales", 0))
             })
         
-        return {
-            "success": True,
-            "filename": file.filename,
-            "employee_count": len(formatted_employees),
-            "total_pages": safe_int(raw_data.get("pages_processed", raw_data.get("total_pages", 1)), 1),
-            "employees": formatted_employees,
-            "extraction_notes": f"AI/OCR extracted {len(formatted_employees)} employees. {validated_data.get('extraction_notes', '')}"
+        pdf_jobs[job_id] = {
+            **pdf_jobs[job_id],
+            "status": "completed",
+            "progress": 100,
+            "result": {
+                "success": True,
+                "filename": filename,
+                "employee_count": len(formatted_employees),
+                "total_pages": safe_int(raw_data.get("pages_processed", raw_data.get("total_pages", 1)), 1),
+                "employees": formatted_employees,
+                "extraction_notes": f"AI/OCR extracted {len(formatted_employees)} employees. {validated_data.get('extraction_notes', '')}"
+            }
         }
-            
-    except HTTPException:
-        raise
+        logging.info(f"Background PDF processing completed for job {job_id}: {len(formatted_employees)} employees")
+        
     except Exception as e:
-        logging.error(f"PDF parsing error: {str(e)}")
+        logging.error(f"Background PDF processing error for job {job_id}: {str(e)}")
         import traceback
         logging.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"PDF parsing failed: {str(e)}")
+        pdf_jobs[job_id] = {
+            **pdf_jobs[job_id],
+            "status": "failed",
+            "progress": 100,
+            "error": str(e)
+        }
+
+
+@api_router.get("/v2/pos-pdf/job/{job_id}")
+async def get_pdf_job_status(job_id: str):
+    """Get the status of a PDF processing job."""
+    if job_id not in pdf_jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    job = pdf_jobs[job_id]
+    
+    response = {
+        "job_id": job_id,
+        "status": job["status"],
+        "progress": job["progress"],
+        "filename": job.get("filename")
+    }
+    
+    if job["status"] == "completed" and job.get("result"):
+        response["result"] = job["result"]
+        # Clean up old job after returning result
+        # Keep for 5 minutes for retry
+    elif job["status"] == "failed":
+        response["error"] = job.get("error", "Unknown error")
+    
+    return response
+
+
+class ParsedEmployeeData(BaseModel):
+    employees: List[Dict[str, Any]]
+
+
+@api_router.post("/v2/pos-pdf/import-parsed")
+async def import_parsed_pdf_data(
+    data: ParsedEmployeeData,
+    quarter: str = "Q1",
+    year: int = 2026
+):
+    """
+    Import pre-parsed POS PDF data into the employee database.
+    This uses already-extracted employee data from the preview step.
+    """
+    from rapidfuzz import fuzz, process
+    
+    quarter = quarter.upper()
+    employees_data = data.employees
+    
+    if not employees_data:
+        raise HTTPException(status_code=400, detail="No employee data provided")
+    
+    # Check quarter settings
+    settings_doc = await db.quarter_settings.find_one(
+        {"year": year, "quarter": quarter},
+        {"_id": 0}
+    )
+    if not settings_doc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Quarter settings must exist for {quarter} {year}. Go to Settings first."
+        )
+    
+    # Get existing employees for matching
+    existing_employees = await db.employees_v2.find({
+        "quarter": quarter,
+        "year": year
+    }, {"_id": 0}).to_list(1000)
+    
+    # Build name matching index
+    name_index = {}
+    for emp in existing_employees:
+        emp_id = emp.get('id') or emp.get('employee_id')
+        if not emp_id:
+            continue
+        for field in ['name', 'report_name', 'display_name']:
+            if emp.get(field):
+                name_index[emp[field].lower()] = emp_id
+        for alias in emp.get('aliases', []):
+            name_index[alias.lower()] = emp_id
+    
+    # Process each employee
+    results = {"matched": [], "created": [], "errors": []}
+    
+    for emp_data in employees_data:
+        emp_name = emp_data.get('name', 'Unknown')
+        emp_name_lower = emp_name.lower()
+        
+        # Try exact match first
+        matched_id = name_index.get(emp_name_lower)
+        
+        # Try fuzzy match if no exact match
+        if not matched_id and name_index:
+            best_match = process.extractOne(
+                emp_name_lower,
+                list(name_index.keys()),
+                scorer=fuzz.token_sort_ratio
+            )
+            if best_match and best_match[1] >= 85:
+                matched_id = name_index[best_match[0]]
+        
+        try:
+            if matched_id:
+                # Update existing employee
+                update_data = {
+                    "guest_count": emp_data.get('guest_count', 0),
+                    "net_sales": emp_data.get('net_sales', 0),
+                    "food_sales": emp_data.get('food_sales', 0),
+                    "liquor_sales": emp_data.get('liquor_sales', 0),
+                    "beer_sales": emp_data.get('beer_sales', 0),
+                    "wine_sales": emp_data.get('wine_sales', 0),
+                    "lbw_total": emp_data.get('lbw_total', 0),
+                    "bar_glassware_sales": emp_data.get('bar_glassware_sales', 0),
+                    "loyalty_sales": emp_data.get('loyalty_sales', 0),
+                    "updated_at": datetime.now(timezone.utc)
+                }
+                
+                await db.employees_v2.update_one(
+                    {"id": matched_id},
+                    {"$set": update_data}
+                )
+                results["matched"].append({"name": emp_name, "id": matched_id})
+            else:
+                # Create new employee
+                new_id = str(uuid.uuid4())
+                new_employee = {
+                    "id": new_id,
+                    "name": emp_name,
+                    "display_name": emp_name,
+                    "report_name": emp_name,
+                    "aliases": [],
+                    "quarter": quarter,
+                    "year": year,
+                    "guest_count": emp_data.get('guest_count', 0),
+                    "net_sales": emp_data.get('net_sales', 0),
+                    "food_sales": emp_data.get('food_sales', 0),
+                    "liquor_sales": emp_data.get('liquor_sales', 0),
+                    "beer_sales": emp_data.get('beer_sales', 0),
+                    "wine_sales": emp_data.get('wine_sales', 0),
+                    "lbw_total": emp_data.get('lbw_total', 0),
+                    "bar_glassware_sales": emp_data.get('bar_glassware_sales', 0),
+                    "loyalty_sales": emp_data.get('loyalty_sales', 0),
+                    "created_at": datetime.now(timezone.utc),
+                    "updated_at": datetime.now(timezone.utc)
+                }
+                await db.employees_v2.insert_one(new_employee)
+                results["created"].append({"name": emp_name, "id": new_id})
+                name_index[emp_name_lower] = new_id
+                
+        except Exception as e:
+            results["errors"].append({"name": emp_name, "error": str(e)})
+    
+    # Recalculate all scores
+    await fix_all_employee_scores(quarter, year)
+    
+    return {
+        "success": True,
+        "total_processed": len(employees_data),
+        "matched": len(results["matched"]),
+        "created": len(results["created"]),
+        "errors": len(results["errors"]),
+        "details": results
+    }
 
 
 @api_router.post("/v2/pos-pdf/import")

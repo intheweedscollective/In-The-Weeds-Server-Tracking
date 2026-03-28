@@ -165,16 +165,12 @@ export default function DataUploads() {
     toast.success("Template download started");
   };
 
-  // Parse scanned PDF
+  // Parse scanned PDF with background job polling
   const handlePdfParse = async () => {
     if (!pdfFile) return;
     setPdfParsing(true);
     setPdfParsedData(null);
     setPdfProgress({ stage: 'Uploading PDF...', elapsed: 0 });
-    
-    // Estimate processing time based on file size (rough: 2 seconds per MB for AI processing)
-    const fileSizeMB = pdfFile.size / (1024 * 1024);
-    const estimatedSeconds = Math.max(15, Math.round(fileSizeMB * 3)); // At least 15 seconds, ~3s per MB
     
     // Start elapsed time counter
     const startTime = Date.now();
@@ -182,9 +178,9 @@ export default function DataUploads() {
       const elapsed = Math.round((Date.now() - startTime) / 1000);
       const stage = elapsed < 3 
         ? 'Uploading PDF...' 
-        : elapsed < 8 
-          ? 'Converting pages to images...'
-          : 'AI analyzing employee data...';
+        : elapsed < 10 
+          ? 'Starting AI analysis...'
+          : 'AI analyzing pages (this takes 1-2 minutes)...';
       setPdfProgress({ stage, elapsed });
     }, 1000);
     
@@ -192,132 +188,116 @@ export default function DataUploads() {
     formData.append('file', pdfFile);
     
     try {
-      // Create abort controller with 5-minute timeout for large PDFs
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutes
-      
-      const response = await fetch(`${BACKEND_URL}/api/v2/pos-pdf/parse`, {
+      // Step 1: Upload and get job ID
+      const uploadResponse = await fetch(`${BACKEND_URL}/api/v2/pos-pdf/parse`, {
         method: 'POST',
         body: formData,
-        signal: controller.signal,
-        // Prevent caching issues
-        cache: 'no-store',
-        headers: {
-          'Accept': 'application/json',
-        }
       });
       
-      clearTimeout(timeoutId);
-      clearInterval(progressInterval);
-      
-      // Check if response is ok before trying to parse
-      if (!response.ok) {
-        let errorMessage = `Server error: ${response.status}`;
+      if (!uploadResponse.ok) {
+        const errorText = await uploadResponse.text();
+        let errorMsg = `Upload failed: ${uploadResponse.status}`;
         try {
-          const errorText = await response.text();
           const errorData = JSON.parse(errorText);
-          errorMessage = errorData.detail || errorData.error || errorMessage;
-        } catch (e) {
-          // Ignore parse errors for error responses
-        }
-        toast.error(errorMessage);
-        setPdfParsing(false);
-        setPdfProgress({ stage: '', elapsed: 0 });
-        return;
+          errorMsg = errorData.detail || errorData.error || errorMsg;
+        } catch (e) {}
+        throw new Error(errorMsg);
       }
       
-      // Clone response to safely read body
-      const responseClone = response.clone();
-      let data;
-      try {
-        data = await response.json();
-      } catch (parseError) {
-        // Try reading as text from clone
-        try {
-          const responseText = await responseClone.text();
-          console.error('Failed to parse JSON response:', responseText?.substring(0, 500));
-        } catch (e) {
-          console.error('Could not read response body');
-        }
-        toast.error("Server returned invalid response format");
-        setPdfParsing(false);
-        setPdfProgress({ stage: '', elapsed: 0 });
-        return;
+      const uploadData = await uploadResponse.json();
+      
+      if (!uploadData.job_id) {
+        throw new Error("Server didn't return a job ID");
       }
       
-      if (data.success) {
-        setPdfParsedData(data);
-        setShowPdfPreview(true);
-        toast.success(`Parsed ${data.employee_count} employees from PDF`, {
-          description: data.extraction_notes || `Processed via AI/OCR`
-        });
-      } else {
-        toast.error(data.error || data.detail || "PDF parsing failed");
-      }
+      // Step 2: Poll for results
+      const jobId = uploadData.job_id;
+      let attempts = 0;
+      const maxAttempts = 120; // 2 minutes with 1s intervals
+      
+      const pollForResult = async () => {
+        while (attempts < maxAttempts) {
+          attempts++;
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          try {
+            const statusResponse = await fetch(`${BACKEND_URL}/api/v2/pos-pdf/job/${jobId}`);
+            const statusData = await statusResponse.json();
+            
+            if (statusData.status === 'completed') {
+              clearInterval(progressInterval);
+              
+              if (statusData.result?.success) {
+                setPdfParsedData(statusData.result);
+                setShowPdfPreview(true);
+                toast.success(`Parsed ${statusData.result.employee_count} employees from PDF`, {
+                  description: statusData.result.extraction_notes || 'Processed via AI/OCR'
+                });
+              } else {
+                toast.error(statusData.result?.error || 'PDF parsing failed');
+              }
+              setPdfParsing(false);
+              setPdfProgress({ stage: '', elapsed: 0 });
+              return;
+            } else if (statusData.status === 'failed') {
+              clearInterval(progressInterval);
+              toast.error(statusData.error || 'PDF parsing failed');
+              setPdfParsing(false);
+              setPdfProgress({ stage: '', elapsed: 0 });
+              return;
+            }
+            // Still processing, continue polling
+          } catch (pollError) {
+            console.error('Polling error:', pollError);
+            // Continue polling on error
+          }
+        }
+        
+        // Timeout after max attempts
+        clearInterval(progressInterval);
+        toast.error('PDF processing timed out. Please try again.');
+        setPdfParsing(false);
+        setPdfProgress({ stage: '', elapsed: 0 });
+      };
+      
+      await pollForResult();
+      
     } catch (error) {
       clearInterval(progressInterval);
       console.error('PDF parse error:', error);
-      if (error.name === 'AbortError') {
-        toast.error("PDF parsing timed out. The file may be too large.");
-      } else if (error.message?.includes('Body is disturbed') || error.message?.includes('locked')) {
-        toast.error("Connection interrupted. Please try again.");
-      } else if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
-        toast.error("Network error. Please check your connection and try again.");
-      } else {
-        toast.error("PDF parsing failed: " + error.message);
-      }
+      toast.error(error.message || 'PDF parsing failed');
+      setPdfParsing(false);
+      setPdfProgress({ stage: '', elapsed: 0 });
     }
-    setPdfParsing(false);
-    setPdfProgress({ stage: '', elapsed: 0 });
   };
 
-  // Import parsed PDF data
+  // Import parsed PDF data - uses the already parsed preview data
   const handlePdfImport = async () => {
-    if (!pdfFile) return;
+    if (!pdfParsedData || !pdfParsedData.employees) {
+      toast.error("No parsed data to import. Please preview the PDF first.");
+      return;
+    }
+    
     setPdfImporting(true);
     setPdfProgress({ stage: 'Importing data to database...', elapsed: 0 });
     
-    // Start elapsed time counter for import
     const startTime = Date.now();
     const progressInterval = setInterval(() => {
       const elapsed = Math.round((Date.now() - startTime) / 1000);
-      const stage = elapsed < 5 
-        ? 'Re-processing PDF via AI...' 
-        : elapsed < 15 
-          ? 'Matching employees...'
-          : 'Updating database & recalculating scores...';
-      setPdfProgress({ stage, elapsed });
+      setPdfProgress({ stage: 'Updating database & recalculating scores...', elapsed });
     }, 1000);
     
-    const formData = new FormData();
-    formData.append('file', pdfFile);
-    
     try {
-      // Create abort controller with 5-minute timeout for large PDFs
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutes
-      
-      const response = await fetch(`${BACKEND_URL}/api/v2/pos-pdf/import?quarter=${quarter}&year=${year}`, {
+      // Send the already-parsed employee data directly
+      const response = await fetch(`${BACKEND_URL}/api/v2/pos-pdf/import-parsed?quarter=${quarter}&year=${year}`, {
         method: 'POST',
-        body: formData,
-        signal: controller.signal
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employees: pdfParsedData.employees })
       });
       
-      clearTimeout(timeoutId);
       clearInterval(progressInterval);
       
-      // Safe JSON parsing - read as text first to avoid "body disturbed" errors
-      const responseText = await response.text();
-      let data;
-      try {
-        data = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error('Failed to parse response:', responseText);
-        toast.error("Server returned invalid response");
-        setPdfImporting(false);
-        setPdfProgress({ stage: '', elapsed: 0 });
-        return;
-      }
+      const data = await response.json();
       
       if (response.ok && data.success) {
         toast.success(`Imported ${data.total_processed} employees`, {
@@ -332,11 +312,8 @@ export default function DataUploads() {
       }
     } catch (error) {
       clearInterval(progressInterval);
-      if (error.name === 'AbortError') {
-        toast.error("Import timed out. Please try again.");
-      } else {
-        toast.error("Import failed: " + error.message);
-      }
+      console.error('Import error:', error);
+      toast.error("Import failed: " + error.message);
     }
     setPdfImporting(false);
     setPdfProgress({ stage: '', elapsed: 0 });
