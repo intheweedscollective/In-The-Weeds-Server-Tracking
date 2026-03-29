@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { 
   ArrowLeft, Upload, CheckCircle, XCircle, Clock, RefreshCw, 
   PlayCircle, FileSpreadsheet, MessageSquare, Star, Loader2,
-  AlertTriangle, FileText, Trash2, Eye, Calendar, Users
+  AlertTriangle, FileText, Trash2, Eye, Calendar, Users, Settings2
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
@@ -32,11 +32,12 @@ const UPLOAD_TYPES = [
   { 
     key: "customer_voice", 
     label: "NPS Toolkit / Customer Voice", 
-    description: "Server Performance Report or Customer Voice data",
+    description: "Server Performance Report (XLSX) or use NPS Adjustment Tool",
     icon: MessageSquare,
     accept: ".xlsx,.xls,.csv",
     required: false,
-    step: 2
+    step: 2,
+    hasAdjustmentTool: true
   },
   { 
     key: "review_tracker", 
@@ -365,6 +366,18 @@ export default function SnapshotDetail() {
                               </>
                             )}
                           </Button>
+                          {/* NPS Adjustment Tool button for Customer Voice */}
+                          {uploadType.hasAdjustmentTool && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                              onClick={() => navigate(`/cv-adjustment?snapshot=${snapshotId}`)}
+                            >
+                              <Settings2 className="w-4 h-4 mr-2" />
+                              NPS Adjustment Tool
+                            </Button>
+                          )}
                         </>
                       )}
                       {isCompleted && (

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -8,7 +9,7 @@ import { toast } from 'sonner';
 import { 
   Upload, AlertTriangle, CheckCircle, XCircle, RefreshCw, 
   FileSpreadsheet, Filter, ThumbsUp, ThumbsDown, Minus,
-  ChevronDown, ChevronUp, Info
+  ChevronDown, ChevronUp, Info, ArrowLeft, Send
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -40,9 +41,14 @@ async function safeFetch(url, options = {}) {
 }
 
 export default function CVAdjustment() {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const snapshotId = searchParams.get('snapshot');
+  
   const [feedbackFile, setFeedbackFile] = useState(null);
   const [transactionFile, setTransactionFile] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [session, setSession] = useState(null);
   const [feedbackItems, setFeedbackItems] = useState([]);
   const [filter, setFilter] = useState('all');
@@ -67,6 +73,31 @@ export default function CVAdjustment() {
     } catch (error) {
       console.error('Error fetching sessions:', error);
     }
+  };
+
+  const handleImportToSnapshot = async () => {
+    if (!session?.session_id || !snapshotId) {
+      toast.error('No session or snapshot to import to');
+      return;
+    }
+    
+    setImporting(true);
+    try {
+      const { ok, data } = await safeFetch(
+        `${API_URL}/api/v2/snapshot-workflow/snapshots/${snapshotId}/import-cv-adjustment/${session.session_id}`,
+        { method: 'POST' }
+      );
+      
+      if (!ok) {
+        throw new Error(data?.detail || 'Import failed');
+      }
+      
+      toast.success(`Imported ${data.employees_imported} employees to snapshot`);
+      navigate(`/snapshot-workflow/${snapshotId}`);
+    } catch (error) {
+      toast.error(error.message || 'Failed to import to snapshot');
+    }
+    setImporting(false);
   };
 
   const handleUpload = async () => {
@@ -241,12 +272,48 @@ export default function CVAdjustment() {
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-slate-900">CV NPS Adjustment Tool</h1>
-            <p className="text-slate-600 mt-1 text-sm md:text-base">
-              Remove feedback that isn't the server's fault and recalculate NPS
-            </p>
+          <div className="flex items-center gap-4">
+            {snapshotId && (
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={() => navigate(`/snapshot-workflow/${snapshotId}`)}
+                className="text-slate-600 hover:text-slate-900"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </Button>
+            )}
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-slate-900">CV NPS Adjustment Tool</h1>
+              <p className="text-slate-600 mt-1 text-sm md:text-base">
+                Remove feedback that isn't the server's fault and recalculate NPS
+              </p>
+              {snapshotId && (
+                <p className="text-blue-600 text-sm mt-1">
+                  Linked to Snapshot • Adjusted data will be imported when ready
+                </p>
+              )}
+            </div>
           </div>
+          {session && snapshotId && (
+            <Button
+              onClick={handleImportToSnapshot}
+              disabled={importing}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {importing ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Importing...
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4 mr-2" />
+                  Import to Snapshot
+                </>
+              )}
+            </Button>
+          )}
         </div>
 
         {/* Upload Section */}

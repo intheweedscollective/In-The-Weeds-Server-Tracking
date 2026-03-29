@@ -309,6 +309,139 @@ async def get_snapshot_uploads(snapshot_id: str):
     }
 
 
+@snapshot_router.post("/snapshots/{snapshot_id}/import-cv-adjustment/{session_id}")
+async def import_cv_adjustment_to_snapshot(snapshot_id: str, session_id: str):
+    """
+    Import CV Adjustment session results into a snapshot.
+    This takes the adjusted NPS data (with excluded no-fault reviews) and 
+    creates a CV upload record in the snapshot.
+    """
+    db = get_db()
+    
+    # Validate snapshot
+    snapshot = await db.snapshot_workflow.find_one({"id": snapshot_id})
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    
+    if snapshot["status"] == SnapshotStatus.COMPLETED.value:
+        raise HTTPException(status_code=400, detail="Cannot import to a completed snapshot")
+    
+    # Get CV adjustment session
+    cv_session = await db.cv_adjustment_sessions.find_one({"_id": session_id})
+    if not cv_session:
+        raise HTTPException(status_code=404, detail="CV Adjustment session not found")
+    
+    # Aggregate by server name from the feedback items
+    # Group by server and calculate adjusted metrics
+    feedback_items = cv_session.get("feedback_items", [])
+    adjusted_nps = cv_session.get("adjusted_nps", {})
+    
+    # Build employee data from non-excluded feedback
+    employee_data = {}
+    for item in feedback_items:
+        # Skip excluded items
+        if item.get("excluded", False):
+            continue
+        
+        # Get server name - might be from transaction matching or check number
+        server_name = item.get("server_name") or "Unknown"
+        
+        if server_name not in employee_data:
+            employee_data[server_name] = {
+                "name": server_name,
+                "promoters": 0,
+                "passives": 0,
+                "detractors": 0,
+            }
+        
+        # Count by NPS category
+        category = item.get("nps_category", "")
+        if category == "promoter":
+            employee_data[server_name]["promoters"] += 1
+        elif category == "passive":
+            employee_data[server_name]["passives"] += 1
+        elif category == "detractor":
+            employee_data[server_name]["detractors"] += 1
+    
+    # Calculate NPS for each employee
+    employees = []
+    for emp in employee_data.values():
+        total = emp["promoters"] + emp["passives"] + emp["detractors"]
+        if total > 0:
+            nps = ((emp["promoters"] - emp["detractors"]) / total) * 100
+            emp["nps_score"] = round(nps, 1)
+            emp["responses"] = total
+        else:
+            emp["nps_score"] = 0
+            emp["responses"] = 0
+        employees.append(emp)
+    
+    # Create upload record
+    now = datetime.now(timezone.utc).isoformat()
+    upload_record = {
+        "id": str(uuid.uuid4()),
+        "snapshot_id": snapshot_id,
+        "upload_type": UploadType.CUSTOMER_VOICE.value,
+        "filename": f"CV Adjustment Session ({session_id[:8]})",
+        "file_size": 0,
+        "uploaded_at": now,
+        "status": UploadStatus.PARSED.value,
+        "parsed_data": {
+            "employees": employees,
+            "source": "cv_adjustment_session",
+            "session_id": session_id,
+            "original_nps": cv_session.get("original_nps", {}),
+            "adjusted_nps": adjusted_nps,
+            "excluded_count": len([i for i in feedback_items if i.get("excluded")])
+        },
+        "parsed_at": now,
+        "record_count": len(employees),
+    }
+    
+    # Update snapshot
+    current_uploads = snapshot.get("uploads", [])
+    existing_idx = next(
+        (i for i, u in enumerate(current_uploads) if u.get("upload_type") == UploadType.CUSTOMER_VOICE.value),
+        None
+    )
+    if existing_idx is not None:
+        current_uploads[existing_idx] = upload_record
+    else:
+        current_uploads.append(upload_record)
+    
+    upload_progress = calculate_upload_progress(current_uploads)
+    
+    new_status = snapshot["status"]
+    if new_status == SnapshotStatus.DRAFT.value and any(upload_progress.values()):
+        new_status = SnapshotStatus.IN_PROGRESS.value
+    
+    await db.snapshot_workflow.update_one(
+        {"id": snapshot_id},
+        {
+            "$set": {
+                "uploads": current_uploads,
+                "upload_progress": upload_progress,
+                "status": new_status,
+                "updated_at": now
+            }
+        }
+    )
+    
+    # Mark session as applied
+    await db.cv_adjustment_sessions.update_one(
+        {"_id": session_id},
+        {"$set": {"applied_to_snapshot": snapshot_id, "applied_at": now}}
+    )
+    
+    return {
+        "success": True,
+        "message": f"Imported CV adjustment data with {len(employees)} employees",
+        "employees_imported": len(employees),
+        "excluded_reviews": upload_record["parsed_data"]["excluded_count"],
+        "adjusted_nps": adjusted_nps
+    }
+
+
 # ============================================================================
 # SNAPSHOT PROCESSING
 # ============================================================================
