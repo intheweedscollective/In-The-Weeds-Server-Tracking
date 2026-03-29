@@ -1035,41 +1035,92 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
         
         elif upload_type == UploadType.CUSTOMER_VOICE.value:
             # Merge CV/NPS Toolkit data
-            for cv_data in parsed_data.get("employees", []):
-                name = cv_data.get("name", "").strip().lower()
-                if name in employees:
-                    # Get values from parsed data
-                    promoters = cv_data.get("promoters", 0) or 0
-                    passives = cv_data.get("passives", 0) or 0
-                    detractors = cv_data.get("detractors", 0) or 0
-                    nps_from_report = cv_data.get("nps_score", 0) or 0
+            cv_employees = parsed_data.get("employees", [])
+            
+            # Check if we have individual employee data or just store-level ("Unknown")
+            has_individual_data = any(
+                emp.get("name", "").strip().lower() != "unknown" and 
+                emp.get("name", "").strip().lower() in employees
+                for emp in cv_employees
+            )
+            
+            if has_individual_data:
+                # Individual employee CV data - merge directly
+                for cv_data in cv_employees:
+                    name = cv_data.get("name", "").strip().lower()
+                    if name in employees:
+                        # Get values from parsed data
+                        promoters = cv_data.get("promoters", 0) or 0
+                        passives = cv_data.get("passives", 0) or 0
+                        detractors = cv_data.get("detractors", 0) or 0
+                        nps_from_report = cv_data.get("nps_score", 0) or 0
+                        
+                        employees[name]["cv_promoters"] = promoters
+                        employees[name]["cv_passives"] = passives
+                        employees[name]["cv_detractors"] = detractors
+                        employees[name]["cv_responses"] = cv_data.get("responses", 0) or 0
+                        employees[name]["cv_avg_rating"] = cv_data.get("avg_rating", 0) or 0
+                        
+                        # Use NPS from report if available, otherwise calculate
+                        total = promoters + passives + detractors
+                        if nps_from_report != 0:
+                            nps = nps_from_report
+                        elif total > 0:
+                            nps = ((promoters - detractors) / total) * 100
+                        else:
+                            nps = 0
+                        
+                        employees[name]["nps_score"] = round(nps, 1)
+                        employees[name]["nps_score_pts"] = round(nps / 10, 1)
+                        
+                        # CV bonus: +1 per promoter, -2 per detractor
+                        # CV Formula: (Promoters × 1) + (RT Mentions × 0.5) - (Detractors × 2)
+                        cv_raw = (promoters * 1) - (detractors * 2)
+                        employees[name]["cv_raw_points"] = round(cv_raw, 2)
+                        employees[name]["cv_score"] = round(
+                            employees[name].get("nps_score_pts", 0) + employees[name]["cv_raw_points"],
+                            2
+                        )
+            else:
+                # Store-level CV data (all attributed to "Unknown") 
+                # Distribute proportionally based on guest count
+                unknown_data = next((e for e in cv_employees if e.get("name", "").strip().lower() == "unknown"), None)
+                if unknown_data:
+                    total_promoters = unknown_data.get("promoters", 0) or 0
+                    total_passives = unknown_data.get("passives", 0) or 0  
+                    total_detractors = unknown_data.get("detractors", 0) or 0
+                    store_nps = unknown_data.get("nps_score", 0) or 0
                     
-                    employees[name]["cv_promoters"] = promoters
-                    employees[name]["cv_passives"] = passives
-                    employees[name]["cv_detractors"] = detractors
-                    employees[name]["cv_responses"] = cv_data.get("responses", 0) or 0
-                    employees[name]["cv_avg_rating"] = cv_data.get("avg_rating", 0) or 0
+                    # Calculate total guests for distribution
+                    total_guests = sum(emp.get("guest_count", 0) or 0 for emp in employees.values())
                     
-                    # Use NPS from report if available, otherwise calculate
-                    total = promoters + passives + detractors
-                    if nps_from_report != 0:
-                        nps = nps_from_report
-                    elif total > 0:
-                        nps = ((promoters - detractors) / total) * 100
-                    else:
-                        nps = 0
-                    
-                    employees[name]["nps_score"] = round(nps, 1)
-                    employees[name]["nps_score_pts"] = round(nps / 10, 1)
-                    
-                    # CV bonus: +1 per promoter, -2 per detractor
-                    # CV Formula: (Promoters × 1) + (RT Mentions × 0.5) - (Detractors × 2)
-                    cv_raw = (promoters * 1) - (detractors * 2)
-                    employees[name]["cv_raw_points"] = round(cv_raw, 2)
-                    employees[name]["cv_score"] = round(
-                        employees[name].get("nps_score_pts", 0) + employees[name]["cv_raw_points"],
-                        2
-                    )
+                    if total_guests > 0 and total_promoters > 0:
+                        # Distribute CV data proportionally by guest count
+                        for name, emp in employees.items():
+                            guest_count = emp.get("guest_count", 0) or 0
+                            if guest_count > 0:
+                                ratio = guest_count / total_guests
+                                
+                                # Distribute promoters/detractors proportionally
+                                promoters = round(total_promoters * ratio)
+                                detractors = round(total_detractors * ratio)
+                                passives = round(total_passives * ratio)
+                                
+                                employees[name]["cv_promoters"] = promoters
+                                employees[name]["cv_passives"] = passives
+                                employees[name]["cv_detractors"] = detractors
+                                
+                                # Everyone gets the store NPS score
+                                employees[name]["nps_score"] = store_nps
+                                employees[name]["nps_score_pts"] = round(store_nps / 10, 1)
+                                
+                                # CV bonus based on distributed promoters/detractors
+                                cv_raw = (promoters * 1) - (detractors * 2)
+                                employees[name]["cv_raw_points"] = round(cv_raw, 2)
+                                employees[name]["cv_score"] = round(
+                                    employees[name].get("nps_score_pts", 0) + employees[name]["cv_raw_points"],
+                                    2
+                                )
         
         elif upload_type == UploadType.REVIEW_TRACKER.value:
             # Merge RT data
