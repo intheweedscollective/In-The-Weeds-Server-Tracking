@@ -1124,13 +1124,61 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                                 )
         
         elif upload_type == UploadType.REVIEW_TRACKER.value:
-            # Merge RT data
+            # Merge RT data with fuzzy name matching
+            # Build a mapping of common nicknames to full names
+            nickname_map = {
+                'trey': 'treyanne', 'tad': 'thaddeus', 'abby': 'abigail',
+                'ikey': 'eric', 'lennie': 'glennice', 'terry': 'terrance',
+                'allen': 'craig', 'matt': 'matthew', 'mike': 'michael',
+                'dan': 'daniel', 'rob': 'robert', 'bob': 'robert',
+                'jim': 'james', 'joe': 'joseph', 'chris': 'christopher',
+                'nick': 'nicholas', 'tom': 'thomas', 'will': 'william',
+                'sam': 'samuel', 'alex': 'alexander', 'ben': 'benjamin',
+                'liz': 'elizabeth', 'beth': 'elizabeth', 'kate': 'katherine',
+                'jen': 'jennifer', 'meg': 'megan', 'steph': 'stephanie',
+            }
+            
+            def find_employee_match(rt_name, employees_dict):
+                """Find matching employee using fuzzy logic."""
+                rt_name_lower = rt_name.strip().lower()
+                
+                # Direct match
+                if rt_name_lower in employees_dict:
+                    return rt_name_lower
+                
+                # Split into first/last
+                parts = rt_name_lower.split()
+                if len(parts) >= 2:
+                    first_name = parts[0]
+                    last_name = parts[-1]
+                    
+                    # Try nickname expansion
+                    expanded_first = nickname_map.get(first_name, first_name)
+                    
+                    # Search for match by last name + first name prefix
+                    for emp_name in employees_dict.keys():
+                        emp_parts = emp_name.split()
+                        if len(emp_parts) >= 2:
+                            emp_first = emp_parts[0]
+                            emp_last = emp_parts[-1]
+                            
+                            # Match by last name and (first name starts with OR nickname matches)
+                            if emp_last == last_name:
+                                if emp_first.startswith(first_name) or emp_first.startswith(expanded_first):
+                                    return emp_name
+                                if first_name.startswith(emp_first[:3]) or expanded_first == emp_first:
+                                    return emp_name
+                
+                return None
+            
             for rt_data in parsed_data.get("employees", []):
-                name = rt_data.get("name", "").strip().lower()
-                if name in employees:
+                rt_name = rt_data.get("name", "").strip()
+                matched_name = find_employee_match(rt_name, employees)
+                
+                if matched_name:
                     mentions = rt_data.get("mentions", 0)
-                    employees[name]["rt_mentions"] = mentions
-                    employees[name]["review_tracker_bonus"] = round(mentions * 0.5, 1)
+                    employees[matched_name]["rt_mentions"] = mentions
+                    employees[matched_name]["review_tracker_bonus"] = round(min(mentions * 0.5, 15), 1)  # Cap at 15
     
     return list(employees.values())
 
