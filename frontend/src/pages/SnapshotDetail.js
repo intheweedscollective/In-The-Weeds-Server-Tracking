@@ -3,11 +3,14 @@ import { useParams, useNavigate } from "react-router-dom";
 import { 
   ArrowLeft, Upload, CheckCircle, XCircle, Clock, RefreshCw, 
   PlayCircle, FileSpreadsheet, MessageSquare, Star, Loader2,
-  AlertTriangle, FileText, Trash2, Eye, Calendar, Users, Settings2
+  AlertTriangle, FileText, Trash2, Eye, Calendar, Users, Settings2,
+  Edit2, Save, X, AlertCircle
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import { Progress } from "../components/ui/progress";
+import { Input } from "../components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../components/ui/dialog";
 import { useToast } from "../hooks/use-toast";
 import api from "../lib/api";
 
@@ -27,7 +30,8 @@ const UPLOAD_TYPES = [
     icon: FileSpreadsheet,
     accept: ".xlsx,.xls,.pdf",
     required: true,
-    step: 1
+    step: 1,
+    requiresReview: true  // Must review data before proceeding
   },
   { 
     key: "customer_voice", 
@@ -59,11 +63,26 @@ export default function SnapshotDetail() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(null);
   const [processing, setProcessing] = useState(false);
+  
+  // POS Data Review state
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewData, setReviewData] = useState([]);
+  const [historicalAvg, setHistoricalAvg] = useState({});
+  const [editingRow, setEditingRow] = useState(null);
+  const [editValues, setEditValues] = useState({});
+  const [dataReviewed, setDataReviewed] = useState(false);
+  const [savingReview, setSavingReview] = useState(false);
 
   const fetchSnapshot = useCallback(async () => {
     try {
       const res = await api.get(`/v2/snapshot-workflow/snapshots/${snapshotId}`);
       setSnapshot(res.data);
+      
+      // Check if POS data has been reviewed
+      const posUpload = res.data.uploads?.find(u => u.upload_type === 'pos_report');
+      if (posUpload?.reviewed) {
+        setDataReviewed(true);
+      }
     } catch (error) {
       console.error("Error fetching snapshot:", error);
       toast({ 
@@ -73,6 +92,15 @@ export default function SnapshotDetail() {
       });
     }
   }, [snapshotId, toast]);
+
+  const fetchHistoricalAverages = async () => {
+    try {
+      const res = await api.get('/v2/snapshot-workflow/historical-averages');
+      setHistoricalAvg(res.data.averages || {});
+    } catch (error) {
+      console.error("Error fetching historical averages:", error);
+    }
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -103,6 +131,15 @@ export default function SnapshotDetail() {
       });
       
       await fetchSnapshot();
+      
+      // If POS upload, show review modal
+      if (uploadType === 'pos_report' && res.data.record_count > 0) {
+        const parsedData = res.data.upload?.parsed_data?.employees || [];
+        setReviewData(parsedData);
+        setDataReviewed(false);
+        await fetchHistoricalAverages();
+        setShowReviewModal(true);
+      }
     } catch (error) {
       toast({ 
         title: "Upload Failed", 
@@ -111,6 +148,69 @@ export default function SnapshotDetail() {
       });
     }
     setUploading(null);
+  };
+
+  const openReviewModal = async () => {
+    const posUpload = snapshot?.uploads?.find(u => u.upload_type === 'pos_report');
+    if (posUpload?.parsed_data?.employees) {
+      setReviewData(posUpload.parsed_data.employees);
+      await fetchHistoricalAverages();
+      setShowReviewModal(true);
+    }
+  };
+
+  const startEditRow = (index, emp) => {
+    setEditingRow(index);
+    setEditValues({
+      ppa: emp.ppa || 0,
+      lbw_per_guest: emp.lbw_per_guest || 0,
+      glassware_per_guest: emp.glassware_per_guest || 0,
+      guests_per_lsc: emp.guests_per_lsc || 0,
+      guest_count: emp.guest_count || 0,
+    });
+  };
+
+  const saveRowEdit = (index) => {
+    const updated = [...reviewData];
+    updated[index] = { ...updated[index], ...editValues };
+    setReviewData(updated);
+    setEditingRow(null);
+    setEditValues({});
+  };
+
+  const cancelEdit = () => {
+    setEditingRow(null);
+    setEditValues({});
+  };
+
+  const isValueFlagged = (field, value, avgValue) => {
+    if (value === 0 || value === null || value === undefined) return true;
+    if (!avgValue || avgValue === 0) return false;
+    
+    // Flag if more than 50% deviation from historical average
+    const deviation = Math.abs(value - avgValue) / avgValue;
+    return deviation > 0.5;
+  };
+
+  const confirmReviewData = async () => {
+    setSavingReview(true);
+    try {
+      await api.post(`/v2/snapshot-workflow/snapshots/${snapshotId}/confirm-pos-review`, {
+        employees: reviewData
+      });
+      
+      toast({ title: "Data Confirmed", description: "POS data has been reviewed and saved" });
+      setDataReviewed(true);
+      setShowReviewModal(false);
+      await fetchSnapshot();
+    } catch (error) {
+      toast({ 
+        title: "Error", 
+        description: error.response?.data?.detail || "Failed to save review",
+        variant: "destructive"
+      });
+    }
+    setSavingReview(false);
   };
 
   const handleProcess = async () => {
@@ -322,6 +422,19 @@ export default function SnapshotDetail() {
                             {upload.filename} • {upload.record_count || 0} records • {new Date(upload.uploaded_at).toLocaleString()}
                           </p>
                         )}
+                        {/* Show review warning for POS */}
+                        {uploadType.requiresReview && isCompleted && !dataReviewed && upload?.record_count > 0 && (
+                          <p className="text-xs text-yellow-400 mt-1 flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3" />
+                            Data needs review before proceeding to Step 2
+                          </p>
+                        )}
+                        {uploadType.requiresReview && isCompleted && dataReviewed && (
+                          <p className="text-xs text-green-400 mt-1 flex items-center gap-1">
+                            <CheckCircle className="w-3 h-3" />
+                            Data reviewed and confirmed
+                          </p>
+                        )}
                       </div>
                     </div>
                     
@@ -366,6 +479,18 @@ export default function SnapshotDetail() {
                               </>
                             )}
                           </Button>
+                          {/* Review Data button for POS */}
+                          {uploadType.requiresReview && isCompleted && upload?.record_count > 0 && (
+                            <Button
+                              variant={dataReviewed ? "outline" : "default"}
+                              size="sm"
+                              className={dataReviewed ? "border-slate-600 text-slate-300" : "bg-yellow-600 hover:bg-yellow-700"}
+                              onClick={openReviewModal}
+                            >
+                              <Eye className="w-4 h-4 mr-2" />
+                              {dataReviewed ? "Re-Review" : "Review Data"}
+                            </Button>
+                          )}
                           {/* NPS Adjustment Tool button for Customer Voice */}
                           {uploadType.hasAdjustmentTool && (
                             <Button
@@ -531,6 +656,162 @@ export default function SnapshotDetail() {
           </Card>
         )}
       </div>
+
+      {/* POS Data Review Modal */}
+      <Dialog open={showReviewModal} onOpenChange={setShowReviewModal}>
+        <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2">
+              <FileSpreadsheet className="w-5 h-5 text-blue-400" />
+              Review POS Data Before Proceeding
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Review and correct any data issues. Fields highlighted in <span className="text-red-400 font-medium">red</span> have zeros or significant deviation from historical averages.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-auto mt-4">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-slate-800 z-10">
+                <tr className="text-slate-300 text-left">
+                  <th className="px-3 py-2 font-medium">Employee</th>
+                  <th className="px-3 py-2 font-medium text-right">Guests</th>
+                  <th className="px-3 py-2 font-medium text-right">PPA</th>
+                  <th className="px-3 py-2 font-medium text-right">LBW/Guest</th>
+                  <th className="px-3 py-2 font-medium text-right">Glass/Guest</th>
+                  <th className="px-3 py-2 font-medium text-right">Guests/LSC</th>
+                  <th className="px-3 py-2 font-medium text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-700">
+                {reviewData.map((emp, idx) => (
+                  <tr key={idx} className="hover:bg-slate-800/50">
+                    <td className="px-3 py-2 text-white font-medium">{emp.name}</td>
+                    {editingRow === idx ? (
+                      <>
+                        <td className="px-3 py-2">
+                          <Input
+                            type="number"
+                            value={editValues.guest_count}
+                            onChange={(e) => setEditValues({...editValues, guest_count: parseFloat(e.target.value) || 0})}
+                            className="w-20 h-7 text-right bg-slate-700 border-slate-600 text-white"
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={editValues.ppa}
+                            onChange={(e) => setEditValues({...editValues, ppa: parseFloat(e.target.value) || 0})}
+                            className="w-20 h-7 text-right bg-slate-700 border-slate-600 text-white"
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={editValues.lbw_per_guest}
+                            onChange={(e) => setEditValues({...editValues, lbw_per_guest: parseFloat(e.target.value) || 0})}
+                            className="w-20 h-7 text-right bg-slate-700 border-slate-600 text-white"
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={editValues.glassware_per_guest}
+                            onChange={(e) => setEditValues({...editValues, glassware_per_guest: parseFloat(e.target.value) || 0})}
+                            className="w-20 h-7 text-right bg-slate-700 border-slate-600 text-white"
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={editValues.guests_per_lsc}
+                            onChange={(e) => setEditValues({...editValues, guests_per_lsc: parseFloat(e.target.value) || 0})}
+                            className="w-20 h-7 text-right bg-slate-700 border-slate-600 text-white"
+                          />
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          <div className="flex justify-center gap-1">
+                            <Button size="sm" variant="ghost" onClick={() => saveRowEdit(idx)} className="h-7 w-7 p-0 text-green-400 hover:bg-green-900/50">
+                              <Save className="w-4 h-4" />
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={cancelEdit} className="h-7 w-7 p-0 text-slate-400 hover:bg-slate-700">
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className={`px-3 py-2 text-right ${isValueFlagged('guest_count', emp.guest_count, historicalAvg.guest_count) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
+                          {emp.guest_count || 0}
+                        </td>
+                        <td className={`px-3 py-2 text-right ${isValueFlagged('ppa', emp.ppa, historicalAvg.ppa) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
+                          ${(emp.ppa || 0).toFixed(2)}
+                        </td>
+                        <td className={`px-3 py-2 text-right ${isValueFlagged('lbw_per_guest', emp.lbw_per_guest, historicalAvg.lbw_per_guest) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
+                          ${(emp.lbw_per_guest || 0).toFixed(2)}
+                        </td>
+                        <td className={`px-3 py-2 text-right ${isValueFlagged('glassware_per_guest', emp.glassware_per_guest, historicalAvg.glassware_per_guest) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
+                          ${(emp.glassware_per_guest || 0).toFixed(2)}
+                        </td>
+                        <td className={`px-3 py-2 text-right ${isValueFlagged('guests_per_lsc', emp.guests_per_lsc, historicalAvg.guests_per_lsc) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
+                          {emp.guests_per_lsc ? emp.guests_per_lsc.toFixed(1) : '—'}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          <Button size="sm" variant="ghost" onClick={() => startEditRow(idx, emp)} className="h-7 w-7 p-0 text-slate-400 hover:bg-slate-700 hover:text-white">
+                            <Edit2 className="w-4 h-4" />
+                          </Button>
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Summary and Actions */}
+          <div className="mt-4 pt-4 border-t border-slate-700">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 text-sm">
+                  <AlertCircle className="w-4 h-4 text-red-400" />
+                  <span className="text-red-400 font-medium">
+                    {reviewData.filter(e => 
+                      isValueFlagged('ppa', e.ppa, historicalAvg.ppa) ||
+                      isValueFlagged('lbw_per_guest', e.lbw_per_guest, historicalAvg.lbw_per_guest) ||
+                      isValueFlagged('glassware_per_guest', e.glassware_per_guest, historicalAvg.glassware_per_guest)
+                    ).length} items need attention
+                  </span>
+                </div>
+                <div className="text-sm text-slate-400">
+                  Historical Avg: PPA ${historicalAvg.ppa?.toFixed(2) || '—'}, LBW ${historicalAvg.lbw_per_guest?.toFixed(2) || '—'}, Glass ${historicalAvg.glassware_per_guest?.toFixed(2) || '—'}
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={() => setShowReviewModal(false)} className="border-slate-600 text-slate-300">
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={confirmReviewData} 
+                  disabled={savingReview}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  {savingReview ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</>
+                  ) : (
+                    <><CheckCircle className="w-4 h-4 mr-2" /> Confirm & Proceed</>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

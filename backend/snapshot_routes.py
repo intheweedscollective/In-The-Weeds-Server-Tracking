@@ -309,6 +309,111 @@ async def get_snapshot_uploads(snapshot_id: str):
     }
 
 
+@snapshot_router.get("/historical-averages")
+async def get_historical_averages():
+    """
+    Get historical average values for POS metrics.
+    Used for data validation/review step.
+    """
+    db = get_db()
+    
+    # Get completed snapshots to calculate averages
+    completed_snapshots = await db.snapshot_workflow.find(
+        {"status": "completed"},
+        {"_id": 0, "employees": 1}
+    ).to_list(10)
+    
+    # Also check employees_v2 for historical data
+    employees_v2 = await db.employees_v2.find(
+        {},
+        {"_id": 0, "ppa": 1, "lbw_per_guest": 1, "glassware_per_guest": 1, "guests_per_lsc": 1, "guest_count": 1}
+    ).to_list(500)
+    
+    # Collect all employee metrics
+    all_employees = []
+    for snapshot in completed_snapshots:
+        all_employees.extend(snapshot.get("employees", []))
+    all_employees.extend(employees_v2)
+    
+    if not all_employees:
+        # Return reasonable defaults
+        return {
+            "averages": {
+                "ppa": 55.0,
+                "lbw_per_guest": 8.0,
+                "glassware_per_guest": 1.25,
+                "guests_per_lsc": 100.0,
+                "guest_count": 200
+            }
+        }
+    
+    # Calculate averages (excluding zeros/nulls)
+    def calc_avg(field):
+        values = [e.get(field, 0) for e in all_employees if e.get(field, 0) and e.get(field, 0) > 0]
+        return sum(values) / len(values) if values else 0
+    
+    return {
+        "averages": {
+            "ppa": round(calc_avg("ppa"), 2),
+            "lbw_per_guest": round(calc_avg("lbw_per_guest"), 2),
+            "glassware_per_guest": round(calc_avg("glassware_per_guest"), 2),
+            "guests_per_lsc": round(calc_avg("guests_per_lsc"), 2),
+            "guest_count": round(calc_avg("guest_count"), 0)
+        }
+    }
+
+
+@snapshot_router.post("/snapshots/{snapshot_id}/confirm-pos-review")
+async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
+    """
+    Confirm POS data review and save any edits.
+    This marks the data as reviewed so user can proceed to Step 2.
+    """
+    db = get_db()
+    
+    snapshot = await db.snapshot_workflow.find_one({"id": snapshot_id})
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    
+    if snapshot["status"] == SnapshotStatus.COMPLETED.value:
+        raise HTTPException(status_code=400, detail="Cannot modify completed snapshot")
+    
+    employees = data.get("employees", [])
+    if not employees:
+        raise HTTPException(status_code=400, detail="No employee data provided")
+    
+    # Find the POS upload and update it with reviewed data
+    uploads = snapshot.get("uploads", [])
+    pos_upload_idx = next(
+        (i for i, u in enumerate(uploads) if u.get("upload_type") == "pos_report"),
+        None
+    )
+    
+    if pos_upload_idx is None:
+        raise HTTPException(status_code=400, detail="No POS upload found")
+    
+    # Update the parsed data with reviewed/edited values
+    uploads[pos_upload_idx]["parsed_data"]["employees"] = employees
+    uploads[pos_upload_idx]["reviewed"] = True
+    uploads[pos_upload_idx]["reviewed_at"] = datetime.now(timezone.utc).isoformat()
+    
+    # Save to database
+    await db.snapshot_workflow.update_one(
+        {"id": snapshot_id},
+        {
+            "$set": {
+                "uploads": uploads,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    return {
+        "success": True,
+        "message": f"POS data reviewed and confirmed ({len(employees)} employees)"
+    }
+
+
 @snapshot_router.post("/snapshots/{snapshot_id}/import-cv-adjustment/{session_id}")
 async def import_cv_adjustment_to_snapshot(snapshot_id: str, session_id: str):
     """
