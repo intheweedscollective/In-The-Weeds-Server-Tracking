@@ -362,7 +362,9 @@ async def get_historical_averages():
         return {
             "averages": {
                 "ppa": 55.0,
-                "lbw_per_guest": 8.0,
+                "liquor_sales": 500.0,
+                "beer_sales": 300.0,
+                "wine_sales": 150.0,
                 "glassware_per_guest": 1.25,
                 "lsc_count": 5,
                 "guest_count": 200
@@ -372,12 +374,17 @@ async def get_historical_averages():
     # Calculate averages (excluding zeros/nulls)
     def calc_avg(field):
         values = [e.get(field, 0) for e in all_employees if e.get(field, 0) and e.get(field, 0) > 0]
+        # Also check _raw field for nested data
+        if not values:
+            values = [e.get("_raw", {}).get(field, 0) for e in all_employees if e.get("_raw", {}).get(field, 0) and e.get("_raw", {}).get(field, 0) > 0]
         return sum(values) / len(values) if values else 0
     
     return {
         "averages": {
             "ppa": round(calc_avg("ppa"), 2),
-            "lbw_per_guest": round(calc_avg("lbw_per_guest"), 2),
+            "liquor_sales": round(calc_avg("liquor_sales"), 0),
+            "beer_sales": round(calc_avg("beer_sales"), 0),
+            "wine_sales": round(calc_avg("wine_sales"), 0),
             "glassware_per_guest": round(calc_avg("glassware_per_guest"), 2),
             "lsc_count": round(calc_avg("lsc_count"), 0),
             "guest_count": round(calc_avg("guest_count"), 0)

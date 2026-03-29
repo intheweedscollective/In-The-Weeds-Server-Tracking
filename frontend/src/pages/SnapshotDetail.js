@@ -295,7 +295,9 @@ export default function SnapshotDetail() {
     setEditingRow(index);
     setEditValues({
       ppa: emp.ppa || 0,
-      lbw_per_guest: emp.lbw_per_guest || 0,
+      liquor_sales: emp.liquor_sales || emp._raw?.liquor_sales || 0,
+      beer_sales: emp.beer_sales || emp._raw?.beer_sales || 0,
+      wine_sales: emp.wine_sales || emp._raw?.wine_sales || 0,
       glassware_per_guest: emp.glassware_per_guest || 0,
       lsc_count: emp.lsc_count || 0,
       guest_count: emp.guest_count || 0,
@@ -829,7 +831,9 @@ export default function SnapshotDetail() {
                   <th className="px-3 py-2 font-medium">Employee</th>
                   <th className="px-3 py-2 font-medium text-right">Guests</th>
                   <th className="px-3 py-2 font-medium text-right">PPA</th>
-                  <th className="px-3 py-2 font-medium text-right">LBW/Guest</th>
+                  <th className="px-3 py-2 font-medium text-right">Liquor $</th>
+                  <th className="px-3 py-2 font-medium text-right">Beer $</th>
+                  <th className="px-3 py-2 font-medium text-right">Wine $</th>
                   <th className="px-3 py-2 font-medium text-right">Glass/Guest</th>
                   <th className="px-3 py-2 font-medium text-right">LSC Qty</th>
                   <th className="px-3 py-2 font-medium text-center">Actions</th>
@@ -862,8 +866,26 @@ export default function SnapshotDetail() {
                           <Input
                             type="number"
                             step="0.01"
-                            value={editValues.lbw_per_guest}
-                            onChange={(e) => setEditValues({...editValues, lbw_per_guest: parseFloat(e.target.value) || 0})}
+                            value={editValues.liquor_sales}
+                            onChange={(e) => setEditValues({...editValues, liquor_sales: parseFloat(e.target.value) || 0})}
+                            className="w-20 h-7 text-right bg-slate-700 border-slate-600 text-white"
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={editValues.beer_sales}
+                            onChange={(e) => setEditValues({...editValues, beer_sales: parseFloat(e.target.value) || 0})}
+                            className="w-20 h-7 text-right bg-slate-700 border-slate-600 text-white"
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={editValues.wine_sales}
+                            onChange={(e) => setEditValues({...editValues, wine_sales: parseFloat(e.target.value) || 0})}
                             className="w-20 h-7 text-right bg-slate-700 border-slate-600 text-white"
                           />
                         </td>
@@ -904,8 +926,14 @@ export default function SnapshotDetail() {
                         <td className={`px-3 py-2 text-right ${isValueFlagged('ppa', emp.ppa, historicalAvg.ppa) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
                           ${(emp.ppa || 0).toFixed(2)}
                         </td>
-                        <td className={`px-3 py-2 text-right ${isValueFlagged('lbw_per_guest', emp.lbw_per_guest, historicalAvg.lbw_per_guest) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
-                          ${(emp.lbw_per_guest || 0).toFixed(2)}
+                        <td className={`px-3 py-2 text-right ${isValueFlagged('liquor_sales', emp.liquor_sales || emp._raw?.liquor_sales, historicalAvg.liquor_sales) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
+                          ${(emp.liquor_sales || emp._raw?.liquor_sales || 0).toFixed(0)}
+                        </td>
+                        <td className={`px-3 py-2 text-right ${isValueFlagged('beer_sales', emp.beer_sales || emp._raw?.beer_sales, historicalAvg.beer_sales) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
+                          ${(emp.beer_sales || emp._raw?.beer_sales || 0).toFixed(0)}
+                        </td>
+                        <td className={`px-3 py-2 text-right ${isValueFlagged('wine_sales', emp.wine_sales || emp._raw?.wine_sales, historicalAvg.wine_sales) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
+                          ${(emp.wine_sales || emp._raw?.wine_sales || 0).toFixed(0)}
                         </td>
                         <td className={`px-3 py-2 text-right ${isValueFlagged('glassware_per_guest', emp.glassware_per_guest, historicalAvg.glassware_per_guest) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
                           ${(emp.glassware_per_guest || 0).toFixed(2)}
@@ -929,20 +957,22 @@ export default function SnapshotDetail() {
           {/* Summary and Actions */}
           <div className="mt-4 pt-4 border-t border-slate-700">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
+              <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-2 text-sm">
                   <AlertCircle className="w-4 h-4 text-red-400" />
                   <span className="text-red-400 font-medium">
                     {reviewData.filter(e => 
                       isValueFlagged('ppa', e.ppa, historicalAvg.ppa) ||
-                      isValueFlagged('lbw_per_guest', e.lbw_per_guest, historicalAvg.lbw_per_guest) ||
+                      isValueFlagged('liquor_sales', e.liquor_sales || e._raw?.liquor_sales, historicalAvg.liquor_sales) ||
+                      isValueFlagged('beer_sales', e.beer_sales || e._raw?.beer_sales, historicalAvg.beer_sales) ||
+                      isValueFlagged('wine_sales', e.wine_sales || e._raw?.wine_sales, historicalAvg.wine_sales) ||
                       isValueFlagged('glassware_per_guest', e.glassware_per_guest, historicalAvg.glassware_per_guest) ||
                       isValueFlagged('lsc_count', e.lsc_count, historicalAvg.lsc_count)
                     ).length} items need attention
                   </span>
                 </div>
-                <div className="text-sm text-slate-400">
-                  Historical Avg: PPA ${historicalAvg.ppa?.toFixed(2) || '—'}, LBW ${historicalAvg.lbw_per_guest?.toFixed(2) || '—'}, Glass ${historicalAvg.glassware_per_guest?.toFixed(2) || '—'}, LSC {historicalAvg.lsc_count?.toFixed(0) || '—'}
+                <div className="text-xs text-slate-500">
+                  Historical Avg: PPA ${historicalAvg.ppa?.toFixed(2) || '—'} | Liquor ${historicalAvg.liquor_sales?.toFixed(0) || '—'} | Beer ${historicalAvg.beer_sales?.toFixed(0) || '—'} | Wine ${historicalAvg.wine_sales?.toFixed(0) || '—'} | Glass/G ${historicalAvg.glassware_per_guest?.toFixed(2) || '—'} | LSC {historicalAvg.lsc_count?.toFixed(0) || '—'}
                 </div>
               </div>
               <div className="flex gap-3">
