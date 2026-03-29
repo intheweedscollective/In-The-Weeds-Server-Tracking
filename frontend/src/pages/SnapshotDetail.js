@@ -811,7 +811,10 @@ export default function SnapshotDetail() {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {snapshot.employees.slice(0, 5).map((emp, idx) => (
+                {[...snapshot.employees]
+                  .sort((a, b) => (b.total_score || 0) - (a.total_score || 0))
+                  .slice(0, 5)
+                  .map((emp, idx) => (
                   <div 
                     key={emp.id}
                     className="flex items-center justify-between p-3 rounded-lg bg-slate-700/30"
