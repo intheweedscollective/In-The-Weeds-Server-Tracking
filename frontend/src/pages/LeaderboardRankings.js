@@ -255,7 +255,10 @@ export default function LeaderboardRankings() {
     if (!employees.length) return {};
     
     const findLeader = (metric, higherBetter = true) => {
-      const sorted = [...employees].sort((a, b) => {
+      const sorted = [...employees].filter(e => {
+        const val = e[metric];
+        return val !== null && val !== undefined && val > 0;
+      }).sort((a, b) => {
         const aVal = a[metric] || 0;
         const bVal = b[metric] || 0;
         return higherBetter ? bVal - aVal : aVal - bVal;
@@ -263,11 +266,19 @@ export default function LeaderboardRankings() {
       return sorted[0];
     };
     
+    // LSC Champion: person with most LSC cards sold (highest lsc_count)
+    const findLscLeader = () => {
+      const sorted = [...employees].filter(e => (e.lsc_count || 0) > 0).sort((a, b) => {
+        return (b.lsc_count || 0) - (a.lsc_count || 0);
+      });
+      return sorted[0];
+    };
+    
     return {
       ppa: findLeader("ppa"),
       lbw: findLeader("lbw_per_guest"),
-      lsc: findLeader("guests_per_lsc", false),
-      reviews: findLeader("review_mentions"),
+      lsc: findLscLeader(),
+      reviews: findLeader("rt_mentions") || findLeader("review_mentions"),
     };
   }, [employees]);
 
@@ -681,7 +692,7 @@ export default function LeaderboardRankings() {
             <CategoryLeaderCard
               title="LSC Champion"
               leader={categoryLeaders.lsc?.name}
-              value={categoryLeaders.lsc?.guests_per_lsc}
+              value={categoryLeaders.lsc?.lsc_count}
               format="number"
               icon={Star}
             />
@@ -689,7 +700,7 @@ export default function LeaderboardRankings() {
             <CategoryLeaderCard
               title="Review Leader"
               leader={categoryLeaders.reviews?.name}
-              value={categoryLeaders.reviews?.review_mentions}
+              value={categoryLeaders.reviews?.rt_mentions || categoryLeaders.reviews?.review_mentions}
               format="number"
               icon={Award}
             />
