@@ -187,9 +187,9 @@ export default function SnapshotDetail() {
     if (value === 0 || value === null || value === undefined) return true;
     if (!avgValue || avgValue === 0) return false;
     
-    // Flag if more than 50% deviation from historical average
+    // Flag if more than 33% deviation from historical average
     const deviation = Math.abs(value - avgValue) / avgValue;
-    return deviation > 0.5;
+    return deviation > 0.33;
   };
 
   const confirmReviewData = async () => {
