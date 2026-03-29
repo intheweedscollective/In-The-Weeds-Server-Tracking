@@ -714,23 +714,33 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                 }
         
         elif upload_type == UploadType.CUSTOMER_VOICE.value:
-            # Merge CV data
+            # Merge CV/NPS Toolkit data
             for cv_data in parsed_data.get("employees", []):
                 name = cv_data.get("name", "").strip().lower()
                 if name in employees:
-                    employees[name]["cv_promoters"] = cv_data.get("promoters", 0)
-                    employees[name]["cv_passives"] = cv_data.get("passives", 0)
-                    employees[name]["cv_detractors"] = cv_data.get("detractors", 0)
+                    # Get values from parsed data
+                    promoters = cv_data.get("promoters", 0) or 0
+                    passives = cv_data.get("passives", 0) or 0
+                    detractors = cv_data.get("detractors", 0) or 0
+                    nps_from_report = cv_data.get("nps_score", 0) or 0
                     
-                    # Calculate CV score
-                    promoters = cv_data.get("promoters", 0)
-                    detractors = cv_data.get("detractors", 0)
-                    total = promoters + cv_data.get("passives", 0) + detractors
+                    employees[name]["cv_promoters"] = promoters
+                    employees[name]["cv_passives"] = passives
+                    employees[name]["cv_detractors"] = detractors
+                    employees[name]["cv_responses"] = cv_data.get("responses", 0) or 0
+                    employees[name]["cv_avg_rating"] = cv_data.get("avg_rating", 0) or 0
                     
-                    if total > 0:
+                    # Use NPS from report if available, otherwise calculate
+                    total = promoters + passives + detractors
+                    if nps_from_report != 0:
+                        nps = nps_from_report
+                    elif total > 0:
                         nps = ((promoters - detractors) / total) * 100
-                        employees[name]["nps_score"] = round(nps, 1)
-                        employees[name]["nps_score_pts"] = round(nps / 10, 1)
+                    else:
+                        nps = 0
+                    
+                    employees[name]["nps_score"] = round(nps, 1)
+                    employees[name]["nps_score_pts"] = round(nps / 10, 1)
                     
                     # CV bonus: +0.5 per promoter, -1 per detractor
                     cv_raw = (promoters * 0.5) - (detractors * 1)
@@ -768,30 +778,135 @@ async def parse_pos_file(filename: str, contents: bytes) -> Dict[str, Any]:
 
 
 async def parse_cv_file(filename: str, contents: bytes) -> Dict[str, Any]:
-    """Parse Customer Voice CSV file."""
+    """
+    Parse Customer Voice / NPS Toolkit file.
+    Supports:
+    - NPS Toolkit XLSX (Server Performance Report with Name, NPS, Received columns)
+    - CSV with Employee, Promoters, Passives, Detractors columns
+    """
     import csv
-    from io import StringIO
+    from io import StringIO, BytesIO
     
-    # Decode contents
-    try:
-        text = contents.decode('utf-8')
-    except UnicodeDecodeError:
-        text = contents.decode('latin-1')
-    
-    reader = csv.DictReader(StringIO(text))
     employees = []
     
-    for row in reader:
-        name = row.get("Employee", row.get("employee", row.get("Name", "")))
-        if not name:
-            continue
+    # Check file type
+    if filename.lower().endswith(('.xlsx', '.xls')):
+        # Parse NPS Toolkit XLSX format
+        try:
+            import openpyxl
+            wb = openpyxl.load_workbook(BytesIO(contents), data_only=True)
+            ws = wb.active
+            
+            # Find header row and column indices
+            headers = {}
+            header_row = None
+            for row_idx, row in enumerate(ws.iter_rows(max_row=5, values_only=True), 1):
+                row_lower = [str(c).lower() if c else '' for c in row]
+                if 'name' in row_lower and ('nps' in row_lower or 'received' in row_lower):
+                    header_row = row_idx
+                    for col_idx, cell in enumerate(row):
+                        if cell:
+                            headers[str(cell).lower()] = col_idx
+                    break
+            
+            if not header_row:
+                raise ValueError("Could not find header row with Name and NPS columns")
+            
+            # Parse data rows
+            name_col = headers.get('name', 0)
+            nps_col = headers.get('nps', headers.get('nps score', 6))
+            received_col = headers.get('received', headers.get('responses', 3))
+            avg_rating_col = headers.get('avg rating', headers.get('average rating', 5))
+            
+            for row in ws.iter_rows(min_row=header_row + 1, values_only=True):
+                name = row[name_col] if name_col < len(row) else None
+                if not name or name == 'None' or 'manager' in str(name).lower():
+                    continue
+                
+                # Get NPS score (already calculated in the report)
+                try:
+                    nps = float(row[nps_col]) if nps_col < len(row) and row[nps_col] else 0
+                except (ValueError, TypeError):
+                    nps = 0
+                
+                # Get number of responses
+                try:
+                    received = int(float(row[received_col])) if received_col < len(row) and row[received_col] else 0
+                except (ValueError, TypeError):
+                    received = 0
+                
+                # Get avg rating
+                try:
+                    avg_rating = float(row[avg_rating_col]) if avg_rating_col < len(row) and row[avg_rating_col] else 0
+                except (ValueError, TypeError):
+                    avg_rating = 0
+                
+                # Estimate promoters/passives/detractors from NPS and received count
+                # NPS = (promoters - detractors) / total * 100
+                # We'll estimate based on NPS score
+                if received > 0:
+                    # Estimate breakdown based on NPS
+                    if nps >= 75:
+                        promoters = received
+                        passives = 0
+                        detractors = 0
+                    elif nps >= 50:
+                        promoters = int(received * 0.8)
+                        passives = int(received * 0.15)
+                        detractors = received - promoters - passives
+                    elif nps >= 0:
+                        # NPS = (P - D) / Total * 100, P + Pa + D = Total
+                        # Estimate: P = (NPS/100 + 1) * Total / 2
+                        promoters = max(0, int((nps/100 + 1) * received / 2))
+                        detractors = max(0, int((1 - nps/100) * received / 2))
+                        passives = received - promoters - detractors
+                    else:
+                        # Negative NPS
+                        detractors = max(1, int(abs(nps) / 100 * received))
+                        promoters = max(0, received - detractors)
+                        passives = 0
+                else:
+                    promoters = 0
+                    passives = 0
+                    detractors = 0
+                
+                employees.append({
+                    "name": str(name).strip(),
+                    "nps_score": nps,
+                    "responses": received,
+                    "avg_rating": avg_rating,
+                    "promoters": promoters,
+                    "passives": passives,
+                    "detractors": detractors,
+                })
+            
+            logger.info(f"Parsed NPS Toolkit XLSX: {len(employees)} employees")
+            
+        except Exception as e:
+            logger.error(f"Error parsing NPS Toolkit XLSX: {e}")
+            raise ValueError(f"Failed to parse NPS Toolkit file: {str(e)}")
+    
+    else:
+        # Parse CSV format (legacy)
+        try:
+            text = contents.decode('utf-8')
+        except UnicodeDecodeError:
+            text = contents.decode('latin-1')
         
-        employees.append({
-            "name": name,
-            "promoters": int(row.get("Promoters", row.get("promoters", 0)) or 0),
-            "passives": int(row.get("Passives", row.get("passives", 0)) or 0),
-            "detractors": int(row.get("Detractors", row.get("detractors", 0)) or 0),
-        })
+        reader = csv.DictReader(StringIO(text))
+        
+        for row in reader:
+            name = row.get("Employee", row.get("employee", row.get("Name", row.get("name", ""))))
+            if not name:
+                continue
+            
+            employees.append({
+                "name": name,
+                "promoters": int(row.get("Promoters", row.get("promoters", 0)) or 0),
+                "passives": int(row.get("Passives", row.get("passives", 0)) or 0),
+                "detractors": int(row.get("Detractors", row.get("detractors", 0)) or 0),
+                "nps_score": float(row.get("NPS", row.get("nps", row.get("nps_score", 0))) or 0),
+            })
     
     return {"employees": employees, "record_count": len(employees)}
 

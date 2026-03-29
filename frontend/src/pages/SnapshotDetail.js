@@ -31,10 +31,10 @@ const UPLOAD_TYPES = [
   },
   { 
     key: "customer_voice", 
-    label: "Customer Voice", 
-    description: "Customer survey feedback data",
+    label: "NPS Toolkit / Customer Voice", 
+    description: "Server Performance Report or Customer Voice data",
     icon: MessageSquare,
-    accept: ".csv",
+    accept: ".xlsx,.xls,.csv",
     required: false,
     step: 2
   },
