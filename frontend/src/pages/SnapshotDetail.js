@@ -829,121 +829,121 @@ export default function SnapshotDetail() {
           <div className="flex-1 overflow-auto mt-4">
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-slate-800 z-10">
-                <tr className="text-slate-300 text-left">
-                  <th className="px-3 py-2 font-medium">Employee</th>
-                  <th className="px-3 py-2 font-medium text-right">Guests</th>
-                  <th className="px-3 py-2 font-medium text-right">PPA</th>
-                  <th className="px-3 py-2 font-medium text-right">Liquor $</th>
-                  <th className="px-3 py-2 font-medium text-right">Beer $</th>
-                  <th className="px-3 py-2 font-medium text-right">Wine $</th>
-                  <th className="px-3 py-2 font-medium text-right">Glass/Guest</th>
-                  <th className="px-3 py-2 font-medium text-right">LSC Qty</th>
-                  <th className="px-3 py-2 font-medium text-center">Actions</th>
+                <tr className="text-slate-300 text-xs uppercase tracking-wide">
+                  <th className="px-2 py-2 font-medium text-left whitespace-nowrap">Employee</th>
+                  <th className="px-2 py-2 font-medium text-center whitespace-nowrap">Guests</th>
+                  <th className="px-2 py-2 font-medium text-center whitespace-nowrap">PPA</th>
+                  <th className="px-2 py-2 font-medium text-center whitespace-nowrap">Liquor</th>
+                  <th className="px-2 py-2 font-medium text-center whitespace-nowrap">Beer</th>
+                  <th className="px-2 py-2 font-medium text-center whitespace-nowrap">Wine</th>
+                  <th className="px-2 py-2 font-medium text-center whitespace-nowrap">Glass/G</th>
+                  <th className="px-2 py-2 font-medium text-center whitespace-nowrap">LSC</th>
+                  <th className="px-2 py-2 font-medium text-center whitespace-nowrap">Edit</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-700">
                 {reviewData.map((emp, idx) => (
-                  <tr key={idx} className="hover:bg-slate-800/50">
-                    <td className="px-3 py-2 text-white font-medium">{emp.name}</td>
+                  <tr key={idx} className="hover:bg-slate-800/50 text-sm">
+                    <td className="px-2 py-2 text-white font-medium whitespace-nowrap">{emp.name}</td>
                     {editingRow === idx ? (
                       <>
-                        <td className="px-3 py-2">
+                        <td className="px-2 py-1">
                           <Input
                             type="number"
                             value={editValues.guest_count}
                             onChange={(e) => setEditValues({...editValues, guest_count: parseFloat(e.target.value) || 0})}
-                            className="w-20 h-7 text-right bg-slate-700 border-slate-600 text-white"
+                            className="w-16 h-7 text-center bg-slate-700 border-slate-600 text-white text-sm"
                           />
                         </td>
-                        <td className="px-3 py-2">
+                        <td className="px-2 py-1">
                           <Input
                             type="number"
                             step="0.01"
                             value={editValues.ppa}
                             onChange={(e) => setEditValues({...editValues, ppa: parseFloat(e.target.value) || 0})}
-                            className="w-20 h-7 text-right bg-slate-700 border-slate-600 text-white"
+                            className="w-16 h-7 text-center bg-slate-700 border-slate-600 text-white text-sm"
                           />
                         </td>
-                        <td className="px-3 py-2">
+                        <td className="px-2 py-1">
                           <Input
                             type="number"
                             step="0.01"
                             value={editValues.liquor_sales}
                             onChange={(e) => setEditValues({...editValues, liquor_sales: parseFloat(e.target.value) || 0})}
-                            className="w-20 h-7 text-right bg-slate-700 border-slate-600 text-white"
+                            className="w-16 h-7 text-center bg-slate-700 border-slate-600 text-white text-sm"
                           />
                         </td>
-                        <td className="px-3 py-2">
+                        <td className="px-2 py-1">
                           <Input
                             type="number"
                             step="0.01"
                             value={editValues.beer_sales}
                             onChange={(e) => setEditValues({...editValues, beer_sales: parseFloat(e.target.value) || 0})}
-                            className="w-20 h-7 text-right bg-slate-700 border-slate-600 text-white"
+                            className="w-16 h-7 text-center bg-slate-700 border-slate-600 text-white text-sm"
                           />
                         </td>
-                        <td className="px-3 py-2">
+                        <td className="px-2 py-1">
                           <Input
                             type="number"
                             step="0.01"
                             value={editValues.wine_sales}
                             onChange={(e) => setEditValues({...editValues, wine_sales: parseFloat(e.target.value) || 0})}
-                            className="w-20 h-7 text-right bg-slate-700 border-slate-600 text-white"
+                            className="w-16 h-7 text-center bg-slate-700 border-slate-600 text-white text-sm"
                           />
                         </td>
-                        <td className="px-3 py-2">
+                        <td className="px-2 py-1">
                           <Input
                             type="number"
                             step="0.01"
                             value={editValues.glassware_per_guest}
                             onChange={(e) => setEditValues({...editValues, glassware_per_guest: parseFloat(e.target.value) || 0})}
-                            className="w-20 h-7 text-right bg-slate-700 border-slate-600 text-white"
+                            className="w-16 h-7 text-center bg-slate-700 border-slate-600 text-white text-sm"
                           />
                         </td>
-                        <td className="px-3 py-2">
+                        <td className="px-2 py-1">
                           <Input
                             type="number"
                             step="1"
                             value={editValues.lsc_count}
                             onChange={(e) => setEditValues({...editValues, lsc_count: parseInt(e.target.value) || 0})}
-                            className="w-20 h-7 text-right bg-slate-700 border-slate-600 text-white"
+                            className="w-16 h-7 text-center bg-slate-700 border-slate-600 text-white text-sm"
                           />
                         </td>
-                        <td className="px-3 py-2 text-center">
+                        <td className="px-2 py-1 text-center">
                           <div className="flex justify-center gap-1">
-                            <Button size="sm" variant="ghost" onClick={() => saveRowEdit(idx)} className="h-7 w-7 p-0 text-green-400 hover:bg-green-900/50">
-                              <Save className="w-4 h-4" />
+                            <Button size="sm" variant="ghost" onClick={() => saveRowEdit(idx)} className="h-6 w-6 p-0 text-green-400 hover:bg-green-900/50">
+                              <Save className="w-3 h-3" />
                             </Button>
-                            <Button size="sm" variant="ghost" onClick={cancelEdit} className="h-7 w-7 p-0 text-slate-400 hover:bg-slate-700">
-                              <X className="w-4 h-4" />
+                            <Button size="sm" variant="ghost" onClick={cancelEdit} className="h-6 w-6 p-0 text-slate-400 hover:bg-slate-700">
+                              <X className="w-3 h-3" />
                             </Button>
                           </div>
                         </td>
                       </>
                     ) : (
                       <>
-                        <td className={`px-3 py-2 text-right ${isValueFlagged('guest_count', emp.guest_count, historicalAvg.guest_count) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
+                        <td className={`px-2 py-2 text-center text-sm ${isValueFlagged('guest_count', emp.guest_count, historicalAvg.guest_count) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
                           {emp.guest_count || 0}
                         </td>
-                        <td className={`px-3 py-2 text-right ${isValueFlagged('ppa', emp.ppa, historicalAvg.ppa) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
+                        <td className={`px-2 py-2 text-center text-sm ${isValueFlagged('ppa', emp.ppa, historicalAvg.ppa) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
                           ${(emp.ppa || 0).toFixed(2)}
                         </td>
-                        <td className={`px-3 py-2 text-right ${isValueFlagged('liquor_sales', emp.liquor_sales || emp._raw?.liquor_sales, historicalAvg.liquor_sales) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
+                        <td className={`px-2 py-2 text-center text-sm ${isValueFlagged('liquor_sales', emp.liquor_sales || emp._raw?.liquor_sales, historicalAvg.liquor_sales) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
                           ${(emp.liquor_sales || emp._raw?.liquor_sales || 0).toFixed(0)}
                         </td>
-                        <td className={`px-3 py-2 text-right ${isValueFlagged('beer_sales', emp.beer_sales || emp._raw?.beer_sales, historicalAvg.beer_sales) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
+                        <td className={`px-2 py-2 text-center text-sm ${isValueFlagged('beer_sales', emp.beer_sales || emp._raw?.beer_sales, historicalAvg.beer_sales) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
                           ${(emp.beer_sales || emp._raw?.beer_sales || 0).toFixed(0)}
                         </td>
-                        <td className={`px-3 py-2 text-right ${isValueFlagged('wine_sales', emp.wine_sales || emp._raw?.wine_sales, historicalAvg.wine_sales) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
+                        <td className={`px-2 py-2 text-center text-sm ${isValueFlagged('wine_sales', emp.wine_sales || emp._raw?.wine_sales, historicalAvg.wine_sales) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
                           ${(emp.wine_sales || emp._raw?.wine_sales || 0).toFixed(0)}
                         </td>
-                        <td className={`px-3 py-2 text-right ${isValueFlagged('glassware_per_guest', emp.glassware_per_guest, historicalAvg.glassware_per_guest) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
+                        <td className={`px-2 py-2 text-center text-sm ${isValueFlagged('glassware_per_guest', emp.glassware_per_guest, historicalAvg.glassware_per_guest) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
                           ${(emp.glassware_per_guest || 0).toFixed(2)}
                         </td>
-                        <td className={`px-3 py-2 text-right ${isValueFlagged('lsc_count', emp.lsc_count || Math.round((emp.loyalty_sales || 0) / 25), historicalAvg.lsc_count) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
+                        <td className={`px-2 py-2 text-center text-sm ${isValueFlagged('lsc_count', emp.lsc_count || Math.round((emp.loyalty_sales || 0) / 25), historicalAvg.lsc_count) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
                           {emp.lsc_count || Math.round((emp.loyalty_sales || 0) / 25) || 0}
                         </td>
-                        <td className="px-3 py-2 text-center">
+                        <td className="px-2 py-2 text-center">
                           <Button size="sm" variant="ghost" onClick={() => startEditRow(idx, emp)} className="h-7 w-7 p-0 text-slate-400 hover:bg-slate-700 hover:text-white">
                             <Edit2 className="w-4 h-4" />
                           </Button>
