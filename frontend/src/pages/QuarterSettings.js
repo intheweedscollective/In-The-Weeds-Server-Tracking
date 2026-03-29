@@ -566,7 +566,7 @@ export default function QuarterSettings() {
             <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-sm text-blue-800">
                 <strong>Note:</strong> Customer Voice (CV) points are added directly to the total score as raw points, not as a weighted percentage.
-                Formula: (Promoters × 1) + (Mentions × 0.2) - (Detractors × 2)
+                Formula: (Promoters × 1) + (Mentions × 0.5) - (Detractors × 2)
               </p>
             </div>
           </div>
