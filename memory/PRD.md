@@ -68,7 +68,8 @@ Build a comprehensive performance review application for restaurant employees th
 
 ## Scoring Formula (Q1 2026)
 - **Weights:** PPA (25%), LSC (25%), LBW (15%), Glassware (10%), NPS (10%), ReviewTracker (15%)
-- **Bonuses:** +0.5 pts per CV promoter, -1 pt per CV detractor
+- **CV Scoring:** NPS pts (max 10) + Promoters × 1 - Detractors × 2
+- **RT Bonus:** Mentions × 0.5 pts (capped at 15 pts)
 - **Metric bonuses:** Up to 5 pts per metric if >100% of benchmark
 
 ## Key Metrics
@@ -195,8 +196,21 @@ Build a comprehensive performance review application for restaurant employees th
 - `GET /api/v2/snapshot-workflow/snapshots/{id}` - Get detail
 - `POST /api/v2/snapshot-workflow/snapshots/{id}/upload/{type}` - Upload file
 - `POST /api/v2/snapshot-workflow/snapshots/{id}/process` - Finalize
+- `POST /api/v2/snapshot-workflow/snapshots/{id}/unlock` - Unlock completed snapshot for editing
 - `GET /api/v2/snapshot-workflow/current-rankings` - Active rankings
 - `POST /api/v2/snapshot-workflow/migrate-legacy-data` - Migration utility
+
+## Changelog
+
+### 2026-03-29 (Session 2)
+- **CV Scoring Formula Fix:** Updated to (Promoters × 1) + (RT Mentions × 0.5) - (Detractors × 2)
+  - Changed CV_PROMOTER_POINTS from 0.5 to 1.0
+  - Changed CV_DETRACTOR_POINTS from -1 to -2
+  - Updated related hardcoded values in server.py, review_tracker.py, audit_system.py, snapshot_routes.py
+- **Unlock Snapshot Feature:** Added ability to edit completed snapshots
+  - New endpoint: `POST /api/v2/snapshot-workflow/snapshots/{id}/unlock`
+  - Added "Unlock for Editing" button in SnapshotDetail.js
+  - Changes status from 'completed' back to 'in_progress'
 
 ## 3rd Party Integrations
 - OpenAI GPT-4o (via Emergent LLM Key) - PDF OCR

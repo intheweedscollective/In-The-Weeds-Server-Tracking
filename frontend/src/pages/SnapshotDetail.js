@@ -387,6 +387,25 @@ export default function SnapshotDetail() {
     setProcessing(false);
   };
 
+  const handleUnlock = async () => {
+    setProcessing(true);
+    try {
+      const res = await api.post(`/v2/snapshot-workflow/snapshots/${snapshotId}/unlock`);
+      toast({ 
+        title: "Snapshot Unlocked", 
+        description: res.data.message || "You can now edit this snapshot"
+      });
+      await fetchSnapshot();
+    } catch (error) {
+      toast({ 
+        title: "Unlock Failed", 
+        description: error.response?.data?.detail || "Failed to unlock snapshot",
+        variant: "destructive"
+      });
+    }
+    setProcessing(false);
+  };
+
   const getUploadStatus = (uploadType) => {
     const upload = snapshot?.uploads?.find(u => u.upload_type === uploadType);
     return upload;
@@ -694,6 +713,16 @@ export default function SnapshotDetail() {
                   >
                     <Eye className="w-4 h-4 mr-2" />
                     View Rankings
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleUnlock}
+                    disabled={processing}
+                    className="border-amber-600 text-amber-400 hover:bg-amber-600/20"
+                    data-testid="unlock-snapshot-btn"
+                  >
+                    <Edit2 className="w-4 h-4 mr-2" />
+                    Unlock for Editing
                   </Button>
                   <Button
                     variant="outline"

@@ -165,6 +165,48 @@ async def delete_snapshot(snapshot_id: str):
     return {"success": True, "message": "Snapshot deleted"}
 
 
+@snapshot_router.post("/snapshots/{snapshot_id}/unlock")
+async def unlock_snapshot(snapshot_id: str):
+    """
+    Unlock a completed snapshot to allow editing.
+    Changes status from 'completed' back to 'in_progress'.
+    The snapshot retains its existing uploads and results.
+    """
+    db = get_db()
+    
+    snapshot = await db.snapshot_workflow.find_one({"id": snapshot_id})
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    
+    if snapshot["status"] != SnapshotStatus.COMPLETED.value:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only completed snapshots can be unlocked. Current status: {snapshot['status']}"
+        )
+    
+    # Update status to in_progress
+    await db.snapshot_workflow.update_one(
+        {"id": snapshot_id},
+        {
+            "$set": {
+                "status": SnapshotStatus.IN_PROGRESS.value,
+                "unlocked_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    updated = await db.snapshot_workflow.find_one({"id": snapshot_id}, {"_id": 0})
+    
+    logger.info(f"Unlocked snapshot: {snapshot_id} for editing")
+    
+    return {
+        "success": True,
+        "message": "Snapshot unlocked for editing. You can now modify uploads and reprocess.",
+        "snapshot": format_snapshot_response(updated)
+    }
+
+
 # ============================================================================
 # SNAPSHOT UPLOADS
 # ============================================================================
