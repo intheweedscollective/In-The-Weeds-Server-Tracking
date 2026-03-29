@@ -1014,7 +1014,8 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                     "lbw_per_guest": emp_data.get("lbw_per_guest", 0),
                     "glassware_per_guest": emp_data.get("glassware_per_guest", 0),
                     "guests_per_lsc": emp_data.get("guests_per_lsc", 0),
-                    "lsc_count": emp_data.get("lsc_count", 0),
+                    # Calculate LSC count from loyalty_sales (each card = $25)
+                    "lsc_count": emp_data.get("lsc_count") or (round(emp_data.get("loyalty_sales", 0) / 25) if emp_data.get("loyalty_sales", 0) > 0 else 0),
                     "loyalty_sales": emp_data.get("loyalty_sales", 0),
                     "food_sales": emp_data.get("food_sales", 0),
                     "liquor_sales": emp_data.get("liquor_sales", 0),
