@@ -1376,16 +1376,47 @@ async def parse_rt_file(filename: str, contents: bytes) -> Dict[str, Any]:
         
         review_text_lower = review_text.lower()
         
-        # Simple name matching - look for employee names in review text
+        # Track which employees were mentioned in this review (avoid double-counting)
+        mentioned_in_review = set()
+        
+        # Build name variations for special cases
+        name_variations = {
+            "starwars": ["starwars", "star wars", "star"],
+            "treyanne": ["treyanne", "trey"],
+            "thaddeus": ["thaddeus", "tad", "thad"],
+            "abigail": ["abigail", "abby"],
+            "glennice": ["glennice", "lennie"],
+            "terrance": ["terrance", "terry"],
+            "matthew": ["matthew", "matt"],
+            "eric": ["eric", "ikey"],
+            "robert": ["robert", "rob", "bob"],
+            "daniel": ["daniel", "dan"],
+        }
+        
+        # Check each known employee
         for name in known_names:
-            if not name:
+            if not name or name in mentioned_in_review:
                 continue
             
             # Get first name for matching
             first_name = name.split()[0].lower() if name else ""
+            if not first_name or len(first_name) < 3:
+                continue
             
-            # Check if first name appears in review
-            if first_name and len(first_name) > 2 and first_name in review_text_lower:
+            # Get variations to search for
+            variations = name_variations.get(first_name, [first_name])
+            
+            # Check if any variation appears in review
+            found = False
+            for variant in variations:
+                # Use word boundary check
+                import re
+                pattern = r'\b' + re.escape(variant) + r'\b'
+                if re.search(pattern, review_text_lower):
+                    found = True
+                    break
+            
+            if found:
                 # Store the original capitalized name
                 original_name = next(
                     (e.get("name") for e in known_employees if e.get("name", "").lower() == name),
@@ -1394,6 +1425,7 @@ async def parse_rt_file(filename: str, contents: bytes) -> Dict[str, Any]:
                 if original_name not in employee_mentions:
                     employee_mentions[original_name] = 0
                 employee_mentions[original_name] += 1
+                mentioned_in_review.add(name)
         
         reviews.append({
             "text": review_text[:200],
