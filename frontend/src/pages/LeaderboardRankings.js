@@ -289,15 +289,19 @@ export default function LeaderboardRankings() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [employeesRes, snapshotsRes] = await Promise.all([
-        api.get(`/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`),
-        api.get(`/v2/snapshots?year=${selectedYear}&quarter=${selectedQuarter}`),
+      // Use snapshot-workflow current-rankings endpoint
+      const [rankingsRes, snapshotsRes] = await Promise.all([
+        api.get(`/v2/snapshot-workflow/current-rankings?year=${selectedYear}&quarter=${selectedQuarter}`),
+        api.get(`/v2/snapshot-workflow/snapshots?year=${selectedYear}&quarter=${selectedQuarter}&status=completed`),
       ]);
       
+      // Get employees from the current snapshot
+      const snapshotEmployees = rankingsRes.data?.employees || [];
+      
       // Sort employees by score (highest to lowest) for leaderboard view
-      const sortedEmployees = (employeesRes.data || []).sort((a, b) => {
-        const scoreA = a.pre_dar_score || a.total_score || 0;
-        const scoreB = b.pre_dar_score || b.total_score || 0;
+      const sortedEmployees = snapshotEmployees.sort((a, b) => {
+        const scoreA = a.total_score || a.pre_dar_score || 0;
+        const scoreB = b.total_score || b.pre_dar_score || 0;
         return scoreB - scoreA;
       });
       
@@ -306,29 +310,31 @@ export default function LeaderboardRankings() {
         position: idx + 1,
         position_label: `#${idx + 1}`,
         tier_label: emp.job_title || "Server",
-        employee_id: emp.id,
+        employee_id: emp.id || emp.name,
         name: emp.name,
         job_title: emp.job_title || "Server",
-        total_score: emp.pre_dar_score || emp.total_score || 0,
-        bonus_points: (emp.total_metric_bonus || 0) + ((emp.review_mentions || 0) * 0.2),
-        review_bonus: (emp.review_mentions || 0) * 0.2,
+        total_score: emp.total_score || emp.pre_dar_score || 0,
+        base_score: emp.weighted_score || 0,
+        bonus_points: (emp.total_metric_bonus || 0) + (emp.review_tracker_bonus || 0),
+        review_bonus: emp.review_tracker_bonus || 0,
         metric_bonus: emp.total_metric_bonus || 0,
-        combined_review_bonus: (emp.cv_score || 0) + ((emp.review_mentions || 0) * 0.2),
+        combined_review_bonus: (emp.cv_score || 0) + (emp.review_tracker_bonus || 0),
         ppa: emp.ppa || 0,
         lbw_per_guest: emp.lbw_per_guest || 0,
         glassware_per_guest: emp.glassware_per_guest || 0,
         guests_per_lsc: emp.guests_per_lsc || 0,
-        guest_count: emp.guests || 0,
+        guest_count: emp.guest_count || emp.guests || 0,
         net_sales: emp.net_sales || 0,
         ppa_percentage: emp.score_ppa || 0,
         lbw_percentage: emp.score_lbw || 0,
         glassware_percentage: emp.score_glass || 0,
         lsc_percentage: emp.score_lsc || 0,
         nps_score: emp.nps_score || 0,
-        nps_points: emp.cv_score || 0,
+        nps_points: emp.nps_score_pts || emp.cv_score || 0,
+        cv_score: emp.cv_score || 0,
         cv_promoters: emp.cv_promoters || 0,
         cv_detractors: emp.cv_detractors || 0,
-        review_mentions: emp.review_mentions || 0,
+        review_mentions: emp.rt_mentions || emp.review_mentions || 0,
       }));
       
       setRankings(leaderboardRankings);
