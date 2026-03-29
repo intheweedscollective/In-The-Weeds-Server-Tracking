@@ -330,7 +330,7 @@ export default function DataUploads() {
     setEditForm({
       guest_count: String(emp.guest_count || 0),
       net_sales: String(emp.net_sales || 0),
-      food_sales: String(emp.food_sales || 0),
+      ppa: String(emp.ppa || 0),
       liquor_sales: String(emp.liquor_sales || 0),
       beer_sales: String(emp.beer_sales || 0),
       wine_sales: String(emp.wine_sales || 0),
@@ -349,7 +349,7 @@ export default function DataUploads() {
       ...newData.employees[editingEmployee],
       guest_count: parseInt(editForm.guest_count) || 0,
       net_sales: parseFloat(editForm.net_sales) || 0,
-      food_sales: parseFloat(editForm.food_sales) || 0,
+      ppa: parseFloat(editForm.ppa) || 0,
       liquor_sales: parseFloat(editForm.liquor_sales) || 0,
       beer_sales: parseFloat(editForm.beer_sales) || 0,
       wine_sales: parseFloat(editForm.wine_sales) || 0,
@@ -724,7 +724,7 @@ export default function DataUploads() {
                         <tr className="text-slate-400">
                           <th className="text-left px-2 py-2 font-medium">Name</th>
                           <th className="text-right px-2 py-2 font-medium">Guests</th>
-                          <th className="text-right px-2 py-2 font-medium">Food</th>
+                          <th className="text-right px-2 py-2 font-medium">PPA</th>
                           <th className="text-right px-2 py-2 font-medium">LBW</th>
                           <th className="text-right px-2 py-2 font-medium">LSC</th>
                           <th className="text-right px-2 py-2 font-medium">Glass</th>
@@ -749,8 +749,8 @@ export default function DataUploads() {
                                   <input 
                                     type="number" 
                                     step="0.01"
-                                    value={editForm.food_sales}
-                                    onChange={(e) => setEditForm({...editForm, food_sales: e.target.value})}
+                                    value={editForm.ppa}
+                                    onChange={(e) => setEditForm({...editForm, ppa: e.target.value})}
                                     className="w-20 bg-slate-700 border border-slate-600 rounded px-1 py-0.5 text-right text-white text-xs"
                                   />
                                 </td>
@@ -785,7 +785,7 @@ export default function DataUploads() {
                               <>
                                 <td className="px-2 py-2 text-white">{emp.name}</td>
                                 <td className="px-2 py-2 text-right">{emp.guest_count?.toLocaleString()}</td>
-                                <td className="px-2 py-2 text-right">${emp.food_sales?.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+                                <td className="px-2 py-2 text-right">${emp.ppa?.toFixed(2)}</td>
                                 <td className="px-2 py-2 text-right">${emp.lbw_total?.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
                                 <td className={`px-2 py-2 text-right ${emp.loyalty_sales === 0 ? 'text-red-400' : 'text-green-400'}`}>
                                   ${emp.loyalty_sales?.toLocaleString(undefined, {maximumFractionDigits: 0})}
