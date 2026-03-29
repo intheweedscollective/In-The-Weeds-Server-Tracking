@@ -63,11 +63,52 @@ export default function EmployeeList() {
   const fetchEmployees = useCallback(async () => {
     setLoading(true);
     try {
-      // Use V2 API with quarter selection
-      const response = await api.get(`/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`);
-      setEmployees(response.data);
+      // Fetch from current snapshot (snapshot-first architecture)
+      const response = await api.get(`/v2/snapshot-workflow/current-rankings?year=${selectedYear}&quarter=${selectedQuarter}`);
+      const snapshotEmployees = response.data?.employees || [];
+      
+      // Transform snapshot employee data to match expected format
+      const transformedEmployees = snapshotEmployees.map(emp => ({
+        id: emp.id || emp.name,
+        name: emp.name,
+        job_title: emp.job_title || "Server",
+        ppa: emp.ppa || 0,
+        lbw_per_guest: emp.lbw_per_guest || 0,
+        glassware_per_guest: emp.glassware_per_guest || 0,
+        guests_per_lsc: emp.guests_per_lsc || 0,
+        guests: emp.guest_count || emp.guests || 0,
+        guest_count: emp.guest_count || emp.guests || 0,
+        net_sales: emp.net_sales || 0,
+        nps_score: emp.nps_score || 0,
+        cv_promoters: emp.cv_promoters || 0,
+        cv_detractors: emp.cv_detractors || 0,
+        cv_score: emp.cv_score || 0,
+        review_mentions: emp.rt_mentions || emp.review_mentions || 0,
+        review_tracker_bonus: emp.review_tracker_bonus || 0,
+        total_score: emp.total_score || 0,
+        pre_dar_score: emp.total_score || emp.pre_dar_score || 0,
+        weighted_score: emp.weighted_score || 0,
+        total_metric_bonus: emp.total_metric_bonus || 0,
+        score_ppa: emp.score_ppa || 0,
+        score_lbw: emp.score_lbw || 0,
+        score_glass: emp.score_glass || 0,
+        score_lsc: emp.score_lsc || 0,
+        quarter: selectedQuarter,
+        year: selectedYear,
+        // Source indicator
+        _source: "snapshot"
+      }));
+      
+      setEmployees(transformedEmployees);
     } catch (error) {
-      toast.error("Error loading employees");
+      console.error("Error loading from snapshot, falling back to employees_v2:", error);
+      // Fallback to legacy employees_v2 if no snapshot exists
+      try {
+        const response = await api.get(`/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`);
+        setEmployees(response.data);
+      } catch (fallbackError) {
+        toast.error("Error loading employees");
+      }
     } finally {
       setLoading(false);
     }
