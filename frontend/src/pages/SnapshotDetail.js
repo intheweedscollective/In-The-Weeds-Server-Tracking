@@ -326,12 +326,19 @@ export default function SnapshotDetail() {
                     
                     <div className="flex items-center gap-2">
                       {snapshot.status !== 'completed' && (
-                        <label className="cursor-pointer">
+                        <>
                           <input
                             type="file"
+                            id={`file-input-${uploadType.key}`}
                             accept={uploadType.accept}
                             className="hidden"
-                            onChange={(e) => handleFileUpload(uploadType.key, e.target.files[0])}
+                            onChange={(e) => {
+                              if (e.target.files[0]) {
+                                handleFileUpload(uploadType.key, e.target.files[0]);
+                              }
+                              // Reset input so same file can be re-selected
+                              e.target.value = '';
+                            }}
                             disabled={isUploading || snapshot.status === 'processing'}
                           />
                           <Button
@@ -339,28 +346,26 @@ export default function SnapshotDetail() {
                             size="sm"
                             className={isCompleted ? "border-slate-600" : "bg-blue-600 hover:bg-blue-700"}
                             disabled={isUploading || snapshot.status === 'processing'}
-                            asChild
+                            onClick={() => document.getElementById(`file-input-${uploadType.key}`).click()}
                           >
-                            <span>
-                              {isUploading ? (
-                                <>
-                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                  Uploading...
-                                </>
-                              ) : isCompleted ? (
-                                <>
-                                  <RefreshCw className="w-4 h-4 mr-2" />
-                                  Replace
-                                </>
-                              ) : (
-                                <>
-                                  <Upload className="w-4 h-4 mr-2" />
-                                  Upload
-                                </>
-                              )}
-                            </span>
+                            {isUploading ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Uploading...
+                              </>
+                            ) : isCompleted ? (
+                              <>
+                                <RefreshCw className="w-4 h-4 mr-2" />
+                                Replace
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="w-4 h-4 mr-2" />
+                                Upload
+                              </>
+                            )}
                           </Button>
-                        </label>
+                        </>
                       )}
                       {isCompleted && (
                         <CheckCircle className="w-5 h-5 text-green-400" />
