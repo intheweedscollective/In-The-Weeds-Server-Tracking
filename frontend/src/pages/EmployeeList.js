@@ -858,7 +858,7 @@ export default function EmployeeList() {
                           </div>
                         </div>
                         <div className="text-sm text-slate-300">
-                          {selectedEmployee.review_mentions || selectedEmployee.rt_mentions || 0} mentions × 0.2 pts each
+                          {selectedEmployee.review_mentions || selectedEmployee.rt_mentions || 0} mentions × 0.5 pts each (max 15 pts)
                         </div>
                       </div>
                     )}

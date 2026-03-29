@@ -9112,13 +9112,15 @@ async def upload_server_performance_csv(
             # Calculate promoters from NPS formula
             # NPS = ((P - D) / R) * 100
             # For promoters only (detractors are manually entered via DARs):
-            # Assume D=0, so P = R × (100 + NPS) / 200
-            promoters = round(received * (100 + nps_score) / 200)
-            promoters = max(0, promoters)
+            # Calculate promoters from NPS:
+            # NPS = (Promoters - Detractors) / Total × 100
+            # Assuming D=0: NPS = P / R × 100, so P = R × NPS / 100
+            promoters = round(received * nps_score / 100)
+            promoters = max(0, min(promoters, received))  # Clamp between 0 and received
             
             # Detractors are NOT assumed - they must be manually entered via DAR or employee edit
             detractors = 0
-            passives = received - promoters  # All non-promoters are passives until DARs are entered
+            passives = received - promoters - detractors  # Remaining are passives
             passives = max(0, passives)
             
             # Calculate CV Score:
