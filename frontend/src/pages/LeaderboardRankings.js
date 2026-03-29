@@ -213,18 +213,28 @@ const RankBadge = ({ position, tier }) => {
 };
 
 // Category Leader Card Component
-const CategoryLeaderCard = ({ title, leader, value, format, icon: Icon }) => (
-  <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700/50">
-    <div className="flex items-center gap-2 mb-2 text-slate-400 text-sm">
-      <Icon className="w-4 h-4" />
-      <span>{title}</span>
+const CategoryLeaderCard = ({ title, leader, value, format, icon: Icon }) => {
+  const formatValue = () => {
+    if (!value && value !== 0) return "N/A";
+    if (format === "currency") return `$${value?.toFixed(2) || "0.00"}`;
+    if (format === "ratio") return `1 in ${Math.round(value)}`;
+    if (format === "number") return Math.round(value);
+    return value?.toFixed(1) || "0";
+  };
+  
+  return (
+    <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700/50">
+      <div className="flex items-center gap-2 mb-2 text-slate-400 text-sm">
+        <Icon className="w-4 h-4" />
+        <span>{title}</span>
+      </div>
+      <div className="font-bold text-white truncate">{leader || "N/A"}</div>
+      <div className="text-2xl font-bold text-green-400">
+        {formatValue()}
+      </div>
     </div>
-    <div className="font-bold text-white truncate">{leader || "N/A"}</div>
-    <div className="text-2xl font-bold text-green-400">
-      {format === "currency" ? `$${value?.toFixed(2) || "0.00"}` : value?.toFixed(1) || "0"}
-    </div>
-  </div>
-);
+  );
+};
 
 export default function LeaderboardRankings() {
   const [rankings, setRankings] = useState([]);
@@ -692,8 +702,8 @@ export default function LeaderboardRankings() {
             <CategoryLeaderCard
               title="LSC Champion"
               leader={categoryLeaders.lsc?.name}
-              value={categoryLeaders.lsc?.lsc_count}
-              format="number"
+              value={categoryLeaders.lsc?.guests_per_lsc}
+              format="ratio"
               icon={Star}
             />
             
