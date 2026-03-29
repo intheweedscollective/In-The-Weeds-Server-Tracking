@@ -23,7 +23,8 @@ import {
   QrCode,
   Building2,
   Filter,
-  Calculator
+  Calculator,
+  Layers
 } from "lucide-react";
 import { useTheme } from "../context/ThemeContext";
 
@@ -33,6 +34,7 @@ const navGroups = [
     id: "main",
     items: [
       { path: "/", label: "Dashboard", icon: Home },
+      { path: "/snapshot-workflow", label: "Snapshot Workflow", icon: Layers },
       { path: "/uploads", label: "Data Uploads", icon: Upload },
       { path: "/reports", label: "Reports", icon: FileText }
     ]

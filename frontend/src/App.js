@@ -26,6 +26,8 @@ import StoreLeaderboard from "./pages/StoreLeaderboard";
 import StoreDetails from "./pages/StoreDetails";
 import CVAdjustment from "./pages/CVAdjustment";
 import ScoringGuide from "./pages/ScoringGuide";
+import SnapshotWorkflow from "./pages/SnapshotWorkflow";
+import SnapshotDetail from "./pages/SnapshotDetail";
 import OnboardingGuide from "./components/OnboardingGuide";
 import "./App.css";
 
@@ -63,6 +65,9 @@ function App() {
               <Route path="/stores" element={<StoreManagement />} />
               <Route path="/stores/leaderboard" element={<StoreLeaderboard />} />
               <Route path="/stores/:storeId" element={<StoreDetails />} />
+              {/* Snapshot Workflow */}
+              <Route path="/snapshot-workflow" element={<SnapshotWorkflow />} />
+              <Route path="/snapshot-workflow/:snapshotId" element={<SnapshotDetail />} />
             </Routes>
           </SidebarLayout>
           <OnboardingGuide />

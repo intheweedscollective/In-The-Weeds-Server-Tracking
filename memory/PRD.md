@@ -7,12 +7,64 @@ Build a comprehensive performance review application for restaurant employees th
 - Generate outputs: downloadable slides for digital signage (Yodeck), leaderboards, reports
 - QR code tracking system for Google Reviews
 
-## Core Requirements
-1. **Unified Data Flow** - Master employee list updated from multiple sources
-2. **Advanced Data Parsing** - Scanned PDF POS reports, CSV review files
-3. **QR Code System** - Redirect to Google Reviews with scan tracking
-4. **Production Data Management** - Exact PPA/Score calculations
-5. **Reporting** - Detailed scoring breakdowns with visual indicators
+## Architecture Change: Snapshot-First Model (Implemented 2026-03-29)
+
+### Previous Flow:
+1. Upload data globally
+2. Take snapshot
+3. Snapshot pulls from latest uploaded data
+
+### New Flow (Implemented):
+1. Click "Create New Snapshot"
+2. Enter snapshot details (name, date range, quarter)
+3. System guides user through required uploads for that snapshot
+4. Each uploaded file is permanently tied to that snapshot
+5. Process and finalize snapshot
+6. Rankings page reflects most recent completed snapshot
+
+### Key Changes:
+- Snapshots are now first-class parent records
+- Each snapshot contains its own uploaded files, parsed data, and calculated results
+- Historical snapshots are frozen and traceable
+- No more ambiguity about which data created which snapshot
+
+## Data Model
+
+### `snapshot_workflow` Collection:
+```
+{
+  id: uuid,
+  name: "Week 1-2 March 2026",
+  effective_date: "2026-03-14",
+  period_start: "2026-03-01",
+  period_end: "2026-03-14",
+  quarter: "Q1",
+  year: 2026,
+  status: "draft|in_progress|processing|completed|failed",
+  notes: string,
+  created_at: datetime,
+  completed_at: datetime,
+  uploads: [
+    {
+      id: uuid,
+      upload_type: "pos_report|customer_voice|review_tracker",
+      filename: string,
+      status: "uploaded|parsed|failed",
+      parsed_data: {...},
+      record_count: number
+    }
+  ],
+  upload_progress: {
+    pos_report: boolean,
+    customer_voice: boolean,
+    review_tracker: boolean
+  },
+  employees: [...], // Calculated results
+  employee_count: number,
+  benchmarks_used: {...},
+  is_current: boolean
+}
+```
 
 ## Scoring Formula (Q1 2026)
 - **Weights:** PPA (25%), LSC (25%), LBW (15%), Glassware (10%), NPS (10%), ReviewTracker (15%)
@@ -20,7 +72,7 @@ Build a comprehensive performance review application for restaurant employees th
 - **Metric bonuses:** Up to 5 pts per metric if >100% of benchmark
 
 ## Key Metrics
-- **PPA (Per Person Average):** Net Sales / Guest Count (or extracted from "Guest Avg" column)
+- **PPA (Per Person Average):** Extracted from "Guest Avg" column in Totals row
 - **LBW:** (Liquor + Beer + Wine) / Guest Count
 - **LSC:** Guest Count / LSC Cards Sold (lower is better)
 - **Glassware:** Bar Glassware Sales / Guest Count
@@ -38,18 +90,22 @@ Build a comprehensive performance review application for restaurant employees th
 - [x] ReviewTracker CSV upload
 - [x] Customer Voice feedback upload
 
+### Snapshot-First Workflow (NEW)
+- [x] Snapshot CRUD (create, read, update, delete)
+- [x] Per-snapshot file uploads
+- [x] Upload progress tracking (3 steps)
+- [x] Snapshot processing & finalization
+- [x] Status lifecycle (draft → in_progress → processing → completed)
+- [x] Current rankings from latest completed snapshot
+- [x] Legacy data migration utility
+- [x] Top Performers display in snapshot detail
+
 ### Scoring Engine
 - [x] Complex weighted scoring formula
 - [x] Benchmark-based normalization
 - [x] Metric bonuses (capped at 5 pts each)
 - [x] CV promoter/detractor points
 - [x] DAR penalty system
-
-### Data Integrity
-- [x] Audit system for score verification
-- [x] Data reconciliation tools
-- [x] "Fix All" discrepancy resolution
-- [x] Official stats sync (CV, RT)
 
 ### Reporting
 - [x] Leaderboard with rankings
@@ -67,10 +123,12 @@ Build a comprehensive performance review application for restaurant employees th
 ## Changelog
 
 ### 2026-03-29 (Current Session)
-- Updated PPA extraction to prioritize "Guest Avg" column from reports
-- Modified AI OCR prompt to explicitly extract Guest Average
-- Added PPA column support in consolidated XLSX parser
-- Verified Chase Winston PPA accuracy: $52.29
+- **MAJOR:** Implemented snapshot-first architecture
+- Created `snapshot_manager.py` and `snapshot_routes.py`
+- Added SnapshotWorkflow and SnapshotDetail pages
+- Migrated 28 existing employees to Legacy Migration snapshot
+- Added current-rankings API endpoint
+- Updated PPA extraction to use "Guest Avg" column from reports
 
 ### Previous Sessions
 - Fixed PDF parsing (migrated to AI Vision OCR)
@@ -88,18 +146,19 @@ Build a comprehensive performance review application for restaurant employees th
 - None currently
 
 ### P1 (High Priority)
+- [ ] Update Leaderboard to use snapshot-workflow current-rankings API
+- [ ] Test full snapshot workflow with new file uploads
 - [ ] Momentum Indicators - Add Trend column on Leaderboard
-- [ ] Multi-Store Architecture - Support 22 locations with global reporting
 
 ### P2 (Medium Priority)
+- [ ] Multi-Store Architecture - Support 22 locations
 - [ ] Code Refactoring - Break down server.py (12k+ lines)
 - [ ] Review Spotlight Feature
-- [ ] "Download All Slides" ZIP feature
 
 ### P3 (Future)
+- [ ] "Download All Slides" ZIP feature
 - [ ] Automated UI scraping for official stats
 - [ ] Background task queue (Celery)
-- [ ] Historical performance comparison
 
 ---
 
@@ -108,23 +167,36 @@ Build a comprehensive performance review application for restaurant employees th
 ```
 /app/
 ├── backend/
-│   ├── server.py           # Main API (12k+ lines - needs modularization)
-│   ├── pos_ocr.py          # AI Vision OCR for PDFs
-│   ├── pos_report_parser.py # XLSX parsing
-│   └── qr_tracking.py      # QR code management
+│   ├── server.py              # Main API (12k+ lines - needs modularization)
+│   ├── snapshot_manager.py    # NEW: Snapshot models and scoring functions
+│   ├── snapshot_routes.py     # NEW: Snapshot workflow API routes
+│   ├── pos_ocr.py             # AI Vision OCR for PDFs
+│   ├── pos_report_parser.py   # XLSX parsing
+│   └── qr_tracking.py         # QR code management
 └── frontend/
     └── src/pages/
-        ├── DataUploads.js   # Upload handling with polling
-        ├── EmployeeList.js  # Employee details
-        ├── Leaderboard.js   # Rankings display
-        └── ScoringAudit.js  # Data integrity tools
+        ├── SnapshotWorkflow.js  # NEW: Snapshot list page
+        ├── SnapshotDetail.js    # NEW: Snapshot detail with uploads
+        ├── DataUploads.js       # Legacy upload handling
+        ├── EmployeeList.js      # Employee details
+        └── LeaderboardRankings.js # Rankings display
 ```
 
 ## Key Collections (MongoDB)
-- `employees_v2` - Main employee data and scores
+- `snapshot_workflow` - NEW: Snapshot-first data container
+- `employees_v2` - Legacy employee data (migrated)
 - `customer_reviews` - ReviewTracker data
 - `cv_feedback` - Customer Voice surveys
 - `qr_employees` / `qr_scans` - QR tracking
+
+## API Endpoints (Snapshot Workflow)
+- `POST /api/v2/snapshot-workflow/snapshots` - Create snapshot
+- `GET /api/v2/snapshot-workflow/snapshots` - List all
+- `GET /api/v2/snapshot-workflow/snapshots/{id}` - Get detail
+- `POST /api/v2/snapshot-workflow/snapshots/{id}/upload/{type}` - Upload file
+- `POST /api/v2/snapshot-workflow/snapshots/{id}/process` - Finalize
+- `GET /api/v2/snapshot-workflow/current-rankings` - Active rankings
+- `POST /api/v2/snapshot-workflow/migrate-legacy-data` - Migration utility
 
 ## 3rd Party Integrations
 - OpenAI GPT-4o (via Emergent LLM Key) - PDF OCR

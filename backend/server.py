@@ -29,6 +29,7 @@ from pypdf import PdfReader, PdfWriter
 from pdf_full_rankings import build_full_rankings_pdf
 from qr_tracking import register_qr_routes
 from store_management import register_store_routes
+from snapshot_routes import snapshot_router
 
 # In-memory job storage for PDF processing
 pdf_jobs = {}  # job_id -> {status, progress, result, error}
@@ -12458,6 +12459,9 @@ register_qr_routes(api_router, db)
 
 # Register store management routes
 register_store_routes(api_router, db)
+
+# Include snapshot workflow routes
+api_router.include_router(snapshot_router)
 
 
 # ============================================================================
