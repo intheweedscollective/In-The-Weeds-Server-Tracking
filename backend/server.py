@@ -4810,8 +4810,10 @@ async def update_employee_cv_stats(employee_id: str, data: dict):
     
     CV Score = NPS pts (0-10) + Promoter/Detractor Bonus
     - NPS pts: NPS% / 10 (e.g., 77% = 7.7 pts)
-    - Promoter bonus: +0.5 per promoter (9-10 rating)
-    - Detractor penalty: -1 per detractor (≤6 rating)
+    - Promoter bonus: +1 per promoter (9-10 rating)
+    - Detractor penalty: -2 per detractor (≤6 rating)
+    
+    CV Formula: (Promoters × 1) + (RT Mentions × 0.5) - (Detractors × 2)
     """
     quarter = data.get("quarter", "Q1")
     year = data.get("year", 2026)
@@ -4841,8 +4843,9 @@ async def update_employee_cv_stats(employee_id: str, data: dict):
     nps_pts = round(nps_score / 10, 1) if nps_score > 0 else 0.0
     nps_pts = min(nps_pts, 10.0)
     
-    # Calculate Promoter/Detractor bonus: +0.5 per promoter, -1 per detractor
-    promo_detr_bonus = (cv_promoters * 0.5) - (cv_detractors * 1)
+    # Calculate Promoter/Detractor bonus: +1 per promoter, -2 per detractor
+    # CV Formula: (Promoters × 1) + (RT Mentions × 0.5) - (Detractors × 2)
+    promo_detr_bonus = (cv_promoters * 1) - (cv_detractors * 2)
     
     # Total CV Score = NPS pts + Promoter/Detractor bonus
     new_cv_score = round(nps_pts + promo_detr_bonus, 2)
@@ -4925,8 +4928,8 @@ async def clear_all_detractors(year: int = 2026, quarter: str = "Q1"):
         nps_pts = min(nps_pts, 10.0)
         
         cv_promoters = emp.get("cv_promoters", 0) or 0
-        # Promoter bonus only, no detractor penalty
-        promo_bonus = cv_promoters * 0.5
+        # Promoter bonus: +1 per promoter (CV Formula)
+        promo_bonus = cv_promoters * 1
         new_cv_score = round(nps_pts + promo_bonus, 2)
         
         # Recalculate total score
@@ -9137,8 +9140,9 @@ async def upload_server_performance_csv(
             nps_pts = round(nps_score / 10, 1) if nps_score > 0 else 0.0
             nps_pts = min(nps_pts, 10.0)
             
-            # 2. Promoter Bonus only (detractors added manually via DARs)
-            promo_detr_bonus = (promoters * 0.5)  # No detractor penalty until manually added
+            # 2. Promoter Bonus: +1 per promoter (detractors added via DARs)
+            # CV Formula: (Promoters × 1) + (RT Mentions × 0.5) - (Detractors × 2)
+            promo_detr_bonus = (promoters * 1)  # No detractor penalty until manually added
             
             # Total CV Score = NPS pts + Promoter/Detractor bonus
             cv_score = round(nps_pts + promo_detr_bonus, 2)
@@ -11471,7 +11475,7 @@ async def fix_all_discrepancies(quarter: str = "Q1", year: int = 2026):
                 if full_name in mentioned_names:
                     continue
                 if len(pattern) > 2 and re.search(r'\b' + re.escape(pattern) + r'\b', text_lower):
-                    mentioned.append({"name": full_name, "sentiment": "positive", "points": 0.2})
+                    mentioned.append({"name": full_name, "sentiment": "positive", "points": 0.5})
                     mentioned_names.add(full_name)
             return mentioned
         

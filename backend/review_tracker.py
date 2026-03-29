@@ -13,7 +13,7 @@ load_dotenv()
 PLATFORMS = ["Google", "Yelp", "Facebook", "TripAdvisor", "OpenTable"]
 
 # Points configuration
-POINTS_PER_POSITIVE_MENTION = 0.2
+POINTS_PER_POSITIVE_MENTION = 0.5
 
 
 def generate_review_hash(review_text: str, platform: str, date: str) -> str:

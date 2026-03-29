@@ -1019,9 +1019,10 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                     employees[name]["nps_score"] = round(nps, 1)
                     employees[name]["nps_score_pts"] = round(nps / 10, 1)
                     
-                    # CV bonus: +0.5 per promoter, -1 per detractor
-                    cv_raw = (promoters * 0.5) - (detractors * 1)
-                    employees[name]["cv_raw_points"] = round(max(cv_raw, 0), 2)
+                    # CV bonus: +1 per promoter, -2 per detractor
+                    # CV Formula: (Promoters × 1) + (RT Mentions × 0.5) - (Detractors × 2)
+                    cv_raw = (promoters * 1) - (detractors * 2)
+                    employees[name]["cv_raw_points"] = round(cv_raw, 2)
                     employees[name]["cv_score"] = round(
                         employees[name].get("nps_score_pts", 0) + employees[name]["cv_raw_points"],
                         2

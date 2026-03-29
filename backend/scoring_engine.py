@@ -26,6 +26,8 @@ SCORING MODEL (Hybrid - Spec NPS + Current Promoter Logic):
    Promoter/Detractor Points (NO CAP - from Current):
    - Promoter (9-10 rating): +1 pt each
    - Detractor (6 or below): -2 pts each
+   
+   Full CV Formula: (Promoters × 1) + (RT Mentions × 0.5) - (Detractors × 2)
 
 4. METRIC BONUSES (up to 20 pts total):
    - 5 pts max per metric (PPA, LSC, LBW, Glassware)
@@ -49,9 +51,9 @@ import pandas as pd
 # ============================================================================
 
 # Customer Voice scoring
-CV_PROMOTER_POINTS = 0.5  # +0.5 per promoter (9-10 rating)
+CV_PROMOTER_POINTS = 1.0  # +1 per promoter (9-10 rating)
 CV_PASSIVE_POINTS = 0     # 0 for passive (7-8)
-CV_DETRACTOR_POINTS = -1  # -1 per detractor (6 or below)
+CV_DETRACTOR_POINTS = -2  # -2 per detractor (6 or below)
 
 # NPS Score: Direct ratio (77% = 7.7 pts, max 10 pts)
 NPS_MAX_POINTS = 10
@@ -78,9 +80,10 @@ CV_MAX_POINTS = 10
 # MAX SCORE BREAKDOWN (User Confirmed Model):
 # Weighted POS: 75 pts (PPA 25 + LSC 25 + LBW 15 + Glass 10)
 # Metric Bonuses: 20 pts (PPA 5 + LSC 5 + LBW 5 + Glass 5)
-# Review Tracker Bonus: Mentions × 0.2 pts (uncapped)
-# Customer Voice: NPS Bonus (0-5 pts) + Survey Points (+1/-2 each, NO CAP)
-# TOTAL: 95+ pts base possible, plus uncapped RT and CV bonuses
+# Review Tracker Bonus: Mentions × 0.5 pts (capped at 15 pts)
+# Customer Voice: NPS Bonus (0-10 pts) + Survey Points (+1 promoter, -2 detractor, NO CAP)
+# CV Formula: (Promoters × 1) + (RT Mentions × 0.5) - (Detractors × 2)
+# TOTAL: 95+ pts base possible, plus uncapped CV bonuses
 
 
 # ============================================================================
@@ -458,7 +461,7 @@ def calculate_customer_voice_score(employee: EmployeeV2) -> EmployeeV2:
     nps_score_pts = min(nps_score_pts, 10.0)
     
     # 2. Calculate Promoter/Detractor Points
-    # +0.5 per promoter (9-10 rating), -1 per detractor (≤6)
+    # +1 per promoter (9-10 rating), -2 per detractor (≤6)
     promoters = employee.cv_promoters or 0
     detractors = employee.cv_detractors or 0
     survey_points = (promoters * CV_PROMOTER_POINTS) + (detractors * CV_DETRACTOR_POINTS)

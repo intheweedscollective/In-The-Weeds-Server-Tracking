@@ -328,14 +328,14 @@ class ScoringAuditSystem:
         # Review Tracker Breakdown
         rt_mentions = employee.get("review_mentions", 0)
         rt_bonus = employee.get("review_tracker_bonus", 0)
-        expected_rt_bonus = rt_mentions * 0.2
+        expected_rt_bonus = min(rt_mentions * 0.5, 15)  # Capped at 15 pts
         
         verification["breakdown"]["review_tracker"] = {
             "mentions": rt_mentions,
-            "points_per_mention": 0.2,
+            "points_per_mention": 0.5,
             "rt_bonus": rt_bonus,
             "expected_rt_bonus": expected_rt_bonus,
-            "calculation": f"{rt_mentions} mentions × 0.2 pts = {expected_rt_bonus} pts"
+            "calculation": f"{rt_mentions} mentions × 0.5 pts = {expected_rt_bonus} pts (capped at 15)"
         }
         
         if abs(rt_bonus - expected_rt_bonus) > 0.01:
