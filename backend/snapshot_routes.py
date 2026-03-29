@@ -855,6 +855,85 @@ async def get_current_rankings(quarter: Optional[str] = None, year: Optional[int
 
 
 # ============================================================================
+# SLIDE GENERATION
+# ============================================================================
+
+@snapshot_router.get("/snapshots/{snapshot_id}/slide")
+async def generate_snapshot_workflow_slide(
+    snapshot_id: str,
+    format: str = "16:9",
+    background: str = "dark"
+):
+    """
+    Generate a downloadable PNG slide for a snapshot workflow snapshot.
+    """
+    from snapshot_slides import generate_snapshot_slide, BACKGROUNDS
+    from fastapi.responses import Response
+    
+    db = get_db()
+    
+    snapshot = await db.snapshot_workflow.find_one({"id": snapshot_id}, {"_id": 0})
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    
+    employees = snapshot.get("employees", [])
+    if not employees:
+        raise HTTPException(status_code=400, detail="Snapshot has no employee data")
+    
+    # Sort employees by total_score
+    sorted_employees = sorted(employees, key=lambda x: x.get("total_score", 0) or 0, reverse=True)
+    
+    # Format employees for slide generation (must have exact fields)
+    slide_employees = []
+    for i, emp in enumerate(sorted_employees[:15]):  # Top 15 for slide
+        slide_employees.append({
+            "rank": i + 1,
+            "name": emp.get("name", "Unknown"),
+            "total_score": emp.get("total_score", 0) or 0,
+            "ppa": emp.get("ppa", 0) or 0,
+            "lbw_per_guest": emp.get("lbw_per_guest", 0) or 0,
+            "guests_per_lsc": emp.get("guests_per_lsc", 0) or 0,
+            "glassware_per_guest": emp.get("glassware_per_guest", 0) or 0,
+            "job_title": emp.get("job_title", "Server"),
+            "review_mentions": emp.get("rt_mentions", 0) or 0,
+            "cv_promoters": emp.get("cv_promoters", 0) or 0,
+        })
+    
+    # Get benchmarks from snapshot or use defaults
+    benchmarks = snapshot.get("benchmarks", {
+        "ppa": 55.0,
+        "lbw_per_guest": 6.0,
+        "guests_per_lsc": 35.0,
+        "glassware_per_guest": 1.2
+    })
+    
+    # Build title
+    title = f"{snapshot.get('quarter', 'Q1')} {snapshot.get('year', 2026)} Server Performance Snapshot"
+    snapshot_date = snapshot.get("effective_date", "")
+    
+    # Generate the slide
+    try:
+        slide_bytes = generate_snapshot_slide(
+            employees=slide_employees,
+            benchmarks=benchmarks,
+            snapshot_date=snapshot_date,
+            background=background,
+            title=title
+        )
+        
+        return Response(
+            content=slide_bytes,
+            media_type="image/png",
+            headers={
+                "Content-Disposition": f'attachment; filename="{snapshot.get("name", "snapshot")}-slide.png"'
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error generating slide: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate slide: {str(e)}")
+
+
+# ============================================================================
 # MIGRATION
 # ============================================================================
 

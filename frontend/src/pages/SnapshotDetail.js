@@ -412,7 +412,7 @@ export default function SnapshotDetail() {
     setDownloading(true);
     try {
       const response = await api.get(
-        `/v2/yodeck/${snapshot.year}/${snapshot.quarter}/leaderboard-slide?format=16:9&snapshot_id=${snapshotId}`,
+        `/v2/snapshot-workflow/snapshots/${snapshotId}/slide?format=16:9`,
         { responseType: 'blob' }
       );
       
@@ -431,6 +431,7 @@ export default function SnapshotDetail() {
         description: "Performance snapshot slide has been downloaded"
       });
     } catch (error) {
+      console.error("Download error:", error);
       toast({ 
         title: "Download Failed", 
         description: error.response?.data?.detail || "Failed to download slide",
