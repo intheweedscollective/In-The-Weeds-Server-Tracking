@@ -364,7 +364,7 @@ async def get_historical_averages():
                 "ppa": 55.0,
                 "lbw_per_guest": 8.0,
                 "glassware_per_guest": 1.25,
-                "guests_per_lsc": 100.0,
+                "lsc_count": 5,
                 "guest_count": 200
             }
         }
@@ -379,7 +379,7 @@ async def get_historical_averages():
             "ppa": round(calc_avg("ppa"), 2),
             "lbw_per_guest": round(calc_avg("lbw_per_guest"), 2),
             "glassware_per_guest": round(calc_avg("glassware_per_guest"), 2),
-            "guests_per_lsc": round(calc_avg("guests_per_lsc"), 2),
+            "lsc_count": round(calc_avg("lsc_count"), 0),
             "guest_count": round(calc_avg("guest_count"), 0)
         }
     }

@@ -297,7 +297,7 @@ export default function SnapshotDetail() {
       ppa: emp.ppa || 0,
       lbw_per_guest: emp.lbw_per_guest || 0,
       glassware_per_guest: emp.glassware_per_guest || 0,
-      guests_per_lsc: emp.guests_per_lsc || 0,
+      lsc_count: emp.lsc_count || 0,
       guest_count: emp.guest_count || 0,
     });
   };
@@ -831,7 +831,7 @@ export default function SnapshotDetail() {
                   <th className="px-3 py-2 font-medium text-right">PPA</th>
                   <th className="px-3 py-2 font-medium text-right">LBW/Guest</th>
                   <th className="px-3 py-2 font-medium text-right">Glass/Guest</th>
-                  <th className="px-3 py-2 font-medium text-right">Guests/LSC</th>
+                  <th className="px-3 py-2 font-medium text-right">LSC Qty</th>
                   <th className="px-3 py-2 font-medium text-center">Actions</th>
                 </tr>
               </thead>
@@ -879,9 +879,9 @@ export default function SnapshotDetail() {
                         <td className="px-3 py-2">
                           <Input
                             type="number"
-                            step="0.01"
-                            value={editValues.guests_per_lsc}
-                            onChange={(e) => setEditValues({...editValues, guests_per_lsc: parseFloat(e.target.value) || 0})}
+                            step="1"
+                            value={editValues.lsc_count}
+                            onChange={(e) => setEditValues({...editValues, lsc_count: parseInt(e.target.value) || 0})}
                             className="w-20 h-7 text-right bg-slate-700 border-slate-600 text-white"
                           />
                         </td>
@@ -910,8 +910,8 @@ export default function SnapshotDetail() {
                         <td className={`px-3 py-2 text-right ${isValueFlagged('glassware_per_guest', emp.glassware_per_guest, historicalAvg.glassware_per_guest) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
                           ${(emp.glassware_per_guest || 0).toFixed(2)}
                         </td>
-                        <td className={`px-3 py-2 text-right ${isValueFlagged('guests_per_lsc', emp.guests_per_lsc, historicalAvg.guests_per_lsc) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
-                          {emp.guests_per_lsc ? emp.guests_per_lsc.toFixed(1) : '—'}
+                        <td className={`px-3 py-2 text-right ${isValueFlagged('lsc_count', emp.lsc_count, historicalAvg.lsc_count) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
+                          {emp.lsc_count || 0}
                         </td>
                         <td className="px-3 py-2 text-center">
                           <Button size="sm" variant="ghost" onClick={() => startEditRow(idx, emp)} className="h-7 w-7 p-0 text-slate-400 hover:bg-slate-700 hover:text-white">
@@ -936,12 +936,13 @@ export default function SnapshotDetail() {
                     {reviewData.filter(e => 
                       isValueFlagged('ppa', e.ppa, historicalAvg.ppa) ||
                       isValueFlagged('lbw_per_guest', e.lbw_per_guest, historicalAvg.lbw_per_guest) ||
-                      isValueFlagged('glassware_per_guest', e.glassware_per_guest, historicalAvg.glassware_per_guest)
+                      isValueFlagged('glassware_per_guest', e.glassware_per_guest, historicalAvg.glassware_per_guest) ||
+                      isValueFlagged('lsc_count', e.lsc_count, historicalAvg.lsc_count)
                     ).length} items need attention
                   </span>
                 </div>
                 <div className="text-sm text-slate-400">
-                  Historical Avg: PPA ${historicalAvg.ppa?.toFixed(2) || '—'}, LBW ${historicalAvg.lbw_per_guest?.toFixed(2) || '—'}, Glass ${historicalAvg.glassware_per_guest?.toFixed(2) || '—'}
+                  Historical Avg: PPA ${historicalAvg.ppa?.toFixed(2) || '—'}, LBW ${historicalAvg.lbw_per_guest?.toFixed(2) || '—'}, Glass ${historicalAvg.glassware_per_guest?.toFixed(2) || '—'}, LSC {historicalAvg.lsc_count?.toFixed(0) || '—'}
                 </div>
               </div>
               <div className="flex gap-3">
