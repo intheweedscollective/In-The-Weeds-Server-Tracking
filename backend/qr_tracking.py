@@ -332,8 +332,11 @@ async def quick_scan_redirect(employee_id: str):
                 "platform": "google",
                 "scanned_at": datetime.now(timezone.utc).isoformat()
             })
-    except:
-        pass  # Never fail, always redirect
+            logging.info(f"QR scan tracked: {employee.get('name')} (google)")
+        else:
+            logging.warning(f"QR scan: Employee not found: {employee_id}")
+    except Exception as e:
+        logging.error(f"QR scan tracking error: {e}")
     
     # Get URL from settings or use hardcoded fallback
     try:
