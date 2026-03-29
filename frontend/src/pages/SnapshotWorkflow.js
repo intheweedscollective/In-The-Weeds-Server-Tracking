@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { 
   Plus, Calendar, FileText, Upload, CheckCircle, XCircle, Clock, 
   RefreshCw, PlayCircle, Eye, ChevronRight, AlertCircle, Loader2,
-  FileSpreadsheet, MessageSquare, Star
+  FileSpreadsheet, MessageSquare, Star, Trash2
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
@@ -11,6 +11,7 @@ import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../components/ui/alert-dialog";
 import { useToast } from "../hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
@@ -30,6 +31,8 @@ export default function SnapshotWorkflow() {
   const [loading, setLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   
   // Create form state
   const [formData, setFormData] = useState({
@@ -64,6 +67,29 @@ export default function SnapshotWorkflow() {
     };
     load();
   }, [fetchSnapshots]);
+
+  const handleDeleteSnapshot = async () => {
+    if (!deleteTarget) return;
+    
+    setDeleting(true);
+    try {
+      await api.delete(`/v2/snapshot-workflow/snapshots/${deleteTarget.id}`);
+      toast({ 
+        title: "Snapshot Deleted", 
+        description: `"${deleteTarget.name}" has been deleted`
+      });
+      await fetchSnapshots();
+    } catch (error) {
+      toast({ 
+        title: "Delete Failed", 
+        description: error.response?.data?.detail || "Cannot delete this snapshot",
+        variant: "destructive"
+      });
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
+    }
+  };
 
   const handleCreateSnapshot = async () => {
     if (!formData.name || !formData.effective_date || !formData.period_start || !formData.period_end) {
@@ -374,6 +400,20 @@ export default function SnapshotWorkflow() {
                     <div className="flex items-center gap-4">
                       {getUploadProgress(snapshot.upload_progress)}
                       {getStatusBadge(snapshot.status)}
+                      {snapshot.status !== 'completed' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-slate-400 hover:text-red-400 hover:bg-red-900/20"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteTarget(snapshot);
+                          }}
+                          data-testid={`delete-snapshot-${snapshot.id}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
                       <ChevronRight className="w-5 h-5 text-slate-500" />
                     </div>
                   </div>
@@ -382,6 +422,37 @@ export default function SnapshotWorkflow() {
             ))}
           </div>
         )}
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+          <AlertDialogContent className="bg-slate-800 border-slate-700">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-white">Delete Snapshot?</AlertDialogTitle>
+              <AlertDialogDescription className="text-slate-400">
+                Are you sure you want to delete "{deleteTarget?.name}"? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="bg-slate-700 border-slate-600 text-white hover:bg-slate-600">
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteSnapshot}
+                disabled={deleting}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                {deleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  "Delete"
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );
