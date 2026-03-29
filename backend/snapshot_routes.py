@@ -1015,6 +1015,119 @@ async def generate_snapshot_workflow_slide(
         raise HTTPException(status_code=500, detail=f"Failed to generate slide: {str(e)}")
 
 
+@snapshot_router.post("/snapshots/{snapshot_id}/sync-from-employees")
+async def sync_pos_from_employees_v2(snapshot_id: str):
+    """
+    Sync POS data from employees_v2 collection to the snapshot.
+    This ensures the snapshot uses the same verified data as the Employee tab.
+    """
+    db = get_db()
+    
+    snapshot = await db.snapshot_workflow.find_one({"id": snapshot_id}, {"_id": 0})
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    
+    # Get employees from employees_v2
+    employees_v2 = await db.employees_v2.find(
+        {"quarter": snapshot.get("quarter", "Q1"), "year": snapshot.get("year", 2026)},
+        {"_id": 0}
+    ).to_list(100)
+    
+    if not employees_v2:
+        raise HTTPException(status_code=404, detail="No employees found in employees_v2")
+    
+    # Find POS upload and update its parsed_data
+    uploads = snapshot.get("uploads", [])
+    pos_upload_idx = next(
+        (i for i, u in enumerate(uploads) if u.get("upload_type") == "pos_report"),
+        None
+    )
+    
+    if pos_upload_idx is None:
+        # Create a new POS upload record from employees_v2
+        pos_employees = []
+    else:
+        pos_employees = uploads[pos_upload_idx].get("parsed_data", {}).get("employees", [])
+    
+    # Build employee lookup from employees_v2
+    v2_lookup = {}
+    for emp in employees_v2:
+        name_key = emp.get("name", "").strip().lower()
+        if name_key:
+            v2_lookup[name_key] = emp
+    
+    # Update or add employees from v2
+    updated_employees = []
+    for emp in pos_employees:
+        name_key = emp.get("name", "").strip().lower()
+        v2_emp = v2_lookup.get(name_key)
+        
+        if v2_emp:
+            # Update with v2 data
+            emp.update({
+                "ppa": v2_emp.get("ppa", emp.get("ppa", 0)),
+                "lbw_per_guest": v2_emp.get("lbw_per_guest", emp.get("lbw_per_guest", 0)),
+                "glassware_per_guest": v2_emp.get("glassware_per_guest", emp.get("glassware_per_guest", 0)),
+                "guests_per_lsc": v2_emp.get("guests_per_lsc", emp.get("guests_per_lsc", 0)),
+                "guest_count": v2_emp.get("guests", emp.get("guest_count", 0)),
+                "net_sales": v2_emp.get("net_sales", emp.get("net_sales", 0)),
+                "loyalty_sales": v2_emp.get("loyalty_sales", emp.get("loyalty_sales", 0)),
+            })
+            # Remove from lookup so we can add remaining v2 employees
+            del v2_lookup[name_key]
+        
+        updated_employees.append(emp)
+    
+    # Add any employees from v2 that weren't in POS upload
+    for name_key, v2_emp in v2_lookup.items():
+        updated_employees.append({
+            "name": v2_emp.get("name"),
+            "ppa": v2_emp.get("ppa", 0),
+            "lbw_per_guest": v2_emp.get("lbw_per_guest", 0),
+            "glassware_per_guest": v2_emp.get("glassware_per_guest", 0),
+            "guests_per_lsc": v2_emp.get("guests_per_lsc", 0),
+            "guest_count": v2_emp.get("guests", 0),
+            "net_sales": v2_emp.get("net_sales", 0),
+            "loyalty_sales": v2_emp.get("loyalty_sales", 0),
+            "liquor_sales": v2_emp.get("liquor_sales", 0),
+            "beer_sales": v2_emp.get("beer_sales", 0),
+            "wine_sales": v2_emp.get("wine_sales", 0),
+        })
+    
+    # Update POS upload
+    if pos_upload_idx is not None:
+        uploads[pos_upload_idx]["parsed_data"]["employees"] = updated_employees
+        uploads[pos_upload_idx]["source"] = "synced_from_employees_v2"
+    else:
+        uploads.append({
+            "upload_type": "pos_report",
+            "filename": "synced_from_employees_v2",
+            "source": "employees_v2",
+            "status": "parsed",
+            "parsed_data": {"employees": updated_employees, "record_count": len(updated_employees)}
+        })
+    
+    # Update snapshot
+    await db.snapshot_workflow.update_one(
+        {"id": snapshot_id},
+        {
+            "$set": {
+                "uploads": uploads,
+                "upload_progress.pos_report": True,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    logger.info(f"Synced {len(updated_employees)} employees from employees_v2 to snapshot {snapshot_id}")
+    
+    return {
+        "success": True,
+        "message": f"Synced {len(updated_employees)} employees from employees_v2",
+        "employee_count": len(updated_employees)
+    }
+
+
 # ============================================================================
 # MIGRATION
 # ============================================================================
