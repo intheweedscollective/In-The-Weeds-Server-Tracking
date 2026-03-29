@@ -11694,7 +11694,14 @@ async def check_data_caps(quarter: str = "Q1", year: int = 2026):
     
     # Get our data counts
     cv_count = await db.cv_feedback.count_documents({"quarter": quarter.upper(), "year": year})
-    rt_count = await db.customer_reviews.count_documents({"quarter": quarter.upper(), "year": year})
+    
+    # For RT, sum up all rt_mentions from employees (not from customer_reviews collection)
+    rt_pipeline = [
+        {"$match": {"quarter": quarter.upper(), "year": year}},
+        {"$group": {"_id": None, "total_mentions": {"$sum": "$rt_mentions"}}}
+    ]
+    rt_result = await db.employees_v2.aggregate(rt_pipeline).to_list(1)
+    rt_count = rt_result[0]["total_mentions"] if rt_result else 0
     
     result = {
         "quarter": quarter.upper(),
