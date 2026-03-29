@@ -4,7 +4,7 @@ import {
   ArrowLeft, Upload, CheckCircle, XCircle, Clock, RefreshCw, 
   PlayCircle, FileSpreadsheet, MessageSquare, Star, Loader2,
   AlertTriangle, FileText, Trash2, Eye, Calendar, Users, Settings2,
-  Edit2, Save, X, AlertCircle
+  Edit2, Save, X, AlertCircle, Download
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
@@ -406,6 +406,40 @@ export default function SnapshotDetail() {
     setProcessing(false);
   };
 
+  const [downloading, setDownloading] = useState(false);
+  
+  const handleDownloadSlide = async () => {
+    setDownloading(true);
+    try {
+      const response = await api.get(
+        `/v2/yodeck/${snapshot.year}/${snapshot.quarter}/leaderboard-slide?format=16:9&snapshot_id=${snapshotId}`,
+        { responseType: 'blob' }
+      );
+      
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${snapshot.name || 'snapshot'}-performance-slide.png`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast({ 
+        title: "Slide Downloaded", 
+        description: "Performance snapshot slide has been downloaded"
+      });
+    } catch (error) {
+      toast({ 
+        title: "Download Failed", 
+        description: error.response?.data?.detail || "Failed to download slide",
+        variant: "destructive"
+      });
+    }
+    setDownloading(false);
+  };
+
   const getUploadStatus = (uploadType) => {
     const upload = snapshot?.uploads?.find(u => u.upload_type === uploadType);
     return upload;
@@ -713,6 +747,19 @@ export default function SnapshotDetail() {
                   >
                     <Eye className="w-4 h-4 mr-2" />
                     View Rankings
+                  </Button>
+                  <Button
+                    onClick={handleDownloadSlide}
+                    disabled={downloading}
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                    data-testid="download-slide-btn"
+                  >
+                    {downloading ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Download className="w-4 h-4 mr-2" />
+                    )}
+                    Download Slide
                   </Button>
                   <Button
                     variant="outline"
