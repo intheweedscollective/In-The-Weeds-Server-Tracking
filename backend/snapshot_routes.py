@@ -280,6 +280,85 @@ async def upload_to_snapshot(
     
     else:
         raise HTTPException(status_code=400, detail="Either file or parsed_data is required")
+
+
+@snapshot_router.post("/snapshots/{snapshot_id}/parsed-data/{upload_type}")
+async def push_parsed_data_to_snapshot(
+    snapshot_id: str,
+    upload_type: str,
+    data: Dict[str, Any]
+):
+    """
+    Push pre-parsed data to a snapshot.
+    Used for background job results (e.g., PDF OCR).
+    
+    Body should contain:
+    - parsed_data: The parsed employee/review data
+    - filename: Original filename
+    - source: Source of data (e.g., 'pos_ocr_job')
+    """
+    db = get_db()
+    
+    snapshot = await db.snapshot_workflow.find_one({"id": snapshot_id})
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    
+    if snapshot["status"] == SnapshotStatus.COMPLETED.value:
+        raise HTTPException(status_code=400, detail="Cannot modify a completed snapshot")
+    
+    try:
+        upload_type_enum = UploadType(upload_type)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid upload type: {upload_type}")
+    
+    parsed_data = data.get("parsed_data", {})
+    filename = data.get("filename", "background_job_result")
+    source = data.get("source", "background_job")
+    
+    if not parsed_data:
+        raise HTTPException(status_code=400, detail="parsed_data is required")
+    
+    # Create upload record
+    upload_record = create_upload_record(
+        snapshot_id=snapshot_id,
+        upload_type=upload_type_enum,
+        filename=filename,
+        file_size=0,
+        parsed_data=parsed_data
+    )
+    upload_record["source"] = source
+    upload_record["status"] = "parsed"
+    
+    # Update snapshot
+    uploads = snapshot.get("uploads", [])
+    
+    # Remove existing upload of same type
+    uploads = [u for u in uploads if u.get("upload_type") != upload_type]
+    uploads.append(upload_record)
+    
+    # Update upload progress
+    upload_progress = snapshot.get("upload_progress", {})
+    upload_progress[upload_type] = True
+    
+    await db.snapshot_workflow.update_one(
+        {"id": snapshot_id},
+        {
+            "$set": {
+                "uploads": uploads,
+                "upload_progress": upload_progress,
+                "status": SnapshotStatus.IN_PROGRESS.value,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    logger.info(f"Pushed {len(parsed_data.get('employees', []))} employees to snapshot {snapshot_id}")
+    
+    return {
+        "success": True,
+        "message": f"Pushed {upload_type} data to snapshot",
+        "record_count": parsed_data.get("record_count", len(parsed_data.get("employees", [])))
+    }
     
     # Create upload record
     upload_record = create_upload_record(
