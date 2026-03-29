@@ -64,6 +64,9 @@ export default function SnapshotDetail() {
   const [uploading, setUploading] = useState(null);
   const [processing, setProcessing] = useState(false);
   
+  // Upload progress state
+  const [uploadProgress, setUploadProgress] = useState({ stage: '', elapsed: 0 });
+  
   // POS Data Review state
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewData, setReviewData] = useState([]);
@@ -114,40 +117,169 @@ export default function SnapshotDetail() {
   const handleFileUpload = async (uploadType, file) => {
     if (!file) return;
     
+    const isPdf = file.name.toLowerCase().endsWith('.pdf');
     setUploading(uploadType);
-    const formData = new FormData();
-    formData.append("file", file);
+    setUploadProgress({ stage: 'Uploading file...', elapsed: 0 });
+    
+    // Start elapsed time counter
+    const startTime = Date.now();
+    const progressInterval = setInterval(() => {
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
+      let stage = 'Uploading file...';
+      let estimate = '';
+      
+      if (isPdf) {
+        if (elapsed < 3) {
+          stage = 'Uploading PDF...';
+        } else if (elapsed < 10) {
+          stage = 'Starting AI analysis...';
+          estimate = '~1-2 min remaining';
+        } else if (elapsed < 60) {
+          stage = 'AI analyzing pages...';
+          estimate = `~${Math.max(60 - elapsed, 10)}s remaining`;
+        } else {
+          stage = 'Still processing...';
+          estimate = 'Almost done';
+        }
+      } else {
+        if (elapsed < 3) {
+          stage = 'Uploading file...';
+        } else {
+          stage = 'Processing data...';
+          estimate = '~5s remaining';
+        }
+      }
+      
+      setUploadProgress({ stage, elapsed, estimate });
+    }, 1000);
     
     try {
-      const res = await api.post(
-        `/v2/snapshot-workflow/snapshots/${snapshotId}/upload/${uploadType}`,
-        formData,
-        { headers: { "Content-Type": "multipart/form-data" } }
-      );
-      
-      toast({ 
-        title: "Upload Successful", 
-        description: `${res.data.record_count || 0} records processed from ${file.name}`
-      });
-      
-      await fetchSnapshot();
-      
-      // If POS upload, show review modal
-      if (uploadType === 'pos_report' && res.data.record_count > 0) {
-        const parsedData = res.data.upload?.parsed_data?.employees || [];
-        setReviewData(parsedData);
-        setDataReviewed(false);
-        await fetchHistoricalAverages();
-        setShowReviewModal(true);
+      if (isPdf && uploadType === 'pos_report') {
+        // Handle PDF with background job polling
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        // Step 1: Upload and get job ID
+        const uploadResponse = await fetch(
+          `${process.env.REACT_APP_BACKEND_URL}/api/v2/pos-pdf/parse`,
+          { method: 'POST', body: formData }
+        );
+        
+        if (!uploadResponse.ok) {
+          throw new Error(`Upload failed: ${uploadResponse.status}`);
+        }
+        
+        const uploadData = await uploadResponse.json();
+        
+        if (!uploadData.job_id) {
+          throw new Error("Server didn't return a job ID");
+        }
+        
+        // Step 2: Poll for results
+        const jobId = uploadData.job_id;
+        let attempts = 0;
+        const maxAttempts = 180; // 3 minutes
+        
+        while (attempts < maxAttempts) {
+          attempts++;
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          try {
+            const statusResponse = await fetch(
+              `${process.env.REACT_APP_BACKEND_URL}/api/v2/pos-pdf/job/${jobId}`
+            );
+            const statusData = await statusResponse.json();
+            
+            if (statusData.status === 'completed') {
+              clearInterval(progressInterval);
+              
+              if (statusData.result?.success) {
+                // Now save to snapshot
+                const saveRes = await api.post(
+                  `/v2/snapshot-workflow/snapshots/${snapshotId}/upload/${uploadType}`,
+                  { 
+                    parsed_data: statusData.result,
+                    filename: file.name,
+                    source: 'pdf_ocr'
+                  }
+                );
+                
+                toast({ 
+                  title: "Upload Successful", 
+                  description: `${statusData.result.employee_count || 0} employees parsed from PDF`
+                });
+                
+                await fetchSnapshot();
+                
+                // Show review modal
+                if (statusData.result.employee_count > 0) {
+                  const employees = statusData.result.employees || [];
+                  setReviewData(employees);
+                  setDataReviewed(false);
+                  await fetchHistoricalAverages();
+                  setShowReviewModal(true);
+                }
+              } else {
+                throw new Error(statusData.result?.error || 'PDF parsing failed');
+              }
+              
+              setUploading(null);
+              setUploadProgress({ stage: '', elapsed: 0 });
+              return;
+              
+            } else if (statusData.status === 'failed') {
+              throw new Error(statusData.error || 'PDF parsing failed');
+            }
+            // Still processing, continue polling
+          } catch (pollError) {
+            console.error('Polling error:', pollError);
+            if (pollError.message.includes('failed')) throw pollError;
+          }
+        }
+        
+        throw new Error('PDF processing timed out. Please try again.');
+        
+      } else {
+        // Handle regular file upload (XLSX, CSV)
+        const formData = new FormData();
+        formData.append("file", file);
+        
+        const res = await api.post(
+          `/v2/snapshot-workflow/snapshots/${snapshotId}/upload/${uploadType}`,
+          formData,
+          { headers: { "Content-Type": "multipart/form-data" } }
+        );
+        
+        clearInterval(progressInterval);
+        
+        toast({ 
+          title: "Upload Successful", 
+          description: `${res.data.record_count || 0} records processed from ${file.name}`
+        });
+        
+        await fetchSnapshot();
+        
+        // If POS upload, show review modal
+        if (uploadType === 'pos_report' && res.data.record_count > 0) {
+          const parsedData = res.data.upload?.parsed_data?.employees || [];
+          setReviewData(parsedData);
+          setDataReviewed(false);
+          await fetchHistoricalAverages();
+          setShowReviewModal(true);
+        }
       }
     } catch (error) {
+      clearInterval(progressInterval);
+      console.error('Upload error:', error);
       toast({ 
         title: "Upload Failed", 
-        description: error.response?.data?.detail || "Failed to upload file",
+        description: error.message || error.response?.data?.detail || "Failed to upload file",
         variant: "destructive"
       });
     }
+    
     setUploading(null);
+    setUploadProgress({ stage: '', elapsed: 0 });
   };
 
   const openReviewModal = async () => {
@@ -366,6 +498,26 @@ export default function SnapshotDetail() {
             )}
           </CardContent>
         </Card>
+
+        {/* Active Upload Progress Bar */}
+        {uploading && uploadProgress.stage && (
+          <Card className="bg-blue-900/30 border-blue-500/30">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-4">
+                <Loader2 className="w-6 h-6 text-blue-400 animate-spin" />
+                <div className="flex-1">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-blue-300 font-medium">{uploadProgress.stage}</span>
+                    <span className="text-blue-400 text-sm">
+                      {uploadProgress.elapsed}s {uploadProgress.estimate && `• ${uploadProgress.estimate}`}
+                    </span>
+                  </div>
+                  <Progress value={Math.min(uploadProgress.elapsed * 1.5, 95)} className="h-2" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Upload Progress */}
         <Card className="bg-slate-800/50 border-slate-700">

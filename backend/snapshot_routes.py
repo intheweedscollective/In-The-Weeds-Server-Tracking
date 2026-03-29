@@ -7,7 +7,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Body
 from pydantic import BaseModel
 
 from snapshot_manager import (
@@ -173,11 +173,18 @@ async def delete_snapshot(snapshot_id: str):
 async def upload_to_snapshot(
     snapshot_id: str,
     upload_type: str,
-    file: UploadFile = File(...),
+    file: UploadFile = File(None),
+    parsed_data: Optional[Dict[str, Any]] = Body(None),
+    filename: Optional[str] = Body(None),
+    source: Optional[str] = Body(None),
 ):
     """
     Upload a file to a specific snapshot.
     upload_type: pos_report, customer_voice, review_tracker
+    
+    Can accept either:
+    - A file upload (multipart/form-data)
+    - Pre-parsed data (JSON body with parsed_data, filename, source)
     """
     db = get_db()
     
@@ -201,38 +208,53 @@ async def upload_to_snapshot(
             detail=f"Invalid upload type. Must be: {[t.value for t in UploadType]}"
         )
     
-    # Read file contents
-    contents = await file.read()
-    file_size = len(contents)
-    
-    # Parse the file based on type
-    parsed_data = None
+    # Handle file upload or pre-parsed data
+    file_size = 0
+    final_filename = filename or "unknown"
+    final_parsed_data = parsed_data
     parse_error = None
     
-    try:
-        if upload_type_enum == UploadType.POS_REPORT:
-            parsed_data = await parse_pos_file(file.filename, contents)
-        elif upload_type_enum == UploadType.CUSTOMER_VOICE:
-            parsed_data = await parse_cv_file(file.filename, contents)
-        elif upload_type_enum == UploadType.REVIEW_TRACKER:
-            parsed_data = await parse_rt_file(file.filename, contents)
-    except Exception as e:
-        parse_error = str(e)
-        logger.error(f"Parse error for {upload_type}: {e}")
+    if file is not None:
+        # Traditional file upload - read and parse
+        contents = await file.read()
+        file_size = len(contents)
+        final_filename = file.filename
+        
+        try:
+            if upload_type_enum == UploadType.POS_REPORT:
+                final_parsed_data = await parse_pos_file(file.filename, contents)
+            elif upload_type_enum == UploadType.CUSTOMER_VOICE:
+                final_parsed_data = await parse_cv_file(file.filename, contents)
+            elif upload_type_enum == UploadType.REVIEW_TRACKER:
+                final_parsed_data = await parse_rt_file(file.filename, contents)
+        except Exception as e:
+            parse_error = str(e)
+            logger.error(f"Parse error for {upload_type}: {e}")
+    
+    elif parsed_data is not None:
+        # Pre-parsed data (e.g., from PDF background job)
+        final_parsed_data = parsed_data
+        logger.info(f"Received pre-parsed data for {upload_type}: {len(parsed_data.get('employees', []))} employees")
+    
+    else:
+        raise HTTPException(status_code=400, detail="Either file or parsed_data is required")
     
     # Create upload record
     upload_record = create_upload_record(
         snapshot_id=snapshot_id,
         upload_type=upload_type_enum,
-        filename=file.filename,
+        filename=final_filename,
         file_size=file_size,
-        parsed_data=parsed_data
+        parsed_data=final_parsed_data
     )
+    
+    if source:
+        upload_record["source"] = source
     
     if parse_error:
         upload_record["status"] = UploadStatus.FAILED.value
         upload_record["error"] = parse_error
-    elif parsed_data:
+    elif final_parsed_data:
         upload_record["status"] = UploadStatus.PARSED.value
     
     # Update snapshot with new upload
