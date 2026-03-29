@@ -373,6 +373,88 @@ async def get_snapshot_uploads(snapshot_id: str):
     }
 
 
+@snapshot_router.patch("/snapshots/{snapshot_id}/pos-employee/{employee_name}")
+async def update_pos_employee_data(snapshot_id: str, employee_name: str, updates: dict):
+    """
+    Update POS data for a specific employee in the snapshot.
+    Used to correct data errors before processing.
+    """
+    db = get_db()
+    
+    snapshot = await db.snapshot_workflow.find_one({"id": snapshot_id}, {"_id": 0})
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    
+    # Find POS upload
+    uploads = snapshot.get("uploads", [])
+    pos_upload_idx = next(
+        (i for i, u in enumerate(uploads) if u.get("upload_type") == "pos_report"),
+        None
+    )
+    
+    if pos_upload_idx is None:
+        raise HTTPException(status_code=404, detail="No POS upload found")
+    
+    pos_upload = uploads[pos_upload_idx]
+    parsed_data = pos_upload.get("parsed_data", {})
+    employees = parsed_data.get("employees", [])
+    
+    # Find employee by name (case-insensitive)
+    employee_name_lower = employee_name.lower().strip()
+    emp_idx = next(
+        (i for i, e in enumerate(employees) if e.get("name", "").lower().strip() == employee_name_lower),
+        None
+    )
+    
+    if emp_idx is None:
+        raise HTTPException(status_code=404, detail=f"Employee '{employee_name}' not found in POS data")
+    
+    # Update employee data
+    for key, value in updates.items():
+        if key in ["ppa", "lbw_per_guest", "glassware_per_guest", "guests_per_lsc", 
+                   "guest_count", "loyalty_sales", "lsc_count", "net_sales",
+                   "liquor_sales", "beer_sales", "wine_sales"]:
+            employees[emp_idx][key] = value
+    
+    # Recalculate LSC count if loyalty_sales is updated
+    if "loyalty_sales" in updates and updates["loyalty_sales"]:
+        employees[emp_idx]["lsc_count"] = round(updates["loyalty_sales"] / 25)
+    
+    # Recalculate guests_per_lsc if both guest_count and lsc_count are available
+    if employees[emp_idx].get("lsc_count") and employees[emp_idx].get("guest_count"):
+        employees[emp_idx]["guests_per_lsc"] = round(
+            employees[emp_idx]["guest_count"] / employees[emp_idx]["lsc_count"], 2
+        )
+    
+    # Update the snapshot
+    parsed_data["employees"] = employees
+    uploads[pos_upload_idx]["parsed_data"] = parsed_data
+    
+    await db.snapshot_workflow.update_one(
+        {"id": snapshot_id},
+        {
+            "$set": {
+                "uploads": uploads,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    updated_emp = employees[emp_idx]
+    logger.info(f"Updated POS data for {employee_name}: {updates}")
+    
+    return {
+        "success": True,
+        "message": f"Updated POS data for {employee_name}",
+        "employee": {
+            "name": updated_emp.get("name"),
+            "guests_per_lsc": updated_emp.get("guests_per_lsc"),
+            "lsc_count": updated_emp.get("lsc_count"),
+            "loyalty_sales": updated_emp.get("loyalty_sales")
+        }
+    }
+
+
 @snapshot_router.get("/historical-averages")
 async def get_historical_averages():
     """
