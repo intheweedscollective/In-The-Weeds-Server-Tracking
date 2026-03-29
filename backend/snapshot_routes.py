@@ -280,6 +280,54 @@ async def upload_to_snapshot(
     
     else:
         raise HTTPException(status_code=400, detail="Either file or parsed_data is required")
+    
+    # Create upload record
+    upload_record = create_upload_record(
+        snapshot_id=snapshot_id,
+        upload_type=upload_type_enum,
+        filename=final_filename,
+        file_size=file_size,
+        parsed_data=final_parsed_data
+    )
+    
+    if parse_error:
+        upload_record["status"] = "failed"
+        upload_record["error"] = parse_error
+    else:
+        upload_record["status"] = "parsed"
+    
+    # Update snapshot
+    uploads = snapshot.get("uploads", [])
+    
+    # Remove existing upload of same type
+    uploads = [u for u in uploads if u.get("upload_type") != upload_type]
+    uploads.append(upload_record)
+    
+    # Update upload progress
+    upload_progress = snapshot.get("upload_progress", {})
+    upload_progress[upload_type] = final_parsed_data is not None and not parse_error
+    
+    await db.snapshot_workflow.update_one(
+        {"id": snapshot_id},
+        {
+            "$set": {
+                "uploads": uploads,
+                "upload_progress": upload_progress,
+                "status": SnapshotStatus.IN_PROGRESS.value,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    logger.info(f"Upload {upload_type} to snapshot {snapshot_id}: {len(final_parsed_data.get('employees', [])) if final_parsed_data else 0} records")
+    
+    return {
+        "success": not parse_error,
+        "message": f"Uploaded {upload_type}" if not parse_error else f"Upload failed: {parse_error}",
+        "upload_type": upload_type,
+        "record_count": final_parsed_data.get("record_count", len(final_parsed_data.get("employees", []))) if final_parsed_data else 0,
+        "status": upload_record["status"]
+    }
 
 
 @snapshot_router.post("/snapshots/{snapshot_id}/parsed-data/{upload_type}")
