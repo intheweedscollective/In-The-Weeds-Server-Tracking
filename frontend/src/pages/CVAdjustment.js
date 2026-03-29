@@ -357,6 +357,7 @@ export default function CVAdjustment() {
             <Button 
               onClick={handleUpload} 
               disabled={loading || !feedbackFile}
+              className="bg-red-500 hover:bg-red-600 text-white"
               data-testid="upload-btn"
             >
               {loading ? (
@@ -452,48 +453,73 @@ export default function CVAdjustment() {
             {/* Filter & Actions */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div className="flex flex-wrap gap-2">
-                <Badge 
-                  variant={filter === 'all' ? 'default' : 'outline'} 
-                  className="cursor-pointer"
+                <button 
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                    filter === 'all' 
+                      ? 'bg-red-500 text-white' 
+                      : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                  }`}
                   onClick={() => setFilter('all')}
                 >
                   All ({feedbackItems.length})
-                </Badge>
-                <Badge 
-                  variant={filter === 'detractors' ? 'destructive' : 'outline'} 
-                  className="cursor-pointer"
+                </button>
+                <button 
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                    filter === 'detractors' 
+                      ? 'bg-red-600 text-white' 
+                      : 'bg-red-100 text-red-800 hover:bg-red-200'
+                  }`}
                   onClick={() => setFilter('detractors')}
                 >
                   Detractors ({feedbackItems.filter(i => i.nps_category === 'detractor').length})
-                </Badge>
-                <Badge 
-                  variant={filter === 'passives' ? 'secondary' : 'outline'} 
-                  className="cursor-pointer"
+                </button>
+                <button 
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                    filter === 'passives' 
+                      ? 'bg-yellow-500 text-white' 
+                      : 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
+                  }`}
                   onClick={() => setFilter('passives')}
                 >
                   Passives ({feedbackItems.filter(i => i.nps_category === 'passive').length})
-                </Badge>
-                <Badge 
-                  variant={filter === 'promoters' ? 'default' : 'outline'} 
-                  className="cursor-pointer bg-green-500"
+                </button>
+                <button 
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                    filter === 'promoters' 
+                      ? 'bg-green-600 text-white' 
+                      : 'bg-green-100 text-green-800 hover:bg-green-200'
+                  }`}
                   onClick={() => setFilter('promoters')}
                 >
                   Promoters ({feedbackItems.filter(i => i.nps_category === 'promoter').length})
-                </Badge>
-                <Badge 
-                  variant={filter === 'excluded' ? 'default' : 'outline'} 
-                  className="cursor-pointer"
+                </button>
+                <button 
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                    filter === 'flagged' 
+                      ? 'bg-orange-500 text-white' 
+                      : 'bg-orange-100 text-orange-800 hover:bg-orange-200'
+                  }`}
+                  onClick={() => setFilter('flagged')}
+                >
+                  Auto-flagged ({feedbackItems.filter(i => i.auto_flagged_non_server).length})
+                </button>
+                <button 
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                    filter === 'excluded' 
+                      ? 'bg-slate-700 text-white' 
+                      : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                  }`}
                   onClick={() => setFilter('excluded')}
                 >
                   Excluded ({stats.excluded})
-                </Badge>
+                </button>
               </div>
               
               {session.status !== 'applied' && (
                 <Button 
                   onClick={applyAdjustments}
                   disabled={loading}
-                  className="bg-green-600 hover:bg-green-700"
+                  className="bg-green-600 hover:bg-green-700 text-white"
                 >
                   {loading ? (
                     <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Applying...</>
@@ -551,7 +577,7 @@ export default function CVAdjustment() {
                               </Badge>
                             )}
                             {item.excluded && (
-                              <Badge variant="outline" className="bg-slate-200">
+                              <Badge className="bg-slate-600 text-white border-slate-600">
                                 Excluded
                               </Badge>
                             )}
