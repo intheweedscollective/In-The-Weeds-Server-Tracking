@@ -379,6 +379,16 @@ async def get_historical_averages():
             values = [e.get("_raw", {}).get(field, 0) for e in all_employees if e.get("_raw", {}).get(field, 0) and e.get("_raw", {}).get(field, 0) > 0]
         return sum(values) / len(values) if values else 0
     
+    # Calculate lsc_count from loyalty_sales (each card = $25)
+    lsc_counts = []
+    for e in all_employees:
+        lsc = e.get("lsc_count", 0)
+        if not lsc and e.get("loyalty_sales"):
+            lsc = round(e.get("loyalty_sales", 0) / 25)
+        if lsc and lsc > 0:
+            lsc_counts.append(lsc)
+    avg_lsc_count = sum(lsc_counts) / len(lsc_counts) if lsc_counts else 5
+    
     return {
         "averages": {
             "ppa": round(calc_avg("ppa"), 2),
@@ -386,7 +396,7 @@ async def get_historical_averages():
             "beer_sales": round(calc_avg("beer_sales"), 0),
             "wine_sales": round(calc_avg("wine_sales"), 0),
             "glassware_per_guest": round(calc_avg("glassware_per_guest"), 2),
-            "lsc_count": round(calc_avg("lsc_count"), 0),
+            "lsc_count": round(avg_lsc_count, 0),
             "guest_count": round(calc_avg("guest_count"), 0)
         }
     }

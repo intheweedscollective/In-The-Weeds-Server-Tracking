@@ -293,13 +293,15 @@ export default function SnapshotDetail() {
 
   const startEditRow = (index, emp) => {
     setEditingRow(index);
+    // Calculate lsc_count from loyalty_sales if not directly available (each card = $25)
+    const lscCount = emp.lsc_count || Math.round((emp.loyalty_sales || 0) / 25) || 0;
     setEditValues({
       ppa: emp.ppa || 0,
       liquor_sales: emp.liquor_sales || emp._raw?.liquor_sales || 0,
       beer_sales: emp.beer_sales || emp._raw?.beer_sales || 0,
       wine_sales: emp.wine_sales || emp._raw?.wine_sales || 0,
       glassware_per_guest: emp.glassware_per_guest || 0,
-      lsc_count: emp.lsc_count || 0,
+      lsc_count: lscCount,
       guest_count: emp.guest_count || 0,
     });
   };
@@ -321,9 +323,9 @@ export default function SnapshotDetail() {
     if (value === 0 || value === null || value === undefined) return true;
     if (!avgValue || avgValue === 0) return false;
     
-    // Flag if more than 33% deviation from historical average
+    // Flag if more than 50% deviation from historical average
     const deviation = Math.abs(value - avgValue) / avgValue;
-    return deviation > 0.33;
+    return deviation > 0.50;
   };
 
   const confirmReviewData = async () => {
@@ -938,8 +940,8 @@ export default function SnapshotDetail() {
                         <td className={`px-3 py-2 text-right ${isValueFlagged('glassware_per_guest', emp.glassware_per_guest, historicalAvg.glassware_per_guest) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
                           ${(emp.glassware_per_guest || 0).toFixed(2)}
                         </td>
-                        <td className={`px-3 py-2 text-right ${isValueFlagged('lsc_count', emp.lsc_count, historicalAvg.lsc_count) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
-                          {emp.lsc_count || 0}
+                        <td className={`px-3 py-2 text-right ${isValueFlagged('lsc_count', emp.lsc_count || Math.round((emp.loyalty_sales || 0) / 25), historicalAvg.lsc_count) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
+                          {emp.lsc_count || Math.round((emp.loyalty_sales || 0) / 25) || 0}
                         </td>
                         <td className="px-3 py-2 text-center">
                           <Button size="sm" variant="ghost" onClick={() => startEditRow(idx, emp)} className="h-7 w-7 p-0 text-slate-400 hover:bg-slate-700 hover:text-white">
