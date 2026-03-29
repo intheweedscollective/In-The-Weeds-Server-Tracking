@@ -873,78 +873,78 @@ export default function SnapshotDetail() {
               <tbody className="divide-y divide-slate-700">
                 {reviewData.map((emp, idx) => (
                   <tr key={idx} className="hover:bg-slate-800/50 text-sm">
-                    <td className="px-2 py-2 text-white font-medium whitespace-nowrap">{emp.name}</td>
+                    <td className="px-2 py-2 text-white font-medium whitespace-nowrap">{emp.name?.split(' ')[0] || emp.name}</td>
                     {editingRow === idx ? (
                       <>
-                        <td className="px-2 py-1">
+                        <td className="px-1 py-1">
                           <Input
                             type="number"
                             value={editValues.guest_count}
                             onChange={(e) => setEditValues({...editValues, guest_count: parseFloat(e.target.value) || 0})}
-                            className="w-16 h-7 text-center bg-slate-700 border-slate-600 text-white text-sm"
+                            className="w-20 h-8 text-center bg-slate-700 border-slate-600 text-white text-sm px-1"
                           />
                         </td>
-                        <td className="px-2 py-1">
+                        <td className="px-1 py-1">
                           <Input
                             type="number"
                             step="0.01"
                             value={editValues.ppa}
                             onChange={(e) => setEditValues({...editValues, ppa: parseFloat(e.target.value) || 0})}
-                            className="w-16 h-7 text-center bg-slate-700 border-slate-600 text-white text-sm"
+                            className="w-20 h-8 text-center bg-slate-700 border-slate-600 text-white text-sm px-1"
                           />
                         </td>
-                        <td className="px-2 py-1">
+                        <td className="px-1 py-1">
                           <Input
                             type="number"
                             step="0.01"
                             value={editValues.liquor_sales}
                             onChange={(e) => setEditValues({...editValues, liquor_sales: parseFloat(e.target.value) || 0})}
-                            className="w-16 h-7 text-center bg-slate-700 border-slate-600 text-white text-sm"
+                            className="w-20 h-8 text-center bg-slate-700 border-slate-600 text-white text-sm px-1"
                           />
                         </td>
-                        <td className="px-2 py-1">
+                        <td className="px-1 py-1">
                           <Input
                             type="number"
                             step="0.01"
                             value={editValues.beer_sales}
                             onChange={(e) => setEditValues({...editValues, beer_sales: parseFloat(e.target.value) || 0})}
-                            className="w-16 h-7 text-center bg-slate-700 border-slate-600 text-white text-sm"
+                            className="w-20 h-8 text-center bg-slate-700 border-slate-600 text-white text-sm px-1"
                           />
                         </td>
-                        <td className="px-2 py-1">
+                        <td className="px-1 py-1">
                           <Input
                             type="number"
                             step="0.01"
                             value={editValues.wine_sales}
                             onChange={(e) => setEditValues({...editValues, wine_sales: parseFloat(e.target.value) || 0})}
-                            className="w-16 h-7 text-center bg-slate-700 border-slate-600 text-white text-sm"
+                            className="w-20 h-8 text-center bg-slate-700 border-slate-600 text-white text-sm px-1"
                           />
                         </td>
-                        <td className="px-2 py-1">
+                        <td className="px-1 py-1">
                           <Input
                             type="number"
                             step="0.01"
                             value={editValues.glassware_sales}
                             onChange={(e) => setEditValues({...editValues, glassware_sales: parseFloat(e.target.value) || 0})}
-                            className="w-16 h-7 text-center bg-slate-700 border-slate-600 text-white text-sm"
+                            className="w-20 h-8 text-center bg-slate-700 border-slate-600 text-white text-sm px-1"
                           />
                         </td>
-                        <td className="px-2 py-1">
+                        <td className="px-1 py-1">
                           <Input
                             type="number"
                             step="1"
                             value={editValues.lsc_count}
                             onChange={(e) => setEditValues({...editValues, lsc_count: parseInt(e.target.value) || 0})}
-                            className="w-16 h-7 text-center bg-slate-700 border-slate-600 text-white text-sm"
+                            className="w-16 h-8 text-center bg-slate-700 border-slate-600 text-white text-sm px-1"
                           />
                         </td>
-                        <td className="px-2 py-1 text-center">
+                        <td className="px-1 py-1 text-center">
                           <div className="flex justify-center gap-1">
-                            <Button size="sm" variant="ghost" onClick={() => saveRowEdit(idx)} className="h-6 w-6 p-0 text-green-400 hover:bg-green-900/50">
-                              <Save className="w-3 h-3" />
+                            <Button size="sm" variant="ghost" onClick={() => saveRowEdit(idx)} className="h-7 w-7 p-0 text-green-400 hover:bg-green-900/50">
+                              <Save className="w-4 h-4" />
                             </Button>
-                            <Button size="sm" variant="ghost" onClick={cancelEdit} className="h-6 w-6 p-0 text-slate-400 hover:bg-slate-700">
-                              <X className="w-3 h-3" />
+                            <Button size="sm" variant="ghost" onClick={cancelEdit} className="h-7 w-7 p-0 text-slate-400 hover:bg-slate-700">
+                              <X className="w-4 h-4" />
                             </Button>
                           </div>
                         </td>
