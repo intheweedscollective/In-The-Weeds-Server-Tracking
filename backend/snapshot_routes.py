@@ -390,7 +390,7 @@ async def get_historical_averages():
     # Also check employees_v2 for historical data
     employees_v2 = await db.employees_v2.find(
         {},
-        {"_id": 0, "ppa": 1, "lbw_per_guest": 1, "glassware_per_guest": 1, "guests_per_lsc": 1, "guest_count": 1}
+        {"_id": 0, "ppa": 1, "lbw_per_guest": 1, "glassware_sales": 1, "glassware_per_guest": 1, "guests_per_lsc": 1, "guest_count": 1}
     ).to_list(500)
     
     # Collect all employee metrics
@@ -407,7 +407,7 @@ async def get_historical_averages():
                 "liquor_sales": 500.0,
                 "beer_sales": 300.0,
                 "wine_sales": 150.0,
-                "glassware_per_guest": 1.25,
+                "glassware_sales": 250.0,
                 "lsc_count": 5,
                 "guest_count": 200
             }
@@ -418,7 +418,8 @@ async def get_historical_averages():
         values = [e.get(field, 0) for e in all_employees if e.get(field, 0) and e.get(field, 0) > 0]
         # Also check _raw field for nested data
         if not values:
-            values = [e.get("_raw", {}).get(field, 0) for e in all_employees if e.get("_raw", {}).get(field, 0) and e.get("_raw", {}).get(field, 0) > 0]
+            raw_field = "bar_glassware_sales" if field == "glassware_sales" else field
+            values = [e.get("_raw", {}).get(raw_field, 0) for e in all_employees if e.get("_raw", {}).get(raw_field, 0) and e.get("_raw", {}).get(raw_field, 0) > 0]
         return sum(values) / len(values) if values else 0
     
     # Calculate lsc_count from loyalty_sales (each card = $25)
@@ -437,7 +438,7 @@ async def get_historical_averages():
             "liquor_sales": round(calc_avg("liquor_sales"), 0),
             "beer_sales": round(calc_avg("beer_sales"), 0),
             "wine_sales": round(calc_avg("wine_sales"), 0),
-            "glassware_per_guest": round(calc_avg("glassware_per_guest"), 2),
+            "glassware_sales": round(calc_avg("glassware_sales"), 0),
             "lsc_count": round(avg_lsc_count, 0),
             "guest_count": round(calc_avg("guest_count"), 0)
         }
