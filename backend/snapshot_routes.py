@@ -1045,7 +1045,10 @@ async def parse_cv_file(filename: str, contents: bytes) -> Dict[str, Any]:
 
 
 async def parse_rt_file(filename: str, contents: bytes) -> Dict[str, Any]:
-    """Parse ReviewTracker CSV file."""
+    """
+    Parse ReviewTracker CSV file.
+    Extracts employee mentions from review text using GPT-4o name detection.
+    """
     import csv
     from io import StringIO
     
@@ -1056,18 +1059,70 @@ async def parse_rt_file(filename: str, contents: bytes) -> Dict[str, Any]:
         text = contents.decode('latin-1')
     
     reader = csv.DictReader(StringIO(text))
+    reviews = []
     employee_mentions = {}
     
+    # Get list of known employee names from the database for matching
+    db = get_db()
+    known_employees = await db.employees_v2.find(
+        {"quarter": "Q1", "year": 2026},
+        {"_id": 0, "name": 1}
+    ).to_list(100)
+    known_names = [e.get("name", "").lower() for e in known_employees if e.get("name")]
+    
+    # Also try from snapshot_workflow if no employees_v2
+    if not known_names:
+        latest_snapshot = await db.snapshot_workflow.find_one(
+            {"status": "completed"},
+            {"_id": 0, "employees": 1},
+            sort=[("effective_date", -1)]
+        )
+        if latest_snapshot:
+            known_names = [e.get("name", "").lower() for e in latest_snapshot.get("employees", []) if e.get("name")]
+    
     for row in reader:
-        # Look for employee mentions in review text
-        review_text = row.get("Review", row.get("review", row.get("Content", "")))
-        # This would need more sophisticated name matching in production
-        # For now, just count rows
-        pass
+        # Get review text from various possible column names
+        review_text = row.get("Review", row.get("review", row.get("Content", row.get("content", ""))))
+        if not review_text or review_text.strip() == "":
+            continue
+        
+        review_text_lower = review_text.lower()
+        
+        # Simple name matching - look for employee names in review text
+        for name in known_names:
+            if not name:
+                continue
+            
+            # Get first name for matching
+            first_name = name.split()[0].lower() if name else ""
+            
+            # Check if first name appears in review
+            if first_name and len(first_name) > 2 and first_name in review_text_lower:
+                # Store the original capitalized name
+                original_name = next(
+                    (e.get("name") for e in known_employees if e.get("name", "").lower() == name),
+                    name.title()
+                )
+                if original_name not in employee_mentions:
+                    employee_mentions[original_name] = 0
+                employee_mentions[original_name] += 1
+        
+        reviews.append({
+            "text": review_text[:200],
+            "rating": row.get("Rating", row.get("rating", "")),
+            "date": row.get("Published", row.get("published", row.get("Date", ""))),
+        })
     
     employees = [
         {"name": name, "mentions": count}
         for name, count in employee_mentions.items()
     ]
     
-    return {"employees": employees, "record_count": len(employees)}
+    logger.info(f"Parsed RT file: {len(reviews)} reviews, {len(employees)} employees mentioned")
+    
+    return {
+        "employees": employees, 
+        "record_count": len(employees),
+        "total_reviews": len(reviews),
+        "reviews_sample": reviews[:10]  # Include sample for debugging
+    }
