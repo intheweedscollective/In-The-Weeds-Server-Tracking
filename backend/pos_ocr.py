@@ -17,7 +17,7 @@ POS_EXTRACTION_PROMPT = """You are an expert at extracting employee performance 
 
 REPORT STRUCTURE:
 - Employee name at TOP of the page (e.g., "Chase Winston", "Starwars Mckinnon-Herrera")
-- Table with columns: Category | Qty Sold | Gross Sls | Net Sls | Void | Comp | Promo | Emp Disc
+- Table with columns: Category | Qty Sold | Gross Sls | Net Sls | Void | Comp | Promo | Emp Disc | Guest Avg
 - Each row is a sales category. ALWAYS look for these rows in the table:
   * Food
   * Liquor
@@ -25,6 +25,7 @@ REPORT STRUCTURE:
   * Wine
   * Bar Glassware (may appear as "Brglswre", "Bar Glass", "Glassware")
   * Loyalty (may appear as "Loyany", "LSC", "Loyal" - this is CRITICAL, don't miss it!)
+  * Totals (bottom row with summary values)
 - Summary section at bottom with "Total Guests" or "Ttl Guests"
 
 CRITICAL - LOYALTY ROW:
@@ -34,16 +35,24 @@ The Loyalty row is often near the bottom of the category table, sometimes betwee
 - If you see Qty Sold = 2 and Net Sls = 50.00, that's the Loyalty row
 - DO NOT return 0 unless you are 100% certain there is NO Loyalty row
 
-EXTRACT THESE VALUES (use Net Sls column):
+CRITICAL - PPA (GUEST AVERAGE):
+The PPA is found in the "Totals" row under the "Guest Avg" or "Guest Average" column.
+- Look at the LAST column in the Totals row - this is the PPA value
+- Example: If Totals row shows Guest Avg = 52.29, then ppa = 52.29
+- This is the pre-calculated PPA from the register system - use this exact value
+- DO NOT calculate PPA yourself - extract the Guest Avg value from the Totals row
+
+EXTRACT THESE VALUES (use Net Sls column unless specified):
 1. **name** - Employee name at top
 2. **guest_count** - "Total Guests" number
-3. **net_sales** - Grand Total row (sum of all categories)
-4. **food_sales** - Food row
-5. **liquor_sales** - Liquor row
-6. **beer_sales** - Beer row
-7. **wine_sales** - Wine row
-8. **bar_glassware_sales** - Bar Glassware/Brglswre row
-9. **loyalty_sales** - Loyalty/LSC row (VERY IMPORTANT - scan entire table carefully!)
+3. **ppa** - CRITICAL: The "Guest Avg" value from the TOTALS row (e.g., 52.29)
+4. **net_sales** - Grand Total row (sum of all categories)
+5. **food_sales** - Food row
+6. **liquor_sales** - Liquor row
+7. **beer_sales** - Beer row
+8. **wine_sales** - Wine row
+9. **bar_glassware_sales** - Bar Glassware/Brglswre row
+10. **loyalty_sales** - Loyalty/LSC row (VERY IMPORTANT - scan entire table carefully!)
 
 JSON FORMAT:
 {
@@ -53,6 +62,7 @@ JSON FORMAT:
     {
       "name": "Employee Name",
       "guest_count": 725,
+      "ppa": 52.29,
       "net_sales": 38274.79,
       "food_sales": 28500.00,
       "liquor_sales": 3467.00,
@@ -68,6 +78,7 @@ JSON FORMAT:
 IMPORTANT:
 - Scan the ENTIRE table for the Loyalty row - it's easy to miss
 - Use 0 ONLY if you're certain the row doesn't exist
+- ALWAYS extract the ppa from the Guest Avg column in the Totals row
 - Remove $ signs and commas from numbers
 
 Return ONLY valid JSON."""
@@ -184,10 +195,13 @@ def validate_extracted_data(data: Dict[str, Any]) -> Dict[str, Any]:
             if lbw_total > 0:
                 lbw_per_guest = lbw_total / guest_count
         
-        # Calculate PPA if not provided
+        # Use PPA from report's Guest Avg column if provided
+        # Only fall back to calculation if not available
         ppa = _safe_float(emp.get("ppa"))
-        if ppa is None and net_sales and guest_count and guest_count > 0:
-            ppa = net_sales / guest_count
+        if ppa is None or ppa == 0:
+            # Fallback: calculate PPA from net_sales / guest_count
+            if net_sales and guest_count and guest_count > 0:
+                ppa = net_sales / guest_count
         
         # Calculate LSC count from loyalty_sales (each LSC = $25)
         # Then calculate guests_per_lsc = guest_count / lsc_count
@@ -575,8 +589,13 @@ def extract_pos_data_from_xlsx(xlsx_bytes: bytes) -> Dict[str, Any]:
                 loyalty_sales = emp.get('loyalty_sales', 0) or 0
                 lsc_count = emp.get('lsc_count', 0) or 0
                 
-                # Calculate derived values
-                ppa = net_sales / guest_count if guest_count > 0 else 0
+                # Use extracted PPA if available, else calculate
+                extracted_ppa = emp.get('ppa', 0) or 0
+                if extracted_ppa and extracted_ppa > 0:
+                    ppa = extracted_ppa
+                else:
+                    ppa = net_sales / guest_count if guest_count > 0 else 0
+                
                 lbw_per_guest = lbw_total / guest_count if guest_count > 0 else 0
                 glassware_per_guest = glassware / guest_count if guest_count > 0 else 0
                 guests_per_lsc = guest_count / lsc_count if lsc_count > 0 else None
@@ -720,6 +739,27 @@ def extract_pos_data_from_xlsx(xlsx_bytes: bytes) -> Dict[str, Any]:
                                     return row
                     return None
                 
+                def get_guest_avg_value(row_num) -> float:
+                    """Get the Guest Average (PPA) from the Totals row - typically in columns F-L."""
+                    if not row_num:
+                        return 0.0
+                    # Guest Avg is typically in columns F (6), G (7), H (8), or later
+                    # It's usually one of the last columns with data
+                    for col in range(6, 15):  # Columns F through N
+                        # First, check if the header row has "Guest Avg" above this column
+                        # The header is typically 2-3 rows above the Totals row
+                        for header_offset in range(1, 4):
+                            if row_num - header_offset > 0:
+                                header_val = sheet.cell(row=row_num - header_offset, column=col).value
+                                if header_val:
+                                    header_str = str(header_val).lower().replace(" ", "")
+                                    if "guestavg" in header_str or "gstavg" in header_str or "guest avg" in str(header_val).lower():
+                                        val = sheet.cell(row=row_num, column=col).value
+                                        parsed = _safe_float(val)
+                                        if parsed and parsed > 0 and parsed < 500:  # PPA typically $10-$200
+                                            return parsed
+                    return 0.0
+                
                 # Find key rows by label - search entire sheet with wide ranges
                 food_row = find_row_by_label("food", 1, 60)
                 liquor_row = find_row_by_label("liquor", 1, 60)
@@ -741,6 +781,9 @@ def extract_pos_data_from_xlsx(xlsx_bytes: bytes) -> Dict[str, Any]:
                 loyalty_sales = get_net_sales_value(loyalty_row) if loyalty_row else 0.0
                 bar_glassware_sales = get_net_sales_value(glassware_row) if glassware_row else 0.0
                 net_sales = get_net_sales_value(totals_row) if totals_row else 0.0
+                
+                # Extract PPA from Guest Avg column in Totals row
+                extracted_ppa = get_guest_avg_value(totals_row) if totals_row else 0.0
                 
                 # Log if key data is missing
                 if not totals_row or net_sales == 0:
@@ -872,8 +915,11 @@ def extract_pos_data_from_xlsx(xlsx_bytes: bytes) -> Dict[str, Any]:
                     continue
                 
                 # Calculate derived values
-                # PPA = Net Sales / Guests
-                ppa = net_sales / guest_count if guest_count > 0 else None
+                # PPA = Use extracted Guest Avg if available, else calculate from Net Sales / Guests
+                if extracted_ppa and extracted_ppa > 0:
+                    ppa = extracted_ppa
+                else:
+                    ppa = net_sales / guest_count if guest_count > 0 else None
                 
                 # LBW Total = Liquor + Beer + Wine
                 lbw_total = liquor_sales + beer_sales + wine_sales

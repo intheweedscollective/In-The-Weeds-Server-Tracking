@@ -512,7 +512,7 @@ def _parse_summary_table(file_path: str, sheet_name, header_row: int = 3) -> Lis
             'total guests': None, 'guests': None, 'guest_count': None,
             'lbw total': None, 'lbw': None, 'lbw $': None,
             'loyalty qty': None, 'lsc_count': None, 'lsc': None,
-            'ppa': None, 'ppa $': None,
+            'ppa': None, 'ppa $': None, 'guest avg': None, 'guest average': None,
             'lbw/guest': None, 'lbw / guest': None, 'lbw / guest $': None,
             'glassware/guest': None, 'glassware / guest': None, 'glassware / guest $': None,
         }
@@ -574,6 +574,7 @@ def _parse_summary_table(file_path: str, sheet_name, header_row: int = 3) -> Lis
                 'guests': int(get_val(['total guests', 'guests', 'guest_count'])),
                 'lbw': get_val(['lbw $', 'lbw total', 'lbw']),
                 'lsc_count': int(get_val(['loyalty qty', 'lsc_count', 'lsc'])),
+                'ppa': get_val(['ppa', 'ppa $', 'guest avg', 'guest average']),  # Extract PPA directly
             }
             
             # Calculate LBW if not present
