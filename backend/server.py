@@ -1846,13 +1846,21 @@ async def process_pdf_in_background(job_id: str, contents: bytes, filename: str)
         for emp in validated_data.get("employees", []):
             raw_data_fields = emp.get("_raw", {})
             
+            # Calculate PPA if not present
+            guest_count = safe_int(emp.get("guest_count", 0))
+            net_sales = safe_float(emp.get("net_sales", 0))
+            ppa = safe_float(emp.get("ppa", 0))
+            if (not ppa or ppa == 0) and guest_count > 0 and net_sales > 0:
+                ppa = round(net_sales / guest_count, 2)
+            
             # Log what we're getting
-            logging.info(f"PDF Extract - {emp.get('name')}: guest_count={emp.get('guest_count')}, net_sales={emp.get('net_sales')}, loyalty={emp.get('loyalty_sales')}, _raw={raw_data_fields}")
+            logging.info(f"PDF Extract - {emp.get('name')}: guest_count={guest_count}, net_sales={net_sales}, ppa={ppa}, loyalty={emp.get('loyalty_sales')}")
             
             formatted_employees.append({
                 "name": str(emp.get("name", "Unknown") or "Unknown"),
-                "guest_count": safe_int(emp.get("guest_count", 0)),
-                "net_sales": safe_float(emp.get("net_sales", 0)),
+                "guest_count": guest_count,
+                "net_sales": net_sales,
+                "ppa": ppa,
                 "food_sales": safe_float(raw_data_fields.get("food_sales", 0)),
                 "liquor_sales": safe_float(raw_data_fields.get("liquor_sales", 0)),
                 "beer_sales": safe_float(raw_data_fields.get("beer_sales", 0)),
