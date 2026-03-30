@@ -1026,7 +1026,7 @@ async def generate_snapshot_workflow_slide(
     
     # Format employees for slide generation (must have exact fields)
     slide_employees = []
-    for i, emp in enumerate(sorted_employees[:15]):  # Top 15 for slide
+    for i, emp in enumerate(sorted_employees):  # All employees for slide
         slide_employees.append({
             "rank": i + 1,
             "name": emp.get("name", "Unknown"),
@@ -1036,8 +1036,21 @@ async def generate_snapshot_workflow_slide(
             "guests_per_lsc": emp.get("guests_per_lsc", 0) or 0,
             "glassware_per_guest": emp.get("glassware_per_guest", 0) or 0,
             "job_title": emp.get("job_title", "Server"),
-            "review_mentions": emp.get("rt_mentions", 0) or 0,
+            "tier_label": emp.get("tier_label") or emp.get("performance_tier", "Server"),
+            # Score percentages for each metric
+            "score_ppa": emp.get("score_ppa", 0) or 0,
+            "score_lbw": emp.get("score_lbw", 0) or 0,
+            "score_glass": emp.get("score_glass", 0) or 0,
+            "score_lsc": emp.get("score_lsc", 0) or 0,
+            # CV and RT data
+            "cv_score": emp.get("cv_score", 0) or 0,
             "cv_promoters": emp.get("cv_promoters", 0) or 0,
+            "cv_detractors": emp.get("cv_detractors", 0) or 0,
+            "nps_score": emp.get("nps_score", 0) or 0,
+            "rt_mentions": emp.get("rt_mentions", 0) or 0,
+            "review_tracker_bonus": emp.get("review_tracker_bonus", 0) or 0,
+            # Bonuses
+            "total_metric_bonus": emp.get("total_metric_bonus", 0) or 0,
         })
     
     # Get benchmarks from snapshot or use defaults
