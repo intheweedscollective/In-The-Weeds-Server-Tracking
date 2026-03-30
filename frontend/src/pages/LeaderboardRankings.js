@@ -292,10 +292,17 @@ export default function LeaderboardRankings() {
     };
   }, [employees]);
 
-  // Calculate momentum (trend) based on snapshots - uses employee name for matching
-  const calculateMomentum = useCallback((employeeName, currentScore) => {
+  // Calculate momentum (trend) based on snapshots - uses multiple name matching strategies
+  const calculateMomentum = useCallback((employeeName, currentScore, reportName = null) => {
     const nameLower = employeeName?.toLowerCase().trim();
-    const prevScore = previousScores[nameLower];
+    const firstName = nameLower?.split(' ')[0];
+    const reportLower = reportName?.toLowerCase().trim();
+    
+    // Try multiple matching strategies
+    let prevScore = previousScores[nameLower];
+    if (prevScore === undefined && firstName) prevScore = previousScores[firstName];
+    if (prevScore === undefined && reportLower) prevScore = previousScores[reportLower];
+    
     if (prevScore === undefined) return { trend: "new", change: 0 };
     
     const change = currentScore - prevScore;
@@ -342,6 +349,8 @@ export default function LeaderboardRankings() {
         tier_rank: emp.tier_rank || idx + 1,
         employee_id: emp.id || emp.name,
         name: emp.name,
+        display_name: emp.display_name || emp.name,
+        report_name: emp.report_name || emp.name,
         job_title: emp.job_title || "Server",
         total_score: emp.total_score || emp.pre_dar_score || 0,
         base_score: emp.weighted_score || 0,
@@ -372,17 +381,24 @@ export default function LeaderboardRankings() {
       setSnapshots(snapshotsRes.data || []);
       
       // Build previous scores from second-latest snapshot for momentum/trend
-      // Match by name since employee IDs may differ between snapshots
+      // Match by multiple keys: name, display_name, report_name, first name
       if (snapshotsRes.data?.length > 1) {
         const prevSnapshot = snapshotsRes.data[1]; // Second most recent snapshot
         const prevScoresMap = {};
         const prevEmployees = prevSnapshot.employees || prevSnapshot.employees_data || [];
         prevEmployees.forEach(emp => {
-          // Use name as key for more reliable matching
+          const score = emp.total_score || emp.pre_dar_score || 0;
+          
+          // Add multiple keys for flexible matching
           const name = emp.name?.toLowerCase().trim();
-          if (name) {
-            prevScoresMap[name] = emp.total_score || emp.pre_dar_score || 0;
-          }
+          const displayName = emp.display_name?.toLowerCase().trim();
+          const reportName = emp.report_name?.toLowerCase().trim();
+          const firstName = name?.split(' ')[0];
+          
+          if (name) prevScoresMap[name] = score;
+          if (displayName && displayName !== name) prevScoresMap[displayName] = score;
+          if (reportName && reportName !== name) prevScoresMap[reportName] = score;
+          if (firstName && firstName !== name) prevScoresMap[firstName] = score;
         });
         setPreviousScores(prevScoresMap);
       }
@@ -554,8 +570,9 @@ export default function LeaderboardRankings() {
                   const metricBonus = empData.total_metric_bonus || 0; // Benchmark bonuses
                   const finalScore = empData.pre_dar_score || empData.total_score || employee.total_score || 0;
                   
-                  // Calculate trend/momentum based on previous snapshot (match by name)
-                  const momentum = calculateMomentum(employee.name, finalScore);
+                  // Calculate trend/momentum based on previous snapshot (match by name or report_name)
+                  const reportName = empData.report_name || employee.report_name;
+                  const momentum = calculateMomentum(employee.name, finalScore, reportName);
                   
                   return (
                     <div 

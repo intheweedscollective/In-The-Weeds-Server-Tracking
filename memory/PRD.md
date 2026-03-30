@@ -149,7 +149,7 @@ Build a comprehensive performance review application for restaurant employees th
 
 ### P1 (High Priority)
 - [x] ~~Update Leaderboard to use snapshot-workflow current-rankings API~~ (Done)
-- [ ] Momentum Indicators - Add Trend column on Leaderboard comparing current vs previous snapshot scores
+- [x] ~~Momentum Indicators~~ - Implemented Trend column on Leaderboard comparing current vs previous snapshot scores (Done 2026-03-31)
 - [ ] Evaluate legacy "Fix All/Remove Excess" ReviewTracker bug (may be obsolete with snapshot architecture)
 
 ### P2 (Medium Priority)
@@ -211,6 +211,15 @@ Build a comprehensive performance review application for restaurant employees th
   - All pages (Employees, Rankings, Leaderboard) now show consistent first-name-only display
   - Tier sorting working correctly: Trainers → Bartenders → A-Servers → B-Servers → C-Servers
   - `current-rankings` endpoint now sorts by tier before returning
+- **TIER THRESHOLD UPDATE**: Changed server tier thresholds:
+  - A-Server: ≥90 (was ≥85)
+  - B-Server: 75-89.9 (was 70-84.9)
+  - C-Server: <75 (was <70)
+- **MOMENTUM INDICATORS IMPLEMENTED**:
+  - Added Trend column to Leaderboard showing score changes vs previous snapshot
+  - Indicators: 🔥 Hot (+5 or more), ↑ Up (improved), ↓ Down (-2 or more), ⭐ New (no previous data), — Stable
+  - Enhanced name matching to handle first-name/full-name discrepancies between snapshots
+  - Uses `report_name` and first-name fallback for reliable matching
 - **VERIFIED: Employee Names UI Fix**
   - Confirmed 28 employees with no duplicates
   - `display_name` (first name only) shows correctly on Employee cards, Rankings, and Leaderboard

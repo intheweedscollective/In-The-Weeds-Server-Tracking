@@ -89,7 +89,7 @@ async def list_snapshots(
     snapshots = await db.snapshot_workflow.find(
         query,
         {"_id": 0}
-    ).sort("effective_date", -1).limit(limit).to_list(limit)
+    ).sort([("effective_date", -1), ("completed_at", -1)]).limit(limit).to_list(limit)
     
     # Determine which is the current snapshot
     current_id = await get_current_snapshot_id(db)
