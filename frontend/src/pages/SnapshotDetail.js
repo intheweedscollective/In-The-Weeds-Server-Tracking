@@ -878,7 +878,13 @@ export default function SnapshotDetail() {
                       </span>
                       <div>
                         <p className="text-white font-medium">{emp.name}</p>
-                        <p className="text-slate-400 text-xs">{emp.job_title || 'Server'}</p>
+                        <p className={`text-xs ${
+                          emp.tier_label?.includes('Trainer') ? 'text-purple-400' :
+                          emp.tier_label?.includes('Bartender') ? 'text-blue-400' :
+                          emp.tier_label?.includes('A-') ? 'text-green-400' :
+                          emp.tier_label?.includes('B-') ? 'text-yellow-400' :
+                          'text-red-400'
+                        }`}>{emp.tier_label || emp.job_title || 'Server'}</p>
                       </div>
                     </div>
                     <div className="text-right">

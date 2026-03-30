@@ -600,6 +600,77 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
 
 
 
+@snapshot_router.post("/sync-job-titles")
+async def sync_job_titles_from_legacy():
+    """
+    Sync job titles from employees_v2 to the current active snapshot.
+    Used to restore trainer/bartender designations.
+    """
+    db = get_db()
+    
+    # Get current active snapshot
+    snapshot = await db.snapshot_workflow.find_one(
+        {"is_current": True},
+        {"_id": 0}
+    )
+    
+    if not snapshot:
+        snapshot = await db.snapshot_workflow.find_one(
+            {"status": "completed"},
+            {"_id": 0},
+            sort=[("completed_at", -1)]
+        )
+    
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="No active snapshot found")
+    
+    # Get job titles from employees_v2
+    job_title_map = {}
+    async for emp in db.employees_v2.find({}, {"_id": 0, "name": 1, "job_title": 1, "display_name": 1}):
+        name = (emp.get('display_name') or emp.get('name', '')).lower().strip()
+        jt = emp.get('job_title', 'Server')
+        if name and jt and jt.lower() != 'server':
+            job_title_map[name] = jt
+            # Also add first name as key
+            first_name = name.split()[0] if name else ''
+            if first_name:
+                job_title_map[first_name] = jt
+    
+    # Update employees in snapshot
+    employees = snapshot.get('employees', [])
+    updated_count = 0
+    updates = []
+    
+    for emp in employees:
+        name = emp.get('name', '').lower().strip()
+        first_name = name.split()[0] if name else ''
+        
+        # Try to find matching job title
+        new_jt = job_title_map.get(name) or job_title_map.get(first_name)
+        if new_jt:
+            old_jt = emp.get('job_title', 'Server')
+            emp['job_title'] = new_jt
+            updates.append(f"{emp['name']}: {old_jt} -> {new_jt}")
+            updated_count += 1
+    
+    # Update snapshot
+    await db.snapshot_workflow.update_one(
+        {"id": snapshot['id']},
+        {"$set": {"employees": employees}}
+    )
+    
+    logger.info(f"Synced {updated_count} job titles to snapshot {snapshot['id']}")
+    
+    return {
+        "success": True,
+        "message": f"Synced {updated_count} job titles from employees_v2",
+        "updates": updates,
+        "snapshot_id": snapshot['id']
+    }
+
+
+
+
 @snapshot_router.get("/historical-averages")
 async def get_historical_averages():
     """
