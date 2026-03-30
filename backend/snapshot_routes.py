@@ -679,6 +679,57 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
 
 
 
+
+@snapshot_router.delete("/employees/{employee_id}")
+async def delete_snapshot_employee(employee_id: str):
+    """
+    Delete an employee from the current active snapshot.
+    Used to remove duplicates or incorrect entries.
+    """
+    db = get_db()
+    
+    # Find current active snapshot
+    snapshot = await db.snapshot_workflow.find_one(
+        {"is_current": True},
+        {"_id": 0}
+    )
+    
+    if not snapshot:
+        snapshot = await db.snapshot_workflow.find_one(
+            {"status": "completed"},
+            {"_id": 0},
+            sort=[("completed_at", -1)]
+        )
+    
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="No active snapshot found")
+    
+    snapshot_id = snapshot["id"]
+    employees = snapshot.get("employees", [])
+    
+    # Find and remove employee
+    original_count = len(employees)
+    employees = [e for e in employees if e.get("id") != employee_id and e.get("name", "").lower() != employee_id.lower()]
+    
+    if len(employees) == original_count:
+        raise HTTPException(status_code=404, detail=f"Employee '{employee_id}' not found in snapshot")
+    
+    # Update snapshot
+    await db.snapshot_workflow.update_one(
+        {"id": snapshot_id},
+        {"$set": {"employees": employees}}
+    )
+    
+    logger.info(f"Deleted employee {employee_id} from snapshot {snapshot_id}")
+    
+    return {
+        "success": True,
+        "message": f"Deleted employee from snapshot",
+        "remaining_count": len(employees)
+    }
+
+
+
 @snapshot_router.post("/sync-job-titles")
 async def sync_job_titles_from_legacy():
     """
