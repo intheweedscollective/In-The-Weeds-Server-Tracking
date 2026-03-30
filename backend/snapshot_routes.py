@@ -1657,9 +1657,16 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                                 employees[name]["cv_passives"] = passives
                                 employees[name]["cv_detractors"] = detractors
                                 
-                                # Everyone gets the store NPS score
-                                employees[name]["nps_score"] = store_nps
-                                employees[name]["nps_score_pts"] = round(store_nps / 10, 1)
+                                # Calculate individual NPS from distributed data
+                                # NPS = (promoters - detractors) / total * 100
+                                individual_total = promoters + passives + detractors
+                                if individual_total > 0:
+                                    individual_nps = ((promoters - detractors) / individual_total) * 100
+                                else:
+                                    individual_nps = store_nps  # Fallback to store NPS
+                                
+                                employees[name]["nps_score"] = round(individual_nps, 1)
+                                employees[name]["nps_score_pts"] = round(individual_nps / 10, 1)
                                 
                                 # CV bonus based on distributed promoters/detractors
                                 cv_raw = (promoters * 1) - (detractors * 2)
