@@ -21,8 +21,13 @@ const emptyEmployee = {
   aliases: "",  // Comma-separated aliases
   guests: 0,
   net_sales: 0,
+  ppa: 0,
+  liquor_sales: 0,
+  beer_sales: 0,
+  wine_sales: 0,
   lbw: 0,
   glassware_sales: 0,
+  loyalty_sales: 0,
   lsc_count: 0,
   nps_score: 0,
   cv_promoters: 0,
@@ -72,19 +77,33 @@ export default function EmployeeList() {
         id: emp.id || emp.name,
         name: emp.name,
         job_title: emp.job_title || "Server",
-        ppa: emp.ppa || 0,
-        lbw_per_guest: emp.lbw_per_guest || 0,
-        glassware_per_guest: emp.glassware_per_guest || 0,
-        guests_per_lsc: emp.guests_per_lsc || 0,
+        tier_label: emp.tier_label || "Server",
+        // Raw POS data
         guests: emp.guest_count || emp.guests || 0,
         guest_count: emp.guest_count || emp.guests || 0,
         net_sales: emp.net_sales || 0,
+        ppa: emp.ppa || 0,
+        liquor_sales: emp.liquor_sales || 0,
+        beer_sales: emp.beer_sales || 0,
+        wine_sales: emp.wine_sales || 0,
+        lbw: emp.lbw || 0,
+        glassware_sales: emp.bar_glassware_sales || emp.glassware_sales || 0,
+        loyalty_sales: emp.loyalty_sales || 0,
+        lsc_count: emp.lsc_count || 0,
+        // Calculated per-guest metrics
+        lbw_per_guest: emp.lbw_per_guest || 0,
+        glassware_per_guest: emp.glassware_per_guest || 0,
+        guests_per_lsc: emp.guests_per_lsc || 0,
+        // CV/NPS data
         nps_score: emp.nps_score || 0,
         cv_promoters: emp.cv_promoters || 0,
+        cv_passives: emp.cv_passives || 0,
         cv_detractors: emp.cv_detractors || 0,
         cv_score: emp.cv_score || 0,
+        // RT data
         review_mentions: emp.rt_mentions || emp.review_mentions || 0,
         review_tracker_bonus: emp.review_tracker_bonus || 0,
+        // Scores
         total_score: emp.total_score || 0,
         pre_dar_score: emp.total_score || emp.pre_dar_score || 0,
         weighted_score: emp.weighted_score || 0,
@@ -212,16 +231,21 @@ export default function EmployeeList() {
       report_name: employee.report_name || "",
       job_title: employee.job_title || "server",
       aliases: (employee.aliases || []).join(", "),  // Convert array to comma-separated string
-      guests: employee.guests || 0,
+      guests: employee.guests || employee.guest_count || 0,
       net_sales: employee.net_sales || 0,
+      ppa: employee.ppa || 0,
+      liquor_sales: employee.liquor_sales || 0,
+      beer_sales: employee.beer_sales || 0,
+      wine_sales: employee.wine_sales || 0,
       lbw: employee.lbw || 0,
-      glassware_sales: employee.glassware_sales || 0,
+      glassware_sales: employee.glassware_sales || employee.bar_glassware_sales || 0,
+      loyalty_sales: employee.loyalty_sales || 0,
       lsc_count: employee.lsc_count || 0,
       nps_score: employee.nps_score || 0,
       cv_promoters: employee.cv_promoters || 0,
       cv_passives: employee.cv_passives || 0,
       cv_detractors: employee.cv_detractors || 0,
-      review_mentions: employee.review_mentions || 0
+      review_mentions: employee.review_mentions || employee.rt_mentions || 0
     });
     setShowEditModal(true);
   };
@@ -1069,7 +1093,7 @@ export default function EmployeeList() {
                 {/* Sales Data */}
                 <div className="mb-6">
                   <h3 className="font-semibold text-slate-200 mb-3">Sales Data</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-300 mb-1">Guests</label>
                       <Input
@@ -1089,16 +1113,18 @@ export default function EmployeeList() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1">LBW ($)</label>
+                      <label className="block text-sm font-medium text-cyan-400 mb-1">PPA ($)</label>
                       <Input
                         type="number"
-                        value={formData.lbw}
-                        onChange={(e) => handleFormChange('lbw', parseFloat(e.target.value) || 0)}
-                        placeholder="0"
+                        step="0.01"
+                        value={formData.ppa}
+                        onChange={(e) => handleFormChange('ppa', parseFloat(e.target.value) || 0)}
+                        placeholder="0.00"
+                        className="border-cyan-200"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1">Glassware ($)</label>
+                      <label className="block text-sm font-medium text-slate-300 mb-1">Glassware Total ($)</label>
                       <Input
                         type="number"
                         value={formData.glassware_sales}
@@ -1107,19 +1133,97 @@ export default function EmployeeList() {
                       />
                     </div>
                   </div>
+                  
+                  {/* LBW Breakdown */}
+                  <div className="bg-slate-700/30 p-4 rounded-lg">
+                    <h4 className="text-sm font-medium text-amber-400 mb-3">LBW Breakdown (Liquor + Beer + Wine)</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Liquor ($)</label>
+                        <Input
+                          type="number"
+                          value={formData.liquor_sales}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value) || 0;
+                            handleFormChange('liquor_sales', val);
+                            // Auto-calculate LBW total
+                            const newLbw = val + (formData.beer_sales || 0) + (formData.wine_sales || 0);
+                            handleFormChange('lbw', newLbw);
+                          }}
+                          placeholder="0"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Beer ($)</label>
+                        <Input
+                          type="number"
+                          value={formData.beer_sales}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value) || 0;
+                            handleFormChange('beer_sales', val);
+                            const newLbw = (formData.liquor_sales || 0) + val + (formData.wine_sales || 0);
+                            handleFormChange('lbw', newLbw);
+                          }}
+                          placeholder="0"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Wine ($)</label>
+                        <Input
+                          type="number"
+                          value={formData.wine_sales}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value) || 0;
+                            handleFormChange('wine_sales', val);
+                            const newLbw = (formData.liquor_sales || 0) + (formData.beer_sales || 0) + val;
+                            handleFormChange('lbw', newLbw);
+                          }}
+                          placeholder="0"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-amber-400 mb-1">LBW Total ($)</label>
+                        <Input
+                          type="number"
+                          value={formData.lbw}
+                          onChange={(e) => handleFormChange('lbw', parseFloat(e.target.value) || 0)}
+                          placeholder="0"
+                          className="border-amber-200 bg-slate-700"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 {/* LSC Count */}
                 <div className="mb-6">
                   <h3 className="font-semibold text-slate-200 mb-3">LSC (Loyalty Signups)</h3>
-                  <div className="w-1/2">
-                    <label className="block text-sm font-medium text-slate-300 mb-1">LSC Count</label>
-                    <Input
-                      type="number"
-                      value={formData.lsc_count}
-                      onChange={(e) => handleFormChange('lsc_count', parseInt(e.target.value) || 0)}
-                      placeholder="0"
-                    />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-1">Loyalty Sales ($)</label>
+                      <Input
+                        type="number"
+                        value={formData.loyalty_sales}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value) || 0;
+                          handleFormChange('loyalty_sales', val);
+                          // Auto-calculate LSC count ($25 per signup)
+                          handleFormChange('lsc_count', Math.round(val / 25));
+                        }}
+                        placeholder="0"
+                      />
+                      <p className="text-xs text-slate-500 mt-1">Each $25 = 1 LSC</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-green-400 mb-1">LSC Count</label>
+                      <Input
+                        type="number"
+                        value={formData.lsc_count}
+                        onChange={(e) => handleFormChange('lsc_count', parseInt(e.target.value) || 0)}
+                        placeholder="0"
+                        className="border-green-200"
+                      />
+                    </div>
                   </div>
                 </div>
 

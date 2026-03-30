@@ -571,13 +571,49 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
     # Recalculate derived values if needed
     emp = employees[emp_idx]
     
+    # Handle field aliases
+    if "guests" in updates:
+        emp["guest_count"] = updates["guests"]
+    if "glassware_sales" in updates:
+        emp["bar_glassware_sales"] = updates["glassware_sales"]
+    if "lbw" in updates:
+        emp["lbw"] = updates["lbw"]
+    if "review_mentions" in updates:
+        emp["rt_mentions"] = updates["review_mentions"]
+    
+    # Recalculate LBW from components if any L/B/W updated
+    if any(k in updates for k in ["liquor_sales", "beer_sales", "wine_sales"]):
+        liquor = emp.get("liquor_sales", 0) or 0
+        beer = emp.get("beer_sales", 0) or 0
+        wine = emp.get("wine_sales", 0) or 0
+        emp["lbw"] = liquor + beer + wine
+    
     # Recalculate LSC count if loyalty_sales updated
     if "loyalty_sales" in updates and updates["loyalty_sales"]:
         emp["lsc_count"] = round(updates["loyalty_sales"] / 25)
     
+    # Recalculate per-guest metrics
+    guest_count = emp.get("guest_count") or emp.get("guests") or 0
+    if guest_count > 0:
+        lbw = emp.get("lbw", 0) or 0
+        glassware = emp.get("bar_glassware_sales") or emp.get("glassware_sales") or 0
+        emp["lbw_per_guest"] = round(lbw / guest_count, 2)
+        emp["glassware_per_guest"] = round(glassware / guest_count, 2)
+    
     # Recalculate guests_per_lsc
-    if emp.get("lsc_count") and emp.get("guest_count"):
-        emp["guests_per_lsc"] = round(emp["guest_count"] / emp["lsc_count"], 2)
+    lsc_count = emp.get("lsc_count", 0) or 0
+    if lsc_count > 0 and guest_count > 0:
+        emp["guests_per_lsc"] = round(guest_count / lsc_count, 2)
+    
+    # Recalculate scores using the scoring formula
+    from snapshot_manager import calculate_employee_scores, assign_performance_tiers
+    
+    # Update this employee's scores
+    scored_emp = calculate_employee_scores([emp])[0]
+    employees[emp_idx] = scored_emp
+    
+    # Re-assign tiers for all employees (since one employee's score change affects tiers)
+    employees = assign_performance_tiers(employees)
     
     # Update the snapshot
     await db.snapshot_workflow.update_one(
@@ -590,12 +626,15 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
         }
     )
     
-    logger.info(f"Updated employee {employee_id} in snapshot {snapshot_id}")
+    # Get the updated employee data
+    updated_emp = next((e for e in employees if e.get("id") == employee_id or e.get("name", "").lower() == employee_id.lower()), scored_emp)
+    
+    logger.info(f"Updated employee {employee_id} in snapshot {snapshot_id}, new score: {updated_emp.get('total_score')}")
     
     return {
         "success": True,
         "message": f"Updated employee in snapshot",
-        "employee": {k: v for k, v in emp.items() if k != "_id"}
+        "employee": {k: v for k, v in updated_emp.items() if k != "_id"}
     }
 
 
