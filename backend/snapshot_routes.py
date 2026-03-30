@@ -929,7 +929,7 @@ async def sync_job_titles_from_legacy():
 async def fix_snapshot_names():
     """
     Fix display names and tiers in the active snapshot.
-    Syncs display_name from employees_v2, re-assigns tiers, and sorts properly.
+    Syncs display_name and job_title from employees_v2, re-assigns tiers, and sorts properly.
     """
     db = get_db()
     
@@ -950,19 +950,24 @@ async def fix_snapshot_names():
         raise HTTPException(status_code=404, detail="No active snapshot found")
     
     # Build lookup from employees_v2 for display_name and job_title
+    # Use multiple keys: full name, first name, display_name, report_name
     name_lookup = {}
     async for emp in db.employees_v2.find({}, {"_id": 0}):
-        # Use multiple keys for matching
-        for key in [
-            emp.get("name", "").lower().strip(),
-            emp.get("report_name", "").lower().strip(),
-            emp.get("display_name", "").lower().strip() if emp.get("display_name") else ""
-        ]:
-            if key and key not in name_lookup:
-                name_lookup[key] = {
-                    "display_name": emp.get("display_name") or emp.get("name", "").split()[0],
-                    "job_title": emp.get("job_title", "Server")
-                }
+        emp_data = {
+            "display_name": emp.get("display_name") or emp.get("name", "").split()[0],
+            "job_title": emp.get("job_title", "Server")
+        }
+        
+        # Add multiple keys for flexible matching
+        name = emp.get("name", "").lower().strip()
+        display = (emp.get("display_name") or "").lower().strip()
+        report = (emp.get("report_name") or "").lower().strip()
+        first_name = name.split()[0] if name else ""
+        
+        if name: name_lookup[name] = emp_data
+        if display and display != name: name_lookup[display] = emp_data
+        if report and report != name: name_lookup[report] = emp_data
+        if first_name and first_name != name: name_lookup[first_name] = emp_data
     
     # Update employees in snapshot
     employees = snapshot.get('employees', [])
@@ -971,9 +976,12 @@ async def fix_snapshot_names():
     for emp in employees:
         emp_name = emp.get('name', '').lower().strip()
         emp_report = emp.get('report_name', '').lower().strip()
+        emp_first = emp_name.split()[0] if emp_name else ""
         
-        # Find match
-        lookup = name_lookup.get(emp_name) or name_lookup.get(emp_report)
+        # Find match using multiple strategies
+        lookup = (name_lookup.get(emp_name) or 
+                  name_lookup.get(emp_report) or 
+                  name_lookup.get(emp_first))
         
         if lookup:
             old_display = emp.get('display_name')
@@ -985,7 +993,7 @@ async def fix_snapshot_names():
                 emp['display_name'] = new_display
                 emp['name'] = new_display  # Sync name with display_name
             
-            # Set job_title from lookup
+            # Set job_title from lookup - THIS IS CRITICAL FOR TIER SORTING
             new_job = lookup.get('job_title', 'Server')
             if new_job:
                 emp['job_title'] = new_job
@@ -999,7 +1007,7 @@ async def fix_snapshot_names():
             emp['display_name'] = first_name
             emp['name'] = first_name
             emp['report_name'] = current_name  # Preserve original as report_name
-            changes.append(f"{current_name}: derived display='{first_name}'")
+            changes.append(f"{current_name}: derived display='{first_name}', no job match")
     
     # Re-calculate scores and assign tiers (which also sorts)
     from snapshot_manager import assign_performance_tiers
