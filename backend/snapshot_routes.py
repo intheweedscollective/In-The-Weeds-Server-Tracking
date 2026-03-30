@@ -407,74 +407,6 @@ async def push_parsed_data_to_snapshot(
         "message": f"Pushed {upload_type} data to snapshot",
         "record_count": parsed_data.get("record_count", len(parsed_data.get("employees", [])))
     }
-    
-    # Create upload record
-    upload_record = create_upload_record(
-        snapshot_id=snapshot_id,
-        upload_type=upload_type_enum,
-        filename=final_filename,
-        file_size=file_size,
-        parsed_data=final_parsed_data
-    )
-    
-    if source:
-        upload_record["source"] = source
-    
-    if parse_error:
-        upload_record["status"] = UploadStatus.FAILED.value
-        upload_record["error"] = parse_error
-    elif final_parsed_data:
-        upload_record["status"] = UploadStatus.PARSED.value
-    
-    # Update snapshot with new upload
-    current_uploads = snapshot.get("uploads", [])
-    
-    # Replace existing upload of same type or add new
-    existing_idx = next(
-        (i for i, u in enumerate(current_uploads) if u.get("upload_type") == upload_type),
-        None
-    )
-    if existing_idx is not None:
-        current_uploads[existing_idx] = upload_record
-    else:
-        current_uploads.append(upload_record)
-    
-    # Calculate new progress
-    upload_progress = calculate_upload_progress(current_uploads)
-    
-    # Determine new status
-    new_status = snapshot["status"]
-    if new_status == SnapshotStatus.DRAFT.value and any(upload_progress.values()):
-        new_status = SnapshotStatus.IN_PROGRESS.value
-    
-    # Update snapshot
-    await db.snapshot_workflow.update_one(
-        {"id": snapshot_id},
-        {
-            "$set": {
-                "uploads": current_uploads,
-                "upload_progress": upload_progress,
-                "status": new_status,
-                "updated_at": datetime.now(timezone.utc).isoformat()
-            }
-        }
-    )
-    
-    # Return result
-    can_process, missing = can_process_snapshot({
-        "upload_progress": upload_progress,
-        **snapshot
-    })
-    
-    return {
-        "success": parse_error is None,
-        "upload": upload_record,
-        "upload_progress": upload_progress,
-        "can_process": can_process,
-        "missing_uploads": missing,
-        "message": parse_error or f"Successfully uploaded {file.filename}",
-        "record_count": upload_record.get("record_count", 0)
-    }
 
 
 @snapshot_router.get("/snapshots/{snapshot_id}/uploads")
@@ -1402,28 +1334,57 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                 if not name:
                     continue
                 
+                # Extract raw values
+                guest_count = emp_data.get("guest_count", 0) or 0
+                liquor_sales = emp_data.get("liquor_sales", 0) or 0
+                beer_sales = emp_data.get("beer_sales", 0) or 0
+                wine_sales = emp_data.get("wine_sales", 0) or 0
+                glassware_sales = emp_data.get("glassware_sales", 0) or emp_data.get("bar_glassware_sales", 0) or 0
+                loyalty_sales = emp_data.get("loyalty_sales", 0) or 0
+                lbw_total = emp_data.get("lbw_total", 0) or (liquor_sales + beer_sales + wine_sales)
+                
+                # Calculate per-guest metrics (if not already provided)
+                # LBW per guest: prioritize pre-calculated, otherwise calculate from totals
+                lbw_per_guest = emp_data.get("lbw_per_guest", 0)
+                if not lbw_per_guest and guest_count > 0:
+                    lbw_per_guest = round(lbw_total / guest_count, 2)
+                
+                # Glassware per guest: prioritize pre-calculated, otherwise calculate
+                glassware_per_guest = emp_data.get("glassware_per_guest", 0)
+                if not glassware_per_guest and guest_count > 0:
+                    glassware_per_guest = round(glassware_sales / guest_count, 2)
+                
+                # LSC Count (each loyalty card = $25)
+                lsc_count = emp_data.get("lsc_count", 0)
+                if not lsc_count and loyalty_sales > 0:
+                    lsc_count = round(loyalty_sales / 25)
+                
+                # Guests per LSC: prioritize pre-calculated, otherwise calculate
+                guests_per_lsc = emp_data.get("guests_per_lsc", 0)
+                if not guests_per_lsc and lsc_count > 0:
+                    guests_per_lsc = round(guest_count / lsc_count, 2)
+                
                 employees[name.lower()] = {
                     "id": str(uuid.uuid4()),
                     "name": name,
                     "quarter": snapshot.get("quarter"),
                     "year": snapshot.get("year"),
                     "job_title": emp_data.get("job_title", "Server"),
-                    "guests": emp_data.get("guest_count", 0),
-                    "guest_count": emp_data.get("guest_count", 0),
+                    "guests": guest_count,
+                    "guest_count": guest_count,
                     "net_sales": emp_data.get("net_sales", 0),
                     "ppa": emp_data.get("ppa", 0),
-                    "lbw_per_guest": emp_data.get("lbw_per_guest", 0),
-                    "glassware_per_guest": emp_data.get("glassware_per_guest", 0),
-                    "guests_per_lsc": emp_data.get("guests_per_lsc", 0),
-                    # Calculate LSC count from loyalty_sales (each card = $25)
-                    "lsc_count": emp_data.get("lsc_count") or (round(emp_data.get("loyalty_sales", 0) / 25) if emp_data.get("loyalty_sales", 0) > 0 else 0),
-                    "loyalty_sales": emp_data.get("loyalty_sales", 0),
+                    "lbw_per_guest": lbw_per_guest,
+                    "glassware_per_guest": glassware_per_guest,
+                    "guests_per_lsc": guests_per_lsc,
+                    "lsc_count": lsc_count,
+                    "loyalty_sales": loyalty_sales,
                     "food_sales": emp_data.get("food_sales", 0),
-                    "liquor_sales": emp_data.get("liquor_sales", 0),
-                    "beer_sales": emp_data.get("beer_sales", 0),
-                    "wine_sales": emp_data.get("wine_sales", 0),
-                    "bar_glassware_sales": emp_data.get("bar_glassware_sales", 0),
-                    "lbw": emp_data.get("lbw_total", 0),
+                    "liquor_sales": liquor_sales,
+                    "beer_sales": beer_sales,
+                    "wine_sales": wine_sales,
+                    "bar_glassware_sales": glassware_sales,
+                    "lbw": lbw_total,
                     # Initialize CV/RT fields
                     "cv_promoters": 0,
                     "cv_passives": 0,

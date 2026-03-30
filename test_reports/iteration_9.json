@@ -1,0 +1,105 @@
+{
+  "summary": "Bug fix verification complete. The merge_snapshot_data function fix is working correctly - all 28 employees have properly calculated per-guest metrics (lbw_per_guest, glassware_per_guest, guests_per_lsc) and scores. Snapshot Q1P3W6 displays correctly with Starwars Mckinnon-Herrera as top scorer with 117.2 points.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "passed_tests": [
+    "Backend: /api/v2/snapshot-workflow/current-rankings returns 200 OK",
+    "Backend: Current rankings returns all 28 employees",
+    "Backend: Snapshot metadata correct (Q1P3W6, 28 employees)",
+    "Backend: lbw_per_guest calculated for all employees with guests",
+    "Backend: glassware_per_guest calculated for all employees with guests",
+    "Backend: guests_per_lsc calculated for all employees with LSC data",
+    "Backend: score_ppa non-zero for all employees",
+    "Backend: score_lbw non-zero for all employees",
+    "Backend: score_glass non-zero for all employees",
+    "Backend: score_lsc non-zero for all employees",
+    "Backend: total_score in reasonable range (50-120) for all employees",
+    "Backend: Top scorer is Starwars Mckinnon-Herrera with 117.2 points",
+    "Backend: Slide endpoint returns 200 OK",
+    "Backend: Slide returns valid PNG file (205KB)",
+    "Backend: Slide has proper content-disposition header",
+    "Backend: Snapshot details returns 200 OK",
+    "Backend: Snapshot has 28 employees",
+    "Backend: Snapshot has benchmarks (ppa: 55.0, lbw: 8.0, glass: 1.25, lsc: 100.0)",
+    "Frontend: Dashboard shows 28 CREW MEMBERS",
+    "Frontend: Dashboard shows AVG SCORE 81.0",
+    "Frontend: Dashboard shows 7 TOP PERFORMERS",
+    "Frontend: Leaderboard displays all 28 employees with correct rankings",
+    "Frontend: Starwars Mckinnon-Herrera shown as #1 with 117.2 points",
+    "Frontend: Category Leaders panel shows correct leaders",
+    "Frontend: All employees have proper POS metrics and review scores displayed"
+  ],
+
+  "test_report_links": [
+    "/app/backend/tests/test_snapshot_metrics.py",
+    "/app/test_reports/pytest/snapshot_metrics_results.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [],
+
+  "updated_files": [
+    "/app/backend/tests/test_snapshot_metrics.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% (18/18 tests passed)",
+    "frontend": "100% (all features verified)"
+  },
+
+  "seed_data_creation": "None - used existing snapshot Q1P3W6 (af0b6115-135a-4c3d-b839-fd6ef6a18348)",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Bug fix for merge_snapshot_data function verified. The fix correctly calculates per-guest metrics (lbw_per_guest, glassware_per_guest, guests_per_lsc) from raw POS data when they aren't pre-populated. All 28 employees in snapshot Q1P3W6 have proper scores ranging from 69.5 to 117.2. Top scorer is Starwars Mckinnon-Herrera with 117.2 points. Slide generation working correctly (205KB PNG).",
+
+  "features_verified": {
+    "current_rankings_endpoint": {
+      "status": "Working",
+      "employee_count": 28,
+      "top_scorer": "Starwars Mckinnon-Herrera (117.2 pts)"
+    },
+    "per_guest_metrics_calculation": {
+      "lbw_per_guest": "Calculated for all 28 employees",
+      "glassware_per_guest": "Calculated for all 28 employees",
+      "guests_per_lsc": "Calculated for all 28 employees"
+    },
+    "score_calculation": {
+      "score_ppa": "Non-zero for all employees (range: 82.67-104.65)",
+      "score_lbw": "Non-zero for all employees (range: 40.12-180.00)",
+      "score_glass": "Non-zero for all employees (range: 81.60-215.20)",
+      "score_lsc": "Non-zero for all employees (range: 26.39-374.81)",
+      "total_score": "In range 50-120 for all employees (actual: 69.55-117.20)"
+    },
+    "slide_generation": {
+      "status": "Working",
+      "file_size": "205KB PNG",
+      "content_type": "image/png"
+    },
+    "frontend_leaderboard": {
+      "status": "Working",
+      "displays_all_employees": true,
+      "correct_rankings": true,
+      "category_leaders_shown": true
+    }
+  },
+
+  "bug_fix_verification": {
+    "original_issue": "After processing snapshot Q1P3W6, the generated slide was 'all wrong, missing most data and more than half of the staff'",
+    "root_cause": "merge_snapshot_data function was not calculating per-guest metrics from raw POS data when those fields weren't pre-calculated by the OCR parser",
+    "fix_applied": "Added calculations for lbw_per_guest (lbw_total/guest_count), glassware_per_guest (glassware_sales/guest_count), and guests_per_lsc (guest_count/lsc_count) when they aren't pre-populated",
+    "verification_result": "PASSED - All 28 employees now have properly calculated metrics and scores"
+  }
+}
