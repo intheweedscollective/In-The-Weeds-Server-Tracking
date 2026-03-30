@@ -1419,8 +1419,16 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Merge data from all uploads in a snapshot into employee records.
     POS data is the base, CV and RT data are merged on top.
+    Preserves manually set job_titles from existing snapshot data.
     """
     employees = {}
+    
+    # Build lookup of existing employee data to preserve job_titles
+    existing_employees = {}
+    for emp in snapshot.get("employees", []):
+        name_key = emp.get("name", "").lower().strip()
+        if name_key:
+            existing_employees[name_key] = emp
     
     for upload in snapshot.get("uploads", []):
         upload_type = upload.get("upload_type")
@@ -1463,12 +1471,16 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                 if not guests_per_lsc and lsc_count > 0:
                     guests_per_lsc = round(guest_count / lsc_count, 2)
                 
+                # Preserve job_title from existing employee data or POS data
+                existing_emp = existing_employees.get(name.lower())
+                job_title = emp_data.get("job_title") or (existing_emp.get("job_title") if existing_emp else None) or "Server"
+                
                 employees[name.lower()] = {
-                    "id": str(uuid.uuid4()),
+                    "id": existing_emp.get("id") if existing_emp else str(uuid.uuid4()),
                     "name": name,
                     "quarter": snapshot.get("quarter"),
                     "year": snapshot.get("year"),
-                    "job_title": emp_data.get("job_title", "Server"),
+                    "job_title": job_title,
                     "guests": guest_count,
                     "guest_count": guest_count,
                     "net_sales": emp_data.get("net_sales", 0),
