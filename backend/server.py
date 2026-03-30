@@ -1207,8 +1207,8 @@ class QuarterSettingsCreate(BaseModel):
     bonus_rate: float = 0.2
     bonus_cap: float = 5.0
     # Server tier thresholds (Settings-driven)
-    a_server_min_score: float = 85.1
-    b_server_min_score: float = 70.1
+    a_server_min_score: float = 90.0   # A-Server >= 90
+    b_server_min_score: float = 75.0   # B-Server >= 75, C-Server < 75
 
 
 class QuarterSettingsUpdate(BaseModel):
