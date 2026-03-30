@@ -608,8 +608,16 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
     # Recalculate scores using the scoring formula
     from snapshot_manager import calculate_employee_scores, assign_performance_tiers
     
+    # Default benchmarks
+    benchmarks = {
+        "ppa": 55.0,
+        "lbw": 8.0,
+        "glass": 1.25,
+        "lsc": 100.0
+    }
+    
     # Update this employee's scores
-    scored_emp = calculate_employee_scores([emp])[0]
+    scored_emp = calculate_employee_scores(emp, benchmarks)
     employees[emp_idx] = scored_emp
     
     # Re-assign tiers for all employees (since one employee's score change affects tiers)
