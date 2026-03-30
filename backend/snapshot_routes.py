@@ -1670,10 +1670,12 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
         elif upload_type == UploadType.REVIEW_TRACKER.value:
             # Merge RT data with fuzzy name matching
             # Build a mapping of common nicknames to full names
+            # Format: 'nickname_in_reviews': 'name_in_pos'
             nickname_map = {
-                'trey': 'treyanne', 'tad': 'thaddeus', 'abby': 'abigail',
+                'trey': 'treyanna', 'tad': 'thaddeus', 'abby': 'abigail',
                 'ikey': 'eric', 'lennie': 'glennice', 'terry': 'terrance',
-                'allen': 'craig', 'matt': 'matthew', 'mike': 'michael',
+                'allen': 'craig',  # Allen in reviews = Craig Simmons in POS
+                'matt': 'matthew', 'mike': 'michael',
                 'dan': 'daniel', 'rob': 'robert', 'bob': 'robert',
                 'jim': 'james', 'joe': 'joseph', 'chris': 'christopher',
                 'nick': 'nicholas', 'tom': 'thomas', 'will': 'william',
