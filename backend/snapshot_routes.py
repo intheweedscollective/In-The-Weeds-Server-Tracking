@@ -1910,16 +1910,24 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Merge data from all uploads in a snapshot into employee records.
     POS data is the base, CV and RT data are merged on top.
-    Preserves manually set job_titles from existing snapshot data.
+    Preserves manually set job_titles, display_names, and other edits from existing snapshot data.
     """
     employees = {}
     
-    # Build lookup of existing employee data to preserve job_titles
+    # Build lookup of existing employee data to preserve edits
+    # Use multiple keys for flexible matching (full name, first name, report_name)
     existing_employees = {}
     for emp in snapshot.get("employees", []):
-        name_key = emp.get("name", "").lower().strip()
-        if name_key:
-            existing_employees[name_key] = emp
+        name = emp.get("name", "").lower().strip()
+        display_name = emp.get("display_name", "").lower().strip()
+        report_name = emp.get("report_name", "").lower().strip()
+        first_name = name.split()[0] if name else ""
+        
+        # Add to lookup with multiple keys
+        if name: existing_employees[name] = emp
+        if display_name and display_name != name: existing_employees[display_name] = emp
+        if report_name and report_name != name: existing_employees[report_name] = emp
+        if first_name and first_name != name: existing_employees[first_name] = emp
     
     for upload in snapshot.get("uploads", []):
         upload_type = upload.get("upload_type")
@@ -1931,6 +1939,12 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                 name = emp_data.get("name", "").strip()
                 if not name:
                     continue
+                
+                # Find existing employee using multiple matching strategies
+                name_lower = name.lower()
+                first_name_lower = name_lower.split()[0] if name_lower else ""
+                existing_emp = (existing_employees.get(name_lower) or 
+                               existing_employees.get(first_name_lower))
                 
                 # Extract raw values
                 guest_count = emp_data.get("guest_count", 0) or 0
@@ -1944,32 +1958,42 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                 lbw_total = liquor_sales + beer_sales + wine_sales
                 
                 # Calculate per-guest metrics (if not already provided)
-                # LBW per guest: prioritize pre-calculated, otherwise calculate from totals
                 lbw_per_guest = emp_data.get("lbw_per_guest", 0)
                 if not lbw_per_guest and guest_count > 0:
                     lbw_per_guest = round(lbw_total / guest_count, 2)
                 
-                # Glassware per guest: prioritize pre-calculated, otherwise calculate
                 glassware_per_guest = emp_data.get("glassware_per_guest", 0)
                 if not glassware_per_guest and guest_count > 0:
                     glassware_per_guest = round(glassware_sales / guest_count, 2)
                 
-                # LSC Count (each loyalty card = $25)
                 lsc_count = emp_data.get("lsc_count", 0)
                 if not lsc_count and loyalty_sales > 0:
                     lsc_count = round(loyalty_sales / 25)
                 
-                # Guests per LSC: prioritize pre-calculated, otherwise calculate
                 guests_per_lsc = emp_data.get("guests_per_lsc", 0)
                 if not guests_per_lsc and lsc_count > 0:
                     guests_per_lsc = round(guest_count / lsc_count, 2)
                 
-                # Preserve job_title and display_name from existing employee data or POS data
-                existing_emp = existing_employees.get(name.lower())
-                job_title = emp_data.get("job_title") or (existing_emp.get("job_title") if existing_emp else None) or "Server"
+                # PRESERVE job_title from existing employee - THIS IS CRITICAL
+                # Only use POS job_title if no existing job_title or it's generic "Server"
+                existing_job = existing_emp.get("job_title", "Server").lower() if existing_emp else "server"
+                pos_job = emp_data.get("job_title", "Server")
                 
-                # Use existing display_name if set, otherwise default to full name
-                display_name = (existing_emp.get("display_name") if existing_emp else None) or name
+                # If existing job is trainer/bartender, preserve it (don't override with POS data)
+                if existing_job in ["trainer", "bartender"]:
+                    job_title = existing_job
+                else:
+                    job_title = pos_job or "Server"
+                
+                # PRESERVE display_name from existing employee
+                # If user set a custom display_name (like "Abby"), keep it
+                existing_display = existing_emp.get("display_name", "") if existing_emp else ""
+                if existing_display and existing_display.lower() != name.lower() and ' ' not in existing_display:
+                    # User has set a custom first-name-only display_name
+                    display_name = existing_display
+                else:
+                    display_name = existing_emp.get("display_name", name) if existing_emp else name
+                
                 # Store the full POS name as report_name for matching
                 report_name = name
                 
