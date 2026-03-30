@@ -300,10 +300,10 @@ def assign_performance_tiers(employees: List[Dict[str, Any]]) -> List[Dict[str, 
     Tier assignment rules:
     - Bartenders: job_title contains 'bartender' -> tier_label = "Bartender"
     - Trainers: job_title contains 'trainer' -> tier_label = "Trainer"
-    - Servers are ranked by score and assigned A/B/C tiers:
-      - Top 25%: A-Server
-      - Middle 50%: B-Server  
-      - Bottom 25%: C-Server
+    - Servers are assigned tiers by SCORE thresholds:
+      - 85+ points: A-Server
+      - 70-85 points: B-Server  
+      - 0-70 points: C-Server
     """
     # Separate bartenders/trainers from servers
     bartenders = []
@@ -312,6 +312,8 @@ def assign_performance_tiers(employees: List[Dict[str, Any]]) -> List[Dict[str, 
     
     for emp in employees:
         job_title = (emp.get("job_title") or "server").lower()
+        score = emp.get("total_score", 0) or emp.get("pre_dar_score", 0) or 0
+        
         if "bartender" in job_title or "bar" in job_title:
             emp["tier_label"] = "Bartender"
             bartenders.append(emp)
@@ -319,26 +321,19 @@ def assign_performance_tiers(employees: List[Dict[str, Any]]) -> List[Dict[str, 
             emp["tier_label"] = "Trainer"
             trainers.append(emp)
         else:
+            # Assign tier based on score thresholds
+            if score >= 85:
+                emp["tier_label"] = "A-Server"
+            elif score >= 70:
+                emp["tier_label"] = "B-Server"
+            else:
+                emp["tier_label"] = "C-Server"
             servers.append(emp)
     
     # Sort each group by total_score descending
     bartenders = sorted(bartenders, key=lambda x: x.get("total_score", 0) or 0, reverse=True)
     trainers = sorted(trainers, key=lambda x: x.get("total_score", 0) or 0, reverse=True)
     servers = sorted(servers, key=lambda x: x.get("total_score", 0) or 0, reverse=True)
-    
-    # Assign A/B/C tiers to servers based on score rank
-    num_servers = len(servers)
-    if num_servers > 0:
-        a_cutoff = int(num_servers * 0.25)  # Top 25%
-        c_start = int(num_servers * 0.75)   # Bottom 25%
-        
-        for i, emp in enumerate(servers):
-            if i < a_cutoff:
-                emp["tier_label"] = "A-Server"
-            elif i >= c_start:
-                emp["tier_label"] = "C-Server"
-            else:
-                emp["tier_label"] = "B-Server"
     
     # Combine in order: Trainers, Bartenders, A-Servers, B-Servers, C-Servers
     sorted_employees = trainers + bartenders
@@ -364,15 +359,15 @@ def assign_performance_tiers(employees: List[Dict[str, Any]]) -> List[Dict[str, 
         emp["peer_rank"] = i
         emp["peer_rank_display"] = f"{i} of {len(sorted_employees)}"
         
-        # Assign performance tier label based on percentile (for color coding)
-        percentile = (len(sorted_employees) - i + 1) / len(sorted_employees) * 100
-        if percentile >= 80:
+        # Assign performance tier label based on score (for color coding)
+        score = emp.get("total_score", 0) or 0
+        if score >= 100:
             emp["performance_tier"] = "Top Performer"
-        elif percentile >= 60:
+        elif score >= 85:
             emp["performance_tier"] = "Above Average"
-        elif percentile >= 40:
+        elif score >= 70:
             emp["performance_tier"] = "Average"
-        elif percentile >= 20:
+        elif score >= 60:
             emp["performance_tier"] = "Below Average"
         else:
             emp["performance_tier"] = "Needs Immediate Improvement"
