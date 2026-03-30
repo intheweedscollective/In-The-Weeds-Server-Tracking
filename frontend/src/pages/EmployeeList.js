@@ -261,11 +261,11 @@ export default function EmployeeList() {
     setSaving(true);
     try {
       if (editingEmployee) {
-        // Update existing
-        await api.put(`/v2/employees/${editingEmployee.id}`, dataToSave);
+        // Update existing employee in the current snapshot
+        await api.put(`/v2/snapshot-workflow/employees/${editingEmployee.id}`, dataToSave);
         toast.success(`Updated ${formData.name}`);
       } else {
-        // Create new
+        // Create new - still use legacy endpoint
         await api.post(`/v2/employees`, {
           ...dataToSave,
           year: selectedYear,

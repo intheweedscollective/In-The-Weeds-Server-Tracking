@@ -319,8 +319,16 @@ export default function LeaderboardRankings() {
       // Get employees from the current snapshot
       const snapshotEmployees = rankingsRes.data?.employees || [];
       
-      // Sort employees by score (highest to lowest) for leaderboard view
+      // Define tier order for sorting
+      const tierOrder = {
+        "Trainer": 0, "Bartender": 1, "A-Server": 2, "B-Server": 3, "C-Server": 4, "Server": 5
+      };
+      
+      // Sort employees by tier first, then by score within tier (highest to lowest)
       const sortedEmployees = snapshotEmployees.sort((a, b) => {
+        const tierA = tierOrder[a.tier_label] ?? 5;
+        const tierB = tierOrder[b.tier_label] ?? 5;
+        if (tierA !== tierB) return tierA - tierB;
         const scoreA = a.total_score || a.pre_dar_score || 0;
         const scoreB = b.total_score || b.pre_dar_score || 0;
         return scoreB - scoreA;
@@ -330,7 +338,8 @@ export default function LeaderboardRankings() {
       const leaderboardRankings = sortedEmployees.map((emp, idx) => ({
         position: idx + 1,
         position_label: `#${idx + 1}`,
-        tier_label: emp.job_title || "Server",
+        tier_label: emp.tier_label || emp.job_title || "Server",
+        tier_rank: emp.tier_rank || idx + 1,
         employee_id: emp.id || emp.name,
         name: emp.name,
         job_title: emp.job_title || "Server",

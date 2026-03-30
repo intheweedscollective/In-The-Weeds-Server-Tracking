@@ -514,6 +514,92 @@ async def update_pos_employee_data(snapshot_id: str, employee_name: str, updates
     }
 
 
+
+@snapshot_router.put("/employees/{employee_id}")
+async def update_snapshot_employee(employee_id: str, updates: dict):
+    """
+    Update an employee in the current active snapshot.
+    Used when Employee List tab edits an employee's data.
+    """
+    db = get_db()
+    
+    # Find current active snapshot
+    snapshot = await db.snapshot_workflow.find_one(
+        {"is_current": True},
+        {"_id": 0}
+    )
+    
+    if not snapshot:
+        # Fallback to most recent completed snapshot
+        snapshot = await db.snapshot_workflow.find_one(
+            {"status": "completed"},
+            {"_id": 0},
+            sort=[("completed_at", -1)]
+        )
+    
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="No active snapshot found")
+    
+    snapshot_id = snapshot["id"]
+    employees = snapshot.get("employees", [])
+    
+    # Find employee by ID or name
+    emp_idx = None
+    for i, emp in enumerate(employees):
+        if emp.get("id") == employee_id or emp.get("name", "").lower() == employee_id.lower():
+            emp_idx = i
+            break
+    
+    if emp_idx is None:
+        raise HTTPException(status_code=404, detail=f"Employee '{employee_id}' not found in snapshot")
+    
+    # Update allowed fields
+    allowed_fields = [
+        "name", "display_name", "job_title", "tier_label",
+        "ppa", "lbw_per_guest", "glassware_per_guest", "guests_per_lsc",
+        "guest_count", "guests", "net_sales", "loyalty_sales", "lsc_count",
+        "liquor_sales", "beer_sales", "wine_sales", "bar_glassware_sales",
+        "cv_promoters", "cv_passives", "cv_detractors", "cv_score",
+        "rt_mentions", "review_tracker_bonus", "nps_score",
+        "aliases"
+    ]
+    
+    for key, value in updates.items():
+        if key in allowed_fields:
+            employees[emp_idx][key] = value
+    
+    # Recalculate derived values if needed
+    emp = employees[emp_idx]
+    
+    # Recalculate LSC count if loyalty_sales updated
+    if "loyalty_sales" in updates and updates["loyalty_sales"]:
+        emp["lsc_count"] = round(updates["loyalty_sales"] / 25)
+    
+    # Recalculate guests_per_lsc
+    if emp.get("lsc_count") and emp.get("guest_count"):
+        emp["guests_per_lsc"] = round(emp["guest_count"] / emp["lsc_count"], 2)
+    
+    # Update the snapshot
+    await db.snapshot_workflow.update_one(
+        {"id": snapshot_id},
+        {
+            "$set": {
+                "employees": employees,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    logger.info(f"Updated employee {employee_id} in snapshot {snapshot_id}")
+    
+    return {
+        "success": True,
+        "message": f"Updated employee in snapshot",
+        "employee": {k: v for k, v in emp.items() if k != "_id"}
+    }
+
+
+
 @snapshot_router.get("/historical-averages")
 async def get_historical_averages():
     """

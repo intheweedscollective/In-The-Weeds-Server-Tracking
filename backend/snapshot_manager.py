@@ -296,33 +296,75 @@ def calculate_employee_scores(
 def assign_performance_tiers(employees: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Assign performance tiers and ranks to employees.
-    Sorts by tier priority first, then by total_score descending.
+    
+    Tier assignment rules:
+    - Bartenders: job_title contains 'bartender' -> tier_label = "Bartender"
+    - Trainers: job_title contains 'trainer' -> tier_label = "Trainer"
+    - Servers are ranked by score and assigned A/B/C tiers:
+      - Top 25%: A-Server
+      - Middle 50%: B-Server  
+      - Bottom 25%: C-Server
     """
-    # Tier priority order
-    tier_order = {
-        "trainer": 1,
-        "bartender": 2,
-        "server": 3,
-        "a-server": 3,
-        "b-server": 4,
-        "new": 5,
-    }
+    # Separate bartenders/trainers from servers
+    bartenders = []
+    trainers = []
+    servers = []
     
-    # Sort employees
-    def sort_key(emp):
+    for emp in employees:
         job_title = (emp.get("job_title") or "server").lower()
-        tier = tier_order.get(job_title, 3)
-        score = emp.get("total_score", 0) or 0
-        return (tier, -score)
+        if "bartender" in job_title or "bar" in job_title:
+            emp["tier_label"] = "Bartender"
+            bartenders.append(emp)
+        elif "trainer" in job_title or "train" in job_title:
+            emp["tier_label"] = "Trainer"
+            trainers.append(emp)
+        else:
+            servers.append(emp)
     
-    sorted_employees = sorted(employees, key=sort_key)
+    # Sort each group by total_score descending
+    bartenders = sorted(bartenders, key=lambda x: x.get("total_score", 0) or 0, reverse=True)
+    trainers = sorted(trainers, key=lambda x: x.get("total_score", 0) or 0, reverse=True)
+    servers = sorted(servers, key=lambda x: x.get("total_score", 0) or 0, reverse=True)
     
-    # Assign ranks
+    # Assign A/B/C tiers to servers based on score rank
+    num_servers = len(servers)
+    if num_servers > 0:
+        a_cutoff = int(num_servers * 0.25)  # Top 25%
+        c_start = int(num_servers * 0.75)   # Bottom 25%
+        
+        for i, emp in enumerate(servers):
+            if i < a_cutoff:
+                emp["tier_label"] = "A-Server"
+            elif i >= c_start:
+                emp["tier_label"] = "C-Server"
+            else:
+                emp["tier_label"] = "B-Server"
+    
+    # Combine in order: Trainers, Bartenders, A-Servers, B-Servers, C-Servers
+    sorted_employees = trainers + bartenders
+    
+    # Add servers grouped by tier
+    a_servers = [e for e in servers if e.get("tier_label") == "A-Server"]
+    b_servers = [e for e in servers if e.get("tier_label") == "B-Server"]
+    c_servers = [e for e in servers if e.get("tier_label") == "C-Server"]
+    
+    sorted_employees.extend(a_servers)
+    sorted_employees.extend(b_servers)
+    sorted_employees.extend(c_servers)
+    
+    # Assign ranks within each tier
+    tier_counts = {}
+    for emp in sorted_employees:
+        tier = emp.get("tier_label", "Server")
+        tier_counts[tier] = tier_counts.get(tier, 0) + 1
+        emp["tier_rank"] = tier_counts[tier]
+    
+    # Assign overall peer rank
     for i, emp in enumerate(sorted_employees, 1):
         emp["peer_rank"] = i
         emp["peer_rank_display"] = f"{i} of {len(sorted_employees)}"
         
-        # Assign performance tier based on percentile
+        # Assign performance tier label based on percentile (for color coding)
         percentile = (len(sorted_employees) - i + 1) / len(sorted_employees) * 100
         if percentile >= 80:
             emp["performance_tier"] = "Top Performer"
