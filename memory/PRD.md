@@ -144,12 +144,12 @@ Build a comprehensive performance review application for restaurant employees th
 ## Roadmap
 
 ### P0 (Critical)
-- None currently
+- [x] ~~Snapshot processing missing staff data~~ (Fixed 2026-03-30)
 
 ### P1 (High Priority)
-- [ ] Update Leaderboard to use snapshot-workflow current-rankings API
-- [ ] Test full snapshot workflow with new file uploads
+- [x] ~~Update Leaderboard to use snapshot-workflow current-rankings API~~ (Done)
 - [ ] Momentum Indicators - Add Trend column on Leaderboard
+- [ ] Evaluate legacy "Fix All/Remove Excess" ReviewTracker bug (may be obsolete with snapshot architecture)
 
 ### P2 (Medium Priority)
 - [ ] Multi-Store Architecture - Support 22 locations
@@ -201,6 +201,14 @@ Build a comprehensive performance review application for restaurant employees th
 - `POST /api/v2/snapshot-workflow/migrate-legacy-data` - Migration utility
 
 ## Changelog
+
+### 2026-03-30 (Session 3)
+- **CRITICAL FIX: Per-Guest Metrics Calculation**
+  - Fixed `merge_snapshot_data` function in `snapshot_routes.py` to properly calculate per-guest metrics from raw POS data
+  - Issue: POS OCR produces raw totals (lbw_total, glassware_sales) but merge function expected pre-calculated per-guest values
+  - Fix: Added calculations for `lbw_per_guest`, `glassware_per_guest`, `guests_per_lsc` when not pre-populated
+  - Result: All 28 employees now have correct scores (69.5-117.2 range) instead of broken values (~53)
+- **Code Cleanup:** Removed dead/duplicate code after line 409 in snapshot_routes.py (leftover from botched edit)
 
 ### 2026-03-29 (Session 2)
 - **CV Scoring Formula Fix:** Updated to (Promoters × 1) + (RT Mentions × 0.5) - (Detractors × 2)
