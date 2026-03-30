@@ -666,6 +666,34 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
         }
     )
     
+    # ALSO sync critical fields back to employees_v2 to prevent data drift
+    # This ensures fix-snapshot-names won't overwrite with stale data
+    updated_emp = employees[emp_idx]
+    sync_fields = ["display_name", "report_name", "job_title", "name"]
+    sync_data = {k: updated_emp.get(k) for k in sync_fields if updated_emp.get(k)}
+    
+    if sync_data:
+        # Try multiple matching strategies to find the employee in employees_v2
+        report_name = updated_emp.get("report_name", "").strip()
+        display_name = updated_emp.get("display_name", "").strip()
+        
+        # Update employees_v2 with the corrected data
+        update_result = await db.employees_v2.update_one(
+            {
+                "$or": [
+                    {"name": {"$regex": f"^{report_name}$", "$options": "i"}},
+                    {"report_name": {"$regex": f"^{report_name}$", "$options": "i"}},
+                    {"display_name": display_name},
+                    {"name": {"$regex": f"^{display_name}", "$options": "i"}}
+                ],
+                "year": snapshot.get("year", 2026),
+                "quarter": snapshot.get("quarter", "Q1").upper()
+            },
+            {"$set": sync_data}
+        )
+        if update_result.modified_count > 0:
+            logger.info(f"Synced employee {employee_id} data back to employees_v2")
+    
     # Get the updated employee data
     updated_emp = next((e for e in employees if e.get("id") == employee_id or e.get("name", "").lower() == employee_id.lower()), scored_emp)
     
@@ -987,16 +1015,22 @@ async def fix_snapshot_names():
             old_display = emp.get('display_name')
             old_job = emp.get('job_title')
             
-            # Set display_name from lookup (or derive from first name)
-            new_display = lookup.get('display_name') or emp_name.split()[0].title()
-            if new_display and new_display != 'None':
-                emp['display_name'] = new_display
-                emp['name'] = new_display  # Sync name with display_name
+            # Set display_name from lookup (or derive from first name) - ONLY if not already set
+            current_display = emp.get('display_name', '')
+            if not current_display or current_display == 'None' or ' ' in current_display:
+                new_display = lookup.get('display_name') or emp_name.split()[0].title()
+                if new_display and new_display != 'None':
+                    emp['display_name'] = new_display
+                    emp['name'] = new_display  # Sync name with display_name
             
-            # Set job_title from lookup - THIS IS CRITICAL FOR TIER SORTING
-            new_job = lookup.get('job_title', 'Server')
-            if new_job:
-                emp['job_title'] = new_job
+            # ONLY set job_title from lookup if current job_title is generic "Server"
+            # This preserves Trainer/Bartender assignments that were already set
+            current_job = emp.get('job_title', 'Server').lower()
+            lookup_job = lookup.get('job_title', 'Server').lower()
+            
+            # Only update if: current is generic AND lookup has a specific role
+            if current_job == 'server' and lookup_job in ['trainer', 'bartender']:
+                emp['job_title'] = lookup_job
             
             if old_display != emp.get('display_name') or old_job != emp.get('job_title'):
                 changes.append(f"{emp_report or emp_name}: display='{emp.get('display_name')}', job='{emp.get('job_title')}'")
