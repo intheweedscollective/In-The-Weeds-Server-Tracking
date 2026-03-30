@@ -145,10 +145,11 @@ Build a comprehensive performance review application for restaurant employees th
 
 ### P0 (Critical)
 - [x] ~~Snapshot processing missing staff data~~ (Fixed 2026-03-30)
+- [x] ~~Employee Names UI Fix~~ (Verified 2026-03-31) - 28 employees, no duplicates, display_name/report_name separation working
 
 ### P1 (High Priority)
 - [x] ~~Update Leaderboard to use snapshot-workflow current-rankings API~~ (Done)
-- [ ] Momentum Indicators - Add Trend column on Leaderboard
+- [ ] Momentum Indicators - Add Trend column on Leaderboard comparing current vs previous snapshot scores
 - [ ] Evaluate legacy "Fix All/Remove Excess" ReviewTracker bug (may be obsolete with snapshot architecture)
 
 ### P2 (Medium Priority)
@@ -201,6 +202,13 @@ Build a comprehensive performance review application for restaurant employees th
 - `POST /api/v2/snapshot-workflow/migrate-legacy-data` - Migration utility
 
 ## Changelog
+
+### 2026-03-31 (Session 4)
+- **VERIFIED: Employee Names UI Fix**
+  - Confirmed 28 employees with no duplicates
+  - `display_name` (first name only) shows correctly on Employee cards
+  - `report_name` (full POS name) populates correctly in Edit modal
+  - No more "Abby" vs "Abigail Ostrowski" duplicate issues
 
 ### 2026-03-30 (Session 3)
 - **CRITICAL FIX: Per-Guest Metrics Calculation**
