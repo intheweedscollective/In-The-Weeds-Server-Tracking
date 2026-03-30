@@ -54,13 +54,53 @@ export default function CVAdjustment() {
   const [filter, setFilter] = useState('all');
   const [expandedItems, setExpandedItems] = useState(new Set());
   const [sessions, setSessions] = useState([]);
+  const [employees, setEmployees] = useState([]);
   
   const quarter = 'Q1';
   const year = 2026;
 
   useEffect(() => {
     fetchSessions();
+    fetchEmployees();
   }, []);
+
+  const fetchEmployees = async () => {
+    try {
+      // Fetch employees from current snapshot for server assignment dropdown
+      const { ok, data } = await safeFetch(
+        `${API_URL}/api/v2/snapshot-workflow/current-rankings`
+      );
+      if (ok && data?.employees) {
+        setEmployees(data.employees.map(e => e.name).sort());
+      }
+    } catch (error) {
+      console.error('Error fetching employees:', error);
+    }
+  };
+
+  const handleServerAssignment = async (itemId, serverName) => {
+    // Update local state
+    const updatedItems = feedbackItems.map(item => 
+      item.id === itemId ? { ...item, assigned_server: serverName } : item
+    );
+    setFeedbackItems(updatedItems);
+    
+    // Update server session if exists
+    if (session?.session_id) {
+      try {
+        await safeFetch(
+          `${API_URL}/api/v2/cv/adjustment/sessions/${session.session_id}/assign-server`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ item_id: itemId, server_name: serverName })
+          }
+        );
+      } catch (error) {
+        console.error('Error saving server assignment:', error);
+      }
+    }
+  };
 
   const fetchSessions = async () => {
     try {
@@ -587,6 +627,29 @@ export default function CVAdjustment() {
                             <p className={`text-sm ${item.excluded ? 'text-slate-400 line-through' : 'text-slate-600'}`}>
                               "{item.comment}"
                             </p>
+                          )}
+                          
+                          {/* Server Assignment - only for passives and detractors */}
+                          {(item.nps_category === 'passive' || item.nps_category === 'detractor') && !item.excluded && (
+                            <div className="mt-3 flex items-center gap-2">
+                              <span className="text-sm text-slate-600">Assign to Server:</span>
+                              <select
+                                value={item.assigned_server || ''}
+                                onChange={(e) => handleServerAssignment(item.id, e.target.value)}
+                                className="px-3 py-1.5 text-sm border border-slate-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                data-testid={`server-select-${item.id}`}
+                              >
+                                <option value="">-- Select Server --</option>
+                                {employees.map(emp => (
+                                  <option key={emp} value={emp}>{emp}</option>
+                                ))}
+                              </select>
+                              {item.assigned_server && (
+                                <Badge className="bg-blue-100 text-blue-800 border-blue-300">
+                                  Assigned: {item.assigned_server}
+                                </Badge>
+                              )}
+                            </div>
                           )}
                           
                           {item.flag_reason && (

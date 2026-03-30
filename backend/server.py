@@ -10039,6 +10039,46 @@ async def update_cv_adjustment_item(
     }
 
 
+@api_router.post("/v2/cv/adjustment/sessions/{session_id}/assign-server")
+async def assign_server_to_feedback(session_id: str, item_id: str, server_name: str):
+    """
+    Assign a server to a specific feedback item (passive or detractor).
+    This allows manual attribution of CV scores to the responsible server.
+    """
+    session = await db.cv_adjustment_sessions.find_one({"_id": session_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Update the specific item
+    feedback_items = session.get("feedback_items", [])
+    item_found = False
+    for item in feedback_items:
+        if item.get("id") == item_id:
+            item["assigned_server"] = server_name
+            item_found = True
+            break
+    
+    if not item_found:
+        raise HTTPException(status_code=404, detail="Feedback item not found")
+    
+    # Update session in database
+    await db.cv_adjustment_sessions.update_one(
+        {"_id": session_id},
+        {"$set": {
+            "feedback_items": feedback_items,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {
+        "status": "assigned",
+        "item_id": item_id,
+        "server_name": server_name
+    }
+
+
+
+
 @api_router.post("/v2/cv/adjustment/session/{session_id}/apply")
 async def apply_cv_adjustment(session_id: str, quarter: str = "Q1", year: int = 2026):
     """
@@ -10076,26 +10116,26 @@ async def apply_cv_adjustment(session_id: str, quarter: str = "Q1", year: int = 
         '_doc': emp
     } for emp in all_employees]
     
-    # Aggregate feedback by employee (using server name detection from comments)
+    # Aggregate feedback by employee (using assigned_server or name detection from comments)
     employee_feedback = {}
     
     for item in feedback_items:
         if item.get('excluded'):
             continue  # Skip excluded items
         
-        # Try to detect server name from comment
-        comment = item.get('comment', '')
+        # First check if server was manually assigned
+        server_name = item.get('assigned_server')
         
-        # First, try to match customer name to employee (in case there's overlap)
-        # Then try to find server name mentioned in comment
-        server_name = None
-        
-        # Look for employee names mentioned in comment
-        for emp in employee_dicts:
-            emp_first = emp['name'].split()[0].lower()
-            if emp_first in comment.lower():
-                server_name = emp['name']
-                break
+        if not server_name:
+            # Try to detect server name from comment
+            comment = item.get('comment', '')
+            
+            # Look for employee names mentioned in comment
+            for emp in employee_dicts:
+                emp_first = emp['name'].split()[0].lower()
+                if len(emp_first) > 2 and emp_first in comment.lower():
+                    server_name = emp['name']
+                    break
         
         if server_name:
             if server_name not in employee_feedback:

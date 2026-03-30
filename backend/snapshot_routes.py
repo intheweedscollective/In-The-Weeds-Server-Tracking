@@ -828,8 +828,8 @@ async def import_cv_adjustment_to_snapshot(snapshot_id: str, session_id: str):
         if item.get("excluded", False):
             continue
         
-        # Get server name - might be from transaction matching or check number
-        server_name = item.get("server_name") or "Unknown"
+        # Get server name - first check assigned_server, then server_name from transaction
+        server_name = item.get("assigned_server") or item.get("server_name") or "Unknown"
         
         if server_name not in employee_data:
             employee_data[server_name] = {
