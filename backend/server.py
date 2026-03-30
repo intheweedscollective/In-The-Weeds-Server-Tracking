@@ -3264,6 +3264,9 @@ async def get_full_hierarchy_rankings(year: int, quarter: str, tier_filter: Opti
     """
     Get hierarchy-based rankings with settings-driven server tiering.
     
+    SNAPSHOT-FIRST: Now pulls from the active snapshot to ensure display names
+    and all edits are reflected.
+    
     HIERARCHY ORDER (fixed, not by raw score):
     1. Trainers (sorted by score within tier)
     2. Bartenders (sorted by score within tier)
@@ -3285,11 +3288,22 @@ async def get_full_hierarchy_rankings(year: int, quarter: str, tier_filter: Opti
     
     settings = QuarterSettings(**settings_doc)
     
-    # Get all employees
-    employees_docs = await db.employees_v2.find(
-        {"year": year, "quarter": quarter.upper()},
-        {"_id": 0}
-    ).to_list(5000)
+    # SNAPSHOT-FIRST: Get employees from the active snapshot instead of employees_v2
+    snapshot = await db.snapshot_workflow.find_one(
+        {"status": "completed", "quarter": quarter.upper(), "year": year},
+        {"_id": 0},
+        sort=[("effective_date", -1), ("completed_at", -1)]
+    )
+    
+    if snapshot and snapshot.get("employees"):
+        # Use snapshot employees (source of truth)
+        employees_docs = snapshot.get("employees", [])
+    else:
+        # Fallback to legacy employees_v2
+        employees_docs = await db.employees_v2.find(
+            {"year": year, "quarter": quarter.upper()},
+            {"_id": 0}
+        ).to_list(5000)
     
     if not employees_docs:
         return {
@@ -3303,8 +3317,26 @@ async def get_full_hierarchy_rankings(year: int, quarter: str, tier_filter: Opti
             "rankings": []
         }
     
-    # Convert to EmployeeV2 objects
-    employees = [EmployeeV2(**doc) for doc in employees_docs]
+    # Convert to EmployeeV2-like objects (handle both snapshot and legacy formats)
+    employees = []
+    for doc in employees_docs:
+        # Handle snapshot format where display_name should be used as name
+        emp_data = dict(doc)
+        if emp_data.get('display_name') and emp_data.get('display_name') != 'None':
+            emp_data['name'] = emp_data['display_name']
+        
+        # Map snapshot fields to EmployeeV2 fields
+        if 'guest_count' in emp_data and 'guests' not in emp_data:
+            emp_data['guests'] = emp_data['guest_count']
+        if 'bar_glassware_sales' in emp_data and 'glassware_sales' not in emp_data:
+            emp_data['glassware_sales'] = emp_data['bar_glassware_sales']
+        if 'rt_mentions' in emp_data and 'review_mentions' not in emp_data:
+            emp_data['review_mentions'] = emp_data['rt_mentions']
+        
+        try:
+            employees.append(EmployeeV2(**emp_data))
+        except Exception as e:
+            logger.warning(f"Could not convert employee {emp_data.get('name')}: {e}")
     
     # Generate hierarchy-based rankings
     rankings = generate_hierarchy_rankings(employees, settings)

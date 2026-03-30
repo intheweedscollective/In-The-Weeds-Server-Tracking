@@ -204,11 +204,18 @@ Build a comprehensive performance review application for restaurant employees th
 ## Changelog
 
 ### 2026-03-31 (Session 4)
+- **CRITICAL FIX: Snapshot-First Display Names & Tier Sorting**
+  - Fixed `full-rankings` endpoint in `server.py` to pull from active snapshot instead of legacy `employees_v2`
+  - Rankings now properly show `display_name` (first name only) from snapshot data
+  - Added `fix-snapshot-names` endpoint to sync display names and re-apply tier assignments
+  - All pages (Employees, Rankings, Leaderboard) now show consistent first-name-only display
+  - Tier sorting working correctly: Trainers → Bartenders → A-Servers → B-Servers → C-Servers
+  - `current-rankings` endpoint now sorts by tier before returning
 - **VERIFIED: Employee Names UI Fix**
   - Confirmed 28 employees with no duplicates
-  - `display_name` (first name only) shows correctly on Employee cards
-  - `report_name` (full POS name) populates correctly in Edit modal
-  - No more "Abby" vs "Abigail Ostrowski" duplicate issues
+  - `display_name` (first name only) shows correctly on Employee cards, Rankings, and Leaderboard
+  - `report_name` (full POS name) populates correctly in Edit modal for data matching
+  - Employee edits immediately update the active snapshot
 
 ### 2026-03-30 (Session 3)
 - **CRITICAL FIX: Per-Guest Metrics Calculation**

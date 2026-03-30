@@ -925,6 +925,106 @@ async def sync_job_titles_from_legacy():
     }
 
 
+@snapshot_router.post("/fix-snapshot-names")
+async def fix_snapshot_names():
+    """
+    Fix display names and tiers in the active snapshot.
+    Syncs display_name from employees_v2, re-assigns tiers, and sorts properly.
+    """
+    db = get_db()
+    
+    # Find active snapshot
+    snapshot = await db.snapshot_workflow.find_one(
+        {"is_current": True},
+        {"_id": 0}
+    )
+    
+    if not snapshot:
+        snapshot = await db.snapshot_workflow.find_one(
+            {"status": "completed"},
+            {"_id": 0},
+            sort=[("completed_at", -1)]
+        )
+    
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="No active snapshot found")
+    
+    # Build lookup from employees_v2 for display_name and job_title
+    name_lookup = {}
+    async for emp in db.employees_v2.find({}, {"_id": 0}):
+        # Use multiple keys for matching
+        for key in [
+            emp.get("name", "").lower().strip(),
+            emp.get("report_name", "").lower().strip(),
+            emp.get("display_name", "").lower().strip() if emp.get("display_name") else ""
+        ]:
+            if key and key not in name_lookup:
+                name_lookup[key] = {
+                    "display_name": emp.get("display_name") or emp.get("name", "").split()[0],
+                    "job_title": emp.get("job_title", "Server")
+                }
+    
+    # Update employees in snapshot
+    employees = snapshot.get('employees', [])
+    changes = []
+    
+    for emp in employees:
+        emp_name = emp.get('name', '').lower().strip()
+        emp_report = emp.get('report_name', '').lower().strip()
+        
+        # Find match
+        lookup = name_lookup.get(emp_name) or name_lookup.get(emp_report)
+        
+        if lookup:
+            old_display = emp.get('display_name')
+            old_job = emp.get('job_title')
+            
+            # Set display_name from lookup (or derive from first name)
+            new_display = lookup.get('display_name') or emp_name.split()[0].title()
+            if new_display and new_display != 'None':
+                emp['display_name'] = new_display
+                emp['name'] = new_display  # Sync name with display_name
+            
+            # Set job_title from lookup
+            new_job = lookup.get('job_title', 'Server')
+            if new_job:
+                emp['job_title'] = new_job
+            
+            if old_display != emp.get('display_name') or old_job != emp.get('job_title'):
+                changes.append(f"{emp_report or emp_name}: display='{emp.get('display_name')}', job='{emp.get('job_title')}'")
+        else:
+            # No lookup found - derive display_name from first word of name
+            current_name = emp.get('name', '')
+            first_name = current_name.split()[0].title() if current_name else 'Unknown'
+            emp['display_name'] = first_name
+            emp['name'] = first_name
+            emp['report_name'] = current_name  # Preserve original as report_name
+            changes.append(f"{current_name}: derived display='{first_name}'")
+    
+    # Re-calculate scores and assign tiers (which also sorts)
+    from snapshot_manager import assign_performance_tiers
+    employees = assign_performance_tiers(employees)
+    
+    # Update snapshot
+    await db.snapshot_workflow.update_one(
+        {"id": snapshot['id']},
+        {
+            "$set": {
+                "employees": employees,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    logger.info(f"Fixed {len(changes)} employee names/tiers in snapshot {snapshot['id']}")
+    
+    return {
+        "success": True,
+        "message": f"Fixed {len(changes)} employees in snapshot",
+        "changes": changes[:20],  # Limit output
+        "employee_count": len(employees),
+        "snapshot_id": snapshot['id']
+    }
 
 
 @snapshot_router.get("/historical-averages")
@@ -1364,6 +1464,7 @@ async def get_current_rankings(quarter: Optional[str] = None, year: Optional[int
     """
     Get rankings from the latest completed snapshot.
     This is what the Rankings page should use.
+    Returns employees sorted by tier: Trainers, Bartenders, A-Servers, B-Servers, C-Servers
     """
     db = get_db()
     
@@ -1389,6 +1490,27 @@ async def get_current_rankings(quarter: Optional[str] = None, year: Optional[int
             "snapshot": None
         }
     
+    # Sort employees by tier before returning
+    employees = snapshot.get("employees", [])
+    
+    # Define tier order
+    TIER_ORDER = {
+        'Trainer': 1,
+        'Bartender': 2,
+        'A-Server': 3,
+        'B-Server': 4,
+        'C-Server': 5,
+        'Server': 6
+    }
+    
+    def sort_key(emp):
+        tier = emp.get('tier_label', 'Server')
+        tier_rank = TIER_ORDER.get(tier, 99)
+        score = emp.get('total_score', 0) or 0
+        return (tier_rank, -score)  # Sort by tier first, then by score descending
+    
+    sorted_employees = sorted(employees, key=sort_key)
+    
     return {
         "success": True,
         "has_data": True,
@@ -1403,7 +1525,7 @@ async def get_current_rankings(quarter: Optional[str] = None, year: Optional[int
             "completed_at": snapshot.get("completed_at"),
             "employee_count": snapshot.get("employee_count", 0)
         },
-        "employees": snapshot.get("employees", []),
+        "employees": sorted_employees,
         "benchmarks": snapshot.get("benchmarks_used", {})
     }
 
