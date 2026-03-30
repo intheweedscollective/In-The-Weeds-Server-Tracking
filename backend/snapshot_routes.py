@@ -543,10 +543,40 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
     snapshot_id = snapshot["id"]
     employees = snapshot.get("employees", [])
     
-    # Find employee by ID or name
+    # Find employee by ID, name, display_name, or report_name (with fuzzy matching)
     emp_idx = None
+    employee_id_lower = employee_id.lower().strip()
+    
     for i, emp in enumerate(employees):
-        if emp.get("id") == employee_id or emp.get("name", "").lower() == employee_id.lower():
+        emp_id = emp.get("id", "")
+        emp_name = emp.get("name", "").lower().strip()
+        emp_display = emp.get("display_name", "").lower().strip()
+        emp_report = emp.get("report_name", "").lower().strip()
+        
+        # Exact ID match
+        if emp_id == employee_id:
+            emp_idx = i
+            break
+        
+        # Exact name match (any of the name fields)
+        if emp_name == employee_id_lower or emp_display == employee_id_lower or emp_report == employee_id_lower:
+            emp_idx = i
+            break
+        
+        # Partial match - check if search contains or is contained in any name field
+        if (employee_id_lower in emp_name or emp_name in employee_id_lower or
+            employee_id_lower in emp_display or emp_display in employee_id_lower or
+            employee_id_lower in emp_report or emp_report in employee_id_lower):
+            emp_idx = i
+            break
+        
+        # First name match
+        search_first = employee_id_lower.split()[0] if employee_id_lower else ""
+        emp_first = emp_name.split()[0] if emp_name else ""
+        report_first = emp_report.split()[0] if emp_report else ""
+        
+        if search_first and (search_first == emp_first or search_first == report_first or 
+                            search_first == emp_display):
             emp_idx = i
             break
     
@@ -555,10 +585,10 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
     
     # Update allowed fields
     allowed_fields = [
-        "name", "display_name", "job_title", "tier_label",
+        "name", "display_name", "report_name", "job_title", "tier_label",
         "ppa", "lbw_per_guest", "glassware_per_guest", "guests_per_lsc",
         "guest_count", "guests", "net_sales", "loyalty_sales", "lsc_count",
-        "liquor_sales", "beer_sales", "wine_sales", "bar_glassware_sales",
+        "liquor_sales", "beer_sales", "wine_sales", "bar_glassware_sales", "lbw",
         "cv_promoters", "cv_passives", "cv_detractors", "cv_score",
         "rt_mentions", "review_tracker_bonus", "nps_score",
         "aliases"
@@ -580,6 +610,8 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
         emp["lbw"] = updates["lbw"]
     if "review_mentions" in updates:
         emp["rt_mentions"] = updates["review_mentions"]
+    if "display_name" in updates:
+        emp["name"] = updates["display_name"]  # Sync name with display_name
     
     # Recalculate LBW from components if any L/B/W updated
     if any(k in updates for k in ["liquor_sales", "beer_sales", "wine_sales"]):
@@ -1591,13 +1623,20 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                 if not guests_per_lsc and lsc_count > 0:
                     guests_per_lsc = round(guest_count / lsc_count, 2)
                 
-                # Preserve job_title from existing employee data or POS data
+                # Preserve job_title and display_name from existing employee data or POS data
                 existing_emp = existing_employees.get(name.lower())
                 job_title = emp_data.get("job_title") or (existing_emp.get("job_title") if existing_emp else None) or "Server"
                 
+                # Use existing display_name if set, otherwise default to full name
+                display_name = (existing_emp.get("display_name") if existing_emp else None) or name
+                # Store the full POS name as report_name for matching
+                report_name = name
+                
                 employees[name.lower()] = {
                     "id": existing_emp.get("id") if existing_emp else str(uuid.uuid4()),
-                    "name": name,
+                    "name": display_name,  # Show display name
+                    "display_name": display_name,
+                    "report_name": report_name,  # Full POS name for matching
                     "quarter": snapshot.get("quarter"),
                     "year": snapshot.get("year"),
                     "job_title": job_title,
