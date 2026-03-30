@@ -76,6 +76,8 @@ export default function EmployeeList() {
       const transformedEmployees = snapshotEmployees.map(emp => ({
         id: emp.id || emp.name,
         name: emp.name,
+        display_name: emp.display_name || emp.name,
+        report_name: emp.report_name || "",
         job_title: emp.job_title || "Server",
         tier_label: emp.tier_label || "Server",
         // Raw POS data

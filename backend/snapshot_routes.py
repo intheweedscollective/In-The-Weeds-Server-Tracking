@@ -724,88 +724,127 @@ async def delete_snapshot_employee(employee_id: str):
     
 
 
-@snapshot_router.post("/fix-all-names")
-async def fix_all_employee_names():
+@snapshot_router.post("/rebuild-from-pos")
+async def rebuild_snapshot_from_pos():
     """
-    Fix all employee names in the current snapshot:
-    - Set display_name to first name only
-    - Set report_name to full POS name for matching
-    - Remove duplicates
+    Completely rebuild the snapshot employees from POS data.
+    Sets first names as display, full names as report_name.
     """
     db = get_db()
     
-    # Find current active snapshot
-    snapshot = await db.snapshot_workflow.find_one(
-        {"is_current": True},
-        {"_id": 0}
-    )
-    
-    if not snapshot:
-        snapshot = await db.snapshot_workflow.find_one(
-            {"status": "completed"},
-            {"_id": 0},
-            sort=[("completed_at", -1)]
-        )
-    
+    # Get current snapshot
+    snapshot = await db.snapshot_workflow.find_one({"is_current": True}, {"_id": 0})
     if not snapshot:
         raise HTTPException(status_code=404, detail="No active snapshot found")
     
-    employees = snapshot.get("employees", [])
-    fixed_employees = []
-    seen_first_names = {}
+    # Get POS data
+    pos_employees = []
+    for u in snapshot.get("uploads", []):
+        if u.get("upload_type") == "pos_report":
+            pos_employees = u.get("parsed_data", {}).get("employees", [])
+            break
     
-    for emp in employees:
-        full_name = emp.get("name", "")
-        existing_report = emp.get("report_name") or ""
-        existing_display = emp.get("display_name") or ""
-        
-        # Determine the full name (report_name takes priority, then current name)
-        if existing_report and len(existing_report) > len(full_name):
-            report_name = existing_report
-        else:
-            report_name = full_name
-        
-        # Extract first name for display
-        first_name = report_name.split()[0] if report_name else full_name.split()[0] if full_name else "Unknown"
-        
-        # Use existing display_name if it was explicitly set and is different
-        if existing_display and existing_display != full_name:
-            first_name = existing_display
-        
-        # Handle duplicates - keep the one with more data
-        if first_name.lower() in seen_first_names:
-            existing_idx = seen_first_names[first_name.lower()]
-            existing_emp = fixed_employees[existing_idx]
-            # Keep the one with higher score or more data
-            if (emp.get("total_score", 0) or 0) > (existing_emp.get("total_score", 0) or 0):
-                fixed_employees[existing_idx] = emp
-                logger.info(f"Replaced duplicate {first_name} with higher scoring version")
+    if not pos_employees:
+        raise HTTPException(status_code=400, detail="No POS data found in snapshot")
+    
+    # Get existing employees to preserve scores/CV/RT data
+    existing_by_name = {}
+    for emp in snapshot.get("employees", []):
+        # Index by multiple possible name keys
+        for key in [emp.get("name", "").lower(), emp.get("report_name", "").lower(), emp.get("display_name", "").lower()]:
+            if key:
+                existing_by_name[key] = emp
+    
+    # Rebuild employees from POS
+    new_employees = []
+    seen = set()
+    
+    for pos_emp in pos_employees:
+        full_name = pos_emp.get("name", "").strip()
+        if not full_name or full_name.lower() in seen:
             continue
+        seen.add(full_name.lower())
         
-        # Set the name fields
-        emp["display_name"] = first_name
-        emp["name"] = first_name
-        emp["report_name"] = report_name
+        first_name = full_name.split()[0]
         
-        seen_first_names[first_name.lower()] = len(fixed_employees)
-        fixed_employees.append(emp)
+        # Find existing data
+        existing = existing_by_name.get(full_name.lower()) or existing_by_name.get(first_name.lower()) or {}
+        
+        # Calculate metrics
+        guest_count = pos_emp.get("guest_count", 0) or 0
+        liquor = pos_emp.get("liquor_sales", 0) or 0
+        beer = pos_emp.get("beer_sales", 0) or 0
+        wine = pos_emp.get("wine_sales", 0) or 0
+        lbw_total = liquor + beer + wine
+        glassware = pos_emp.get("glassware_sales", 0) or pos_emp.get("bar_glassware_sales", 0) or 0
+        loyalty = pos_emp.get("loyalty_sales", 0) or 0
+        lsc_count = round(loyalty / 25) if loyalty > 0 else 0
+        
+        lbw_per_guest = round(lbw_total / guest_count, 2) if guest_count > 0 else 0
+        glass_per_guest = round(glassware / guest_count, 2) if guest_count > 0 else 0
+        guests_per_lsc = round(guest_count / lsc_count, 2) if lsc_count > 0 else 0
+        
+        emp = {
+            "id": existing.get("id") or str(uuid.uuid4()),
+            "name": first_name,
+            "display_name": first_name,
+            "report_name": full_name,
+            "job_title": existing.get("job_title") or "Server",
+            "quarter": snapshot.get("quarter"),
+            "year": snapshot.get("year"),
+            "guest_count": guest_count,
+            "guests": guest_count,
+            "net_sales": pos_emp.get("net_sales", 0) or 0,
+            "ppa": pos_emp.get("ppa", 0) or 0,
+            "liquor_sales": liquor,
+            "beer_sales": beer,
+            "wine_sales": wine,
+            "lbw": lbw_total,
+            "lbw_per_guest": lbw_per_guest,
+            "bar_glassware_sales": glassware,
+            "glassware_per_guest": glass_per_guest,
+            "loyalty_sales": loyalty,
+            "lsc_count": lsc_count,
+            "guests_per_lsc": guests_per_lsc,
+            # Preserve CV/RT data
+            "cv_promoters": existing.get("cv_promoters", 0),
+            "cv_passives": existing.get("cv_passives", 0),
+            "cv_detractors": existing.get("cv_detractors", 0),
+            "cv_score": existing.get("cv_score", 0),
+            "nps_score": existing.get("nps_score", 0),
+            "nps_score_pts": existing.get("nps_score_pts", 0),
+            "rt_mentions": existing.get("rt_mentions", 0),
+            "review_tracker_bonus": existing.get("review_tracker_bonus", 0),
+        }
+        new_employees.append(emp)
+    
+    # Calculate scores
+    from snapshot_manager import calculate_employee_scores, assign_performance_tiers
+    benchmarks = {"ppa": 55.0, "lbw": 8.0, "glass": 1.25, "lsc": 100.0}
+    
+    scored_employees = []
+    for emp in new_employees:
+        scored = calculate_employee_scores(emp, benchmarks)
+        scored_employees.append(scored)
+    
+    # Assign tiers
+    final_employees = assign_performance_tiers(scored_employees)
     
     # Update snapshot
     await db.snapshot_workflow.update_one(
         {"id": snapshot["id"]},
         {"$set": {
-            "employees": fixed_employees,
+            "employees": final_employees,
+            "status": "completed",
+            "is_current": True,
             "updated_at": datetime.now(timezone.utc).isoformat()
         }}
     )
     
-    logger.info(f"Fixed {len(fixed_employees)} employee names in snapshot {snapshot['id']}")
-    
     return {
         "success": True,
-        "message": f"Fixed all employee names. {len(fixed_employees)} employees remaining.",
-        "employee_count": len(fixed_employees),
-        "employees": [{"name": e["name"], "report_name": e.get("report_name")} for e in fixed_employees]
+        "employee_count": len(final_employees),
+        "employees": [{"name": e["name"], "report_name": e["report_name"]} for e in final_employees]
     }
 
 
