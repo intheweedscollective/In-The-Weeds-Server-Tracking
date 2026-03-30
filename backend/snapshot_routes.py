@@ -1519,7 +1519,9 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                 wine_sales = emp_data.get("wine_sales", 0) or 0
                 glassware_sales = emp_data.get("glassware_sales", 0) or emp_data.get("bar_glassware_sales", 0) or 0
                 loyalty_sales = emp_data.get("loyalty_sales", 0) or 0
-                lbw_total = emp_data.get("lbw_total", 0) or (liquor_sales + beer_sales + wine_sales)
+                
+                # ALWAYS recalculate LBW from components (don't trust pre-calculated value)
+                lbw_total = liquor_sales + beer_sales + wine_sales
                 
                 # Calculate per-guest metrics (if not already provided)
                 # LBW per guest: prioritize pre-calculated, otherwise calculate from totals
