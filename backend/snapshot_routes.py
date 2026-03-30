@@ -722,6 +722,93 @@ async def delete_snapshot_employee(employee_id: str):
     
     logger.info(f"Deleted employee {employee_id} from snapshot {snapshot_id}")
     
+
+
+@snapshot_router.post("/fix-all-names")
+async def fix_all_employee_names():
+    """
+    Fix all employee names in the current snapshot:
+    - Set display_name to first name only
+    - Set report_name to full POS name for matching
+    - Remove duplicates
+    """
+    db = get_db()
+    
+    # Find current active snapshot
+    snapshot = await db.snapshot_workflow.find_one(
+        {"is_current": True},
+        {"_id": 0}
+    )
+    
+    if not snapshot:
+        snapshot = await db.snapshot_workflow.find_one(
+            {"status": "completed"},
+            {"_id": 0},
+            sort=[("completed_at", -1)]
+        )
+    
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="No active snapshot found")
+    
+    employees = snapshot.get("employees", [])
+    fixed_employees = []
+    seen_first_names = {}
+    
+    for emp in employees:
+        full_name = emp.get("name", "")
+        existing_report = emp.get("report_name") or ""
+        existing_display = emp.get("display_name") or ""
+        
+        # Determine the full name (report_name takes priority, then current name)
+        if existing_report and len(existing_report) > len(full_name):
+            report_name = existing_report
+        else:
+            report_name = full_name
+        
+        # Extract first name for display
+        first_name = report_name.split()[0] if report_name else full_name.split()[0] if full_name else "Unknown"
+        
+        # Use existing display_name if it was explicitly set and is different
+        if existing_display and existing_display != full_name:
+            first_name = existing_display
+        
+        # Handle duplicates - keep the one with more data
+        if first_name.lower() in seen_first_names:
+            existing_idx = seen_first_names[first_name.lower()]
+            existing_emp = fixed_employees[existing_idx]
+            # Keep the one with higher score or more data
+            if (emp.get("total_score", 0) or 0) > (existing_emp.get("total_score", 0) or 0):
+                fixed_employees[existing_idx] = emp
+                logger.info(f"Replaced duplicate {first_name} with higher scoring version")
+            continue
+        
+        # Set the name fields
+        emp["display_name"] = first_name
+        emp["name"] = first_name
+        emp["report_name"] = report_name
+        
+        seen_first_names[first_name.lower()] = len(fixed_employees)
+        fixed_employees.append(emp)
+    
+    # Update snapshot
+    await db.snapshot_workflow.update_one(
+        {"id": snapshot["id"]},
+        {"$set": {
+            "employees": fixed_employees,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    logger.info(f"Fixed {len(fixed_employees)} employee names in snapshot {snapshot['id']}")
+    
+    return {
+        "success": True,
+        "message": f"Fixed all employee names. {len(fixed_employees)} employees remaining.",
+        "employee_count": len(fixed_employees),
+        "employees": [{"name": e["name"], "report_name": e.get("report_name")} for e in fixed_employees]
+    }
+
+
     return {
         "success": True,
         "message": f"Deleted employee from snapshot",
