@@ -637,6 +637,30 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
     if lsc_count > 0 and guest_count > 0:
         emp["guests_per_lsc"] = round(guest_count / lsc_count, 2)
     
+    # Recalculate CV score if any CV fields were updated
+    if any(k in updates for k in ["cv_promoters", "cv_passives", "cv_detractors", "nps_score"]):
+        promoters = emp.get("cv_promoters", 0) or 0
+        detractors = emp.get("cv_detractors", 0) or 0
+        nps_score = emp.get("nps_score", 0) or 0
+        
+        # NPS pts: max 10 based on NPS percentage
+        nps_pts = min(nps_score / 10, 10.0) if nps_score else 0
+        
+        # CV Score = NPS pts (max 10) + Promoters × 1 - Detractors × 2
+        cv_score = round(nps_pts + (promoters * 1) - (detractors * 2), 2)
+        emp["cv_score"] = cv_score
+        emp["nps_score_pts"] = round(nps_pts, 2)
+        emp["cv_raw_points"] = promoters - (detractors * 2)
+        
+        logger.info(f"Recalculated CV score for {emp.get('name')}: promoters={promoters}, detractors={detractors}, nps={nps_score}, cv_score={cv_score}")
+    
+    # Recalculate RT bonus if rt_mentions updated
+    if "rt_mentions" in updates or "review_mentions" in updates:
+        rt_mentions = emp.get("rt_mentions", 0) or 0
+        # RT Bonus = mentions × 0.5, capped at 15 pts
+        emp["review_tracker_bonus"] = min(rt_mentions * 0.5, 15.0)
+        logger.info(f"Recalculated RT bonus for {emp.get('name')}: mentions={rt_mentions}, bonus={emp['review_tracker_bonus']}")
+    
     # Recalculate scores using the scoring formula
     from snapshot_manager import calculate_employee_scores, assign_performance_tiers
     
