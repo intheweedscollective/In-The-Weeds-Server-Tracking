@@ -183,18 +183,18 @@ export default function SnapshotWorkflow() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4 sm:p-6">
+      <div className="max-w-6xl mx-auto space-y-4 sm:space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-white">Snapshot Workflow</h1>
-            <p className="text-slate-400 mt-1">Create and manage bi-weekly performance snapshots</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-white">Snapshot Workflow</h1>
+            <p className="text-sm sm:text-base text-slate-400 mt-1">Create and manage bi-weekly performance snapshots</p>
           </div>
           
           <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
             <DialogTrigger asChild>
-              <Button className="bg-blue-600 hover:bg-blue-700" data-testid="create-snapshot-btn">
+              <Button className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto" data-testid="create-snapshot-btn">
                 <Plus className="w-4 h-4 mr-2" />
                 New Snapshot
               </Button>
@@ -371,50 +371,57 @@ export default function SnapshotWorkflow() {
                 onClick={() => navigate(`/snapshot-workflow/${snapshot.id}`)}
                 data-testid={`snapshot-card-${snapshot.id}`}
               >
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-lg bg-slate-700 flex items-center justify-center">
-                        <Calendar className="w-6 h-6 text-blue-400" />
+                <CardContent className="p-3 sm:p-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    {/* Left side - Info */}
+                    <div className="flex items-start sm:items-center gap-3 sm:gap-4 min-w-0">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-slate-700 flex items-center justify-center flex-shrink-0">
+                        <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-blue-400" />
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold text-white">{snapshot.name}</h3>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-semibold text-white text-sm sm:text-base">{snapshot.name}</h3>
                           {snapshot.is_current && (
-                            <span className="text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded">
+                            <span className="text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded whitespace-nowrap">
                               Current
                             </span>
                           )}
                         </div>
-                        <p className="text-sm text-slate-400">
-                          {snapshot.period_start} to {snapshot.period_end} • {snapshot.quarter} {snapshot.year}
+                        <p className="text-xs sm:text-sm text-slate-400 truncate">
+                          {snapshot.period_start} to {snapshot.period_end}
                         </p>
-                        {snapshot.employee_count > 0 && (
-                          <p className="text-xs text-slate-500 mt-0.5">
-                            {snapshot.employee_count} employees
-                          </p>
-                        )}
+                        <p className="text-xs text-slate-500">
+                          {snapshot.quarter} {snapshot.year}
+                          {snapshot.employee_count > 0 && ` • ${snapshot.employee_count} employees`}
+                        </p>
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-4">
-                      {getUploadProgress(snapshot.upload_progress)}
-                      {getStatusBadge(snapshot.status)}
-                      {snapshot.status !== 'completed' && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 text-slate-400 hover:text-red-400 hover:bg-red-900/20"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteTarget(snapshot);
-                          }}
-                          data-testid={`delete-snapshot-${snapshot.id}`}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      )}
-                      <ChevronRight className="w-5 h-5 text-slate-500" />
+                    {/* Right side - Status and actions */}
+                    <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-4 ml-13 sm:ml-0">
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        <div className="hidden sm:flex items-center gap-2">
+                          {getUploadProgress(snapshot.upload_progress)}
+                        </div>
+                        {getStatusBadge(snapshot.status)}
+                      </div>
+                      <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                        {snapshot.status !== 'completed' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-slate-400 hover:text-red-400 hover:bg-red-900/20"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteTarget(snapshot);
+                            }}
+                            data-testid={`delete-snapshot-${snapshot.id}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                        <ChevronRight className="w-5 h-5 text-slate-500" />
+                      </div>
                     </div>
                   </div>
                 </CardContent>
