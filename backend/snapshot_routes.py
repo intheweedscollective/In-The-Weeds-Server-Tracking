@@ -1157,6 +1157,8 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
     if not employees_data:
         raise HTTPException(status_code=400, detail="No employee data provided")
     
+    logger.info(f"confirm_pos_review: Received {len(employees_data)} employees to update")
+    
     # Find the POS upload and update it with reviewed data
     uploads = snapshot.get("uploads", [])
     pos_upload_idx = next(
@@ -1170,9 +1172,10 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
         uploads[pos_upload_idx]["reviewed"] = True
         uploads[pos_upload_idx]["reviewed_at"] = datetime.now(timezone.utc).isoformat()
     
-    # ALSO update the snapshot employees directly if snapshot is completed
+    # ALSO update the snapshot employees directly (always, not just when completed)
     # This ensures edits take effect immediately without needing to reprocess
     existing_employees = snapshot.get("employees", [])
+    logger.info(f"confirm_pos_review: Found {len(existing_employees)} existing employees in snapshot")
     if existing_employees:
         # Build lookup by name for matching
         emp_lookup = {}
@@ -1203,16 +1206,41 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
             name = new_emp.get("name", "").lower().strip()
             existing = emp_lookup.get(name)
             
+            logger.info(f"confirm_pos_review: Looking for '{name}' in lookup. Found: {existing is not None}")
+            
             if existing:
                 # Update POS fields
+                old_ppa = existing.get("ppa")
                 for field in ["guest_count", "guests", "net_sales", "ppa", "liquor_sales", "beer_sales", 
                               "wine_sales", "lbw_total", "lbw_per_guest", "glassware_sales", "bar_glassware_sales",
                               "glassware_per_guest", "loyalty_sales", "lsc_count", "guests_per_lsc"]:
                     if field in new_emp and new_emp[field] is not None:
                         existing[field] = new_emp[field]
                 
+                logger.info(f"confirm_pos_review: Updated '{name}' PPA from {old_ppa} to {existing.get('ppa')}")
+                
+                # Recalculate derived values (LBW per guest, etc.)
+                guest_count = existing.get("guest_count") or existing.get("guests") or 0
+                if guest_count > 0:
+                    lbw = existing.get("lbw") or (
+                        (existing.get("liquor_sales") or 0) + 
+                        (existing.get("beer_sales") or 0) + 
+                        (existing.get("wine_sales") or 0)
+                    )
+                    existing["lbw"] = lbw
+                    existing["lbw_per_guest"] = round(lbw / guest_count, 2)
+                    
+                    glassware = existing.get("bar_glassware_sales") or existing.get("glassware_sales") or 0
+                    existing["glassware_per_guest"] = round(glassware / guest_count, 2)
+                
+                lsc_count = existing.get("lsc_count") or 0
+                if lsc_count > 0 and guest_count > 0:
+                    existing["guests_per_lsc"] = round(guest_count / lsc_count, 2)
+                
                 # Recalculate scores
+                old_score = existing.get("total_score")
                 calculate_employee_scores(existing, benchmarks)
+                logger.info(f"confirm_pos_review: Recalculated '{name}' score from {old_score} to {existing.get('total_score')}")
         
         # Re-assign tiers
         existing_employees = assign_performance_tiers(existing_employees)
@@ -1548,24 +1576,38 @@ async def reprocess_snapshot(snapshot_id: str):
 @snapshot_router.get("/current-rankings")
 async def get_current_rankings(quarter: Optional[str] = None, year: Optional[int] = None):
     """
-    Get rankings from the latest completed snapshot.
-    This is what the Rankings page should use.
-    Returns employees sorted by tier: Trainers, Bartenders, A-Servers, B-Servers, C-Servers
+    Get rankings from the current active snapshot.
+    If there's an is_current=True snapshot, use that (even if in_progress).
+    Otherwise, fall back to the latest completed snapshot.
+    This ensures edits made to the active snapshot are visible.
     """
     db = get_db()
     
-    query = {"status": SnapshotStatus.COMPLETED.value}
+    # First try to find the current active snapshot (regardless of status)
+    current_query = {"is_current": True}
     if quarter:
-        query["quarter"] = quarter.upper()
+        current_query["quarter"] = quarter.upper()
     if year:
-        query["year"] = year
+        current_query["year"] = year
     
-    # Get latest completed snapshot by effective_date
     snapshot = await db.snapshot_workflow.find_one(
-        query,
-        {"_id": 0},
-        sort=[("effective_date", -1), ("completed_at", -1)]
+        current_query,
+        {"_id": 0}
     )
+    
+    # If no current snapshot, fall back to latest completed
+    if not snapshot:
+        completed_query = {"status": SnapshotStatus.COMPLETED.value}
+        if quarter:
+            completed_query["quarter"] = quarter.upper()
+        if year:
+            completed_query["year"] = year
+        
+        snapshot = await db.snapshot_workflow.find_one(
+            completed_query,
+            {"_id": 0},
+            sort=[("effective_date", -1), ("completed_at", -1)]
+        )
     
     if not snapshot:
         return {

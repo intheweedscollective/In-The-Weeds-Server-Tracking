@@ -1,0 +1,90 @@
+{
+  "summary": "Backend testing complete for employee metric edit and score recalculation bug fixes. All 8 tests passed. The bug fixes are working correctly: 1) PUT /v2/snapshot-workflow/employees/{id} updates PPA and recalculates scores, 2) POST /v2/snapshot-workflow/snapshots/{id}/confirm-pos-review updates scores correctly, 3) current-rankings returns data from is_current=True snapshot.",
+
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+
+  "passed_tests": [
+    "current-rankings returns 28 employees from active snapshot",
+    "current-rankings returns correct snapshot ID (af0b6115-135a-4c3d-b839-fd6ef6a18348)",
+    "All employees have valid total_score values",
+    "PUT /employees/{id} with PPA update recalculates score correctly",
+    "PUT /employees/{id} with liquor_sales update recalculates lbw_per_guest",
+    "confirm-pos-review updates PPA and recalculates scores",
+    "Score formula verification: score_ppa, score_lbw, score_glass, score_lsc match expected values"
+  ],
+
+  "test_report_links": [
+    "/app/backend/tests/test_employee_metric_edit.py",
+    "/app/test_reports/pytest/employee_metric_edit_results.xml"
+  ],
+
+  "action_items": [],
+
+  "critical_code_review_comments": [
+    "Note: Score changes are only visible when PPA is below benchmark (55.0). When PPA is already above benchmark, the score is maxed out for that metric and further increases won't change the total_score. This is expected behavior based on the scoring formula with capped scores and max bonuses."
+  ],
+
+  "updated_files": [
+    "/app/backend/tests/test_employee_metric_edit.py"
+  ],
+
+  "success_rate": {
+    "backend": "100% (8/8 tests passed)",
+    "frontend": "N/A (backend only testing requested)"
+  },
+
+  "seed_data_creation": "None - used existing snapshot Q1P3W6 (af0b6115-135a-4c3d-b839-fd6ef6a18348)",
+
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+
+  "context_for_next_testing_agent": "Bug fixes verified for employee metric editing. The scoring formula caps individual metric scores at 100 and bonuses at 5.0 per metric. When testing score changes, use employees with PPA below 55.0 (the benchmark) to see visible score changes. Employees with PPA already above benchmark won't show score changes because they're already at max for that metric.",
+
+  "features_verified": {
+    "PUT_employees_endpoint": {
+      "status": "Working",
+      "ppa_update": "Updates PPA and recalculates total_score",
+      "lbw_update": "Updates liquor_sales and recalculates lbw_per_guest",
+      "score_recalculation": "Correctly applies scoring formula"
+    },
+    "confirm_pos_review_endpoint": {
+      "status": "Working",
+      "ppa_update": "Updates PPA from modal data",
+      "score_recalculation": "Recalculates derived values and scores"
+    },
+    "current_rankings_endpoint": {
+      "status": "Working",
+      "returns_active_snapshot": "Returns data from is_current=True snapshot",
+      "employee_count": 28
+    }
+  },
+
+  "bug_fix_verification": {
+    "original_issue": "User reported that editing metrics in the Employee tab does not update scores. OCR values need to be correctable and scores should recalculate after edits.",
+    "bugs_fixed": [
+      "1) current-rankings now returns data from is_current=True snapshot instead of only completed snapshots",
+      "2) confirm_pos_review now recalculates derived values (lbw_per_guest, etc.) before scoring"
+    ],
+    "verification_result": "PASSED - All endpoints correctly update metrics and recalculate scores"
+  },
+
+  "scoring_formula_notes": {
+    "benchmark_ppa": 55.0,
+    "benchmark_lbw": 8.0,
+    "benchmark_glass": 1.25,
+    "benchmark_lsc": 100.0,
+    "score_calculation": "score = (value / benchmark) * 100, capped at 100 for weighted calculation",
+    "bonus_calculation": "bonus = min((score - 100) * 0.25, 5.0) for scores > 100",
+    "weighted_score": "PPA*0.25 + LBW*0.15 + Glass*0.10 + LSC*0.25 = max 75 pts",
+    "total_score": "weighted_score + metric_bonuses + cv_score + review_tracker_bonus"
+  }
+}
