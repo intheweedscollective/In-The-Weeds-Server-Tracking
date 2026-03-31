@@ -98,6 +98,7 @@ Build a comprehensive performance review application for restaurant employees th
 - [x] Snapshot processing & finalization
 - [x] Status lifecycle (draft → in_progress → processing → completed)
 - [x] Current rankings from latest completed snapshot
+- [x] POS Review Modal data persistence fix (2026-03-31) - All 28 employees now correctly display
 - [x] Legacy data migration utility
 - [x] Top Performers display in snapshot detail
 
