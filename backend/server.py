@@ -76,6 +76,13 @@ app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
 
+# Health check endpoint for deployment monitoring
+@api_router.get("/health")
+async def health_check():
+    """Health check endpoint for load balancer and deployment verification"""
+    return {"status": "healthy", "service": "staff-score-engine"}
+
+
 # ============================================================================
 # V2 MODELS
 # ============================================================================
