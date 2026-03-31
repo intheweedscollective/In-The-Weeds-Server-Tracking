@@ -1167,10 +1167,33 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
     )
     
     if pos_upload_idx is not None:
-        # Update the parsed data with reviewed/edited values
-        uploads[pos_upload_idx]["parsed_data"]["employees"] = employees_data
+        # MERGE the incoming employee data with existing POS data (don't replace all)
+        existing_pos_employees = uploads[pos_upload_idx].get("parsed_data", {}).get("employees", [])
+        
+        # Build a lookup of existing POS employees by name
+        pos_emp_lookup = {}
+        for i, emp in enumerate(existing_pos_employees):
+            name_key = emp.get("name", "").lower().strip()
+            pos_emp_lookup[name_key] = i
+        
+        # Update existing or add new
+        for new_emp in employees_data:
+            name = new_emp.get("name", "").lower().strip()
+            if name in pos_emp_lookup:
+                # Update existing employee in POS data
+                idx = pos_emp_lookup[name]
+                existing_pos_employees[idx].update(new_emp)
+                logger.info(f"confirm_pos_review: Updated POS data for '{name}'")
+            else:
+                # Add new employee to POS data
+                existing_pos_employees.append(new_emp)
+                logger.info(f"confirm_pos_review: Added new employee '{name}' to POS data")
+        
+        uploads[pos_upload_idx]["parsed_data"]["employees"] = existing_pos_employees
+        uploads[pos_upload_idx]["parsed_data"]["record_count"] = len(existing_pos_employees)
         uploads[pos_upload_idx]["reviewed"] = True
         uploads[pos_upload_idx]["reviewed_at"] = datetime.now(timezone.utc).isoformat()
+        logger.info(f"confirm_pos_review: POS upload now has {len(existing_pos_employees)} employees")
     
     # ALSO update the snapshot employees directly (always, not just when completed)
     # This ensures edits take effect immediately without needing to reprocess
