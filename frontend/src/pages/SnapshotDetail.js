@@ -598,26 +598,26 @@ export default function SnapshotDetail() {
               return (
                 <div 
                   key={uploadType.key}
-                  className={`p-4 rounded-lg border transition-colors ${
+                  className={`p-3 sm:p-4 rounded-lg border transition-colors ${
                     isCompleted 
                       ? 'bg-green-900/20 border-green-500/30'
                       : 'bg-slate-700/30 border-slate-600 hover:border-slate-500'
                   }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="flex items-center gap-3 sm:gap-4">
+                      <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
                         isCompleted ? 'bg-green-500/20' : 'bg-slate-700'
                       }`}>
                         {isCompleted ? (
-                          <CheckCircle className="w-5 h-5 text-green-400" />
+                          <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-400" />
                         ) : (
-                          <Icon className={`w-5 h-5 ${uploadType.required ? 'text-blue-400' : 'text-slate-400'}`} />
+                          <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${uploadType.required ? 'text-blue-400' : 'text-slate-400'}`} />
                         )}
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-medium text-white">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="font-medium text-white text-sm sm:text-base">
                             Step {uploadType.step}: {uploadType.label}
                           </h4>
                           {uploadType.required && (
@@ -626,7 +626,7 @@ export default function SnapshotDetail() {
                             </span>
                           )}
                         </div>
-                        <p className="text-sm text-slate-400">{uploadType.description}</p>
+                        <p className="text-xs sm:text-sm text-slate-400 line-clamp-2">{uploadType.description}</p>
                         {upload && (
                           <p className="text-xs text-slate-500 mt-1">
                             {upload.filename} • {upload.record_count || 0} records • {new Date(upload.uploaded_at).toLocaleString()}
@@ -648,7 +648,7 @@ export default function SnapshotDetail() {
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2 ml-11 sm:ml-0">
                       {snapshot.status !== 'completed' && (
                         <>
                           <input
@@ -668,23 +668,24 @@ export default function SnapshotDetail() {
                           <Button
                             variant={isCompleted ? "outline" : "default"}
                             size="sm"
-                            className={isCompleted ? "border-slate-600" : "bg-blue-600 hover:bg-blue-700"}
+                            className={`text-xs sm:text-sm ${isCompleted ? "border-slate-600" : "bg-blue-600 hover:bg-blue-700"}`}
                             disabled={isUploading || snapshot.status === 'processing'}
                             onClick={() => document.getElementById(`file-input-${uploadType.key}`).click()}
                           >
                             {isUploading ? (
                               <>
-                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                Uploading...
+                                <Loader2 className="w-4 h-4 mr-1 sm:mr-2 animate-spin" />
+                                <span className="hidden sm:inline">Uploading...</span>
+                                <span className="sm:hidden">...</span>
                               </>
                             ) : isCompleted ? (
                               <>
-                                <RefreshCw className="w-4 h-4 mr-2" />
+                                <RefreshCw className="w-4 h-4 mr-1 sm:mr-2" />
                                 Replace
                               </>
                             ) : (
                               <>
-                                <Upload className="w-4 h-4 mr-2" />
+                                <Upload className="w-4 h-4 mr-1 sm:mr-2" />
                                 Upload
                               </>
                             )}
@@ -694,11 +695,12 @@ export default function SnapshotDetail() {
                             <Button
                               variant={dataReviewed ? "outline" : "default"}
                               size="sm"
-                              className={dataReviewed ? "border-slate-600 text-slate-300" : "bg-yellow-600 hover:bg-yellow-700"}
+                              className={`text-xs sm:text-sm ${dataReviewed ? "border-slate-600 text-slate-300" : "bg-yellow-600 hover:bg-yellow-700"}`}
                               onClick={openReviewModal}
                             >
-                              <Eye className="w-4 h-4 mr-2" />
-                              {dataReviewed ? "Re-Review" : "Review Data"}
+                              <Eye className="w-4 h-4 mr-1 sm:mr-2" />
+                              <span className="hidden sm:inline">{dataReviewed ? "Re-Review" : "Review Data"}</span>
+                              <span className="sm:hidden">Review</span>
                             </Button>
                           )}
                           {/* NPS Adjustment Tool button for Customer Voice */}
@@ -706,11 +708,12 @@ export default function SnapshotDetail() {
                             <Button
                               variant="outline"
                               size="sm"
-                              className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                              className="border-slate-600 text-slate-300 hover:bg-slate-700 text-xs sm:text-sm"
                               onClick={() => navigate(`/cv-adjustment?snapshot=${snapshotId}`)}
                             >
-                              <Settings2 className="w-4 h-4 mr-2" />
-                              NPS Adjustment Tool
+                              <Settings2 className="w-4 h-4 mr-1 sm:mr-2" />
+                              <span className="hidden sm:inline">NPS Adjustment Tool</span>
+                              <span className="sm:hidden">NPS Tool</span>
                             </Button>
                           )}
                         </>
