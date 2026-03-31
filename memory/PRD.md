@@ -101,6 +101,8 @@ Build a comprehensive performance review application for restaurant employees th
 - [x] POS Review Modal data persistence fix (2026-03-31) - All 28 employees now correctly display
 - [x] Legacy data migration utility
 - [x] Top Performers display in snapshot detail
+- [x] **Employee metric edit recalculation fix (2026-03-31)** - Editing PPA/metrics now correctly recalculates scores
+- [x] **current-rankings now returns active (is_current) snapshot** - Edits visible immediately without reprocessing
 
 ### Scoring Engine
 - [x] Complex weighted scoring formula
