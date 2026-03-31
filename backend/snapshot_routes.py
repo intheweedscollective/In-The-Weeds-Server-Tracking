@@ -624,13 +624,18 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
     if "loyalty_sales" in updates and updates["loyalty_sales"]:
         emp["lsc_count"] = round(updates["loyalty_sales"] / 25)
     
-    # Recalculate per-guest metrics
+    # Recalculate per-guest metrics when any relevant field is updated
     guest_count = emp.get("guest_count") or emp.get("guests") or 0
     if guest_count > 0:
+        # Always recalculate LBW per guest
         lbw = emp.get("lbw", 0) or 0
-        glassware = emp.get("bar_glassware_sales") or emp.get("glassware_sales") or 0
         emp["lbw_per_guest"] = round(lbw / guest_count, 2)
+        
+        # Always recalculate glassware per guest
+        glassware = emp.get("bar_glassware_sales") or emp.get("glassware_sales") or 0
         emp["glassware_per_guest"] = round(glassware / guest_count, 2)
+        
+        logger.info(f"Recalculated per-guest metrics for {emp.get('name')}: lbw_per_guest={emp['lbw_per_guest']}, glassware_per_guest={emp['glassware_per_guest']}")
     
     # Recalculate guests_per_lsc
     lsc_count = emp.get("lsc_count", 0) or 0
