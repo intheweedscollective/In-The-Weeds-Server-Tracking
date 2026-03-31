@@ -1263,13 +1263,20 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
             if existing:
                 # Update POS fields
                 old_ppa = existing.get("ppa")
+                old_glassware = existing.get("bar_glassware_sales")
                 for field in ["guest_count", "guests", "net_sales", "ppa", "liquor_sales", "beer_sales", 
                               "wine_sales", "lbw_total", "lbw_per_guest", "glassware_sales", "bar_glassware_sales",
                               "glassware_per_guest", "loyalty_sales", "lsc_count", "guests_per_lsc"]:
                     if field in new_emp and new_emp[field] is not None:
                         existing[field] = new_emp[field]
                 
-                logger.info(f"confirm_pos_review: Updated '{name}' PPA from {old_ppa} to {existing.get('ppa')}")
+                # Sync field aliases
+                if "glassware_sales" in new_emp:
+                    existing["bar_glassware_sales"] = new_emp["glassware_sales"]
+                if "guests" in new_emp:
+                    existing["guest_count"] = new_emp["guests"]
+                
+                logger.info(f"confirm_pos_review: Updated '{name}' PPA from {old_ppa} to {existing.get('ppa')}, glassware from {old_glassware} to {existing.get('bar_glassware_sales')}")
                 
                 # Recalculate derived values (LBW per guest, etc.)
                 guest_count = existing.get("guest_count") or existing.get("guests") or 0
