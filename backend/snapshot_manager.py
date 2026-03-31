@@ -195,8 +195,8 @@ def format_snapshot_response(snapshot: Dict[str, Any], is_current: bool = False)
         "is_current": is_current or snapshot.get("is_current", False),
     }
     
-    # Include employees for completed snapshots (sorted by score)
-    if snapshot.get("status") == SnapshotStatus.COMPLETED.value:
+    # Include employees for completed OR in_progress snapshots (sorted by score)
+    if snapshot.get("status") in [SnapshotStatus.COMPLETED.value, SnapshotStatus.IN_PROGRESS.value]:
         employees = snapshot.get("employees", [])
         # Sort by total_score or pre_dar_score descending
         sorted_employees = sorted(
