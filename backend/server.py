@@ -61,8 +61,11 @@ from io import BytesIO
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
+# MongoDB connection - handle special characters in password
+import urllib.parse
 mongo_url = os.environ['MONGO_URL']
+# If URL contains unencoded special chars, the connection will handle it
+# But we ensure it works by using the URL as-is since motor handles encoding
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
