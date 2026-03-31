@@ -1145,7 +1145,7 @@ async def get_historical_averages():
 async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
     """
     Confirm POS data review and save any edits.
-    This marks the data as reviewed so user can proceed to Step 2.
+    This marks the data as reviewed AND updates the snapshot employees directly.
     """
     db = get_db()
     
@@ -1153,11 +1153,8 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
     if not snapshot:
         raise HTTPException(status_code=404, detail="Snapshot not found")
     
-    if snapshot["status"] == SnapshotStatus.COMPLETED.value:
-        raise HTTPException(status_code=400, detail="Cannot modify completed snapshot")
-    
-    employees = data.get("employees", [])
-    if not employees:
+    employees_data = data.get("employees", [])
+    if not employees_data:
         raise HTTPException(status_code=400, detail="No employee data provided")
     
     # Find the POS upload and update it with reviewed data
@@ -1167,28 +1164,75 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
         None
     )
     
-    if pos_upload_idx is None:
-        raise HTTPException(status_code=400, detail="No POS upload found")
+    if pos_upload_idx is not None:
+        # Update the parsed data with reviewed/edited values
+        uploads[pos_upload_idx]["parsed_data"]["employees"] = employees_data
+        uploads[pos_upload_idx]["reviewed"] = True
+        uploads[pos_upload_idx]["reviewed_at"] = datetime.now(timezone.utc).isoformat()
     
-    # Update the parsed data with reviewed/edited values
-    uploads[pos_upload_idx]["parsed_data"]["employees"] = employees
-    uploads[pos_upload_idx]["reviewed"] = True
-    uploads[pos_upload_idx]["reviewed_at"] = datetime.now(timezone.utc).isoformat()
+    # ALSO update the snapshot employees directly if snapshot is completed
+    # This ensures edits take effect immediately without needing to reprocess
+    existing_employees = snapshot.get("employees", [])
+    if existing_employees:
+        # Build lookup by name for matching
+        emp_lookup = {}
+        for emp in existing_employees:
+            name_key = emp.get("name", "").lower().strip()
+            report_key = emp.get("report_name", "").lower().strip()
+            if name_key:
+                emp_lookup[name_key] = emp
+            if report_key and report_key != name_key:
+                emp_lookup[report_key] = emp
+        
+        # Update matching employees with new POS data
+        from snapshot_manager import calculate_employee_scores, assign_performance_tiers
+        
+        # Get benchmarks
+        settings = await db.quarter_settings.find_one(
+            {"year": snapshot.get("year", 2026), "quarter": snapshot.get("quarter", "Q1").upper()},
+            {"_id": 0}
+        )
+        benchmarks = {
+            "ppa": settings.get("benchmark_ppa", 55.0) if settings else 55.0,
+            "lbw": settings.get("benchmark_lbw", 8.0) if settings else 8.0,
+            "glass": settings.get("benchmark_glass", 1.25) if settings else 1.25,
+            "lsc": settings.get("benchmark_lsc", 100.0) if settings else 100.0,
+        }
+        
+        for new_emp in employees_data:
+            name = new_emp.get("name", "").lower().strip()
+            existing = emp_lookup.get(name)
+            
+            if existing:
+                # Update POS fields
+                for field in ["guest_count", "guests", "net_sales", "ppa", "liquor_sales", "beer_sales", 
+                              "wine_sales", "lbw_total", "lbw_per_guest", "glassware_sales", "bar_glassware_sales",
+                              "glassware_per_guest", "loyalty_sales", "lsc_count", "guests_per_lsc"]:
+                    if field in new_emp and new_emp[field] is not None:
+                        existing[field] = new_emp[field]
+                
+                # Recalculate scores
+                calculate_employee_scores(existing, benchmarks)
+        
+        # Re-assign tiers
+        existing_employees = assign_performance_tiers(existing_employees)
     
     # Save to database
+    update_data = {
+        "uploads": uploads,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    if existing_employees:
+        update_data["employees"] = existing_employees
+    
     await db.snapshot_workflow.update_one(
         {"id": snapshot_id},
-        {
-            "$set": {
-                "uploads": uploads,
-                "updated_at": datetime.now(timezone.utc).isoformat()
-            }
-        }
+        {"$set": update_data}
     )
     
     return {
         "success": True,
-        "message": f"POS data reviewed and confirmed ({len(employees)} employees)"
+        "message": f"POS data reviewed and confirmed ({len(employees_data)} employees)"
     }
 
 
