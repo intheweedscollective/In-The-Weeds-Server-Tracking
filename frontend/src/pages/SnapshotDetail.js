@@ -728,11 +728,11 @@ export default function SnapshotDetail() {
 
         {/* Action Buttons */}
         <Card className="bg-slate-800/50 border-slate-700">
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             {snapshot.status === 'completed' ? (
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-4">
                 <div className="flex items-center gap-3">
-                  <CheckCircle className="w-6 h-6 text-green-400" />
+                  <CheckCircle className="w-6 h-6 text-green-400 flex-shrink-0" />
                   <div>
                     <p className="text-white font-medium">Snapshot Completed</p>
                     <p className="text-slate-400 text-sm">
@@ -740,43 +740,43 @@ export default function SnapshotDetail() {
                     </p>
                   </div>
                 </div>
-                <div className="flex gap-3">
+                <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:gap-3">
                   <Button
                     variant="outline"
                     onClick={() => navigate(`/leaderboard?snapshot=${snapshotId}`)}
-                    className="border-slate-600"
+                    className="border-slate-600 text-xs sm:text-sm"
                   >
-                    <Eye className="w-4 h-4 mr-2" />
-                    View Rankings
+                    <Eye className="w-4 h-4 mr-1 sm:mr-2" />
+                    <span className="hidden sm:inline">View </span>Rankings
                   </Button>
                   <Button
                     onClick={handleDownloadSlide}
                     disabled={downloading}
-                    className="bg-green-600 hover:bg-green-700 text-white"
+                    className="bg-green-600 hover:bg-green-700 text-white text-xs sm:text-sm"
                     data-testid="download-slide-btn"
                   >
                     {downloading ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      <Loader2 className="w-4 h-4 mr-1 sm:mr-2 animate-spin" />
                     ) : (
-                      <Download className="w-4 h-4 mr-2" />
+                      <Download className="w-4 h-4 mr-1 sm:mr-2" />
                     )}
-                    Download Slide
+                    <span className="hidden sm:inline">Download </span>Slide
                   </Button>
                   <Button
                     variant="outline"
                     onClick={handleUnlock}
                     disabled={processing}
-                    className="border-amber-600 text-amber-400 hover:bg-amber-600/20"
+                    className="border-amber-600 text-amber-400 hover:bg-amber-600/20 text-xs sm:text-sm"
                     data-testid="unlock-snapshot-btn"
                   >
-                    <Edit2 className="w-4 h-4 mr-2" />
-                    Unlock for Editing
+                    <Edit2 className="w-4 h-4 mr-1 sm:mr-2" />
+                    Unlock
                   </Button>
                   <Button
                     variant="outline"
                     onClick={handleReprocess}
                     disabled={processing}
-                    className="border-slate-600"
+                    className="border-slate-600 text-xs sm:text-sm"
                   >
                     {processing ? (
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
