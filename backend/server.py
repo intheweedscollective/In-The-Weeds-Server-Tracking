@@ -3379,61 +3379,96 @@ async def get_full_hierarchy_rankings(year: int, quarter: str, tier_filter: Opti
 @api_router.get("/v2/full-rankings/{year}/{quarter}/pdf")
 async def download_full_rankings_pdf(year: int, quarter: str):
     """
-    Download Full Rankings as a PDF document.
+    Download Full Rankings as a PNG slide matching the Snapshot aesthetic.
     
-    Includes all employees with hierarchy-based ranking and complete scoring breakdown:
-    - Position, Position Label (T1, Bar1, A1, B1, C1...)
-    - Employee Name, Tier
-    - Total Score, Total Bonus
-    - PPA (Base + Bonus), LBW (Base + Bonus), LSC (Base + Bonus), Glass (Base + Bonus)
-    - Customer Voice Score
+    Uses the snapshot_slides.py generator for the exact dark navy design with:
+    - Bubba Gump logo and left sidebar
+    - Color-coded performance cells (blue/green/yellow/red)
+    - Metrics as percentages with visual indicators
     """
-    # Get settings for tier thresholds
+    from snapshot_slides import generate_snapshot_slide
+    
+    # SNAPSHOT-FIRST: Get employees from the active snapshot
+    snapshot = await db.snapshot_workflow.find_one(
+        {"is_current": True, "quarter": quarter.upper(), "year": year},
+        {"_id": 0}
+    )
+    
+    if not snapshot:
+        snapshot = await db.snapshot_workflow.find_one(
+            {"status": "completed", "quarter": quarter.upper(), "year": year},
+            {"_id": 0},
+            sort=[("effective_date", -1), ("completed_at", -1)]
+        )
+    
+    if not snapshot or not snapshot.get("employees"):
+        raise HTTPException(status_code=404, detail=f"No snapshot data found for {quarter} {year}")
+    
+    employees = snapshot.get("employees", [])
+    
+    # Get settings for benchmarks
     settings_doc = await db.quarter_settings.find_one(
         {"year": year, "quarter": quarter.upper()},
         {"_id": 0}
     )
-    if not settings_doc:
-        raise HTTPException(status_code=404, detail=f"Settings not found for {quarter} {year}")
     
-    settings = QuarterSettings(**settings_doc)
+    benchmarks = {}
+    if settings_doc:
+        benchmarks = {
+            "ppa_benchmark": settings_doc.get("ppa_benchmark", 60),
+            "lbw_benchmark": settings_doc.get("lbw_benchmark", 12),
+            "glassware_benchmark": settings_doc.get("glassware_benchmark", 1.0),
+            "lsc_benchmark": settings_doc.get("guests_per_lsc_benchmark", 100),
+        }
     
-    # Get all employees
-    employees_docs = await db.employees_v2.find(
-        {"year": year, "quarter": quarter.upper()},
-        {"_id": 0}
-    ).to_list(5000)
+    # Transform employee data for the slide generator
+    slide_employees = []
+    for emp in employees:
+        # Calculate percentage scores relative to benchmarks
+        ppa = emp.get("ppa", 0) or 0
+        lbw = emp.get("lbw_per_guest", 0) or 0
+        glass = emp.get("glassware_per_guest", 0) or emp.get("bar_glassware_sales", 0) or 0
+        lsc = emp.get("guests_per_lsc", 0) or 0
+        
+        ppa_bench = benchmarks.get("ppa_benchmark", 60)
+        lbw_bench = benchmarks.get("lbw_benchmark", 12)
+        glass_bench = benchmarks.get("glassware_benchmark", 1.0)
+        lsc_bench = benchmarks.get("lsc_benchmark", 100)
+        
+        # Calculate percentages (higher is better for PPA/LBW/Glass, lower is better for LSC)
+        score_ppa = (ppa / ppa_bench * 100) if ppa_bench > 0 else 0
+        score_lbw = (lbw / lbw_bench * 100) if lbw_bench > 0 else 0
+        score_glass = (glass / glass_bench * 100) if glass_bench > 0 else 0
+        score_lsc = (lsc_bench / lsc * 100) if lsc > 0 else 0  # Inverted: fewer guests per LSC is better
+        
+        slide_emp = {
+            "id": emp.get("id"),
+            "name": emp.get("display_name") or emp.get("name"),
+            "tier_label": emp.get("tier_label") or emp.get("performance_tier") or "B-Server",
+            "total_score": emp.get("total_score", 0) or 0,
+            "score_ppa": score_ppa,
+            "score_lbw": score_lbw,
+            "score_glass": score_glass,
+            "score_lsc": score_lsc,
+            "cv_score": emp.get("cv_score", 0) or 0,
+            "rt_mentions": emp.get("rt_mentions", 0) or emp.get("review_mentions", 0) or 0,
+            "rt_bonus": min((emp.get("rt_mentions", 0) or 0) * 0.5, 15),
+        }
+        slide_employees.append(slide_emp)
     
-    if not employees_docs:
-        raise HTTPException(status_code=404, detail=f"No employee data found for {quarter} {year}")
+    # Generate the snapshot slide
+    snapshot_date = datetime.now().strftime("%Y-%m-%d")
+    png_bytes = generate_snapshot_slide(
+        employees=slide_employees,
+        benchmarks=benchmarks,
+        snapshot_date=snapshot_date,
+        background="dark"
+    )
     
-    # Convert to EmployeeV2 objects and generate rankings
-    employees = [EmployeeV2(**doc) for doc in employees_docs]
-    rankings = generate_hierarchy_rankings(employees, settings)
-    
-    # Add bonus details to rankings for PDF
-    emp_lookup = {emp.id: emp for emp in employees}
-    for r in rankings:
-        emp = emp_lookup.get(r["employee_id"])
-        if emp:
-            r["bonus_ppa"] = emp.bonus_ppa or 0
-            r["bonus_lbw"] = emp.bonus_lbw or 0
-            r["bonus_lsc"] = emp.bonus_lsc or 0
-            r["bonus_glass"] = emp.bonus_glass or 0
-            r["cv_score"] = emp.cv_score or 0
-    
-    # Generate PDF
-    thresholds = {
-        "a_server_min": settings.a_server_min_score,
-        "b_server_min": settings.b_server_min_score
-    }
-    
-    pdf_bytes = build_full_rankings_pdf(rankings, quarter.upper(), year, thresholds)
-    
-    filename = f"full_rankings_{quarter}_{year}.pdf"
+    filename = f"performance_snapshot_{quarter}_{year}.png"
     return Response(
-        content=pdf_bytes,
-        media_type="application/pdf",
+        content=png_bytes,
+        media_type="image/png",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
