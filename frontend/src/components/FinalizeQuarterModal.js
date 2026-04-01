@@ -336,7 +336,7 @@ export default function FinalizeQuarterModal({ isOpen, onClose, quarter, year, e
                           value={dar.written_warnings}
                           onChange={(e) => handleDARChange(employee.id, 'written_warnings', e.target.value)}
                           disabled={isFinalized}
-                          className="w-20 text-center mx-auto"
+                          className="w-20 text-center mx-auto text-gray-900 bg-white border-gray-300"
                           data-testid={`dar-written-${employee.id}`}
                         />
                       </td>
@@ -347,7 +347,7 @@ export default function FinalizeQuarterModal({ isOpen, onClose, quarter, year, e
                           value={dar.suspensions}
                           onChange={(e) => handleDARChange(employee.id, 'suspensions', e.target.value)}
                           disabled={isFinalized}
-                          className="w-20 text-center mx-auto"
+                          className="w-20 text-center mx-auto text-gray-900 bg-white border-gray-300"
                           data-testid={`dar-suspension-${employee.id}`}
                         />
                       </td>

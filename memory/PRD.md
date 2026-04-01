@@ -207,6 +207,14 @@ Build a comprehensive performance review application for restaurant employees th
 
 ## Changelog
 
+### 2026-04-01 (Session 5)
+- **FIX: Finalize Quarter Modal Contrast & Calculation Issues**
+  - Fixed invisible input text in DAR (Written Warnings/Suspensions) fields
+  - Added explicit `text-gray-900 bg-white border-gray-300` classes to Input components
+  - Verified deduction calculations working: Written Warning (-3 pts) × count + Suspension (-5 pts) × count
+  - Final Score updates correctly: Pre-DAR Score - Total Deductions
+  - Summary stats (Total Deductions, Employees w/ DAR) update in real-time
+
 ### 2026-03-31 (Session 4)
 - **CRITICAL FIX: Snapshot-First Display Names & Tier Sorting**
   - Fixed `full-rankings` endpoint in `server.py` to pull from active snapshot instead of legacy `employees_v2`
