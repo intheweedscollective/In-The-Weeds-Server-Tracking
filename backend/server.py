@@ -7290,13 +7290,31 @@ async def finalize_quarter(year: int, quarter: str, submission: DARSubmission, g
     - Suspension DAR: -5 points each
     
     This creates the final rankings for end-of-quarter reviews.
+    Uses SNAPSHOT-FIRST architecture - reads from active snapshot.
     If generate_reviews=True, automatically generates AI reviews for all employees.
     """
-    # Get current employees
-    employees = await db.employees_v2.find(
-        {"year": year, "quarter": quarter.upper()},
+    # SNAPSHOT-FIRST: Get employees from active snapshot
+    snapshot = await db.snapshot_workflow.find_one(
+        {"is_current": True, "quarter": quarter.upper(), "year": year},
         {"_id": 0}
-    ).to_list(1000)
+    )
+    
+    if not snapshot:
+        # Fallback to latest completed snapshot
+        snapshot = await db.snapshot_workflow.find_one(
+            {"status": "completed", "quarter": quarter.upper(), "year": year},
+            {"_id": 0},
+            sort=[("effective_date", -1), ("completed_at", -1)]
+        )
+    
+    if not snapshot or not snapshot.get("employees"):
+        # Final fallback to legacy employees_v2
+        employees = await db.employees_v2.find(
+            {"year": year, "quarter": quarter.upper()},
+            {"_id": 0}
+        ).to_list(1000)
+    else:
+        employees = snapshot.get("employees", [])
     
     if not employees:
         raise HTTPException(status_code=404, detail="No employees found for this quarter")
@@ -7349,7 +7367,8 @@ async def finalize_quarter(year: int, quarter: str, submission: DARSubmission, g
         "final_rankings": final_rankings,
         "total_employees": len(final_rankings),
         "total_dar_deductions": sum(e["total_deduction"] for e in final_rankings),
-        "reviews_generated": False
+        "reviews_generated": False,
+        "snapshot_id": snapshot.get("id") if snapshot else None
     }
     
     await db.quarter_finalizations.update_one(
@@ -7357,6 +7376,34 @@ async def finalize_quarter(year: int, quarter: str, submission: DARSubmission, g
         {"$set": finalization_doc},
         upsert=True
     )
+    
+    # SNAPSHOT-FIRST: Update the active snapshot with finalization status
+    if snapshot and snapshot.get("id"):
+        # Update employees in snapshot with final scores (DAR applied)
+        final_score_lookup = {r["employee_id"]: r for r in final_rankings}
+        updated_employees = []
+        for emp in snapshot.get("employees", []):
+            emp_id = emp.get("id")
+            if emp_id in final_score_lookup:
+                emp_final = final_score_lookup[emp_id]
+                emp["final_score"] = emp_final["final_score"]
+                emp["dar_written_warnings"] = emp_final["written_warnings"]
+                emp["dar_suspensions"] = emp_final["suspensions"]
+                emp["dar_deduction"] = emp_final["total_deduction"]
+                emp["final_rank"] = emp_final["final_rank"]
+            updated_employees.append(emp)
+        
+        await db.snapshot_workflow.update_one(
+            {"id": snapshot["id"]},
+            {
+                "$set": {
+                    "status": "finalized",
+                    "finalized_at": datetime.now(timezone.utc).isoformat(),
+                    "employees": updated_employees,
+                    "dar_applied": True
+                }
+            }
+        )
     
     # Also save the DAR entries separately
     await db.dar_entries.update_one(
