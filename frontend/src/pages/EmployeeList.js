@@ -114,6 +114,8 @@ export default function EmployeeList() {
         score_lbw: emp.score_lbw || 0,
         score_glass: emp.score_glass || 0,
         score_lsc: emp.score_lsc || 0,
+        // Aliases/nicknames
+        aliases: emp.aliases || [],
         quarter: selectedQuarter,
         year: selectedYear,
         // Source indicator
