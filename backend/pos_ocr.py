@@ -51,8 +51,15 @@ EXTRACT THESE VALUES (use Net Sls column unless specified):
 6. **liquor_sales** - Liquor row
 7. **beer_sales** - Beer row
 8. **wine_sales** - Wine row
-9. **bar_glassware_sales** - Bar Glassware/Brglswre row
-10. **loyalty_sales** - Loyalty/LSC row (VERY IMPORTANT - scan entire table carefully!)
+9. **bar_glassware_sales** - Bar Glassware row (may also be labeled "Brglswre" or just "Glassware")
+10. **loyalty_sales** - Loyalty row (CRITICAL - this row ALWAYS exists, scan the ENTIRE table for it!)
+
+CRITICAL INSTRUCTIONS:
+- The "Loyalty" row is ALWAYS present in the table, usually between other category rows
+- Even if Loyalty sales are small (like $25 or $50), you MUST extract this value
+- Bar Glassware row is also ALWAYS present
+- DO NOT return 0 for these fields unless you have verified the row shows 0.00
+- Scan ALL rows in the Sales By Category section carefully
 
 JSON FORMAT:
 {
@@ -76,10 +83,13 @@ JSON FORMAT:
 }
 
 IMPORTANT:
-- Scan the ENTIRE table for the Loyalty row - it's easy to miss
-- Use 0 ONLY if you're certain the row doesn't exist
+- The Loyalty row is ALWAYS present - scan every row in the Sales By Category section
+- Even small amounts ($25, $50, $100) MUST be captured from the Loyalty row
+- Bar Glassware is also ALWAYS present - look for "Bar Glassware" or "Brglswre"
+- Use 0 ONLY if the Net Sls column for that row literally shows 0.00 or is blank
 - ALWAYS extract the ppa from the Guest Avg column in the Totals row
 - Remove $ signs and commas from numbers
+- Double-check that you have extracted loyalty_sales before returning
 
 Return ONLY valid JSON."""
 
@@ -383,8 +393,8 @@ async def extract_pos_data_from_pdf(pdf_bytes: bytes, max_pages: int = 60) -> Di
         page_images = []
         for page_num in range(pages_to_process):
             page = pdf_document[page_num]
-            # Use 100 DPI instead of 150 for faster upload/processing while maintaining readability
-            mat = fitz.Matrix(100/72, 100/72)
+            # Use 120 DPI for better OCR accuracy while keeping reasonable file size
+            mat = fitz.Matrix(120/72, 120/72)
             pix = page.get_pixmap(matrix=mat)
             # Use JPEG with quality setting for smaller file size
             img_bytes = pix.tobytes("jpeg")
@@ -464,28 +474,35 @@ async def extract_pos_data_from_pdf(pdf_bytes: bytes, max_pages: int = 60) -> Di
 
 def _deduplicate_employees(employees: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    Deduplicate employees by name, keeping the entry with more data.
+    Deduplicate employees by name, MERGING data from multiple extractions.
+    This ensures we capture data that might be extracted from different pages.
     """
     seen = {}
     for emp in employees:
         name = emp.get("name", "").strip().lower()
         if not name:
             continue
-            
-        # Count non-null fields
-        data_count = sum(1 for v in emp.values() if v is not None and v != "")
         
-        if name not in seen or data_count > seen[name]["_count"]:
-            emp["_count"] = data_count
-            seen[name] = emp
+        if name not in seen:
+            # First time seeing this employee
+            seen[name] = emp.copy()
+        else:
+            # Merge data - keep non-zero values from either extraction
+            existing = seen[name]
+            for key, value in emp.items():
+                if key == "name":
+                    continue
+                # If the new value is better (non-null, non-zero), use it
+                existing_val = existing.get(key)
+                if value is not None and value != "" and value != 0:
+                    if existing_val is None or existing_val == "" or existing_val == 0:
+                        existing[key] = value
+                    elif isinstance(value, (int, float)) and isinstance(existing_val, (int, float)):
+                        # For numeric values, keep the larger non-zero value (likely more complete data)
+                        if value > existing_val:
+                            existing[key] = value
     
-    # Remove the _count field before returning
-    result = []
-    for emp in seen.values():
-        emp.pop("_count", None)
-        result.append(emp)
-    
-    return result
+    return list(seen.values())
 
 
 def extract_pos_data_from_xlsx(xlsx_bytes: bytes) -> Dict[str, Any]:
