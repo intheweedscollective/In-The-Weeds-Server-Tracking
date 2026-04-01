@@ -3406,53 +3406,24 @@ async def download_full_rankings_pdf(year: int, quarter: str):
     
     employees = snapshot.get("employees", [])
     
-    # Get settings for benchmarks
-    settings_doc = await db.quarter_settings.find_one(
-        {"year": year, "quarter": quarter.upper()},
-        {"_id": 0}
-    )
-    
-    benchmarks = {}
-    if settings_doc:
-        benchmarks = {
-            "ppa_benchmark": settings_doc.get("ppa_benchmark", 60),
-            "lbw_benchmark": settings_doc.get("lbw_benchmark", 12),
-            "glassware_benchmark": settings_doc.get("glassware_benchmark", 1.0),
-            "lsc_benchmark": settings_doc.get("guests_per_lsc_benchmark", 100),
-        }
-    
-    # Transform employee data for the slide generator
+    # Use the pre-calculated data from the snapshot directly
+    # The snapshot already has score_ppa, score_lbw, score_glass, score_lsc as percentages
     slide_employees = []
     for emp in employees:
-        # Calculate percentage scores relative to benchmarks
-        ppa = emp.get("ppa", 0) or 0
-        lbw = emp.get("lbw_per_guest", 0) or 0
-        glass = emp.get("glassware_per_guest", 0) or emp.get("bar_glassware_sales", 0) or 0
-        lsc = emp.get("guests_per_lsc", 0) or 0
-        
-        ppa_bench = benchmarks.get("ppa_benchmark", 60)
-        lbw_bench = benchmarks.get("lbw_benchmark", 12)
-        glass_bench = benchmarks.get("glassware_benchmark", 1.0)
-        lsc_bench = benchmarks.get("lsc_benchmark", 100)
-        
-        # Calculate percentages (higher is better for PPA/LBW/Glass, lower is better for LSC)
-        score_ppa = (ppa / ppa_bench * 100) if ppa_bench > 0 else 0
-        score_lbw = (lbw / lbw_bench * 100) if lbw_bench > 0 else 0
-        score_glass = (glass / glass_bench * 100) if glass_bench > 0 else 0
-        score_lsc = (lsc_bench / lsc * 100) if lsc > 0 else 0  # Inverted: fewer guests per LSC is better
-        
         slide_emp = {
             "id": emp.get("id"),
             "name": emp.get("display_name") or emp.get("name"),
             "tier_label": emp.get("tier_label") or emp.get("performance_tier") or "B-Server",
-            "total_score": emp.get("total_score", 0) or 0,
-            "score_ppa": score_ppa,
-            "score_lbw": score_lbw,
-            "score_glass": score_glass,
-            "score_lsc": score_lsc,
+            "total_score": emp.get("total_score", 0) or emp.get("pre_dar_score", 0) or 0,
+            # Use pre-calculated percentage scores from snapshot
+            "score_ppa": emp.get("score_ppa", 0) or 0,
+            "score_lbw": emp.get("score_lbw", 0) or 0,
+            "score_glass": emp.get("score_glass", 0) or 0,
+            "score_lsc": emp.get("score_lsc", 0) or 0,
             "cv_score": emp.get("cv_score", 0) or 0,
             "rt_mentions": emp.get("rt_mentions", 0) or emp.get("review_mentions", 0) or 0,
-            "rt_bonus": min((emp.get("rt_mentions", 0) or 0) * 0.5, 15),
+            "rt_bonus": emp.get("review_tracker_bonus", 0) or min((emp.get("rt_mentions", 0) or 0) * 0.5, 15),
+            "total_metric_bonus": emp.get("total_metric_bonus", 0) or 0,
         }
         slide_employees.append(slide_emp)
     
@@ -3460,9 +3431,10 @@ async def download_full_rankings_pdf(year: int, quarter: str):
     snapshot_date = datetime.now().strftime("%Y-%m-%d")
     png_bytes = generate_snapshot_slide(
         employees=slide_employees,
-        benchmarks=benchmarks,
+        benchmarks={},
         snapshot_date=snapshot_date,
-        background="dark"
+        background="dark",
+        quarter=quarter.upper()
     )
     
     filename = f"performance_snapshot_{quarter}_{year}.png"

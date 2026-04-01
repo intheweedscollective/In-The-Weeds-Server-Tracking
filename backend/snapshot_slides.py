@@ -319,7 +319,7 @@ def generate_snapshot_slide(
             fill=(128, 128, 128)
         )
         
-        # Get metric values
+        # Get metric values - use pre-calculated from snapshot
         score_ppa = emp.get("score_ppa", 0) or 0
         score_lbw = emp.get("score_lbw", 0) or 0
         score_glass = emp.get("score_glass", 0) or 0
@@ -327,14 +327,8 @@ def generate_snapshot_slide(
         cv_score = emp.get("cv_score", 0) or 0
         rt_bonus = emp.get("rt_bonus", 0) or min((emp.get("rt_mentions", 0) or 0) * 0.5, 15)
         
-        # Calculate metric bonus
-        def calc_bonus(score):
-            if score <= 100:
-                return 0
-            excess = score - 100
-            return min((excess / 20) * 5, 5.0)
-        
-        metric_bonus = calc_bonus(score_ppa) + calc_bonus(score_lbw) + calc_bonus(score_glass) + calc_bonus(score_lsc)
+        # Use pre-calculated metric bonus from snapshot
+        metric_bonus = emp.get("total_metric_bonus", 0) or 0
         total_score = emp.get("total_score", 0) or 0
         
         # Draw metric cells with colors
