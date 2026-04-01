@@ -3514,18 +3514,31 @@ async def get_yodeck_complete_rankings_slide(year: int, quarter: str, format: st
     Generate a complete rankings slide showing ALL employees top to bottom on one slide.
     Matches snapshot layout with left panel (logo, title, legend) and right panel (data table).
     
+    USES SNAPSHOT-FIRST ARCHITECTURE - reads from active snapshot for data consistency.
+    
     Args:
         format: "16:9" for Yodeck/digital signage (1920x1080) or "letter" for 8.5x11" print (2550x3300)
         background: Background key (dark, rainbow_bokeh, cosmic_lights, neon_grid, synthwave_sunset, electric_mesh)
     """
-    # Get all rankings using the full-rankings format for proper tier labels
-    employees = await db.employees_v2.find(
-        {"year": year, "quarter": quarter.upper()},
-        {"_id": 0}
-    ).to_list(5000)
+    from snapshot_slides import generate_snapshot_slide
     
-    if not employees:
-        raise HTTPException(status_code=404, detail=f"No data for {quarter} {year}")
+    # SNAPSHOT-FIRST: Get employees from the active snapshot
+    snapshot = await db.snapshot_workflow.find_one(
+        {"is_current": True, "quarter": quarter.upper(), "year": year},
+        {"_id": 0}
+    )
+    
+    if not snapshot:
+        snapshot = await db.snapshot_workflow.find_one(
+            {"status": "completed", "quarter": quarter.upper(), "year": year},
+            {"_id": 0},
+            sort=[("effective_date", -1), ("completed_at", -1)]
+        )
+    
+    if not snapshot or not snapshot.get("employees"):
+        raise HTTPException(status_code=404, detail=f"No snapshot data found for {quarter} {year}")
+    
+    employees = snapshot.get("employees", [])
     
     # Get settings for tier thresholds
     settings = await db.quarter_settings.find_one(
@@ -3533,109 +3546,45 @@ async def get_yodeck_complete_rankings_slide(year: int, quarter: str, format: st
         {"_id": 0}
     ) or {}
     
-    a_server_min = settings.get("a_server_min_score", 80.1)
-    b_server_min = settings.get("b_server_min_score", 70.1)
+    a_min = settings.get("a_server_min_score", 85)
+    b_min = settings.get("b_server_min_score", 70)
     
-    # Transform employees to have proper tier labels and points structure
-    tier_counters = {"trainer": 0, "bartender": 0, "a-server": 0, "b-server": 0, "c-server": 0}
-    
-    # Sort by hierarchy then by score within each tier
-    def get_sort_key(e):
-        job = str(e.get("job_title", "server")).lower()
-        if job == "trainer":
-            return (0, -float(e.get("total_score", 0) or 0))
-        elif job == "bartender":
-            return (1, -float(e.get("total_score", 0) or 0))
-        else:
-            # Servers sorted by A/B/C then score
-            score = float(e.get("total_score", 0) or 0)
-            if score >= a_server_min:
-                return (2, -score)
-            elif score >= b_server_min:
-                return (3, -score)
-            else:
-                return (4, -score)
-    
-    employees.sort(key=get_sort_key)
-    
-    # Add tier labels and position labels
+    # Transform employees for the slide generator - use pre-calculated data
+    slide_employees = []
     for emp in employees:
-        job = str(emp.get("job_title", "server")).lower()
-        score = float(emp.get("total_score", 0) or 0)
-        
-        if job == "trainer":
-            tier_counters["trainer"] += 1
-            emp["tier_label"] = "Trainer"
-            emp["position_label"] = f"T{tier_counters['trainer']}"
-        elif job == "bartender":
-            tier_counters["bartender"] += 1
-            emp["tier_label"] = "Bartender"
-            emp["position_label"] = f"Bar{tier_counters['bartender']}"
-        else:
-            # Determine server tier based on score
-            if score >= a_server_min:
-                tier_counters["a-server"] += 1
-                emp["tier_label"] = "A-Server"
-                emp["position_label"] = f"A{tier_counters['a-server']}"
-            elif score >= b_server_min:
-                tier_counters["b-server"] += 1
-                emp["tier_label"] = "B-Server"
-                emp["position_label"] = f"B{tier_counters['b-server']}"
-            else:
-                tier_counters["c-server"] += 1
-                emp["tier_label"] = "C-Server"
-                emp["position_label"] = f"C{tier_counters['c-server']}"
-        
-        # Add points structure (earned/possible) - cap scores at max
-        ppa_raw = float(emp.get("score_ppa", 0) or 0)
-        lbw_raw = float(emp.get("score_lbw", 0) or 0)
-        lsc_raw = float(emp.get("score_lsc", 0) or 0)
-        glass_raw = float(emp.get("score_glass", 0) or 0)
-        
-        # Calculate weighted scores (capped at 100% of weight, then scaled)
-        ppa_pct = min(ppa_raw / 100, 1.0)
-        lbw_pct = min(lbw_raw / 100, 1.0)
-        lsc_pct = min(lsc_raw / 100, 1.0)
-        glass_pct = min(glass_raw / 100, 1.0)
-        
-        emp["ppa_points"] = {"earned": round(ppa_pct * 30, 2), "possible": 30}
-        emp["lbw_points"] = {"earned": round(lbw_pct * 25, 2), "possible": 25}
-        emp["lsc_points"] = {"earned": round(lsc_pct * 30, 2), "possible": 30}
-        emp["glassware_points"] = {"earned": round(glass_pct * 20, 2), "possible": 20}
-        
-        # Bonus points
-        emp["bonus_total"] = float(emp.get("bonus_total", 0) or emp.get("total_metric_bonus", 0) or 0)
-    
-    theme = settings.get("slide_theme", "dark_navy")
-    seasonal_theme = settings.get("slide_seasonal_theme", None)
-    custom_colors = None
-    
-    if theme == "custom":
-        custom_colors = {
-            "background": settings.get("slide_bg_color", "#0A1628"),
-            "background_gradient": settings.get("slide_bg_gradient", "#132238"),
-            "text_white": settings.get("slide_text_color", "#FFFFFF"),
-            "primary": settings.get("slide_accent_color", "#D12E2E"),
-            "secondary": settings.get("slide_secondary_color", "#005B96"),
+        slide_emp = {
+            "id": emp.get("id"),
+            "name": emp.get("display_name") or emp.get("name"),
+            "tier_label": emp.get("tier_label") or emp.get("performance_tier") or "B-Server",
+            "total_score": emp.get("total_score", 0) or emp.get("pre_dar_score", 0) or 0,
+            # Use pre-calculated percentage scores from snapshot
+            "score_ppa": emp.get("score_ppa", 0) or 0,
+            "score_lbw": emp.get("score_lbw", 0) or 0,
+            "score_glass": emp.get("score_glass", 0) or 0,
+            "score_lsc": emp.get("score_lsc", 0) or 0,
+            "cv_score": emp.get("cv_score", 0) or 0,
+            "rt_mentions": emp.get("rt_mentions", 0) or emp.get("review_mentions", 0) or 0,
+            "rt_bonus": emp.get("review_tracker_bonus", 0) or min((emp.get("rt_mentions", 0) or 0) * 0.5, 15),
+            "total_metric_bonus": emp.get("total_metric_bonus", 0) or 0,
         }
+        slide_employees.append(slide_emp)
     
-    slide_bytes = generate_complete_rankings_slide(
-        rankings=employees,
-        quarter=quarter,
-        year=year,
-        theme=theme,
-        custom_colors=custom_colors,
-        seasonal_theme=seasonal_theme,
-        output_format=format,
-        background=background
+    # Generate the snapshot slide
+    snapshot_date = datetime.now().strftime("%Y-%m-%d")
+    png_bytes = generate_snapshot_slide(
+        employees=slide_employees,
+        benchmarks={},
+        snapshot_date=snapshot_date,
+        background=background,
+        quarter=quarter.upper(),
+        a_min=a_min,
+        b_min=b_min
     )
     
-    format_suffix = "letter" if format == "letter" else "16x9"
-    filename = f"complete_rankings_{quarter}_{year}_{format_suffix}.png"
     return Response(
-        content=slide_bytes,
+        content=png_bytes,
         media_type="image/png",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
+        headers={"Content-Disposition": f"attachment; filename=rankings_{quarter}_{year}.png"}
     )
 
 
