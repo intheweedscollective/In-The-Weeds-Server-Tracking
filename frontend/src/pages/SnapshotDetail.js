@@ -194,9 +194,9 @@ export default function SnapshotDetail() {
               clearInterval(progressInterval);
               
               if (statusData.result?.success) {
-                // Now save to snapshot
+                // Now save to snapshot using the parsed-data endpoint
                 const saveRes = await api.post(
-                  `/v2/snapshot-workflow/snapshots/${snapshotId}/upload/${uploadType}`,
+                  `/v2/snapshot-workflow/snapshots/${snapshotId}/parsed-data/${uploadType}`,
                   { 
                     parsed_data: statusData.result,
                     filename: file.name,
