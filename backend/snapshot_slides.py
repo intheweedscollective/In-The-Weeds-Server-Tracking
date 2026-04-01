@@ -1,6 +1,6 @@
 """
 Server Performance Snapshot - EXACT REPLICATION
-Matching the reference image precisely
+Matching the Q1 Final Performance Slide reference image precisely
 """
 import io
 import os
@@ -12,7 +12,7 @@ from datetime import datetime
 SLIDE_WIDTH = 1920
 SLIDE_HEIGHT = 1080
 
-# Background options with descriptive names and preview URLs
+# Background options
 BACKGROUNDS = {
     "dark": {
         "name": "Dark Navy",
@@ -20,36 +20,6 @@ BACKGROUNDS = {
         "color": (15, 23, 42),
         "preview": None
     },
-    "rainbow_bokeh": {
-        "name": "Rainbow Bokeh",
-        "type": "image",
-        "url": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/0dpcbmve_IMG_2080.jpeg",
-        "preview": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/0dpcbmve_IMG_2080.jpeg"
-    },
-    "cosmic_lights": {
-        "name": "Cosmic Lights",
-        "type": "image",
-        "url": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/kj7dry1p_IMG_2081.jpeg",
-        "preview": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/kj7dry1p_IMG_2081.jpeg"
-    },
-    "neon_grid": {
-        "name": "Neon Grid",
-        "type": "image",
-        "url": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/7ejr8e4h_IMG_2078.jpeg",
-        "preview": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/7ejr8e4h_IMG_2078.jpeg"
-    },
-    "synthwave_sunset": {
-        "name": "Synthwave Sunset",
-        "type": "image",
-        "url": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/2uyjx6bg_IMG_2076.jpeg",
-        "preview": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/2uyjx6bg_IMG_2076.jpeg"
-    },
-    "electric_mesh": {
-        "name": "Electric Mesh",
-        "type": "image",
-        "url": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/zlo7kss4_IMG_2077.jpeg",
-        "preview": "https://customer-assets.emergentagent.com/job_staffscore-1/artifacts/zlo7kss4_IMG_2077.jpeg"
-    }
 }
 
 # Exact colors from reference
@@ -59,13 +29,12 @@ COLORS = {
     "white": (255, 255, 255),
     "row_white": (255, 255, 255),
     "row_gray": (240, 242, 245),
-    "bar_row": (25, 40, 65),           # BAR1/BAR2 row background
     
-    # Performance colors - EXACT hex values
-    "blue": (12, 118, 158),            # #0c769e - Exceeding
-    "green": (51, 204, 51),            # #33cc33 - Meeting
-    "yellow": (255, 255, 0),           # #ffff00 - Work in Progress
-    "red": (255, 0, 0),                # #ff0000 - Needs Improvement
+    # Performance colors - EXACT from reference
+    "blue": (12, 118, 158),            # #0c769e - Exceeding (>=100%)
+    "green": (51, 204, 51),            # #33cc33 - Meeting (80-99%)
+    "yellow": (255, 255, 0),           # #ffff00 - Work in Progress (70-79%)
+    "red": (255, 0, 0),                # #ff0000 - Needs Improvement (<70%)
     
     # Title colors
     "title_red": (255, 50, 50),
@@ -91,20 +60,18 @@ def get_font(size: int, weight: str = "regular"):
     try:
         return ImageFont.truetype(path, size)
     except:
-        # Use Liberation fonts as fallback (available in container)
-        if weight in ["bold", "semibold"]:
+        if weight in ["bold", "semibold", "aptos"]:
             fallback = "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
         else:
             fallback = "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
         try:
             return ImageFont.truetype(fallback, size)
         except:
-            # Last resort: use default PIL font
             return ImageFont.load_default()
 
 
-def get_cell_color(value: float, is_total: bool = False) -> Tuple[int, int, int]:
-    """Get cell color based on performance."""
+def get_metric_color(value: float) -> Tuple[int, int, int]:
+    """Get cell color based on percentage value."""
     if value >= 100:
         return COLORS["blue"]
     elif value >= 80:
@@ -114,36 +81,46 @@ def get_cell_color(value: float, is_total: bool = False) -> Tuple[int, int, int]
     return COLORS["red"]
 
 
-def get_rt_color(value: float) -> Tuple[int, int, int]:
-    """Get Review Tracker bonus color.
-    0.5 pts per mention, capped at 15 pts
-    0 = red
-    0.5-2.5 = yellow (1-5 mentions)
-    3.0-5.0 = green (6-10 mentions)
-    5.5-15 = blue (11-30 mentions, capped)
-    """
-    if value >= 5.5:
+def get_cv_color(value: float) -> Tuple[int, int, int]:
+    """Get CV score color. Higher is better."""
+    if value >= 15:
         return COLORS["blue"]
-    elif value >= 3.0:
+    elif value >= 10:
         return COLORS["green"]
-    elif value >= 0.5:
+    elif value >= 5:
         return COLORS["yellow"]
     return COLORS["red"]
 
 
-def get_cv_color(value: float) -> Tuple[int, int, int]:
-    """Get Customer Voice score color.
-    CV Score = NPS points (0-10) + promoter/detractor points (+0.5/-1 each)
-    0-5 = red
-    5.1-10 = yellow
-    10.1-15 = green
-    15.1+ = blue
-    """
-    if value >= 15.1:
+def get_rt_color(value: float) -> Tuple[int, int, int]:
+    """Get RT bonus color. Higher is better."""
+    if value >= 10:
         return COLORS["blue"]
-    elif value >= 10.1:
+    elif value >= 5:
         return COLORS["green"]
-    elif value >= 5.1:
+    elif value >= 1:
+        return COLORS["yellow"]
+    return COLORS["red"]
+
+
+def get_bonus_color(value: float) -> Tuple[int, int, int]:
+    """Get metric bonus color."""
+    if value >= 8:
+        return COLORS["blue"]
+    elif value >= 4:
+        return COLORS["green"]
+    elif value >= 1:
+        return COLORS["yellow"]
+    return COLORS["red"]
+
+
+def get_score_color(value: float) -> Tuple[int, int, int]:
+    """Get total score color."""
+    if value >= 100:
+        return COLORS["blue"]
+    elif value >= 85:
+        return COLORS["green"]
+    elif value >= 75:
         return COLORS["yellow"]
     return COLORS["red"]
 
@@ -153,74 +130,27 @@ def generate_snapshot_slide(
     benchmarks: Dict[str, float],
     snapshot_date: str,
     background: str = "dark",
-    title: str = None
+    title: str = None,
+    quarter: str = "Q1"
 ) -> bytes:
-    """Generate snapshot matching reference image exactly."""
+    """Generate snapshot matching Q1 Final reference image exactly."""
     
-    # Get background configuration
-    bg_config = BACKGROUNDS.get(background, BACKGROUNDS["dark"])
-    
-    # Create base image based on background type
-    if bg_config.get("type") == "image" and bg_config.get("url"):
-        try:
-            # Download and load image background
-            response = requests.get(bg_config["url"], timeout=10)
-            bg_img = Image.open(io.BytesIO(response.content))
-            
-            # Convert to RGB if necessary
-            if bg_img.mode != 'RGB':
-                bg_img = bg_img.convert('RGB')
-            
-            # Resize to fit slide dimensions
-            bg_img = bg_img.resize((SLIDE_WIDTH, SLIDE_HEIGHT), Image.Resampling.LANCZOS)
-            
-            # Darken the image significantly for text readability
-            enhancer = ImageEnhance.Brightness(bg_img)
-            bg_img = enhancer.enhance(0.3)  # Darken to 30% brightness
-            
-            # Reduce saturation for more subtle look
-            sat_enhancer = ImageEnhance.Color(bg_img)
-            bg_img = sat_enhancer.enhance(0.6)  # Reduce saturation
-            
-            # Add slight blur for a softer look
-            bg_img = bg_img.filter(ImageFilter.GaussianBlur(radius=3))
-            
-            # Create a dark overlay for even better readability
-            overlay = Image.new('RGBA', (SLIDE_WIDTH, SLIDE_HEIGHT), (10, 20, 40, 150))
-            bg_img = bg_img.convert('RGBA')
-            bg_img = Image.alpha_composite(bg_img, overlay)
-            bg_img = bg_img.convert('RGB')
-            
-            img = bg_img
-        except Exception as e:
-            print(f"Error loading background image: {e}")
-            # Fallback to solid color
-            img = Image.new('RGB', (SLIDE_WIDTH, SLIDE_HEIGHT), COLORS["bg_navy"])
-    else:
-        # Solid color background
-        color = bg_config.get("color", COLORS["bg_navy"])
-        img = Image.new('RGB', (SLIDE_WIDTH, SLIDE_HEIGHT), color)
-    
+    # Create base image with dark navy background
+    img = Image.new('RGB', (SLIDE_WIDTH, SLIDE_HEIGHT), COLORS["bg_navy"])
     draw = ImageDraw.Draw(img)
     
-    # Sort employees by tier first, then by score within tier
+    # Sort employees by tier, then by score within tier
     tier_order = {"Trainer": 0, "Bartender": 1, "A-Server": 2, "B-Server": 3, "C-Server": 4}
     sorted_emps = sorted(employees, key=lambda x: (
         tier_order.get(x.get("tier_label", "C-Server"), 4),
-        -(x.get("total_score") or x.get("pre_dar_score") or 0)
+        -(x.get("total_score") or 0)
     ))
     num_emps = len(sorted_emps)
     
-    # Debug: Print sort order
-    import logging
-    logging.info(f"Snapshot slide employee order after sorting:")
-    for i, emp in enumerate(sorted_emps[:10], 1):
-        logging.info(f"  {i}. {emp.get('name')} | tier: {emp.get('tier_label')} | score: {emp.get('total_score')}")
-    
-    # ===== LEFT PANEL - WIDER to give more space for legend =====
+    # ===== LEFT PANEL =====
     left_width = 480
     
-    # Logo - large, top of left panel
+    # Logo
     logo_path = "/app/backend/assets/bubba_gump_logo.png"
     if os.path.exists(logo_path):
         try:
@@ -238,7 +168,7 @@ def generate_snapshot_slide(
     center_x = left_width // 2
     
     # "Q1 SERVER" - white
-    draw.text((center_x, title_y), "Q1 SERVER", font=get_font(36, "semibold"),
+    draw.text((center_x, title_y), f"{quarter} SERVER", font=get_font(36, "semibold"),
               fill=COLORS["white"], anchor="mm")
     
     # "PERFORMANCE" - red, large
@@ -250,22 +180,11 @@ def generate_snapshot_slide(
               fill=COLORS["white"], anchor="mm")
     
     # Date - red
-    date_y = title_y + 145
-    draw.text((center_x, date_y), snapshot_date, font=get_font(24, "medium"),
+    draw.text((center_x, title_y + 145), snapshot_date, font=get_font(24, "medium"),
               fill=COLORS["title_red"], anchor="mm")
-    date_bottom_y = date_y + 20  # Add padding below date
     
-    # Footer text - positioned at bottom
-    footer_y = SLIDE_HEIGHT - 130
-    
-    # Calculate legend position - EQUALLY CENTERED between date and footer statement
-    legend_height = 4 * 70  # 4 items × 70px spacing (280px total)
-    # Available space from date bottom to footer top
-    available_space = footer_y - date_bottom_y
-    # Position legend so space above and below is equal
-    space_above = (available_space - legend_height) // 2
-    legend_y = date_bottom_y + space_above
-    
+    # Legend
+    legend_y = title_y + 200
     legend_items = [
         (COLORS["blue"], "EXCEEDING ALL", "EXPECTATIONS"),
         (COLORS["green"], "MEETING", "EXPECTATIONS"),
@@ -275,20 +194,17 @@ def generate_snapshot_slide(
     
     for i, (color, line1, line2) in enumerate(legend_items):
         y = legend_y + i * 70
-        # Colored square - centered with logo
         square_size = 50
-        # Calculate total legend width (square + gap + text)
-        legend_content_width = square_size + 12 + 250  # approximate text width
-        legend_start_x = (left_width - legend_content_width) // 2
+        legend_start_x = 50
         
         draw.rectangle([legend_start_x, y, legend_start_x + square_size, y + square_size], fill=color)
-        # Text in matching color - 28pt (split into 2 lines)
         draw.text((legend_start_x + square_size + 12, y + 8), line1, 
                   font=get_font(28, "semibold"), fill=color, anchor="lm")
         draw.text((legend_start_x + square_size + 12, y + 36), line2, 
                   font=get_font(28, "semibold"), fill=color, anchor="lm")
     
     # Footer text
+    footer_y = SLIDE_HEIGHT - 130
     draw.text((center_x, footer_y), "DON'T WAIT TO IMPACT", 
               font=get_font(24, "semibold"), fill=COLORS["white"], anchor="mm")
     draw.text((center_x, footer_y + 30), "THIS NUMBER.",
@@ -304,83 +220,28 @@ def generate_snapshot_slide(
     table_top = 30
     table_width = table_right - table_left
     
-    # Calculate row sizing to fit ALL employees
+    # Row sizing
     header_h = 45
     available_height = SLIDE_HEIGHT - table_top - 20 - header_h
     row_h = available_height // max(num_emps, 1)
-    row_h = max(28, min(42, row_h))  # Between 28-42px
+    row_h = max(28, min(42, row_h))
     
-    # Columns - Added Trend column, split Review into CV and RT
+    # Columns - EXACT match to reference: Rank, Name, Trend, PPA, LBW, GLASS, LSC, CV, RT, Bonus, Score
     columns = [
         {"name": "Rank", "width": 55},
         {"name": "Name", "width": 140},
-        {"name": "Trend", "width": 45, "key": "trend"},
-        {"name": "PPA", "width": 80, "key": "score_ppa"},
-        {"name": "LBW", "width": 80, "key": "score_lbw"},
-        {"name": "GLASS", "width": 80, "key": "score_glass"},
-        {"name": "LSC", "width": 80, "key": "score_lsc"},
-        {"name": "CV", "width": 70, "key": "cv_score", "is_bonus": True},
-        {"name": "RT", "width": 70, "key": "rt_bonus", "is_bonus": True},
-        {"name": "Bonus", "width": 80, "key": "total_metric_bonus", "is_bonus": True},
-        {"name": "Score", "width": 100, "key": "total_score"},
+        {"name": "Trend", "width": 50},
+        {"name": "PPA", "width": 80},
+        {"name": "LBW", "width": 80},
+        {"name": "GLASS", "width": 80},
+        {"name": "LSC", "width": 80},
+        {"name": "CV", "width": 75},
+        {"name": "RT", "width": 75},
+        {"name": "Bonus", "width": 75},
+        {"name": "Score", "width": 90},
     ]
     
-    # Calculate CV score and RT bonus separately for each employee
-    for emp in sorted_emps:
-        # CV Score: NPS%/10 + promoters × 0.5 - detractors × 1 (stored as cv_score)
-        cv_score = float(emp.get("cv_score", 0) or 0)
-        emp["cv_score"] = cv_score
-        
-        # Debug log CV score
-        logging.info(f"CV Score for {emp.get('name')}: stored={emp.get('cv_score')} -> using={cv_score}")
-        
-        # RT Bonus: Check multiple possible field names
-        # - review_tracker_bonus: pre-calculated bonus
-        # - review_bonus: alternative name
-        # - rt_mentions: raw count (needs to be multiplied by 0.5)
-        rt_bonus = float(emp.get("review_tracker_bonus", 0) or emp.get("review_bonus", 0) or 0)
-        if rt_bonus == 0:
-            # Calculate from mentions if bonus field not present
-            rt_mentions = float(emp.get("rt_mentions", 0) or emp.get("review_mentions", 0) or 0)
-            rt_bonus = rt_mentions * 0.5
-        rt_bonus = min(rt_bonus, 15)  # Ensure cap
-        emp["rt_bonus"] = rt_bonus
-        
-        # Metric Bonus: ALWAYS recalculate from scores to ensure accuracy
-        # Bonus is earned for scores exceeding 100%: 0 at 100%, up to 5 pts at 120%
-        def calc_bonus(score):
-            if score is None or score <= 100:
-                return 0
-            excess_percent = score - 100
-            bonus = (excess_percent / 20) * 5  # 5 pts max at 20% over
-            return min(bonus, 5.0)
-        
-        bonus_ppa = calc_bonus(emp.get("score_ppa"))
-        bonus_lbw = calc_bonus(emp.get("score_lbw"))
-        bonus_glass = calc_bonus(emp.get("score_glass"))
-        bonus_lsc = calc_bonus(emp.get("score_lsc"))
-        total_metric_bonus = round(bonus_ppa + bonus_lbw + bonus_glass + bonus_lsc, 2)
-        emp["total_metric_bonus"] = total_metric_bonus
-        
-        # Calculate trend from previous snapshot data if available
-        prev_score = emp.get("previous_score")
-        current_score = emp.get("total_score", 0) or 0
-        if prev_score is not None:
-            diff = current_score - prev_score
-            if diff > 1:
-                emp["trend"] = "↑"
-                emp["trend_color"] = "green"
-            elif diff < -1:
-                emp["trend"] = "↓"
-                emp["trend_color"] = "red"
-            else:
-                emp["trend"] = "→"
-                emp["trend_color"] = "gray"
-        else:
-            emp["trend"] = "•"
-            emp["trend_color"] = "gray"
-    
-    # Scale columns
+    # Scale columns to fit
     total_col_w = sum(c["width"] for c in columns)
     scale = table_width / total_col_w
     for c in columns:
@@ -398,7 +259,7 @@ def generate_snapshot_slide(
     draw.rectangle([table_left, table_top, table_right, table_top + header_h],
                    fill=COLORS["header_blue"])
     
-    # Header border - BLACK lines
+    # Header border
     draw.line([(table_left, table_top), (table_right, table_top)], fill=(0, 0, 0), width=1)
     draw.line([(table_left, table_top + header_h), (table_right, table_top + header_h)], fill=(0, 0, 0), width=1)
     
@@ -411,20 +272,12 @@ def generate_snapshot_slide(
     
     # Data rows
     data_y = table_top + header_h
-    current_tier = None
     tier_counts = {}
     row_idx = 0
     
     for emp in sorted_emps:
         tier = emp.get("tier_label", "C-Server")
-        
-        # Insert BAR separator rows for Bartenders
-        if tier == "Bartender" and current_tier != "Bartender":
-            # Check if we have bartenders
-            pass
-        
         tier_counts[tier] = tier_counts.get(tier, 0) + 1
-        current_tier = tier
         
         y = data_y + row_idx * row_h
         if y + row_h > SLIDE_HEIGHT - 20:
@@ -432,154 +285,150 @@ def generate_snapshot_slide(
         
         # Alternating row colors (white / light gray)
         row_bg = COLORS["row_white"] if row_idx % 2 == 0 else COLORS["row_gray"]
-        
-        # Special row for BAR entries
-        if tier == "Bartender":
-            prefix = "BAR"
-            rank_text = f"{prefix}{tier_counts[tier]}"
-        else:
-            prefix = {"Trainer": "T", "A-Server": "A", "B-Server": "B", "C-Server": "C"}.get(tier, "")
-            if prefix:
-                rank_text = f"{prefix}{tier_counts[tier]}"
-            else:
-                rank_text = str(row_idx + 1)
-        
-        # Draw row background
         draw.rectangle([table_left, y, table_right, y + row_h], fill=row_bg)
         
-        # Horizontal grid lines - BLACK (top and bottom of each row)
+        # Grid lines
         draw.line([(table_left, y), (table_right, y)], fill=(0, 0, 0), width=1)
         draw.line([(table_left, y + row_h), (table_right, y + row_h)], fill=(0, 0, 0), width=1)
         
         row_cy = y + row_h // 2
         
-        # Rank column - Aptos Narrow Bold, black text
+        # Rank label (T1, T2, BAR1, A1, B1, C1, etc.)
+        if tier == "Bartender":
+            rank_text = f"BAR{tier_counts[tier]}"
+        else:
+            prefix = {"Trainer": "T", "A-Server": "A", "B-Server": "B", "C-Server": "C"}.get(tier, "")
+            rank_text = f"{prefix}{tier_counts[tier]}"
+        
         draw.text((col_x[0] + columns[0]["width"] // 2, row_cy), rank_text,
                   font=get_font(16, "aptos"), fill=(0, 0, 0), anchor="mm")
         
-        # Employee name - First name only, Aptos Narrow Bold, black text
-        # Use 'name' field which has the preferred nickname (Trey, Tad, Sheri, etc.)
+        # Name - first name only
         full_name = emp.get("name") or emp.get("display_name") or "Unknown"
-        name = full_name.split()[0] if full_name else "Unknown"  # First name only
-        max_ch = columns[1]["width"] // 10
-        if len(name) > max_ch:
-            name = name[:max_ch-1] + "…"
+        name = full_name.split()[0] if full_name else "Unknown"
         draw.text((col_x[1] + 10, row_cy), name,
                   font=get_font(16, "aptos"), fill=(0, 0, 0), anchor="lm")
         
-        # Metric columns - colored cells
-        for i, col in enumerate(columns[2:], start=2):
-            key = col.get("key")
-            if not key:
-                continue
-            
-            # Special handling for trend column - draw arrows manually
-            if key == "trend":
-                trend_color_name = emp.get("trend_color", "gray")
-                if trend_color_name == "green":
-                    arrow_color = (34, 197, 94)  # Bright green
-                elif trend_color_name == "red":
-                    arrow_color = (239, 68, 68)  # Bright red
-                else:
-                    arrow_color = (156, 163, 175)  # Gray
-                
-                # Center point for the arrow
-                center_x = col_x[i] + columns[i]["width"] // 2
-                center_y = row_cy
-                arrow_size = 8  # Half the arrow size
-                
-                trend_type = emp.get("trend", "•")
-                
-                if trend_type == "↑":
-                    # Draw UP arrow (triangle pointing up)
-                    points = [
-                        (center_x, center_y - arrow_size),      # Top point
-                        (center_x - arrow_size, center_y + arrow_size),  # Bottom left
-                        (center_x + arrow_size, center_y + arrow_size),  # Bottom right
-                    ]
-                    draw.polygon(points, fill=arrow_color)
-                elif trend_type == "↓":
-                    # Draw DOWN arrow (triangle pointing down)
-                    points = [
-                        (center_x, center_y + arrow_size),      # Bottom point
-                        (center_x - arrow_size, center_y - arrow_size),  # Top left
-                        (center_x + arrow_size, center_y - arrow_size),  # Top right
-                    ]
-                    draw.polygon(points, fill=arrow_color)
-                elif trend_type == "→":
-                    # Draw horizontal line/dash for no change
-                    draw.rectangle(
-                        [center_x - arrow_size, center_y - 2, center_x + arrow_size, center_y + 2],
-                        fill=arrow_color
-                    )
-                else:
-                    # Draw a horizontal dash for no data (same as no change)
-                    draw.rectangle(
-                        [center_x - arrow_size, center_y - 2, center_x + arrow_size, center_y + 2],
-                        fill=arrow_color
-                    )
-                continue
-            
-            # Get value - combined_review_bonus is already calculated above
-            val = emp.get(key, 0) or 0
-            
-            is_bonus = col.get("is_bonus", False)
-            
-            # Cell dimensions
-            cell_pad = 4
-            cx = col_x[i] + cell_pad
-            cw = columns[i]["width"] - cell_pad * 2
-            ch = row_h - 8
-            cy = y + 4
-            
-            # Determine color and format
-            if key == "cv_score":
-                # Customer Voice: 0-5=Red, 5.1-10=Yellow, 10.1-15=Green, 15.1+=Blue
-                color = get_cv_color(val)
-                text_color = COLORS["white"] if color == COLORS["blue"] else (0, 0, 0)
-                text = f"+{val:.1f}" if val > 0 else f"{val:.1f}"
-            elif key == "rt_bonus":
-                # Review Tracker: 0=Red, 0.1-2.5=Yellow, 2.6-5=Green, 5.1+=Blue
-                color = get_rt_color(val)
-                text_color = COLORS["white"] if color == COLORS["blue"] else (0, 0, 0)
-                text = f"+{val:.1f}" if val > 0 else f"{val:.1f}"
-            elif key == "total_metric_bonus":
-                # Metric Bonus: 0=Red, +1=Green, +10=Blue
-                if val >= 10:
-                    color = COLORS["blue"]
-                    text_color = COLORS["white"]  # White text on blue
-                elif val >= 1:
-                    color = COLORS["green"]
-                    text_color = (0, 0, 0)  # Black text
-                else:
-                    color = COLORS["red"]
-                    text_color = (0, 0, 0)  # Black text
-                text = f"+{val:.1f}"
-            elif key == "total_score":
-                # Total score - colored based on value
-                color = get_cell_color(val)
-                text_color = COLORS["white"] if color == COLORS["blue"] else (0, 0, 0)
-                text = f"{val:.1f}"
-            else:
-                # Metric scores - colored cells
-                color = get_cell_color(val)
-                text_color = COLORS["white"] if color == COLORS["blue"] else (0, 0, 0)
-                text = f"{val:.0f}%"
-            
-            # Draw colored cell
-            draw.rectangle([cx, cy, cx + cw, cy + ch], fill=color)
-            
-            # Draw text - Aptos Narrow Bold
-            draw.text((cx + cw // 2, row_cy), text,
-                      font=get_font(14, "aptos"), fill=text_color, anchor="mm")
+        # Trend - horizontal dash (=)
+        trend_cx = col_x[2] + columns[2]["width"] // 2
+        dash_width = 16
+        dash_height = 4
+        draw.rectangle(
+            [trend_cx - dash_width//2, row_cy - dash_height//2, 
+             trend_cx + dash_width//2, row_cy + dash_height//2],
+            fill=(128, 128, 128)
+        )
+        
+        # Get metric values
+        score_ppa = emp.get("score_ppa", 0) or 0
+        score_lbw = emp.get("score_lbw", 0) or 0
+        score_glass = emp.get("score_glass", 0) or 0
+        score_lsc = emp.get("score_lsc", 0) or 0
+        cv_score = emp.get("cv_score", 0) or 0
+        rt_bonus = emp.get("rt_bonus", 0) or min((emp.get("rt_mentions", 0) or 0) * 0.5, 15)
+        
+        # Calculate metric bonus
+        def calc_bonus(score):
+            if score <= 100:
+                return 0
+            excess = score - 100
+            return min((excess / 20) * 5, 5.0)
+        
+        metric_bonus = calc_bonus(score_ppa) + calc_bonus(score_lbw) + calc_bonus(score_glass) + calc_bonus(score_lsc)
+        total_score = emp.get("total_score", 0) or 0
+        
+        # Draw metric cells with colors
+        cell_pad = 4
+        
+        # PPA (column 3)
+        col_idx = 3
+        color = get_metric_color(score_ppa)
+        text_color = COLORS["white"] if color == COLORS["blue"] else (0, 0, 0)
+        cx = col_x[col_idx] + cell_pad
+        cw = columns[col_idx]["width"] - cell_pad * 2
+        ch = row_h - 8
+        cy_cell = y + 4
+        draw.rectangle([cx, cy_cell, cx + cw, cy_cell + ch], fill=color)
+        draw.text((cx + cw // 2, row_cy), f"{score_ppa:.0f}%",
+                  font=get_font(14, "aptos"), fill=text_color, anchor="mm")
+        
+        # LBW (column 4)
+        col_idx = 4
+        color = get_metric_color(score_lbw)
+        text_color = COLORS["white"] if color == COLORS["blue"] else (0, 0, 0)
+        cx = col_x[col_idx] + cell_pad
+        cw = columns[col_idx]["width"] - cell_pad * 2
+        draw.rectangle([cx, cy_cell, cx + cw, cy_cell + ch], fill=color)
+        draw.text((cx + cw // 2, row_cy), f"{score_lbw:.0f}%",
+                  font=get_font(14, "aptos"), fill=text_color, anchor="mm")
+        
+        # GLASS (column 5)
+        col_idx = 5
+        color = get_metric_color(score_glass)
+        text_color = COLORS["white"] if color == COLORS["blue"] else (0, 0, 0)
+        cx = col_x[col_idx] + cell_pad
+        cw = columns[col_idx]["width"] - cell_pad * 2
+        draw.rectangle([cx, cy_cell, cx + cw, cy_cell + ch], fill=color)
+        draw.text((cx + cw // 2, row_cy), f"{score_glass:.0f}%",
+                  font=get_font(14, "aptos"), fill=text_color, anchor="mm")
+        
+        # LSC (column 6)
+        col_idx = 6
+        color = get_metric_color(score_lsc)
+        text_color = COLORS["white"] if color == COLORS["blue"] else (0, 0, 0)
+        cx = col_x[col_idx] + cell_pad
+        cw = columns[col_idx]["width"] - cell_pad * 2
+        draw.rectangle([cx, cy_cell, cx + cw, cy_cell + ch], fill=color)
+        draw.text((cx + cw // 2, row_cy), f"{score_lsc:.0f}%",
+                  font=get_font(14, "aptos"), fill=text_color, anchor="mm")
+        
+        # CV (column 7)
+        col_idx = 7
+        color = get_cv_color(cv_score)
+        text_color = COLORS["white"] if color == COLORS["blue"] else (0, 0, 0)
+        cx = col_x[col_idx] + cell_pad
+        cw = columns[col_idx]["width"] - cell_pad * 2
+        draw.rectangle([cx, cy_cell, cx + cw, cy_cell + ch], fill=color)
+        draw.text((cx + cw // 2, row_cy), f"+{cv_score:.1f}",
+                  font=get_font(14, "aptos"), fill=text_color, anchor="mm")
+        
+        # RT (column 8)
+        col_idx = 8
+        color = get_rt_color(rt_bonus)
+        text_color = COLORS["white"] if color == COLORS["blue"] else (0, 0, 0)
+        cx = col_x[col_idx] + cell_pad
+        cw = columns[col_idx]["width"] - cell_pad * 2
+        draw.rectangle([cx, cy_cell, cx + cw, cy_cell + ch], fill=color)
+        draw.text((cx + cw // 2, row_cy), f"+{rt_bonus:.1f}",
+                  font=get_font(14, "aptos"), fill=text_color, anchor="mm")
+        
+        # Bonus (column 9)
+        col_idx = 9
+        color = get_bonus_color(metric_bonus)
+        text_color = COLORS["white"] if color == COLORS["blue"] else (0, 0, 0)
+        cx = col_x[col_idx] + cell_pad
+        cw = columns[col_idx]["width"] - cell_pad * 2
+        draw.rectangle([cx, cy_cell, cx + cw, cy_cell + ch], fill=color)
+        draw.text((cx + cw // 2, row_cy), f"+{metric_bonus:.1f}",
+                  font=get_font(14, "aptos"), fill=text_color, anchor="mm")
+        
+        # Score (column 10)
+        col_idx = 10
+        color = get_score_color(total_score)
+        text_color = COLORS["white"] if color == COLORS["blue"] else (0, 0, 0)
+        cx = col_x[col_idx] + cell_pad
+        cw = columns[col_idx]["width"] - cell_pad * 2
+        draw.rectangle([cx, cy_cell, cx + cw, cy_cell + ch], fill=color)
+        draw.text((cx + cw // 2, row_cy), f"{total_score:.1f}",
+                  font=get_font(14, "aptos"), fill=text_color, anchor="mm")
         
         row_idx += 1
     
-    # Outer border - BLACK
+    # Outer border
     final_y = data_y + row_idx * row_h
     draw.rectangle([table_left, table_top, table_right, final_y], outline=(0, 0, 0), width=1)
     
-    # Vertical column lines - BLACK
+    # Vertical column lines
     for i in range(len(columns)):
         draw.line([(col_x[i], table_top), (col_x[i], final_y)], fill=(0, 0, 0), width=1)
     draw.line([(table_right, table_top), (table_right, final_y)], fill=(0, 0, 0), width=1)
