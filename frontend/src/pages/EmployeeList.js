@@ -229,6 +229,7 @@ export default function EmployeeList() {
   // Open modal for editing existing employee
   const openEditModal = (employee) => {
     setEditingEmployee(employee);
+    const originalRt = employee.review_mentions || employee.rt_mentions || 0;
     setFormData({
       name: employee.name || "",
       display_name: employee.display_name || employee.name || "",
@@ -249,7 +250,8 @@ export default function EmployeeList() {
       cv_promoters: employee.cv_promoters || 0,
       cv_passives: employee.cv_passives || 0,
       cv_detractors: employee.cv_detractors || 0,
-      review_mentions: employee.review_mentions || employee.rt_mentions || 0
+      review_mentions: originalRt,
+      _original_rt: originalRt  // Track original value to detect changes
     });
     setShowEditModal(true);
   };
@@ -305,9 +307,10 @@ export default function EmployeeList() {
       nps_score: formData.nps_score,
       cv_promoters: formData.cv_promoters,
       cv_passives: formData.cv_passives,
-      cv_detractors: formData.cv_detractors
-      // NOTE: rt_mentions/review_mentions intentionally NOT sent - this preserves existing RT data
-      // RT data is synced from Review Tracker uploads, not edited manually
+      cv_detractors: formData.cv_detractors,
+      // RT data - always include so manual edits work
+      rt_mentions: formData.review_mentions,
+      review_mentions: formData.review_mentions
     };
     
     setSaving(true);
