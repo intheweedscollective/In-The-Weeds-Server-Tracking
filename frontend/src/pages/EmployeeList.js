@@ -280,10 +280,34 @@ export default function EmployeeList() {
       aliasesArray.push(reportName);
     }
     
+    // Only send fields that are editable from this form
+    // Don't send review_mentions - preserve existing RT data (RT is synced from uploads, not edited here)
     const dataToSave = {
-      ...formData,
+      name: formData.name,
       display_name: formData.name,  // Display name = main name field
-      aliases: aliasesArray
+      report_name: formData.report_name,
+      job_title: formData.job_title,
+      aliases: aliasesArray,
+      // POS data
+      guests: formData.guests,
+      guest_count: formData.guests,
+      net_sales: formData.net_sales,
+      ppa: formData.ppa,
+      liquor_sales: formData.liquor_sales,
+      beer_sales: formData.beer_sales,
+      wine_sales: formData.wine_sales,
+      lbw: formData.lbw,
+      glassware_sales: formData.glassware_sales,
+      bar_glassware_sales: formData.glassware_sales,
+      loyalty_sales: formData.loyalty_sales,
+      lsc_count: formData.lsc_count,
+      // CV data
+      nps_score: formData.nps_score,
+      cv_promoters: formData.cv_promoters,
+      cv_passives: formData.cv_passives,
+      cv_detractors: formData.cv_detractors
+      // NOTE: rt_mentions/review_mentions intentionally NOT sent - this preserves existing RT data
+      // RT data is synced from Review Tracker uploads, not edited manually
     };
     
     setSaving(true);
