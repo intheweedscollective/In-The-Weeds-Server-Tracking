@@ -61,26 +61,33 @@ export default function FinalizeQuarterModal({ isOpen, onClose, quarter, year, e
 
   const handleDARChange = (employeeId, field, value) => {
     const numValue = Math.max(0, parseInt(value) || 0);
-    setDarEntries(prev => ({
-      ...prev,
-      [employeeId]: {
-        ...prev[employeeId],
-        [field]: numValue
-      }
-    }));
+    setDarEntries(prev => {
+      const existing = prev[employeeId] || { written_warnings: 0, suspensions: 0 };
+      return {
+        ...prev,
+        [employeeId]: {
+          written_warnings: existing.written_warnings || 0,
+          suspensions: existing.suspensions || 0,
+          [field]: numValue
+        }
+      };
+    });
   };
 
   const calculateFinalScore = (employee) => {
     const dar = darEntries[employee.id] || { written_warnings: 0, suspensions: 0 };
-    const preDarScore = employee.pre_dar_score || employee.total_score || 0;
-    const writtenDeduction = dar.written_warnings * 3;
-    const suspensionDeduction = dar.suspensions * 5;
-    return Math.max(0, preDarScore - writtenDeduction - suspensionDeduction);
+    const preDarScore = parseFloat(employee.pre_dar_score) || parseFloat(employee.total_score) || 0;
+    const writtenDeduction = (parseInt(dar.written_warnings) || 0) * 3;
+    const suspensionDeduction = (parseInt(dar.suspensions) || 0) * 5;
+    const finalScore = preDarScore - writtenDeduction - suspensionDeduction;
+    return Math.max(0, isNaN(finalScore) ? preDarScore : finalScore);
   };
 
   const getTotalDeduction = (employee) => {
     const dar = darEntries[employee.id] || { written_warnings: 0, suspensions: 0 };
-    return (dar.written_warnings * 3) + (dar.suspensions * 5);
+    const writtenDeduction = (parseInt(dar.written_warnings) || 0) * 3;
+    const suspensionDeduction = (parseInt(dar.suspensions) || 0) * 5;
+    return writtenDeduction + suspensionDeduction;
   };
 
   const handleSaveDraft = async () => {
