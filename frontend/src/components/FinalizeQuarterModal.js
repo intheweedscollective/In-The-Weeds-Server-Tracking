@@ -207,7 +207,7 @@ export default function FinalizeQuarterModal({ isOpen, onClose, quarter, year, e
           <div className="flex gap-6">
             <div>
               <p className="text-xs text-gray-500 uppercase font-semibold">Total Employees</p>
-              <p className="text-xl font-bold text-foreground">{employees.length}</p>
+              <p className="text-xl font-bold text-gray-900">{employees.length}</p>
             </div>
             <div>
               <p className="text-xs text-gray-500 uppercase font-semibold">Employees w/ DAR</p>
@@ -322,8 +322,8 @@ export default function FinalizeQuarterModal({ isOpen, onClose, quarter, year, e
                       </td>
                       <td className="px-4 py-3">
                         <div>
-                          <p className="font-semibold text-foreground">{employee.name}</p>
-                          <p className="text-xs text-gray-500">{employee.job_title || 'Server'}</p>
+                          <p className="font-semibold text-gray-900">{employee.display_name || employee.name}</p>
+                          <p className="text-xs text-gray-600">{employee.job_title || 'Server'}</p>
                         </div>
                       </td>
                       <td className="px-4 py-3 text-center">
