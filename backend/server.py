@@ -3298,12 +3298,20 @@ async def get_full_hierarchy_rankings(year: int, quarter: str, tier_filter: Opti
     
     settings = QuarterSettings(**settings_doc)
     
-    # SNAPSHOT-FIRST: Get employees from the active snapshot instead of employees_v2
+    # SNAPSHOT-FIRST: Get employees from the active snapshot (same logic as current-rankings)
+    # First try to find the current active snapshot (regardless of status)
     snapshot = await db.snapshot_workflow.find_one(
-        {"status": "completed", "quarter": quarter.upper(), "year": year},
-        {"_id": 0},
-        sort=[("effective_date", -1), ("completed_at", -1)]
+        {"is_current": True, "quarter": quarter.upper(), "year": year},
+        {"_id": 0}
     )
+    
+    # If no current snapshot, fall back to latest completed
+    if not snapshot:
+        snapshot = await db.snapshot_workflow.find_one(
+            {"status": "completed", "quarter": quarter.upper(), "year": year},
+            {"_id": 0},
+            sort=[("effective_date", -1), ("completed_at", -1)]
+        )
     
     if snapshot and snapshot.get("employees"):
         # Use snapshot employees (source of truth)
