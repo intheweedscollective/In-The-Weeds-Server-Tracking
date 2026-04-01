@@ -528,18 +528,27 @@ export default function Dashboard() {
               
               {(() => {
                 const avgPPA = employees.reduce((sum, e) => sum + (e.ppa || 0), 0) / employees.length;
-                const avgLBW = employees.reduce((sum, e) => sum + (e.lbw_per_guest || 0), 0) / employees.length;
                 const totalGuests = employees.reduce((sum, e) => sum + (e.guests || 0), 0);
+                const totalLSC = employees.reduce((sum, e) => sum + (e.lsc_count || 0), 0);
                 const ppaBenchmark = quarterSettings?.benchmark_ppa || 55;
-                const lbwBenchmark = quarterSettings?.benchmark_lbw || 8;
+                const lscBenchmark = quarterSettings?.benchmark_lsc || 10; // Target guests per LSC
                 
+                // Calculate current LSC rate (guests per sign-up)
+                const currentGuestsPerLSC = totalLSC > 0 ? totalGuests / totalLSC : 999;
+                const lscGap = Math.max(0, currentGuestsPerLSC - lscBenchmark);
+                
+                // Revenue calculations
                 const ppaGap = Math.max(0, ppaBenchmark - avgPPA);
-                const lbwGap = Math.max(0, lbwBenchmark - avgLBW);
                 const annualGuests = totalGuests * 26;
+                const ppaRevenue = ppaGap * annualGuests;
                 
-                // Revenue impact is based on PPA gap only (LBW is already included in PPA)
-                // LBW gap shows the "upsell mix opportunity" - shifting sales toward higher-margin bar items
-                const potentialRevenue = ppaGap * annualGuests;
+                // LSC Value: Each loyalty member worth ~$25 in lifetime value
+                const lscValuePerSignup = quarterSettings?.lsc_value || 25;
+                const potentialExtraLSC = lscGap > 0 ? Math.round((totalGuests / lscBenchmark) - totalLSC) : 0;
+                const annualExtraLSC = potentialExtraLSC * 26;
+                const lscRevenue = annualExtraLSC * lscValuePerSignup;
+                
+                const totalPotential = ppaRevenue + lscRevenue;
                 
                 return (
                   <div className="space-y-3">
@@ -550,21 +559,46 @@ export default function Dashboard() {
                         <p className="text-xs text-slate-500">Target: ${ppaBenchmark}</p>
                       </div>
                       <div className="p-3 bg-slate-700/50 rounded-lg">
-                        <p className="text-xs text-slate-400 uppercase">Avg LBW/Guest</p>
-                        <p className="text-lg font-bold text-white">${avgLBW.toFixed(2)}</p>
-                        <p className="text-xs text-slate-500">Target: ${lbwBenchmark}</p>
+                        <p className="text-xs text-slate-400 uppercase">Guests/LSC</p>
+                        <p className="text-lg font-bold text-white">{currentGuestsPerLSC.toFixed(1)}</p>
+                        <p className="text-xs text-slate-500">Target: {lscBenchmark} (1 in {lscBenchmark})</p>
                       </div>
                     </div>
                     
-                    {potentialRevenue > 0 ? (
-                      <div className="p-3 bg-emerald-900/30 border border-emerald-700/50 rounded-lg">
-                        <p className="text-sm font-medium text-emerald-400">Potential Annual Revenue</p>
-                        <p className="text-2xl font-bold text-emerald-300">${Math.round(potentialRevenue).toLocaleString()}</p>
-                        <p className="text-xs text-emerald-500">If avg PPA reaches ${ppaBenchmark}</p>
+                    {totalPotential > 0 ? (
+                      <div className="space-y-2">
+                        {ppaRevenue > 0 && (
+                          <div className="p-3 bg-emerald-900/30 border border-emerald-700/50 rounded-lg">
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <p className="text-sm font-medium text-emerald-400">PPA Opportunity</p>
+                                <p className="text-xs text-emerald-500">+${ppaGap.toFixed(2)}/guest to hit ${ppaBenchmark}</p>
+                              </div>
+                              <p className="text-xl font-bold text-emerald-300">${Math.round(ppaRevenue).toLocaleString()}</p>
+                            </div>
+                          </div>
+                        )}
+                        {lscRevenue > 0 && (
+                          <div className="p-3 bg-amber-900/30 border border-amber-700/50 rounded-lg">
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <p className="text-sm font-medium text-amber-400">LSC Opportunity</p>
+                                <p className="text-xs text-amber-500">+{annualExtraLSC.toLocaleString()} sign-ups @ ${lscValuePerSignup} each</p>
+                              </div>
+                              <p className="text-xl font-bold text-amber-300">${Math.round(lscRevenue).toLocaleString()}</p>
+                            </div>
+                          </div>
+                        )}
+                        <div className="p-3 bg-blue-900/30 border border-blue-700/50 rounded-lg">
+                          <div className="flex justify-between items-center">
+                            <p className="text-sm font-medium text-blue-400">Total Annual Potential</p>
+                            <p className="text-2xl font-bold text-blue-300">${Math.round(totalPotential).toLocaleString()}</p>
+                          </div>
+                        </div>
                       </div>
                     ) : (
                       <div className="p-3 bg-blue-900/30 border border-blue-700/50 rounded-lg text-center">
-                        <p className="text-blue-300 font-medium">Team PPA is at or above benchmark!</p>
+                        <p className="text-blue-300 font-medium">Team is meeting all benchmarks!</p>
                       </div>
                     )}
                   </div>
