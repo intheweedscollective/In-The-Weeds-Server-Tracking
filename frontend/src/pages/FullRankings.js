@@ -89,16 +89,17 @@ export default function FullRankings() {
     setLoading(true);
     try {
       const tierParam = tierFilter !== "all" ? `&tier_filter=${tierFilter}` : "";
-      const [rankingsRes, employeesRes, settingsRes, bgRes, npsRes] = await Promise.all([
+      const [rankingsRes, snapshotRes, settingsRes, bgRes, npsRes] = await Promise.all([
         api.get(`/v2/full-rankings/${selectedYear}/${selectedQuarter}?${tierParam}`),
-        api.get(`/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`),
+        api.get(`/v2/snapshot-workflow/current-rankings?year=${selectedYear}&quarter=${selectedQuarter}`),
         api.get(`/v2/quarter-settings/${selectedYear}/${selectedQuarter}`).catch(() => null),
         api.get(`/v2/snapshots/backgrounds`).catch(() => ({ data: [] })),
         api.get(`/v2/cv/nps?year=${selectedYear}&quarter=${selectedQuarter}`).catch(() => ({ data: { nps_records: [] } }))
       ]);
       
       setRankings(rankingsRes.data.rankings || []);
-      setEmployees(employeesRes.data || []);
+      // Use snapshot employees for consistency across all pages
+      setEmployees(snapshotRes.data?.employees || []);
       setQuarterSettings(settingsRes?.data || null);
       setTotalEmployees(rankingsRes.data.total_employees || 0);
       setThresholds(rankingsRes.data.tier_thresholds || { a_server_min: 85.1, b_server_min: 70.1 });

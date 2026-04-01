@@ -75,11 +75,24 @@ export default function Dashboard() {
 
   const fetchEmployeesForQuarter = useCallback(async () => {
     try {
-      const response = await api.get(`/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`);
-      // Sort by total_score descending for display
-      const sorted = (response.data || []).sort((a, b) => (b.total_score || 0) - (a.total_score || 0));
-      setEmployees(sorted);
+      // Use current-rankings endpoint for consistency across all pages
+      const response = await api.get(`/v2/snapshot-workflow/current-rankings?year=${selectedYear}&quarter=${selectedQuarter}`);
+      if (response.data?.employees) {
+        // Sort by total_score descending for display
+        const sorted = (response.data.employees || []).sort((a, b) => (b.total_score || 0) - (a.total_score || 0));
+        setEmployees(sorted);
+      } else {
+        setEmployees([]);
+      }
     } catch (error) {
+      // Fallback to legacy endpoint if snapshot not available
+      try {
+        const fallback = await api.get(`/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`);
+        const sorted = (fallback.data || []).sort((a, b) => (b.total_score || 0) - (a.total_score || 0));
+        setEmployees(sorted);
+      } catch (e) {
+        setEmployees([]);
+      }
     }
   }, [selectedYear, selectedQuarter]);
 
