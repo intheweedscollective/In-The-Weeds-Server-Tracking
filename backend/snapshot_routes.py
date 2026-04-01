@@ -2625,3 +2625,57 @@ async def parse_rt_file(filename: str, contents: bytes) -> Dict[str, Any]:
         "total_reviews": len(reviews),
         "reviews_sample": reviews[:10]  # Include sample for debugging
     }
+
+
+
+@snapshot_router.post("/recalculate-tiers")
+async def recalculate_tiers(year: int = 2026, quarter: str = "Q1"):
+    """
+    Recalculate performance tiers for all employees in the active snapshot
+    using the current quarter settings thresholds.
+    """
+    db = get_db()
+    
+    # Get quarter settings for thresholds
+    settings = await db.quarter_settings.find_one(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    )
+    
+    a_min = settings.get("a_server_min_score", 85) if settings else 85
+    b_min = settings.get("b_server_min_score", 70) if settings else 70
+    
+    # Get active snapshot
+    snapshot = await db.snapshot_workflow.find_one(
+        {"is_current": True, "quarter": quarter.upper(), "year": year},
+        {"_id": 0}
+    )
+    
+    if not snapshot:
+        raise HTTPException(status_code=404, detail=f"No active snapshot found for {quarter} {year}")
+    
+    employees = snapshot.get("employees", [])
+    if not employees:
+        raise HTTPException(status_code=404, detail="No employees in snapshot")
+    
+    # Reassign tiers using new thresholds
+    updated_employees = assign_performance_tiers(employees, a_min=a_min, b_min=b_min)
+    
+    # Update snapshot with new tier assignments
+    await db.snapshot_workflow.update_one(
+        {"id": snapshot["id"]},
+        {"$set": {"employees": updated_employees}}
+    )
+    
+    # Count by tier
+    tier_counts = {}
+    for emp in updated_employees:
+        tier = emp.get("tier_label", "Unknown")
+        tier_counts[tier] = tier_counts.get(tier, 0) + 1
+    
+    return {
+        "success": True,
+        "message": f"Recalculated tiers with A>={a_min}, B>={b_min}, C<{b_min}",
+        "tier_counts": tier_counts,
+        "total_employees": len(updated_employees)
+    }

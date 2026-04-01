@@ -293,7 +293,7 @@ def calculate_employee_scores(
     return employee
 
 
-def assign_performance_tiers(employees: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def assign_performance_tiers(employees: List[Dict[str, Any]], a_min: float = 85, b_min: float = 70) -> List[Dict[str, Any]]:
     """
     Assign performance tiers and ranks to employees.
     
@@ -301,9 +301,9 @@ def assign_performance_tiers(employees: List[Dict[str, Any]]) -> List[Dict[str, 
     - Bartenders: job_title contains 'bartender' -> tier_label = "Bartender"
     - Trainers: job_title contains 'trainer' -> tier_label = "Trainer"
     - Servers are assigned tiers by SCORE thresholds:
-      - 90+ points: A-Server
-      - 75-89.9 points: B-Server  
-      - <75 points: C-Server
+      - >= a_min points: A-Server (default 85+)
+      - >= b_min points: B-Server (default 70-84.9)
+      - < b_min points: C-Server (default <70)
     """
     # Separate bartenders/trainers from servers
     bartenders = []
@@ -322,9 +322,9 @@ def assign_performance_tiers(employees: List[Dict[str, Any]]) -> List[Dict[str, 
             trainers.append(emp)
         else:
             # Assign tier based on score thresholds
-            if score >= 90:
+            if score >= a_min:
                 emp["tier_label"] = "A-Server"
-            elif score >= 75:
+            elif score >= b_min:
                 emp["tier_label"] = "B-Server"
             else:
                 emp["tier_label"] = "C-Server"
