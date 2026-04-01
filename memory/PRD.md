@@ -103,6 +103,7 @@ Build a comprehensive performance review application for restaurant employees th
 - [x] Top Performers display in snapshot detail
 - [x] **Employee metric edit recalculation fix (2026-03-31)** - Editing PPA/metrics now correctly recalculates scores
 - [x] **current-rankings now returns active (is_current) snapshot** - Edits visible immediately without reprocessing
+- [x] **PDF upload flow fixed (2026-04-01)** - Background job processing with proper endpoint routing
 
 ### Scoring Engine
 - [x] Complex weighted scoring formula

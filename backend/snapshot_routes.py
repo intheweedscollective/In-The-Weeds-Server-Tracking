@@ -7,7 +7,8 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Body
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Body, Request
+import json
 from pydantic import BaseModel
 
 from snapshot_manager import (
@@ -215,10 +216,8 @@ async def unlock_snapshot(snapshot_id: str):
 async def upload_to_snapshot(
     snapshot_id: str,
     upload_type: str,
+    request: Request,
     file: UploadFile = File(None),
-    parsed_data: Optional[Dict[str, Any]] = Body(None),
-    filename: Optional[str] = Body(None),
-    source: Optional[str] = Body(None),
 ):
     """
     Upload a file to a specific snapshot.
@@ -227,6 +226,11 @@ async def upload_to_snapshot(
     Can accept either:
     - A file upload (multipart/form-data)
     - Pre-parsed data (JSON body with parsed_data, filename, source)
+    
+    For PDF files, use the background job flow:
+    1. POST /api/v2/pos-pdf/parse to start processing
+    2. Poll /api/v2/pos-pdf/job/{job_id} for results
+    3. POST /api/v2/snapshot-workflow/snapshots/{id}/parsed-data/{type} to save results
     """
     db = get_db()
     
@@ -238,7 +242,7 @@ async def upload_to_snapshot(
     if snapshot["status"] == SnapshotStatus.COMPLETED.value:
         raise HTTPException(
             status_code=400,
-            detail="Cannot upload to a completed snapshot"
+            detail="Cannot upload to a completed snapshot. Click 'Unlock' first."
         )
     
     # Validate upload type
@@ -252,15 +256,41 @@ async def upload_to_snapshot(
     
     # Handle file upload or pre-parsed data
     file_size = 0
-    final_filename = filename or "unknown"
-    final_parsed_data = parsed_data
+    final_filename = "unknown"
+    final_parsed_data = None
     parse_error = None
     
-    if file is not None:
+    # Check if this is a JSON request (pre-parsed data)
+    content_type = request.headers.get("content-type", "")
+    
+    if "application/json" in content_type:
+        # Handle JSON body with pre-parsed data
+        try:
+            body = await request.json()
+            final_parsed_data = body.get("parsed_data")
+            final_filename = body.get("filename", "background_job_result")
+            source = body.get("source", "background_job")
+            
+            if not final_parsed_data:
+                raise HTTPException(status_code=400, detail="parsed_data is required in JSON body")
+            
+            logger.info(f"Received pre-parsed JSON data for {upload_type}: {len(final_parsed_data.get('employees', []))} employees")
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
+    
+    elif file is not None:
         # Traditional file upload - read and parse
         contents = await file.read()
         file_size = len(contents)
         final_filename = file.filename
+        
+        # Check if it's a PDF - should use background job flow
+        if final_filename.lower().endswith('.pdf'):
+            raise HTTPException(
+                status_code=400,
+                detail="PDF files must use the background processing flow. "
+                       "POST to /api/v2/pos-pdf/parse first, then save results via /parsed-data/ endpoint."
+            )
         
         try:
             if upload_type_enum == UploadType.POS_REPORT:
@@ -273,13 +303,11 @@ async def upload_to_snapshot(
             parse_error = str(e)
             logger.error(f"Parse error for {upload_type}: {e}")
     
-    elif parsed_data is not None:
-        # Pre-parsed data (e.g., from PDF background job)
-        final_parsed_data = parsed_data
-        logger.info(f"Received pre-parsed data for {upload_type}: {len(parsed_data.get('employees', []))} employees")
-    
     else:
-        raise HTTPException(status_code=400, detail="Either file or parsed_data is required")
+        raise HTTPException(
+            status_code=400, 
+            detail="Either a file upload or JSON body with parsed_data is required"
+        )
     
     # Create upload record
     upload_record = create_upload_record(
