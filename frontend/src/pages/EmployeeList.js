@@ -1056,9 +1056,9 @@ export default function EmployeeList() {
 
         {/* Edit/Add Employee Modal */}
         {showEditModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowEditModal(false)}>
-            <div className="bg-slate-800 rounded-2xl max-w-2xl w-full max-h-[95vh] overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
-              <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-4 flex items-center justify-between">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4" onClick={() => setShowEditModal(false)}>
+            <div className="bg-slate-800 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+              <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-4 flex items-center justify-between flex-shrink-0">
                 <div className="flex items-center gap-3">
                   {editingEmployee ? <Pencil className="w-5 h-5 text-white" /> : <Plus className="w-5 h-5 text-white" />}
                   <h2 className="text-lg font-serif font-bold text-white">
@@ -1070,7 +1070,7 @@ export default function EmployeeList() {
                 </button>
               </div>
               
-              <div className="p-4 overflow-y-auto max-h-[calc(95vh-60px)]">
+              <div className="p-4 overflow-y-auto flex-1">
                 {/* Basic Info */}
                 <div className="mb-4">
                   <h3 className="font-semibold text-slate-200 mb-2">Basic Information</h3>
@@ -1335,21 +1335,21 @@ export default function EmployeeList() {
                 </div>
               </div>
               
-              <div className="p-6 border-t bg-background flex gap-3 justify-end">
-                <Button variant="outline" onClick={() => setShowEditModal(false)}>
+              <div className="p-4 sm:p-6 border-t border-slate-700 bg-slate-800 flex gap-3 justify-end flex-shrink-0 sticky bottom-0">
+                <Button variant="outline" onClick={() => setShowEditModal(false)} className="flex-1 sm:flex-none">
                   Cancel
                 </Button>
                 <Button 
                   onClick={saveEmployee} 
                   disabled={saving}
-                  className="bg-blue-600 hover:bg-blue-700"
+                  className="bg-blue-600 hover:bg-blue-700 flex-1 sm:flex-none"
                 >
                   {saving ? (
                     <>Saving...</>
                   ) : (
                     <>
                       <Save className="w-4 h-4 mr-2" />
-                      {editingEmployee ? 'Update Employee' : 'Create Employee'}
+                      {editingEmployee ? 'Save' : 'Create'}
                     </>
                   )}
                 </Button>
