@@ -591,7 +591,7 @@ export default function EmployeeList() {
         </div>
 
         {/* Results Summary */}
-        <div className="mb-6" data-testid="results-summary">
+        <div className="mb-4" data-testid="results-summary">
           <p className="text-slate-400 font-medium">
             Showing <span className="text-primary font-bold">{filteredEmployees.length}</span> of {employees.length} crew members
           </p>
@@ -783,7 +783,7 @@ export default function EmployeeList() {
                 </div>
 
                 {/* Scoring Breakdown by Category */}
-                <div className="mb-6">
+                <div className="mb-4">
                   <h4 className="font-serif font-bold text-foreground mb-4 flex items-center gap-2">
                     <Target className="w-5 h-5 text-secondary" />
                     Scoring Breakdown by Category
@@ -992,7 +992,7 @@ export default function EmployeeList() {
 
                 {/* Customer Voice Breakdown */}
                 {(selectedEmployee.cv_promoters > 0 || selectedEmployee.cv_passives > 0 || selectedEmployee.cv_detractors > 0 || selectedEmployee.nps_score > 0) && (
-                  <div className="mb-6">
+                  <div className="mb-4">
                     <h4 className="font-serif font-bold text-white mb-3">Customer Voice Breakdown</h4>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                       <div className="text-center p-3 bg-cyan-900/30 rounded-lg border border-cyan-500/30">
@@ -1057,11 +1057,11 @@ export default function EmployeeList() {
         {/* Edit/Add Employee Modal */}
         {showEditModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowEditModal(false)}>
-            <div className="bg-slate-800 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
-              <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-6 flex items-center justify-between">
+            <div className="bg-slate-800 rounded-2xl max-w-2xl w-full max-h-[95vh] overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
+              <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  {editingEmployee ? <Pencil className="w-6 h-6 text-white" /> : <Plus className="w-6 h-6 text-white" />}
-                  <h2 className="text-xl font-serif font-bold text-white">
+                  {editingEmployee ? <Pencil className="w-5 h-5 text-white" /> : <Plus className="w-5 h-5 text-white" />}
+                  <h2 className="text-lg font-serif font-bold text-white">
                     {editingEmployee ? `Edit ${editingEmployee.name}` : 'Add New Employee'}
                   </h2>
                 </div>
@@ -1070,11 +1070,11 @@ export default function EmployeeList() {
                 </button>
               </div>
               
-              <div className="p-6 overflow-y-auto max-h-[70vh]">
+              <div className="p-4 overflow-y-auto max-h-[calc(95vh-60px)]">
                 {/* Basic Info */}
-                <div className="mb-6">
-                  <h3 className="font-semibold text-slate-200 mb-3">Basic Information</h3>
-                  <div className="grid grid-cols-2 gap-4">
+                <div className="mb-4">
+                  <h3 className="font-semibold text-slate-200 mb-2">Basic Information</h3>
+                  <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-sm font-medium text-slate-300 mb-1">Display Name *</label>
                       <Input
@@ -1122,7 +1122,7 @@ export default function EmployeeList() {
                 </div>
 
                 {/* Sales Data */}
-                <div className="mb-6">
+                <div className="mb-4">
                   <h3 className="font-semibold text-slate-200 mb-3">Sales Data</h3>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                     <div>
@@ -1227,7 +1227,7 @@ export default function EmployeeList() {
                 </div>
 
                 {/* LSC Count */}
-                <div className="mb-6">
+                <div className="mb-4">
                   <h3 className="font-semibold text-slate-200 mb-3">LSC (Loyalty Signups)</h3>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -1259,7 +1259,7 @@ export default function EmployeeList() {
                 </div>
 
                 {/* Customer Voice */}
-                <div className="mb-6">
+                <div className="mb-4">
                   <h3 className="font-semibold text-slate-200 mb-3">Customer Voice & Reviews</h3>
                   
                   {/* NPS Score - Full width at top */}
