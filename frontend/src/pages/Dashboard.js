@@ -536,7 +536,10 @@ export default function Dashboard() {
                 const ppaGap = Math.max(0, ppaBenchmark - avgPPA);
                 const lbwGap = Math.max(0, lbwBenchmark - avgLBW);
                 const annualGuests = totalGuests * 26;
-                const potentialRevenue = (ppaGap + lbwGap) * annualGuests;
+                
+                // Revenue impact is based on PPA gap only (LBW is already included in PPA)
+                // LBW gap shows the "upsell mix opportunity" - shifting sales toward higher-margin bar items
+                const potentialRevenue = ppaGap * annualGuests;
                 
                 return (
                   <div className="space-y-3">
@@ -547,7 +550,7 @@ export default function Dashboard() {
                         <p className="text-xs text-slate-500">Target: ${ppaBenchmark}</p>
                       </div>
                       <div className="p-3 bg-slate-700/50 rounded-lg">
-                        <p className="text-xs text-slate-400 uppercase">Avg LBW</p>
+                        <p className="text-xs text-slate-400 uppercase">Avg LBW/Guest</p>
                         <p className="text-lg font-bold text-white">${avgLBW.toFixed(2)}</p>
                         <p className="text-xs text-slate-500">Target: ${lbwBenchmark}</p>
                       </div>
@@ -556,12 +559,12 @@ export default function Dashboard() {
                     {potentialRevenue > 0 ? (
                       <div className="p-3 bg-emerald-900/30 border border-emerald-700/50 rounded-lg">
                         <p className="text-sm font-medium text-emerald-400">Potential Annual Revenue</p>
-                        <p className="text-2xl font-bold text-emerald-300">${potentialRevenue.toLocaleString()}</p>
-                        <p className="text-xs text-emerald-500">If all staff hit benchmarks</p>
+                        <p className="text-2xl font-bold text-emerald-300">${Math.round(potentialRevenue).toLocaleString()}</p>
+                        <p className="text-xs text-emerald-500">If avg PPA reaches ${ppaBenchmark}</p>
                       </div>
                     ) : (
                       <div className="p-3 bg-blue-900/30 border border-blue-700/50 rounded-lg text-center">
-                        <p className="text-blue-300 font-medium">Team is meeting all benchmarks!</p>
+                        <p className="text-blue-300 font-medium">Team PPA is at or above benchmark!</p>
                       </div>
                     )}
                   </div>
