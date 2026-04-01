@@ -3427,14 +3427,24 @@ async def download_full_rankings_pdf(year: int, quarter: str):
         }
         slide_employees.append(slide_emp)
     
-    # Generate the snapshot slide
+    # Get tier thresholds from quarter settings
+    settings_doc = await db.quarter_settings.find_one(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    )
+    a_min = settings_doc.get("a_server_min_score", 85) if settings_doc else 85
+    b_min = settings_doc.get("b_server_min_score", 70) if settings_doc else 70
+    
+    # Generate the snapshot slide with tier thresholds for score coloring
     snapshot_date = datetime.now().strftime("%Y-%m-%d")
     png_bytes = generate_snapshot_slide(
         employees=slide_employees,
         benchmarks={},
         snapshot_date=snapshot_date,
         background="dark",
-        quarter=quarter.upper()
+        quarter=quarter.upper(),
+        a_min=a_min,
+        b_min=b_min
     )
     
     filename = f"performance_snapshot_{quarter}_{year}.png"

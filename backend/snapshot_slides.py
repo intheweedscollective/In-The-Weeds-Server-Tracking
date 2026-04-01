@@ -114,15 +114,13 @@ def get_bonus_color(value: float) -> Tuple[int, int, int]:
     return COLORS["red"]
 
 
-def get_score_color(value: float) -> Tuple[int, int, int]:
-    """Get total score color."""
-    if value >= 100:
-        return COLORS["blue"]
-    elif value >= 85:
-        return COLORS["green"]
-    elif value >= 75:
-        return COLORS["yellow"]
-    return COLORS["red"]
+def get_score_color(value: float, a_min: float = 85, b_min: float = 70) -> Tuple[int, int, int]:
+    """Get total score color based on tier thresholds."""
+    if value >= a_min:
+        return COLORS["green"]   # A-Server: Green
+    elif value >= b_min:
+        return COLORS["yellow"]  # B-Server: Yellow
+    return COLORS["red"]         # C-Server: Red
 
 
 def generate_snapshot_slide(
@@ -131,7 +129,9 @@ def generate_snapshot_slide(
     snapshot_date: str,
     background: str = "dark",
     title: str = None,
-    quarter: str = "Q1"
+    quarter: str = "Q1",
+    a_min: float = 85,
+    b_min: float = 70
 ) -> bytes:
     """Generate snapshot matching Q1 Final reference image exactly."""
     
@@ -406,10 +406,10 @@ def generate_snapshot_slide(
         draw.text((cx + cw // 2, row_cy), f"+{metric_bonus:.1f}",
                   font=get_font(14, "aptos"), fill=text_color, anchor="mm")
         
-        # Score (column 10)
+        # Score (column 10) - color based on tier thresholds
         col_idx = 10
-        color = get_score_color(total_score)
-        text_color = COLORS["white"] if color == COLORS["blue"] else (0, 0, 0)
+        color = get_score_color(total_score, a_min, b_min)
+        text_color = (0, 0, 0) if color == COLORS["yellow"] else COLORS["white"]
         cx = col_x[col_idx] + cell_pad
         cw = columns[col_idx]["width"] - cell_pad * 2
         draw.rectangle([cx, cy_cell, cx + cw, cy_cell + ch], fill=color)
