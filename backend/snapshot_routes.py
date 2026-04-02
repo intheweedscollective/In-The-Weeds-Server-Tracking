@@ -2193,15 +2193,18 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                     "wine_sales": wine_sales,
                     "bar_glassware_sales": glassware_sales,
                     "lbw": lbw_total,
-                    # Initialize CV/RT fields
-                    "cv_promoters": 0,
-                    "cv_passives": 0,
-                    "cv_detractors": 0,
-                    "cv_score": 0,
-                    "nps_score": 0,
-                    "rt_mentions": 0,
-                    "review_tracker_bonus": 0,
-                    "dar_penalty": 0,
+                    # PRESERVE CV/RT fields from existing employee if they were manually set
+                    "cv_promoters": existing_emp.get("cv_promoters", 0) if existing_emp else 0,
+                    "cv_passives": existing_emp.get("cv_passives", 0) if existing_emp else 0,
+                    "cv_detractors": existing_emp.get("cv_detractors", 0) if existing_emp else 0,
+                    "cv_score": existing_emp.get("cv_score", 0) if existing_emp else 0,
+                    "nps_score": existing_emp.get("nps_score", 0) if existing_emp else 0,
+                    # PRESERVE RT mentions - critical for manual corrections
+                    "rt_mentions": existing_emp.get("rt_mentions", 0) if existing_emp else 0,
+                    "review_tracker_bonus": existing_emp.get("review_tracker_bonus", 0) if existing_emp else 0,
+                    "dar_penalty": existing_emp.get("dar_penalty", 0) if existing_emp else 0,
+                    # Preserve calculated scores if they exist
+                    "total_metric_bonus": existing_emp.get("total_metric_bonus", 0) if existing_emp else 0,
                 }
         
         elif upload_type == UploadType.CUSTOMER_VOICE.value:
