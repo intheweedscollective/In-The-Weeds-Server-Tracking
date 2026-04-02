@@ -548,6 +548,9 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
     """
     Update an employee in the current active snapshot.
     Used when Employee List tab edits an employee's data.
+    
+    WORKFLOW ENFORCEMENT:
+    - Cannot edit if snapshot is finalized (must reopen first)
     """
     db = get_db()
     
@@ -567,6 +570,13 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
     
     if not snapshot:
         raise HTTPException(status_code=404, detail="No active snapshot found")
+    
+    # WORKFLOW ENFORCEMENT: Check if snapshot is finalized
+    if snapshot.get("status") == "finalized":
+        raise HTTPException(
+            status_code=400, 
+            detail="Cannot edit employees - snapshot is finalized. Reopen the snapshot first."
+        )
     
     snapshot_id = snapshot["id"]
     employees = snapshot.get("employees", [])
@@ -1721,10 +1731,15 @@ async def get_current_rankings(quarter: Optional[str] = None, year: Optional[int
     def sort_key(emp):
         tier = emp.get('tier_label', 'Server')
         tier_rank = TIER_ORDER.get(tier, 99)
-        score = emp.get('total_score', 0) or 0
+        # Use final_score if finalized, otherwise total_score
+        score = emp.get('final_score') or emp.get('total_score', 0) or 0
         return (tier_rank, -score)  # Sort by tier first, then by score descending
     
     sorted_employees = sorted(employees, key=sort_key)
+    
+    # Workflow status info
+    status = snapshot.get("status", "in_progress")
+    is_finalized = status == "finalized"
     
     return {
         "success": True,
@@ -1737,11 +1752,21 @@ async def get_current_rankings(quarter: Optional[str] = None, year: Optional[int
             "period_end": snapshot.get("period_end"),
             "quarter": snapshot.get("quarter"),
             "year": snapshot.get("year"),
+            "status": status,
+            "is_finalized": is_finalized,
+            "finalized_at": snapshot.get("finalized_at"),
+            "dar_applied": snapshot.get("dar_applied", False),
+            "total_dar_deductions": snapshot.get("total_dar_deductions", 0),
             "completed_at": snapshot.get("completed_at"),
             "employee_count": snapshot.get("employee_count", 0)
         },
         "employees": sorted_employees,
-        "benchmarks": snapshot.get("benchmarks_used", {})
+        "benchmarks": snapshot.get("benchmarks_used", {}),
+        "workflow": {
+            "can_edit": status not in ["finalized"],
+            "can_finalize": status in ["reviewed", "completed", "in_progress"],
+            "can_reopen": status == "finalized",
+        }
     }
 
 
@@ -2681,4 +2706,281 @@ async def recalculate_tiers(year: int = 2026, quarter: str = "Q1"):
         "message": f"Recalculated tiers with A>={a_min}, B>={b_min}, C<{b_min}",
         "tier_counts": tier_counts,
         "total_employees": len(updated_employees)
+    }
+
+
+
+# ============================================================================
+# FINALIZATION WORKFLOW
+# ============================================================================
+
+class DAREntry(BaseModel):
+    """DAR (Disciplinary Action Record) entry for an employee"""
+    employee_id: str
+    written_warnings: int = 0  # -3 points each
+    suspensions: int = 0  # -5 points each
+
+
+class FinalizeRequest(BaseModel):
+    """Request to finalize a quarter with DAR entries"""
+    dar_entries: List[DAREntry] = []
+
+
+@snapshot_router.post("/snapshots/{snapshot_id}/mark-reviewed")
+async def mark_snapshot_reviewed(snapshot_id: str):
+    """
+    Mark a snapshot as reviewed - ready for finalization.
+    
+    Prerequisites:
+    - Snapshot must be in 'in_progress' or 'completed' status
+    - All data should be verified before marking reviewed
+    
+    After marking reviewed:
+    - Minor edits still allowed
+    - Ready for final DAR entry and finalization
+    """
+    db = get_db()
+    
+    snapshot = await db.snapshot_workflow.find_one({"id": snapshot_id}, {"_id": 0})
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    
+    current_status = snapshot.get("status", "")
+    
+    # Can only mark reviewed from in_progress or completed
+    if current_status not in ["in_progress", "completed", "processing"]:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Cannot mark as reviewed from status '{current_status}'. Must be in_progress or completed."
+        )
+    
+    # Check if snapshot has employees
+    if not snapshot.get("employees"):
+        raise HTTPException(status_code=400, detail="Cannot mark as reviewed - no employees in snapshot")
+    
+    await db.snapshot_workflow.update_one(
+        {"id": snapshot_id},
+        {
+            "$set": {
+                "status": "reviewed",
+                "reviewed_at": datetime.now(timezone.utc).isoformat(),
+            }
+        }
+    )
+    
+    return {
+        "success": True,
+        "message": "Snapshot marked as reviewed and ready for finalization",
+        "status": "reviewed"
+    }
+
+
+@snapshot_router.post("/snapshots/{snapshot_id}/finalize")
+async def finalize_snapshot(snapshot_id: str, request: FinalizeRequest):
+    """
+    Finalize a snapshot - apply DAR deductions and lock all scores.
+    
+    This is the FINAL step in the workflow:
+    1. Apply DAR deductions (written warnings: -3 pts, suspensions: -5 pts)
+    2. Calculate final_score for each employee
+    3. Lock the snapshot - no more edits allowed
+    4. All views will now show final_score
+    
+    Prerequisites:
+    - Snapshot must be in 'reviewed' or 'completed' status
+    """
+    db = get_db()
+    
+    snapshot = await db.snapshot_workflow.find_one({"id": snapshot_id}, {"_id": 0})
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    
+    current_status = snapshot.get("status", "")
+    
+    # Can only finalize from reviewed or completed
+    if current_status not in ["reviewed", "completed", "in_progress"]:
+        if current_status == "finalized":
+            raise HTTPException(status_code=400, detail="Snapshot is already finalized")
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Cannot finalize from status '{current_status}'. Must be reviewed first."
+        )
+    
+    employees = snapshot.get("employees", [])
+    if not employees:
+        raise HTTPException(status_code=400, detail="Cannot finalize - no employees in snapshot")
+    
+    # Build DAR lookup
+    dar_lookup = {entry.employee_id: entry for entry in request.dar_entries}
+    
+    # Apply DAR deductions to each employee
+    updated_employees = []
+    total_dar_deductions = 0
+    employees_with_dar = 0
+    
+    for emp in employees:
+        emp_id = emp.get("id")
+        dar_entry = dar_lookup.get(emp_id)
+        
+        written_warnings = dar_entry.written_warnings if dar_entry else 0
+        suspensions = dar_entry.suspensions if dar_entry else 0
+        dar_deduction = (written_warnings * 3) + (suspensions * 5)
+        
+        # Store pre-DAR score and calculate final score
+        pre_dar_score = emp.get("total_score", 0) or 0
+        final_score = max(0, pre_dar_score - dar_deduction)
+        
+        emp["pre_dar_score"] = pre_dar_score
+        emp["dar_written_warnings"] = written_warnings
+        emp["dar_suspensions"] = suspensions
+        emp["dar_deduction"] = -dar_deduction if dar_deduction > 0 else 0
+        emp["final_score"] = final_score
+        emp["total_score"] = final_score  # Update total_score to reflect DAR
+        
+        if dar_deduction > 0:
+            total_dar_deductions += dar_deduction
+            employees_with_dar += 1
+        
+        updated_employees.append(emp)
+    
+    # Sort by final_score and assign final ranks
+    updated_employees.sort(key=lambda x: x.get("final_score", 0), reverse=True)
+    for idx, emp in enumerate(updated_employees, 1):
+        emp["final_rank"] = idx
+    
+    # Update snapshot to finalized
+    await db.snapshot_workflow.update_one(
+        {"id": snapshot_id},
+        {
+            "$set": {
+                "status": "finalized",
+                "finalized_at": datetime.now(timezone.utc).isoformat(),
+                "dar_applied": True,
+                "total_dar_deductions": total_dar_deductions,
+                "employees_with_dar": employees_with_dar,
+                "employees": updated_employees,
+            }
+        }
+    )
+    
+    # Also save to quarter_finalizations for historical record
+    await db.quarter_finalizations.update_one(
+        {"year": snapshot.get("year"), "quarter": snapshot.get("quarter")},
+        {
+            "$set": {
+                "year": snapshot.get("year"),
+                "quarter": snapshot.get("quarter"),
+                "snapshot_id": snapshot_id,
+                "is_finalized": True,
+                "finalized_at": datetime.now(timezone.utc).isoformat(),
+                "dar_entries": [e.model_dump() for e in request.dar_entries],
+                "total_dar_deductions": total_dar_deductions,
+                "employees_with_dar": employees_with_dar,
+                "total_employees": len(updated_employees),
+            }
+        },
+        upsert=True
+    )
+    
+    return {
+        "success": True,
+        "message": "Snapshot finalized successfully",
+        "status": "finalized",
+        "summary": {
+            "total_employees": len(updated_employees),
+            "employees_with_dar": employees_with_dar,
+            "total_dar_deductions": total_dar_deductions,
+        }
+    }
+
+
+@snapshot_router.post("/snapshots/{snapshot_id}/reopen")
+async def reopen_snapshot(snapshot_id: str):
+    """
+    Reopen a finalized snapshot for editing.
+    
+    This removes the finalization status and allows edits again.
+    DAR entries are preserved but can be modified on re-finalization.
+    """
+    db = get_db()
+    
+    snapshot = await db.snapshot_workflow.find_one({"id": snapshot_id}, {"_id": 0})
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    
+    if snapshot.get("status") != "finalized":
+        raise HTTPException(status_code=400, detail="Snapshot is not finalized")
+    
+    # Restore pre_dar_score as total_score for all employees
+    employees = snapshot.get("employees", [])
+    for emp in employees:
+        if emp.get("pre_dar_score"):
+            emp["total_score"] = emp["pre_dar_score"]
+    
+    await db.snapshot_workflow.update_one(
+        {"id": snapshot_id},
+        {
+            "$set": {
+                "status": "reviewed",
+                "finalized_at": None,
+                "dar_applied": False,
+                "reopened_at": datetime.now(timezone.utc).isoformat(),
+                "employees": employees,
+            }
+        }
+    )
+    
+    return {
+        "success": True,
+        "message": "Snapshot reopened for editing",
+        "status": "reviewed"
+    }
+
+
+@snapshot_router.get("/snapshots/{snapshot_id}/workflow-status")
+async def get_workflow_status(snapshot_id: str):
+    """
+    Get the current workflow status and available actions for a snapshot.
+    """
+    db = get_db()
+    
+    snapshot = await db.snapshot_workflow.find_one({"id": snapshot_id}, {"_id": 0})
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    
+    status = snapshot.get("status", "draft")
+    employee_count = len(snapshot.get("employees", []))
+    
+    # Determine available actions based on status
+    actions = {
+        "can_upload": status in ["draft", "in_progress"],
+        "can_edit": status in ["draft", "in_progress", "completed", "reviewed"],
+        "can_reprocess": status in ["in_progress", "completed", "reviewed"],
+        "can_mark_reviewed": status in ["in_progress", "completed"],
+        "can_finalize": status in ["reviewed", "completed", "in_progress"],
+        "can_reopen": status == "finalized",
+        "can_download": status in ["completed", "reviewed", "finalized"],
+    }
+    
+    # Status message
+    messages = {
+        "draft": "Upload data to begin",
+        "in_progress": "Review data and make corrections",
+        "processing": "Processing data...",
+        "completed": "Data processed - verify and mark as reviewed",
+        "reviewed": "Ready for finalization - enter DAR and finalize",
+        "finalized": "Quarter finalized - scores locked",
+        "failed": "Processing failed - check logs",
+    }
+    
+    return {
+        "snapshot_id": snapshot_id,
+        "status": status,
+        "status_message": messages.get(status, "Unknown status"),
+        "employee_count": employee_count,
+        "actions": actions,
+        "is_finalized": status == "finalized",
+        "finalized_at": snapshot.get("finalized_at"),
+        "dar_applied": snapshot.get("dar_applied", False),
+        "total_dar_deductions": snapshot.get("total_dar_deductions", 0),
     }

@@ -81,6 +81,12 @@ export default function Dashboard() {
         // Sort by total_score descending for display
         const sorted = (response.data.employees || []).sort((a, b) => (b.total_score || 0) - (a.total_score || 0));
         setEmployees(sorted);
+        
+        // Update snapshot and workflow status
+        if (response.data.snapshot) {
+          setLatestSnapshot(response.data.snapshot);
+          setIsQuarterFinalized(response.data.snapshot.is_finalized || false);
+        }
       } else {
         setEmployees([]);
       }
@@ -111,13 +117,12 @@ export default function Dashboard() {
   }, [selectedYear, selectedQuarter]);
 
   const checkFinalizationStatus = useCallback(async () => {
-    try {
-      const response = await api.get(`/v2/finalization/${selectedYear}/${selectedQuarter}`);
-      setIsQuarterFinalized(response.data.is_finalized || false);
-    } catch (error) {
-      setIsQuarterFinalized(false);
+    // Finalization status is now included in current-rankings response
+    // This is kept for backwards compatibility but the main check is in fetchEmployeesForQuarter
+    if (latestSnapshot?.is_finalized !== undefined) {
+      setIsQuarterFinalized(latestSnapshot.is_finalized);
     }
-  }, [selectedYear, selectedQuarter]);
+  }, [latestSnapshot]);
 
   useEffect(() => {
     fetchQuarterSettings();

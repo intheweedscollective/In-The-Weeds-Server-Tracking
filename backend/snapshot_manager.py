@@ -18,10 +18,21 @@ logger = logging.getLogger(__name__)
 
 
 class SnapshotStatus(str, Enum):
+    """
+    Snapshot workflow states:
+    - DRAFT: Initial state, uploading data
+    - IN_PROGRESS: Data uploaded, being processed
+    - PROCESSING: System is calculating scores
+    - REVIEWED: Data verified, ready for finalization
+    - FINALIZED: Quarter closed, scores locked with DAR applied
+    - FAILED: Processing error
+    """
     DRAFT = "draft"
     IN_PROGRESS = "in_progress"
     PROCESSING = "processing"
-    COMPLETED = "completed"
+    COMPLETED = "completed"  # Legacy, treat as REVIEWED
+    REVIEWED = "reviewed"
+    FINALIZED = "finalized"
     FAILED = "failed"
 
 

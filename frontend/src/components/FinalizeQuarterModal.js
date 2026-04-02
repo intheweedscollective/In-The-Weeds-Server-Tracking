@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { X, AlertTriangle, CheckCircle2, Lock, Unlock, FileWarning, Save } from "lucide-react";
+import { X, AlertTriangle, CheckCircle2, Lock, Unlock, FileWarning, Save, RefreshCw } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { toast } from "sonner";
@@ -7,57 +7,58 @@ import axios from "axios";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
-export default function FinalizeQuarterModal({ isOpen, onClose, quarter, year, employees, onFinalized }) {
+export default function FinalizeQuarterModal({ isOpen, onClose, quarter, year, employees, snapshotId, onFinalized }) {
   const [darEntries, setDarEntries] = useState({});
   const [isFinalized, setIsFinalized] = useState(false);
+  const [workflowStatus, setWorkflowStatus] = useState(null);
   const [finalRankings, setFinalRankings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Load existing DAR data
-  const loadDARData = useCallback(async () => {
+  // Load workflow status and existing DAR data
+  const loadWorkflowData = useCallback(async () => {
+    if (!snapshotId) return;
+    
     try {
       setLoading(true);
       
-      // Check if already finalized
-      const finResponse = await axios.get(`${API}/api/v2/finalization/${year}/${quarter}`);
-      if (finResponse.data.is_finalized) {
-        setIsFinalized(true);
-        setFinalRankings(finResponse.data.final_rankings || []);
-        
-        // Load DAR entries from finalization
-        const darLookup = {};
-        (finResponse.data.dar_entries || []).forEach(entry => {
-          darLookup[entry.employee_id] = {
-            written_warnings: entry.written_warnings || 0,
-            suspensions: entry.suspensions || 0
+      // Get workflow status
+      const statusResponse = await axios.get(`${API}/api/v2/snapshot-workflow/snapshots/${snapshotId}/workflow-status`);
+      setWorkflowStatus(statusResponse.data);
+      setIsFinalized(statusResponse.data.is_finalized);
+      
+      // Load existing DAR entries from employees
+      const darLookup = {};
+      employees.forEach(emp => {
+        if (emp.dar_written_warnings || emp.dar_suspensions) {
+          darLookup[emp.id] = {
+            written_warnings: emp.dar_written_warnings || 0,
+            suspensions: emp.dar_suspensions || 0
           };
-        });
-        setDarEntries(darLookup);
-      } else {
-        // Load draft DAR entries
-        const darResponse = await axios.get(`${API}/api/v2/dar/${year}/${quarter}`);
-        const darLookup = {};
-        (darResponse.data || []).forEach(entry => {
-          darLookup[entry.employee_id] = {
-            written_warnings: entry.written_warnings || 0,
-            suspensions: entry.suspensions || 0
-          };
-        });
-        setDarEntries(darLookup);
-      }
+        } else {
+          darLookup[emp.id] = { written_warnings: 0, suspensions: 0 };
+        }
+      });
+      setDarEntries(darLookup);
+      
     } catch (error) {
-      console.error("Error loading DAR data:", error);
+      console.error("Error loading workflow data:", error);
+      // Fallback - initialize empty DAR entries
+      const darLookup = {};
+      employees.forEach(emp => {
+        darLookup[emp.id] = { written_warnings: 0, suspensions: 0 };
+      });
+      setDarEntries(darLookup);
     } finally {
       setLoading(false);
     }
-  }, [year, quarter]);
+  }, [snapshotId, employees]);
 
   useEffect(() => {
     if (isOpen) {
-      loadDARData();
+      loadWorkflowData();
     }
-  }, [isOpen, loadDARData]);
+  }, [isOpen, loadWorkflowData]);
 
   const handleDARChange = (employeeId, field, value) => {
     const numValue = Math.max(0, parseInt(value) || 0);
@@ -116,54 +117,70 @@ export default function FinalizeQuarterModal({ isOpen, onClose, quarter, year, e
   };
 
   const handleFinalize = async () => {
-    if (!window.confirm(`Are you sure you want to finalize ${quarter} ${year}? This will lock the final rankings with DAR deductions applied.`)) {
+    if (!snapshotId) {
+      toast.error("No snapshot ID available");
+      return;
+    }
+    
+    if (!window.confirm(`Are you sure you want to finalize ${quarter} ${year}?\n\nThis will:\n• Apply all DAR deductions\n• Lock all scores\n• Prevent further edits\n\nYou can reopen later if needed.`)) {
       return;
     }
 
     try {
       setSaving(true);
-      const entries = employees.map(emp => ({
+      
+      // Build DAR entries array for the request
+      const darEntriesArray = employees.map(emp => ({
         employee_id: emp.id,
-        employee_name: emp.name,
-        written_warnings: darEntries[emp.id]?.written_warnings || 0,
-        suspensions: darEntries[emp.id]?.suspensions || 0
+        written_warnings: parseInt(darEntries[emp.id]?.written_warnings) || 0,
+        suspensions: parseInt(darEntries[emp.id]?.suspensions) || 0
       }));
 
-      const response = await axios.post(`${API}/api/v2/finalize/${year}/${quarter}`, {
-        quarter,
-        year,
-        entries
-      });
+      // Use the new snapshot-based finalization endpoint
+      const response = await axios.post(
+        `${API}/api/v2/snapshot-workflow/snapshots/${snapshotId}/finalize`,
+        { dar_entries: darEntriesArray }
+      );
 
       setIsFinalized(true);
-      setFinalRankings(response.data.final_rankings || []);
-      toast.success(`${quarter} ${year} finalized successfully!`);
+      setWorkflowStatus(prev => ({ ...prev, status: "finalized", is_finalized: true }));
+      toast.success(`${quarter} ${year} finalized successfully! ${response.data.summary?.employees_with_dar || 0} employees have DAR deductions.`);
       
       if (onFinalized) {
-        onFinalized(response.data.final_rankings);
+        onFinalized();
       }
     } catch (error) {
       console.error("Error finalizing quarter:", error);
-      toast.error("Failed to finalize quarter");
+      toast.error(error.response?.data?.detail || "Failed to finalize quarter");
     } finally {
       setSaving(false);
     }
   };
 
   const handleUnfinalize = async () => {
-    if (!window.confirm(`Are you sure you want to reopen ${quarter} ${year}? This will unlock the quarter for further edits.`)) {
+    if (!snapshotId) {
+      toast.error("No snapshot ID available");
+      return;
+    }
+    
+    if (!window.confirm(`Are you sure you want to reopen ${quarter} ${year}?\n\nThis will:\n• Unlock the quarter for edits\n• Remove finalization status\n• Restore pre-DAR scores`)) {
       return;
     }
 
     try {
       setSaving(true);
-      await axios.delete(`${API}/api/v2/finalize/${year}/${quarter}`);
+      await axios.post(`${API}/api/v2/snapshot-workflow/snapshots/${snapshotId}/reopen`);
       setIsFinalized(false);
+      setWorkflowStatus(prev => ({ ...prev, status: "reviewed", is_finalized: false }));
       setFinalRankings([]);
       toast.success(`${quarter} ${year} reopened for edits`);
+      
+      if (onFinalized) {
+        onFinalized();
+      }
     } catch (error) {
-      console.error("Error unfinalizing quarter:", error);
-      toast.error("Failed to reopen quarter");
+      console.error("Error reopening quarter:", error);
+      toast.error(error.response?.data?.detail || "Failed to reopen quarter");
     } finally {
       setSaving(false);
     }
