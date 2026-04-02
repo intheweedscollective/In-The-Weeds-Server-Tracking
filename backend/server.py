@@ -32,6 +32,8 @@ from store_management import register_store_routes
 from snapshot_routes import snapshot_router
 from routes.quarter_settings import quarter_settings_router
 from routes.finalization import finalization_router
+from routes.yodeck_slides import yodeck_router
+from routes.employees import employee_router
 
 # In-memory job storage for PDF processing
 pdf_jobs = {}  # job_id -> {status, progress, result, error}
@@ -12583,6 +12585,8 @@ api_router.include_router(snapshot_router)
 # Include modular routes
 api_router.include_router(quarter_settings_router)
 api_router.include_router(finalization_router)
+api_router.include_router(yodeck_router)
+api_router.include_router(employee_router)
 
 
 # ============================================================================

@@ -159,13 +159,14 @@ Build a comprehensive performance review application for restaurant employees th
 ### P2 (Medium Priority)
 - [ ] Multi-Store Architecture - Support 22 locations
 - [IN PROGRESS] Code Refactoring - Break down server.py (12k+ lines)
-  - [x] Quarter Settings extracted to `/app/backend/routes/quarter_settings.py`
-  - [x] Finalization/DAR extracted to `/app/backend/routes/finalization.py`
-  - [ ] Yodeck Slides extraction
-  - [ ] Employee CRUD extraction
-  - [ ] Reviews extraction
-  - [ ] Trends/Analytics extraction
-  - [ ] Remove duplicated code from server.py
+  - [x] Quarter Settings extracted to `/app/backend/routes/quarter_settings.py` (323 lines)
+  - [x] Finalization/DAR extracted to `/app/backend/routes/finalization.py` (507 lines)
+  - [x] Yodeck Slides extracted to `/app/backend/routes/yodeck_slides.py` (755 lines)
+  - [x] Employee CRUD extracted to `/app/backend/routes/employees.py` (563 lines)
+  - [ ] Reviews extraction (~600 lines)
+  - [ ] Trends/Analytics extraction (~400 lines)
+  - [ ] POS Upload/OCR extraction (~800 lines)
+  - [ ] Remove duplicated code from server.py (final cleanup)
 - [ ] Review Spotlight Feature
 
 ### P3 (Future)
@@ -180,10 +181,12 @@ Build a comprehensive performance review application for restaurant employees th
 ```
 /app/
 ├── backend/
-│   ├── server.py              # Main API (12k+ lines - refactoring in progress)
-│   ├── routes/                # NEW: Modular route files
-│   │   ├── quarter_settings.py  # Quarter settings API
-│   │   └── finalization.py      # DAR and finalization API
+│   ├── server.py              # Main API (~13k lines - refactoring in progress)
+│   ├── routes/                # Modular route files (~2,150 lines extracted)
+│   │   ├── quarter_settings.py  # Quarter benchmarks, weights, tiers (323 lines)
+│   │   ├── finalization.py      # DAR and finalization API (507 lines)
+│   │   ├── yodeck_slides.py     # Slide generation endpoints (755 lines)
+│   │   └── employees.py         # Employee CRUD, CV stats, DAR (563 lines)
 │   ├── snapshot_manager.py    # Snapshot models and scoring functions
 │   ├── snapshot_routes.py     # Snapshot workflow API routes
 │   ├── pos_ocr.py             # AI Vision OCR for PDFs
@@ -228,12 +231,16 @@ Build a comprehensive performance review application for restaurant employees th
   - All 9 backend tests passed (100%): workflow-status, finalize, reopen, quarter-settings, DAR calculations
   - DAR deductions working correctly: Written Warning = -3 pts, Suspension = -5 pts
   
-- **STARTED: Code Refactoring**
+- **MAJOR: Code Refactoring Progress**
   - Created `/app/backend/routes/` directory for modular route files
-  - Extracted Quarter Settings to `/app/backend/routes/quarter_settings.py`
-  - Extracted Finalization/DAR to `/app/backend/routes/finalization.py`
-  - Both routers integrated into `server.py` via `include_router()`
-  - Old endpoints still exist in server.py (backward compatibility) - pending removal
+  - Extracted ~2,150 lines into 4 modular route files:
+    - `quarter_settings.py` (323 lines) - Quarter benchmarks, weights, tier thresholds
+    - `finalization.py` (507 lines) - DAR entries, quarter finalization, reviews
+    - `yodeck_slides.py` (755 lines) - All slide generation endpoints
+    - `employees.py` (563 lines) - Employee CRUD, display names, CV stats, DAR
+  - All routers integrated via `include_router()` and working
+  - Slide generation verified working (PNG files generated correctly)
+  - Old endpoints in server.py still active for backward compatibility
 
 ### 2026-04-01 (Session 5)
 - **FIX: Finalize Quarter Modal Contrast & Calculation Issues**
