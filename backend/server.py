@@ -30,6 +30,8 @@ from pdf_full_rankings import build_full_rankings_pdf
 from qr_tracking import register_qr_routes
 from store_management import register_store_routes
 from snapshot_routes import snapshot_router
+from routes.quarter_settings import quarter_settings_router
+from routes.finalization import finalization_router
 
 # In-memory job storage for PDF processing
 pdf_jobs = {}  # job_id -> {status, progress, result, error}
@@ -12577,6 +12579,10 @@ register_store_routes(api_router, db)
 
 # Include snapshot workflow routes
 api_router.include_router(snapshot_router)
+
+# Include modular routes
+api_router.include_router(quarter_settings_router)
+api_router.include_router(finalization_router)
 
 
 # ============================================================================

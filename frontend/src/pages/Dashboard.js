@@ -923,9 +923,11 @@ export default function Dashboard() {
         quarter={selectedQuarter}
         year={selectedYear}
         employees={employees}
+        snapshotId={latestSnapshot?.id}
         onFinalized={() => {
           setIsQuarterFinalized(true);
           setShowFinalizeModal(false);
+          fetchEmployeesForQuarter(); // Refresh data after finalization
         }}
       />
     </div>
