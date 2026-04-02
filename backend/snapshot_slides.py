@@ -226,19 +226,21 @@ def generate_snapshot_slide(
     row_h = available_height // max(num_emps, 1)
     row_h = max(28, min(42, row_h))
     
-    # Columns - EXACT match to reference: Rank, Name, Trend, PPA, LBW, GLASS, LSC, CV, RT, Bonus, Score
+    # Columns - EXACT match to reference: Rank, Name, Trend, PPA, LBW, GLASS, LSC, CV, RT, Bonus, DAR, Score
+    # DAR column shows deductions when finalized
     columns = [
-        {"name": "Rank", "width": 55},
-        {"name": "Name", "width": 140},
-        {"name": "Trend", "width": 50},
-        {"name": "PPA", "width": 80},
-        {"name": "LBW", "width": 80},
-        {"name": "GLASS", "width": 80},
-        {"name": "LSC", "width": 80},
-        {"name": "CV", "width": 75},
-        {"name": "RT", "width": 75},
-        {"name": "Bonus", "width": 75},
-        {"name": "Score", "width": 90},
+        {"name": "Rank", "width": 50},
+        {"name": "Name", "width": 130},
+        {"name": "Trend", "width": 45},
+        {"name": "PPA", "width": 70},
+        {"name": "LBW", "width": 70},
+        {"name": "GLASS", "width": 70},
+        {"name": "LSC", "width": 70},
+        {"name": "CV", "width": 65},
+        {"name": "RT", "width": 65},
+        {"name": "Bonus", "width": 65},
+        {"name": "DAR", "width": 55},
+        {"name": "Score", "width": 80},
     ]
     
     # Scale columns to fit
@@ -329,7 +331,13 @@ def generate_snapshot_slide(
         
         # Use pre-calculated metric bonus from snapshot
         metric_bonus = emp.get("total_metric_bonus", 0) or 0
-        total_score = emp.get("total_score", 0) or 0
+        
+        # DAR deductions (negative points for written warnings/suspensions)
+        dar_deduction = emp.get("dar_deduction", 0) or 0
+        
+        # Use final_score if finalized, otherwise total_score
+        # final_score includes DAR deductions
+        total_score = emp.get("final_score") or emp.get("total_score", 0) or 0
         
         # Draw metric cells with colors
         cell_pad = 4
@@ -406,8 +414,24 @@ def generate_snapshot_slide(
         draw.text((cx + cw // 2, row_cy), f"+{metric_bonus:.1f}",
                   font=get_font(14, "aptos"), fill=text_color, anchor="mm")
         
-        # Score (column 10) - color based on tier thresholds
+        # DAR (column 10) - shows negative deductions in red
         col_idx = 10
+        if dar_deduction != 0:
+            color = COLORS["red"]
+            text_color = COLORS["white"]
+            dar_text = f"{dar_deduction:.0f}"  # Already negative
+        else:
+            color = COLORS["green"]
+            text_color = (0, 0, 0)
+            dar_text = "0"
+        cx = col_x[col_idx] + cell_pad
+        cw = columns[col_idx]["width"] - cell_pad * 2
+        draw.rectangle([cx, cy_cell, cx + cw, cy_cell + ch], fill=color)
+        draw.text((cx + cw // 2, row_cy), dar_text,
+                  font=get_font(14, "aptos"), fill=text_color, anchor="mm")
+        
+        # Score (column 11) - color based on tier thresholds, shows final score with DAR applied
+        col_idx = 11
         color = get_score_color(total_score, a_min, b_min)
         text_color = (0, 0, 0) if color == COLORS["yellow"] else COLORS["white"]
         cx = col_x[col_idx] + cell_pad
