@@ -158,7 +158,14 @@ Build a comprehensive performance review application for restaurant employees th
 
 ### P2 (Medium Priority)
 - [ ] Multi-Store Architecture - Support 22 locations
-- [ ] Code Refactoring - Break down server.py (12k+ lines)
+- [IN PROGRESS] Code Refactoring - Break down server.py (12k+ lines)
+  - [x] Quarter Settings extracted to `/app/backend/routes/quarter_settings.py`
+  - [x] Finalization/DAR extracted to `/app/backend/routes/finalization.py`
+  - [ ] Yodeck Slides extraction
+  - [ ] Employee CRUD extraction
+  - [ ] Reviews extraction
+  - [ ] Trends/Analytics extraction
+  - [ ] Remove duplicated code from server.py
 - [ ] Review Spotlight Feature
 
 ### P3 (Future)
@@ -173,19 +180,26 @@ Build a comprehensive performance review application for restaurant employees th
 ```
 /app/
 ├── backend/
-│   ├── server.py              # Main API (12k+ lines - needs modularization)
-│   ├── snapshot_manager.py    # NEW: Snapshot models and scoring functions
-│   ├── snapshot_routes.py     # NEW: Snapshot workflow API routes
+│   ├── server.py              # Main API (12k+ lines - refactoring in progress)
+│   ├── routes/                # NEW: Modular route files
+│   │   ├── quarter_settings.py  # Quarter settings API
+│   │   └── finalization.py      # DAR and finalization API
+│   ├── snapshot_manager.py    # Snapshot models and scoring functions
+│   ├── snapshot_routes.py     # Snapshot workflow API routes
 │   ├── pos_ocr.py             # AI Vision OCR for PDFs
 │   ├── pos_report_parser.py   # XLSX parsing
 │   └── qr_tracking.py         # QR code management
 └── frontend/
-    └── src/pages/
-        ├── SnapshotWorkflow.js  # NEW: Snapshot list page
-        ├── SnapshotDetail.js    # NEW: Snapshot detail with uploads
-        ├── DataUploads.js       # Legacy upload handling
-        ├── EmployeeList.js      # Employee details
-        └── LeaderboardRankings.js # Rankings display
+    └── src/
+        ├── components/
+        │   └── FinalizeQuarterModal.js  # DAR entry and finalization UI
+        └── pages/
+            ├── Dashboard.js         # Main dashboard with finalize button
+            ├── SnapshotWorkflow.js  # Snapshot list page
+            ├── SnapshotDetail.js    # Snapshot detail with uploads
+            ├── DataUploads.js       # Legacy upload handling
+            ├── EmployeeList.js      # Employee details
+            └── LeaderboardRankings.js # Rankings display
 ```
 
 ## Key Collections (MongoDB)
@@ -206,6 +220,20 @@ Build a comprehensive performance review application for restaurant employees th
 - `POST /api/v2/snapshot-workflow/migrate-legacy-data` - Migration utility
 
 ## Changelog
+
+### 2026-04-02 (Session 6)
+- **COMPLETED: Cohesive Finalization Workflow**
+  - Fixed missing `snapshotId` prop in `Dashboard.js` line 926 - FinalizeQuarterModal now receives snapshot ID correctly
+  - Tested complete workflow: Dashboard → Finalize Now → Apply DAR → Finalize Quarter → Verify Lock
+  - All 9 backend tests passed (100%): workflow-status, finalize, reopen, quarter-settings, DAR calculations
+  - DAR deductions working correctly: Written Warning = -3 pts, Suspension = -5 pts
+  
+- **STARTED: Code Refactoring**
+  - Created `/app/backend/routes/` directory for modular route files
+  - Extracted Quarter Settings to `/app/backend/routes/quarter_settings.py`
+  - Extracted Finalization/DAR to `/app/backend/routes/finalization.py`
+  - Both routers integrated into `server.py` via `include_router()`
+  - Old endpoints still exist in server.py (backward compatibility) - pending removal
 
 ### 2026-04-01 (Session 5)
 - **FIX: Finalize Quarter Modal Contrast & Calculation Issues**
