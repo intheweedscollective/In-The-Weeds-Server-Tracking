@@ -104,15 +104,19 @@ export default function Dashboard() {
 
   const fetchLatestSnapshot = useCallback(async () => {
     try {
-      const response = await api.get(`/v2/snapshots?year=${selectedYear}`);
-      const snapshots = response.data.filter(s => s.quarter === selectedQuarter);
-      if (snapshots.length > 0) {
-        // Get most recent snapshot
-        setLatestSnapshot(snapshots[0]);
+      // Use snapshot-workflow to get the current active snapshot
+      const response = await api.get(`/v2/snapshot-workflow/current-rankings?year=${selectedYear}&quarter=${selectedQuarter}`);
+      if (response.data.success && response.data.snapshot) {
+        setLatestSnapshot({
+          ...response.data.snapshot,
+          employee_count: response.data.employees?.length || 0
+        });
       } else {
         setLatestSnapshot(null);
       }
     } catch (error) {
+      console.error('Failed to fetch latest snapshot:', error);
+      setLatestSnapshot(null);
     }
   }, [selectedYear, selectedQuarter]);
 
@@ -124,6 +128,7 @@ export default function Dashboard() {
     }
   }, [latestSnapshot]);
 
+  // Fetch data when quarter/year changes
   useEffect(() => {
     fetchQuarterSettings();
     fetchEmployeesForQuarter();
