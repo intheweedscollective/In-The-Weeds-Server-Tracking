@@ -226,8 +226,8 @@ def generate_snapshot_slide(
     row_h = available_height // max(num_emps, 1)
     row_h = max(28, min(42, row_h))
     
-    # Columns - EXACT match to reference: Rank, Name, Trend, PPA, LBW, GLASS, LSC, CV, RT, Bonus, DAR, Score
-    # DAR column shows deductions when finalized
+    # Columns: Rank, Name, Trend, PPA, LBW, GLASS, LSC, CV, RT, Bonus, Score
+    # NOTE: DAR is intentionally excluded - sensitive HR data should not appear on public slides
     columns = [
         {"name": "Rank", "width": 50},
         {"name": "Name", "width": 130},
@@ -238,9 +238,8 @@ def generate_snapshot_slide(
         {"name": "LSC", "width": 70},
         {"name": "CV", "width": 65},
         {"name": "RT", "width": 65},
-        {"name": "Bonus", "width": 65},
-        {"name": "DAR", "width": 55},
-        {"name": "Score", "width": 80},
+        {"name": "Bonus", "width": 70},
+        {"name": "Score", "width": 90},
     ]
     
     # Scale columns to fit
@@ -414,30 +413,16 @@ def generate_snapshot_slide(
         draw.text((cx + cw // 2, row_cy), f"+{metric_bonus:.1f}",
                   font=get_font(14, "aptos"), fill=text_color, anchor="mm")
         
-        # DAR (column 10) - shows negative deductions in red
+        # Score (column 10) - color based on tier thresholds
+        # Uses pre-DAR score for public display (DAR is private HR data)
         col_idx = 10
-        if dar_deduction != 0:
-            color = COLORS["red"]
-            text_color = COLORS["white"]
-            dar_text = f"{dar_deduction:.0f}"  # Already negative
-        else:
-            color = COLORS["green"]
-            text_color = (0, 0, 0)
-            dar_text = "0"
-        cx = col_x[col_idx] + cell_pad
-        cw = columns[col_idx]["width"] - cell_pad * 2
-        draw.rectangle([cx, cy_cell, cx + cw, cy_cell + ch], fill=color)
-        draw.text((cx + cw // 2, row_cy), dar_text,
-                  font=get_font(14, "aptos"), fill=text_color, anchor="mm")
-        
-        # Score (column 11) - color based on tier thresholds, shows final score with DAR applied
-        col_idx = 11
-        color = get_score_color(total_score, a_min, b_min)
+        display_score = emp.get("total_score", 0) or emp.get("pre_dar_score", 0) or 0
+        color = get_score_color(display_score, a_min, b_min)
         text_color = (0, 0, 0) if color == COLORS["yellow"] else COLORS["white"]
         cx = col_x[col_idx] + cell_pad
         cw = columns[col_idx]["width"] - cell_pad * 2
         draw.rectangle([cx, cy_cell, cx + cw, cy_cell + ch], fill=color)
-        draw.text((cx + cw // 2, row_cy), f"{total_score:.1f}",
+        draw.text((cx + cw // 2, row_cy), f"{display_score:.1f}",
                   font=get_font(14, "aptos"), fill=text_color, anchor="mm")
         
         row_idx += 1

@@ -119,21 +119,15 @@ async def get_yodeck_complete_rankings_slide(year: int, quarter: str, format: st
     b_min = settings.get("b_server_min_score", 70)
     
     # Transform employees for the slide generator - use pre-calculated data
+    # NOTE: DAR data is intentionally excluded - it's sensitive HR info not for public display
     slide_employees = []
     for emp in employees:
-        # Calculate DAR deduction from written warnings and suspensions
-        written_warnings = emp.get("dar_written_warnings", 0) or 0
-        suspensions = emp.get("dar_suspensions", 0) or 0
-        dar_deduction = emp.get("dar_deduction", 0) or (-(written_warnings * 3) - (suspensions * 5))
-        
         slide_emp = {
             "id": emp.get("id"),
             "name": emp.get("display_name") or emp.get("name"),
             "tier_label": emp.get("tier_label") or emp.get("performance_tier") or "B-Server",
-            "total_score": emp.get("total_score", 0) or emp.get("pre_dar_score", 0) or 0,
-            # Use final_score if snapshot is finalized (includes DAR deductions)
-            "final_score": emp.get("final_score"),
-            "dar_deduction": dar_deduction,
+            # Always use pre-DAR score for public slides
+            "total_score": emp.get("pre_dar_score", 0) or emp.get("total_score", 0) or 0,
             # Use pre-calculated percentage scores from snapshot
             "score_ppa": emp.get("score_ppa", 0) or 0,
             "score_lbw": emp.get("score_lbw", 0) or 0,
