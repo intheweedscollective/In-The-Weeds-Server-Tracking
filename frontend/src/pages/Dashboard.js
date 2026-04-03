@@ -79,22 +79,27 @@ export default function Dashboard() {
       const response = await api.get(`/v2/snapshot-workflow/current-rankings?year=${selectedYear}&quarter=${selectedQuarter}`);
       if (response.data?.employees) {
         // Sort by total_score descending for display
-        const sorted = (response.data.employees || []).sort((a, b) => (b.total_score || 0) - (a.total_score || 0));
+        const sorted = [...(response.data.employees || [])].sort((a, b) => (b.total_score || 0) - (a.total_score || 0));
         setEmployees(sorted);
         
-        // Update snapshot and workflow status
+        // Update snapshot and workflow status from the same response
         if (response.data.snapshot) {
-          setLatestSnapshot(response.data.snapshot);
+          setLatestSnapshot({
+            ...response.data.snapshot,
+            employee_count: response.data.employees?.length || 0
+          });
           setIsQuarterFinalized(response.data.snapshot.is_finalized || false);
         }
       } else {
         setEmployees([]);
+        setLatestSnapshot(null);
       }
     } catch (error) {
+      console.error('Failed to fetch employees:', error);
       // Fallback to legacy endpoint if snapshot not available
       try {
         const fallback = await api.get(`/v2/employees?year=${selectedYear}&quarter=${selectedQuarter}`);
-        const sorted = (fallback.data || []).sort((a, b) => (b.total_score || 0) - (a.total_score || 0));
+        const sorted = [...(fallback.data || [])].sort((a, b) => (b.total_score || 0) - (a.total_score || 0));
         setEmployees(sorted);
       } catch (e) {
         setEmployees([]);
@@ -102,39 +107,16 @@ export default function Dashboard() {
     }
   }, [selectedYear, selectedQuarter]);
 
-  const fetchLatestSnapshot = useCallback(async () => {
-    try {
-      // Use snapshot-workflow to get the current active snapshot
-      const response = await api.get(`/v2/snapshot-workflow/current-rankings?year=${selectedYear}&quarter=${selectedQuarter}`);
-      if (response.data.success && response.data.snapshot) {
-        setLatestSnapshot({
-          ...response.data.snapshot,
-          employee_count: response.data.employees?.length || 0
-        });
-      } else {
-        setLatestSnapshot(null);
-      }
-    } catch (error) {
-      console.error('Failed to fetch latest snapshot:', error);
-      setLatestSnapshot(null);
-    }
-  }, [selectedYear, selectedQuarter]);
-
+  // checkFinalizationStatus is now handled within fetchEmployeesForQuarter
   const checkFinalizationStatus = useCallback(async () => {
-    // Finalization status is now included in current-rankings response
-    // This is kept for backwards compatibility but the main check is in fetchEmployeesForQuarter
-    if (latestSnapshot?.is_finalized !== undefined) {
-      setIsQuarterFinalized(latestSnapshot.is_finalized);
-    }
-  }, [latestSnapshot]);
+    // Status is set in fetchEmployeesForQuarter - this is kept for hook dependency compatibility
+  }, []);
 
   // Fetch data when quarter/year changes
   useEffect(() => {
     fetchQuarterSettings();
     fetchEmployeesForQuarter();
-    fetchLatestSnapshot();
-    checkFinalizationStatus();
-  }, [fetchQuarterSettings, fetchEmployeesForQuarter, fetchLatestSnapshot, checkFinalizationStatus]);
+  }, [fetchQuarterSettings, fetchEmployeesForQuarter]);
 
   useEffect(() => {
     calculateStats();
