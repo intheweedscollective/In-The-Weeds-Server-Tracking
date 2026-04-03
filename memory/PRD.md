@@ -163,8 +163,8 @@ Build a comprehensive performance review application for restaurant employees th
   - [x] Finalization/DAR extracted to `/app/backend/routes/finalization.py` (507 lines)
   - [x] Yodeck Slides extracted to `/app/backend/routes/yodeck_slides.py` (755 lines)
   - [x] Employee CRUD extracted to `/app/backend/routes/employees.py` (563 lines)
+  - [x] Trends/Analytics extracted to `/app/backend/routes/trends.py` (512 lines)
   - [ ] Reviews extraction (~600 lines)
-  - [ ] Trends/Analytics extraction (~400 lines)
   - [ ] POS Upload/OCR extraction (~800 lines)
   - [ ] Remove duplicated code from server.py (final cleanup)
 - [ ] Review Spotlight Feature
@@ -233,11 +233,12 @@ Build a comprehensive performance review application for restaurant employees th
   
 - **MAJOR: Code Refactoring Progress**
   - Created `/app/backend/routes/` directory for modular route files
-  - Extracted ~2,150 lines into 4 modular route files:
+  - Extracted ~2,660 lines into 5 modular route files:
     - `quarter_settings.py` (323 lines) - Quarter benchmarks, weights, tier thresholds
     - `finalization.py` (507 lines) - DAR entries, quarter finalization, reviews
     - `yodeck_slides.py` (755 lines) - All slide generation endpoints
     - `employees.py` (563 lines) - Employee CRUD, display names, CV stats, DAR
+    - `trends.py` (512 lines) - Employee/team trends, bi-weekly charts
   - All routers integrated via `include_router()` and working
   - Slide generation verified working (PNG files generated correctly)
   - Old endpoints in server.py still active for backward compatibility

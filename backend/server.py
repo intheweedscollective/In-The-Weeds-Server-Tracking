@@ -34,6 +34,7 @@ from routes.quarter_settings import quarter_settings_router
 from routes.finalization import finalization_router
 from routes.yodeck_slides import yodeck_router
 from routes.employees import employee_router
+from routes.trends import trends_router
 
 # In-memory job storage for PDF processing
 pdf_jobs = {}  # job_id -> {status, progress, result, error}
@@ -12587,6 +12588,7 @@ api_router.include_router(quarter_settings_router)
 api_router.include_router(finalization_router)
 api_router.include_router(yodeck_router)
 api_router.include_router(employee_router)
+api_router.include_router(trends_router)
 
 
 # ============================================================================
