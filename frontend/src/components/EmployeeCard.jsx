@@ -25,6 +25,11 @@ export const EmployeeCard = ({
   const guestsPerLsc = employee.guests_per_lsc;
   const cvScore = employee.cv_score || 0;
   
+  // New bonus metrics
+  const rtBonus = employee.review_tracker_bonus || 0;
+  const metricBonus = employee.total_metric_bonus || 0;
+  const qrScans = (employee.yelp_clicks || 0) + (employee.google_clicks || 0);
+  
   return (
     <div 
       className={`bubba-card relative ${selectMode && isSelected ? 'ring-2 ring-blue-500 bg-blue-900/20' : ''}`} 
@@ -76,6 +81,9 @@ export const EmployeeCard = ({
           glassPerGuest={glassPerGuest}
           guestsPerLsc={guestsPerLsc}
           cvScore={cvScore}
+          rtBonus={rtBonus}
+          metricBonus={metricBonus}
+          qrScans={qrScans}
         />
         
         {/* Actions - hidden in select mode */}
@@ -117,10 +125,14 @@ export const EmployeeCard = ({
 };
 
 /**
- * Metrics grid showing the 6 key metrics
+ * Metrics grid showing the 9 key metrics (expanded from 6)
+ * Row 1: Score, PPA, LBW/G
+ * Row 2: Glass/G, G/LSC, CV Score  
+ * Row 3: RT Bonus, Metric Bonus, QR Scans
  */
-const MetricsGrid = ({ score, ppa, lbwPerGuest, glassPerGuest, guestsPerLsc, cvScore }) => (
+const MetricsGrid = ({ score, ppa, lbwPerGuest, glassPerGuest, guestsPerLsc, cvScore, rtBonus, metricBonus, qrScans }) => (
   <div className="grid grid-cols-3 gap-2 mb-4">
+    {/* Row 1: Core metrics */}
     <div className="text-center p-2 bg-red-50 rounded-lg border border-red-100">
       <div className="text-lg font-serif font-bold text-primary">{formatNumber(score)}</div>
       <div className="text-[10px] text-slate-400 font-semibold uppercase">Score</div>
@@ -133,6 +145,8 @@ const MetricsGrid = ({ score, ppa, lbwPerGuest, glassPerGuest, guestsPerLsc, cvS
       <div className="text-sm font-serif font-bold text-purple-700">{formatCurrency(lbwPerGuest)}</div>
       <div className="text-[10px] text-slate-400 font-semibold uppercase">LBW/G</div>
     </div>
+    
+    {/* Row 2: Per-guest metrics */}
     <div className="text-center p-2 bg-slate-600 rounded-lg border border-slate-500">
       <div className="text-sm font-serif font-bold text-slate-100">{formatCurrency(glassPerGuest)}</div>
       <div className="text-[10px] text-slate-300 font-semibold uppercase">Glass/G</div>
@@ -144,6 +158,20 @@ const MetricsGrid = ({ score, ppa, lbwPerGuest, glassPerGuest, guestsPerLsc, cvS
     <div className="text-center p-2 bg-yellow-50 rounded-lg border border-yellow-100">
       <div className="text-sm font-serif font-bold text-yellow-700">{cvScore > 0 ? '+' : ''}{formatNumber(cvScore)}</div>
       <div className="text-[10px] text-slate-400 font-semibold uppercase">CV</div>
+    </div>
+    
+    {/* Row 3: Bonus metrics & QR */}
+    <div className="text-center p-2 bg-teal-50 rounded-lg border border-teal-100">
+      <div className="text-sm font-serif font-bold text-teal-700">{rtBonus > 0 ? '+' : ''}{formatNumber(rtBonus)}</div>
+      <div className="text-[10px] text-slate-400 font-semibold uppercase">RT Bonus</div>
+    </div>
+    <div className="text-center p-2 bg-orange-50 rounded-lg border border-orange-100">
+      <div className="text-sm font-serif font-bold text-orange-700">{metricBonus > 0 ? '+' : ''}{formatNumber(metricBonus)}</div>
+      <div className="text-[10px] text-slate-400 font-semibold uppercase">Metric+</div>
+    </div>
+    <div className="text-center p-2 bg-indigo-50 rounded-lg border border-indigo-100">
+      <div className="text-sm font-serif font-bold text-indigo-700">{qrScans || 0}</div>
+      <div className="text-[10px] text-slate-400 font-semibold uppercase">QR Scans</div>
     </div>
   </div>
 );

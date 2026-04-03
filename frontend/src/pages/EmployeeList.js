@@ -66,52 +66,78 @@ export default function EmployeeList() {
   const fetchEmployees = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await api.get(`/v2/snapshot-workflow/current-rankings?year=${selectedYear}&quarter=${selectedQuarter}`);
-      const snapshotEmployees = response.data?.employees || [];
+      // Fetch both snapshot employees and QR data in parallel
+      const [snapshotResponse, qrResponse] = await Promise.all([
+        api.get(`/v2/snapshot-workflow/current-rankings?year=${selectedYear}&quarter=${selectedQuarter}`),
+        api.get('/qr/employees').catch(() => ({ data: [] })) // QR data is optional
+      ]);
       
-      const transformedEmployees = snapshotEmployees.map(emp => ({
-        id: emp.id || emp.name,
-        name: emp.name,
-        display_name: emp.display_name || emp.name,
-        report_name: emp.report_name || "",
-        job_title: emp.job_title || "Server",
-        tier_label: emp.tier_label || "Server",
-        guests: emp.guest_count || emp.guests || 0,
-        guest_count: emp.guest_count || emp.guests || 0,
-        net_sales: emp.net_sales || 0,
-        ppa: emp.ppa || 0,
-        liquor_sales: emp.liquor_sales || 0,
-        beer_sales: emp.beer_sales || 0,
-        wine_sales: emp.wine_sales || 0,
-        lbw: emp.lbw || 0,
-        glassware_sales: emp.bar_glassware_sales || emp.glassware_sales || 0,
-        loyalty_sales: emp.loyalty_sales || 0,
-        lsc_count: emp.lsc_count || 0,
-        lbw_per_guest: emp.lbw_per_guest || 0,
-        glassware_per_guest: emp.glassware_per_guest || 0,
-        guests_per_lsc: emp.guests_per_lsc || 0,
-        nps_score: emp.nps_score || 0,
-        cv_promoters: emp.cv_promoters || 0,
-        cv_passives: emp.cv_passives || 0,
-        cv_detractors: emp.cv_detractors || 0,
-        cv_score: emp.cv_score || 0,
-        review_mentions: emp.rt_mentions || emp.review_mentions || 0,
-        review_tracker_bonus: emp.review_tracker_bonus || 0,
-        total_score: emp.total_score || 0,
-        pre_dar_score: emp.total_score || emp.pre_dar_score || 0,
-        weighted_score: emp.weighted_score || 0,
-        total_metric_bonus: emp.total_metric_bonus || 0,
-        score_ppa: emp.score_ppa || 0,
-        score_lbw: emp.score_lbw || 0,
-        score_glass: emp.score_glass || 0,
-        score_lsc: emp.score_lsc || 0,
-        aliases: emp.aliases || [],
-        peer_rank: emp.peer_rank,
-        performance_tier: emp.performance_tier,
-        quarter: selectedQuarter,
-        year: selectedYear,
-        _source: "snapshot"
-      }));
+      const snapshotEmployees = snapshotResponse.data?.employees || [];
+      const qrEmployees = qrResponse.data || [];
+      
+      // Create a map of QR data by employee name (case-insensitive)
+      const qrDataMap = {};
+      qrEmployees.forEach(qr => {
+        const nameLower = (qr.name || '').toLowerCase().trim();
+        qrDataMap[nameLower] = {
+          yelp_clicks: qr.yelp_clicks || 0,
+          google_clicks: qr.google_clicks || 0
+        };
+      });
+      
+      const transformedEmployees = snapshotEmployees.map(emp => {
+        // Match QR data by name (try full name, then first name)
+        const empNameLower = (emp.name || '').toLowerCase().trim();
+        const empFirstNameLower = empNameLower.split(' ')[0];
+        const qrData = qrDataMap[empNameLower] || qrDataMap[empFirstNameLower] || { yelp_clicks: 0, google_clicks: 0 };
+        
+        return {
+          id: emp.id || emp.name,
+          name: emp.name,
+          display_name: emp.display_name || emp.name,
+          report_name: emp.report_name || "",
+          job_title: emp.job_title || "Server",
+          tier_label: emp.tier_label || "Server",
+          guests: emp.guest_count || emp.guests || 0,
+          guest_count: emp.guest_count || emp.guests || 0,
+          net_sales: emp.net_sales || 0,
+          ppa: emp.ppa || 0,
+          liquor_sales: emp.liquor_sales || 0,
+          beer_sales: emp.beer_sales || 0,
+          wine_sales: emp.wine_sales || 0,
+          lbw: emp.lbw || 0,
+          glassware_sales: emp.bar_glassware_sales || emp.glassware_sales || 0,
+          loyalty_sales: emp.loyalty_sales || 0,
+          lsc_count: emp.lsc_count || 0,
+          lbw_per_guest: emp.lbw_per_guest || 0,
+          glassware_per_guest: emp.glassware_per_guest || 0,
+          guests_per_lsc: emp.guests_per_lsc || 0,
+          nps_score: emp.nps_score || 0,
+          cv_promoters: emp.cv_promoters || 0,
+          cv_passives: emp.cv_passives || 0,
+          cv_detractors: emp.cv_detractors || 0,
+          cv_score: emp.cv_score || 0,
+          review_mentions: emp.rt_mentions || emp.review_mentions || 0,
+          review_tracker_bonus: emp.review_tracker_bonus || 0,
+          total_score: emp.total_score || 0,
+          pre_dar_score: emp.total_score || emp.pre_dar_score || 0,
+          weighted_score: emp.weighted_score || 0,
+          total_metric_bonus: emp.total_metric_bonus || 0,
+          score_ppa: emp.score_ppa || 0,
+          score_lbw: emp.score_lbw || 0,
+          score_glass: emp.score_glass || 0,
+          score_lsc: emp.score_lsc || 0,
+          aliases: emp.aliases || [],
+          peer_rank: emp.peer_rank,
+          performance_tier: emp.performance_tier,
+          quarter: selectedQuarter,
+          year: selectedYear,
+          // QR scan data
+          yelp_clicks: qrData.yelp_clicks,
+          google_clicks: qrData.google_clicks,
+          _source: "snapshot"
+        };
+      });
       
       setEmployees(transformedEmployees);
     } catch (error) {

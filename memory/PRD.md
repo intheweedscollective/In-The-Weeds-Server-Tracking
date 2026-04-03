@@ -237,6 +237,14 @@ Build a comprehensive performance review application for restaurant employees th
   - Components properly use formatCurrency/formatNumber from utils/formatters.js
   - All data-testid attributes maintained for testing
 
+- **FEATURE: Expanded Employee Card Metrics (9 metrics)**
+  - Extended EmployeeCard from 6 to 9 metrics:
+    - Row 1: Score, PPA, LBW/G
+    - Row 2: Glass/G, G/LSC, CV Score
+    - Row 3 (NEW): RT Bonus, Metric Bonus, QR Scans
+  - QR scan data fetched from `/api/qr/employees` and merged by employee name
+  - Name matching supports full name and first-name fallback for QR data merge
+
 ### 2026-04-02 (Session 6)
 - **COMPLETED: Cohesive Finalization Workflow**
   - Fixed missing `snapshotId` prop in `Dashboard.js` line 926 - FinalizeQuarterModal now receives snapshot ID correctly
