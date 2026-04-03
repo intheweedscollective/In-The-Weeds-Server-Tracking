@@ -3470,29 +3470,47 @@ async def get_yodeck_top10_slide(year: int, quarter: str, format: str = "16:9", 
     Generate Top 10 Performers By Metric slide.
     Shows 4 metric columns: PPA, Glass/Guest, Guests/LSC, LBW/Guest
     
+    USES SNAPSHOT-FIRST ARCHITECTURE - reads from active snapshot for data consistency.
+    
     Args:
         format: "16:9" for Yodeck (1920x1080) or "letter" for 8.5x11" print (2550x3300)
         background: Background key from available backgrounds
     """
-    # Get all employees for the quarter
-    employees_docs = await db.employees_v2.find(
-        {"year": year, "quarter": quarter.upper()},
+    # SNAPSHOT-FIRST: Get employees from the active snapshot
+    snapshot = await db.snapshot_workflow.find_one(
+        {"is_current": True, "quarter": quarter.upper(), "year": year},
         {"_id": 0}
-    ).to_list(5000)
+    )
+    
+    if not snapshot:
+        snapshot = await db.snapshot_workflow.find_one(
+            {"status": "completed", "quarter": quarter.upper(), "year": year},
+            {"_id": 0},
+            sort=[("effective_date", -1), ("completed_at", -1)]
+        )
+    
+    if not snapshot or not snapshot.get("employees"):
+        # Fallback to employees_v2 if no snapshot
+        employees_docs = await db.employees_v2.find(
+            {"year": year, "quarter": quarter.upper()},
+            {"_id": 0}
+        ).to_list(5000)
+    else:
+        employees_docs = snapshot.get("employees", [])
     
     if not employees_docs:
         raise HTTPException(status_code=404, detail=f"No employee data for {quarter} {year}")
     
     # Get the most recent snapshot date for this quarter
-    most_recent_snapshot = await db.snapshots.find_one(
-        {"year": year, "quarter": quarter.upper()},
-        {"snapshot_date": 1},
-        sort=[("snapshot_date", -1)]
-    )
-    
-    data_date = None
-    if most_recent_snapshot and most_recent_snapshot.get("snapshot_date"):
-        data_date = most_recent_snapshot["snapshot_date"]
+    data_date = snapshot.get("effective_date") if snapshot else None
+    if not data_date:
+        most_recent_snapshot = await db.snapshots.find_one(
+            {"year": year, "quarter": quarter.upper()},
+            {"snapshot_date": 1},
+            sort=[("snapshot_date", -1)]
+        )
+        if most_recent_snapshot and most_recent_snapshot.get("snapshot_date"):
+            data_date = most_recent_snapshot["snapshot_date"]
     
     # Generate slide with the new design
     slide_bytes = generate_top_10_by_metric_slide(
