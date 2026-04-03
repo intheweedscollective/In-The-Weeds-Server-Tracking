@@ -1,32 +1,11 @@
 import { useState, useEffect } from "react";
-import { Settings, Lock, Unlock, Save, RefreshCw, AlertTriangle, Palette, Sparkles } from "lucide-react";
+import { Settings, Lock, Unlock, Save, RefreshCw, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 
-// Pre-built theme options for Yodeck slides
-const SLIDE_THEMES = {
-  dark_navy: { name: "Dark Navy", bg: "#0A1628", gradient: "#132238", text: "#FFFFFF", accent: "#D12E2E", secondary: "#005B96" },
-  light_corporate: { name: "Light Corporate", bg: "#F8FAFC", gradient: "#E2E8F0", text: "#1E293B", accent: "#D12E2E", secondary: "#005B96" },
-  bubba_red: { name: "Bubba Red", bg: "#7F1D1D", gradient: "#450A0A", text: "#FFFFFF", accent: "#FEF2F2", secondary: "#FCA5A5" },
-  ocean_blue: { name: "Ocean Blue", bg: "#0C4A6E", gradient: "#082F49", text: "#FFFFFF", accent: "#F0F9FF", secondary: "#38BDF8" },
-  custom: { name: "Custom", bg: "#0A1628", gradient: "#132238", text: "#FFFFFF", accent: "#D12E2E", secondary: "#005B96" }
-};
-
-// Seasonal theme options for holiday decorations
-const SEASONAL_THEMES = {
-  auto: { name: "Auto Detect", emoji: "🔄", description: "Automatically show seasonal theme based on current date" },
-  none: { name: "None", emoji: "➖", description: "No seasonal decorations" },
-  valentines: { name: "Valentine's Day", emoji: "💕", bg: "#4A0D2A", text: "#FFFFFF" },
-  st_patricks: { name: "St. Patrick's Day", emoji: "🍀", bg: "#0D3B0D", text: "#FFFFFF" },
-  easter: { name: "Easter", emoji: "🐣", bg: "#E8E4F0", text: "#4A148C" },
-  july_4th: { name: "4th of July", emoji: "🇺🇸", bg: "#0A1628", text: "#FFFFFF" },
-  halloween: { name: "Halloween", emoji: "🎃", bg: "#1A0A00", text: "#FFFFFF" },
-  thanksgiving: { name: "Thanksgiving", emoji: "🦃", bg: "#3E2723", text: "#FFFFFF" },
-  christmas: { name: "Christmas", emoji: "🎄", bg: "#0D2818", text: "#FFFFFF" },
-  new_year: { name: "New Year", emoji: "🎆", bg: "#0A0A1A", text: "#FFFFFF" }
-};
+// NOTE: SLIDE_THEMES and SEASONAL_THEMES removed - functionality deprecated
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -57,16 +36,7 @@ export default function QuarterSettings() {
     bonus_cap: 5.0,
     // Server tier thresholds
     a_server_min_score: 80.0,
-    b_server_min_score: 70.0,
-    // Slide theme settings
-    slide_theme: "dark_navy",
-    slide_bg_color: "#0A1628",
-    slide_bg_gradient: "#132238",
-    slide_text_color: "#FFFFFF",
-    slide_accent_color: "#D12E2E",
-    slide_secondary_color: "#005B96",
-    // Seasonal theme setting
-    slide_seasonal_theme: "auto"
+    b_server_min_score: 70.0
   });
 
   useEffect(() => {
@@ -93,16 +63,7 @@ export default function QuarterSettings() {
           bonus_rate: response.data.bonus_rate,
           bonus_cap: response.data.bonus_cap,
           a_server_min_score: response.data.a_server_min_score || 80.0,
-          b_server_min_score: response.data.b_server_min_score || 70.1,
-          // Slide theme settings
-          slide_theme: response.data.slide_theme || "dark_navy",
-          slide_bg_color: response.data.slide_bg_color || "#0A1628",
-          slide_bg_gradient: response.data.slide_bg_gradient || "#132238",
-          slide_text_color: response.data.slide_text_color || "#FFFFFF",
-          slide_accent_color: response.data.slide_accent_color || "#D12E2E",
-          slide_secondary_color: response.data.slide_secondary_color || "#005B96",
-          // Seasonal theme setting
-          slide_seasonal_theme: response.data.slide_seasonal_theme || "auto"
+          b_server_min_score: response.data.b_server_min_score || 70.1
         });
         setIsNew(false);
       } catch (error) {
@@ -123,16 +84,7 @@ export default function QuarterSettings() {
             bonus_rate: 0.2,
             bonus_cap: 5.0,
             a_server_min_score: 80.0,
-            b_server_min_score: 70.0,
-            // Slide theme settings
-            slide_theme: "dark_navy",
-            slide_bg_color: "#0A1628",
-            slide_bg_gradient: "#132238",
-            slide_text_color: "#FFFFFF",
-            slide_accent_color: "#D12E2E",
-            slide_secondary_color: "#005B96",
-            // Seasonal theme setting
-            slide_seasonal_theme: "auto"
+            b_server_min_score: 70.0
           });
         } else {
           toast.error("Error loading settings");
@@ -182,16 +134,7 @@ export default function QuarterSettings() {
         bonus_rate: response.data.bonus_rate,
         bonus_cap: response.data.bonus_cap,
         a_server_min_score: response.data.a_server_min_score || 80.0,
-        b_server_min_score: response.data.b_server_min_score || 70.1,
-        // Slide theme settings
-        slide_theme: response.data.slide_theme || "dark_navy",
-        slide_bg_color: response.data.slide_bg_color || "#0A1628",
-        slide_bg_gradient: response.data.slide_bg_gradient || "#132238",
-        slide_text_color: response.data.slide_text_color || "#FFFFFF",
-        slide_accent_color: response.data.slide_accent_color || "#D12E2E",
-        slide_secondary_color: response.data.slide_secondary_color || "#005B96",
-        // Seasonal theme setting
-        slide_seasonal_theme: response.data.slide_seasonal_theme || "auto"
+        b_server_min_score: response.data.b_server_min_score || 70.1
       });
       setIsNew(false);
     } catch (error) {
@@ -255,25 +198,7 @@ export default function QuarterSettings() {
     }));
   };
 
-  const applyThemePreset = (themeName) => {
-    const preset = SLIDE_THEMES[themeName];
-    if (preset && themeName !== "custom") {
-      setFormData(prev => ({
-        ...prev,
-        slide_theme: themeName,
-        slide_bg_color: preset.bg,
-        slide_bg_gradient: preset.gradient,
-        slide_text_color: preset.text,
-        slide_accent_color: preset.accent,
-        slide_secondary_color: preset.secondary
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        slide_theme: "custom"
-      }));
-    }
-  };
+  // NOTE: applyThemePreset function removed - slide themes deprecated
 
   const weightSum = formData.weight_ppa + formData.weight_lbw + formData.weight_glass + formData.weight_lsc + formData.weight_cv;
   const weightsValid = Math.abs(weightSum - 1.0) <= 0.01;
@@ -663,215 +588,7 @@ export default function QuarterSettings() {
           </div>
         </div>
 
-        {/* Slide Theme Settings */}
-        <div className="bubba-card mb-8" data-testid="slide-theme-settings">
-          <div className="tape tape-blue" style={{ top: '-8px', left: '50%', transform: 'translateX(-50%) rotate(-1deg)' }} />
-          <div className="p-6 pt-8">
-            <div className="flex items-center gap-3 mb-4">
-              <Palette className="w-6 h-6 text-purple-500" />
-              <h2 className="text-lg font-serif font-bold text-foreground">Yodeck Slide Theme</h2>
-              <span className="text-sm text-slate-400">(Per-Quarter)</span>
-            </div>
-            <p className="text-sm text-slate-400 mb-6">
-              Customize the visual theme for all Yodeck slides generated for this quarter.
-            </p>
-            
-            {/* Theme Presets */}
-            <div className="mb-6">
-              <label className="text-sm font-medium mb-3 block">Choose a Theme Preset</label>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                {Object.entries(SLIDE_THEMES).map(([key, theme]) => (
-                  <button
-                    key={key}
-                    onClick={() => applyThemePreset(key)}
-                    className={`p-4 rounded-lg border-2 transition-all ${
-                      formData.slide_theme === key 
-                        ? 'border-primary ring-2 ring-primary/20' 
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                    style={{ backgroundColor: theme.bg }}
-                    data-testid={`theme-preset-${key}`}
-                  >
-                    <div className="text-center">
-                      <div className="w-6 h-6 rounded-full mx-auto mb-2" style={{ backgroundColor: theme.accent }}></div>
-                      <span className="text-xs font-medium" style={{ color: theme.text }}>{theme.name}</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-            
-            {/* Custom Colors (only shown when custom theme selected) */}
-            {formData.slide_theme === "custom" && (
-              <div className="mb-6 p-4 bg-background rounded-lg border border-gray-200">
-                <label className="text-sm font-medium mb-4 block">Custom Color Settings</label>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-xs text-slate-400 block">Background</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={formData.slide_bg_color}
-                        onChange={(e) => setFormData(prev => ({ ...prev, slide_bg_color: e.target.value }))}
-                        className="w-10 h-10 rounded cursor-pointer border-0"
-                      />
-                      <Input
-                        value={formData.slide_bg_color}
-                        onChange={(e) => setFormData(prev => ({ ...prev, slide_bg_color: e.target.value }))}
-                        className="text-xs h-8 border-2"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs text-slate-400 block">Gradient End</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={formData.slide_bg_gradient}
-                        onChange={(e) => setFormData(prev => ({ ...prev, slide_bg_gradient: e.target.value }))}
-                        className="w-10 h-10 rounded cursor-pointer border-0"
-                      />
-                      <Input
-                        value={formData.slide_bg_gradient}
-                        onChange={(e) => setFormData(prev => ({ ...prev, slide_bg_gradient: e.target.value }))}
-                        className="text-xs h-8 border-2"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs text-slate-400 block">Text Color</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={formData.slide_text_color}
-                        onChange={(e) => setFormData(prev => ({ ...prev, slide_text_color: e.target.value }))}
-                        className="w-10 h-10 rounded cursor-pointer border-0"
-                      />
-                      <Input
-                        value={formData.slide_text_color}
-                        onChange={(e) => setFormData(prev => ({ ...prev, slide_text_color: e.target.value }))}
-                        className="text-xs h-8 border-2"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs text-slate-400 block">Accent (Primary)</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={formData.slide_accent_color}
-                        onChange={(e) => setFormData(prev => ({ ...prev, slide_accent_color: e.target.value }))}
-                        className="w-10 h-10 rounded cursor-pointer border-0"
-                      />
-                      <Input
-                        value={formData.slide_accent_color}
-                        onChange={(e) => setFormData(prev => ({ ...prev, slide_accent_color: e.target.value }))}
-                        className="text-xs h-8 border-2"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs text-slate-400 block">Secondary</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={formData.slide_secondary_color}
-                        onChange={(e) => setFormData(prev => ({ ...prev, slide_secondary_color: e.target.value }))}
-                        className="w-10 h-10 rounded cursor-pointer border-0"
-                      />
-                      <Input
-                        value={formData.slide_secondary_color}
-                        onChange={(e) => setFormData(prev => ({ ...prev, slide_secondary_color: e.target.value }))}
-                        className="text-xs h-8 border-2"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {/* Theme Preview */}
-            <div className="mt-4">
-              <label className="text-sm font-medium mb-2 block">Preview</label>
-              <div 
-                className="h-24 rounded-lg flex items-center justify-center relative overflow-hidden"
-                style={{ 
-                  background: `linear-gradient(180deg, ${formData.slide_bg_color} 0%, ${formData.slide_bg_gradient} 100%)`
-                }}
-              >
-                <div className="text-center">
-                  <div 
-                    className="text-lg font-bold mb-1"
-                    style={{ color: formData.slide_text_color }}
-                  >
-                    {SEASONAL_THEMES[formData.slide_seasonal_theme]?.emoji || '🦐'} TOP 10 PERFORMERS {SEASONAL_THEMES[formData.slide_seasonal_theme]?.emoji || '🦐'}
-                  </div>
-                  <div 
-                    className="text-sm"
-                    style={{ color: formData.slide_accent_color }}
-                  >
-                    {selectedQuarter} {selectedYear} • Bubba Gump Shrimp Co.
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Seasonal Theme Settings */}
-        <div className="bubba-card mb-8" data-testid="seasonal-theme-settings">
-          <div className="tape tape-pink" style={{ top: '-8px', left: '50%', transform: 'translateX(-50%) rotate(1deg)' }} />
-          <div className="p-6 pt-8">
-            <div className="flex items-center gap-3 mb-4">
-              <Sparkles className="w-6 h-6 text-pink-500" />
-              <h2 className="text-lg font-serif font-bold text-foreground">Seasonal Decorations</h2>
-              <span className="text-sm text-slate-400">(Holiday Themes)</span>
-            </div>
-            <p className="text-sm text-slate-400 mb-6">
-              Add festive decorations to your Yodeck slides based on the time of year.
-            </p>
-            
-            {/* Seasonal Theme Selector */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              {Object.entries(SEASONAL_THEMES).map(([key, theme]) => (
-                <button
-                  key={key}
-                  onClick={() => setFormData(prev => ({ ...prev, slide_seasonal_theme: key }))}
-                  className={`p-3 rounded-lg border-2 transition-all ${
-                    formData.slide_seasonal_theme === key 
-                      ? 'border-pink-500 ring-2 ring-pink-500/20 bg-pink-50' 
-                      : 'border-gray-200 hover:border-gray-300 bg-slate-800'
-                  }`}
-                  data-testid={`seasonal-theme-${key}`}
-                >
-                  <div className="text-center">
-                    <div className="text-2xl mb-1">{theme.emoji}</div>
-                    <span className="text-xs font-medium text-slate-200">{theme.name}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-            
-            {/* Current Selection Info */}
-            <div className="mt-4 p-3 bg-background rounded-lg border border-gray-200">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">{SEASONAL_THEMES[formData.slide_seasonal_theme]?.emoji}</span>
-                <div>
-                  <span className="font-medium text-gray-800">{SEASONAL_THEMES[formData.slide_seasonal_theme]?.name}</span>
-                  {formData.slide_seasonal_theme === 'auto' && (
-                    <p className="text-xs text-slate-400">Slides will automatically show decorations for Valentine&apos;s Day, St. Patrick&apos;s Day, Easter, 4th of July, Halloween, Thanksgiving, Christmas, and New Year based on the current date.</p>
-                  )}
-                  {formData.slide_seasonal_theme === 'none' && (
-                    <p className="text-xs text-slate-400">No seasonal decorations will be added to slides.</p>
-                  )}
-                  {formData.slide_seasonal_theme !== 'auto' && formData.slide_seasonal_theme !== 'none' && (
-                    <p className="text-xs text-slate-400">Slides will always show {SEASONAL_THEMES[formData.slide_seasonal_theme]?.name} decorations regardless of the current date.</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* NOTE: Slide Theme and Seasonal Decorations sections removed - functionality deprecated */}
 
         {/* Save Button - Always show (theme settings can be saved even when locked) */}
         <div className="flex justify-between items-center">

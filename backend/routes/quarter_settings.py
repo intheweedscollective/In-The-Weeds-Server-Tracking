@@ -59,16 +59,7 @@ class QuarterSettingsUpdate(BaseModel):
     # Server tier thresholds
     a_server_min_score: Optional[float] = None
     b_server_min_score: Optional[float] = None
-    # Slide theme settings
-    slide_theme: Optional[str] = None
-    slide_bg_color: Optional[str] = None
-    slide_bg_gradient: Optional[str] = None
-    slide_text_color: Optional[str] = None
-    slide_accent_color: Optional[str] = None
-    slide_secondary_color: Optional[str] = None
-    slide_custom_bg_image: Optional[str] = None
-    # Seasonal theme setting
-    slide_seasonal_theme: Optional[str] = None
+    # NOTE: Slide theme settings removed - functionality deprecated
 
 
 # ============================================================================
@@ -158,7 +149,7 @@ async def create_quarter_settings(data: QuarterSettingsCreate):
 
 @quarter_settings_router.put("/{year}/{quarter}")
 async def update_quarter_settings(year: int, quarter: str, data: QuarterSettingsUpdate):
-    """Update quarter settings (only if not locked, except for theme settings)"""
+    """Update quarter settings (only if not locked)"""
     db = get_db()
     settings = await db.quarter_settings.find_one(
         {"year": year, "quarter": quarter.upper()}, 
@@ -167,29 +158,11 @@ async def update_quarter_settings(year: int, quarter: str, data: QuarterSettings
     if not settings:
         raise HTTPException(status_code=404, detail=f"Settings not found for {quarter} {year}")
     
-    # Check if this is a theme-only update (allowed even when locked)
-    theme_only_fields = {'slide_theme', 'slide_bg_color', 'slide_bg_gradient', 'slide_text_color', 
-                        'slide_accent_color', 'slide_secondary_color', 'slide_seasonal_theme', 'slide_custom_bg_image'}
-    
-    non_theme_fields_provided = False
-    for field in data.model_fields_set if hasattr(data, 'model_fields_set') else []:
-        if field not in theme_only_fields and getattr(data, field, None) is not None:
-            non_theme_fields_provided = True
-            break
-    
-    # Also check each field manually for older pydantic versions
-    score_affecting_fields = [
-        data.benchmark_ppa, data.benchmark_lbw, data.benchmark_glass, data.benchmark_lsc, data.benchmark_cv,
-        data.weight_ppa, data.weight_lbw, data.weight_glass, data.weight_lsc, data.weight_cv,
-        data.bonus_rate, data.bonus_cap, data.a_server_min_score, data.b_server_min_score
-    ]
-    if any(f is not None for f in score_affecting_fields):
-        non_theme_fields_provided = True
-    
-    if settings.get("is_locked") and non_theme_fields_provided:
+    # Check if locked - no updates allowed when locked
+    if settings.get("is_locked"):
         raise HTTPException(
             status_code=403, 
-            detail=f"Settings for {quarter} {year} are locked. Only theme settings can be modified."
+            detail=f"Settings for {quarter} {year} are locked and cannot be modified."
         )
     
     # Build update dict
@@ -222,23 +195,6 @@ async def update_quarter_settings(year: int, quarter: str, data: QuarterSettings
         update_data["a_server_min_score"] = data.a_server_min_score
     if data.b_server_min_score is not None:
         update_data["b_server_min_score"] = data.b_server_min_score
-    # Slide theme settings
-    if data.slide_theme is not None:
-        update_data["slide_theme"] = data.slide_theme
-    if data.slide_bg_color is not None:
-        update_data["slide_bg_color"] = data.slide_bg_color
-    if data.slide_bg_gradient is not None:
-        update_data["slide_bg_gradient"] = data.slide_bg_gradient
-    if data.slide_text_color is not None:
-        update_data["slide_text_color"] = data.slide_text_color
-    if data.slide_accent_color is not None:
-        update_data["slide_accent_color"] = data.slide_accent_color
-    if data.slide_secondary_color is not None:
-        update_data["slide_secondary_color"] = data.slide_secondary_color
-    if data.slide_custom_bg_image is not None:
-        update_data["slide_custom_bg_image"] = data.slide_custom_bg_image
-    if data.slide_seasonal_theme is not None:
-        update_data["slide_seasonal_theme"] = data.slide_seasonal_theme
     
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
     
