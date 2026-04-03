@@ -42,7 +42,8 @@ export default function ReviewTracker() {
         const cvStatsRes = await fetch(`${API_URL}/api/v2/cv/stats?quarter=${selectedQuarter}&year=${selectedYear}`);
         const cvStatsData = await cvStatsRes.json();
         setCvStats(cvStatsData);
-      } catch {
+      } catch (error) {
+        console.error('Failed to fetch CV data:', error);
         setCvFeedback([]);
         setCvStats(null);
       }
@@ -53,7 +54,8 @@ export default function ReviewTracker() {
         const rtStatsData = await rtStatsRes.json();
         setRtStats(rtStatsData);
         setEmployeeMentions(rtStatsData?.top_mentioned || []);
-      } catch {
+      } catch (error) {
+        console.error('Failed to fetch RT stats:', error);
         setRtStats(null);
         setEmployeeMentions([]);
       }
@@ -70,7 +72,8 @@ export default function ReviewTracker() {
           cv_score: emp.cv_score || 0,
           nps_score: emp.nps_score || 0
         })).sort((a, b) => a.name.localeCompare(b.name)));
-      } catch {
+      } catch (error) {
+        console.error('Failed to fetch employee stats:', error);
         setEmployeeCvStats([]);
       }
       
