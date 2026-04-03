@@ -116,11 +116,13 @@ def get_bonus_color(value: float) -> Tuple[int, int, int]:
 
 def get_score_color(value: float, a_min: float = 85, b_min: float = 70) -> Tuple[int, int, int]:
     """Get total score color based on tier thresholds."""
-    if value >= a_min:
-        return COLORS["green"]   # A-Server: Green
+    if value >= 100:
+        return COLORS["blue"]     # Exceeding expectations: Blue (100+)
+    elif value >= a_min:
+        return COLORS["green"]    # A-Server: Green
     elif value >= b_min:
-        return COLORS["yellow"]  # B-Server: Yellow
-    return COLORS["red"]         # C-Server: Red
+        return COLORS["yellow"]   # B-Server: Yellow
+    return COLORS["red"]          # C-Server: Red
 
 
 def generate_snapshot_slide(
