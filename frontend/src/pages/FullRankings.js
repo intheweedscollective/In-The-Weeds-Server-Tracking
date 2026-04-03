@@ -948,8 +948,8 @@ export default function FullRankings() {
                                     </div>
                                     
                                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                                      {metrics.map((m, i) => (
-                                        <div key={i} className="bg-slate-800 rounded-xl p-3 shadow-sm border border-slate-600 min-w-0">
+                                      {metrics.map((m) => (
+                                        <div key={m.label} className="bg-slate-800 rounded-xl p-3 shadow-sm border border-slate-600 min-w-0">
                                           <div className="text-xs font-semibold text-slate-400 uppercase mb-1 truncate">{m.label}</div>
                                           <div className={`text-xl sm:text-2xl font-bold ${m.color} truncate`}>{m.value}</div>
                                           <div className="text-xs text-slate-400 mt-1 truncate">{m.benchmark}</div>
@@ -1110,13 +1110,13 @@ export default function FullRankings() {
                                                 inverse: true // Lower is better
                                               }
                                             ];
-                                            return gaps.map((g, i) => {
+                                            return gaps.map((g) => {
                                               const diff = g.inverse 
                                                 ? g.target - g.current 
                                                 : g.current - g.target;
                                               const isGood = diff >= 0;
                                               return (
-                                                <div key={i} className={`p-3 rounded-lg ${isGood ? 'bg-green-900/40 border border-green-500/50' : 'bg-red-900/40 border border-red-500/50'}`}>
+                                                <div key={g.label} className={`p-3 rounded-lg ${isGood ? 'bg-green-900/40 border border-green-500/50' : 'bg-red-900/40 border border-red-500/50'}`}>
                                                   <div className="text-xs text-slate-300 mb-1">{g.label}</div>
                                                   <div className={`text-lg font-bold ${isGood ? 'text-green-400' : 'text-red-400'}`}>
                                                     {isGood ? '+' : '-'}{g.format(Math.abs(diff))}

@@ -18,9 +18,9 @@ logger = logging.getLogger(__name__)
 finalization_router = APIRouter(prefix="/v2", tags=["Finalization & DAR"])
 
 def get_db():
-    """Get database instance - will be set by main server"""
-    from server import db
-    return db
+    """Get database instance from shared module to avoid circular imports"""
+    from database import get_database
+    return get_database()
 
 # ============================================================================
 # MODELS

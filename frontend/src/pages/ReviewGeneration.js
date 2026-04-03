@@ -39,6 +39,7 @@ export default function ReviewGeneration() {
       const response = await api.get(`/reviews`);
       setReviews(response.data);
     } catch (error) {
+      console.error('Failed to fetch reviews:', error);
     }
   };
 

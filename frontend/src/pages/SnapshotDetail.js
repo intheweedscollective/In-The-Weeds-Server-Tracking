@@ -932,7 +932,7 @@ export default function SnapshotDetail() {
               </thead>
               <tbody className="divide-y divide-slate-700">
                 {reviewData.map((emp, idx) => (
-                  <tr key={idx} className="hover:bg-slate-800/50 text-sm">
+                  <tr key={emp.id || emp.name || `emp-${idx}`} className="hover:bg-slate-800/50 text-sm">
                     <td className="px-2 py-2 text-white font-medium whitespace-nowrap">{emp.name?.split(' ')[0] || emp.name}</td>
                     {editingRow === idx ? (
                       <>

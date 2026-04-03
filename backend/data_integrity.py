@@ -98,7 +98,7 @@ class DataIntegrityChecker:
             source = review.get('platform') or review.get('source', '')
             
             content = f"{reviewer}{date}{text}{source}"
-            content_hash = hashlib.md5(content.encode()).hexdigest()
+            content_hash = hashlib.sha256(content.encode()).hexdigest()
             
             is_duplicate = False
             reason = []
@@ -307,7 +307,7 @@ class DataIntegrityChecker:
                 continue
                 
             content = f"{reviewer}{date}{text}{source}"
-            content_hash = hashlib.md5(content.encode()).hexdigest()
+            content_hash = hashlib.sha256(content.encode()).hexdigest()
             
             if content_hash in seen_hashes:
                 to_delete.append(review["_id"])

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { Building2, MapPin, Plus, Search, Filter, Settings, BarChart3, Trophy, Users, ChevronRight, Globe } from "lucide-react";
 import { Button } from "../components/ui/button";
@@ -14,12 +14,7 @@ export default function StoreManagement() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [globalStats, setGlobalStats] = useState(null);
 
-  useEffect(() => {
-    fetchStores();
-    fetchGlobalStats();
-  }, [selectedRegion]);
-
-  const fetchStores = async () => {
+  const fetchStores = useCallback(async () => {
     try {
       setLoading(true);
       let url = '/stores';
@@ -34,16 +29,21 @@ export default function StoreManagement() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedRegion]);
 
-  const fetchGlobalStats = async () => {
+  const fetchGlobalStats = useCallback(async () => {
     try {
       const response = await api.get('/stores/reports/leaderboard?quarter=Q1&year=2026');
       setGlobalStats(response.data);
     } catch (error) {
       console.error('Failed to fetch global stats:', error);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchStores();
+    fetchGlobalStats();
+  }, [fetchStores, fetchGlobalStats]);
 
   const initializeStores = async () => {
     try {
@@ -166,7 +166,7 @@ export default function StoreManagement() {
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[...Array(6)].map((_, i) => (
-            <div key={i} className="bg-slate-800 rounded-xl p-5 border border-slate-700 animate-pulse">
+            <div key={`skeleton-${i}`} className="bg-slate-800 rounded-xl p-5 border border-slate-700 animate-pulse">
               <div className="h-6 bg-slate-700 rounded w-3/4 mb-3"></div>
               <div className="h-4 bg-slate-700 rounded w-1/2"></div>
             </div>

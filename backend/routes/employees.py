@@ -17,9 +17,9 @@ logger = logging.getLogger(__name__)
 employee_router = APIRouter(prefix="/v2/employees", tags=["Employees"])
 
 def get_db():
-    """Get database instance - will be set by main server"""
-    from server import db
-    return db
+    """Get database instance from shared module to avoid circular imports"""
+    from database import get_database
+    return get_database()
 
 
 # ============================================================================
@@ -402,8 +402,6 @@ async def update_employee_cv_stats(employee_id: str, data: dict):
     from server import sync_employees_to_most_recent_snapshot
     
     db = get_db()
-    quarter = data.get("quarter", "Q1")
-    year = data.get("year", 2026)
     cv_promoters = int(data.get("cv_promoters", 0))
     cv_detractors = int(data.get("cv_detractors", 0))
     cv_passives = int(data.get("cv_passives", 0))

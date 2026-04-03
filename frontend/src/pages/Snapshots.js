@@ -34,6 +34,7 @@ export default function Snapshots() {
       const res = await api.get(`/v2/snapshots`);
       setSnapshots(res.data);
     } catch (error) {
+      console.error('Failed to fetch snapshots:', error);
     }
   }, []);
 

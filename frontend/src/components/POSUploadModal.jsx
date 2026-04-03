@@ -674,7 +674,7 @@ export const POSUploadModal = ({ isOpen, onClose, onDataExtracted, year, quarter
                         const glassTotal = emp._raw?.bar_glassware_sales || 0;
                         
                         return (
-                          <tr key={idx} className={`${hasMissing ? 'bg-yellow-500/5' : 'hover:bg-slate-700/50'}`}>
+                          <tr key={emp.id || emp.name || `emp-${idx}`} className={`${hasMissing ? 'bg-yellow-500/5' : 'hover:bg-slate-700/50'}`}>
                             <td className="px-2 py-2 font-medium text-sm sticky left-0 bg-slate-800">
                               <EditableNameCell
                                 value={emp.name}

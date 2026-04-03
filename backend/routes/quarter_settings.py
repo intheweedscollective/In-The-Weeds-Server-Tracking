@@ -15,9 +15,9 @@ logger = logging.getLogger(__name__)
 quarter_settings_router = APIRouter(prefix="/v2/quarter-settings", tags=["Quarter Settings"])
 
 def get_db():
-    """Get database instance - will be set by main server"""
-    from server import db
-    return db
+    """Get database instance from shared module to avoid circular imports"""
+    from database import get_database
+    return get_database()
 
 # ============================================================================
 # MODELS
