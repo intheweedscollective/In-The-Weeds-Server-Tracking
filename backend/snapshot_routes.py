@@ -1975,6 +1975,112 @@ async def sync_pos_from_employees_v2(snapshot_id: str):
     }
 
 
+@snapshot_router.post("/snapshots/{snapshot_id}/fix-employee-ids")
+async def fix_snapshot_employee_ids(snapshot_id: str):
+    """
+    Fix snapshot employees array by replacing with actual employees_v2 data.
+    This ensures employee IDs in the snapshot match employees_v2 for proper delete/edit operations.
+    """
+    db = get_db()
+    
+    snapshot = await db.snapshot_workflow.find_one({"id": snapshot_id}, {"_id": 0})
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    
+    quarter = snapshot.get("quarter", "Q1")
+    year = snapshot.get("year", 2026)
+    
+    # Get all employees from employees_v2
+    employees_v2 = await db.employees_v2.find(
+        {"quarter": quarter, "year": year},
+        {"_id": 0}
+    ).to_list(200)
+    
+    if not employees_v2:
+        raise HTTPException(status_code=404, detail="No employees found in employees_v2")
+    
+    # Get quarter settings for tier calculation
+    settings = await db.quarter_settings.find_one(
+        {"quarter": quarter, "year": year},
+        {"_id": 0}
+    )
+    a_min = settings.get("a_server_min_score", 90) if settings else 90
+    b_min = settings.get("b_server_min_score", 75) if settings else 75
+    
+    # Build clean employee array from employees_v2
+    clean_employees = []
+    for emp in employees_v2:
+        score = emp.get("pre_dar_score") or emp.get("total_score") or 0
+        job = (emp.get("job_title") or "server").lower()
+        
+        if job in ["trainer", "bartender"]:
+            tier_label = job.title()
+        elif score >= a_min:
+            tier_label = "A-Server"
+        elif score >= b_min:
+            tier_label = "B-Server"
+        else:
+            tier_label = "C-Server"
+        
+        clean_employees.append({
+            "id": emp.get("id"),
+            "name": emp.get("name") or emp.get("display_name") or "",
+            "display_name": emp.get("display_name") or emp.get("name") or "",
+            "report_name": emp.get("report_name") or "",
+            "job_title": emp.get("job_title") or "Server",
+            "tier_label": tier_label,
+            "guest_count": emp.get("guests") or emp.get("guest_count") or 0,
+            "net_sales": emp.get("net_sales") or 0,
+            "ppa": emp.get("ppa") or 0,
+            "lbw": emp.get("lbw") or 0,
+            "lbw_per_guest": emp.get("lbw_per_guest") or 0,
+            "bar_glassware_sales": emp.get("glassware_sales") or emp.get("bar_glassware_sales") or 0,
+            "glassware_per_guest": emp.get("glassware_per_guest") or 0,
+            "lsc_count": emp.get("lsc_count") or 0,
+            "guests_per_lsc": emp.get("guests_per_lsc") or 0,
+            "liquor_sales": emp.get("liquor_sales") or 0,
+            "beer_sales": emp.get("beer_sales") or 0,
+            "wine_sales": emp.get("wine_sales") or 0,
+            "cv_promoters": emp.get("cv_promoters") or 0,
+            "cv_passives": emp.get("cv_passives") or 0,
+            "cv_detractors": emp.get("cv_detractors") or 0,
+            "cv_score": emp.get("cv_score") or 0,
+            "nps_score": emp.get("nps_score") or 0,
+            "rt_mentions": emp.get("rt_mentions") or emp.get("review_mentions") or 0,
+            "review_tracker_bonus": emp.get("review_tracker_bonus") or 0,
+            "total_metric_bonus": emp.get("total_metric_bonus") or 0,
+            "weighted_score": emp.get("weighted_score") or 0,
+            "total_score": emp.get("total_score") or 0,
+            "pre_dar_score": emp.get("pre_dar_score") or emp.get("total_score") or 0,
+            "aliases": emp.get("aliases") or []
+        })
+    
+    # Sort by score descending and assign peer_rank
+    clean_employees.sort(key=lambda x: x.get("pre_dar_score") or 0, reverse=True)
+    for i, emp in enumerate(clean_employees):
+        emp["peer_rank"] = i + 1
+    
+    # Update snapshot with clean employee data
+    await db.snapshot_workflow.update_one(
+        {"id": snapshot_id},
+        {
+            "$set": {
+                "employees": clean_employees,
+                "employee_count": len(clean_employees),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    logger.info(f"Fixed employee IDs in snapshot {snapshot_id}: {len(clean_employees)} employees")
+    
+    return {
+        "success": True,
+        "message": f"Fixed {len(clean_employees)} employee IDs in snapshot",
+        "employee_count": len(clean_employees)
+    }
+
+
 # ============================================================================
 # MIGRATION
 # ============================================================================

@@ -302,12 +302,32 @@ async def update_employee(employee_id: str, data: EmployeeUpdate):
 
 @employee_router.delete("/{employee_id}")
 async def delete_employee(employee_id: str):
-    """Delete a single employee"""
+    """Delete a single employee from both employees_v2 and active snapshots"""
     db = get_db()
-    result = await db.employees_v2.delete_one({"id": employee_id})
-    if result.deleted_count == 0:
+    
+    # First get the employee to know which quarter/year to update
+    employee = await db.employees_v2.find_one({"id": employee_id}, {"_id": 0})
+    if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")
-    return {"success": True, "message": "Employee deleted"}
+    
+    # Delete from employees_v2
+    result = await db.employees_v2.delete_one({"id": employee_id})
+    
+    # Also remove from any snapshots that contain this employee
+    year = employee.get("year")
+    quarter = employee.get("quarter")
+    if year and quarter:
+        await db.snapshot_workflow.update_many(
+            {"year": year, "quarter": quarter},
+            {"$pull": {"employees": {"id": employee_id}}}
+        )
+        # Also update employee count
+        await db.snapshot_workflow.update_many(
+            {"year": year, "quarter": quarter},
+            [{"$set": {"employee_count": {"$size": {"$ifNull": ["$employees", []]}}}}]
+        )
+    
+    return {"success": True, "message": f"Employee {employee.get('name', 'Unknown')} deleted"}
 
 
 @employee_router.delete("")
