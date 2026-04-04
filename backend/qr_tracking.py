@@ -398,31 +398,6 @@ async def reset_all_qr_scans():
         "employees_reset": employees_result.modified_count
     }
 
-@qr_router.get("/stats")
-async def get_qr_stats():
-    """Get QR scan statistics"""
-    total_scans = await _db.qr_scans.count_documents({})
-    total_employees = await _db.qr_employees.count_documents({})
-    
-    # Sum all clicks
-    pipeline = [
-        {"$group": {
-            "_id": None,
-            "total_google": {"$sum": "$google_clicks"},
-            "total_yelp": {"$sum": "$yelp_clicks"}
-        }}
-    ]
-    result = await _db.qr_employees.aggregate(pipeline).to_list(1)
-    
-    total_clicks = 0
-    if result:
-        total_clicks = (result[0].get("total_google", 0) or 0) + (result[0].get("total_yelp", 0) or 0)
-    
-    return {
-        "total_scans": total_clicks,
-        "total_employees": total_employees
-    }
-
 
 # ==================== SETTINGS ====================
 
