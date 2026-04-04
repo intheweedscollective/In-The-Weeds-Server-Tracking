@@ -2052,7 +2052,17 @@ async def fix_snapshot_employee_ids(snapshot_id: str):
             "weighted_score": emp.get("weighted_score") or 0,
             "total_score": emp.get("total_score") or 0,
             "pre_dar_score": emp.get("pre_dar_score") or emp.get("total_score") or 0,
-            "aliases": emp.get("aliases") or []
+            "aliases": emp.get("aliases") or [],
+            # Score percentages (needed for rankings breakdown)
+            "score_ppa": emp.get("score_ppa") or 0,
+            "score_lbw": emp.get("score_lbw") or 0,
+            "score_glass": emp.get("score_glass") or 0,
+            "score_lsc": emp.get("score_lsc") or 0,
+            # Bonus points per metric
+            "bonus_ppa": emp.get("bonus_ppa") or 0,
+            "bonus_lbw": emp.get("bonus_lbw") or 0,
+            "bonus_glass": emp.get("bonus_glass") or 0,
+            "bonus_lsc": emp.get("bonus_lsc") or 0,
         })
     
     # Sort by score descending and assign peer_rank
