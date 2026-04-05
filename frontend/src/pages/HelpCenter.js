@@ -187,14 +187,14 @@ export default function HelpCenter() {
               {/* Questions */}
               {expandedCategory === category.category && (
                 <div className="border-t border-slate-700">
-                  {category.questions.map((qa, idx) => (
-                    <div key={idx} className="border-b border-slate-700 last:border-0">
+                  {category.questions.map((qa) => (
+                    <div key={qa.q} className="border-b border-slate-700 last:border-0">
                       <button
-                        onClick={() => setExpandedQuestion(expandedQuestion === `${category.category}-${idx}` ? null : `${category.category}-${idx}`)}
+                        onClick={() => setExpandedQuestion(expandedQuestion === `${category.category}-${qa.q}` ? null : `${category.category}-${qa.q}`)}
                         className="w-full flex items-center justify-between p-4 text-left hover:bg-slate-700 transition-colors"
                       >
                         <span className="font-medium text-slate-200 pr-4">{qa.q}</span>
-                        {expandedQuestion === `${category.category}-${idx}` ? (
+                        {expandedQuestion === `${category.category}-${qa.q}` ? (
                           <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />
                         ) : (
                           <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />

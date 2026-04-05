@@ -85,8 +85,8 @@ export default function StoreHealthScore({ quarter = "Q1", year = 2026 }) {
 
       {/* Category Breakdown */}
       <div className="space-y-3">
-        {categories.map((cat, idx) => (
-          <div key={idx} className="flex items-center justify-between">
+        {categories.map((cat) => (
+          <div key={cat.label} className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               {getTrendIcon(cat.trend)}
               <span className="text-sm text-slate-300">{cat.label}</span>

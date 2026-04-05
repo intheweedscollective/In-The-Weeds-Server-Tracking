@@ -245,6 +245,22 @@ Build a comprehensive performance review application for restaurant employees th
   - QR scan data fetched from `/api/qr/employees` and merged by employee name
   - Name matching supports full name and first-name fallback for QR data merge
 
+- **FIX: QR Stats Dashboard Display**
+  - Fixed duplicate `/qr/stats` endpoint in `qr_tracking.py` that was returning incomplete data
+  - Dashboard now correctly shows total QR scans with Yelp/Google breakdown and top performers
+
+- **FIX: Deployed App Data Restoration**
+  - Fixed snapshot employee ID mismatch causing delete failures
+  - Created `fix-employee-ids` endpoint to sync employees_v2 with snapshot
+  - Added `manual-score` endpoint for direct score updates without recalculation
+
+- **CODE QUALITY: Applied Code Review Fixes**
+  - Fixed 10 array-index-as-key React anti-patterns (Dashboard, HelpCenter, OnboardingGuide, DataUploads, ReviewGeneration, StoreHealthScore, CoachingRadar, ReviewImpactTracker)
+  - Added useMemo for expensive Dashboard computations (topPerformersList, restaurantAverages)
+  - Fixed empty catch block in ReviewGeneration.js with proper error logging
+  - Fixed 5 bare `except` blocks in server.py with specific exception types
+  - Added proper error logging for chart capture failures
+
 ### 2026-04-02 (Session 6)
 - **COMPLETED: Cohesive Finalization Workflow**
   - Fixed missing `snapshotId` prop in `Dashboard.js` line 926 - FinalizeQuarterModal now receives snapshot ID correctly

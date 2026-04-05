@@ -4888,8 +4888,8 @@ async def get_analytics_pdf_v2(year: int, quarter: str):
                 if await dist_section.count() > 0:
                     dist_img = await dist_section.screenshot()
                     chart_images.append(("Score Distribution", dist_img))
-            except:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to capture score distribution chart: {e}")
             
             # Capture each metric chart individually
             metric_ids = ["ppa", "lbw_per_guest", "glassware_per_guest", "guests_per_lsc", "cv_score"]
@@ -4930,8 +4930,8 @@ async def get_analytics_pdf_v2(year: int, quarter: str):
                     # Capture a region around the top 10 section
                     img_data = await page.screenshot(clip={"x": 50, "y": 100, "width": 1300, "height": 500})
                     chart_images.append(("Top 10 Overall", img_data))
-            except:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to capture top 10 chart: {e}")
             
             await browser.close()
             
@@ -6358,7 +6358,7 @@ async def generate_snapshot_slide_endpoint(
     try:
         date_obj = datetime.strptime(snapshot_date, "%Y-%m-%d")
         formatted_date = date_obj.strftime("%B %d, %Y")
-    except:
+    except ValueError:
         formatted_date = snapshot_date
     
     # Generate slide
@@ -7707,7 +7707,7 @@ async def get_cv_feedback(quarter: str = "Q1", year: int = 2026, limit: int = 10
                     month = int(parts[0])
                     if 1 <= month <= 3:
                         is_q1_2026 = True
-                except:
+                except (ValueError, IndexError):
                     pass
         
         if is_q1_2026:
@@ -11398,8 +11398,8 @@ async def configure_scheduler(config: SchedulerConfig):
     # Remove existing job if any
     try:
         scheduler.remove_job("reconciliation_job")
-    except:
-        pass
+    except Exception:
+        pass  # Job doesn't exist, which is fine
     
     if config.enabled:
         # Add new scheduled job

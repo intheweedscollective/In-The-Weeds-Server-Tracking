@@ -97,7 +97,7 @@ export default function CoachingRadar({ quarter = "Q1", year = 2026 }) {
       <div className="space-y-3">
         {topOpportunities.map((opp, idx) => (
           <div
-            key={idx}
+            key={opp.employee_name || idx}
             className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50 hover:border-amber-500/30 transition-colors"
           >
             <div className="flex items-start justify-between mb-2">

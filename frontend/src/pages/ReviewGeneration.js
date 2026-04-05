@@ -138,6 +138,7 @@ export default function ReviewGeneration() {
         const response = await api.get(`/v2/trends/${selectedYear}/${selectedQuarter}/employee/${employeeId}/data`);
         setTrendData(prev => ({ ...prev, [employeeId]: response.data }));
       } catch (error) {
+        console.error('Failed to load trend data:', error);
         // Still allow expansion even if data fetch fails
       }
     }
@@ -301,8 +302,8 @@ export default function ReviewGeneration() {
                             { label: 'Glass', value: `$${(employee.glassware_per_guest || 0).toFixed(2)}`, color: 'text-blue-600' },
                             { label: 'LSC Ratio', value: (employee.guests_per_lsc || 0).toFixed(0), color: 'text-green-600' },
                             { label: 'CV', value: formatNumber(employee.cv_score || 0), color: 'text-purple-600' },
-                          ].map((kpi, i) => (
-                            <div key={i} className="text-center px-2 py-1 bg-background rounded-lg min-w-[50px]">
+                          ].map((kpi) => (
+                            <div key={kpi.label} className="text-center px-2 py-1 bg-background rounded-lg min-w-[50px]">
                               <div className={`text-sm font-serif font-bold ${kpi.color}`}>{kpi.value}</div>
                               <div className="text-[10px] text-slate-400 uppercase font-semibold">{kpi.label}</div>
                             </div>

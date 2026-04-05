@@ -204,8 +204,8 @@ export default function OnboardingGuide({ onComplete }) {
           <p className="text-gray-600 mb-4">{step.description}</p>
           
           <ul className="space-y-2 mb-6">
-            {step.tips.map((tip, idx) => (
-              <li key={idx} className="flex items-start gap-2 text-sm text-gray-700">
+            {step.tips.map((tip) => (
+              <li key={tip} className="flex items-start gap-2 text-sm text-gray-700">
                 <CheckCircle2 className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
                 <span>{tip}</span>
               </li>
@@ -236,9 +236,9 @@ export default function OnboardingGuide({ onComplete }) {
           </Button>
 
           <div className="flex gap-1">
-            {ONBOARDING_STEPS.map((_, idx) => (
+            {ONBOARDING_STEPS.map((s, idx) => (
               <button
-                key={idx}
+                key={s.title}
                 onClick={() => setCurrentStep(idx)}
                 className={`w-2 h-2 rounded-full transition-colors ${
                   idx === currentStep ? 'bg-primary' : 'bg-gray-300 hover:bg-gray-400'

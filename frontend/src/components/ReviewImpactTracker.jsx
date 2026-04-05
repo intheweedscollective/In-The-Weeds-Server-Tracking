@@ -98,7 +98,7 @@ export default function ReviewImpactTracker({ quarter = "Q1", year = 2026 }) {
         <p className="text-xs text-slate-400 uppercase tracking-wide mb-2">Top Guest Influencers</p>
         {topPerformers.map((emp, idx) => (
           <div
-            key={idx}
+            key={emp.employee_name || idx}
             className="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition-colors gap-2"
           >
             <div className="flex items-center gap-2 min-w-0 flex-1">

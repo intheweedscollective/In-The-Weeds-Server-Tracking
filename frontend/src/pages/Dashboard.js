@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Users, FileText, TrendingUp, Award, Target, Fish, Settings, Camera, Download, X, AlertTriangle, Lock, CheckCircle2, Trophy, Star, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
@@ -33,6 +33,22 @@ export default function Dashboard() {
     topPerformers: 0,
     underPerformers: 0
   });
+
+  // Memoize expensive computations
+  const topPerformersList = useMemo(() => {
+    const threshold = parseFloat(stats.topPerformerThreshold || 0);
+    return employees.filter(emp => (emp.total_score || 0) >= threshold);
+  }, [employees, stats.topPerformerThreshold]);
+
+  const restaurantAverages = useMemo(() => {
+    if (employees.length === 0) return { ppa: 0, lbw: 0, glass: 0, lsc: 0 };
+    return {
+      ppa: employees.reduce((sum, e) => sum + (e.ppa || 0), 0) / employees.length,
+      lbw: employees.reduce((sum, e) => sum + (e.lbw_per_guest || 0), 0) / employees.length,
+      glass: employees.reduce((sum, e) => sum + (e.glassware_per_guest || 0), 0) / employees.length,
+      lsc: employees.filter(e => e.guests_per_lsc > 0).reduce((sum, e) => sum + (e.guests_per_lsc || 0), 0) / (employees.filter(e => e.guests_per_lsc > 0).length || 1)
+    };
+  }, [employees]);
 
   const calculateStats = useCallback(() => {
     const total = employees.length;
@@ -786,8 +802,8 @@ export default function Dashboard() {
                         <p className="text-sm text-gray-700 italic">"{justification}"</p>
                         {top2Metrics.length > 0 && (
                           <div className="flex gap-2 mt-2">
-                            {top2Metrics.map((metric, i) => (
-                              <span key={i} className="px-2 py-1 bg-green-50 text-green-700 text-xs font-semibold rounded-full border border-green-200">
+                            {top2Metrics.map((metric) => (
+                              <span key={metric.name} className="px-2 py-1 bg-green-50 text-green-700 text-xs font-semibold rounded-full border border-green-200">
                                 {metric.name}: {metric.display}
                               </span>
                             ))}
