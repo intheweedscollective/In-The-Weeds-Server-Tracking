@@ -4021,6 +4021,52 @@ async def update_employee(employee_id: str, data: EmployeeUpdate):
     return {"success": True, "message": f"Updated {employee.name} - new score: {employee.total_score}"}
 
 
+@api_router.put("/v2/employees/{employee_id}/manual-score")
+async def update_employee_manual_score(employee_id: str, data: dict):
+    """
+    Manually set employee scores WITHOUT recalculation.
+    Used for restoring finalized rankings from backup.
+    """
+    # Get existing employee
+    emp_doc = await db.employees_v2.find_one({"id": employee_id}, {"_id": 0})
+    if not emp_doc:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    # Fields that can be manually set
+    allowed_fields = [
+        'total_score', 'pre_dar_score', 'score_ppa', 'score_lbw', 'score_glass', 'score_lsc',
+        'cv_score', 'review_tracker_bonus', 'total_metric_bonus', 'weighted_score',
+        'bonus_ppa', 'bonus_lbw', 'bonus_glass', 'bonus_lsc'
+    ]
+    
+    update_dict = {}
+    for field in allowed_fields:
+        if field in data:
+            update_dict[field] = data[field]
+    
+    if not update_dict:
+        raise HTTPException(status_code=400, detail="No valid fields to update")
+    
+    # Update in employees_v2
+    await db.employees_v2.update_one(
+        {"id": employee_id},
+        {"$set": update_dict}
+    )
+    
+    # Also update in snapshot_workflow
+    snapshot_update = {f"employees.$.{k}": v for k, v in update_dict.items()}
+    await db.snapshot_workflow.update_many(
+        {
+            "year": emp_doc.get('year'),
+            "quarter": emp_doc.get('quarter'),
+            "employees.id": employee_id
+        },
+        {"$set": snapshot_update}
+    )
+    
+    return {"success": True, "message": f"Manually set scores for {emp_doc.get('name')}", "updated_fields": list(update_dict.keys())}
+
+
 @api_router.delete("/v2/employees/{employee_id}")
 async def delete_employee(employee_id: str):
     """Delete a single employee"""
