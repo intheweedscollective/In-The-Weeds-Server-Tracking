@@ -7,120 +7,66 @@ Build a comprehensive performance review application for restaurant employees th
 - Downloadable slides for digital signage (Yodeck)
 - Leaderboards and reports
 
-## User Personas
-- **Restaurant Manager**: Needs to track employee performance, generate reports, upload data
-- **Regional Manager**: Multi-store oversight, global reporting
-- **Employees**: View their scores and rankings (via digital signage)
-
-## Core Requirements
-1. **Snapshot-First Data Architecture**: Uploads and parsed data tightly coupled to historical "Snapshots"
-2. **Advanced Data Parsing**: Handle POS reports (via AI OCR), NPS Toolkit Server Performance Reports, ReviewTracker CSV exports
-3. **Accurate Scoring & Finalization**: Weighted scoring logic, DAR deductions, locking finalized quarters
-4. **Consistent UI**: All leaderboards, modals, slides pull from active Snapshot as single source of truth
-5. **Downloadable Outputs**: Aesthetic PNG/PDF slides matching corporate branding
-6. **Multi-Store Support**: 22 locations with global reporting dashboards
-
 ## Tech Stack
 - **Frontend**: React (Vite)
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
-- **AI**: OpenAI GPT-4o (via Emergent LLM Key) for name detection in reviews and POS OCR
+- **AI**: OpenAI GPT-4o (via Emergent LLM Key)
 
 ## Current State (2026-04-06)
 
-### What's Implemented ✅
-- Snapshot workflow system with embedded employees array
-- Multiple slide generators (Top 10 By Metric, Complete Rankings, Tier slides, etc.)
-- Manual score override endpoint (`/api/v2/snapshot-workflow/snapshots/{id}/manual-score`)
-- 9-metric Employee Card with QR scans, RT bonus, Metric bonus
-- Data reconciliation tools for Customer Voice and ReviewTracker
-- React component refactoring (EmployeeDetailsModal, EmployeeCard, etc.)
-- **Background Task Queue** - Persistent job system for large file uploads
-- **Multi-Store Architecture** - 22 Bubba Gump locations with global reporting
+### Recent Changes
+- **A-Server threshold** changed from 80 to 85
+- **CV Passives tip** corrected (they DO affect NPS)
+- **Backend modularization** - Extracted audit routes (1555 lines)
 
-### New Features (This Session)
+### Route Modules
+| Module | Lines | Purpose |
+|--------|-------|---------|
+| `/app/backend/routes/audit.py` | 917 | Scoring audit system |
+| `/app/backend/routes/stores.py` | 657 | Multi-store management |
+| `/app/backend/routes/upload_jobs.py` | 586 | Background file uploads |
+| `/app/backend/routes/yodeck_slides.py` | 767 | Slide generation |
+| `/app/backend/routes/employees.py` | 581 | Employee CRUD |
+| `/app/backend/routes/finalization.py` | 507 | Quarter finalization |
+| `/app/backend/routes/trends.py` | 512 | Trend analytics |
+| `/app/backend/routes/quarter_settings.py` | 279 | Settings management |
+| `/app/backend/server.py` | 10,292 | Main server (reduced from 11,847) |
 
-#### Background Task Queue (P1 - DONE)
-- `/app/backend/routes/upload_jobs.py`
-- `POST /api/v2/upload-jobs/direct` - Returns immediately with job_id
-- `GET /api/v2/upload-jobs/{job_id}` - Check job status
-- Jobs stored in MongoDB (survives restarts)
-- Solves 520 timeout on large PDF uploads
-
-#### Multi-Store Architecture (P1 - DONE)
-- `/app/backend/routes/stores.py`
+### Multi-Store Architecture
 - 22 Bubba Gump locations across 5 regions
 - Las Vegas store has 27 employees migrated
 - Global Overview page at `/global`
-- Store performance rankings and company-wide leaderboard
 
 ### Working Endpoints
-- `GET /api/v2/yodeck/{year}/{quarter}/top10` - Top 10 By Metric slide
-- `GET /api/v2/yodeck/{year}/{quarter}/complete-rankings` - Complete Rankings slide
-- `POST /api/v2/snapshot-workflow/snapshots/{id}/manual-score` - Manual score override
+- `GET /api/v2/audit/*` - Scoring audit system (NEW MODULE)
+- `GET /api/v2/stores/*` - Multi-store management
 - `POST /api/v2/upload-jobs/direct` - Background file upload
-- `GET /api/v2/upload-jobs/{job_id}` - Check job status
-- `GET /api/v2/stores` - List all stores
-- `GET /api/v2/stores/reports/overview` - Global performance overview
-- `GET /api/v2/stores/reports/leaderboard` - Global employee leaderboard
-- `GET /api/v2/stores/reports/store-comparison` - Store metric comparison
-
-### Current Standings (Q1 2026 - 27 employees in Las Vegas)
-1. Starwars Mckinnon-Herrera - 112.1 (Trainer)
-2. Trey Quick - 108.2 (Trainer)
-3. Keisha Martin - 102.5 (Trainer)
-
-### Store Distribution
-- **West**: 7 stores (Las Vegas, Santa Monica, Long Beach, San Francisco, Monterey, San Diego, Anaheim)
-- **East**: 5 stores (New York, Miami, Orlando, Fort Lauderdale, Gatlinburg)
-- **Central**: 5 stores (Chicago, Nashville, New Orleans, San Antonio, Galveston)
-- **Hawaii**: 3 stores (Maui, Oahu, Kona)
-- **International**: 2 stores (Cancun, London)
+- `GET /api/v2/yodeck/{year}/{quarter}/*` - Slide generation
 
 ## Prioritized Backlog
 
-### P0 - Critical
-None currently
-
 ### P1 - High Priority
-- [x] ~~Production 520 error on large PDF uploads~~ - COMPLETED (upload-jobs system)
-- [x] ~~Multi-Store Architecture~~ - COMPLETED (22 locations with global reporting)
+- [x] ~~Production 520 error on large PDF uploads~~ - DONE
+- [x] ~~Multi-Store Architecture~~ - DONE
+- [ ] Continue backend modularization (CV adjustment ~1500 lines)
 
 ### P2 - Medium Priority
-- [ ] Backend modularization (server.py is 11.5k lines)
 - [ ] Review Spotlight feature
 - [ ] Download All Slides as ZIP
-- [ ] Scraper complexity refactoring (cv_feedback_scraper.py has >60 cyclomatic complexity)
 
 ### P3 - Low Priority
-- [ ] Momentum/Trend indicators (compare current vs previous snapshot)
-- [ ] Store vs Store comparison feature
+- [ ] Momentum/Trend indicators
+- [ ] Store vs Store comparison
 
-## Architecture Notes
-
-### Key Collections
-- `snapshot_workflow`: Main collection with embedded `employees[]` array - source of truth
-- `employees_v2`: Legacy data collection
-- `qr_employees`: Yelp/Google QR click data
-- `upload_jobs`: Persistent job queue for background file processing
-- `upload_chunks`: Temporary storage for chunked uploads
-- `stores`: Store locations and metadata
-
-### Critical Constraints
-- **DO NOT** trigger score recalculations on finalized snapshots
-- Slide generators read from existing `total_score` without recalculating
-- QR data linked by exact string name matching
+## Key Thresholds
+- **A-Server**: Score >= 85
+- **B-Server**: Score >= 70 and < 85
+- **C-Server**: Score < 70
+- **Trainer**: Score >= 100 OR designated role
 
 ## Files of Reference
-- `/app/backend/routes/upload_jobs.py` - Background upload/job system
+- `/app/backend/routes/audit.py` - Extracted audit module
 - `/app/backend/routes/stores.py` - Multi-store management
-- `/app/backend/routes/yodeck_slides.py` - Slide generation endpoints
-- `/app/backend/yodeck_slides.py` - Slide image generators
-- `/app/backend/server.py` - Main server (11.5k lines - needs modularization)
-- `/app/frontend/src/pages/GlobalOverview.jsx` - Global overview page
-- `/app/frontend/src/contexts/StoreContext.jsx` - Store context provider
-- `/app/frontend/src/components/StoreSelector.jsx` - Store selector dropdown
-
-## Test Reports
-- `/app/test_reports/iteration_14.json` - Multi-store architecture tests (26/26 passed)
-- `/app/test_reports/iteration_13.json` - React refactoring tests
+- `/app/backend/routes/upload_jobs.py` - Background uploads
+- `/app/backend/server.py` - Main server (10,292 lines)
