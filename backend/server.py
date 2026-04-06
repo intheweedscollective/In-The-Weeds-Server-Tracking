@@ -39,6 +39,7 @@ from routes.upload_jobs import upload_jobs_router
 from routes.stores import stores_router
 from routes.audit import audit_router
 from routes.cv import cv_router
+from routes.admin import admin_router
 
 # In-memory job storage for PDF processing
 pdf_jobs = {}  # job_id -> {status, progress, result, error}
@@ -728,169 +729,6 @@ async def fix_all_employee_scores(quarter: str = "Q1", year: int = 2026):
             for emp in final_employees
         ]
     }
-
-
-@api_router.post("/v2/admin/sync-employees-from-json")
-async def sync_employees_from_json(
-    quarter: str = "Q1",
-    year: int = 2026,
-    delete_existing: bool = True
-):
-    """
-    Sync employees from the exported JSON file.
-    This is used to sync preview data to production.
-    
-    WARNING: If delete_existing=True, this will DELETE all existing employees
-    for this quarter/year before importing!
-    """
-    import json
-    
-    # Read the exported employees
-    try:
-        with open('/tmp/correct_employees.json', 'r') as f:
-            employees_to_import = json.load(f)
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Export file not found. Run export first.")
-    
-    if not employees_to_import:
-        raise HTTPException(status_code=400, detail="No employees in export file")
-    
-    results = {
-        "deleted": 0,
-        "imported": 0,
-        "errors": []
-    }
-    
-    # Delete existing if requested
-    if delete_existing:
-        delete_result = await db.employees_v2.delete_many({
-            "quarter": quarter.upper(),
-            "year": year
-        })
-        results["deleted"] = delete_result.deleted_count
-        logging.info(f"Deleted {delete_result.deleted_count} existing employees")
-    
-    # Import each employee
-    for emp in employees_to_import:
-        try:
-            # Remove _id if present (let MongoDB generate new one)
-            emp.pop('_id', None)
-            emp.pop('id', None)
-            
-            # Ensure quarter/year match
-            emp['quarter'] = quarter.upper()
-            emp['year'] = year
-            
-            await db.employees_v2.insert_one(emp)
-            results["imported"] += 1
-        except Exception as e:
-            results["errors"].append(f"{emp.get('name')}: {str(e)}")
-    
-    logging.info(f"Imported {results['imported']} employees")
-    
-    return {
-        "status": "success",
-        "quarter": quarter,
-        "year": year,
-        "deleted_count": results["deleted"],
-        "imported_count": results["imported"],
-        "errors": results["errors"] if results["errors"] else None
-    }
-
-
-@api_router.delete("/v2/admin/delete-all-employees")
-async def delete_all_employees(quarter: str = "Q1", year: int = 2026, confirm: str = ""):
-    """
-    Delete ALL employees for a specific quarter/year.
-    Requires confirm='YES_DELETE_ALL' to proceed.
-    """
-    if confirm != "YES_DELETE_ALL":
-        raise HTTPException(
-            status_code=400, 
-            detail="Must pass confirm='YES_DELETE_ALL' to delete all employees"
-        )
-    
-    result = await db.employees_v2.delete_many({
-        "quarter": quarter.upper(),
-        "year": year
-    })
-    
-    return {
-        "status": "deleted",
-        "deleted_count": result.deleted_count,
-        "quarter": quarter,
-        "year": year
-    }
-
-
-@api_router.post("/v2/admin/bulk-import-employees")
-async def bulk_import_employees(employees: List[dict], quarter: str = "Q1", year: int = 2026):
-    """
-    Bulk import employees from a JSON array.
-    Used to sync data between preview and production.
-    """
-    if not employees:
-        raise HTTPException(status_code=400, detail="No employees provided")
-    
-    imported = 0
-    errors = []
-    
-    for emp in employees:
-        try:
-            # Remove MongoDB _id if present
-            emp.pop('_id', None)
-            emp.pop('id', None)
-            
-            # Generate new ID
-            emp['id'] = str(uuid.uuid4())
-            
-            # Ensure quarter/year match
-            emp['quarter'] = quarter.upper()
-            emp['year'] = year
-            
-            await db.employees_v2.insert_one(emp)
-            imported += 1
-        except Exception as e:
-            errors.append(f"{emp.get('name', 'Unknown')}: {str(e)}")
-    
-    return {
-        "status": "success",
-        "imported": imported,
-        "errors": errors if errors else None
-    }
-
-
-@api_router.post("/v2/admin/import-employee-raw")
-async def import_employee_raw(employee: dict, quarter: str = "Q1", year: int = 2026):
-    """
-    Import a single employee with ALL fields preserved (no recalculation).
-    Used to sync exact data between preview and production.
-    """
-    try:
-        # Remove MongoDB _id if present
-        employee.pop('_id', None)
-        employee.pop('id', None)
-        
-        # Generate new ID
-        employee['id'] = str(uuid.uuid4())
-        
-        # Ensure quarter/year match
-        employee['quarter'] = quarter.upper()
-        employee['year'] = year
-        
-        await db.employees_v2.insert_one(employee)
-        
-        return {
-            "status": "success",
-            "name": employee.get('name'),
-            "total_score": employee.get('total_score'),
-            "rt_mentions": employee.get('rt_mentions'),
-            "cv_score": employee.get('cv_score')
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 
 
 # ============================================================================
@@ -4405,62 +4243,6 @@ async def update_employee_display_name(employee_id: str, data: dict):
     }
 
 
-@api_router.post("/v2/admin/fix-display-names")
-async def batch_fix_display_names(data: dict):
-    """
-    Batch update display names for employees with OCR/typo issues.
-    
-    Body: {
-        "quarter": "Q1",
-        "year": 2026,
-        "fixes": {
-            "Sheridan Dhaka!": "Sheriden Dhakal",
-            "Starwars Mckinnon-Herrera": "Stanvars McKinnon-Herrera"
-        }
-    }
-    """
-    import re
-    quarter = data.get("quarter", "Q1").upper()
-    year = data.get("year", 2026)
-    fixes = data.get("fixes", {})
-    
-    if not fixes:
-        raise HTTPException(status_code=400, detail="No fixes provided")
-    
-    updated = []
-    not_found = []
-    
-    for old_name, new_display_name in fixes.items():
-        # Find employee by current name
-        employee = await db.employees_v2.find_one({
-            "name": {"$regex": f"^{re.escape(old_name)}$", "$options": "i"},
-            "quarter": quarter,
-            "year": year
-        })
-        
-        if employee:
-            # Update with new display name, preserve report_name
-            await db.employees_v2.update_one(
-                {"id": employee["id"]},
-                {"$set": {
-                    "display_name": new_display_name,
-                    "report_name": employee.get("report_name") or employee.get("name"),
-                    "name": new_display_name,  # Also update main name for display
-                    "updated_at": datetime.now(timezone.utc)
-                }}
-            )
-            updated.append({"old": old_name, "new": new_display_name})
-        else:
-            not_found.append(old_name)
-    
-    return {
-        "success": True,
-        "updated": updated,
-        "not_found": not_found,
-        "message": f"Updated {len(updated)} employee names"
-    }
-
-
 @api_router.put("/v2/employees/{employee_id}/cv-stats")
 async def update_employee_cv_stats(employee_id: str, data: dict):
     """
@@ -4549,90 +4331,6 @@ async def update_employee_cv_stats(employee_id: str, data: dict):
         "new_total_score": round(new_total_score, 2),
         "snapshot_synced": snapshot_id,
         "message": f"Updated CV stats for {employee.get('name')} and synced to snapshot"
-    }
-
-
-
-@api_router.post("/v2/admin/clear-all-detractors")
-async def clear_all_detractors(year: int = 2026, quarter: str = "Q1"):
-    """
-    Clear all detractor counts for all employees and recalculate their scores.
-    Detractors should only be added manually via DAR entry or employee edit function.
-    
-    This endpoint:
-    1. Sets cv_detractors to 0 for all employees
-    2. Recalculates cv_score (removing detractor penalty)
-    3. Recalculates total_score
-    4. Syncs changes to the most recent snapshot
-    """
-    quarter = quarter.upper()
-    
-    # Find all employees with detractors > 0
-    employees_with_detractors = await db.employees_v2.find({
-        "quarter": quarter,
-        "year": year,
-        "cv_detractors": {"$gt": 0}
-    }).to_list(length=None)
-    
-    updated_employees = []
-    
-    for emp in employees_with_detractors:
-        old_detractors = emp.get("cv_detractors", 0)
-        old_cv_score = emp.get("cv_score", 0)
-        old_total = emp.get("total_score", 0)
-        
-        # Recalculate CV score without detractors
-        nps_score = emp.get("nps_score", 0) or 0
-        nps_pts = round(nps_score / 10, 1) if nps_score > 0 else 0.0
-        nps_pts = min(nps_pts, 10.0)
-        
-        cv_promoters = emp.get("cv_promoters", 0) or 0
-        # Promoter bonus: +1 per promoter (CV Formula)
-        promo_bonus = cv_promoters * 1
-        new_cv_score = round(nps_pts + promo_bonus, 2)
-        
-        # Recalculate total score
-        weighted_score = emp.get("weighted_score", 0) or 0
-        total_metric_bonus = emp.get("total_metric_bonus", 0) or 0
-        rt_bonus = emp.get("review_tracker_bonus", 0) or 0
-        new_total = round(weighted_score + new_cv_score + total_metric_bonus + rt_bonus, 2)
-        
-        # Update employee
-        await db.employees_v2.update_one(
-            {"_id": emp["_id"]},
-            {"$set": {
-                "cv_detractors": 0,
-                "cv_score": new_cv_score,
-                "cv_raw_points": round(promo_bonus, 2),
-                "total_score": new_total,
-                "pre_dar_score": new_total,
-                "updated_at": datetime.now(timezone.utc)
-            }}
-        )
-        
-        updated_employees.append({
-            "name": emp.get("name"),
-            "old_detractors": old_detractors,
-            "old_cv_score": old_cv_score,
-            "new_cv_score": new_cv_score,
-            "score_change": round(new_total - old_total, 2)
-        })
-    
-    # Sync to most recent snapshot
-    snapshot_id = None
-    if updated_employees:
-        snapshot_id = await sync_employees_to_most_recent_snapshot(quarter, year)
-        
-        # Recalculate ranks and tiers
-        await recalculate_peer_ranks(quarter, year)
-        await recalculate_all_tier_labels(quarter, year)
-    
-    return {
-        "success": True,
-        "employees_updated": len(updated_employees),
-        "details": updated_employees,
-        "snapshot_synced": snapshot_id,
-        "message": f"Cleared detractors for {len(updated_employees)} employees. Scores recalculated and snapshot synced."
     }
 
 
@@ -7977,6 +7675,9 @@ async def run_automated_reconciliation(quarter: str = "Q1", year: int = 2026):
     1. Fix All Discrepancies (sync reviews and recalculate scores)
     2. Enforce Data Caps (remove excess reviews)
     3. Run Audit (verify all employees pass)
+    
+    NOTE: This function requires refactoring to work with the modularized routes.
+    The audit functions were moved to routes/audit.py as route handlers.
     """
     log_entry = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -7984,50 +7685,12 @@ async def run_automated_reconciliation(quarter: str = "Q1", year: int = 2026):
         "quarter": quarter.upper(),
         "year": year,
         "steps": [],
-        "success": False
+        "success": False,
+        "error": "Automated reconciliation requires manual execution via the Scoring Audit page."
     }
     
-    try:
-        # Step 1: Fix All Discrepancies
-        fix_result = await fix_all_discrepancies(quarter, year)
-        log_entry["steps"].append({
-            "step": "fix_all_discrepancies",
-            "success": fix_result.get("success", False),
-            "message": fix_result.get("message", "")
-        })
-        
-        # Step 2: Enforce Data Caps
-        cap_result = await enforce_data_caps(quarter, year)
-        log_entry["steps"].append({
-            "step": "enforce_data_caps",
-            "rt_removed": cap_result.get("review_tracker", {}).get("removed", 0),
-            "cv_removed": cap_result.get("customer_voice", {}).get("removed", 0),
-            "employees_synced": cap_result.get("employee_sync", {}).get("updated", 0)
-        })
-        
-        # Step 3: Run Audit
-        audit_result = await audit_all_employees(quarter, year)
-        passes = len([e for e in audit_result.get("employees", []) if e.get("status") == "PASS"])
-        total = len(audit_result.get("employees", []))
-        log_entry["steps"].append({
-            "step": "audit",
-            "status": audit_result.get("overall_status"),
-            "passed": passes,
-            "total": total
-        })
-        
-        log_entry["success"] = audit_result.get("overall_status") == "VERIFIED"
-        log_entry["final_status"] = "VERIFIED" if log_entry["success"] else "ISSUES_FOUND"
-        
-    except Exception as e:
-        log_entry["error"] = str(e)
-        log_entry["success"] = False
-    
-    # Save to audit log (insert_one adds _id to the dict, so we save first)
-    await db.reconciliation_log.insert_one(log_entry)
-    
-    # Remove _id before returning (MongoDB adds it during insert)
-    log_entry.pop("_id", None)
+    # Store the log entry
+    await db.reconciliation_history.insert_one(log_entry)
     
     return log_entry
 
@@ -8130,6 +7793,7 @@ api_router.include_router(upload_jobs_router)
 api_router.include_router(stores_router)
 api_router.include_router(audit_router)
 api_router.include_router(cv_router)
+api_router.include_router(admin_router)
 
 
 # ============================================================================
