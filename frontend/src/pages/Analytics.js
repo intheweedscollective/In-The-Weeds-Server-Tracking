@@ -13,7 +13,7 @@ const V2_METRICS = {
   lbw_per_guest: { label: 'LBW/Guest', defaultBenchmark: 8.0, format: 'currency', higherBetter: true, settingsKey: 'benchmark_lbw', unit: '$/guest', weight: 0.20 },
   glassware_per_guest: { label: 'Glass/Guest', defaultBenchmark: 1.0, format: 'currency', higherBetter: true, settingsKey: 'benchmark_glass', unit: '$/guest', weight: 0.15 },
   guests_per_lsc: { label: 'Guests/LSC', defaultBenchmark: 100.0, format: 'number', higherBetter: false, settingsKey: 'benchmark_lsc', unit: 'guests', weight: 0.25 },
-  cv_score: { label: 'CV Score', defaultBenchmark: 5.0, format: 'number', higherBetter: true, settingsKey: 'benchmark_cv', unit: 'pts', weight: 0.15 },
+  cv_score: { label: 'Customer Voice', defaultBenchmark: 5.0, format: 'number', higherBetter: true, settingsKey: 'benchmark_cv', unit: 'pts', weight: 0.15 },
   pre_dar_score: { label: 'Total Score', defaultBenchmark: 100.0, format: 'number', higherBetter: true, settingsKey: null, unit: 'pts', weight: null },
 };
 

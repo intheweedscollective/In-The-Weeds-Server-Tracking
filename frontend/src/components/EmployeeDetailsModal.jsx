@@ -201,7 +201,7 @@ const ScoringBreakdown = ({ employee }) => {
 };
 
 /**
- * Customer Voice category display
+ * Customer Voice category display - Combined NPS + Promoter/Detractor points as single total
  */
 const CustomerVoiceCategory = ({ employee }) => {
   const cvScore = employee.cv_score || 0;
@@ -211,7 +211,7 @@ const CustomerVoiceCategory = ({ employee }) => {
       <div className="flex items-center justify-between mb-2">
         <div>
           <span className="font-semibold text-white">Customer Voice</span>
-          <span className="ml-2 text-xs bg-yellow-600 text-white px-2 py-0.5 rounded-full">Direct Points</span>
+          <span className="ml-2 text-xs bg-yellow-600 text-white px-2 py-0.5 rounded-full">Combined Total</span>
         </div>
         <div className="text-right">
           <span className={`font-bold text-lg ${cvScore >= 0 ? 'text-yellow-400' : 'text-red-400'}`}>
@@ -221,14 +221,12 @@ const CustomerVoiceCategory = ({ employee }) => {
         </div>
       </div>
       <div className="flex items-center gap-4 text-sm flex-wrap">
-        <span className="text-cyan-400">NPS {employee.nps_score || 0}% = {((employee.nps_score || 0) / 10).toFixed(1)} pts</span>
-        <span className="text-slate-500">|</span>
         <span className="text-green-400">{employee.cv_promoters || 0} promoters (+{((employee.cv_promoters || 0) * 0.5).toFixed(1)} pts)</span>
         <span className="text-slate-500">|</span>
         <span className="text-red-400">{employee.cv_detractors || 0} detractors ({(employee.cv_detractors || 0) * -1} pts)</span>
       </div>
       <div className="mt-2 text-xs text-slate-400">
-        Formula: NPS%÷10 + Promoters×0.5 + Detractors×-1
+        Formula: Promoters×0.5 + Detractors×-1 (uncapped)
       </div>
     </div>
   );
@@ -249,13 +247,13 @@ const ScoreSummaryTable = ({ employee }) => {
           <span className="font-medium text-white">{formatNumber(employee.weighted_score || 0)}</span>
         </div>
         <div className="flex justify-between py-1 border-b border-slate-600">
-          <span className="text-slate-300">Customer Voice Score</span>
+          <span className="text-slate-300">Customer Voice</span>
           <span className={`font-medium ${cvScore >= 0 ? 'text-yellow-400' : 'text-red-400'}`}>
             {cvScore >= 0 ? '+' : ''}{formatNumber(cvScore)}
           </span>
         </div>
         <div className="flex justify-between py-1 border-b border-slate-600">
-          <span className="text-slate-300">Metric Bonuses</span>
+          <span className="text-slate-300">Metric Bonus</span>
           <span className="font-medium text-green-400">+{formatNumber(employee.total_metric_bonus || 0)}</span>
         </div>
         <div className="flex justify-between py-1 border-b border-slate-600">
@@ -272,21 +270,23 @@ const ScoreSummaryTable = ({ employee }) => {
 };
 
 /**
- * Customer voice breakdown cards
+ * Customer voice breakdown cards - Shows combined total prominently
  */
 const CustomerVoiceBreakdown = ({ employee }) => {
-  if (!(employee.cv_promoters > 0 || employee.cv_passives > 0 || employee.cv_detractors > 0 || employee.nps_score > 0)) {
+  if (!(employee.cv_promoters > 0 || employee.cv_passives > 0 || employee.cv_detractors > 0)) {
     return null;
   }
+
+  const cvScore = employee.cv_score || 0;
 
   return (
     <div className="mb-4">
       <h4 className="font-serif font-bold text-white mb-3">Customer Voice Breakdown</h4>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-        <div className="text-center p-3 bg-cyan-900/30 rounded-lg border border-cyan-500/30">
-          <div className="text-xl font-bold text-cyan-400">{employee.nps_score || 0}%</div>
-          <div className="text-xs text-slate-300">NPS Score</div>
-          <div className="text-xs text-cyan-400 font-medium">+{((employee.nps_score || 0) / 10).toFixed(1)} pts</div>
+        <div className="text-center p-3 bg-yellow-900/30 rounded-lg border border-yellow-500/30">
+          <div className={`text-xl font-bold ${cvScore >= 0 ? 'text-yellow-400' : 'text-red-400'}`}>{cvScore >= 0 ? '+' : ''}{cvScore.toFixed(1)}</div>
+          <div className="text-xs text-slate-300">Total CV Score</div>
+          <div className="text-xs text-yellow-400 font-medium">Combined</div>
         </div>
         <div className="text-center p-3 bg-green-900/30 rounded-lg border border-green-500/30">
           <div className="text-xl font-bold text-green-400">{employee.cv_promoters || 0}</div>

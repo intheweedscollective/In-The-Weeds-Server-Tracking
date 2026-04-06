@@ -25,7 +25,7 @@ const V2_METRICS = {
   lbw_per_guest: { label: 'LBW/Guest', format: 'currency', higherBetter: true },
   glassware_per_guest: { label: 'Glass/Guest', format: 'currency', higherBetter: true },
   guests_per_lsc: { label: 'Guests/LSC', format: 'number', higherBetter: false },
-  cv_score: { label: 'CV Score', format: 'number', higherBetter: true },
+  cv_score: { label: 'Customer Voice', format: 'number', higherBetter: true },
   pre_dar_score: { label: 'Total Score', format: 'number', higherBetter: true },
 };
 
@@ -652,11 +652,11 @@ export default function FullRankings() {
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger className="flex items-center justify-center gap-1 cursor-help">
-                            CV Score <Info className="w-3 h-3 opacity-60" />
+                            Cust. Voice <Info className="w-3 h-3 opacity-60" />
                           </TooltipTrigger>
                           <TooltipContent className="bg-slate-800 text-white p-3 max-w-xs">
                             <div className="text-xs space-y-1">
-                              <div className="font-bold mb-1">Customer Voice Score:</div>
+                              <div className="font-bold mb-1">Customer Voice (Combined Total):</div>
                               <div className="font-semibold text-primary">Promoter/Detractor Points:</div>
                               <div>• Each Promoter (9-10) = +0.5 pt</div>
                               <div>• Each Detractor (≤6) = -1 pt</div>
@@ -750,7 +750,7 @@ export default function FullRankings() {
                             </span>
                           </td>
                           
-                          {/* CV Score - Customer Voice (Promoters/Detractors) */}
+                          {/* Customer Voice - Combined Total (Promoters/Detractors) */}
                           <td className="px-4 py-4 text-center hidden md:table-cell" data-testid={`cv-score-${employee.position}`}>
                             {(() => {
                               const promoters = employee.cv_promoters || 0;
@@ -772,7 +772,7 @@ export default function FullRankings() {
                                     </TooltipTrigger>
                                     <TooltipContent className="bg-slate-800 text-white p-3 max-w-xs border border-slate-600">
                                       <div className="text-xs space-y-1">
-                                        <div className="font-bold text-primary mb-2">{employee.name}'s CV Score</div>
+                                        <div className="font-bold text-primary mb-2">{employee.name}'s Customer Voice</div>
                                         {promoters > 0 && (
                                           <div className="flex justify-between">
                                             <span>Promoters ({promoters} × +0.5):</span>
@@ -786,7 +786,7 @@ export default function FullRankings() {
                                           </div>
                                         )}
                                         <div className="border-t border-slate-600 pt-1 mt-1 flex justify-between font-bold">
-                                          <span>Total CV Score:</span>
+                                          <span>Total:</span>
                                           <span className={cvScore >= 0 ? "text-primary" : "text-red-400"}>{cvScore} pts</span>
                                         </div>
                                       </div>
@@ -936,10 +936,6 @@ export default function FullRankings() {
                                   }
                                 ];
                                 
-                                // Get NPS score for this employee - use the nps_score from employee record
-                                // (already matched via smart name matching on backend)
-                                const empNps = emp.nps_score;
-                                
                                 return (
                                   <div className="space-y-4">
                                     <div className="flex items-center gap-2 mb-3">
@@ -967,25 +963,30 @@ export default function FullRankings() {
                                         </div>
                                       ))}
                                       
-                                      {/* NPS Card */}
+                                      {/* Customer Voice Card - Combined Total */}
                                       <div className="bg-slate-800 rounded-xl p-3 shadow-sm border border-slate-600 min-w-0">
                                         <div className="text-xs font-semibold text-slate-400 uppercase mb-1 flex items-center gap-1">
                                           <MessageCircle className="w-3 h-3 flex-shrink-0" />
-                                          <span className="truncate">NPS</span>
+                                          <span className="truncate">Cust. Voice</span>
                                         </div>
-                                        <div className={`text-xl sm:text-2xl font-bold ${empNps !== null ? (empNps >= 50 ? 'text-green-400' : empNps >= 0 ? 'text-yellow-400' : 'text-red-400') : 'text-gray-400'}`}>
-                                          {empNps !== null ? `${empNps}%` : '—'}
-                                        </div>
-                                        <div className="text-xs text-slate-400 mt-1 truncate">Customer Voice</div>
-                                        <div className="mt-2 pt-2 border-t border-slate-600">
-                                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
-                                            empNps !== null 
-                                              ? (empNps >= 50 ? 'bg-green-600 text-white' : empNps >= 0 ? 'bg-yellow-600 text-white' : 'bg-red-600 text-white')
-                                              : 'bg-slate-700 text-slate-400'
-                                          }`}>
-                                            {empNps !== null ? (empNps >= 50 ? 'Promoter' : empNps >= 0 ? 'Passive' : 'Detract') : 'N/A'}
-                                          </span>
-                                        </div>
+                                        {(() => {
+                                          const cvScore = emp.cv_score || 0;
+                                          return (
+                                            <>
+                                              <div className={`text-xl sm:text-2xl font-bold ${cvScore > 0 ? 'text-green-400' : cvScore < 0 ? 'text-red-400' : 'text-slate-400'}`}>
+                                                {cvScore > 0 ? '+' : ''}{cvScore.toFixed(1)}
+                                              </div>
+                                              <div className="text-xs text-slate-400 mt-1 truncate">Combined pts</div>
+                                              <div className="mt-2 pt-2 border-t border-slate-600">
+                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+                                                  cvScore > 0 ? 'bg-green-600 text-white' : cvScore < 0 ? 'bg-red-600 text-white' : 'bg-slate-700 text-slate-400'
+                                                }`}>
+                                                  {cvScore > 0 ? 'Positive' : cvScore < 0 ? 'Negative' : 'Neutral'}
+                                                </span>
+                                              </div>
+                                            </>
+                                          );
+                                        })()}
                                       </div>
                                     </div>
                                     

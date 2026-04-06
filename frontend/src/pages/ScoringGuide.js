@@ -79,9 +79,9 @@ export default function ScoringGuide() {
                 <span className="text-slate-400"> = </span>
                 <span className="text-green-400">POS Metrics</span>
                 <span className="text-slate-400"> + </span>
-                <span className="text-amber-400">Bonuses</span>
+                <span className="text-amber-400">Metric Bonus</span>
                 <span className="text-slate-400"> + </span>
-                <span className="text-purple-400">CV Score</span>
+                <span className="text-purple-400">Customer Voice</span>
                 <span className="text-slate-400"> + </span>
                 <span className="text-pink-400">RT Bonus</span>
               </div>
@@ -94,11 +94,11 @@ export default function ScoringGuide() {
               </div>
               <div className="bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
                 <p className="text-2xl font-bold text-amber-400">20</p>
-                <p className="text-xs text-slate-400">Bonus Max</p>
+                <p className="text-xs text-slate-400">Metric Bonus Max</p>
               </div>
               <div className="bg-purple-500/10 rounded-lg p-3 border border-purple-500/20">
                 <p className="text-2xl font-bold text-purple-400">∞</p>
-                <p className="text-xs text-slate-400">CV Uncapped</p>
+                <p className="text-xs text-slate-400">Cust. Voice</p>
               </div>
               <div className="bg-pink-500/10 rounded-lg p-3 border border-pink-500/20">
                 <p className="text-2xl font-bold text-pink-400">15</p>
@@ -225,28 +225,6 @@ export default function ScoringGuide() {
             <div className="space-y-4">
               <div className="bg-slate-800/50 rounded-lg p-4">
                 <h4 className="font-semibold text-white mb-3 flex items-center gap-2">
-                  <Target className="w-4 h-4 text-purple-400" />
-                  NPS Score Component (max 10 pts)
-                </h4>
-                <p className="text-sm text-slate-400 mb-2">Your NPS % divided by 10</p>
-                <div className="grid grid-cols-3 gap-2 text-center text-sm">
-                  <div className="bg-slate-700/50 rounded p-2">
-                    <p className="text-purple-400 font-bold">100%</p>
-                    <p className="text-slate-500">= 10 pts</p>
-                  </div>
-                  <div className="bg-slate-700/50 rounded p-2">
-                    <p className="text-purple-400 font-bold">80%</p>
-                    <p className="text-slate-500">= 8 pts</p>
-                  </div>
-                  <div className="bg-slate-700/50 rounded p-2">
-                    <p className="text-purple-400 font-bold">50%</p>
-                    <p className="text-slate-500">= 5 pts</p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-slate-800/50 rounded-lg p-4">
-                <h4 className="font-semibold text-white mb-3 flex items-center gap-2">
                   <Users className="w-4 h-4 text-purple-400" />
                   Survey Points (NO CAP)
                 </h4>
@@ -273,6 +251,15 @@ export default function ScoringGuide() {
                     </div>
                   </div>
                 </div>
+              </div>
+              
+              <div className="bg-purple-900/30 border border-purple-500/30 rounded-lg p-4">
+                <p className="text-sm text-purple-300">
+                  <strong>Formula:</strong> Customer Voice = (Promoters × 0.5) - (Detractors × 1)
+                </p>
+                <p className="text-xs text-slate-400 mt-2">
+                  This score is displayed as a combined total on all leaderboards and employee cards.
+                </p>
               </div>
             </div>
           </Section>

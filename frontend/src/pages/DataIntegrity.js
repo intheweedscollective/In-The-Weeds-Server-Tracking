@@ -352,9 +352,9 @@ export default function DataIntegrity() {
             {stats?.cv?.responses > 0 && (
               <div className="mt-4 pt-4 border-t border-slate-700/50">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-400">NPS Score:</span>
-                  <span className={`font-bold ${stats?.cv?.nps >= 70 ? 'text-green-400' : stats?.cv?.nps >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
-                    {stats?.cv?.nps || 0}%
+                  <span className="text-slate-400">Customer Voice Total:</span>
+                  <span className="font-bold text-purple-400">
+                    {((stats?.cv?.promoters || 0) * 0.5) - (stats?.cv?.detractors || 0)} pts
                   </span>
                 </div>
               </div>

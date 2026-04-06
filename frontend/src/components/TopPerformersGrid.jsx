@@ -7,7 +7,7 @@ const V2_METRICS = {
   lbw_per_guest: { label: 'LBW/Guest', format: 'currency', higherBetter: true },
   glassware_per_guest: { label: 'Glass/Guest', format: 'currency', higherBetter: true },
   guests_per_lsc: { label: 'Guests/LSC', format: 'number', higherBetter: false },
-  cv_score: { label: 'CV Score', format: 'number', higherBetter: true },
+  cv_score: { label: 'Customer Voice', format: 'number', higherBetter: true },
   pre_dar_score: { label: 'Total Score', format: 'number', higherBetter: true },
 };
 

@@ -390,7 +390,7 @@ export default function ReviewGeneration() {
                                 { key: 'lbw_per_guest', label: 'LBW/Guest', format: '$', higherBetter: true },
                                 { key: 'glassware_per_guest', label: 'Glass/Guest', format: '$', higherBetter: true },
                                 { key: 'guests_per_lsc', label: 'LSC Ratio', format: '', higherBetter: false },
-                                { key: 'cv_score', label: 'CV Score', format: '', higherBetter: true },
+                                { key: 'cv_score', label: 'Cust. Voice', format: '', higherBetter: true },
                                 { key: 'pre_dar_score', label: 'Total Score', format: '', higherBetter: true },
                               ].map(metric => {
                                 const currentVal = employeeTrend?.current?.[metric.key] || employee[metric.key] || 0;

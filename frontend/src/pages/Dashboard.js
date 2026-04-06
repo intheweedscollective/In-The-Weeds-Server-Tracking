@@ -1020,7 +1020,7 @@ export default function Dashboard() {
                             </div>
                             <div className="bg-slate-800 rounded p-2">
                               <div className="text-sm font-bold text-white">{emp.cv_score || 0}</div>
-                              <div className="text-xs text-slate-300">CV</div>
+                              <div className="text-xs text-slate-300">Cust. Voice</div>
                             </div>
                           </div>
                           

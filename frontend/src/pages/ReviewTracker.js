@@ -561,7 +561,7 @@ export default function ReviewTracker() {
                     <th className="px-3 md:px-4 py-2 md:py-3 text-center text-xs font-bold text-slate-300 uppercase">
                       <span className="text-red-400">Detractors</span>
                     </th>
-                    <th className="px-3 md:px-4 py-2 md:py-3 text-center text-xs font-bold text-slate-300 uppercase">CV Score</th>
+                    <th className="px-3 md:px-4 py-2 md:py-3 text-center text-xs font-bold text-slate-300 uppercase">Cust. Voice</th>
                     <th className="px-3 md:px-4 py-2 md:py-3 text-center text-xs font-bold text-slate-300 uppercase">Actions</th>
                   </tr>
                 </thead>

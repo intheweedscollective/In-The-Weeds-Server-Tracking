@@ -191,56 +191,60 @@ async def audit_employee_score(employee_name: str, quarter: str = "Q1", year: in
     benchmark_glass = settings.get("benchmark_glass", 1.25)
     benchmark_lsc = settings.get("benchmark_lsc", 100)
     
-    # Calculate expected scores
-    ppa_score = min((stored_ppa / benchmark_ppa) * 100, 100) if benchmark_ppa > 0 else 0
-    lbw_score = min((stored_lbw_per_guest / benchmark_lbw) * 100, 100) if benchmark_lbw > 0 else 0
-    glass_score = min((stored_glass_per_guest / benchmark_glass) * 100, 100) if benchmark_glass > 0 else 0
-    lsc_score = min((benchmark_lsc / stored_guests_per_lsc) * 100, 100) if stored_guests_per_lsc and stored_guests_per_lsc > 0 else 0
+    # Calculate expected scores (uncapped for bonus calculation)
+    ppa_score_raw = (stored_ppa / benchmark_ppa) * 100 if benchmark_ppa > 0 else 0
+    lbw_score_raw = (stored_lbw_per_guest / benchmark_lbw) * 100 if benchmark_lbw > 0 else 0
+    glass_score_raw = (stored_glass_per_guest / benchmark_glass) * 100 if benchmark_glass > 0 else 0
+    lsc_score_raw = (benchmark_lsc / stored_guests_per_lsc) * 100 if stored_guests_per_lsc and stored_guests_per_lsc > 0 else 0
     
-    # Normalize NPS to 0-100 scale
-    nps_normalized = max(0, (stored_nps + 100) / 2)
-    nps_score_contribution = min(nps_normalized, 100)
+    # Cap at 100 for weighted calculation
+    ppa_score = min(ppa_score_raw, 100)
+    lbw_score = min(lbw_score_raw, 100)
+    glass_score = min(glass_score_raw, 100)
+    lsc_score = min(lsc_score_raw, 100)
     
-    # Calculate weighted base score
+    # NPS contribution at 10% weight (NPS already in 0-100 scale)
+    nps_normalized = min(max(stored_nps or 0, 0), 100)
+    nps_contribution = nps_normalized * 0.10
+    
+    # Calculate weighted POS score (75% of base)
     weight_ppa = settings.get("weight_ppa", 0.25)
     weight_lsc = settings.get("weight_lsc", 0.25)
     weight_lbw = settings.get("weight_lbw", 0.15)
     weight_glass = settings.get("weight_glass", 0.10)
-    weight_nps = 0.10  # NPS is 10% weight
     
-    # RT bonus calculation
-    rt_bonus = min(stored_rt_mentions * 0.5, 15)  # 0.5 pts per mention, max 15
-    
-    weighted_base = (
+    weighted_pos = (
         (ppa_score * weight_ppa) +
         (lsc_score * weight_lsc) +
         (lbw_score * weight_lbw) +
-        (glass_score * weight_glass) +
-        (nps_score_contribution * weight_nps) +
-        rt_bonus
+        (glass_score * weight_glass)
     )
     
-    # Metric bonuses
-    metric_bonus = 0
-    bonus_rate = settings.get("bonus_rate", 0.2)
-    bonus_cap = settings.get("bonus_cap", 5.0)
+    # Full weighted base = POS (75%) + NPS (10%)
+    weighted_base = weighted_pos + nps_contribution
     
-    if stored_ppa > benchmark_ppa:
-        metric_bonus += min((stored_ppa - benchmark_ppa) * bonus_rate, bonus_cap)
-    if stored_lbw_per_guest > benchmark_lbw:
-        metric_bonus += min((stored_lbw_per_guest - benchmark_lbw) * bonus_rate, bonus_cap)
-    if stored_glass_per_guest > benchmark_glass:
-        metric_bonus += min((stored_glass_per_guest - benchmark_glass) * bonus_rate, bonus_cap)
-    if stored_guests_per_lsc and stored_guests_per_lsc < benchmark_lsc:
-        metric_bonus += min((benchmark_lsc - stored_guests_per_lsc) * bonus_rate * 0.1, bonus_cap)
+    # RT bonus calculation (0.5 pts per mention, capped at 15)
+    rt_bonus = min(stored_rt_mentions * 0.5, 15)
     
-    metric_bonus = min(metric_bonus, 20)  # Total metric bonus capped at 20
+    # METRIC BONUSES: Linear from 100%-120% = 0-5 pts (0.25 pts per 1%)
+    def calc_metric_bonus(score_raw):
+        if score_raw <= 100:
+            return 0
+        excess_pct = min(score_raw - 100, 20)  # Cap at 20% over
+        return round(excess_pct * 0.25, 2)  # 0.25 pts per 1%
     
-    # CV bonus (promoters - detractors formula)
+    bonus_ppa = calc_metric_bonus(ppa_score_raw)
+    bonus_lbw = calc_metric_bonus(lbw_score_raw)
+    bonus_glass = calc_metric_bonus(glass_score_raw)
+    bonus_lsc = calc_metric_bonus(lsc_score_raw)
+    
+    metric_bonus = min(bonus_ppa + bonus_lbw + bonus_glass + bonus_lsc, 20)  # Total capped at 20
+    
+    # CV bonus (promoters - detractors formula, NO CAP)
     cv_bonus = (stored_cv_promoters * 1) + (stored_cv_detractors * -2)
     
-    # Final expected score
-    expected_total = round(weighted_base + metric_bonus + cv_bonus, 2)
+    # Final expected score = Weighted Base + RT Bonus + CV Bonus + Metric Bonus
+    expected_total = round(weighted_base + rt_bonus + cv_bonus + metric_bonus, 2)
     stored_total = employee.get("pre_dar_score") or employee.get("total_score", 0)
     
     audit["calculations"]["scoring"] = {
@@ -255,7 +259,7 @@ async def audit_employee_score(employee_name: str, quarter: str = "Q1", year: in
             "lbw_score": round(lbw_score, 2),
             "glass_score": round(glass_score, 2),
             "lsc_score": round(lsc_score, 2),
-            "nps_contribution": round(nps_score_contribution, 2)
+            "nps_contribution": round(nps_contribution, 2)
         },
         "weighted_base": round(weighted_base, 2),
         "metric_bonus": round(metric_bonus, 2),

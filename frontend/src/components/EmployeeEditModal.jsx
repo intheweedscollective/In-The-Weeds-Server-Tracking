@@ -274,24 +274,11 @@ const LSCSection = ({ formData, onChange }) => (
  */
 const CustomerVoiceSection = ({ formData, onChange }) => (
   <div className="mb-4">
-    <h3 className="font-semibold text-slate-200 mb-3">Customer Voice & Reviews</h3>
+    <h3 className="font-semibold text-slate-200 mb-3">Customer Voice (Combined Score)</h3>
     
-    {/* NPS Score - Full width at top */}
-    <div className="mb-4">
-      <label className="block text-sm font-medium text-cyan-400 mb-1">NPS Score (%)</label>
-      <Input
-        type="number"
-        value={formData.nps_score}
-        onChange={(e) => onChange('nps_score', parseFloat(e.target.value) || 0)}
-        placeholder="0"
-        className="border-cyan-200"
-      />
-      <p className="text-xs text-slate-500 mt-1">Overall NPS percentage from Customer Voice</p>
-    </div>
-    
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
       <div>
-        <label className="block text-sm font-medium text-green-400 mb-1">CV Promoters</label>
+        <label className="block text-sm font-medium text-green-400 mb-1">Promoters (9-10)</label>
         <Input
           type="number"
           value={formData.cv_promoters}
@@ -302,7 +289,7 @@ const CustomerVoiceSection = ({ formData, onChange }) => (
         <p className="text-xs text-green-600 mt-1">+0.5 pts each</p>
       </div>
       <div>
-        <label className="block text-sm font-medium text-slate-300 mb-1">CV Passives</label>
+        <label className="block text-sm font-medium text-slate-300 mb-1">Passives (7-8)</label>
         <Input
           type="number"
           value={formData.cv_passives}
@@ -312,7 +299,7 @@ const CustomerVoiceSection = ({ formData, onChange }) => (
         <p className="text-xs text-slate-500 mt-1">No pts</p>
       </div>
       <div>
-        <label className="block text-sm font-medium text-red-400 mb-1">CV Detractors</label>
+        <label className="block text-sm font-medium text-red-400 mb-1">Detractors (1-6)</label>
         <Input
           type="number"
           value={formData.cv_detractors}

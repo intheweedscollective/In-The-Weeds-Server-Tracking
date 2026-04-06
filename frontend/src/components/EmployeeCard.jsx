@@ -127,7 +127,7 @@ export const EmployeeCard = ({
 /**
  * Metrics grid showing the 9 key metrics (expanded from 6)
  * Row 1: Score, PPA, LBW/G
- * Row 2: Glass/G, G/LSC, CV Score  
+ * Row 2: Glass/G, G/LSC, Customer Voice (combined NPS + CV Bonus)
  * Row 3: RT Bonus, Metric Bonus, QR Scans
  */
 const MetricsGrid = ({ score, ppa, lbwPerGuest, glassPerGuest, guestsPerLsc, cvScore, rtBonus, metricBonus, qrScans }) => (
@@ -156,8 +156,8 @@ const MetricsGrid = ({ score, ppa, lbwPerGuest, glassPerGuest, guestsPerLsc, cvS
       <div className="text-[10px] text-slate-400 font-semibold uppercase">G/LSC</div>
     </div>
     <div className="text-center p-2 bg-yellow-50 rounded-lg border border-yellow-100">
-      <div className="text-sm font-serif font-bold text-yellow-700">{cvScore > 0 ? '+' : ''}{formatNumber(cvScore)}</div>
-      <div className="text-[10px] text-slate-400 font-semibold uppercase">CV</div>
+      <div className={`text-sm font-serif font-bold ${cvScore > 0 ? 'text-yellow-700' : cvScore < 0 ? 'text-red-600' : 'text-yellow-700'}`}>{cvScore > 0 ? '+' : ''}{formatNumber(cvScore)}</div>
+      <div className="text-[10px] text-slate-400 font-semibold uppercase">Cust. Voice</div>
     </div>
     
     {/* Row 3: Bonus metrics & QR */}
@@ -167,7 +167,7 @@ const MetricsGrid = ({ score, ppa, lbwPerGuest, glassPerGuest, guestsPerLsc, cvS
     </div>
     <div className="text-center p-2 bg-orange-50 rounded-lg border border-orange-100">
       <div className="text-sm font-serif font-bold text-orange-700">{metricBonus > 0 ? '+' : ''}{formatNumber(metricBonus)}</div>
-      <div className="text-[10px] text-slate-400 font-semibold uppercase">Metric+</div>
+      <div className="text-[10px] text-slate-400 font-semibold uppercase">Metric Bonus</div>
     </div>
     <div className="text-center p-2 bg-indigo-50 rounded-lg border border-indigo-100">
       <div className="text-sm font-serif font-bold text-indigo-700">{qrScans || 0}</div>

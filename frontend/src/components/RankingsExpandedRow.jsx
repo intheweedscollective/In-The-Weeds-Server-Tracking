@@ -78,7 +78,7 @@ export const RankingsExpandedRow = ({
     }
   ];
 
-  const empNps = employeeDetails.nps_score;
+  const cvScore = employeeDetails.cv_score || 0;
 
   return (
     <tr className="bg-slate-900">
@@ -96,8 +96,8 @@ export const RankingsExpandedRow = ({
                 <MetricCard key={m.label} metric={m} />
               ))}
               
-              {/* NPS Card */}
-              <NPSCard empNps={empNps} />
+              {/* Customer Voice Card - Combined Total */}
+              <CustomerVoiceCard cvScore={cvScore} />
             </div>
             
             {/* Summary Row with Editable Job Title */}
@@ -152,25 +152,23 @@ const MetricCard = ({ metric }) => (
 );
 
 /**
- * NPS Card component
+ * Customer Voice Card component - shows combined total
  */
-const NPSCard = ({ empNps }) => (
+const CustomerVoiceCard = ({ cvScore }) => (
   <div className="bg-slate-800 rounded-xl p-3 shadow-sm border border-slate-600 min-w-0">
     <div className="text-xs font-semibold text-slate-400 uppercase mb-1 flex items-center gap-1">
       <MessageCircle className="w-3 h-3 flex-shrink-0" />
-      <span className="truncate">NPS</span>
+      <span className="truncate">Cust. Voice</span>
     </div>
-    <div className={`text-xl sm:text-2xl font-bold ${empNps !== null ? (empNps >= 50 ? 'text-green-400' : empNps >= 0 ? 'text-yellow-400' : 'text-red-400') : 'text-gray-400'}`}>
-      {empNps !== null ? `${empNps}%` : '—'}
+    <div className={`text-xl sm:text-2xl font-bold ${cvScore > 0 ? 'text-green-400' : cvScore < 0 ? 'text-red-400' : 'text-slate-400'}`}>
+      {cvScore > 0 ? '+' : ''}{cvScore.toFixed(1)}
     </div>
-    <div className="text-xs text-slate-400 mt-1 truncate">Customer Voice</div>
+    <div className="text-xs text-slate-400 mt-1 truncate">Combined pts</div>
     <div className="mt-2 pt-2 border-t border-slate-600">
       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
-        empNps !== null 
-          ? (empNps >= 50 ? 'bg-green-600 text-white' : empNps >= 0 ? 'bg-yellow-600 text-white' : 'bg-red-600 text-white')
-          : 'bg-slate-700 text-slate-400'
+        cvScore > 0 ? 'bg-green-600 text-white' : cvScore < 0 ? 'bg-red-600 text-white' : 'bg-slate-700 text-slate-400'
       }`}>
-        {empNps !== null ? (empNps >= 50 ? 'Promoter' : empNps >= 0 ? 'Passive' : 'Detract') : 'N/A'}
+        {cvScore > 0 ? 'Positive' : cvScore < 0 ? 'Negative' : 'Neutral'}
       </span>
     </div>
   </div>
