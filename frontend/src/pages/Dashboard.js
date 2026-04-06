@@ -50,6 +50,29 @@ export default function Dashboard() {
     };
   }, [employees]);
 
+  // Calculate tier distribution
+  const tierDistribution = useMemo(() => {
+    const distribution = {
+      'Trainer': 0,
+      'A-Server': 0,
+      'B-Server': 0,
+      'C-Server': 0,
+      'Bartender': 0
+    };
+    
+    employees.forEach(emp => {
+      const tier = emp.tier_label || 'B-Server';
+      if (distribution.hasOwnProperty(tier)) {
+        distribution[tier]++;
+      } else {
+        // Handle any unexpected tier labels
+        distribution['B-Server']++;
+      }
+    });
+    
+    return distribution;
+  }, [employees]);
+
   const calculateStats = useCallback(() => {
     const total = employees.length;
     const avgScore = total > 0 ? employees.reduce((sum, emp) => sum + (emp.total_score || 0), 0) / total : 0;
@@ -350,6 +373,110 @@ export default function Dashboard() {
             <StoreHealthScore quarter={selectedQuarter} year={selectedYear} />
             <CoachingRadar quarter={selectedQuarter} year={selectedYear} />
             <ReviewImpactTracker quarter={selectedQuarter} year={selectedYear} />
+          </div>
+        </div>
+
+        {/* Tier Distribution Section */}
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <h2 className="text-lg font-bold text-white">Tier Distribution</h2>
+          </div>
+          <div className="bg-slate-800 rounded-2xl border border-slate-700 p-6" data-testid="tier-distribution-card">
+            <div className="grid grid-cols-5 gap-4">
+              {/* Trainer */}
+              <div className="text-center">
+                <div className="w-12 h-12 mx-auto rounded-xl bg-purple-500/20 flex items-center justify-center mb-2">
+                  <span className="text-lg font-bold text-purple-400">{tierDistribution['Trainer']}</span>
+                </div>
+                <p className="text-sm font-medium text-purple-400">Trainer</p>
+                <p className="text-xs text-slate-500">≥100 pts</p>
+              </div>
+              
+              {/* A-Server */}
+              <div className="text-center">
+                <div className="w-12 h-12 mx-auto rounded-xl bg-emerald-500/20 flex items-center justify-center mb-2">
+                  <span className="text-lg font-bold text-emerald-400">{tierDistribution['A-Server']}</span>
+                </div>
+                <p className="text-sm font-medium text-emerald-400">A-Server</p>
+                <p className="text-xs text-slate-500">≥85 pts</p>
+              </div>
+              
+              {/* B-Server */}
+              <div className="text-center">
+                <div className="w-12 h-12 mx-auto rounded-xl bg-blue-500/20 flex items-center justify-center mb-2">
+                  <span className="text-lg font-bold text-blue-400">{tierDistribution['B-Server']}</span>
+                </div>
+                <p className="text-sm font-medium text-blue-400">B-Server</p>
+                <p className="text-xs text-slate-500">≥70 pts</p>
+              </div>
+              
+              {/* C-Server */}
+              <div className="text-center">
+                <div className="w-12 h-12 mx-auto rounded-xl bg-red-500/20 flex items-center justify-center mb-2">
+                  <span className="text-lg font-bold text-red-400">{tierDistribution['C-Server']}</span>
+                </div>
+                <p className="text-sm font-medium text-red-400">C-Server</p>
+                <p className="text-xs text-slate-500">&lt;70 pts</p>
+              </div>
+              
+              {/* Bartender */}
+              <div className="text-center">
+                <div className="w-12 h-12 mx-auto rounded-xl bg-amber-500/20 flex items-center justify-center mb-2">
+                  <span className="text-lg font-bold text-amber-400">{tierDistribution['Bartender']}</span>
+                </div>
+                <p className="text-sm font-medium text-amber-400">Bartender</p>
+                <p className="text-xs text-slate-500">Bar staff</p>
+              </div>
+            </div>
+            
+            {/* Progress bar showing distribution */}
+            {employees.length > 0 && (
+              <div className="mt-6">
+                <div className="flex h-3 rounded-full overflow-hidden bg-slate-700">
+                  {tierDistribution['Trainer'] > 0 && (
+                    <div 
+                      className="bg-purple-500" 
+                      style={{ width: `${(tierDistribution['Trainer'] / employees.length) * 100}%` }}
+                      title={`Trainers: ${tierDistribution['Trainer']}`}
+                    />
+                  )}
+                  {tierDistribution['A-Server'] > 0 && (
+                    <div 
+                      className="bg-emerald-500" 
+                      style={{ width: `${(tierDistribution['A-Server'] / employees.length) * 100}%` }}
+                      title={`A-Servers: ${tierDistribution['A-Server']}`}
+                    />
+                  )}
+                  {tierDistribution['B-Server'] > 0 && (
+                    <div 
+                      className="bg-blue-500" 
+                      style={{ width: `${(tierDistribution['B-Server'] / employees.length) * 100}%` }}
+                      title={`B-Servers: ${tierDistribution['B-Server']}`}
+                    />
+                  )}
+                  {tierDistribution['C-Server'] > 0 && (
+                    <div 
+                      className="bg-red-500" 
+                      style={{ width: `${(tierDistribution['C-Server'] / employees.length) * 100}%` }}
+                      title={`C-Servers: ${tierDistribution['C-Server']}`}
+                    />
+                  )}
+                  {tierDistribution['Bartender'] > 0 && (
+                    <div 
+                      className="bg-amber-500" 
+                      style={{ width: `${(tierDistribution['Bartender'] / employees.length) * 100}%` }}
+                      title={`Bartenders: ${tierDistribution['Bartender']}`}
+                    />
+                  )}
+                </div>
+                <div className="flex justify-between mt-2 text-xs text-slate-500">
+                  <span>Total: {employees.length} employees</span>
+                  <span>
+                    {((tierDistribution['Trainer'] + tierDistribution['A-Server']) / employees.length * 100).toFixed(0)}% at A-level or above
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
