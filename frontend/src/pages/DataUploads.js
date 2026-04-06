@@ -188,10 +188,12 @@ export default function DataUploads() {
     
     const formData = new FormData();
     formData.append('file', pdfFile);
+    formData.append('quarter', quarter);
+    formData.append('year', year.toString());
     
     try {
-      // Step 1: Upload and get job ID
-      const uploadResponse = await fetch(`${BACKEND_URL}/api/v2/pos-pdf/parse`, {
+      // Use the new robust upload endpoint that handles large files
+      const uploadResponse = await fetch(`${BACKEND_URL}/api/v2/upload-jobs/direct`, {
         method: 'POST',
         body: formData,
       });
@@ -212,10 +214,10 @@ export default function DataUploads() {
         throw new Error("Server didn't return a job ID");
       }
       
-      // Step 2: Poll for results
+      // Step 2: Poll for results using the new upload-jobs endpoint
       const jobId = uploadData.job_id;
       let attempts = 0;
-      const maxAttempts = 120; // 2 minutes with 1s intervals
+      const maxAttempts = 180; // 3 minutes with 1s intervals (longer for large files)
       
       const pollForResult = async () => {
         while (attempts < maxAttempts) {
@@ -223,8 +225,19 @@ export default function DataUploads() {
           await new Promise(resolve => setTimeout(resolve, 1000));
           
           try {
-            const statusResponse = await fetch(`${BACKEND_URL}/api/v2/pos-pdf/job/${jobId}`);
+            const statusResponse = await fetch(`${BACKEND_URL}/api/v2/upload-jobs/${jobId}`);
             const statusData = await statusResponse.json();
+            
+            // Update progress stage based on server progress
+            if (statusData.progress) {
+              const progressPct = statusData.progress;
+              let stage = 'Processing...';
+              if (progressPct < 30) stage = 'Uploading PDF...';
+              else if (progressPct < 60) stage = 'Starting AI analysis...';
+              else if (progressPct < 90) stage = 'AI analyzing pages...';
+              else stage = 'Finalizing results...';
+              setPdfProgress(prev => ({ ...prev, stage }));
+            }
             
             if (statusData.status === 'completed') {
               clearInterval(progressInterval);
@@ -234,7 +247,7 @@ export default function DataUploads() {
                 const cleanData = JSON.parse(JSON.stringify(statusData.result));
                 setPdfParsedData(cleanData);
                 setShowPdfPreview(true);
-                toast.success(`Parsed ${cleanData.employee_count} employees from PDF`, {
+                toast.success(`Parsed ${cleanData.total_extracted || cleanData.employees?.length || 0} employees from PDF`, {
                   description: cleanData.extraction_notes || 'Processed via AI/OCR'
                 });
               } else {

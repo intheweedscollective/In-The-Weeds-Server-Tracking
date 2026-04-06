@@ -155,13 +155,15 @@ export default function SnapshotDetail() {
     
     try {
       if (isPdf && uploadType === 'pos_report') {
-        // Handle PDF with background job polling
+        // Handle PDF with background job polling using the robust upload-jobs endpoint
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('quarter', snapshot?.quarter || 'Q1');
+        formData.append('year', (snapshot?.year || 2026).toString());
         
-        // Step 1: Upload and get job ID
+        // Step 1: Upload and get job ID using the new persistent job system
         const uploadResponse = await fetch(
-          `${process.env.REACT_APP_BACKEND_URL}/api/v2/pos-pdf/parse`,
+          `${process.env.REACT_APP_BACKEND_URL}/api/v2/upload-jobs/direct`,
           { method: 'POST', body: formData }
         );
         
@@ -175,7 +177,7 @@ export default function SnapshotDetail() {
           throw new Error("Server didn't return a job ID");
         }
         
-        // Step 2: Poll for results
+        // Step 2: Poll for results using the upload-jobs endpoint
         const jobId = uploadData.job_id;
         let attempts = 0;
         const maxAttempts = 180; // 3 minutes
@@ -186,7 +188,7 @@ export default function SnapshotDetail() {
           
           try {
             const statusResponse = await fetch(
-              `${process.env.REACT_APP_BACKEND_URL}/api/v2/pos-pdf/job/${jobId}`
+              `${process.env.REACT_APP_BACKEND_URL}/api/v2/upload-jobs/${jobId}`
             );
             const statusData = await statusResponse.json();
             
@@ -206,13 +208,13 @@ export default function SnapshotDetail() {
                 
                 toast({ 
                   title: "Upload Successful", 
-                  description: `${statusData.result.employee_count || 0} employees parsed from PDF`
+                  description: `${statusData.result.total_extracted || statusData.result.employees?.length || 0} employees parsed from PDF`
                 });
                 
                 await fetchSnapshot();
                 
                 // Show review modal
-                if (statusData.result.employee_count > 0) {
+                if ((statusData.result.total_extracted || statusData.result.employees?.length) > 0) {
                   const employees = statusData.result.employees || [];
                   setReviewData(employees);
                   setDataReviewed(false);

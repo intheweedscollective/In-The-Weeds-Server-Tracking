@@ -23,7 +23,7 @@ Build a comprehensive performance review application for restaurant employees th
 - **Frontend**: React (Vite)
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
-- **AI**: OpenAI GPT-4o (via Emergent LLM Key) for name detection in reviews
+- **AI**: OpenAI GPT-4o (via Emergent LLM Key) for name detection in reviews and POS OCR
 
 ## Current State (2026-04-06)
 
@@ -34,11 +34,14 @@ Build a comprehensive performance review application for restaurant employees th
 - 9-metric Employee Card with QR scans, RT bonus, Metric bonus
 - Data reconciliation tools for Customer Voice and ReviewTracker
 - React component refactoring (EmployeeDetailsModal, EmployeeCard, etc.)
+- **NEW: Robust upload-jobs system** with MongoDB persistence for background processing
 
 ### Working Endpoints
 - `GET /api/v2/yodeck/{year}/{quarter}/top10` - Top 10 By Metric slide (VERIFIED)
 - `GET /api/v2/yodeck/{year}/{quarter}/complete-rankings` - Complete Rankings slide (VERIFIED)
 - `POST /api/v2/snapshot-workflow/snapshots/{id}/manual-score` - Manual score override
+- **NEW:** `POST /api/v2/upload-jobs/direct` - Robust file upload with background processing
+- **NEW:** `GET /api/v2/upload-jobs/{job_id}` - Check job status
 
 ### Current Standings (Q1 2026 - 27 employees)
 1. Starwars Mckinnon-Herrera - 112.1 (Trainer)
@@ -51,7 +54,7 @@ Build a comprehensive performance review application for restaurant employees th
 None currently
 
 ### P1 - High Priority
-- [ ] Production 520 error on large PDF uploads (needs background task queue)
+- [x] ~~Production 520 error on large PDF uploads~~ - COMPLETED (upload-jobs system)
 - [ ] Multi-Store Architecture (support for 22 locations)
 
 ### P2 - Medium Priority
@@ -69,15 +72,36 @@ None currently
 - `snapshot_workflow`: Main collection with embedded `employees[]` array - source of truth
 - `employees_v2`: Legacy data collection
 - `qr_employees`: Yelp/Google QR click data
+- **NEW:** `upload_jobs`: Persistent job queue for background file processing
+- **NEW:** `upload_chunks`: Temporary storage for chunked uploads
 
 ### Critical Constraints
 - **DO NOT** trigger score recalculations on finalized snapshots
 - Slide generators read from existing `total_score` without recalculating
 - QR data linked by exact string name matching
 
+### Background Job System (NEW)
+The new upload-jobs system solves 520 timeout errors:
+1. `POST /api/v2/upload-jobs/direct` - Returns immediately with job_id
+2. File is processed in background (asyncio task)
+3. Status stored in MongoDB (survives restarts)
+4. Frontend polls `GET /api/v2/upload-jobs/{job_id}` for completion
+5. Supports chunked uploads for very large files (100MB max)
+
 ## Files of Reference
+- `/app/backend/routes/upload_jobs.py` - NEW: Robust upload/job system
 - `/app/backend/routes/yodeck_slides.py` - Slide generation endpoints
 - `/app/backend/yodeck_slides.py` - Slide image generators
 - `/app/backend/snapshot_slides.py` - Complete rankings slide generator
 - `/app/backend/server.py` - Main server (11.5k lines - needs modularization)
 - `/app/frontend/src/components/EmployeeCard.jsx` - 9-metric employee card
+- `/app/frontend/src/pages/DataUploads.js` - Updated to use new upload system
+- `/app/frontend/src/pages/SnapshotDetail.js` - Updated PDF upload handling
+
+## Multi-Store Architecture (PLANNED)
+To support 22 locations:
+1. Add `store_id` field to snapshots and employees
+2. Create `stores` collection with store metadata
+3. Add store selector to UI
+4. Implement global reporting dashboard for regional managers
+5. Add store-level and regional-level leaderboards
