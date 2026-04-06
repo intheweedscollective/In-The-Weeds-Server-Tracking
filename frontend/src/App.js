@@ -30,6 +30,7 @@ import CVAdjustment from "./pages/CVAdjustment";
 import ScoringGuide from "./pages/ScoringGuide";
 import SnapshotWorkflow from "./pages/SnapshotWorkflow";
 import SnapshotDetail from "./pages/SnapshotDetail";
+import QuarterlySummary from "./pages/QuarterlySummary";
 import OnboardingGuide from "./components/OnboardingGuide";
 import "./App.css";
 
@@ -59,6 +60,7 @@ function App() {
                 <Route path="/scoring-guide" element={<ScoringGuide />} />
                 <Route path="/help" element={<HelpCenter />} />
                 <Route path="/reports" element={<Reports />} />
+                <Route path="/quarterly-summary" element={<QuarterlySummary />} />
                 {/* QR Track Hub - Isolated Module */}
                 <Route path="/qr" element={<QRDashboard />} />
                 <Route path="/qr/leaderboard" element={<QRLeaderboard />} />

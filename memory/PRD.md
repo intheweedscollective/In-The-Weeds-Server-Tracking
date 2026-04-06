@@ -12,6 +12,12 @@ Build a comprehensive performance review application for restaurant employees.
 ## Current State (2026-04-06)
 
 ### Latest Changes
+- **Quarterly Summary Report (2026-04-06)**:
+  - New print-friendly page at `/quarterly-summary`
+  - Shows Executive Overview, Customer Voice Summary, Metric Bonus Summary, and Complete Employee Breakdown
+  - Print button for generating physical reports
+  - Accessible from Reports & Analytics page
+  
 - **UI Label Updates (2026-04-06)**:
   - "Customer Voice" / "Cust. Voice" replaces "CV Score" / "NPS Score" everywhere
   - "Metric Bonus" replaces "POS bonus" / "Metric+" everywhere
@@ -26,7 +32,7 @@ Build a comprehensive performance review application for restaurant employees.
 |--------|-------|---------|
 | `/app/backend/routes/audit.py` | 917 | Scoring audit system |
 | `/app/backend/routes/cv.py` | 868 | CV feedback & NPS |
-| `/app/backend/routes/yodeck_slides.py` | 767 | Slide generation |
+| `/app/backend/routes/yodeck_slides.py` | 850+ | Slide generation + Quarterly Summary |
 | `/app/backend/routes/stores.py` | 657 | Multi-store management |
 | `/app/backend/routes/upload_jobs.py` | 586 | Background file uploads |
 | `/app/backend/routes/employees.py` | 581 | Employee CRUD |
@@ -52,6 +58,7 @@ Build a comprehensive performance review application for restaurant employees.
 - [x] ~~Production 520 error~~ - DONE (upload_jobs.py)
 - [x] ~~Multi-Store Architecture~~ - DONE (stores.py)
 - [x] ~~UI Label Updates (Customer Voice, Metric Bonus)~~ - DONE
+- [x] ~~Quarterly Summary Report~~ - DONE
 - [ ] Continue backend modularization (admin routes ~1500 lines)
 
 ### P2 - Medium Priority

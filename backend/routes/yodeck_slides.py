@@ -765,3 +765,95 @@ async def get_available_themes():
         "current_auto_seasonal": current_seasonal,
         "current_seasonal_name": SEASONAL_THEMES[current_seasonal]["name"] if current_seasonal else None
     }
+
+
+
+# ============================================================================
+# QUARTERLY SUMMARY REPORT ENDPOINT
+# ============================================================================
+
+@yodeck_router.get("/reports/{year}/{quarter}/quarterly-summary")
+async def get_quarterly_summary_report(year: int, quarter: str):
+    """
+    Generate a PDF quarterly summary report with Customer Voice and Metric Bonus data.
+    This endpoint returns JSON data that the frontend can use to generate a print-ready view.
+    """
+    db = get_db()
+    
+    # Get all employees for the quarter
+    employees = await db.employees_v2.find(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    ).to_list(5000)
+    
+    if not employees:
+        raise HTTPException(status_code=404, detail=f"No employees found for {quarter} {year}")
+    
+    # Sort by total score
+    employees.sort(key=lambda x: -(x.get("total_score", 0) or 0))
+    
+    # Calculate summary statistics
+    total_employees = len(employees)
+    total_cv_score = sum(e.get("cv_score", 0) or 0 for e in employees)
+    total_promoters = sum(e.get("cv_promoters", 0) or 0 for e in employees)
+    total_detractors = sum(e.get("cv_detractors", 0) or 0 for e in employees)
+    total_passives = sum(e.get("cv_passives", 0) or 0 for e in employees)
+    total_metric_bonus = sum(e.get("total_metric_bonus", 0) or 0 for e in employees)
+    total_rt_bonus = sum(e.get("review_tracker_bonus", 0) or 0 for e in employees)
+    
+    avg_score = sum(e.get("total_score", 0) or 0 for e in employees) / total_employees if total_employees > 0 else 0
+    avg_cv_score = total_cv_score / total_employees if total_employees > 0 else 0
+    avg_metric_bonus = total_metric_bonus / total_employees if total_employees > 0 else 0
+    
+    # Top performers by CV
+    top_cv = sorted(employees, key=lambda x: -(x.get("cv_score", 0) or 0))[:5]
+    top_cv_data = [{
+        "name": e.get("name", "Unknown"),
+        "cv_score": e.get("cv_score", 0) or 0,
+        "cv_promoters": e.get("cv_promoters", 0) or 0,
+        "cv_detractors": e.get("cv_detractors", 0) or 0
+    } for e in top_cv]
+    
+    # Top performers by Metric Bonus
+    top_metric = sorted(employees, key=lambda x: -(x.get("total_metric_bonus", 0) or 0))[:5]
+    top_metric_data = [{
+        "name": e.get("name", "Unknown"),
+        "total_metric_bonus": e.get("total_metric_bonus", 0) or 0,
+        "ppa": e.get("ppa", 0) or 0,
+        "guests_per_lsc": e.get("guests_per_lsc", 0) or 0,
+        "lbw_per_guest": e.get("lbw_per_guest", 0) or 0,
+        "glassware_per_guest": e.get("glassware_per_guest", 0) or 0
+    } for e in top_metric]
+    
+    # Full employee list for the table
+    employee_list = [{
+        "name": e.get("name", "Unknown"),
+        "job_title": e.get("job_title", "Server"),
+        "total_score": e.get("total_score", 0) or 0,
+        "cv_score": e.get("cv_score", 0) or 0,
+        "cv_promoters": e.get("cv_promoters", 0) or 0,
+        "cv_detractors": e.get("cv_detractors", 0) or 0,
+        "total_metric_bonus": e.get("total_metric_bonus", 0) or 0,
+        "review_tracker_bonus": e.get("review_tracker_bonus", 0) or 0
+    } for e in employees]
+    
+    return {
+        "quarter": quarter.upper(),
+        "year": year,
+        "generated_at": datetime.now().isoformat(),
+        "summary": {
+            "total_employees": total_employees,
+            "avg_score": round(avg_score, 2),
+            "total_cv_score": round(total_cv_score, 1),
+            "avg_cv_score": round(avg_cv_score, 2),
+            "total_promoters": total_promoters,
+            "total_detractors": total_detractors,
+            "total_passives": total_passives,
+            "total_metric_bonus": round(total_metric_bonus, 1),
+            "avg_metric_bonus": round(avg_metric_bonus, 2),
+            "total_rt_bonus": round(total_rt_bonus, 1)
+        },
+        "top_customer_voice": top_cv_data,
+        "top_metric_bonus": top_metric_data,
+        "employees": employee_list
+    }

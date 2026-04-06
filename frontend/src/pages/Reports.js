@@ -184,6 +184,25 @@ export default function Reports() {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Quarterly Summary Report - NEW */}
+              <Link to="/quarterly-summary" className="block">
+                <Button
+                  variant="outline"
+                  className="w-full justify-start h-auto py-3 border-slate-600 hover:bg-slate-700"
+                  data-testid="quarterly-summary-link"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-cyan-500/20 flex items-center justify-center">
+                      <FileText className="w-5 h-5 text-cyan-400" />
+                    </div>
+                    <div className="text-left">
+                      <p className="font-medium text-white">Quarterly Summary</p>
+                      <p className="text-xs text-slate-400">CV & Metric Bonus report</p>
+                    </div>
+                  </div>
+                </Button>
+              </Link>
+              
               <Button
                 variant="outline"
                 className="justify-start h-auto py-3 border-slate-600 hover:bg-slate-700"
