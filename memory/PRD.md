@@ -25,7 +25,7 @@ Build a comprehensive performance review application for restaurant employees.
   - Updated: EmployeeCard.jsx, EmployeeDetailsModal.jsx, RankingsExpandedRow.jsx, FullRankings.js, ScoringGuide.js, Analytics.js, Dashboard.js, ReviewTracker.js, DataIntegrity.js, ReviewGeneration.js, TopPerformersGrid.jsx, EmployeeEditModal.jsx
 
 ### Backend Modularization Progress
-**server.py: 11,847 → 8,183 lines (31% reduction)**
+**server.py: 11,847 → 7,166 lines (40% reduction)**
 
 ### Route Modules
 | Module | Lines | Purpose |
@@ -35,13 +35,13 @@ Build a comprehensive performance review application for restaurant employees.
 | `/app/backend/routes/cv.py` | 868 | CV feedback & NPS |
 | `/app/backend/routes/yodeck_slides.py` | 850+ | Slide generation + Quarterly Summary |
 | `/app/backend/routes/stores.py` | 657 | Multi-store management |
-| `/app/backend/routes/reviews.py` | 646 | **NEW** Reviews & RT management |
+| `/app/backend/routes/reviews.py` | 646 | Reviews & RT management |
 | `/app/backend/routes/upload_jobs.py` | 586 | Background file uploads |
 | `/app/backend/routes/employees.py` | 581 | Employee CRUD |
 | `/app/backend/routes/trends.py` | 512 | Trend analytics |
 | `/app/backend/routes/finalization.py` | 507 | Quarter finalization |
 | `/app/backend/routes/quarter_settings.py` | 279 | Settings management |
-| `/app/backend/server.py` | 8,183 | Main server (remaining) |
+| `/app/backend/server.py` | 7,166 | Main server (core routes) |
 
 ### Multi-Store Architecture
 - 22 Bubba Gump locations across 5 regions
@@ -61,9 +61,7 @@ Build a comprehensive performance review application for restaurant employees.
 - [x] ~~Multi-Store Architecture~~ - DONE (stores.py)
 - [x] ~~UI Label Updates (Customer Voice, Metric Bonus)~~ - DONE
 - [x] ~~Quarterly Summary Report~~ - DONE
-- [x] ~~Backend route modularization (admin routes)~~ - DONE (admin.py)
-- [x] ~~Backend route modularization (review routes)~~ - DONE (reviews.py)
-- [ ] Clean up duplicate routes in server.py (~1000 lines remaining)
+- [x] ~~Backend route modularization~~ - DONE (admin.py, reviews.py - 40% reduction)
 
 ### P2 - Medium Priority
 - [ ] Review Spotlight feature
