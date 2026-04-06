@@ -392,6 +392,15 @@ export default function Dashboard() {
                 <p className="text-xs text-slate-500">≥100 pts</p>
               </div>
               
+              {/* Bartender - One tier below Trainer */}
+              <div className="text-center">
+                <div className="w-12 h-12 mx-auto rounded-xl bg-amber-500/20 flex items-center justify-center mb-2">
+                  <span className="text-lg font-bold text-amber-400">{tierDistribution['Bartender']}</span>
+                </div>
+                <p className="text-sm font-medium text-amber-400">Bartender</p>
+                <p className="text-xs text-slate-500">Bar staff</p>
+              </div>
+              
               {/* A-Server */}
               <div className="text-center">
                 <div className="w-12 h-12 mx-auto rounded-xl bg-emerald-500/20 flex items-center justify-center mb-2">
@@ -418,15 +427,6 @@ export default function Dashboard() {
                 <p className="text-sm font-medium text-red-400">C-Server</p>
                 <p className="text-xs text-slate-500">&lt;70 pts</p>
               </div>
-              
-              {/* Bartender */}
-              <div className="text-center">
-                <div className="w-12 h-12 mx-auto rounded-xl bg-amber-500/20 flex items-center justify-center mb-2">
-                  <span className="text-lg font-bold text-amber-400">{tierDistribution['Bartender']}</span>
-                </div>
-                <p className="text-sm font-medium text-amber-400">Bartender</p>
-                <p className="text-xs text-slate-500">Bar staff</p>
-              </div>
             </div>
             
             {/* Progress bar showing distribution */}
@@ -438,6 +438,13 @@ export default function Dashboard() {
                       className="bg-purple-500" 
                       style={{ width: `${(tierDistribution['Trainer'] / employees.length) * 100}%` }}
                       title={`Trainers: ${tierDistribution['Trainer']}`}
+                    />
+                  )}
+                  {tierDistribution['Bartender'] > 0 && (
+                    <div 
+                      className="bg-amber-500" 
+                      style={{ width: `${(tierDistribution['Bartender'] / employees.length) * 100}%` }}
+                      title={`Bartenders: ${tierDistribution['Bartender']}`}
                     />
                   )}
                   {tierDistribution['A-Server'] > 0 && (
@@ -461,18 +468,11 @@ export default function Dashboard() {
                       title={`C-Servers: ${tierDistribution['C-Server']}`}
                     />
                   )}
-                  {tierDistribution['Bartender'] > 0 && (
-                    <div 
-                      className="bg-amber-500" 
-                      style={{ width: `${(tierDistribution['Bartender'] / employees.length) * 100}%` }}
-                      title={`Bartenders: ${tierDistribution['Bartender']}`}
-                    />
-                  )}
                 </div>
                 <div className="flex justify-between mt-2 text-xs text-slate-500">
                   <span>Total: {employees.length} employees</span>
                   <span>
-                    {((tierDistribution['Trainer'] + tierDistribution['A-Server']) / employees.length * 100).toFixed(0)}% at A-level or above
+                    {((tierDistribution['Trainer'] + tierDistribution['Bartender'] + tierDistribution['A-Server']) / employees.length * 100).toFixed(0)}% at A-level or above
                   </span>
                 </div>
               </div>
