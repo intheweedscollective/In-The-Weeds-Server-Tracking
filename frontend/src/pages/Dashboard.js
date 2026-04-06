@@ -9,6 +9,7 @@ import StoreHealthScore from "../components/StoreHealthScore";
 import CoachingRadar from "../components/CoachingRadar";
 import ReviewImpactTracker from "../components/ReviewImpactTracker";
 import { formatNumber } from "../utils/formatters";
+import { TrendIndicator } from "../components/TrendIndicator";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -26,6 +27,7 @@ export default function Dashboard() {
   const [showUnderPerformers, setShowUnderPerformers] = useState(false);
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
   const [isQuarterFinalized, setIsQuarterFinalized] = useState(false);
+  const [momentumData, setMomentumData] = useState({});
 
   const [stats, setStats] = useState({
     totalEmployees: 0,

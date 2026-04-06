@@ -1,6 +1,7 @@
 import { CheckSquare, Pencil, Eye, Trash2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { formatCurrency, formatNumber } from "../utils/formatters";
+import { TrendIndicator } from "./TrendIndicator";
 
 /**
  * EmployeeCard - Individual employee card component
@@ -13,7 +14,8 @@ export const EmployeeCard = ({
   onToggleSelection,
   onEdit,
   onViewDetails,
-  onDelete
+  onDelete,
+  momentum = null  // { direction, change, rolling_avg, snapshots_used }
 }) => {
   const performance = getPerformanceLevelLocal(employee.performance_tier, employee.total_score || employee.pre_dar_score);
   
@@ -68,9 +70,20 @@ export const EmployeeCard = ({
               Rank: #{employee.peer_rank || '-'}
             </p>
           </div>
-          <span className={`performance-badge ${performance.class}`} data-testid={`employee-performance-${employee.id}`}>
-            {performance.text}
-          </span>
+          <div className="flex items-center gap-2">
+            {momentum && momentum.direction && (
+              <TrendIndicator
+                direction={momentum.direction}
+                change={momentum.change || 0}
+                rollingAvg={momentum.rolling_avg}
+                snapshotsUsed={momentum.snapshots_used || 0}
+                size="sm"
+              />
+            )}
+            <span className={`performance-badge ${performance.class}`} data-testid={`employee-performance-${employee.id}`}>
+              {performance.text}
+            </span>
+          </div>
         </div>
         
         {/* Metrics Grid */}

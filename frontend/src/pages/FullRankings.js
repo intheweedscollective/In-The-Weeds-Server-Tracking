@@ -7,6 +7,7 @@ import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../components/ui/tooltip";
 import { formatNumber, formatCurrency } from "../utils/formatters";
+import { TrendIndicator } from "../components/TrendIndicator";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -52,6 +53,7 @@ export default function FullRankings() {
   const [pendingJobTitle, setPendingJobTitle] = useState(""); // new job title value
   const [savingJobTitle, setSavingJobTitle] = useState(false);
   const [searchQuery, setSearchQuery] = useState(""); // Employee search
+  const [momentumData, setMomentumData] = useState({}); // Momentum/trend data for all employees
   
   // Use location to detect route changes
   const location = useLocation();
@@ -89,12 +91,13 @@ export default function FullRankings() {
     setLoading(true);
     try {
       const tierParam = tierFilter !== "all" ? `&tier_filter=${tierFilter}` : "";
-      const [rankingsRes, snapshotRes, settingsRes, bgRes, npsRes] = await Promise.all([
+      const [rankingsRes, snapshotRes, settingsRes, bgRes, npsRes, momentumRes] = await Promise.all([
         api.get(`/v2/full-rankings/${selectedYear}/${selectedQuarter}?${tierParam}`),
         api.get(`/v2/snapshot-workflow/current-rankings?year=${selectedYear}&quarter=${selectedQuarter}`),
         api.get(`/v2/quarter-settings/${selectedYear}/${selectedQuarter}`).catch(() => null),
         api.get(`/v2/snapshots/backgrounds`).catch(() => ({ data: [] })),
-        api.get(`/v2/cv/nps?year=${selectedYear}&quarter=${selectedQuarter}`).catch(() => ({ data: { nps_records: [] } }))
+        api.get(`/v2/cv/nps?year=${selectedYear}&quarter=${selectedQuarter}`).catch(() => ({ data: { nps_records: [] } })),
+        api.get(`/v2/trends/momentum/${selectedYear}/${selectedQuarter}`).catch(() => ({ data: {} }))
       ]);
       
       setRankings(rankingsRes.data.rankings || []);
@@ -104,6 +107,7 @@ export default function FullRankings() {
       setTotalEmployees(rankingsRes.data.total_employees || 0);
       setThresholds(rankingsRes.data.tier_thresholds || { a_server_min: 85.1, b_server_min: 70.1 });
       setBackgrounds(bgRes.data || []);
+      setMomentumData(momentumRes.data || {});
       
       // Build NPS lookup by employee_id
       const npsLookup = {};
@@ -684,6 +688,24 @@ export default function FullRankings() {
                       </TooltipProvider>
                     </th>
                     <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden lg:table-cell text-white">Metric Bonus</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden md:table-cell text-white">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger className="flex items-center justify-center gap-1 cursor-help">
+                            Trend <Info className="w-3 h-3 opacity-60" />
+                          </TooltipTrigger>
+                          <TooltipContent className="bg-slate-800 text-white p-3 max-w-xs">
+                            <div className="text-xs space-y-1">
+                              <div className="font-bold mb-1">Momentum Indicator:</div>
+                              <div>Compares current score to rolling average</div>
+                              <div className="mt-1 text-green-400">↑ = Improving</div>
+                              <div className="text-red-400">↓ = Declining</div>
+                              <div className="text-slate-400">— = Stable</div>
+                            </div>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </th>
                     <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell text-white">PPA (25%)</th>
                     <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell text-white">LBW (20%)</th>
                     <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell text-white">LSC (25%)</th>
@@ -826,6 +848,22 @@ export default function FullRankings() {
                             <span className="text-sm font-semibold text-blue-400">
                               +{formatNumber(employee.metric_bonus || 0)}
                             </span>
+                          </td>
+                          
+                          {/* Trend/Momentum Indicator */}
+                          <td className="px-4 py-4 text-center hidden md:table-cell" data-testid={`trend-${employee.position}`}>
+                            {(() => {
+                              const momentum = momentumData[employee.employee_id] || momentumData[employee.name] || {};
+                              return (
+                                <TrendIndicator
+                                  direction={momentum.direction || "stable"}
+                                  change={momentum.change || 0}
+                                  rollingAvg={momentum.rolling_avg}
+                                  snapshotsUsed={momentum.snapshots_used || 0}
+                                  size="sm"
+                                />
+                              );
+                            })()}
                           </td>
                           
                           {/* PPA Points */}

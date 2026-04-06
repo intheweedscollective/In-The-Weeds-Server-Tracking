@@ -510,3 +510,140 @@ async def get_biweekly_trend_data(
         "employee_scores": employee_scores,
         "restaurant_averages": restaurant_averages
     }
+
+
+
+# ============================================================================
+# MOMENTUM / TREND INDICATORS (Rolling Average Comparison)
+# ============================================================================
+
+@trends_router.get("/momentum/{year}/{quarter}")
+async def get_all_employee_momentum(year: int, quarter: str, lookback_snapshots: int = 4):
+    """
+    Calculate momentum/trend for ALL employees in a quarter.
+    Compares current score against rolling average of previous snapshots.
+    
+    Returns:
+        Dictionary mapping employee_id to trend data:
+        {
+            "employee_id": {
+                "current_score": 85.5,
+                "rolling_avg": 82.3,
+                "change": 3.2,
+                "direction": "up",  // "up", "down", "stable"
+                "percent_change": 3.89,
+                "snapshots_used": 3
+            }
+        }
+    """
+    db = get_db()
+    quarter = quarter.upper()
+    
+    # Get all snapshots for this quarter, ordered by date
+    snapshots = await db.snapshot_workflow.find(
+        {"year": year, "quarter": quarter, "status": {"$in": ["completed", "in_progress"]}},
+        {"_id": 0, "employees": 1, "effective_date": 1, "name": 1, "created_at": 1}
+    ).sort("effective_date", -1).to_list(20)
+    
+    if not snapshots:
+        # Fall back to employees_v2 if no snapshots
+        employees = await db.employees_v2.find(
+            {"year": year, "quarter": quarter},
+            {"_id": 0, "id": 1, "name": 1, "total_score": 1}
+        ).to_list(500)
+        
+        # No historical data, return neutral trends
+        return {
+            emp.get("id") or emp.get("name"): {
+                "current_score": emp.get("total_score", 0) or 0,
+                "rolling_avg": emp.get("total_score", 0) or 0,
+                "change": 0,
+                "direction": "stable",
+                "percent_change": 0,
+                "snapshots_used": 0,
+                "employee_name": emp.get("name")
+            }
+            for emp in employees
+        }
+    
+    # Build employee score history from snapshots
+    # Most recent snapshot is the "current" score
+    employee_history = {}  # {employee_id: [scores from oldest to newest]}
+    
+    for snapshot in reversed(snapshots):  # Oldest first
+        for emp in snapshot.get("employees", []):
+            emp_id = emp.get("id") or emp.get("name")
+            if emp_id not in employee_history:
+                employee_history[emp_id] = {
+                    "name": emp.get("name"),
+                    "scores": []
+                }
+            employee_history[emp_id]["scores"].append(emp.get("total_score", 0) or 0)
+    
+    # Calculate momentum for each employee
+    momentum_data = {}
+    
+    for emp_id, data in employee_history.items():
+        scores = data["scores"]
+        name = data["name"]
+        
+        if len(scores) == 0:
+            continue
+        
+        current_score = scores[-1]  # Most recent
+        
+        if len(scores) == 1:
+            # Only one data point, no trend
+            momentum_data[emp_id] = {
+                "current_score": round(current_score, 2),
+                "rolling_avg": round(current_score, 2),
+                "change": 0,
+                "direction": "stable",
+                "percent_change": 0,
+                "snapshots_used": 1,
+                "employee_name": name
+            }
+        else:
+            # Calculate rolling average of previous scores (excluding current)
+            previous_scores = scores[:-1][-lookback_snapshots:]  # Last N scores before current
+            rolling_avg = sum(previous_scores) / len(previous_scores) if previous_scores else current_score
+            
+            change = current_score - rolling_avg
+            percent_change = (change / rolling_avg * 100) if rolling_avg != 0 else 0
+            
+            # Determine direction with threshold (0.5 pts = stable)
+            if change > 0.5:
+                direction = "up"
+            elif change < -0.5:
+                direction = "down"
+            else:
+                direction = "stable"
+            
+            momentum_data[emp_id] = {
+                "current_score": round(current_score, 2),
+                "rolling_avg": round(rolling_avg, 2),
+                "change": round(change, 2),
+                "direction": direction,
+                "percent_change": round(percent_change, 1),
+                "snapshots_used": len(previous_scores),
+                "employee_name": name
+            }
+    
+    return momentum_data
+
+
+@trends_router.get("/momentum/{year}/{quarter}/{employee_id}")
+async def get_employee_momentum(year: int, quarter: str, employee_id: str, lookback_snapshots: int = 4):
+    """
+    Get momentum/trend data for a single employee.
+    """
+    all_momentum = await get_all_employee_momentum(year, quarter, lookback_snapshots)
+    
+    if employee_id not in all_momentum:
+        # Try to find by name
+        for emp_id, data in all_momentum.items():
+            if data.get("employee_name", "").lower() == employee_id.lower():
+                return data
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    return all_momentum[employee_id]
