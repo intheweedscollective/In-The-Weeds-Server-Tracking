@@ -40,6 +40,7 @@ from routes.stores import stores_router
 from routes.audit import audit_router
 from routes.cv import cv_router
 from routes.admin import admin_router
+from routes.reviews import reviews_router
 
 # In-memory job storage for PDF processing
 pdf_jobs = {}  # job_id -> {status, progress, result, error}
@@ -7794,6 +7795,7 @@ api_router.include_router(stores_router)
 api_router.include_router(audit_router)
 api_router.include_router(cv_router)
 api_router.include_router(admin_router)
+api_router.include_router(reviews_router)
 
 
 # ============================================================================
