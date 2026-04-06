@@ -6472,10 +6472,7 @@ from review_tracker import (
     calculate_review_points_for_employee, get_review_stats
 )
 
-# Legacy import - commented out since scrapers are deprecated
-# from reviewtrackers_integration import (
-#     ReviewTrackersClient, sync_reviews_from_reviewtrackers
-# )
+# Legacy scraper imports removed - using manual uploads only
 
 
 class CustomerReviewCreate(BaseModel):
@@ -6920,26 +6917,7 @@ async def get_employee_review_points(
     }
 
 
-# ============================================================================
-# REVIEWTRACKERS SYNC - DEPRECATED (Use manual upload at /api/v2/rt/upload)
-# ============================================================================
-
-@api_router.post("/v2/reviews/sync")
-async def sync_from_reviewtrackers(
-    quarter: str = "Q1",
-    year: int = 2026,
-    since_date: Optional[str] = None
-):
-    """
-    DEPRECATED: Use manual upload instead.
-    Upload ReviewTracker data via /api/v2/rt/upload or the Data Uploads page.
-    """
-    return {
-        "success": False,
-        "deprecated": True,
-        "message": "This sync endpoint has been deprecated. Please use the manual upload feature at /api/v2/rt/upload or navigate to the Data Uploads page to upload ReviewTracker data.",
-        "alternative": "/api/v2/rt/upload"
-    }
+# Deprecated sync endpoints removed - use manual upload at /api/v2/rt/upload
 
 
 # ============================================================================
@@ -7451,29 +7429,7 @@ async def get_sync_status():
     }
 
 
-@api_router.post("/v2/reviews/sync/test")
-async def test_reviewtrackers_connection():
-    """
-    DEPRECATED: ReviewTrackers sync has been replaced with manual uploads.
-    """
-    return {
-        "success": False,
-        "deprecated": True,
-        "message": "ReviewTrackers sync has been deprecated. Please use the manual upload feature instead."
-    }
-
-
-# ============================================================================
-# LOYALTY VOICE (CV) INTEGRATION - DEPRECATED (Use manual upload)
-# ============================================================================
-
-# Legacy imports - commented out since scrapers are deprecated
-# from loyalty_voice_integration import (
-#     sync_loyalty_voice_to_db,
-#     scrape_server_performance_report,
-#     get_nps_score_for_employee,
-#     get_quarter_date_range
-# )
+# Deprecated sync test endpoint removed
 
 
 
@@ -7999,53 +7955,7 @@ async def reconcile_cv_feedback_with_official(quarter: str = "Q1", year: int = 2
 
 
 
-# ============================================================
-# UI DASHBOARD SCRAPER - DEPRECATED (Use manual upload instead)
-# ============================================================
-
-@api_router.post("/v2/admin/sync-from-ui")
-async def sync_stats_from_ui_dashboards(
-    quarter: str = "Q1", 
-    year: int = 2026,
-    background_tasks: BackgroundTasks = None
-):
-    """
-    DEPRECATED: Use manual upload instead.
-    This scraper endpoint has been replaced with manual data uploads.
-    """
-    return {
-        "success": False,
-        "deprecated": True,
-        "message": "UI scraping has been deprecated. Please use the manual upload features on the Data Uploads page.",
-        "alternatives": {
-            "cv_upload": "/api/v2/cv/server-performance/upload",
-            "rt_upload": "/api/v2/rt/upload"
-        }
-    }
-
-
-@api_router.post("/v2/admin/sync-rt-from-ui")
-async def sync_rt_from_ui(quarter: str = "Q1", year: int = 2026):
-    """
-    DEPRECATED: Use manual upload instead.
-    """
-    return {
-        "success": False,
-        "deprecated": True,
-        "message": "ReviewTrackers UI scraping has been deprecated. Please use manual upload at /api/v2/rt/upload or the Data Uploads page."
-    }
-
-
-@api_router.post("/v2/admin/sync-cv-from-ui")
-async def sync_cv_from_ui(quarter: str = "Q1", year: int = 2026):
-    """
-    DEPRECATED: Use manual upload instead.
-    """
-    return {
-        "success": False,
-        "deprecated": True,
-        "message": "Loyalty Voice UI scraping has been deprecated. Please use manual upload at /api/v2/cv/server-performance/upload or the Data Uploads page."
-    }
+# Deprecated UI scraper endpoints removed - use manual upload instead
 
 
 
