@@ -11,6 +11,13 @@ Build a comprehensive performance review application for restaurant employees.
 
 ## Current State (2026-04-06)
 
+### Latest Changes
+- **UI Label Updates (2026-04-06)**:
+  - "Customer Voice" / "Cust. Voice" replaces "CV Score" / "NPS Score" everywhere
+  - "Metric Bonus" replaces "POS bonus" / "Metric+" everywhere
+  - Customer Voice now displays as combined total (Promoters×0.5 - Detractors×1)
+  - Updated: EmployeeCard.jsx, EmployeeDetailsModal.jsx, RankingsExpandedRow.jsx, FullRankings.js, ScoringGuide.js, Analytics.js, Dashboard.js, ReviewTracker.js, DataIntegrity.js, ReviewGeneration.js, TopPerformersGrid.jsx, EmployeeEditModal.jsx
+
 ### Backend Modularization Progress
 **server.py: 11,847 → 8,607 lines (27% reduction)**
 
@@ -44,6 +51,7 @@ Build a comprehensive performance review application for restaurant employees.
 ### P1 - High Priority
 - [x] ~~Production 520 error~~ - DONE (upload_jobs.py)
 - [x] ~~Multi-Store Architecture~~ - DONE (stores.py)
+- [x] ~~UI Label Updates (Customer Voice, Metric Bonus)~~ - DONE
 - [ ] Continue backend modularization (admin routes ~1500 lines)
 
 ### P2 - Medium Priority
