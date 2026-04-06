@@ -24,7 +24,8 @@ import {
   Building2,
   Filter,
   Calculator,
-  Layers
+  Layers,
+  Globe
 } from "lucide-react";
 import { useTheme } from "../context/ThemeContext";
 
@@ -75,6 +76,7 @@ const navGroups = [
     id: "stores",
     label: "Multi-Store",
     items: [
+      { path: "/global", label: "Global Overview", icon: Globe },
       { path: "/stores", label: "Store Management", icon: Building2 },
       { path: "/stores/leaderboard", label: "Store Leaderboard", icon: Trophy }
     ]

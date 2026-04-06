@@ -36,6 +36,7 @@ from routes.yodeck_slides import yodeck_router
 from routes.employees import employee_router
 from routes.trends import trends_router
 from routes.upload_jobs import upload_jobs_router
+from routes.stores import stores_router
 
 # In-memory job storage for PDF processing
 pdf_jobs = {}  # job_id -> {status, progress, result, error}
@@ -11458,6 +11459,7 @@ api_router.include_router(yodeck_router)
 api_router.include_router(employee_router)
 api_router.include_router(trends_router)
 api_router.include_router(upload_jobs_router)
+api_router.include_router(stores_router)
 
 
 # ============================================================================
