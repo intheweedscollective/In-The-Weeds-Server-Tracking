@@ -35,7 +35,7 @@ export default function QuarterSettings() {
     bonus_rate: 0.2,
     bonus_cap: 5.0,
     // Server tier thresholds
-    a_server_min_score: 80.0,
+    a_server_min_score: 85.0,
     b_server_min_score: 70.0
   });
 
@@ -699,7 +699,7 @@ export default function QuarterSettings() {
                 <li>• <strong>View Stats</strong> - See quick summary of team performance</li>
               </ul>
               <div className="mt-3 p-3 bg-blue-50 rounded-lg text-sm text-blue-800">
-                <strong>💡 Tip:</strong> Don't include the CV Passives column - it doesn't affect scores.
+                <strong>💡 Tip:</strong> Review CV Passives carefully - they indicate mediocre service and affect the NPS calculation.
               </div>
             </div>
 
