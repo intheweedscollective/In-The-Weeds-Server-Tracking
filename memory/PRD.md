@@ -12,17 +12,25 @@ Build a comprehensive performance review application for restaurant employees.
 ## Current State (2026-04-06)
 
 ### Latest Changes
+- **Help Center & Self-Help Improvements (2026-04-06)**:
+  - Completely redesigned Help Center with searchable FAQ (21 questions in 6 categories)
+  - New Troubleshooting section with 6 common issues and step-by-step solutions
+  - Created reusable HelpTooltip component for contextual help throughout the app
+  - Added Quick Actions shortcuts to key pages
+  - Fixed outdated scoring formulas (CV = Promoters×0.5 - Detractors×1)
+  - Corrected tier thresholds (A-Server ≥85, not 80)
+  - Added documentation for new features (Quarterly Summary, Multi-Store, Metric Bonus)
+
+- **Backend Route Modularization (2026-04-06)**:
+  - Created admin.py (1,150 lines) and reviews.py (646 lines)
+  - server.py reduced from 11,847 to 7,166 lines (40% reduction)
+
 - **Quarterly Summary Report (2026-04-06)**:
   - New print-friendly page at `/quarterly-summary`
-  - Shows Executive Overview, Customer Voice Summary, Metric Bonus Summary, and Complete Employee Breakdown
-  - Print button for generating physical reports
-  - Accessible from Reports & Analytics page
   
 - **UI Label Updates (2026-04-06)**:
-  - "Customer Voice" / "Cust. Voice" replaces "CV Score" / "NPS Score" everywhere
-  - "Metric Bonus" replaces "POS bonus" / "Metric+" everywhere
-  - Customer Voice now displays as combined total (Promoters×0.5 - Detractors×1)
-  - Updated: EmployeeCard.jsx, EmployeeDetailsModal.jsx, RankingsExpandedRow.jsx, FullRankings.js, ScoringGuide.js, Analytics.js, Dashboard.js, ReviewTracker.js, DataIntegrity.js, ReviewGeneration.js, TopPerformersGrid.jsx, EmployeeEditModal.jsx
+  - "Customer Voice" / "Cust. Voice" replaces "CV Score" / "NPS Score"
+  - "Metric Bonus" replaces "POS bonus" / "Metric+"
 
 ### Backend Modularization Progress
 **server.py: 11,847 → 7,166 lines (40% reduction)**

@@ -1,6 +1,7 @@
 import { X, Target } from "lucide-react";
 import { Button } from "./ui/button";
 import { formatCurrency, formatNumber } from "../utils/formatters";
+import { HelpTooltip } from "./HelpTooltip";
 
 /**
  * EmployeeDetailsModal - Displays detailed employee scoring breakdown
@@ -209,9 +210,10 @@ const CustomerVoiceCategory = ({ employee }) => {
   return (
     <div className="p-4 bg-slate-700/50 rounded-lg border border-yellow-500/30">
       <div className="flex items-center justify-between mb-2">
-        <div>
+        <div className="flex items-center gap-2">
           <span className="font-semibold text-white">Customer Voice</span>
-          <span className="ml-2 text-xs bg-yellow-600 text-white px-2 py-0.5 rounded-full">Combined Total</span>
+          <HelpTooltip topic="cv-scoring" size="sm" />
+          <span className="text-xs bg-yellow-600 text-white px-2 py-0.5 rounded-full">Combined Total</span>
         </div>
         <div className="text-right">
           <span className={`font-bold text-lg ${cvScore >= 0 ? 'text-yellow-400' : 'text-red-400'}`}>
@@ -240,24 +242,39 @@ const ScoreSummaryTable = ({ employee }) => {
   
   return (
     <div className="mb-6 p-4 bg-slate-700/50 rounded-xl border border-slate-600">
-      <h4 className="font-serif font-bold text-white mb-3">Score Summary</h4>
+      <div className="flex items-center gap-2 mb-3">
+        <h4 className="font-serif font-bold text-white">Score Summary</h4>
+        <HelpTooltip topic="total-score" size="sm" />
+      </div>
       <div className="space-y-2 text-sm">
         <div className="flex justify-between py-1 border-b border-slate-600">
-          <span className="text-slate-300">Weighted POS Score (PPA+LSC+LBW+Glass)</span>
+          <span className="text-slate-300 flex items-center gap-1">
+            Weighted POS Score
+            <HelpTooltip topic="weighted-pos" size="sm" />
+          </span>
           <span className="font-medium text-white">{formatNumber(employee.weighted_score || 0)}</span>
         </div>
         <div className="flex justify-between py-1 border-b border-slate-600">
-          <span className="text-slate-300">Customer Voice</span>
+          <span className="text-slate-300 flex items-center gap-1">
+            Customer Voice
+            <HelpTooltip topic="cv-scoring" size="sm" />
+          </span>
           <span className={`font-medium ${cvScore >= 0 ? 'text-yellow-400' : 'text-red-400'}`}>
             {cvScore >= 0 ? '+' : ''}{formatNumber(cvScore)}
           </span>
         </div>
         <div className="flex justify-between py-1 border-b border-slate-600">
-          <span className="text-slate-300">Metric Bonus</span>
+          <span className="text-slate-300 flex items-center gap-1">
+            Metric Bonus
+            <HelpTooltip topic="metric-bonus" size="sm" />
+          </span>
           <span className="font-medium text-green-400">+{formatNumber(employee.total_metric_bonus || 0)}</span>
         </div>
         <div className="flex justify-between py-1 border-b border-slate-600">
-          <span className="text-slate-300">Review Tracker Bonus</span>
+          <span className="text-slate-300 flex items-center gap-1">
+            Review Tracker Bonus
+            <HelpTooltip topic="rt-bonus" size="sm" />
+          </span>
           <span className="font-medium text-green-400">+{formatNumber(employee.review_tracker_bonus || 0)}</span>
         </div>
         <div className="flex justify-between py-2 font-bold text-base">
