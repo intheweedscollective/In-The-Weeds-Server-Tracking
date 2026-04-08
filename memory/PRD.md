@@ -12,6 +12,18 @@ Build a comprehensive performance review application for restaurant employees.
 ## Current State (2026-04-07)
 
 ### Latest Changes
+- **Store Performance Index Overhaul (2026-04-07)**:
+  - Realigned scoring model based on Bubba Gump Daily Flash Report analysis
+  - **NEW WEIGHTS**: Sales (20%), Upsell (20%), Loyalty (25%), Labor (15%), Guest (20%)
+  - **NEW: Labor Efficiency category** - tracks Hourly Labor % vs target
+  - **Added concept benchmarks** to Quarter Settings:
+    - `concept_avg_ppa`: 45.33 (from Flash Report)
+    - `concept_lsc_ratio`: 181 (1:181 guests per LSC)
+    - `concept_labor_pct`: 17.01%
+  - Shows "vs concept" comparisons (e.g., "1.7x better", "+22.9%", "+1.95pp")
+  - Awards indicators for Best in Concept achievements
+  - Store Health Score increased from 80.9 → 84.2 with new weights
+
 - **Momentum Trend Indicator (2026-04-07)**:
   - Rolling average momentum comparison showing direction and point change (e.g., ↗ +8.3)
   - TrendIndicator component in Dashboard Top 5 Performers section

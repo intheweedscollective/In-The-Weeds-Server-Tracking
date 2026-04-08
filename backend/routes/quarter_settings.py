@@ -41,6 +41,12 @@ class QuarterSettingsCreate(BaseModel):
     # Server tier thresholds (Settings-driven)
     a_server_min_score: float = 85.0   # A-Server >= 85
     b_server_min_score: float = 70.0   # B-Server >= 70, C-Server < 70
+    # Concept benchmarks for comparison (from Flash Report)
+    concept_avg_ppa: float = 45.33     # Concept average PPA
+    concept_lsc_ratio: int = 181       # Concept average Guest:LSC ratio
+    concept_labor_pct: float = 17.01   # Concept average Labor %
+    target_labor_pct: float = 17.0     # Target Labor % for store
+    store_labor_pct: float = 15.06     # Store's actual Labor % (Las Vegas)
 
 
 class QuarterSettingsUpdate(BaseModel):
@@ -59,6 +65,12 @@ class QuarterSettingsUpdate(BaseModel):
     # Server tier thresholds
     a_server_min_score: Optional[float] = None
     b_server_min_score: Optional[float] = None
+    # Concept benchmarks for comparison (from Flash Report)
+    concept_avg_ppa: Optional[float] = None
+    concept_lsc_ratio: Optional[int] = None
+    concept_labor_pct: Optional[float] = None
+    target_labor_pct: Optional[float] = None
+    store_labor_pct: Optional[float] = None
     # NOTE: Slide theme settings removed - functionality deprecated
 
 
@@ -195,6 +207,17 @@ async def update_quarter_settings(year: int, quarter: str, data: QuarterSettings
         update_data["a_server_min_score"] = data.a_server_min_score
     if data.b_server_min_score is not None:
         update_data["b_server_min_score"] = data.b_server_min_score
+    # Concept benchmarks
+    if data.concept_avg_ppa is not None:
+        update_data["concept_avg_ppa"] = data.concept_avg_ppa
+    if data.concept_lsc_ratio is not None:
+        update_data["concept_lsc_ratio"] = data.concept_lsc_ratio
+    if data.concept_labor_pct is not None:
+        update_data["concept_labor_pct"] = data.concept_labor_pct
+    if data.target_labor_pct is not None:
+        update_data["target_labor_pct"] = data.target_labor_pct
+    if data.store_labor_pct is not None:
+        update_data["store_labor_pct"] = data.store_labor_pct
     
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
     
