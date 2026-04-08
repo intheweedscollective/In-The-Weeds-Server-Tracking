@@ -53,23 +53,26 @@ Build a comprehensive performance review application for restaurant employees.
   - "Metric Bonus" replaces "POS bonus" / "Metric+"
 
 ### Backend Modularization Progress
-**server.py: 11,847 → 7,166 lines (40% reduction)**
+**server.py: 7,252 → 6,842 lines (410 lines extracted)**
 
-### Route Modules
+### Route Modules (15 total)
 | Module | Lines | Purpose |
 |--------|-------|---------|
 | `/app/backend/routes/admin.py` | 1,150 | Admin utilities, data sync, fixes |
-| `/app/backend/routes/audit.py` | 922 | Scoring audit system |
+| `/app/backend/routes/audit.py` | 921 | Scoring audit system |
 | `/app/backend/routes/cv.py` | 868 | CV feedback & NPS |
-| `/app/backend/routes/yodeck_slides.py` | 850+ | Slide generation + Quarterly Summary |
+| `/app/backend/routes/yodeck_slides.py` | 859 | Slide generation + Quarterly Summary |
+| `/app/backend/routes/pos_upload.py` | 836 | **NEW** POS OCR, PDF parsing |
 | `/app/backend/routes/stores.py` | 657 | Multi-store management |
+| `/app/backend/routes/trends.py` | 649 | Trend analytics + Momentum |
 | `/app/backend/routes/reviews.py` | 646 | Reviews & RT management |
 | `/app/backend/routes/upload_jobs.py` | 586 | Background file uploads |
 | `/app/backend/routes/employees.py` | 581 | Employee CRUD |
-| `/app/backend/routes/trends.py` | 512 | Trend analytics |
 | `/app/backend/routes/finalization.py` | 507 | Quarter finalization |
-| `/app/backend/routes/quarter_settings.py` | 279 | Settings management |
-| `/app/backend/server.py` | 7,166 | Main server (core routes) |
+| `/app/backend/routes/insights.py` | 443 | **NEW** Store health, coaching, reviews |
+| `/app/backend/routes/quarter_settings.py` | 302 | Settings management |
+| `/app/backend/routes/snapshot_routes.py` | ~500 | Snapshot workflow |
+| `/app/backend/server.py` | 6,842 | Main server (core routes) |
 
 ### Multi-Store Architecture
 - 22 Bubba Gump locations across 5 regions
