@@ -9,9 +9,17 @@ Build a comprehensive performance review application for restaurant employees.
 - **Database**: MongoDB
 - **AI**: OpenAI GPT-4o (via Emergent LLM Key)
 
-## Current State (2026-04-06)
+## Current State (2026-04-07)
 
 ### Latest Changes
+- **Momentum Trend Indicator (2026-04-07)**:
+  - Rolling average momentum comparison showing direction and point change (e.g., ↗ +8.3)
+  - TrendIndicator component in Dashboard Top 5 Performers section
+  - TrendIndicator in Top Performers modal
+  - Backend endpoint `/v2/trends/momentum/{year}/{quarter}` provides current score, rolling average, change, direction, percent_change, and snapshots_used
+  - Color coding: green for up trend, red for down trend, gray for stable
+  - Tooltip with detailed breakdown on hover
+
 - **Help Center & Self-Help Improvements (2026-04-06)**:
   - Completely redesigned Help Center with searchable FAQ (21 questions in 6 categories)
   - New Troubleshooting section with 6 common issues and step-by-step solutions
@@ -76,5 +84,5 @@ Build a comprehensive performance review application for restaurant employees.
 - [ ] Download All Slides as ZIP
 
 ### P3 - Low Priority
-- [ ] Momentum/Trend indicators
+- [x] ~~Momentum/Trend indicators~~ - DONE (2026-04-07)
 - [ ] Store vs Store comparison
