@@ -116,8 +116,15 @@ export default function Dashboard() {
 
   const fetchEmployeesForQuarter = useCallback(async () => {
     try {
-      // Use current-rankings endpoint for consistency across all pages
-      const response = await api.get(`/v2/snapshot-workflow/current-rankings?year=${selectedYear}&quarter=${selectedQuarter}`);
+      // Fetch employees and momentum data in parallel
+      const [response, momentumRes] = await Promise.all([
+        api.get(`/v2/snapshot-workflow/current-rankings?year=${selectedYear}&quarter=${selectedQuarter}`),
+        api.get(`/v2/trends/momentum/${selectedYear}/${selectedQuarter}`).catch(() => ({ data: {} }))
+      ]);
+      
+      // Set momentum data
+      setMomentumData(momentumRes.data || {});
+      
       if (response.data?.employees) {
         // Sort by total_score descending for display
         const sorted = [...(response.data.employees || [])].sort((a, b) => (b.total_score || 0) - (a.total_score || 0));
@@ -509,6 +516,9 @@ export default function Dashboard() {
                   const aMin = quarterSettings?.a_server_min_score || 80;
                   const bMin = quarterSettings?.b_server_min_score || 70;
                   
+                  // Get momentum data for this employee
+                  const empMomentum = momentumData[employee.id] || {};
+                  
                   let tierLabel, colorClass;
                   if (jobTitle.includes('trainer')) {
                     tierLabel = 'Trainer';
@@ -531,6 +541,7 @@ export default function Dashboard() {
                     <div 
                       key={employee.id} 
                       className="flex items-center justify-between p-4 hover:bg-slate-750 transition-colors"
+                      data-testid={`top-performer-${employee.id}`}
                     >
                       <div className="flex items-center gap-4">
                         <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm text-white ${
@@ -545,6 +556,15 @@ export default function Dashboard() {
                       </div>
                       
                       <div className="flex items-center gap-3">
+                        {empMomentum.direction && (
+                          <TrendIndicator
+                            direction={empMomentum.direction}
+                            change={empMomentum.change || 0}
+                            rollingAvg={empMomentum.rolling_avg}
+                            snapshotsUsed={empMomentum.snapshots_used || 0}
+                            size="sm"
+                          />
+                        )}
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${colorClass}`}>
                           {tierLabel}
                         </span>
@@ -910,8 +930,11 @@ export default function Dashboard() {
                     justification = `${emp.name} shows balanced performance across all metrics, scoring ${((score - avgScore) / avgScore * 100).toFixed(0)}% above the restaurant average.`;
                   }
                   
+                  // Get momentum for this employee
+                  const empMomentum = momentumData[emp.id] || {};
+                  
                   return (
-                    <div key={emp.id} className="flex items-start gap-4 p-4 border-b border-gray-100 last:border-0 hover:bg-green-50 transition-colors rounded-lg">
+                    <div key={emp.id} className="flex items-start gap-4 p-4 border-b border-gray-100 last:border-0 hover:bg-green-50 transition-colors rounded-lg" data-testid={`modal-top-performer-${emp.id}`}>
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${
                         idx === 0 ? 'bg-yellow-500' : idx === 1 ? 'bg-gray-400' : idx === 2 ? 'bg-amber-600' : 'bg-green-500'
                       }`}>
@@ -924,6 +947,15 @@ export default function Dashboard() {
                             <span className="px-2 py-0.5 bg-green-100 text-green-800 text-xs font-bold rounded-full">
                               +{((score - avgScore) / avgScore * 100).toFixed(0)}% vs avg
                             </span>
+                            {empMomentum.direction && (
+                              <TrendIndicator
+                                direction={empMomentum.direction}
+                                change={empMomentum.change || 0}
+                                rollingAvg={empMomentum.rolling_avg}
+                                snapshotsUsed={empMomentum.snapshots_used || 0}
+                                size="sm"
+                              />
+                            )}
                           </div>
                           <span className="text-xl font-bold text-green-600">{score.toFixed(1)}</span>
                         </div>
