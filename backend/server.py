@@ -43,6 +43,7 @@ from routes.admin import admin_router
 from routes.reviews import reviews_router
 from routes.insights import insights_router
 from routes.pos_upload import pos_upload_router, pdf_jobs
+from routes.scheduler import scheduler_router
 
 # pdf_jobs is now imported from pos_upload module
 from yodeck_slides import (
@@ -6640,123 +6641,7 @@ async def reconcile_cv_feedback_with_official(quarter: str = "Q1", year: int = 2
 
 # Deprecated UI scraper endpoints removed - use manual upload instead
 
-
-
-# ============================================================
-# AUTOMATED RECONCILIATION SCHEDULER
-# ============================================================
-
-class SchedulerConfig(BaseModel):
-    """Configuration for automated reconciliation scheduler."""
-    enabled: bool = False
-    schedule_hour: int = 2  # Default: 2 AM
-    schedule_minute: int = 0
-    quarter: str = "Q1"
-    year: int = 2026
-
-async def run_automated_reconciliation(quarter: str = "Q1", year: int = 2026):
-    """
-    Run the full reconciliation sequence:
-    1. Fix All Discrepancies (sync reviews and recalculate scores)
-    2. Enforce Data Caps (remove excess reviews)
-    3. Run Audit (verify all employees pass)
-    
-    NOTE: This function requires refactoring to work with the modularized routes.
-    The audit functions were moved to routes/audit.py as route handlers.
-    """
-    log_entry = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "action": "automated_reconciliation",
-        "quarter": quarter.upper(),
-        "year": year,
-        "steps": [],
-        "success": False,
-        "error": "Automated reconciliation requires manual execution via the Scoring Audit page."
-    }
-    
-    # Store the log entry
-    await db.reconciliation_history.insert_one(log_entry)
-    
-    return log_entry
-
-
-@api_router.get("/v2/scheduler/status")
-async def get_scheduler_status():
-    """Get the current status of the automated reconciliation scheduler."""
-    config = await db.scheduler_config.find_one({"_id": "reconciliation"}, {"_id": 0})
-    
-    jobs = scheduler.get_jobs()
-    reconciliation_job = next((j for j in jobs if j.id == "reconciliation_job"), None)
-    
-    return {
-        "scheduler_running": scheduler.running,
-        "config": config or {"enabled": False, "schedule_hour": 2, "schedule_minute": 0, "quarter": "Q1", "year": 2026},
-        "next_run": reconciliation_job.next_run_time.isoformat() if reconciliation_job and reconciliation_job.next_run_time else None,
-        "job_active": reconciliation_job is not None
-    }
-
-
-@api_router.post("/v2/scheduler/configure")
-async def configure_scheduler(config: SchedulerConfig):
-    """Configure and enable/disable the automated reconciliation scheduler."""
-    # Save config to database
-    await db.scheduler_config.update_one(
-        {"_id": "reconciliation"},
-        {"$set": {
-            "enabled": config.enabled,
-            "schedule_hour": config.schedule_hour,
-            "schedule_minute": config.schedule_minute,
-            "quarter": config.quarter,
-            "year": config.year,
-            "updated_at": datetime.now(timezone.utc).isoformat()
-        }},
-        upsert=True
-    )
-    
-    # Remove existing job if any
-    try:
-        scheduler.remove_job("reconciliation_job")
-    except Exception:
-        pass  # Job doesn't exist, which is fine
-    
-    if config.enabled:
-        # Add new scheduled job
-        scheduler.add_job(
-            run_automated_reconciliation,
-            CronTrigger(hour=config.schedule_hour, minute=config.schedule_minute),
-            id="reconciliation_job",
-            kwargs={"quarter": config.quarter, "year": config.year},
-            replace_existing=True
-        )
-        next_run = scheduler.get_job("reconciliation_job").next_run_time
-        return {
-            "success": True,
-            "message": f"Scheduler enabled. Next run at {next_run.strftime('%Y-%m-%d %H:%M:%S')}",
-            "next_run": next_run.isoformat()
-        }
-    else:
-        return {
-            "success": True,
-            "message": "Scheduler disabled"
-        }
-
-
-@api_router.post("/v2/scheduler/run-now")
-async def run_reconciliation_now(quarter: str = "Q1", year: int = 2026):
-    """Manually trigger the full reconciliation sequence immediately."""
-    result = await run_automated_reconciliation(quarter, year)
-    return result
-
-
-@api_router.get("/v2/scheduler/history")
-async def get_reconciliation_history(limit: int = 10):
-    """Get the history of automated reconciliation runs."""
-    history = await db.reconciliation_log.find(
-        {},
-        {"_id": 0}
-    ).sort("timestamp", -1).limit(limit).to_list(limit)
-    
-    return {"history": history}
+# Scheduler routes moved to /app/backend/routes/scheduler.py
 
 
 # Register QR tracking routes BEFORE including in app
@@ -6782,6 +6667,7 @@ api_router.include_router(admin_router)
 api_router.include_router(reviews_router)
 api_router.include_router(insights_router)
 api_router.include_router(pos_upload_router)
+api_router.include_router(scheduler_router)
 
 
 # Insights routes moved to /app/backend/routes/insights.py
@@ -6828,6 +6714,8 @@ async def shutdown_db_client():
 @app.on_event("startup")
 async def startup_event():
     """Start the scheduler and load saved configuration."""
+    from routes.scheduler import run_automated_reconciliation
+    
     scheduler.start()
     
     # Load saved scheduler config
