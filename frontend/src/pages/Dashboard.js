@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { Users, FileText, TrendingUp, Award, Target, Fish, Settings, Camera, Download, X, AlertTriangle, Lock, CheckCircle2, Trophy, Star, BarChart3 } from "lucide-react";
+import { Users, FileText, TrendingUp, Award, Target, Fish, Settings, Camera, Download, X, AlertTriangle, Lock, CheckCircle2, Trophy, Star, BarChart3, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
 import FinalizeQuarterModal from "../components/FinalizeQuarterModal";
@@ -94,12 +94,18 @@ export default function Dashboard() {
       return score < bServerThreshold && (jobTitle === 'server' || jobTitle === '');
     }).length;
 
+    // Total RT mentions
+    const totalRTMentions = employees.reduce((sum, emp) => sum + (emp.rt_mentions || 0), 0);
+    const employeesWithMentions = employees.filter(emp => (emp.rt_mentions || 0) > 0).length;
+
     setStats({
       totalEmployees: total,
       avgTotalScore: avgScore.toFixed(1),
       topPerformers,
       underPerformers,
-      topPerformerThreshold: topPerformerThreshold.toFixed(1)
+      topPerformerThreshold: topPerformerThreshold.toFixed(1),
+      totalRTMentions,
+      employeesWithMentions
     });
   }, [employees, quarterSettings]);
 
@@ -216,7 +222,7 @@ export default function Dashboard() {
         </div>
 
         {/* Bento Grid Layout */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
           {/* Hero Stat - Crew Count - Clickable to Employees page */}
           <Link to="/employees" className="block">
             <div className="bg-slate-800 rounded-2xl border border-slate-700 p-6 hover:border-blue-500/50 transition-colors cursor-pointer" data-testid="total-employees-card">
@@ -244,6 +250,22 @@ export default function Dashboard() {
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-cyan-500/20 flex items-center justify-center">
                   <BarChart3 className="w-6 h-6 text-cyan-400" />
+                </div>
+              </div>
+            </div>
+          </Link>
+
+          {/* ReviewTracker Mentions */}
+          <Link to="/review-tracker" className="block">
+            <div className="bg-yellow-900/30 rounded-2xl border border-yellow-700/50 p-6 hover:border-yellow-500/50 transition-colors cursor-pointer" data-testid="rt-mentions-card">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm font-medium text-yellow-400 uppercase tracking-wide">Review Mentions</p>
+                  <p className="text-4xl font-bold text-white mt-2">{stats.totalRTMentions || 0}</p>
+                  <p className="text-xs text-yellow-500 mt-1">{stats.employeesWithMentions || 0} employees mentioned</p>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-yellow-500/20 flex items-center justify-center">
+                  <MessageCircle className="w-6 h-6 text-yellow-400" />
                 </div>
               </div>
             </div>
