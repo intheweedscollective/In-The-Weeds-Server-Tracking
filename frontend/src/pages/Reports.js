@@ -36,12 +36,43 @@ export default function Reports() {
     }
   };
 
+  const [downloading, setDownloading] = useState(null);
+
+  const downloadFile = async (url, filename) => {
+    try {
+      setDownloading(filename);
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Download failed');
+      
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      console.error('Download error:', error);
+      alert('Download failed. Please try again.');
+    } finally {
+      setDownloading(null);
+    }
+  };
+
   const downloadRankingsPDF = () => {
-    window.open(`${BACKEND_URL}/api/v2/yodeck/${selectedYear}/${selectedQuarter}/printable-rankings`, '_blank');
+    downloadFile(
+      `${BACKEND_URL}/api/v2/yodeck/${selectedYear}/${selectedQuarter}/printable-rankings`,
+      `rankings_${selectedQuarter}_${selectedYear}.png`
+    );
   };
 
   const downloadYodeckSlide = (type) => {
-    window.open(`${BACKEND_URL}/api/v2/yodeck/${selectedYear}/${selectedQuarter}/${type}`, '_blank');
+    downloadFile(
+      `${BACKEND_URL}/api/v2/yodeck/${selectedYear}/${selectedQuarter}/${type}`,
+      `${type}_${selectedQuarter}_${selectedYear}.png`
+    );
   };
 
   const topPerformers = employees.slice(0, 5);
@@ -207,14 +238,21 @@ export default function Reports() {
                 variant="outline"
                 className="justify-start h-auto py-3 border-slate-600 hover:bg-slate-700"
                 onClick={() => downloadYodeckSlide('complete-rankings')}
+                disabled={downloading === 'complete-rankings_Q1_2026.png'}
                 data-testid="download-rankings-slide"
               >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                    <Trophy className="w-5 h-5 text-emerald-400" />
+                    {downloading === 'complete-rankings_Q1_2026.png' ? (
+                      <div className="w-5 h-5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Trophy className="w-5 h-5 text-emerald-400" />
+                    )}
                   </div>
                   <div className="text-left">
-                    <p className="font-medium text-white">Complete Rankings</p>
+                    <p className="font-medium text-white">
+                      {downloading === 'complete-rankings_Q1_2026.png' ? 'Downloading...' : 'Complete Rankings'}
+                    </p>
                     <p className="text-xs text-slate-400">Yodeck slide (1920x1080)</p>
                   </div>
                 </div>
