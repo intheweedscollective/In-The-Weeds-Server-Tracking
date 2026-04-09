@@ -23,6 +23,7 @@ import {
   QrCode,
   Building2,
   Filter,
+  BookOpen,
   Calculator,
   Layers,
   Globe
@@ -103,6 +104,7 @@ const navGroups = [
 ];
 
 const bottomNav = [
+  { path: "/upload-tutorial", label: "Upload Tutorial", icon: BookOpen },
   { path: "/scoring-guide", label: "Scoring Guide", icon: Calculator },
   { path: "/settings", label: "Settings", icon: Settings },
   { path: "/help", label: "Help Center", icon: HelpCircle }

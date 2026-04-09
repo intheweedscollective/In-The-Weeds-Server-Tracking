@@ -28,6 +28,7 @@ import StoreDetails from "./pages/StoreDetails";
 import GlobalOverview from "./pages/GlobalOverview";
 import CVAdjustment from "./pages/CVAdjustment";
 import ScoringGuide from "./pages/ScoringGuide";
+import DataUploadTutorial from "./pages/DataUploadTutorial";
 import SnapshotWorkflow from "./pages/SnapshotWorkflow";
 import SnapshotDetail from "./pages/SnapshotDetail";
 import QuarterlySummary from "./pages/QuarterlySummary";
@@ -58,6 +59,7 @@ function App() {
                 <Route path="/scoring-audit" element={<ScoringAudit />} />
                 <Route path="/cv-adjustment" element={<CVAdjustment />} />
                 <Route path="/scoring-guide" element={<ScoringGuide />} />
+                <Route path="/upload-tutorial" element={<DataUploadTutorial />} />
                 <Route path="/help" element={<HelpCenter />} />
                 <Route path="/reports" element={<Reports />} />
                 <Route path="/quarterly-summary" element={<QuarterlySummary />} />
