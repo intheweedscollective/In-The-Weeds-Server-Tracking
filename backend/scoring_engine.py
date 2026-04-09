@@ -1017,7 +1017,17 @@ def classify_employee_role(employee: EmployeeV2, settings: QuarterSettings) -> D
         }
 
 
-def generate_hierarchy_rankings(employees: List[EmployeeV2], settings: QuarterSettings) -> List[Dict[str, Any]]:
+def get_first_name(full_name: str) -> str:
+    """Extract first name only from full name for privacy on public displays."""
+    if not full_name:
+        return "Unknown"
+    parts = full_name.strip().split()
+    if parts:
+        return parts[0]
+    return full_name
+
+
+def generate_hierarchy_rankings(employees: List[EmployeeV2], settings: QuarterSettings, first_name_only: bool = True) -> List[Dict[str, Any]]:
     """
     Generate hierarchy-based rankings with position labels (Bar1, A1, B1, etc.)
     
@@ -1088,7 +1098,7 @@ def generate_hierarchy_rankings(employees: List[EmployeeV2], settings: QuarterSe
             "position_label": position_label,  # Bar1, A1, etc.
             "tier_label": tier,
             "employee_id": emp.id,
-            "name": emp.name,
+            "name": get_first_name(emp.name) if first_name_only else emp.name,
             "job_title": emp.job_title or "Server",
             "total_score": round(item["score"], 2),
             "bonus_points": round(metric_bonus + review_bonus, 2),

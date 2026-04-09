@@ -18,6 +18,17 @@ def get_db():
     from database import get_database
     return get_database()
 
+
+def get_first_name(full_name: str) -> str:
+    """Extract first name only from full name for privacy on public displays."""
+    if not full_name:
+        return "Unknown"
+    # Handle hyphenated names like "Starwars Mckinnon-Herrera"
+    parts = full_name.strip().split()
+    if parts:
+        return parts[0]
+    return full_name
+
 # ============================================================================
 # YODECK SLIDE ENDPOINTS
 # ============================================================================
@@ -138,11 +149,13 @@ async def get_yodeck_complete_rankings_slide(year: int, quarter: str, format: st
     
     # Transform employees for the slide generator - use pre-calculated data
     # NOTE: DAR data is intentionally excluded - it's sensitive HR info not for public display
+    # NOTE: Using first names only for privacy on public digital signage
     slide_employees = []
     for emp in employees:
+        full_name = emp.get("display_name") or emp.get("name") or "Unknown"
         slide_emp = {
             "id": emp.get("id"),
-            "name": emp.get("display_name") or emp.get("name"),
+            "name": get_first_name(full_name),
             "tier_label": emp.get("tier_label") or emp.get("performance_tier") or "B-Server",
             # Always use pre-DAR score for public slides
             "total_score": emp.get("pre_dar_score", 0) or emp.get("total_score", 0) or 0,
@@ -202,11 +215,12 @@ async def get_yodeck_printable_rankings_slide(year: int, quarter: str, format: s
         -(x.get("total_score", 0) or 0)
     ))
     
-    # Clean employee data
+    # Clean employee data - use first name only for privacy
     clean_employees = []
     for emp in employees:
+        full_name = emp.get("name", "Unknown")
         clean_employees.append({
-            "name": emp.get("name", "Unknown"),
+            "name": get_first_name(full_name),
             "tier_label": emp.get("tier_label", ""),
             "total_score": emp.get("total_score", 0)
         })
@@ -294,7 +308,7 @@ async def get_leaderboard_slide(year: int, quarter: str, format: str = "16:9"):
         
         rankings.append({
             "employee_id": emp.get("id"),
-            "name": emp.get("name", "Unknown"),
+            "name": get_first_name(emp.get("name", "Unknown")),
             "position": position,
             "score": total,
             "job_title": emp.get("job_title", "Server"),
