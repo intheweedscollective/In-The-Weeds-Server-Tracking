@@ -142,7 +142,7 @@ export default function ScoringGuide() {
                     <td className="py-2 font-medium text-white">LSC (Loyalty Sales)</td>
                     <td className="text-center">25%</td>
                     <td className="text-center text-green-400">25 pts</td>
-                    <td className="text-center">1:1 ratio</td>
+                    <td className="text-center">1:100 ratio</td>
                   </tr>
                   <tr className="border-b border-slate-700">
                     <td className="py-2 font-medium text-white">LBW (Liquor/Beer/Wine)</td>
