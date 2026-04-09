@@ -28,6 +28,7 @@ const V2_METRICS = {
   guests_per_lsc: { label: 'Guests/LSC', format: 'number', higherBetter: false },
   cv_score: { label: 'Customer Voice', format: 'number', higherBetter: true },
   pre_dar_score: { label: 'Total Score', format: 'number', higherBetter: true },
+  rt_mentions: { label: 'Review Mentions', format: 'number', higherBetter: true },
 };
 
 export default function FullRankings() {
@@ -1294,7 +1295,7 @@ export default function FullRankings() {
 
           {/* Top 10 by Each Metric */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {Object.entries(V2_METRICS).filter(([key]) => key !== 'pre_dar_score').map(([metricKey, metricInfo]) => {
+            {Object.entries(V2_METRICS).filter(([key]) => key !== 'pre_dar_score' && key !== 'rt_mentions').map(([metricKey, metricInfo]) => {
               const performers = topPerformers[metricKey] || [];
               
               return (
@@ -1346,6 +1347,69 @@ export default function FullRankings() {
                 </div>
               );
             })}
+          </div>
+
+          {/* Top 10 ReviewTracker - Detailed View */}
+          <div className="mt-6 bubba-card" data-testid="top-10-reviewtracker-detailed">
+            <div className="p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-serif font-bold text-foreground flex items-center gap-2">
+                    <MessageCircle className="w-5 h-5 text-yellow-500" />
+                    Top 10 - ReviewTracker Mentions
+                  </h3>
+                  <p className="text-sm text-slate-400">
+                    Employees mentioned most frequently in public reviews (Google, Yelp, TripAdvisor)
+                  </p>
+                </div>
+              </div>
+              
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-700">
+                      <th className="text-left py-2 px-2 text-slate-400 font-medium">Rank</th>
+                      <th className="text-left py-2 px-2 text-slate-400 font-medium">Employee</th>
+                      <th className="text-center py-2 px-2 text-slate-400 font-medium">Total Mentions</th>
+                      <th className="text-center py-2 px-2 text-slate-400 font-medium">Positive</th>
+                      <th className="text-center py-2 px-2 text-slate-400 font-medium">RT Bonus</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(topPerformers['rt_mentions'] || []).map((employee, index) => (
+                      <tr key={employee.id} className="border-b border-slate-700/50 hover:bg-slate-800/30">
+                        <td className="py-3 px-2">
+                          <div className="flex items-center justify-center w-7 h-7 bg-yellow-500/20 rounded-full text-sm font-bold text-yellow-400">
+                            {index + 1}
+                          </div>
+                        </td>
+                        <td className="py-3 px-2">
+                          <div className="font-semibold text-foreground">{employee.name}</div>
+                          <div className="text-xs text-slate-400 capitalize">{employee.tier_label || employee.job_title || 'Server'}</div>
+                        </td>
+                        <td className="py-3 px-2 text-center">
+                          <span className="text-lg font-bold text-primary">{employee.rt_mentions || 0}</span>
+                        </td>
+                        <td className="py-3 px-2 text-center">
+                          <span className="text-green-400 font-medium">{employee.rt_positive || 0}</span>
+                        </td>
+                        <td className="py-3 px-2 text-center">
+                          <span className="text-amber-400 font-medium">+{formatNumber(employee.review_tracker_bonus || 0)}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              
+              {(!topPerformers['rt_mentions'] || topPerformers['rt_mentions'].length === 0) && (
+                <div className="text-center py-8 text-gray-400">
+                  <MessageCircle className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                  <p>No ReviewTracker data available</p>
+                  <p className="text-xs mt-1">Upload ReviewTracker CSV in Data Uploads</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
