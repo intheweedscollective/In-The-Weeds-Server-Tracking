@@ -294,8 +294,11 @@ def generate_snapshot_slide(
                       fill=(255, 255, 255), anchor="lm")
             
             # Draw name - EVEN BIGGER and BOLDER, pure white
-            # Fixed position for consistent alignment
-            name_x = col_x + 85  # Fixed position for all names
+            # Adjust position based on rank width for consistent spacing
+            if prefix == "BAR":
+                name_x = col_x + 105  # More space for BAR1, BAR2
+            else:
+                name_x = col_x + 85  # Standard position for T, A, B, C
             draw.text((name_x, row_cy), first_name, font=get_font(36, "quicksand_bold"), 
                       fill=(255, 255, 255), anchor="lm")
     
