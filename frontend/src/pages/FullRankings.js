@@ -49,7 +49,7 @@ export default function FullRankings() {
   const [totalEmployees, setTotalEmployees] = useState(0);
   const [expandedRow, setExpandedRow] = useState(null);
   const [backgrounds, setBackgrounds] = useState([]);
-  const [selectedBackground, setSelectedBackground] = useState("dark");
+  const [selectedBackground, setSelectedBackground] = useState("rainbow_bubbles");
   const [editingJobTitle, setEditingJobTitle] = useState(null); // employee_id being edited
   const [pendingJobTitle, setPendingJobTitle] = useState(""); // new job title value
   const [savingJobTitle, setSavingJobTitle] = useState(false);

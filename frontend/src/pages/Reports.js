@@ -69,8 +69,10 @@ export default function Reports() {
   };
 
   const downloadYodeckSlide = (type) => {
+    // For complete-rankings, use the rainbow_bubbles background
+    const bgParam = type === 'complete-rankings' ? '?format=16:9&background=rainbow_bubbles' : '?format=16:9';
     downloadFile(
-      `${BACKEND_URL}/api/v2/yodeck/${selectedYear}/${selectedQuarter}/${type}`,
+      `${BACKEND_URL}/api/v2/yodeck/${selectedYear}/${selectedQuarter}/${type}${bgParam}`,
       `${type}_${selectedQuarter}_${selectedYear}.png`
     );
   };

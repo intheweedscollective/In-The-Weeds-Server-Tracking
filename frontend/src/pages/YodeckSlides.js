@@ -57,7 +57,7 @@ export default function YodeckSlides() {
   const [showThemeSettings, setShowThemeSettings] = useState(false);
   const [savingTheme, setSavingTheme] = useState(false);
   const [backgrounds, setBackgrounds] = useState([]);
-  const [selectedBackground, setSelectedBackground] = useState("dark");
+  const [selectedBackground, setSelectedBackground] = useState("rainbow_bubbles");
   
   // Theme settings
   const [themeSettings, setThemeSettings] = useState({

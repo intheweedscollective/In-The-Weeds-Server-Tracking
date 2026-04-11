@@ -20,6 +20,12 @@ BACKGROUNDS = {
         "color": (15, 23, 42),
         "preview": None
     },
+    "rainbow_bubbles": {
+        "name": "Rainbow Bubbles",
+        "type": "image",
+        "path": "/app/backend/assets/backgrounds/rainbow_bubbles.jpg",
+        "preview": None
+    },
 }
 
 # Exact colors from reference
@@ -129,314 +135,147 @@ def generate_snapshot_slide(
     employees: List[Dict[str, Any]],
     benchmarks: Dict[str, float],
     snapshot_date: str,
-    background: str = "dark",
+    background: str = "rainbow_bubbles",
     title: str = None,
     quarter: str = "Q1",
     a_min: float = 85,
     b_min: float = 70
 ) -> bytes:
-    """Generate snapshot matching Q1 Final reference image exactly."""
+    """
+    Generate a simplified Complete Rankings slide.
+    Shows ONLY: Tier sections with First Name and Rank, sorted highest to lowest.
+    Uses colorful background image.
+    """
     
-    # Create base image with dark navy background
-    img = Image.new('RGB', (SLIDE_WIDTH, SLIDE_HEIGHT), COLORS["bg_navy"])
+    # Load background image or use solid color
+    bg_config = BACKGROUNDS.get(background, BACKGROUNDS.get("rainbow_bubbles", BACKGROUNDS["dark"]))
+    
+    if bg_config.get("type") == "image" and os.path.exists(bg_config.get("path", "")):
+        try:
+            img = Image.open(bg_config["path"]).convert("RGB")
+            img = img.resize((SLIDE_WIDTH, SLIDE_HEIGHT), Image.Resampling.LANCZOS)
+        except:
+            img = Image.new('RGB', (SLIDE_WIDTH, SLIDE_HEIGHT), COLORS["bg_navy"])
+    else:
+        img = Image.new('RGB', (SLIDE_WIDTH, SLIDE_HEIGHT), bg_config.get("color", COLORS["bg_navy"]))
+    
     draw = ImageDraw.Draw(img)
     
-    # Sort employees by tier, then by score within tier
+    # Sort employees by tier, then by score within tier (highest to lowest)
     tier_order = {"Trainer": 0, "Bartender": 1, "A-Server": 2, "B-Server": 3, "C-Server": 4}
     sorted_emps = sorted(employees, key=lambda x: (
         tier_order.get(x.get("tier_label", "C-Server"), 4),
         -(x.get("total_score") or 0)
     ))
-    num_emps = len(sorted_emps)
     
-    # ===== LEFT PANEL =====
-    left_width = 480
-    
-    # Logo
-    logo_path = "/app/backend/assets/bubba_gump_logo.png"
-    if os.path.exists(logo_path):
-        try:
-            logo = Image.open(logo_path).convert("RGBA")
-            logo.thumbnail((280, 280), Image.Resampling.LANCZOS)
-            logo_x = (left_width - logo.width) // 2
-            img.paste(logo, (logo_x, 30), logo)
-        except:
-            pass
-    
-    draw = ImageDraw.Draw(img)
-    
-    # Title section
-    title_y = 330
-    center_x = left_width // 2
-    
-    # "Q1 SERVER" - white
-    draw.text((center_x, title_y), f"{quarter} SERVER", font=get_font(36, "semibold"),
-              fill=COLORS["white"], anchor="mm")
-    
-    # "PERFORMANCE" - red, large
-    draw.text((center_x, title_y + 50), "PERFORMANCE", font=get_font(42, "semibold"),
-              fill=COLORS["title_red"], anchor="mm")
-    
-    # "SNAPSHOT" - white
-    draw.text((center_x, title_y + 100), "SNAPSHOT", font=get_font(36, "semibold"),
-              fill=COLORS["white"], anchor="mm")
-    
-    # Date - red
-    draw.text((center_x, title_y + 145), snapshot_date, font=get_font(24, "medium"),
-              fill=COLORS["title_red"], anchor="mm")
-    
-    # Legend
-    legend_y = title_y + 200
-    legend_items = [
-        (COLORS["blue"], "EXCEEDING ALL", "EXPECTATIONS"),
-        (COLORS["green"], "MEETING", "EXPECTATIONS"),
-        (COLORS["yellow"], "WORK IN", "PROGRESS"),
-        (COLORS["red"], "NEEDS IMMEDIATE", "IMPROVEMENT"),
-    ]
-    
-    for i, (color, line1, line2) in enumerate(legend_items):
-        y = legend_y + i * 70
-        square_size = 50
-        legend_start_x = 50
-        
-        draw.rectangle([legend_start_x, y, legend_start_x + square_size, y + square_size], fill=color)
-        draw.text((legend_start_x + square_size + 12, y + 8), line1, 
-                  font=get_font(28, "semibold"), fill=color, anchor="lm")
-        draw.text((legend_start_x + square_size + 12, y + 36), line2, 
-                  font=get_font(28, "semibold"), fill=color, anchor="lm")
-    
-    # Footer text
-    footer_y = SLIDE_HEIGHT - 130
-    draw.text((center_x, footer_y), "DON'T WAIT TO IMPACT", 
-              font=get_font(24, "semibold"), fill=COLORS["white"], anchor="mm")
-    draw.text((center_x, footer_y + 30), "THIS NUMBER.",
-              font=get_font(24, "semibold"), fill=COLORS["white"], anchor="mm")
-    draw.text((center_x, footer_y + 65), "IF YOU HAVE QUESTIONS",
-              font=get_font(24, "semibold"), fill=COLORS["white"], anchor="mm")
-    draw.text((center_x, footer_y + 95), "PLEASE SEE MANAGEMENT.",
-              font=get_font(24, "semibold"), fill=COLORS["white"], anchor="mm")
-    
-    # ===== RIGHT PANEL (Table) =====
-    table_left = left_width + 20
-    table_right = SLIDE_WIDTH - 20
-    table_top = 30
-    table_width = table_right - table_left
-    
-    # Row sizing
-    header_h = 45
-    available_height = SLIDE_HEIGHT - table_top - 20 - header_h
-    row_h = available_height // max(num_emps, 1)
-    row_h = max(28, min(42, row_h))
-    
-    # Columns: Rank, Name, Trend, PPA, LBW, GLASS, LSC, CV, RT, Bonus, Score
-    # NOTE: DAR is intentionally excluded - sensitive HR data should not appear on public slides
-    columns = [
-        {"name": "Rank", "width": 50},
-        {"name": "Name", "width": 130},
-        {"name": "Trend", "width": 45},
-        {"name": "PPA", "width": 70},
-        {"name": "LBW", "width": 70},
-        {"name": "GLASS", "width": 70},
-        {"name": "LSC", "width": 70},
-        {"name": "CV", "width": 65},
-        {"name": "RT", "width": 65},
-        {"name": "Bonus", "width": 70},
-        {"name": "Score", "width": 90},
-    ]
-    
-    # Scale columns to fit
-    total_col_w = sum(c["width"] for c in columns)
-    scale = table_width / total_col_w
-    for c in columns:
-        c["width"] = int(c["width"] * scale)
-    columns[-1]["width"] += table_width - sum(c["width"] for c in columns)
-    
-    # Column positions
-    col_x = []
-    x = table_left
-    for c in columns:
-        col_x.append(x)
-        x += c["width"]
-    
-    # Header row - dark blue
-    draw.rectangle([table_left, table_top, table_right, table_top + header_h],
-                   fill=COLORS["header_blue"])
-    
-    # Header border
-    draw.line([(table_left, table_top), (table_right, table_top)], fill=(0, 0, 0), width=1)
-    draw.line([(table_left, table_top + header_h), (table_right, table_top + header_h)], fill=(0, 0, 0), width=1)
-    
-    # Header text
-    header_font = get_font(16, "semibold")
-    for i, col in enumerate(columns):
-        cx = col_x[i] + col["width"] // 2
-        draw.text((cx, table_top + header_h // 2), col["name"],
-                  font=header_font, fill=COLORS["white"], anchor="mm")
-    
-    # Data rows
-    data_y = table_top + header_h
-    tier_counts = {}
-    row_idx = 0
-    
+    # Group employees by tier
+    tier_groups = {}
     for emp in sorted_emps:
         tier = emp.get("tier_label", "C-Server")
-        tier_counts[tier] = tier_counts.get(tier, 0) + 1
-        
-        y = data_y + row_idx * row_h
-        if y + row_h > SLIDE_HEIGHT - 20:
-            break
-        
-        # Alternating row colors (white / light gray)
-        row_bg = COLORS["row_white"] if row_idx % 2 == 0 else COLORS["row_gray"]
-        draw.rectangle([table_left, y, table_right, y + row_h], fill=row_bg)
-        
-        # Grid lines
-        draw.line([(table_left, y), (table_right, y)], fill=(0, 0, 0), width=1)
-        draw.line([(table_left, y + row_h), (table_right, y + row_h)], fill=(0, 0, 0), width=1)
-        
-        row_cy = y + row_h // 2
-        
-        # Rank label (T1, T2, BAR1, A1, B1, C1, etc.)
-        if tier == "Bartender":
-            rank_text = f"BAR{tier_counts[tier]}"
-        else:
-            prefix = {"Trainer": "T", "A-Server": "A", "B-Server": "B", "C-Server": "C"}.get(tier, "")
-            rank_text = f"{prefix}{tier_counts[tier]}"
-        
-        draw.text((col_x[0] + columns[0]["width"] // 2, row_cy), rank_text,
-                  font=get_font(16, "aptos"), fill=(0, 0, 0), anchor="mm")
-        
-        # Name - first name only
-        full_name = emp.get("name") or emp.get("display_name") or "Unknown"
-        name = full_name.split()[0] if full_name else "Unknown"
-        draw.text((col_x[1] + 10, row_cy), name,
-                  font=get_font(16, "aptos"), fill=(0, 0, 0), anchor="lm")
-        
-        # Trend - horizontal dash (=)
-        trend_cx = col_x[2] + columns[2]["width"] // 2
-        dash_width = 16
-        dash_height = 4
-        draw.rectangle(
-            [trend_cx - dash_width//2, row_cy - dash_height//2, 
-             trend_cx + dash_width//2, row_cy + dash_height//2],
-            fill=(128, 128, 128)
-        )
-        
-        # Get metric values - use pre-calculated from snapshot
-        score_ppa = emp.get("score_ppa", 0) or 0
-        score_lbw = emp.get("score_lbw", 0) or 0
-        score_glass = emp.get("score_glass", 0) or 0
-        score_lsc = emp.get("score_lsc", 0) or 0
-        cv_score = emp.get("cv_score", 0) or 0
-        rt_bonus = emp.get("rt_bonus", 0) or min((emp.get("rt_mentions", 0) or 0) * 0.5, 15)
-        
-        # Use pre-calculated metric bonus from snapshot
-        metric_bonus = emp.get("total_metric_bonus", 0) or 0
-        
-        # DAR deductions (negative points for written warnings/suspensions)
-        dar_deduction = emp.get("dar_deduction", 0) or 0
-        
-        # Use final_score if finalized, otherwise total_score
-        # final_score includes DAR deductions
-        total_score = emp.get("final_score") or emp.get("total_score", 0) or 0
-        
-        # Draw metric cells with colors
-        cell_pad = 4
-        
-        # PPA (column 3)
-        col_idx = 3
-        color = get_metric_color(score_ppa)
-        text_color = COLORS["white"] if color == COLORS["blue"] else (0, 0, 0)
-        cx = col_x[col_idx] + cell_pad
-        cw = columns[col_idx]["width"] - cell_pad * 2
-        ch = row_h - 8
-        cy_cell = y + 4
-        draw.rectangle([cx, cy_cell, cx + cw, cy_cell + ch], fill=color)
-        draw.text((cx + cw // 2, row_cy), f"{score_ppa:.0f}%",
-                  font=get_font(14, "aptos"), fill=text_color, anchor="mm")
-        
-        # LBW (column 4)
-        col_idx = 4
-        color = get_metric_color(score_lbw)
-        text_color = COLORS["white"] if color == COLORS["blue"] else (0, 0, 0)
-        cx = col_x[col_idx] + cell_pad
-        cw = columns[col_idx]["width"] - cell_pad * 2
-        draw.rectangle([cx, cy_cell, cx + cw, cy_cell + ch], fill=color)
-        draw.text((cx + cw // 2, row_cy), f"{score_lbw:.0f}%",
-                  font=get_font(14, "aptos"), fill=text_color, anchor="mm")
-        
-        # GLASS (column 5)
-        col_idx = 5
-        color = get_metric_color(score_glass)
-        text_color = COLORS["white"] if color == COLORS["blue"] else (0, 0, 0)
-        cx = col_x[col_idx] + cell_pad
-        cw = columns[col_idx]["width"] - cell_pad * 2
-        draw.rectangle([cx, cy_cell, cx + cw, cy_cell + ch], fill=color)
-        draw.text((cx + cw // 2, row_cy), f"{score_glass:.0f}%",
-                  font=get_font(14, "aptos"), fill=text_color, anchor="mm")
-        
-        # LSC (column 6)
-        col_idx = 6
-        color = get_metric_color(score_lsc)
-        text_color = COLORS["white"] if color == COLORS["blue"] else (0, 0, 0)
-        cx = col_x[col_idx] + cell_pad
-        cw = columns[col_idx]["width"] - cell_pad * 2
-        draw.rectangle([cx, cy_cell, cx + cw, cy_cell + ch], fill=color)
-        draw.text((cx + cw // 2, row_cy), f"{score_lsc:.0f}%",
-                  font=get_font(14, "aptos"), fill=text_color, anchor="mm")
-        
-        # CV (column 7)
-        col_idx = 7
-        color = get_cv_color(cv_score)
-        text_color = COLORS["white"] if color == COLORS["blue"] else (0, 0, 0)
-        cx = col_x[col_idx] + cell_pad
-        cw = columns[col_idx]["width"] - cell_pad * 2
-        draw.rectangle([cx, cy_cell, cx + cw, cy_cell + ch], fill=color)
-        draw.text((cx + cw // 2, row_cy), f"+{cv_score:.1f}",
-                  font=get_font(14, "aptos"), fill=text_color, anchor="mm")
-        
-        # RT (column 8)
-        col_idx = 8
-        color = get_rt_color(rt_bonus)
-        text_color = COLORS["white"] if color == COLORS["blue"] else (0, 0, 0)
-        cx = col_x[col_idx] + cell_pad
-        cw = columns[col_idx]["width"] - cell_pad * 2
-        draw.rectangle([cx, cy_cell, cx + cw, cy_cell + ch], fill=color)
-        draw.text((cx + cw // 2, row_cy), f"+{rt_bonus:.1f}",
-                  font=get_font(14, "aptos"), fill=text_color, anchor="mm")
-        
-        # Bonus (column 9)
-        col_idx = 9
-        color = get_bonus_color(metric_bonus)
-        text_color = COLORS["white"] if color == COLORS["blue"] else (0, 0, 0)
-        cx = col_x[col_idx] + cell_pad
-        cw = columns[col_idx]["width"] - cell_pad * 2
-        draw.rectangle([cx, cy_cell, cx + cw, cy_cell + ch], fill=color)
-        draw.text((cx + cw // 2, row_cy), f"+{metric_bonus:.1f}",
-                  font=get_font(14, "aptos"), fill=text_color, anchor="mm")
-        
-        # Score (column 10) - color based on tier thresholds
-        # Uses pre-DAR score for public display (DAR is private HR data)
-        col_idx = 10
-        display_score = emp.get("total_score", 0) or emp.get("pre_dar_score", 0) or 0
-        color = get_score_color(display_score, a_min, b_min)
-        text_color = (0, 0, 0) if color == COLORS["yellow"] else COLORS["white"]
-        cx = col_x[col_idx] + cell_pad
-        cw = columns[col_idx]["width"] - cell_pad * 2
-        draw.rectangle([cx, cy_cell, cx + cw, cy_cell + ch], fill=color)
-        draw.text((cx + cw // 2, row_cy), f"{display_score:.1f}",
-                  font=get_font(14, "aptos"), fill=text_color, anchor="mm")
-        
-        row_idx += 1
+        if tier not in tier_groups:
+            tier_groups[tier] = []
+        tier_groups[tier].append(emp)
     
-    # Outer border
-    final_y = data_y + row_idx * row_h
-    draw.rectangle([table_left, table_top, table_right, final_y], outline=(0, 0, 0), width=1)
+    # Tier configuration with colors
+    TIER_CONFIG = {
+        "Trainer": {"label": "TRAINERS", "color": (220, 38, 38), "text": (255, 255, 255)},
+        "Bartender": {"label": "BARTENDERS", "color": (168, 85, 247), "text": (255, 255, 255)},
+        "A-Server": {"label": "A-SERVERS", "color": (34, 197, 94), "text": (255, 255, 255)},
+        "B-Server": {"label": "B-SERVERS", "color": (234, 179, 8), "text": (0, 0, 0)},
+        "C-Server": {"label": "C-SERVERS", "color": (239, 68, 68), "text": (255, 255, 255)},
+    }
     
-    # Vertical column lines
-    for i in range(len(columns)):
-        draw.line([(col_x[i], table_top), (col_x[i], final_y)], fill=(0, 0, 0), width=1)
-    draw.line([(table_right, table_top), (table_right, final_y)], fill=(0, 0, 0), width=1)
+    tier_order_list = ["Trainer", "Bartender", "A-Server", "B-Server", "C-Server"]
+    active_tiers = [t for t in tier_order_list if t in tier_groups and len(tier_groups[t]) > 0]
+    
+    # Calculate layout - arrange tiers in columns
+    num_tiers = len(active_tiers)
+    if num_tiers == 0:
+        # No employees, return blank slide
+        buf = io.BytesIO()
+        img.save(buf, format='PNG', optimize=True)
+        buf.seek(0)
+        return buf.getvalue()
+    
+    # Title at top
+    title_text = f"{quarter} SERVER RANKINGS"
+    draw.text((SLIDE_WIDTH // 2, 50), title_text, 
+              font=get_font(56, "semibold"), fill=(255, 255, 255), anchor="mm",
+              stroke_width=3, stroke_fill=(0, 0, 0))
+    
+    # Layout tiers in columns (max 5 columns for 5 tiers)
+    margin = 40
+    top_margin = 120
+    bottom_margin = 40
+    
+    # Calculate column width based on number of active tiers
+    available_width = SLIDE_WIDTH - (2 * margin) - ((num_tiers - 1) * 20)  # 20px gap between columns
+    col_width = available_width // num_tiers
+    
+    tier_header_height = 50
+    row_height = 36
+    available_height = SLIDE_HEIGHT - top_margin - bottom_margin - tier_header_height
+    
+    for tier_idx, tier in enumerate(active_tiers):
+        tier_config = TIER_CONFIG.get(tier, {"label": tier.upper(), "color": (100, 100, 100), "text": (255, 255, 255)})
+        employees_in_tier = tier_groups[tier]
+        
+        # Column position
+        col_x = margin + tier_idx * (col_width + 20)
+        col_right = col_x + col_width
+        
+        # Semi-transparent background for column
+        overlay = Image.new('RGBA', (col_width, SLIDE_HEIGHT - top_margin - bottom_margin + 10), (0, 0, 0, 180))
+        img.paste(Image.alpha_composite(Image.new('RGBA', overlay.size, (0, 0, 0, 0)), overlay).convert('RGB'), 
+                  (col_x, top_margin - 5), 
+                  overlay.split()[3])
+        draw = ImageDraw.Draw(img)
+        
+        # Tier header
+        header_y = top_margin
+        draw.rectangle([col_x, header_y, col_right, header_y + tier_header_height], 
+                      fill=tier_config["color"])
+        draw.text((col_x + col_width // 2, header_y + tier_header_height // 2), 
+                 tier_config["label"], font=get_font(28, "semibold"), 
+                 fill=tier_config["text"], anchor="mm")
+        
+        # Draw employees
+        data_y = header_y + tier_header_height
+        tier_count = 0
+        
+        for emp in employees_in_tier:
+            tier_count += 1
+            
+            y = data_y + (tier_count - 1) * row_height
+            if y + row_height > SLIDE_HEIGHT - bottom_margin:
+                break
+            
+            row_cy = y + row_height // 2
+            
+            # Rank label
+            if tier == "Bartender":
+                rank_text = f"{tier_count}."
+            else:
+                rank_text = f"{tier_count}."
+            
+            # First name only
+            full_name = emp.get("name") or emp.get("display_name") or "Unknown"
+            first_name = full_name.split()[0][:15] if full_name else "Unknown"  # Max 15 chars
+            
+            # Draw rank and name
+            rank_x = col_x + 15
+            name_x = col_x + 50
+            
+            draw.text((rank_x, row_cy), rank_text, font=get_font(22, "semibold"), 
+                      fill=(255, 255, 255), anchor="lm")
+            draw.text((name_x, row_cy), first_name, font=get_font(22, "medium"), 
+                      fill=(255, 255, 255), anchor="lm")
+    
+    # Footer - quarter info
+    footer_text = f"Q1 2026 • Las Vegas"
+    draw.text((SLIDE_WIDTH // 2, SLIDE_HEIGHT - 25), footer_text,
+              font=get_font(20, "medium"), fill=(255, 255, 255), anchor="mm",
+              stroke_width=1, stroke_fill=(0, 0, 0))
     
     # Save
     buf = io.BytesIO()

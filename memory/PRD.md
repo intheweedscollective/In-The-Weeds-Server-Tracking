@@ -9,9 +9,17 @@ Build a comprehensive performance review application for restaurant employees.
 - **Database**: MongoDB
 - **AI**: OpenAI GPT-4o (via Emergent LLM Key)
 
-## Current State (2026-04-10)
+## Current State (2026-04-11)
 
 ### Latest Changes
+- **Complete Rankings Slide Redesign (2026-04-11)**:
+  - Simplified slide to show ONLY: Tier header sections + First Name + Rank
+  - Added colorful rainbow bubbles background (`/app/backend/assets/backgrounds/rainbow_bubbles.jpg`)
+  - Tiers displayed as columns: TRAINERS, BARTENDERS, A-SERVERS, B-SERVERS, C-SERVERS
+  - Each employee shown with rank number and first name only
+  - Updated default background from "dark" to "rainbow_bubbles" across all pages
+  - 16:9 format for Yodeck display
+
 - **Backend Modularization - Phase 2 (2026-04-10)**:
   - Extracted legacy snapshot routes from `server.py` to `routes/snapshots_legacy.py`
   - **server.py reduced: 4,411 → 3,347 lines (~1,064 lines removed)**
