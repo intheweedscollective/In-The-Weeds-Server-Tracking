@@ -52,6 +52,9 @@ FONT_REGULAR = "/app/backend/assets/fonts/Poppins-Regular.ttf"
 FONT_MEDIUM = "/app/backend/assets/fonts/Poppins-Medium.ttf"
 FONT_SEMIBOLD = "/app/backend/assets/fonts/Poppins-SemiBold.ttf"
 FONT_APTOS_NARROW_BOLD = "/app/backend/assets/fonts/Aptos-Narrow-Bold.ttf"
+FONT_QUICKSAND_BOLD = "/app/backend/assets/fonts/Quicksand-Bold.ttf"
+FONT_QUICKSAND_SEMIBOLD = "/app/backend/assets/fonts/Quicksand-SemiBold.ttf"
+FONT_QUICKSAND_MEDIUM = "/app/backend/assets/fonts/Quicksand-Medium.ttf"
 
 
 def get_font(size: int, weight: str = "regular"):
@@ -61,12 +64,18 @@ def get_font(size: int, weight: str = "regular"):
         path = FONT_SEMIBOLD
     elif weight == "medium":
         path = FONT_MEDIUM
+    elif weight == "quicksand_bold":
+        path = FONT_QUICKSAND_BOLD
+    elif weight == "quicksand_semibold":
+        path = FONT_QUICKSAND_SEMIBOLD
+    elif weight == "quicksand":
+        path = FONT_QUICKSAND_MEDIUM
     else:
         path = FONT_REGULAR
     try:
         return ImageFont.truetype(path, size)
     except:
-        if weight in ["bold", "semibold", "aptos"]:
+        if weight in ["bold", "semibold", "aptos", "quicksand_bold"]:
             fallback = "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
         else:
             fallback = "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
@@ -143,8 +152,9 @@ def generate_snapshot_slide(
 ) -> bytes:
     """
     Generate a simplified Complete Rankings slide.
-    Shows ONLY: Tier sections with First Name and Rank, sorted highest to lowest.
-    Uses colorful background image.
+    Shows ONLY: Tier sections with First Name and Rank (T1, BAR1, A1, B1, C1 format).
+    Uses colorful background image with content-fitted column backgrounds.
+    Uses Quicksand font for a fun, stylish look.
     """
     
     # Load background image or use solid color
@@ -176,19 +186,18 @@ def generate_snapshot_slide(
             tier_groups[tier] = []
         tier_groups[tier].append(emp)
     
-    # Tier configuration with colors
+    # Tier configuration with colors and rank prefixes
     TIER_CONFIG = {
-        "Trainer": {"label": "TRAINERS", "color": (220, 38, 38), "text": (255, 255, 255)},
-        "Bartender": {"label": "BARTENDERS", "color": (168, 85, 247), "text": (255, 255, 255)},
-        "A-Server": {"label": "A-SERVERS", "color": (34, 197, 94), "text": (255, 255, 255)},
-        "B-Server": {"label": "B-SERVERS", "color": (234, 179, 8), "text": (0, 0, 0)},
-        "C-Server": {"label": "C-SERVERS", "color": (239, 68, 68), "text": (255, 255, 255)},
+        "Trainer": {"label": "TRAINERS", "prefix": "T", "color": (220, 38, 38), "text": (255, 255, 255)},
+        "Bartender": {"label": "BARTENDERS", "prefix": "BAR", "color": (168, 85, 247), "text": (255, 255, 255)},
+        "A-Server": {"label": "A-SERVERS", "prefix": "A", "color": (34, 197, 94), "text": (255, 255, 255)},
+        "B-Server": {"label": "B-SERVERS", "prefix": "B", "color": (234, 179, 8), "text": (0, 0, 0)},
+        "C-Server": {"label": "C-SERVERS", "prefix": "C", "color": (239, 68, 68), "text": (255, 255, 255)},
     }
     
     tier_order_list = ["Trainer", "Bartender", "A-Server", "B-Server", "C-Server"]
     active_tiers = [t for t in tier_order_list if t in tier_groups and len(tier_groups[t]) > 0]
     
-    # Calculate layout - arrange tiers in columns
     num_tiers = len(active_tiers)
     if num_tiers == 0:
         # No employees, return blank slide
@@ -197,85 +206,105 @@ def generate_snapshot_slide(
         buf.seek(0)
         return buf.getvalue()
     
-    # Title at top
+    # Title at top - using Quicksand Bold for fun style
     title_text = f"{quarter} SERVER RANKINGS"
-    draw.text((SLIDE_WIDTH // 2, 50), title_text, 
-              font=get_font(56, "semibold"), fill=(255, 255, 255), anchor="mm",
-              stroke_width=3, stroke_fill=(0, 0, 0))
+    draw.text((SLIDE_WIDTH // 2, 55), title_text, 
+              font=get_font(60, "quicksand_bold"), fill=(255, 255, 255), anchor="mm",
+              stroke_width=4, stroke_fill=(0, 0, 0))
     
-    # Layout tiers in columns (max 5 columns for 5 tiers)
-    margin = 40
-    top_margin = 120
-    bottom_margin = 40
+    # Layout parameters
+    margin = 50
+    top_margin = 130
+    col_gap = 25  # Gap between columns
     
     # Calculate column width based on number of active tiers
-    available_width = SLIDE_WIDTH - (2 * margin) - ((num_tiers - 1) * 20)  # 20px gap between columns
+    available_width = SLIDE_WIDTH - (2 * margin) - ((num_tiers - 1) * col_gap)
     col_width = available_width // num_tiers
     
-    tier_header_height = 50
-    row_height = 36
-    available_height = SLIDE_HEIGHT - top_margin - bottom_margin - tier_header_height
+    tier_header_height = 55
+    row_height = 42
+    padding_bottom = 15  # Padding inside column after last employee
+    
+    # Calculate max employees per column for vertical centering
+    max_employees = max(len(tier_groups[t]) for t in active_tiers)
     
     for tier_idx, tier in enumerate(active_tiers):
-        tier_config = TIER_CONFIG.get(tier, {"label": tier.upper(), "color": (100, 100, 100), "text": (255, 255, 255)})
+        tier_config = TIER_CONFIG.get(tier, {"label": tier.upper(), "prefix": "", "color": (100, 100, 100), "text": (255, 255, 255)})
         employees_in_tier = tier_groups[tier]
+        num_employees = len(employees_in_tier)
         
         # Column position
-        col_x = margin + tier_idx * (col_width + 20)
+        col_x = margin + tier_idx * (col_width + col_gap)
         col_right = col_x + col_width
         
-        # Semi-transparent background for column
-        overlay = Image.new('RGBA', (col_width, SLIDE_HEIGHT - top_margin - bottom_margin + 10), (0, 0, 0, 180))
-        img.paste(Image.alpha_composite(Image.new('RGBA', overlay.size, (0, 0, 0, 0)), overlay).convert('RGB'), 
-                  (col_x, top_margin - 5), 
-                  overlay.split()[3])
+        # Calculate column height based on CONTENT (not full height)
+        content_height = tier_header_height + (num_employees * row_height) + padding_bottom
+        
+        # Center the column vertically in the available space
+        available_height = SLIDE_HEIGHT - top_margin - 60  # Leave space for footer
+        column_top = top_margin + (available_height - content_height) // 2
+        column_top = max(top_margin, column_top)  # Don't go above top_margin
+        
+        # Draw semi-transparent rounded background for column (content-fitted)
+        bg_radius = 15
+        overlay = Image.new('RGBA', (col_width + 2, content_height + 2), (0, 0, 0, 0))
+        overlay_draw = ImageDraw.Draw(overlay)
+        overlay_draw.rounded_rectangle(
+            [0, 0, col_width, content_height],
+            radius=bg_radius,
+            fill=(0, 0, 0, 200)
+        )
+        img.paste(overlay, (col_x, column_top), overlay)
         draw = ImageDraw.Draw(img)
         
-        # Tier header
-        header_y = top_margin
-        draw.rectangle([col_x, header_y, col_right, header_y + tier_header_height], 
-                      fill=tier_config["color"])
+        # Tier header with rounded top corners
+        header_y = column_top
+        # Draw header background
+        draw.rounded_rectangle(
+            [col_x, header_y, col_right, header_y + tier_header_height],
+            radius=bg_radius,
+            fill=tier_config["color"],
+            corners=(True, True, False, False)  # Only top corners rounded
+        )
+        # Header text - Quicksand Bold
         draw.text((col_x + col_width // 2, header_y + tier_header_height // 2), 
-                 tier_config["label"], font=get_font(28, "semibold"), 
+                 tier_config["label"], font=get_font(26, "quicksand_bold"), 
                  fill=tier_config["text"], anchor="mm")
         
         # Draw employees
-        data_y = header_y + tier_header_height
-        tier_count = 0
+        data_y = header_y + tier_header_height + 8
         
-        for emp in employees_in_tier:
-            tier_count += 1
+        for emp_idx, emp in enumerate(employees_in_tier):
+            tier_count = emp_idx + 1
             
-            y = data_y + (tier_count - 1) * row_height
-            if y + row_height > SLIDE_HEIGHT - bottom_margin:
-                break
-            
+            y = data_y + emp_idx * row_height
             row_cy = y + row_height // 2
             
-            # Rank label
-            if tier == "Bartender":
-                rank_text = f"{tier_count}."
-            else:
-                rank_text = f"{tier_count}."
+            # Rank label (T1, BAR1, A1, B1, C1 format)
+            prefix = tier_config["prefix"]
+            rank_text = f"{prefix}{tier_count}"
             
-            # First name only
+            # First name only (max 12 chars for readability)
             full_name = emp.get("name") or emp.get("display_name") or "Unknown"
-            first_name = full_name.split()[0][:15] if full_name else "Unknown"  # Max 15 chars
+            first_name = full_name.split()[0][:12] if full_name else "Unknown"
             
-            # Draw rank and name
+            # Draw rank - Quicksand Bold, slightly smaller
             rank_x = col_x + 15
-            name_x = col_x + 50
-            
-            draw.text((rank_x, row_cy), rank_text, font=get_font(22, "semibold"), 
+            draw.text((rank_x, row_cy), rank_text, font=get_font(20, "quicksand_bold"), 
                       fill=(255, 255, 255), anchor="lm")
-            draw.text((name_x, row_cy), first_name, font=get_font(22, "medium"), 
+            
+            # Draw name - Quicksand SemiBold
+            # Adjust name position based on rank text width
+            rank_width = 75 if prefix == "BAR" else (55 if tier_count >= 10 else 45)
+            name_x = col_x + rank_width
+            draw.text((name_x, row_cy), first_name, font=get_font(20, "quicksand_semibold"), 
                       fill=(255, 255, 255), anchor="lm")
     
-    # Footer - quarter info
-    footer_text = f"Q1 2026 • Las Vegas"
-    draw.text((SLIDE_WIDTH // 2, SLIDE_HEIGHT - 25), footer_text,
-              font=get_font(20, "medium"), fill=(255, 255, 255), anchor="mm",
-              stroke_width=1, stroke_fill=(0, 0, 0))
+    # Footer - quarter and location info with Quicksand
+    footer_text = f"{quarter} 2026 • Las Vegas"
+    draw.text((SLIDE_WIDTH // 2, SLIDE_HEIGHT - 30), footer_text,
+              font=get_font(22, "quicksand"), fill=(255, 255, 255), anchor="mm",
+              stroke_width=2, stroke_fill=(0, 0, 0))
     
     # Save
     buf = io.BytesIO()
