@@ -222,7 +222,7 @@ def generate_snapshot_slide(
     col_width = available_width // num_tiers
     
     tier_header_height = 55
-    row_height = 42
+    row_height = 48  # Increased for bigger text
     padding_bottom = 15  # Padding inside column after last employee
     
     # Calculate max employees per column for vertical centering
@@ -288,16 +288,15 @@ def generate_snapshot_slide(
             full_name = emp.get("name") or emp.get("display_name") or "Unknown"
             first_name = full_name.split()[0][:12] if full_name else "Unknown"
             
-            # Draw rank - Quicksand Bold, slightly smaller
-            rank_x = col_x + 15
-            draw.text((rank_x, row_cy), rank_text, font=get_font(20, "quicksand_bold"), 
-                      fill=(255, 255, 255), anchor="lm")
+            # Draw rank - smaller, muted color to make name stand out
+            rank_x = col_x + 12
+            draw.text((rank_x, row_cy), rank_text, font=get_font(18, "quicksand"), 
+                      fill=(200, 200, 200), anchor="lm")  # Lighter gray for rank
             
-            # Draw name - Quicksand SemiBold
-            # Adjust name position based on rank text width
-            rank_width = 75 if prefix == "BAR" else (55 if tier_count >= 10 else 45)
-            name_x = col_x + rank_width
-            draw.text((name_x, row_cy), first_name, font=get_font(20, "quicksand_semibold"), 
+            # Draw name - BIGGER and BOLDER, pure white
+            # Fixed position for consistent alignment
+            name_x = col_x + 80  # Fixed position for all names
+            draw.text((name_x, row_cy), first_name, font=get_font(26, "quicksand_bold"), 
                       fill=(255, 255, 255), anchor="lm")
     
     # Footer - quarter and location info with Quicksand
