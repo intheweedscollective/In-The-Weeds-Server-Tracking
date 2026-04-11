@@ -43,14 +43,25 @@ export default function Dashboard() {
   }, [employees, stats.topPerformerThreshold]);
 
   const restaurantAverages = useMemo(() => {
-    if (employees.length === 0) return { ppa: 0, lbw: 0, glass: 0, lsc: 0 };
+    if (employees.length === 0) return { ppa: 0, lbw: 0, glass: 0, lsc: 0, cv: 0 };
     return {
       ppa: employees.reduce((sum, e) => sum + (e.ppa || 0), 0) / employees.length,
       lbw: employees.reduce((sum, e) => sum + (e.lbw_per_guest || 0), 0) / employees.length,
       glass: employees.reduce((sum, e) => sum + (e.glassware_per_guest || 0), 0) / employees.length,
-      lsc: employees.filter(e => e.guests_per_lsc > 0).reduce((sum, e) => sum + (e.guests_per_lsc || 0), 0) / (employees.filter(e => e.guests_per_lsc > 0).length || 1)
+      lsc: employees.filter(e => e.guests_per_lsc > 0).reduce((sum, e) => sum + (e.guests_per_lsc || 0), 0) / (employees.filter(e => e.guests_per_lsc > 0).length || 1),
+      cv: employees.reduce((sum, e) => sum + (e.cv_score || 0), 0) / employees.length
     };
   }, [employees]);
+
+  // Memoize under performers list
+  const underPerformersList = useMemo(() => {
+    const minScore = quarterSettings?.b_server_min_score || 70;
+    return employees.filter(emp => {
+      const score = emp.total_score || 0;
+      const jobTitle = (emp.job_title || '').toLowerCase();
+      return score < minScore && jobTitle === 'server';
+    });
+  }, [employees, quarterSettings?.b_server_min_score]);
 
   // Calculate tier distribution
   const tierDistribution = useMemo(() => {
@@ -875,12 +886,9 @@ export default function Dashboard() {
               </button>
             </div>
             <div className="p-6 overflow-y-auto max-h-[60vh]">
-              {employees
-                .filter(emp => (emp.total_score || 0) >= parseFloat(stats.topPerformerThreshold || 0))
-                .map((emp, idx) => {
+              {topPerformersList.map((emp, idx) => {
                   const score = emp.total_score || 0;
                   const avgScore = parseFloat(stats.avgTotalScore) || 0;
-                  const jobTitle = (emp.job_title || 'server').toLowerCase();
                   const ppa = emp.ppa || 0;
                   const lbw = emp.lbw_per_guest || 0;
                   const glass = emp.glassware_per_guest || 0;
@@ -891,12 +899,8 @@ export default function Dashboard() {
                   const glassBenchmark = quarterSettings?.benchmark_glass || 1;
                   const lscBenchmark = quarterSettings?.benchmark_lsc || 100;
                   
-                  // Calculate restaurant averages for comparison
-                  const avgPpa = employees.reduce((sum, e) => sum + (e.ppa || 0), 0) / employees.length;
-                  const avgLbw = employees.reduce((sum, e) => sum + (e.lbw_per_guest || 0), 0) / employees.length;
-                  const avgGlass = employees.reduce((sum, e) => sum + (e.glassware_per_guest || 0), 0) / employees.length;
-                  const avgLsc = employees.reduce((sum, e) => sum + (e.guests_per_lsc || 0), 0) / employees.length;
-                  const avgCv = employees.reduce((sum, e) => sum + (e.cv_score || 0), 0) / employees.length;
+                  // Use memoized restaurant averages
+                  const { ppa: avgPpa, lbw: avgLbw, glass: avgGlass, lsc: avgLsc, cv: avgCv } = restaurantAverages;
                   
                   // Calculate performance vs benchmark/average for each metric (higher = better)
                   const metricPerformance = [
@@ -996,7 +1000,7 @@ export default function Dashboard() {
                     </div>
                   );
                 })}
-              {employees.filter(emp => (emp.total_score || 0) >= parseFloat(stats.topPerformerThreshold || 0)).length === 0 && (
+              {topPerformersList.length === 0 && (
                 <p className="text-center text-gray-500 py-8">No employees scoring 10% above the restaurant average.</p>
               )}
             </div>
@@ -1021,13 +1025,7 @@ export default function Dashboard() {
               </button>
             </div>
             <div className="p-6 overflow-y-auto max-h-[60vh]">
-              {employees
-                .filter(emp => {
-                  const score = emp.total_score || 0;
-                  const jobTitle = (emp.job_title || '').toLowerCase();
-                  return score < (quarterSettings?.b_server_min_score || 70) && jobTitle === 'server';
-                })
-                .map((emp, idx) => {
+              {underPerformersList.map((emp, idx) => {
                   const score = emp.total_score || 0;
                   const bMin = quarterSettings?.b_server_min_score || 70;
                   const ppa = emp.ppa || 0;

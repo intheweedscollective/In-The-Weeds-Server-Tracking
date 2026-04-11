@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useStore } from '../contexts/StoreContext';
 import { 
   Building2, Users, TrendingUp, Award, AlertTriangle, 
@@ -53,6 +53,16 @@ export default function GlobalOverview() {
 
   const summary = overview?.summary || {};
   const storeData = overview?.stores || [];
+
+  // Memoize filtered store data
+  const activeStores = useMemo(() => {
+    return storeData.filter(s => s.employee_count > 0);
+  }, [storeData]);
+
+  // Memoize inactive stores
+  const inactiveStores = useMemo(() => {
+    return storeData.filter(s => s.employee_count === 0);
+  }, [storeData]);
 
   return (
     <div className="p-6 space-y-6" data-testid="global-overview">
@@ -153,7 +163,7 @@ export default function GlobalOverview() {
           </h2>
           
           <div className="space-y-2">
-            {storeData.filter(s => s.employee_count > 0).map((store, index) => (
+            {activeStores.map((store, index) => (
               <div 
                 key={store.store_id}
                 className="flex items-center gap-3 p-3 rounded-lg bg-[hsl(var(--background))] hover:bg-[hsl(var(--accent))] transition-colors"
@@ -246,13 +256,13 @@ export default function GlobalOverview() {
       </div>
 
       {/* Inactive Stores */}
-      {storeData.filter(s => s.employee_count === 0).length > 0 && (
+      {inactiveStores.length > 0 && (
         <div className="bg-[hsl(var(--card))] rounded-xl border border-[hsl(var(--border))] p-4">
           <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-            Stores Without Data ({storeData.filter(s => s.employee_count === 0).length})
+            Stores Without Data ({inactiveStores.length})
           </h3>
           <div className="flex flex-wrap gap-2">
-            {storeData.filter(s => s.employee_count === 0).map(store => (
+            {inactiveStores.map(store => (
               <span 
                 key={store.store_id}
                 className="px-2 py-1 text-xs rounded-full bg-[hsl(var(--muted))] text-muted-foreground"

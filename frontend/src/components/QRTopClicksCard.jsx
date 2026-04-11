@@ -34,7 +34,7 @@ export default function QRTopClicksCard({ showViewAll = true, limit = 5 }) {
         <div className="h-6 bg-slate-700 rounded w-1/2 mb-4"></div>
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-12 bg-slate-700 rounded"></div>
+            <div key={`skeleton-${i}`} className="h-12 bg-slate-700 rounded"></div>
           ))}
         </div>
       </div>

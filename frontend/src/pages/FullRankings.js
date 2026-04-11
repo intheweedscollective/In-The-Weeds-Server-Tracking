@@ -207,6 +207,11 @@ export default function FullRankings() {
     return result;
   }, [getTopEmployees]);
 
+  // Filtered metrics for display (exclude pre_dar_score and rt_mentions)
+  const displayMetrics = useMemo(() => {
+    return Object.entries(V2_METRICS).filter(([key]) => key !== 'pre_dar_score' && key !== 'rt_mentions');
+  }, []);
+
   // Top 10 overall
   const topOverall = useMemo(() => {
     return getTopEmployees('pre_dar_score', 10);
@@ -1295,7 +1300,7 @@ export default function FullRankings() {
 
           {/* Top 10 by Each Metric */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {Object.entries(V2_METRICS).filter(([key]) => key !== 'pre_dar_score' && key !== 'rt_mentions').map(([metricKey, metricInfo]) => {
+            {displayMetrics.map(([metricKey, metricInfo]) => {
               const performers = topPerformers[metricKey] || [];
               
               return (

@@ -39,7 +39,7 @@ async def get_employee_trend_chart(year: int, quarter: str, employee_id: str, ch
     
     chart_type: "comparison" (line chart with employee, benchmark, restaurant avg) or "change" (% change chart)
     """
-    from server import generate_employee_change_chart, generate_employee_comparison_chart
+    from trend_charts import generate_employee_change_chart, generate_employee_comparison_chart
     
     db = get_db()
     
@@ -228,7 +228,7 @@ async def get_team_trend_chart(year: int, quarter: str, chart_type: str = "compa
     
     chart_type: "comparison" (bar chart) or "distribution" (tier pie charts)
     """
-    from server import generate_team_comparison_chart, generate_tier_distribution_chart
+    from trend_charts import generate_team_comparison_chart, generate_tier_distribution_chart
     
     db = get_db()
     
@@ -356,7 +356,7 @@ async def get_biweekly_trend_chart(
     
     Returns PNG image of the line chart.
     """
-    from server import generate_biweekly_trend_chart
+    from trend_charts import generate_biweekly_trend_chart
     from datetime import datetime as dt
     
     db = get_db()

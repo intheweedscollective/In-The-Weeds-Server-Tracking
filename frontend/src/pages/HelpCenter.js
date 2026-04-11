@@ -475,7 +475,7 @@ export default function HelpCenter() {
                       <p className="text-sm font-medium text-slate-400 mb-2">Solutions:</p>
                       <ul className="space-y-2">
                         {item.solutions.map((solution, idx) => (
-                          <li key={idx} className="flex items-start gap-2 text-sm text-slate-300">
+                          <li key={`${item.title}-solution-${idx}`} className="flex items-start gap-2 text-sm text-slate-300">
                             <CheckCircle className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
                             <span>{solution}</span>
                           </li>
