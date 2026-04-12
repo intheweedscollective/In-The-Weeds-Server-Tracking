@@ -140,19 +140,26 @@ async def get_yodeck_complete_rankings_slide(year: int, quarter: str, format: st
     
     # Fetch latest display_name from employees_v2 as the authoritative source
     # This ensures preferred names from the Employees tab are always used
-    emp_v2_names = {}
+    emp_v2_lookup = {}
     async for emp in db.employees_v2.find(
         {"quarter": quarter.upper(), "year": year},
         {"_id": 0, "name": 1, "display_name": 1, "report_name": 1}
     ):
-        # Build lookup by multiple keys
-        name_key = (emp.get("name") or "").lower().strip()
-        report_key = (emp.get("report_name") or "").lower().strip()
-        display_name = emp.get("display_name") or emp.get("name", "").split()[0]
-        if name_key:
-            emp_v2_names[name_key] = display_name
-        if report_key and report_key != name_key:
-            emp_v2_names[report_key] = display_name
+        # Build lookup by multiple keys (all lowercase for matching)
+        name = (emp.get("name") or "").lower().strip()
+        report_name = (emp.get("report_name") or "").lower().strip()
+        display_name = emp.get("display_name") or emp.get("name") or ""
+        
+        # The display_name (preferred name) is what we want to show
+        # Store under multiple keys for robust matching
+        if name:
+            emp_v2_lookup[name] = display_name
+        if report_name and report_name != name:
+            emp_v2_lookup[report_name] = display_name
+        # Also store by first name for matching
+        first_name = name.split()[0] if name else ""
+        if first_name and first_name not in emp_v2_lookup:
+            emp_v2_lookup[first_name] = display_name
     
     # Get settings for tier thresholds
     settings = await db.quarter_settings.find_one(
@@ -171,18 +178,22 @@ async def get_yodeck_complete_rankings_slide(year: int, quarter: str, format: st
         # Look up the preferred display_name from employees_v2
         emp_name = (emp.get("name") or "").lower().strip()
         emp_report = (emp.get("report_name") or "").lower().strip()
+        emp_display = (emp.get("display_name") or "").lower().strip()
+        emp_first = emp_name.split()[0] if emp_name else ""
         
-        # Prioritize: employees_v2 lookup > snapshot display_name > snapshot name
-        full_name = (
-            emp_v2_names.get(emp_name) or 
-            emp_v2_names.get(emp_report) or 
+        # Try multiple lookup strategies to find the preferred name
+        preferred_name = (
+            emp_v2_lookup.get(emp_name) or 
+            emp_v2_lookup.get(emp_report) or 
+            emp_v2_lookup.get(emp_display) or
+            emp_v2_lookup.get(emp_first) or
             emp.get("display_name") or 
             emp.get("name") or 
             "Unknown"
         )
         slide_emp = {
             "id": emp.get("id"),
-            "name": get_first_name(full_name),
+            "name": get_first_name(preferred_name),
             "tier_label": emp.get("tier_label") or emp.get("performance_tier") or "B-Server",
             # Always use pre-DAR score for public slides
             "total_score": emp.get("pre_dar_score", 0) or emp.get("total_score", 0) or 0,
