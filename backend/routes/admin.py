@@ -303,7 +303,7 @@ async def clear_all_detractors(year: int = 2026, quarter: str = "Q1"):
         "quarter": quarter,
         "year": year,
         "cv_detractors": {"$gt": 0}
-    }).to_list(length=None)
+    }).to_list(500)
     
     updated_employees = []
     
