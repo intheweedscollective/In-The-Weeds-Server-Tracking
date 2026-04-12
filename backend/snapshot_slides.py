@@ -285,7 +285,8 @@ def generate_snapshot_slide(
             rank_text = f"{prefix}{tier_count}"
             
             # First name only (max 12 chars for readability)
-            full_name = emp.get("name") or emp.get("display_name") or "Unknown"
+            # Prioritize display_name (preferred name) over report name
+            full_name = emp.get("display_name") or emp.get("name") or "Unknown"
             first_name = full_name.split()[0][:12] if full_name else "Unknown"
             
             # Draw rank - prominent, bold, white

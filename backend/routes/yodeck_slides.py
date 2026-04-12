@@ -138,6 +138,22 @@ async def get_yodeck_complete_rankings_slide(year: int, quarter: str, format: st
     
     employees = snapshot.get("employees", [])
     
+    # Fetch latest display_name from employees_v2 as the authoritative source
+    # This ensures preferred names from the Employees tab are always used
+    emp_v2_names = {}
+    async for emp in db.employees_v2.find(
+        {"quarter": quarter.upper(), "year": year},
+        {"_id": 0, "name": 1, "display_name": 1, "report_name": 1}
+    ):
+        # Build lookup by multiple keys
+        name_key = (emp.get("name") or "").lower().strip()
+        report_key = (emp.get("report_name") or "").lower().strip()
+        display_name = emp.get("display_name") or emp.get("name", "").split()[0]
+        if name_key:
+            emp_v2_names[name_key] = display_name
+        if report_key and report_key != name_key:
+            emp_v2_names[report_key] = display_name
+    
     # Get settings for tier thresholds
     settings = await db.quarter_settings.find_one(
         {"year": year, "quarter": quarter.upper()},
@@ -152,7 +168,18 @@ async def get_yodeck_complete_rankings_slide(year: int, quarter: str, format: st
     # NOTE: Using first names only for privacy on public digital signage
     slide_employees = []
     for emp in employees:
-        full_name = emp.get("display_name") or emp.get("name") or "Unknown"
+        # Look up the preferred display_name from employees_v2
+        emp_name = (emp.get("name") or "").lower().strip()
+        emp_report = (emp.get("report_name") or "").lower().strip()
+        
+        # Prioritize: employees_v2 lookup > snapshot display_name > snapshot name
+        full_name = (
+            emp_v2_names.get(emp_name) or 
+            emp_v2_names.get(emp_report) or 
+            emp.get("display_name") or 
+            emp.get("name") or 
+            "Unknown"
+        )
         slide_emp = {
             "id": emp.get("id"),
             "name": get_first_name(full_name),
