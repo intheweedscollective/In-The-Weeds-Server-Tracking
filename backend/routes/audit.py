@@ -919,3 +919,191 @@ async def sync_employee_review_mentions(quarter: str = "Q1", year: int = 2026):
         },
         "updated_employees": updated
     }
+
+
+@audit_router.get("/cross-reference/{year}/{quarter}")
+async def cross_reference_snapshot_vs_dashboard(year: int, quarter: str):
+    """
+    Cross-reference snapshot_workflow employee data vs employees_v2 (dashboard) data.
+    Identifies discrepancies where snapshot has real data but dashboard shows zeros.
+    """
+    db = get_db()
+    quarter = quarter.upper()
+
+    # Get the active/latest completed snapshot
+    snapshot = await db.snapshot_workflow.find_one(
+        {"is_current": True, "quarter": quarter, "year": year},
+        {"_id": 0}
+    )
+    if not snapshot:
+        snapshot = await db.snapshot_workflow.find_one(
+            {"status": "completed", "quarter": quarter, "year": year},
+            {"_id": 0},
+            sort=[("effective_date", -1), ("completed_at", -1)]
+        )
+
+    if not snapshot or not snapshot.get("employees"):
+        raise HTTPException(status_code=404, detail=f"No snapshot found for {quarter} {year}")
+
+    snapshot_employees = snapshot.get("employees", [])
+
+    # Build lookup from employees_v2
+    dashboard_lookup = {}
+    async for emp in db.employees_v2.find(
+        {"quarter": quarter, "year": year},
+        {"_id": 0}
+    ):
+        name = (emp.get("name") or "").lower().strip()
+        dashboard_lookup[name] = emp
+
+    # Compare key POS fields
+    key_fields = ["ppa", "lbw_per_guest", "glassware_per_guest", "guests_per_lsc",
+                  "guest_count", "net_sales", "loyalty_sales"]
+    score_fields = ["score_ppa", "score_lbw", "score_glass", "score_lsc",
+                    "cv_score", "total_score", "pre_dar_score"]
+
+    discrepancies = []
+    matched = []
+    missing_from_dashboard = []
+
+    for snap_emp in snapshot_employees:
+        snap_name = (snap_emp.get("name") or "").lower().strip()
+        dash_emp = dashboard_lookup.get(snap_name)
+
+        if not dash_emp:
+            missing_from_dashboard.append({
+                "name": snap_emp.get("name"),
+                "snapshot_score": snap_emp.get("total_score", 0),
+                "tier": snap_emp.get("tier_label") or snap_emp.get("performance_tier"),
+            })
+            continue
+
+        field_diffs = {}
+        has_zero_issue = False
+        for field in key_fields + score_fields:
+            snap_val = snap_emp.get(field, 0) or 0
+            dash_val = dash_emp.get(field, 0) or 0
+            if abs(snap_val - dash_val) > 0.01:
+                field_diffs[field] = {"snapshot": snap_val, "dashboard": dash_val}
+                if dash_val == 0 and snap_val > 0:
+                    has_zero_issue = True
+
+        if field_diffs:
+            discrepancies.append({
+                "name": snap_emp.get("name"),
+                "employee_id": dash_emp.get("id"),
+                "snapshot_score": snap_emp.get("total_score", 0) or snap_emp.get("pre_dar_score", 0),
+                "dashboard_score": dash_emp.get("total_score", 0),
+                "tier_snapshot": snap_emp.get("tier_label") or snap_emp.get("performance_tier"),
+                "tier_dashboard": dash_emp.get("tier_label") or dash_emp.get("performance_tier"),
+                "has_zero_issue": has_zero_issue,
+                "differences": field_diffs,
+            })
+        else:
+            matched.append(snap_emp.get("name"))
+
+    return {
+        "success": True,
+        "quarter": quarter,
+        "year": year,
+        "snapshot_employee_count": len(snapshot_employees),
+        "dashboard_employee_count": len(dashboard_lookup),
+        "matched_count": len(matched),
+        "discrepancy_count": len(discrepancies),
+        "missing_from_dashboard_count": len(missing_from_dashboard),
+        "discrepancies": sorted(discrepancies, key=lambda d: d.get("has_zero_issue", False), reverse=True),
+        "missing_from_dashboard": missing_from_dashboard,
+        "matched_employees": matched,
+    }
+
+
+@audit_router.post("/sync-from-snapshot/{year}/{quarter}")
+async def sync_employees_from_snapshot(year: int, quarter: str, employee_name: Optional[str] = None):
+    """
+    Sync employee data FROM the active snapshot BACK to employees_v2 (dashboard).
+    Fixes cases where dashboard shows zeros but snapshot has real data.
+    If employee_name is provided, only sync that employee. Otherwise sync all with discrepancies.
+    """
+    db = get_db()
+    quarter = quarter.upper()
+
+    # Get the active/latest completed snapshot
+    snapshot = await db.snapshot_workflow.find_one(
+        {"is_current": True, "quarter": quarter, "year": year},
+        {"_id": 0}
+    )
+    if not snapshot:
+        snapshot = await db.snapshot_workflow.find_one(
+            {"status": "completed", "quarter": quarter, "year": year},
+            {"_id": 0},
+            sort=[("effective_date", -1), ("completed_at", -1)]
+        )
+
+    if not snapshot or not snapshot.get("employees"):
+        raise HTTPException(status_code=404, detail=f"No snapshot found for {quarter} {year}")
+
+    snapshot_employees = snapshot.get("employees", [])
+
+    # Fields to sync from snapshot to employees_v2
+    sync_fields = [
+        "ppa", "lbw_per_guest", "glassware_per_guest", "guests_per_lsc",
+        "guest_count", "net_sales", "loyalty_sales", "lsc_count",
+        "liquor_sales", "beer_sales", "wine_sales", "bar_glassware_sales",
+        "score_ppa", "score_lbw", "score_glass", "score_lsc",
+        "cv_score", "cv_nps", "cv_responses", "cv_promoters", "cv_detractors",
+        "rt_mentions", "review_mentions", "review_tracker_bonus",
+        "total_score", "pre_dar_score", "total_metric_bonus",
+        "tier_label", "performance_tier", "rank",
+    ]
+
+    updated = []
+    not_found = []
+    skipped = []
+
+    for snap_emp in snapshot_employees:
+        snap_name = (snap_emp.get("name") or "").strip()
+        if employee_name and snap_name.lower() != employee_name.lower():
+            continue
+
+        # Find matching employee in employees_v2
+        dash_emp = await db.employees_v2.find_one(
+            {"name": {"$regex": f"^{snap_name}$", "$options": "i"}, "quarter": quarter, "year": year}
+        )
+
+        if not dash_emp:
+            not_found.append(snap_name)
+            continue
+
+        # Build update with non-zero snapshot values
+        update_fields = {}
+        for field in sync_fields:
+            snap_val = snap_emp.get(field)
+            if snap_val is not None and snap_val != 0:
+                dash_val = dash_emp.get(field, 0) or 0
+                if dash_val == 0 or (employee_name and snap_val != dash_val):
+                    update_fields[field] = snap_val
+
+        if update_fields:
+            await db.employees_v2.update_one(
+                {"_id": dash_emp["_id"]},
+                {"$set": update_fields}
+            )
+            updated.append({
+                "name": snap_name,
+                "fields_updated": list(update_fields.keys()),
+                "field_count": len(update_fields),
+            })
+        else:
+            skipped.append(snap_name)
+
+    return {
+        "success": True,
+        "quarter": quarter,
+        "year": year,
+        "updated_count": len(updated),
+        "not_found_count": len(not_found),
+        "skipped_count": len(skipped),
+        "updated": updated,
+        "not_found": not_found,
+        "skipped": skipped,
+    }
