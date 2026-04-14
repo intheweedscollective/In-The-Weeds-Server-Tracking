@@ -144,10 +144,14 @@ export default function QuarterSettings() {
   };
 
   const handleSave = async () => {
-    // Validate weights sum to 1.0 (including CV weight)
-    const weightSum = formData.weight_ppa + formData.weight_lbw + formData.weight_glass + formData.weight_lsc;
-    if (Math.abs(weightSum - 1.0) > 0.01) {
-      toast.error(`Weights must sum to 1.0 (currently ${weightSum.toFixed(2)})`);
+    // Validate POS weights sum to 0.75 (PPA 25% + LSC 25% + LBW 15% + Glass 10%)
+    // Note: CV/RT are bonus systems, not weighted percentages
+    const posWeightSum = formData.weight_ppa + formData.weight_lbw + formData.weight_glass + formData.weight_lsc;
+    
+    // Allow flexibility - weights can sum to anywhere between 0.70 and 1.0
+    // The scoring formula uses these as multipliers, so any reasonable sum works
+    if (posWeightSum < 0.50 || posWeightSum > 1.05) {
+      toast.error(`POS weights should sum to between 0.50 and 1.0 (currently ${posWeightSum.toFixed(2)})`);
       return;
     }
 
@@ -200,8 +204,10 @@ export default function QuarterSettings() {
 
   // NOTE: applyThemePreset function removed - slide themes deprecated
 
-  const weightSum = formData.weight_ppa + formData.weight_lbw + formData.weight_glass + formData.weight_lsc + formData.weight_cv;
-  const weightsValid = Math.abs(weightSum - 1.0) <= 0.01;
+  // POS weights validation (PPA + LBW + Glass + LSC)
+  // CV is a bonus system, not included in weight validation
+  const posWeightSum = formData.weight_ppa + formData.weight_lbw + formData.weight_glass + formData.weight_lsc;
+  const weightsValid = posWeightSum >= 0.50 && posWeightSum <= 1.05;
 
   if (loading) {
     return (
@@ -424,12 +430,13 @@ export default function QuarterSettings() {
         <div className="bubba-card mb-8">
           <div className="tape tape-blue" style={{ top: '-8px', left: '50%', transform: 'translateX(-50%) rotate(1deg)' }} />
           <div className="p-6 pt-8">
-            <h2 className="text-lg font-serif font-bold text-foreground mb-4">Metric Weights (Q1 2026 Model)</h2>
+            <h2 className="text-lg font-serif font-bold text-foreground mb-4">Metric Weights (POS Scoring)</h2>
             <p className="text-sm text-slate-400 mb-4">
-              Weights must sum to 1.0. Current sum: 
+              POS weights (PPA + LBW + Glass + LSC). Current sum: 
               <span className={`ml-2 font-bold ${weightsValid ? 'text-green-600' : 'text-red-600'}`}>
-                {weightSum.toFixed(2)}
+                {posWeightSum.toFixed(2)}
               </span>
+              {weightsValid && <span className="ml-2 text-green-500">✓</span>}
             </p>
             
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
