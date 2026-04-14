@@ -368,14 +368,20 @@ def _safe_int(value) -> Optional[int]:
         return None
 
 
-async def extract_pos_data_from_pdf(pdf_bytes: bytes, max_pages: int = 60) -> Dict[str, Any]:
+async def extract_pos_data_from_pdf(pdf_bytes: bytes, max_pages: int = 60, job_id: str = None) -> Dict[str, Any]:
     """
     Extract employee performance data from a PDF file.
     Converts PDF pages to images and processes each with OCR.
     
+    Uses a resilient approach:
+    - Processes pages one at a time with retries
+    - Never fails completely - returns partial results
+    - Updates job progress in real-time
+    
     Args:
         pdf_bytes: Raw PDF file bytes
         max_pages: Maximum number of pages to process (default 60 for full team reports)
+        job_id: Optional job ID for progress updates
     
     Returns:
         Dictionary containing extracted employee data from all pages
@@ -385,9 +391,23 @@ async def extract_pos_data_from_pdf(pdf_bytes: bytes, max_pages: int = 60) -> Di
     import logging
     import asyncio
     
+    # Import job tracker for progress updates
+    try:
+        from routes.pos_upload import pdf_jobs
+    except ImportError:
+        pdf_jobs = {}
+    
+    def update_progress(progress: int, message: str = ""):
+        """Update job progress if job_id provided"""
+        if job_id and job_id in pdf_jobs:
+            pdf_jobs[job_id]["progress"] = progress
+            if message:
+                pdf_jobs[job_id]["message"] = message
+    
     try:
         # Open PDF with PyMuPDF
         logging.info("Starting PDF conversion with PyMuPDF...")
+        update_progress(5, "Opening PDF...")
         pdf_document = fitz.open(stream=pdf_bytes, filetype="pdf")
         
         total_pages = len(pdf_document)
@@ -401,12 +421,14 @@ async def extract_pos_data_from_pdf(pdf_bytes: bytes, max_pages: int = 60) -> Di
         if total_pages > max_pages:
             logging.warning(f"PDF has {total_pages} pages, limiting to {max_pages}")
         
+        update_progress(10, f"Converting {pages_to_process} pages to images...")
+        
         # Convert all pages to images first - use lower DPI for faster processing
         page_images = []
         for page_num in range(pages_to_process):
             page = pdf_document[page_num]
-            # Use 120 DPI for better OCR accuracy while keeping reasonable file size
-            mat = fitz.Matrix(120/72, 120/72)
+            # Use 100 DPI for faster processing (still readable)
+            mat = fitz.Matrix(100/72, 100/72)
             pix = page.get_pixmap(matrix=mat)
             # Use JPEG with quality setting for smaller file size
             img_bytes = pix.tobytes("jpeg")
@@ -414,68 +436,78 @@ async def extract_pos_data_from_pdf(pdf_bytes: bytes, max_pages: int = 60) -> Di
             page_images.append((page_num, image_base64))
         
         pdf_document.close()
+        update_progress(20, f"Processing {pages_to_process} pages with OCR...")
         
-        # Process pages in parallel (5 at a time for speed while staying under rate limits)
+        # Process pages with resilient approach
         all_employees = []
         extraction_notes = []
         report_date = None
         report_type = "unknown"
+        failed_pages = []
         
-        async def process_page(page_num, image_base64):
+        async def process_page_with_retry(page_num: int, image_base64: str, max_retries: int = 2) -> tuple:
+            """Process a single page with retries"""
+            for attempt in range(max_retries + 1):
+                try:
+                    result = await asyncio.wait_for(
+                        extract_pos_data_from_image(image_base64, "image/jpeg"),
+                        timeout=90.0  # 90 seconds per page
+                    )
+                    return page_num, result
+                except asyncio.TimeoutError:
+                    if attempt < max_retries:
+                        logging.warning(f"Page {page_num + 1} timed out, retrying ({attempt + 1}/{max_retries})...")
+                        await asyncio.sleep(2)  # Brief pause before retry
+                    else:
+                        logging.error(f"Page {page_num + 1} failed after {max_retries + 1} attempts")
+                        return page_num, {"error": "timeout", "employees": []}
+                except Exception as e:
+                    logging.error(f"Page {page_num + 1} error: {str(e)}")
+                    return page_num, {"error": str(e), "employees": []}
+            return page_num, {"error": "unknown", "employees": []}
+        
+        # Process pages ONE AT A TIME for maximum reliability
+        for idx, (page_num, image_base64) in enumerate(page_images):
+            # Update progress
+            progress = 20 + int((idx / len(page_images)) * 70)
+            update_progress(progress, f"Processing page {idx + 1} of {len(page_images)}...")
+            
             logging.info(f"Processing page {page_num + 1}/{pages_to_process}...")
-            return page_num, await extract_pos_data_from_image(image_base64, "image/jpeg")
-        
-        # Process pages in batches of 3 for reliability (reduces timeout risk)
-        batch_size = 3
-        for i in range(0, len(page_images), batch_size):
-            batch = page_images[i:i+batch_size]
-            tasks = [process_page(page_num, img) for page_num, img in batch]
             
-            # Add overall timeout for the batch (3 pages × 60 seconds each + buffer)
-            try:
-                results = await asyncio.wait_for(
-                    asyncio.gather(*tasks, return_exceptions=True),
-                    timeout=210.0  # 3.5 minutes per batch
-                )
-            except asyncio.TimeoutError:
-                logging.warning(f"Batch {i//batch_size + 1} timed out, continuing with next batch...")
-                extraction_notes.append(f"Batch {i//batch_size + 1} timed out")
-                continue
+            page_num, page_data = await process_page_with_retry(page_num, image_base64)
             
-            for result in results:
-                # Handle exceptions from gather
-                if isinstance(result, Exception):
-                    logging.error(f"Page processing error: {str(result)}")
-                    extraction_notes.append(f"Page error: {str(result)}")
-                    continue
-                    
-                page_num, page_data = result
-                if page_data.get("employees"):
-                    all_employees.extend(page_data["employees"])
-                    
+            if page_data.get("error"):
+                failed_pages.append(page_num + 1)
+                extraction_notes.append(f"Page {page_num + 1}: {page_data.get('error')}")
+            elif page_data.get("employees"):
+                all_employees.extend(page_data["employees"])
                 if page_data.get("report_date") and not report_date:
                     report_date = page_data["report_date"]
-                    
-                if page_data.get("report_type") and page_data["report_type"] != "unknown":
+                if page_data.get("report_type") and report_type == "unknown":
                     report_type = page_data["report_type"]
-                    
                 if page_data.get("extraction_notes"):
                     extraction_notes.append(f"Page {page_num + 1}: {page_data['extraction_notes']}")
-                
-                if page_data.get("error"):
-                    extraction_notes.append(f"Page {page_num + 1}: {page_data['error']}")
+        
+        update_progress(95, "Finalizing results...")
         
         # Deduplicate employees by name (keep the one with more data)
         unique_employees = _deduplicate_employees(all_employees)
+        
+        # Build summary
+        success_pages = len(page_images) - len(failed_pages)
+        summary = f"Processed {success_pages}/{len(page_images)} pages successfully"
+        if failed_pages:
+            summary += f" ({len(failed_pages)} pages had issues)"
         
         # If no employees found after processing all pages, include error info
         if not unique_employees:
             return {
                 "error": f"No employee data found in {pages_to_process} page(s). The PDF may not contain recognizable POS report data.",
-                "extraction_notes": "; ".join(extraction_notes) if extraction_notes else "No data extracted",
+                "extraction_notes": summary + ". " + ("; ".join(extraction_notes) if extraction_notes else "No data extracted"),
                 "employees": [],
                 "pages_processed": pages_to_process,
-                "total_pages": total_pages
+                "total_pages": total_pages,
+                "failed_pages": failed_pages
             }
         
         note_suffix = ""
@@ -486,9 +518,11 @@ async def extract_pos_data_from_pdf(pdf_bytes: bytes, max_pages: int = 60) -> Di
             "report_date": report_date,
             "report_type": report_type,
             "employees": unique_employees,
-            "extraction_notes": ("; ".join(extraction_notes) if extraction_notes else f"Processed {pages_to_process} page(s)") + note_suffix,
+            "extraction_notes": summary + note_suffix,
             "pages_processed": pages_to_process,
-            "total_pages": total_pages
+            "total_pages": total_pages,
+            "failed_pages": failed_pages,
+            "success": True
         }
         
     except Exception as e:
