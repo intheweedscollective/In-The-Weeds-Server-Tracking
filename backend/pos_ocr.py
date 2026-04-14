@@ -106,6 +106,8 @@ async def extract_pos_data_from_image(image_base64: str, mime_type: str = "image
         Dictionary containing extracted employee data
     """
     from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+    import asyncio
+    import logging
     
     api_key = os.environ.get("EMERGENT_LLM_KEY")
     if not api_key:
@@ -128,10 +130,20 @@ async def extract_pos_data_from_image(image_base64: str, mime_type: str = "image
             file_contents=[image_content]
         )
         
-        response = await chat.send_message(user_message)
+        # Add timeout to prevent hanging on slow responses (60 seconds per page)
+        try:
+            response = await asyncio.wait_for(
+                chat.send_message(user_message),
+                timeout=60.0
+            )
+        except asyncio.TimeoutError:
+            logging.warning("OCR request timed out after 60 seconds")
+            return {
+                "error": "OCR request timed out - page may be too complex",
+                "employees": []
+            }
         
         # Log response for debugging
-        import logging
         logging.info(f"OCR Response (first 500 chars): {response[:500] if response else 'Empty response'}")
         
         if not response or not response.strip():
@@ -413,14 +425,31 @@ async def extract_pos_data_from_pdf(pdf_bytes: bytes, max_pages: int = 60) -> Di
             logging.info(f"Processing page {page_num + 1}/{pages_to_process}...")
             return page_num, await extract_pos_data_from_image(image_base64, "image/jpeg")
         
-        # Process in batches of 5 for faster completion (stay under rate limits)
-        batch_size = 5
+        # Process pages in batches of 3 for reliability (reduces timeout risk)
+        batch_size = 3
         for i in range(0, len(page_images), batch_size):
             batch = page_images[i:i+batch_size]
             tasks = [process_page(page_num, img) for page_num, img in batch]
-            results = await asyncio.gather(*tasks)
             
-            for page_num, page_data in results:
+            # Add overall timeout for the batch (3 pages × 60 seconds each + buffer)
+            try:
+                results = await asyncio.wait_for(
+                    asyncio.gather(*tasks, return_exceptions=True),
+                    timeout=210.0  # 3.5 minutes per batch
+                )
+            except asyncio.TimeoutError:
+                logging.warning(f"Batch {i//batch_size + 1} timed out, continuing with next batch...")
+                extraction_notes.append(f"Batch {i//batch_size + 1} timed out")
+                continue
+            
+            for result in results:
+                # Handle exceptions from gather
+                if isinstance(result, Exception):
+                    logging.error(f"Page processing error: {str(result)}")
+                    extraction_notes.append(f"Page error: {str(result)}")
+                    continue
+                    
+                page_num, page_data = result
                 if page_data.get("employees"):
                     all_employees.extend(page_data["employees"])
                     

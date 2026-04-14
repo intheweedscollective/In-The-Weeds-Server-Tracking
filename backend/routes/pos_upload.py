@@ -388,12 +388,41 @@ async def parse_pos_pdf_scan(file: UploadFile = File(...), background_tasks: Bac
 async def process_pdf_in_background(job_id: str, contents: bytes, filename: str):
     """Background task to process PDF and update job status."""
     from pos_ocr import extract_pos_data_from_pdf, validate_extracted_data
+    import asyncio
     
     try:
         logging.info(f"Background PDF processing started for job {job_id}")
         
-        # Use the AI/OCR-based extraction
-        raw_data = await extract_pos_data_from_pdf(contents)
+        # Update status to processing
+        pdf_jobs[job_id] = {
+            **pdf_jobs[job_id],
+            "status": "processing",
+            "progress": 10,
+            "message": "Starting OCR extraction..."
+        }
+        
+        # Use the AI/OCR-based extraction with overall timeout
+        try:
+            raw_data = await asyncio.wait_for(
+                extract_pos_data_from_pdf(contents),
+                timeout=600.0  # 10 minute overall timeout
+            )
+        except asyncio.TimeoutError:
+            logging.error(f"PDF processing timed out for job {job_id}")
+            pdf_jobs[job_id] = {
+                **pdf_jobs[job_id],
+                "status": "failed",
+                "progress": 100,
+                "error": "PDF processing timed out. Try uploading a smaller PDF (fewer pages) or use XLSX format instead."
+            }
+            return
+        
+        # Update progress
+        pdf_jobs[job_id] = {
+            **pdf_jobs[job_id],
+            "progress": 70,
+            "message": "Validating extracted data..."
+        }
         
         if "error" in raw_data and not raw_data.get("employees"):
             pdf_jobs[job_id] = {
