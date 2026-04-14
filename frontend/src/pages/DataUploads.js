@@ -745,8 +745,8 @@ export default function DataUploads() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-700/50">
-                        {pdfParsedData.employees.map((emp) => (
-                          <tr key={emp.name} className={`text-slate-300 hover:bg-slate-800/30 ${editingEmployee === emp.name ? 'bg-blue-900/20' : ''}`}>
+                        {pdfParsedData.employees.map((emp, idx) => (
+                          <tr key={emp.name || `emp-${idx}`} className={`text-slate-300 hover:bg-slate-800/30 ${editingEmployee === idx ? 'bg-blue-900/20' : ''}`}>
                             {editingEmployee === idx ? (
                               <>
                                 <td className="px-2 py-1 text-white font-medium">{emp.name}</td>

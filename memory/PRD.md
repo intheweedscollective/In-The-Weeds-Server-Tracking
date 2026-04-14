@@ -9,9 +9,14 @@ Build a comprehensive performance review application for restaurant employees.
 - **Database**: MongoDB
 - **AI**: OpenAI GPT-4o (via Emergent LLM Key)
 
-## Current State (2026-04-11)
+## Current State (2026-04-14)
 
 ### Latest Changes
+- **Bug Fix: Blank Page on POS Upload (2026-04-14)**:
+  - Fixed React crash (ReferenceError) on `/uploads` page when PDF preview table tried to render
+  - Root cause: Missing `idx` parameter in `.map()` callback in `DataUploads.js` line 748
+  - Also fixed `editingEmployee` comparison to use index instead of `emp.name`
+
 - **Complete Rankings Slide Redesign (2026-04-11)**:
   - Simplified slide to show ONLY: Tier header sections + First Name + Rank
   - Added colorful rainbow bubbles background (`/app/backend/assets/backgrounds/rainbow_bubbles.jpg`)
