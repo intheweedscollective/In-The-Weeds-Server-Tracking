@@ -19,9 +19,9 @@ Build a comprehensive performance review application for restaurant employees.
 
 - **Data Cross-Reference Audit Tools (2026-04-14)**:
   - `GET /api/v2/audit/cross-reference/{year}/{quarter}` — compares snapshot_workflow vs employees_v2 field-by-field
-  - `POST /api/v2/audit/sync-from-snapshot/{year}/{quarter}?employee_name=X` — syncs non-zero snapshot data back to dashboard
-  - Identifies employees where dashboard shows zeros but snapshot has real data
-  - Can fix individual employees or all at once
+  - `POST /api/v2/audit/sync-from-snapshot/{year}/{quarter}?employee_name=X` — syncs snapshot data → dashboard
+  - `POST /api/v2/audit/sync-to-snapshot/{year}/{quarter}?employee_name=X` — syncs dashboard data → snapshot
+  - Production finding: Lennie had ALL ZEROS in snapshot but correct data in dashboard; loyalty_sales was 0 in snapshot for all 27 employees; several tier mismatches
 
 - **Complete Rankings Slide Redesign (2026-04-11)**:
   - Simplified slide to show ONLY: Tier header sections + First Name + Rank
