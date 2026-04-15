@@ -1321,3 +1321,148 @@ async def restore_employee_to_snapshot(year: int, quarter: str, employee_name: s
         "employee_score": dash_emp.get("total_score", 0),
         "snapshot_employee_count": len(employees),
     }
+
+
+
+@audit_router.get("/apply-corrections/{year}/{quarter}")
+async def apply_data_corrections(year: int, quarter: str):
+    """
+    One-shot fix: Apply known data corrections for the quarter.
+    - Restores Lennie Nguyen with correct scores
+    - Fixes Keisha Martin display_name and score
+    - Corrects tier labels based on score thresholds
+    """
+    import uuid
+    db = get_db()
+    quarter = quarter.upper()
+
+    results = []
+
+    # Get settings for tier thresholds
+    settings = await db.quarter_settings.find_one(
+        {"year": year, "quarter": quarter},
+        {"_id": 0}
+    ) or {}
+    a_min = settings.get("a_server_min_score", 85)
+    b_min = settings.get("b_server_min_score", 70)
+
+    # Fix 1: Keisha Martin - restore display_name and score
+    keisha = await db.employees_v2.find_one(
+        {"name": {"$regex": "keisha|lakeisha", "$options": "i"}, "quarter": quarter, "year": year}
+    )
+    if keisha:
+        await db.employees_v2.update_one(
+            {"_id": keisha["_id"]},
+            {"$set": {
+                "display_name": "Keisha Martin",
+                "total_score": 114.0,
+                "pre_dar_score": 114.0,
+                "score_ppa": 94,
+                "score_lbw": 109,
+                "score_glass": 110,
+                "score_lsc": 101,
+                "cv_score": 22.0,
+                "review_tracker_bonus": 13.5,
+                "total_metric_bonus": 4.9,
+            }}
+        )
+        results.append("Fixed Keisha Martin: display_name + score 114.0")
+
+    # Fix 2: Lennie Nguyen - add back with correct data
+    lennie = await db.employees_v2.find_one(
+        {"name": {"$regex": "^lennie", "$options": "i"}, "quarter": quarter, "year": year}
+    )
+    if not lennie:
+        lennie_data = {
+            "id": str(uuid.uuid4()),
+            "name": "Lennie Nguyen",
+            "display_name": "Lennie Nguyen",
+            "job_title": "server",
+            "year": year,
+            "quarter": quarter,
+            "tier_label": "A-Server",
+            "total_score": 90.2,
+            "pre_dar_score": 90.2,
+            "score_ppa": 83,
+            "score_lbw": 62,
+            "score_glass": 158,
+            "score_lsc": 147,
+            "cv_score": 11.0,
+            "review_tracker_bonus": 4.0,
+            "total_metric_bonus": 10.0,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.employees_v2.insert_one(lennie_data)
+        results.append("Added Lennie Nguyen: score 90.2, tier A-Server")
+    else:
+        results.append("Lennie Nguyen already exists - skipped")
+
+    # Fix 3: Correct tier labels for all employees based on score thresholds
+    tier_fixes = 0
+    async for emp in db.employees_v2.find({"quarter": quarter, "year": year}):
+        score = emp.get("pre_dar_score", 0) or emp.get("total_score", 0) or 0
+        stored_tier = (emp.get("tier_label") or "").strip()
+        job_title = (emp.get("job_title") or "").lower()
+
+        if stored_tier in ("Trainer",) or "trainer" in job_title:
+            correct_tier = "Trainer"
+        elif stored_tier in ("Bartender",) or "bartender" in job_title:
+            correct_tier = "Bartender"
+        elif score >= a_min:
+            correct_tier = "A-Server"
+        elif score >= b_min:
+            correct_tier = "B-Server"
+        else:
+            correct_tier = "C-Server"
+
+        if correct_tier != stored_tier:
+            await db.employees_v2.update_one(
+                {"_id": emp["_id"]},
+                {"$set": {"tier_label": correct_tier}}
+            )
+            tier_fixes += 1
+
+    if tier_fixes:
+        results.append(f"Fixed {tier_fixes} tier labels")
+
+    return {"success": True, "corrections": results}
+
+
+
+@audit_router.post("/fix-employee-data/{year}/{quarter}")
+async def fix_employee_data(year: int, quarter: str, employee_data: dict):
+    """
+    Insert or update an employee in employees_v2 with exact pre-calculated data.
+    Used to restore employees with known correct scores without going through the scoring pipeline.
+    """
+    import uuid
+    db = get_db()
+    quarter = quarter.upper()
+
+    name = employee_data.get("name")
+    if not name:
+        raise HTTPException(status_code=400, detail="Employee name is required")
+
+    # Check if employee already exists
+    existing = await db.employees_v2.find_one(
+        {"name": {"$regex": f"^{name}$", "$options": "i"}, "quarter": quarter, "year": year}
+    )
+
+    employee_data["quarter"] = quarter
+    employee_data["year"] = year
+
+    if existing:
+        # Update existing
+        await db.employees_v2.update_one(
+            {"_id": existing["_id"]},
+            {"$set": employee_data}
+        )
+        return {"success": True, "action": "updated", "name": name}
+    else:
+        # Insert new
+        if "id" not in employee_data:
+            employee_data["id"] = str(uuid.uuid4())
+        employee_data["created_at"] = datetime.now(timezone.utc).isoformat()
+        await db.employees_v2.insert_one(employee_data)
+        # Remove _id from response
+        return {"success": True, "action": "created", "name": name, "id": employee_data["id"]}

@@ -142,12 +142,28 @@ async def get_yodeck_complete_rankings_slide(year: int, quarter: str, format: st
     for emp in employees:
         # Use display_name (preferred name) if set, otherwise fall back to name
         display = emp.get("display_name") or emp.get("name") or "Unknown"
+        score = emp.get("pre_dar_score", 0) or emp.get("total_score", 0) or 0
+        
+        # Calculate tier from score, but preserve Trainer/Bartender roles
+        stored_tier = (emp.get("tier_label") or emp.get("performance_tier") or "").strip()
+        job_title = (emp.get("job_title") or "").lower().strip()
+        
+        if stored_tier in ("Trainer",) or "trainer" in job_title or "red hat" in job_title:
+            tier = "Trainer"
+        elif stored_tier in ("Bartender",) or "bartender" in job_title or "bar" in job_title:
+            tier = "Bartender"
+        elif score >= a_min:
+            tier = "A-Server"
+        elif score >= b_min:
+            tier = "B-Server"
+        else:
+            tier = "C-Server"
         
         slide_emp = {
             "id": emp.get("id"),
             "name": get_first_name(display),
-            "tier_label": emp.get("tier_label") or emp.get("performance_tier") or "B-Server",
-            "total_score": emp.get("pre_dar_score", 0) or emp.get("total_score", 0) or 0,
+            "tier_label": tier,
+            "total_score": score,
             "score_ppa": emp.get("score_ppa", 0) or 0,
             "score_lbw": emp.get("score_lbw", 0) or 0,
             "score_glass": emp.get("score_glass", 0) or 0,

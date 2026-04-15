@@ -12,6 +12,16 @@ Build a comprehensive performance review application for restaurant employees.
 ## Current State (2026-04-14)
 
 ### Latest Changes
+- **Complete Rankings Slide Fix (2026-04-14)**:
+  - Changed Complete Rankings to read from employees_v2 (dashboard) instead of snapshot_workflow
+  - Slide now calculates tiers from scores (A>=85, B>=70, C<70) rather than using stored tier_label
+  - Eliminates all name mismatch and duplicate issues between snapshot and dashboard
+  - Added one-shot correction endpoint: GET /api/v2/audit/apply-corrections/2026/Q1
+    - Restores Lennie Nguyen with correct scores (90.2, A-Server)
+    - Fixes Keisha Martin display_name and score (114.0)
+    - Corrects all tier labels based on score thresholds
+  - Smart delete: handles duplicate employees by removing lowest-scoring entry only
+
 - **Bug Fix: Blank Page on POS Upload (2026-04-14)**:
   - Fixed React crash (ReferenceError) on `/uploads` page when PDF preview table tried to render
   - Root cause: Missing `idx` parameter in `.map()` callback in `DataUploads.js` line 748
