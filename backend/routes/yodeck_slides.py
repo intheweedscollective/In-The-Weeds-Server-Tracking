@@ -108,9 +108,8 @@ async def get_yodeck_top10_slide(year: int, quarter: str, format: str = "16:9", 
 async def get_yodeck_complete_rankings_slide(year: int, quarter: str, format: str = "16:9", background: str = "dark"):
     """
     Generate a complete rankings slide showing ALL employees top to bottom on one slide.
-    Matches snapshot layout with left panel (logo, title, legend) and right panel (data table).
     
-    USES SNAPSHOT-FIRST ARCHITECTURE - reads from active snapshot for data consistency.
+    READS FROM employees_v2 (dashboard) as the authoritative data source.
     
     Args:
         format: "16:9" for Yodeck/digital signage (1920x1080) or "letter" for 8.5x11" print (2550x3300)
@@ -120,50 +119,14 @@ async def get_yodeck_complete_rankings_slide(year: int, quarter: str, format: st
     
     db = get_db()
     
-    # SNAPSHOT-FIRST: Get employees from the active snapshot
-    snapshot = await db.snapshot_workflow.find_one(
-        {"is_current": True, "quarter": quarter.upper(), "year": year},
-        {"_id": 0}
-    )
-    
-    if not snapshot:
-        snapshot = await db.snapshot_workflow.find_one(
-            {"status": "completed", "quarter": quarter.upper(), "year": year},
-            {"_id": 0},
-            sort=[("effective_date", -1), ("completed_at", -1)]
-        )
-    
-    if not snapshot or not snapshot.get("employees"):
-        raise HTTPException(status_code=404, detail=f"No snapshot data found for {quarter} {year}")
-    
-    employees = snapshot.get("employees", [])
-    
-    # Fetch full employee data from employees_v2 as authoritative source
-    # This ensures preferred names AND score fallbacks are always available
-    emp_v2_lookup = {}
-    emp_v2_data_lookup = {}
-    async for emp in db.employees_v2.find(
+    # Read directly from employees_v2 — the dashboard is the authoritative source
+    employees = await db.employees_v2.find(
         {"quarter": quarter.upper(), "year": year},
         {"_id": 0}
-    ):
-        # Build lookup by multiple keys (all lowercase for matching)
-        name = (emp.get("name") or "").lower().strip()
-        report_name = (emp.get("report_name") or "").lower().strip()
-        display_name = emp.get("display_name") or emp.get("name") or ""
-        
-        # The display_name (preferred name) is what we want to show
-        # Store under multiple keys for robust matching
-        if name:
-            emp_v2_lookup[name] = display_name
-            emp_v2_data_lookup[name] = emp
-        if report_name and report_name != name:
-            emp_v2_lookup[report_name] = display_name
-            emp_v2_data_lookup[report_name] = emp
-        # Also store by first name for matching
-        first_name = name.split()[0] if name else ""
-        if first_name and first_name not in emp_v2_lookup:
-            emp_v2_lookup[first_name] = display_name
-            emp_v2_data_lookup[first_name] = emp
+    ).to_list(200)
+    
+    if not employees:
+        raise HTTPException(status_code=404, detail=f"No employee data found for {quarter} {year}")
     
     # Get settings for tier thresholds
     settings = await db.quarter_settings.find_one(
@@ -174,81 +137,27 @@ async def get_yodeck_complete_rankings_slide(year: int, quarter: str, format: st
     a_min = settings.get("a_server_min_score", 85)
     b_min = settings.get("b_server_min_score", 70)
     
-    # Transform employees for the slide generator - use pre-calculated data
-    # NOTE: DAR data is intentionally excluded - it's sensitive HR info not for public display
-    # NOTE: Using first names only for privacy on public digital signage
+    # Transform employees for the slide generator
     slide_employees = []
     for emp in employees:
-        # Look up the preferred display_name from employees_v2
-        emp_name = (emp.get("name") or "").lower().strip()
-        emp_report = (emp.get("report_name") or "").lower().strip()
-        emp_display = (emp.get("display_name") or "").lower().strip()
-        emp_first = emp_name.split()[0] if emp_name else ""
-        
-        # Try multiple lookup strategies to find the preferred name
-        preferred_name = (
-            emp_v2_lookup.get(emp_name) or 
-            emp_v2_lookup.get(emp_report) or 
-            emp_v2_lookup.get(emp_display) or
-            emp_v2_lookup.get(emp_first) or
-            emp.get("display_name") or 
-            emp.get("name") or 
-            "Unknown"
-        )
-        
-        # Fallback: if snapshot has zero total_score, use dashboard data
-        v2_emp = (
-            emp_v2_data_lookup.get(emp_name) or
-            emp_v2_data_lookup.get(emp_report) or
-            emp_v2_data_lookup.get(emp_display) or
-            emp_v2_data_lookup.get(emp_first)
-        )
-        total = emp.get("pre_dar_score", 0) or emp.get("total_score", 0) or 0
-        if total == 0 and v2_emp and (v2_emp.get("total_score", 0) or 0) > 0:
-            # Snapshot missing data — use dashboard scores
-            src = v2_emp
-        else:
-            src = emp
+        # Use display_name (preferred name) if set, otherwise fall back to name
+        display = emp.get("display_name") or emp.get("name") or "Unknown"
         
         slide_emp = {
             "id": emp.get("id"),
-            "name": get_first_name(preferred_name),
-            "tier_label": src.get("tier_label") or src.get("performance_tier") or emp.get("tier_label") or "B-Server",
-            # Always use pre-DAR score for public slides
-            "total_score": src.get("pre_dar_score", 0) or src.get("total_score", 0) or 0,
-            # Use pre-calculated percentage scores
-            "score_ppa": src.get("score_ppa", 0) or 0,
-            "score_lbw": src.get("score_lbw", 0) or 0,
-            "score_glass": src.get("score_glass", 0) or 0,
-            "score_lsc": src.get("score_lsc", 0) or 0,
-            "cv_score": src.get("cv_score", 0) or 0,
-            "rt_mentions": src.get("rt_mentions", 0) or src.get("review_mentions", 0) or 0,
-            "rt_bonus": src.get("review_tracker_bonus", 0) or min((src.get("rt_mentions", 0) or 0) * 0.5, 15),
-            "total_metric_bonus": src.get("total_metric_bonus", 0) or 0,
+            "name": get_first_name(display),
+            "tier_label": emp.get("tier_label") or emp.get("performance_tier") or "B-Server",
+            "total_score": emp.get("pre_dar_score", 0) or emp.get("total_score", 0) or 0,
+            "score_ppa": emp.get("score_ppa", 0) or 0,
+            "score_lbw": emp.get("score_lbw", 0) or 0,
+            "score_glass": emp.get("score_glass", 0) or 0,
+            "score_lsc": emp.get("score_lsc", 0) or 0,
+            "cv_score": emp.get("cv_score", 0) or 0,
+            "rt_mentions": emp.get("rt_mentions", 0) or emp.get("review_mentions", 0) or 0,
+            "rt_bonus": emp.get("review_tracker_bonus", 0) or min((emp.get("rt_mentions", 0) or 0) * 0.5, 15),
+            "total_metric_bonus": emp.get("total_metric_bonus", 0) or 0,
         }
         slide_employees.append(slide_emp)
-    
-    # Include dashboard employees missing from snapshot (e.g. deleted by accident)
-    snapshot_names = {(e.get("name") or "").lower().strip() for e in employees}
-    for v2_name, v2_emp in emp_v2_data_lookup.items():
-        full_name = (v2_emp.get("name") or "").lower().strip()
-        if full_name and full_name not in snapshot_names and (v2_emp.get("total_score", 0) or 0) > 0:
-            snapshot_names.add(full_name)  # prevent dupes
-            display = v2_emp.get("display_name") or v2_emp.get("name") or "Unknown"
-            slide_employees.append({
-                "id": v2_emp.get("id"),
-                "name": get_first_name(display),
-                "tier_label": v2_emp.get("tier_label") or v2_emp.get("performance_tier") or "B-Server",
-                "total_score": v2_emp.get("pre_dar_score", 0) or v2_emp.get("total_score", 0) or 0,
-                "score_ppa": v2_emp.get("score_ppa", 0) or 0,
-                "score_lbw": v2_emp.get("score_lbw", 0) or 0,
-                "score_glass": v2_emp.get("score_glass", 0) or 0,
-                "score_lsc": v2_emp.get("score_lsc", 0) or 0,
-                "cv_score": v2_emp.get("cv_score", 0) or 0,
-                "rt_mentions": v2_emp.get("rt_mentions", 0) or v2_emp.get("review_mentions", 0) or 0,
-                "rt_bonus": v2_emp.get("review_tracker_bonus", 0) or 0,
-                "total_metric_bonus": v2_emp.get("total_metric_bonus", 0) or 0,
-            })
     
     # Generate the snapshot slide
     snapshot_date = datetime.now().strftime("%Y-%m-%d")
