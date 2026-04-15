@@ -138,12 +138,13 @@ async def get_yodeck_complete_rankings_slide(year: int, quarter: str, format: st
     
     employees = snapshot.get("employees", [])
     
-    # Fetch latest display_name from employees_v2 as the authoritative source
-    # This ensures preferred names from the Employees tab are always used
+    # Fetch full employee data from employees_v2 as authoritative source
+    # This ensures preferred names AND score fallbacks are always available
     emp_v2_lookup = {}
+    emp_v2_data_lookup = {}
     async for emp in db.employees_v2.find(
         {"quarter": quarter.upper(), "year": year},
-        {"_id": 0, "name": 1, "display_name": 1, "report_name": 1}
+        {"_id": 0}
     ):
         # Build lookup by multiple keys (all lowercase for matching)
         name = (emp.get("name") or "").lower().strip()
@@ -154,12 +155,15 @@ async def get_yodeck_complete_rankings_slide(year: int, quarter: str, format: st
         # Store under multiple keys for robust matching
         if name:
             emp_v2_lookup[name] = display_name
+            emp_v2_data_lookup[name] = emp
         if report_name and report_name != name:
             emp_v2_lookup[report_name] = display_name
+            emp_v2_data_lookup[report_name] = emp
         # Also store by first name for matching
         first_name = name.split()[0] if name else ""
         if first_name and first_name not in emp_v2_lookup:
             emp_v2_lookup[first_name] = display_name
+            emp_v2_data_lookup[first_name] = emp
     
     # Get settings for tier thresholds
     settings = await db.quarter_settings.find_one(
@@ -191,21 +195,36 @@ async def get_yodeck_complete_rankings_slide(year: int, quarter: str, format: st
             emp.get("name") or 
             "Unknown"
         )
+        
+        # Fallback: if snapshot has zero total_score, use dashboard data
+        v2_emp = (
+            emp_v2_data_lookup.get(emp_name) or
+            emp_v2_data_lookup.get(emp_report) or
+            emp_v2_data_lookup.get(emp_display) or
+            emp_v2_data_lookup.get(emp_first)
+        )
+        total = emp.get("pre_dar_score", 0) or emp.get("total_score", 0) or 0
+        if total == 0 and v2_emp and (v2_emp.get("total_score", 0) or 0) > 0:
+            # Snapshot missing data — use dashboard scores
+            src = v2_emp
+        else:
+            src = emp
+        
         slide_emp = {
             "id": emp.get("id"),
             "name": get_first_name(preferred_name),
-            "tier_label": emp.get("tier_label") or emp.get("performance_tier") or "B-Server",
+            "tier_label": src.get("tier_label") or src.get("performance_tier") or emp.get("tier_label") or "B-Server",
             # Always use pre-DAR score for public slides
-            "total_score": emp.get("pre_dar_score", 0) or emp.get("total_score", 0) or 0,
-            # Use pre-calculated percentage scores from snapshot
-            "score_ppa": emp.get("score_ppa", 0) or 0,
-            "score_lbw": emp.get("score_lbw", 0) or 0,
-            "score_glass": emp.get("score_glass", 0) or 0,
-            "score_lsc": emp.get("score_lsc", 0) or 0,
-            "cv_score": emp.get("cv_score", 0) or 0,
-            "rt_mentions": emp.get("rt_mentions", 0) or emp.get("review_mentions", 0) or 0,
-            "rt_bonus": emp.get("review_tracker_bonus", 0) or min((emp.get("rt_mentions", 0) or 0) * 0.5, 15),
-            "total_metric_bonus": emp.get("total_metric_bonus", 0) or 0,
+            "total_score": src.get("pre_dar_score", 0) or src.get("total_score", 0) or 0,
+            # Use pre-calculated percentage scores
+            "score_ppa": src.get("score_ppa", 0) or 0,
+            "score_lbw": src.get("score_lbw", 0) or 0,
+            "score_glass": src.get("score_glass", 0) or 0,
+            "score_lsc": src.get("score_lsc", 0) or 0,
+            "cv_score": src.get("cv_score", 0) or 0,
+            "rt_mentions": src.get("rt_mentions", 0) or src.get("review_mentions", 0) or 0,
+            "rt_bonus": src.get("review_tracker_bonus", 0) or min((src.get("rt_mentions", 0) or 0) * 0.5, 15),
+            "total_metric_bonus": src.get("total_metric_bonus", 0) or 0,
         }
         slide_employees.append(slide_emp)
     
