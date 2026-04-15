@@ -768,7 +768,7 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
     
     return {
         "success": True,
-        "message": f"Updated employee in snapshot",
+        "message": "Updated employee in snapshot",
         "employee": {k: v for k, v in updated_emp.items() if k != "_id"}
     }
 
@@ -802,12 +802,22 @@ async def delete_snapshot_employee(employee_id: str):
     snapshot_id = snapshot["id"]
     employees = snapshot.get("employees", [])
     
-    # Find and remove employee
-    original_count = len(employees)
-    employees = [e for e in employees if e.get("id") != employee_id and e.get("name", "").lower() != employee_id.lower()]
+    # Find all matching entries
+    matching = [(i, e) for i, e in enumerate(employees) 
+                if e.get("id") == employee_id or e.get("name", "").lower() == employee_id.lower()]
     
-    if len(employees) == original_count:
+    if not matching:
         raise HTTPException(status_code=404, detail=f"Employee '{employee_id}' not found in snapshot")
+    
+    if len(matching) > 1:
+        # Duplicates found: remove only the lowest-scoring entry
+        matching.sort(key=lambda x: x[1].get("pre_dar_score", 0) or x[1].get("total_score", 0) or 0)
+        remove_idx = matching[0][0]  # lowest score
+        employees.pop(remove_idx)
+        logger.info(f"Removed duplicate (lowest score) for {employee_id}, kept {len(matching)-1} remaining")
+    else:
+        # Single entry: remove it
+        employees = [e for e in employees if e.get("id") != employee_id and e.get("name", "").lower() != employee_id.lower()]
     
     # Update snapshot
     await db.snapshot_workflow.update_one(
@@ -945,7 +955,7 @@ async def rebuild_snapshot_from_pos():
 
     return {
         "success": True,
-        "message": f"Deleted employee from snapshot",
+        "message": "Deleted employee from snapshot",
         "remaining_count": len(employees)
     }
 

@@ -228,6 +228,28 @@ async def get_yodeck_complete_rankings_slide(year: int, quarter: str, format: st
         }
         slide_employees.append(slide_emp)
     
+    # Include dashboard employees missing from snapshot (e.g. deleted by accident)
+    snapshot_names = {(e.get("name") or "").lower().strip() for e in employees}
+    for v2_name, v2_emp in emp_v2_data_lookup.items():
+        full_name = (v2_emp.get("name") or "").lower().strip()
+        if full_name and full_name not in snapshot_names and (v2_emp.get("total_score", 0) or 0) > 0:
+            snapshot_names.add(full_name)  # prevent dupes
+            display = v2_emp.get("display_name") or v2_emp.get("name") or "Unknown"
+            slide_employees.append({
+                "id": v2_emp.get("id"),
+                "name": get_first_name(display),
+                "tier_label": v2_emp.get("tier_label") or v2_emp.get("performance_tier") or "B-Server",
+                "total_score": v2_emp.get("pre_dar_score", 0) or v2_emp.get("total_score", 0) or 0,
+                "score_ppa": v2_emp.get("score_ppa", 0) or 0,
+                "score_lbw": v2_emp.get("score_lbw", 0) or 0,
+                "score_glass": v2_emp.get("score_glass", 0) or 0,
+                "score_lsc": v2_emp.get("score_lsc", 0) or 0,
+                "cv_score": v2_emp.get("cv_score", 0) or 0,
+                "rt_mentions": v2_emp.get("rt_mentions", 0) or v2_emp.get("review_mentions", 0) or 0,
+                "rt_bonus": v2_emp.get("review_tracker_bonus", 0) or 0,
+                "total_metric_bonus": v2_emp.get("total_metric_bonus", 0) or 0,
+            })
+    
     # Generate the snapshot slide
     snapshot_date = datetime.now().strftime("%Y-%m-%d")
     png_bytes = generate_snapshot_slide(

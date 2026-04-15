@@ -1209,3 +1209,115 @@ async def sync_dashboard_to_snapshot(year: int, quarter: str, employee_name: Opt
         "not_in_snapshot": not_in_snapshot,
         "skipped": skipped,
     }
+
+
+
+@audit_router.post("/dedup-snapshot/{year}/{quarter}")
+async def dedup_snapshot_employees(year: int, quarter: str):
+    """
+    Remove duplicate employees from the active snapshot, keeping the entry with the highest score.
+    """
+    db = get_db()
+    quarter = quarter.upper()
+
+    snapshot = await db.snapshot_workflow.find_one(
+        {"is_current": True, "quarter": quarter, "year": year}
+    )
+    if not snapshot:
+        snapshot = await db.snapshot_workflow.find_one(
+            {"status": "completed", "quarter": quarter, "year": year},
+            sort=[("effective_date", -1), ("completed_at", -1)]
+        )
+    if not snapshot:
+        raise HTTPException(status_code=404, detail=f"No snapshot found for {quarter} {year}")
+
+    snapshot_id = snapshot["_id"]
+    employees = snapshot.get("employees", [])
+
+    # Group by lowercase name
+    seen = {}
+    deduped = []
+    removed = []
+
+    for emp in employees:
+        name_key = (emp.get("name") or "").lower().strip()
+        score = emp.get("pre_dar_score", 0) or emp.get("total_score", 0) or 0
+
+        if name_key not in seen:
+            seen[name_key] = len(deduped)
+            deduped.append(emp)
+        else:
+            existing_idx = seen[name_key]
+            existing_score = deduped[existing_idx].get("pre_dar_score", 0) or deduped[existing_idx].get("total_score", 0) or 0
+            if score > existing_score:
+                removed.append({"name": deduped[existing_idx].get("name"), "score": existing_score, "action": "replaced"})
+                deduped[existing_idx] = emp
+            else:
+                removed.append({"name": emp.get("name"), "score": score, "action": "dropped"})
+
+    if removed:
+        await db.snapshot_workflow.update_one(
+            {"_id": snapshot_id},
+            {"$set": {"employees": deduped, "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+
+    return {
+        "success": True,
+        "original_count": len(employees),
+        "deduped_count": len(deduped),
+        "removed_count": len(removed),
+        "removed": removed,
+    }
+
+
+@audit_router.post("/restore-employee/{year}/{quarter}")
+async def restore_employee_to_snapshot(year: int, quarter: str, employee_name: str):
+    """
+    Restore a specific employee from employees_v2 (dashboard) into the active snapshot.
+    Used when an employee was accidentally deleted from the snapshot.
+    """
+    db = get_db()
+    quarter = quarter.upper()
+
+    # Find the employee in dashboard
+    dash_emp = await db.employees_v2.find_one(
+        {"name": {"$regex": f"^{employee_name}$", "$options": "i"}, "quarter": quarter, "year": year},
+        {"_id": 0}
+    )
+    if not dash_emp:
+        raise HTTPException(status_code=404, detail=f"Employee '{employee_name}' not found in dashboard")
+
+    # Find the active snapshot
+    snapshot = await db.snapshot_workflow.find_one(
+        {"is_current": True, "quarter": quarter, "year": year}
+    )
+    if not snapshot:
+        snapshot = await db.snapshot_workflow.find_one(
+            {"status": "completed", "quarter": quarter, "year": year},
+            sort=[("effective_date", -1), ("completed_at", -1)]
+        )
+    if not snapshot:
+        raise HTTPException(status_code=404, detail=f"No snapshot found for {quarter} {year}")
+
+    snapshot_id = snapshot["_id"]
+    employees = snapshot.get("employees", [])
+
+    # Check if already exists
+    existing = [e for e in employees if (e.get("name") or "").lower().strip() == employee_name.lower().strip()]
+    if existing:
+        return {"success": False, "message": f"Employee '{employee_name}' already exists in snapshot ({len(existing)} entries)"}
+
+    # Add the employee with all dashboard fields
+    employees.append(dash_emp)
+
+    await db.snapshot_workflow.update_one(
+        {"_id": snapshot_id},
+        {"$set": {"employees": employees, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+
+    return {
+        "success": True,
+        "message": f"Restored '{employee_name}' to snapshot",
+        "employee_score": dash_emp.get("total_score", 0),
+        "snapshot_employee_count": len(employees),
+    }
