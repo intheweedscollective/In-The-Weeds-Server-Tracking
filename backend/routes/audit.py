@@ -1107,3 +1107,105 @@ async def sync_employees_from_snapshot(year: int, quarter: str, employee_name: O
         "not_found": not_found,
         "skipped": skipped,
     }
+
+
+@audit_router.post("/sync-to-snapshot/{year}/{quarter}")
+async def sync_dashboard_to_snapshot(year: int, quarter: str, employee_name: Optional[str] = None):
+    """
+    Sync employee data FROM employees_v2 (dashboard) TO the active snapshot.
+    Fixes cases where snapshot has zeros/stale data but dashboard has correct data.
+    If employee_name is provided, only sync that employee. Otherwise sync all.
+    """
+    db = get_db()
+    quarter = quarter.upper()
+
+    # Get the active/latest completed snapshot
+    snapshot = await db.snapshot_workflow.find_one(
+        {"is_current": True, "quarter": quarter, "year": year}
+    )
+    if not snapshot:
+        snapshot = await db.snapshot_workflow.find_one(
+            {"status": "completed", "quarter": quarter, "year": year},
+            sort=[("effective_date", -1), ("completed_at", -1)]
+        )
+
+    if not snapshot:
+        raise HTTPException(status_code=404, detail=f"No snapshot found for {quarter} {year}")
+
+    snapshot_id = snapshot["_id"]
+    snapshot_employees = snapshot.get("employees", [])
+
+    # Build lookup from snapshot employees by name
+    snap_lookup = {}
+    for i, emp in enumerate(snapshot_employees):
+        name = (emp.get("name") or "").lower().strip()
+        snap_lookup[name] = i
+
+    # Fields to sync from dashboard to snapshot
+    sync_fields = [
+        "ppa", "lbw_per_guest", "glassware_per_guest", "guests_per_lsc",
+        "guest_count", "net_sales", "loyalty_sales", "lsc_count",
+        "liquor_sales", "beer_sales", "wine_sales", "bar_glassware_sales",
+        "score_ppa", "score_lbw", "score_glass", "score_lsc",
+        "cv_score", "cv_nps", "cv_responses", "cv_promoters", "cv_detractors",
+        "rt_mentions", "review_mentions", "review_tracker_bonus",
+        "total_score", "pre_dar_score", "total_metric_bonus",
+        "tier_label", "performance_tier", "rank",
+    ]
+
+    updated = []
+    not_in_snapshot = []
+    skipped = []
+
+    # Get dashboard employees
+    query = {"quarter": quarter, "year": year}
+    if employee_name:
+        query["name"] = {"$regex": f"^{employee_name}$", "$options": "i"}
+
+    async for dash_emp in db.employees_v2.find(query, {"_id": 0}):
+        dash_name = (dash_emp.get("name") or "").lower().strip()
+        snap_idx = snap_lookup.get(dash_name)
+
+        if snap_idx is None:
+            not_in_snapshot.append(dash_emp.get("name"))
+            continue
+
+        snap_emp = snapshot_employees[snap_idx]
+
+        # Build update: copy dashboard values to snapshot employee
+        field_updates = {}
+        for field in sync_fields:
+            dash_val = dash_emp.get(field)
+            snap_val = snap_emp.get(field, 0) or 0
+            if dash_val is not None and dash_val != 0 and (snap_val == 0 or dash_val != snap_val):
+                field_updates[field] = dash_val
+
+        if field_updates:
+            # Update the snapshot employee in-place
+            set_ops = {}
+            for field, val in field_updates.items():
+                set_ops[f"employees.{snap_idx}.{field}"] = val
+            await db.snapshot_workflow.update_one(
+                {"_id": snapshot_id},
+                {"$set": set_ops}
+            )
+            updated.append({
+                "name": dash_emp.get("name"),
+                "fields_updated": list(field_updates.keys()),
+                "field_count": len(field_updates),
+            })
+        else:
+            skipped.append(dash_emp.get("name"))
+
+    return {
+        "success": True,
+        "quarter": quarter,
+        "year": year,
+        "direction": "dashboard → snapshot",
+        "updated_count": len(updated),
+        "not_in_snapshot_count": len(not_in_snapshot),
+        "skipped_count": len(skipped),
+        "updated": updated,
+        "not_in_snapshot": not_in_snapshot,
+        "skipped": skipped,
+    }
