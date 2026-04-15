@@ -110,14 +110,18 @@ async def get_yodeck_complete_rankings_slide(year: int, quarter: str, format: st
     Generate a complete rankings slide showing ALL employees top to bottom on one slide.
     
     READS FROM employees_v2 (dashboard) as the authoritative data source.
-    
-    Args:
-        format: "16:9" for Yodeck/digital signage (1920x1080) or "letter" for 8.5x11" print (2550x3300)
-        background: Background key (dark, rainbow_bokeh, cosmic_lights, neon_grid, synthwave_sunset, electric_mesh)
+    Auto-applies data corrections before generating.
     """
     from snapshot_slides import generate_snapshot_slide
+    from routes.audit import apply_data_corrections
     
     db = get_db()
+    
+    # Auto-apply corrections before generating slide
+    try:
+        await apply_data_corrections(year, quarter)
+    except Exception as e:
+        logger.warning(f"Auto-corrections failed (non-blocking): {e}")
     
     # Read directly from employees_v2 — the dashboard is the authoritative source
     employees = await db.employees_v2.find(
