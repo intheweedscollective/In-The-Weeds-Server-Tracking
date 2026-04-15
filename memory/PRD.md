@@ -17,6 +17,12 @@ Build a comprehensive performance review application for restaurant employees.
   - Root cause: Missing `idx` parameter in `.map()` callback in `DataUploads.js` line 748
   - Also fixed `editingEmployee` comparison to use index instead of `emp.name`
 
+- **Data Cross-Reference Audit Tools (2026-04-14)**:
+  - `GET /api/v2/audit/cross-reference/{year}/{quarter}` — compares snapshot_workflow vs employees_v2 field-by-field
+  - `POST /api/v2/audit/sync-from-snapshot/{year}/{quarter}?employee_name=X` — syncs non-zero snapshot data back to dashboard
+  - Identifies employees where dashboard shows zeros but snapshot has real data
+  - Can fix individual employees or all at once
+
 - **Complete Rankings Slide Redesign (2026-04-11)**:
   - Simplified slide to show ONLY: Tier header sections + First Name + Rank
   - Added colorful rainbow bubbles background (`/app/backend/assets/backgrounds/rainbow_bubbles.jpg`)
