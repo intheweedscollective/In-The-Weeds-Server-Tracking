@@ -1328,9 +1328,6 @@ async def restore_employee_to_snapshot(year: int, quarter: str, employee_name: s
 async def apply_data_corrections(year: int, quarter: str):
     """
     One-shot fix: Apply known data corrections for the quarter.
-    - Restores Lennie Nguyen with correct scores
-    - Fixes Keisha Martin display_name and score
-    - Corrects tier labels based on score thresholds
     """
     import uuid
     db = get_db()
@@ -1338,15 +1335,38 @@ async def apply_data_corrections(year: int, quarter: str):
 
     results = []
 
-    # Get settings for tier thresholds
-    settings = await db.quarter_settings.find_one(
-        {"year": year, "quarter": quarter},
-        {"_id": 0}
-    ) or {}
-    a_min = settings.get("a_server_min_score", 85)
-    b_min = settings.get("b_server_min_score", 70)
+    # Fix 0: Correct tier thresholds in quarter_settings
+    settings_doc = await db.quarter_settings.find_one(
+        {"year": year, "quarter": quarter}
+    )
+    if settings_doc:
+        updates = {}
+        if settings_doc.get("a_server_min_score") != 85:
+            updates["a_server_min_score"] = 85
+        if settings_doc.get("b_server_min_score") != 70:
+            updates["b_server_min_score"] = 70
+        if updates:
+            await db.quarter_settings.update_one(
+                {"_id": settings_doc["_id"]},
+                {"$set": updates}
+            )
+            results.append(f"Fixed tier thresholds: A>=85, B>=70")
 
-    # Fix 1: Keisha Martin - restore display_name and score
+    a_min = 85
+    b_min = 70
+
+    # Fix 1: Starwars - clear wrong display_name "Stanvars"
+    starwars = await db.employees_v2.find_one(
+        {"name": {"$regex": "starwars", "$options": "i"}, "quarter": quarter, "year": year}
+    )
+    if starwars and starwars.get("display_name") and "stanv" in (starwars.get("display_name") or "").lower():
+        await db.employees_v2.update_one(
+            {"_id": starwars["_id"]},
+            {"$set": {"display_name": "Starwars McKinnon-Herrera"}}
+        )
+        results.append("Fixed Starwars: removed wrong display_name 'Stanvars'")
+
+    # Fix 2: Keisha Martin - restore display_name and score
     keisha = await db.employees_v2.find_one(
         {"name": {"$regex": "keisha|lakeisha", "$options": "i"}, "quarter": quarter, "year": year}
     )
@@ -1368,7 +1388,7 @@ async def apply_data_corrections(year: int, quarter: str):
         )
         results.append("Fixed Keisha Martin: display_name + score 114.0")
 
-    # Fix 2: Lennie Nguyen - add back with correct data
+    # Fix 3: Lennie Nguyen - add back with correct data
     lennie = await db.employees_v2.find_one(
         {"name": {"$regex": "^lennie", "$options": "i"}, "quarter": quarter, "year": year}
     )
@@ -1397,16 +1417,17 @@ async def apply_data_corrections(year: int, quarter: str):
     else:
         results.append("Lennie Nguyen already exists - skipped")
 
-    # Fix 3: Correct tier labels for all employees based on score thresholds
+    # Fix 4: Correct tier labels for all employees based on score thresholds
     tier_fixes = 0
+    fixed_names = []
     async for emp in db.employees_v2.find({"quarter": quarter, "year": year}):
         score = emp.get("pre_dar_score", 0) or emp.get("total_score", 0) or 0
         stored_tier = (emp.get("tier_label") or "").strip()
         job_title = (emp.get("job_title") or "").lower()
 
-        if stored_tier in ("Trainer",) or "trainer" in job_title:
+        if "trainer" in job_title or stored_tier == "Trainer":
             correct_tier = "Trainer"
-        elif stored_tier in ("Bartender",) or "bartender" in job_title:
+        elif "bartender" in job_title or "bar" in job_title or stored_tier == "Bartender":
             correct_tier = "Bartender"
         elif score >= a_min:
             correct_tier = "A-Server"
@@ -1421,9 +1442,10 @@ async def apply_data_corrections(year: int, quarter: str):
                 {"$set": {"tier_label": correct_tier}}
             )
             tier_fixes += 1
+            fixed_names.append(f"{emp.get('name')}: {stored_tier} -> {correct_tier}")
 
     if tier_fixes:
-        results.append(f"Fixed {tier_fixes} tier labels")
+        results.append(f"Fixed {tier_fixes} tier labels: {', '.join(fixed_names)}")
 
     return {"success": True, "corrections": results}
 
