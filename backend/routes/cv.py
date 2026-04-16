@@ -536,6 +536,12 @@ async def upload_cv_server_performance(
             "success": True,
             "quarter": quarter.upper(),
             "year": year,
+            "summary": {
+                "employees_updated": imported + updated,
+                "total_responses": sum(1 for _ in df.iterrows()) if 'df' in dir() else 0,
+                "total_promoters": int(df.get('promoters', pd.Series([0])).sum()) if 'promoters' in df.columns else 0,
+                "total_detractors": int(df.get('detractors', pd.Series([0])).sum()) if 'detractors' in df.columns else 0,
+            },
             "imported": imported,
             "updated": updated,
             "errors": errors[:10] if errors else [],
@@ -553,7 +559,8 @@ async def upload_cv_server_performance(
 
 @cv_router.post("/adjustment/upload")
 async def upload_cv_adjustment_file(
-    file: UploadFile = File(...),
+    feedback_file: UploadFile = File(...),
+    transaction_file: Optional[UploadFile] = File(None),
     quarter: str = "Q1",
     year: int = 2026
 ):
@@ -566,9 +573,9 @@ async def upload_cv_adjustment_file(
     try:
         import pandas as pd
         
-        contents = await file.read()
+        contents = await feedback_file.read()
         
-        if file.filename.endswith('.csv'):
+        if feedback_file.filename.endswith('.csv'):
             df = pd.read_csv(io.BytesIO(contents))
         else:
             df = pd.read_excel(io.BytesIO(contents))
@@ -610,7 +617,7 @@ async def upload_cv_adjustment_file(
             "id": session_id,
             "quarter": quarter.upper(),
             "year": year,
-            "filename": file.filename,
+            "filename": feedback_file.filename,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "status": "pending",
             "items": items,
@@ -625,9 +632,15 @@ async def upload_cv_adjustment_file(
         
         await db.cv_adjustment_sessions.insert_one(session)
         
+        # Return without _id field
         return {
             "success": True,
             "session_id": session_id,
+            "summary": {
+                "total_feedback": len(items),
+                "auto_detected": session["summary"]["auto_detected"],
+            },
+            "feedback_items": items,
             "total_items": len(items),
             "auto_detected_issues": session["summary"]["auto_detected"]
         }
