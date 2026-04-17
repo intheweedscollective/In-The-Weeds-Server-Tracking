@@ -644,3 +644,142 @@ async def get_review_sync_status(quarter: str = "Q1", year: int = 2026):
             else "Upload RT data via /v2/rt/upload or set official stats via /v2/admin/rt-stats/set"
         )
     }
+
+
+
+@reviews_router.post("/review-tracker/upload-feedback")
+async def upload_review_tracker_feedback(
+    file: UploadFile = File(...),
+    quarter: str = "Q1",
+    year: int = 2026
+):
+    """
+    Upload ReviewTracker feedback CSV/XLSX.
+    Scans review text for employee name mentions and updates RT scores.
+    """
+    import pandas as pd
+    
+    db = get_db()
+    quarter = quarter.upper()
+    
+    if not file.filename.endswith(('.xlsx', '.xls', '.csv')):
+        raise HTTPException(status_code=400, detail="File must be Excel (.xlsx, .xls) or CSV (.csv)")
+    
+    try:
+        contents = await file.read()
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(io.BytesIO(contents))
+        else:
+            df = pd.read_excel(io.BytesIO(contents))
+        
+        # Normalize columns
+        df.columns = [str(c).strip().lower().replace(' ', '_') for c in df.columns]
+        
+        # Map common column names
+        col_mapping = {}
+        for col in df.columns:
+            cl = col.lower()
+            if any(x in cl for x in ['review', 'comment', 'feedback', 'text', 'body']):
+                if 'review_text' not in col_mapping.values():
+                    col_mapping[col] = 'review_text'
+            elif any(x in cl for x in ['rating', 'score', 'star']):
+                if 'rating' not in col_mapping.values():
+                    col_mapping[col] = 'rating'
+            elif any(x in cl for x in ['date', 'time', 'created', 'posted']):
+                if 'date' not in col_mapping.values():
+                    col_mapping[col] = 'date'
+            elif any(x in cl for x in ['source', 'platform', 'site']):
+                if 'platform' not in col_mapping.values():
+                    col_mapping[col] = 'platform'
+        df = df.rename(columns=col_mapping)
+        
+        # Get all employees for name matching
+        employees = await db.employees_v2.find(
+            {"quarter": quarter, "year": year},
+            {"_id": 0, "id": 1, "name": 1, "display_name": 1, "report_name": 1, "aliases": 1}
+        ).to_list(200)
+        
+        if not employees:
+            raise HTTPException(status_code=404, detail=f"No employees found for {quarter} {year}")
+        
+        # Build name list for matching
+        employee_names = {}
+        for emp in employees:
+            emp_id = emp.get("id")
+            for field in ["name", "display_name", "report_name"]:
+                n = (emp.get(field) or "").strip()
+                if n:
+                    employee_names[n.lower()] = emp_id
+                    # Also add first name
+                    first = n.split()[0].lower()
+                    if len(first) > 2 and first not in employee_names:
+                        employee_names[first] = emp_id
+            for alias in emp.get("aliases", []):
+                if alias:
+                    employee_names[alias.lower()] = emp_id
+        
+        # Scan reviews for employee mentions
+        mention_counts = {}  # emp_id -> count
+        reviews_with_mentions = 0
+        total_reviews = 0
+        
+        review_col = 'review_text' if 'review_text' in df.columns else None
+        if not review_col:
+            # Try to find any text column
+            for col in df.columns:
+                if df[col].dtype == 'object':
+                    avg_len = df[col].astype(str).str.len().mean()
+                    if avg_len > 30:  # likely a text column
+                        review_col = col
+                        break
+        
+        if not review_col:
+            raise HTTPException(status_code=400, detail=f"Could not find review text column. Columns found: {', '.join(df.columns)}")
+        
+        for _, row in df.iterrows():
+            text = str(row.get(review_col, '') or '').lower()
+            if not text or text == 'nan':
+                continue
+            total_reviews += 1
+            
+            found_in_review = False
+            for emp_name, emp_id in employee_names.items():
+                if emp_name in text:
+                    mention_counts[emp_id] = mention_counts.get(emp_id, 0) + 1
+                    found_in_review = True
+            
+            if found_in_review:
+                reviews_with_mentions += 1
+        
+        # Update employee records with mention counts
+        employees_updated = 0
+        for emp_id, mentions in mention_counts.items():
+            rt_bonus = min(mentions * 0.5, 15)
+            result = await db.employees_v2.update_one(
+                {"id": emp_id, "quarter": quarter, "year": year},
+                {"$set": {
+                    "rt_mentions": mentions,
+                    "review_mentions": mentions,
+                    "review_tracker_bonus": rt_bonus,
+                    "rt_source": "feedback_csv_upload",
+                    "rt_updated_at": datetime.now(timezone.utc).isoformat()
+                }}
+            )
+            if result.modified_count > 0:
+                employees_updated += 1
+        
+        return {
+            "success": True,
+            "summary": {
+                "total_reviews": total_reviews,
+                "reviews_with_mentions": reviews_with_mentions,
+                "total_mentions": sum(mention_counts.values()),
+                "employees_updated": employees_updated,
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"RT upload error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

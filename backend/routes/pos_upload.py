@@ -780,17 +780,38 @@ async def import_pos_pdf_data(
             
             try:
                 if matched_id:
-                    # Update existing employee
+                    # Update existing employee with raw + derived metrics
+                    guests = emp_data['guests']
+                    net_sales = emp_data['net_sales']
+                    lbw = emp_data['lbw']
+                    glassware = emp_data['glassware']
+                    loyalty = emp_data.get('loyalty_sales', 0)
+                    lsc_count = int(loyalty / 25) if loyalty > 0 else 0
+                    
+                    # Calculate derived per-guest metrics
+                    ppa = round(net_sales / guests, 2) if guests > 0 else 0
+                    lbw_per_guest = round(lbw / guests, 2) if guests > 0 else 0
+                    glass_per_guest = round(glassware / guests, 2) if guests > 0 else 0
+                    guests_per_lsc = round(guests / lsc_count, 2) if lsc_count > 0 else 0
+                    
                     update_data = {
-                        "guest_count": emp_data['guests'],
-                        "net_sales": emp_data['net_sales'],
+                        "guest_count": guests,
+                        "guests": guests,
+                        "net_sales": net_sales,
                         "food_sales": emp_data['food'],
                         "liquor_sales": emp_data['liquor'],
                         "beer_sales": emp_data['beer'],
                         "wine_sales": emp_data['wine'],
-                        "lbw_total": emp_data['lbw'],
-                        "bar_glassware_sales": emp_data['glassware'],
-                        "loyalty_sales": emp_data.get('loyalty_sales', 0),
+                        "lbw_total": lbw,
+                        "lbw": lbw,
+                        "bar_glassware_sales": glassware,
+                        "glassware_sales": glassware,
+                        "loyalty_sales": loyalty,
+                        "lsc_count": lsc_count,
+                        "ppa": ppa,
+                        "lbw_per_guest": lbw_per_guest,
+                        "glassware_per_guest": glass_per_guest,
+                        "guests_per_lsc": guests_per_lsc,
                         "updated_at": datetime.now(timezone.utc)
                     }
                     
@@ -800,8 +821,20 @@ async def import_pos_pdf_data(
                     )
                     results["matched"].append({"name": emp_name, "id": matched_id})
                 else:
-                    # Create new employee
+                    # Create new employee with raw + derived metrics
                     new_id = str(uuid.uuid4())
+                    guests = emp_data['guests']
+                    net_sales = emp_data['net_sales']
+                    lbw = emp_data['lbw']
+                    glassware = emp_data['glassware']
+                    loyalty = emp_data.get('loyalty_sales', 0)
+                    lsc_count = int(loyalty / 25) if loyalty > 0 else 0
+                    
+                    ppa = round(net_sales / guests, 2) if guests > 0 else 0
+                    lbw_per_guest = round(lbw / guests, 2) if guests > 0 else 0
+                    glass_per_guest = round(glassware / guests, 2) if guests > 0 else 0
+                    guests_per_lsc = round(guests / lsc_count, 2) if lsc_count > 0 else 0
+                    
                     new_employee = {
                         "id": new_id,
                         "name": emp_name,
@@ -810,15 +843,23 @@ async def import_pos_pdf_data(
                         "aliases": [],
                         "quarter": quarter,
                         "year": year,
-                        "guest_count": emp_data['guests'],
-                        "net_sales": emp_data['net_sales'],
+                        "guest_count": guests,
+                        "guests": guests,
+                        "net_sales": net_sales,
                         "food_sales": emp_data['food'],
                         "liquor_sales": emp_data['liquor'],
                         "beer_sales": emp_data['beer'],
                         "wine_sales": emp_data['wine'],
-                        "lbw_total": emp_data['lbw'],
-                        "bar_glassware_sales": emp_data['glassware'],
-                        "loyalty_sales": emp_data.get('loyalty_sales', 0),
+                        "lbw_total": lbw,
+                        "lbw": lbw,
+                        "bar_glassware_sales": glassware,
+                        "glassware_sales": glassware,
+                        "loyalty_sales": loyalty,
+                        "lsc_count": lsc_count,
+                        "ppa": ppa,
+                        "lbw_per_guest": lbw_per_guest,
+                        "glassware_per_guest": glass_per_guest,
+                        "guests_per_lsc": guests_per_lsc,
                         "created_at": datetime.now(timezone.utc),
                         "updated_at": datetime.now(timezone.utc)
                     }

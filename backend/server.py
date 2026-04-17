@@ -438,7 +438,67 @@ async def fix_all_employee_scores(quarter: str = "Q1", year: int = 2026):
     fixed = []
     
     for emp in employees:
-        # Get raw scores
+        # Recalculate derived metrics from raw data if available
+        guests = emp.get('guest_count', 0) or emp.get('guests', 0) or 0
+        net_sales = emp.get('net_sales', 0) or 0
+        lbw_total = emp.get('lbw_total', 0) or emp.get('lbw', 0) or 0
+        if lbw_total == 0:
+            lbw_total = (emp.get('liquor_sales', 0) or 0) + (emp.get('beer_sales', 0) or 0) + (emp.get('wine_sales', 0) or 0)
+        glassware = emp.get('bar_glassware_sales', 0) or emp.get('glassware_sales', 0) or 0
+        lsc_count = emp.get('lsc_count', 0) or 0
+        if lsc_count == 0 and emp.get('loyalty_sales'):
+            lsc_count = int((emp.get('loyalty_sales', 0) or 0) / 25)
+
+        # Recalculate per-guest metrics from raw data
+        derived_updates = {}
+        if guests > 0:
+            new_ppa = round(net_sales / guests, 2) if net_sales > 0 else emp.get('ppa', 0) or 0
+            new_lbw_pg = round(lbw_total / guests, 2) if lbw_total > 0 else emp.get('lbw_per_guest', 0) or 0
+            new_glass_pg = round(glassware / guests, 2) if glassware > 0 else emp.get('glassware_per_guest', 0) or 0
+            new_gplsc = round(guests / lsc_count, 2) if lsc_count > 0 else emp.get('guests_per_lsc', 0) or 0
+
+            if new_ppa > 0 and abs(new_ppa - (emp.get('ppa', 0) or 0)) > 0.01:
+                derived_updates['ppa'] = new_ppa
+            if new_lbw_pg > 0 and abs(new_lbw_pg - (emp.get('lbw_per_guest', 0) or 0)) > 0.01:
+                derived_updates['lbw_per_guest'] = new_lbw_pg
+            if new_glass_pg > 0 and abs(new_glass_pg - (emp.get('glassware_per_guest', 0) or 0)) > 0.01:
+                derived_updates['glassware_per_guest'] = new_glass_pg
+            if new_gplsc > 0 and abs(new_gplsc - (emp.get('guests_per_lsc', 0) or 0)) > 0.01:
+                derived_updates['guests_per_lsc'] = new_gplsc
+
+            # Recalculate score fields from derived metrics
+            settings_doc = await db.quarter_settings.find_one(
+                {"year": year, "quarter": quarter.upper()}, {"_id": 0}
+            )
+            if settings_doc:
+                bm_ppa = settings_doc.get('benchmark_ppa', 55) or 55
+                bm_lbw = settings_doc.get('benchmark_lbw', 8) or 8
+                bm_glass = settings_doc.get('benchmark_glass', 1.25) or 1.25
+                bm_lsc = settings_doc.get('benchmark_lsc', 100) or 100
+                ppa_val = new_ppa if 'ppa' in derived_updates else (emp.get('ppa', 0) or 0)
+                lbw_val = new_lbw_pg if 'lbw_per_guest' in derived_updates else (emp.get('lbw_per_guest', 0) or 0)
+                glass_val = new_glass_pg if 'glassware_per_guest' in derived_updates else (emp.get('glassware_per_guest', 0) or 0)
+                gplsc_val = new_gplsc if 'guests_per_lsc' in derived_updates else (emp.get('guests_per_lsc', 0) or 0)
+                
+                new_score_ppa = round((ppa_val / bm_ppa) * 100, 2) if bm_ppa > 0 and ppa_val > 0 else emp.get('score_ppa', 0) or 0
+                new_score_lbw = round((lbw_val / bm_lbw) * 100, 2) if bm_lbw > 0 and lbw_val > 0 else emp.get('score_lbw', 0) or 0
+                new_score_glass = round((glass_val / bm_glass) * 100, 2) if bm_glass > 0 and glass_val > 0 else emp.get('score_glass', 0) or 0
+                new_score_lsc = round((bm_lsc / gplsc_val) * 100, 2) if gplsc_val > 0 else emp.get('score_lsc', 0) or 0
+                
+                if new_score_ppa > 0:
+                    derived_updates['score_ppa'] = new_score_ppa
+                if new_score_lbw > 0:
+                    derived_updates['score_lbw'] = new_score_lbw
+                if new_score_glass > 0:
+                    derived_updates['score_glass'] = new_score_glass
+                if new_score_lsc > 0:
+                    derived_updates['score_lsc'] = new_score_lsc
+
+            # Apply derived updates to emp dict for subsequent score calc
+            for k, v in derived_updates.items():
+                emp[k] = v
+
+        # Get raw scores (possibly updated above)
         score_ppa = emp.get('score_ppa', 0) or 0
         score_lsc = emp.get('score_lsc', 0) or 0
         score_lbw = emp.get('score_lbw', 0) or 0
@@ -486,24 +546,28 @@ async def fix_all_employee_scores(quarter: str = "Q1", year: int = 2026):
             abs(correct_weighted - old_weighted) > 0.01 or 
             abs(correct_metric_bonus - old_metric_bonus) > 0.01 or
             abs(correct_total - old_total) > 0.01 or
-            abs(rt_bonus - old_rt_bonus) > 0.01
+            abs(rt_bonus - old_rt_bonus) > 0.01 or
+            len(derived_updates) > 0
         )
         
         if needs_update:
+            update_set = {
+                "weighted_score": correct_weighted,
+                "bonus_ppa": bonus_ppa,
+                "bonus_lsc": bonus_lsc,
+                "bonus_lbw": bonus_lbw,
+                "bonus_glass": bonus_glass,
+                "total_metric_bonus": correct_metric_bonus,
+                "review_tracker_bonus": rt_bonus,
+                "review_mentions": rt_mentions,
+                "pre_dar_score": correct_total,
+                "total_score": correct_total
+            }
+            update_set.update(derived_updates)
+            
             await db.employees_v2.update_one(
                 {"_id": emp["_id"]},
-                {"$set": {
-                    "weighted_score": correct_weighted,
-                    "bonus_ppa": bonus_ppa,
-                    "bonus_lsc": bonus_lsc,
-                    "bonus_lbw": bonus_lbw,
-                    "bonus_glass": bonus_glass,
-                    "total_metric_bonus": correct_metric_bonus,
-                    "review_tracker_bonus": rt_bonus,
-                    "review_mentions": rt_mentions,
-                    "pre_dar_score": correct_total,
-                    "total_score": correct_total
-                }}
+                {"$set": update_set}
             )
             fixed.append({
                 "name": emp.get("name"),
@@ -1185,7 +1249,7 @@ async def unified_pos_upload(
         
         return {
             "success": True,
-            "message": f"POS data uploaded successfully",
+            "message": "POS data uploaded successfully",
             "employees_updated": updated_count,
             "employees_created": created_count,
             "total_processed": updated_count + created_count,
@@ -2024,7 +2088,6 @@ async def download_full_rankings_pdf(year: int, quarter: str):
     - Color-coded performance cells (blue/green/yellow/red)
     - Metrics as percentages with visual indicators
     """
-    from snapshot_slides import generate_snapshot_slide
     
     # SNAPSHOT-FIRST: Get employees from the active snapshot
     snapshot = await db.snapshot_workflow.find_one(
@@ -2180,9 +2243,7 @@ async def create_employee(data: EmployeeCreate):
     Create a new employee and calculate their scores.
     """
     from scoring_engine import (
-        EmployeeV2, calculate_derived_metrics, calculate_customer_voice_score,
-        calculate_review_tracker_bonus, calculate_normalized_scores,
-        calculate_bonus_points, calculate_total_score
+        EmployeeV2
     )
     
     # Get quarter settings
@@ -2263,9 +2324,7 @@ async def update_employee(employee_id: str, data: EmployeeUpdate):
     Update an existing employee and recalculate their scores.
     """
     from scoring_engine import (
-        EmployeeV2, calculate_derived_metrics, calculate_customer_voice_score,
-        calculate_review_tracker_bonus, calculate_normalized_scores,
-        calculate_bonus_points, calculate_total_score, QuarterSettings
+        EmployeeV2, QuarterSettings
     )
     
     # Get existing employee
@@ -3054,7 +3113,6 @@ async def get_analytics_pdf_v2(year: int, quarter: str):
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle, PageBreak, Image as RLImage
     from playwright.async_api import async_playwright
-    import asyncio
     
     employees_docs = await db.employees_v2.find(
         {"year": year, "quarter": quarter.upper()},
