@@ -424,43 +424,46 @@ async def upload_cv_server_performance(
     """
     db = get_db()
     
-    if not file.filename.endswith(('.xlsx', '.xls')):
-        raise HTTPException(status_code=400, detail="File must be an Excel file (.xlsx or .xls)")
+    if not file.filename.endswith(('.xlsx', '.xls', '.csv')):
+        raise HTTPException(status_code=400, detail="File must be Excel (.xlsx, .xls) or CSV (.csv)")
     
     try:
         import pandas as pd
         
         contents = await file.read()
-        df = pd.read_excel(io.BytesIO(contents))
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(io.BytesIO(contents))
+        else:
+            df = pd.read_excel(io.BytesIO(contents))
         
         # Normalize column names
         df.columns = [str(c).strip().lower().replace(' ', '_') for c in df.columns]
         
-        # Expected columns: server_name, promoters, passives, detractors, nps
-        required_cols = ['server_name']
-        missing = [c for c in required_cols if c not in df.columns and c.replace('_', '') not in ''.join(df.columns)]
-        
-        if missing:
-            # Try to find similar columns
+        # Map columns to expected names - handle various NPS report formats
+        if 'server_name' not in df.columns:
             col_mapping = {}
             for col in df.columns:
-                if 'server' in col or 'name' in col or 'employee' in col:
-                    col_mapping['server_name'] = col
-                elif 'promoter' in col:
-                    col_mapping['promoters'] = col
-                elif 'passive' in col:
-                    col_mapping['passives'] = col
-                elif 'detractor' in col:
-                    col_mapping['detractors'] = col
-                elif 'nps' in col:
-                    col_mapping['nps_score'] = col
+                col_lower = col.lower()
+                if any(x in col_lower for x in ['server', 'name', 'employee', 'staff', 'team_member']):
+                    if 'server_name' not in col_mapping.values():
+                        col_mapping[col] = 'server_name'
+                elif 'promoter' in col_lower:
+                    col_mapping[col] = 'promoters'
+                elif 'passive' in col_lower:
+                    col_mapping[col] = 'passives'
+                elif 'detractor' in col_lower:
+                    col_mapping[col] = 'detractors'
+                elif 'nps' in col_lower or 'score' in col_lower:
+                    col_mapping[col] = 'nps_score'
+                elif 'total' in col_lower and 'response' in col_lower:
+                    col_mapping[col] = 'total_responses'
             
             df = df.rename(columns=col_mapping)
         
         if 'server_name' not in df.columns:
             return {
                 "success": False,
-                "error": "Could not find server name column",
+                "detail": f"Could not find server name column. Found columns: {', '.join(df.columns)}. Expected a column with 'server', 'name', or 'employee' in it.",
                 "columns_found": list(df.columns)
             }
         
