@@ -483,7 +483,11 @@ async def upload_cv_server_performance(
                 detractors = int(row.get('detractors', 0) or 0)
                 total = promoters + passives + detractors
                 
-                nps = round(((promoters - detractors) / total) * 100, 2) if total > 0 else 0
+                # Skip rows with no response data — don't overwrite existing data with zeros
+                if total == 0:
+                    continue
+                
+                nps = round(((promoters - detractors) / total) * 100, 2)
                 
                 # Check if record exists
                 existing = await db.cv_nps.find_one({
@@ -516,21 +520,41 @@ async def upload_cv_server_performance(
                     await db.cv_nps.insert_one(record)
                     imported += 1
                 
-                # Also update employee record if exists
-                await db.employees_v2.update_one(
-                    {
-                        "name": {"$regex": f"^{server_name}$", "$options": "i"},
-                        "quarter": quarter.upper(),
-                        "year": year
-                    },
-                    {"$set": {
-                        "cv_promoters": promoters,
-                        "cv_passives": passives,
-                        "cv_detractors": detractors,
-                        "nps_score": nps,
-                        "cv_score": (promoters * 1) + (detractors * -2)
-                    }}
-                )
+                # Also update employee record if exists - try multiple name match strategies
+                emp_match = await db.employees_v2.find_one({
+                    "$or": [
+                        {"name": {"$regex": f"^{server_name}$", "$options": "i"}},
+                        {"display_name": {"$regex": f"^{server_name}$", "$options": "i"}},
+                        {"report_name": {"$regex": f"^{server_name}$", "$options": "i"}},
+                    ],
+                    "quarter": quarter.upper(),
+                    "year": year
+                })
+                
+                # Try first-name match if no exact match
+                if not emp_match:
+                    first_name = server_name.split()[0] if server_name else ""
+                    if first_name and len(first_name) > 2:
+                        emp_match = await db.employees_v2.find_one({
+                            "$or": [
+                                {"name": {"$regex": f"^{first_name}\\b", "$options": "i"}},
+                                {"display_name": {"$regex": f"^{first_name}\\b", "$options": "i"}},
+                            ],
+                            "quarter": quarter.upper(),
+                            "year": year
+                        })
+                
+                if emp_match:
+                    await db.employees_v2.update_one(
+                        {"_id": emp_match["_id"]},
+                        {"$set": {
+                            "cv_promoters": promoters,
+                            "cv_passives": passives,
+                            "cv_detractors": detractors,
+                            "nps_score": nps,
+                            "cv_score": (promoters * 1) + (detractors * -2)
+                        }}
+                    )
                 
             except Exception as e:
                 errors.append({"row": server_name, "error": str(e)})
