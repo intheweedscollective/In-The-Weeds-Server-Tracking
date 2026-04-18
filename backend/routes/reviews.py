@@ -373,6 +373,32 @@ async def create_review(review: CustomerReviewCreate):
     
     await db.customer_reviews.insert_one(review_doc)
     
+    # Update employee RT mention counts from this review
+    for mention in employee_mentions:
+        emp_name = mention.get("employee_name", "")
+        if emp_name:
+            # Increment mention count
+            emp = await db.employees_v2.find_one({
+                "$or": [
+                    {"name": {"$regex": f"^{emp_name}$", "$options": "i"}},
+                    {"display_name": {"$regex": f"^{emp_name}$", "$options": "i"}},
+                ],
+                "quarter": review.quarter.upper(),
+                "year": review.year
+            })
+            if emp:
+                current_mentions = (emp.get("rt_mentions") or 0) + 1
+                rt_bonus = min(current_mentions * 0.5, 15)
+                await db.employees_v2.update_one(
+                    {"_id": emp["_id"]},
+                    {"$set": {
+                        "rt_mentions": current_mentions,
+                        "review_mentions": current_mentions,
+                        "review_tracker_bonus": rt_bonus,
+                        "rt_updated_at": datetime.now(timezone.utc).isoformat()
+                    }}
+                )
+    
     # Remove MongoDB _id before returning
     review_doc.pop("_id", None)
     
@@ -783,3 +809,125 @@ async def upload_review_tracker_feedback(
     except Exception as e:
         logger.error(f"RT upload error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+
+@reviews_router.post("/review-tracker/bulk-import")
+async def bulk_import_rt_mentions(
+    data: dict,
+    quarter: str = "Q2",
+    year: int = 2026
+):
+    """
+    Bulk import ReviewTracker mention counts directly to employees.
+    Accepts: {"mentions": [{"name": "Employee Name", "count": 36}, ...]}
+    Or: {"mentions": {"Employee Name": 36, "Another Name": 21, ...}}
+    """
+    db = get_db()
+    quarter = quarter.upper()
+    
+    mentions_data = data.get("mentions", [])
+    if not mentions_data:
+        raise HTTPException(status_code=400, detail="No mention data provided. Expected: {mentions: [{name, count}, ...]} or {mentions: {name: count, ...}}")
+    
+    # Normalize to list of {name, count}
+    if isinstance(mentions_data, dict):
+        mentions_list = [{"name": k, "count": v} for k, v in mentions_data.items()]
+    elif isinstance(mentions_data, list):
+        mentions_list = mentions_data
+    else:
+        raise HTTPException(status_code=400, detail="mentions must be a list or dict")
+    
+    # Get all employees for matching
+    employees = await db.employees_v2.find(
+        {"quarter": quarter, "year": year}
+    ).to_list(200)
+    
+    if not employees:
+        raise HTTPException(status_code=404, detail=f"No employees found for {quarter} {year}. Upload POS data first.")
+    
+    # Build name lookup
+    emp_lookup = {}
+    for emp in employees:
+        for field in ["name", "display_name", "report_name"]:
+            n = (emp.get(field) or "").strip().lower()
+            if n:
+                emp_lookup[n] = emp
+                first = n.split()[0]
+                if len(first) > 2 and first not in emp_lookup:
+                    emp_lookup[first] = emp
+        for alias in emp.get("aliases", []):
+            if alias:
+                emp_lookup[alias.lower()] = emp
+    
+    updated = []
+    not_found = []
+    
+    for item in mentions_list:
+        name = (item.get("name") or "").strip()
+        count = int(item.get("count", 0) or 0)
+        
+        if not name or count == 0:
+            continue
+        
+        # Try matching
+        match = None
+        name_lower = name.lower()
+        
+        # Exact match
+        match = emp_lookup.get(name_lower)
+        
+        # First name match
+        if not match:
+            first = name_lower.split()[0]
+            if len(first) > 2:
+                match = emp_lookup.get(first)
+        
+        # Parenthetical name match (e.g., "Thaddeus (Tad) Hashey" -> try "tad")
+        if not match:
+            import re
+            paren = re.search(r'\(([^)]+)\)', name)
+            if paren:
+                nickname = paren.group(1).strip().lower()
+                match = emp_lookup.get(nickname)
+        
+        # Last name match
+        if not match:
+            parts = name_lower.split()
+            if len(parts) > 1:
+                last = parts[-1]
+                for key, emp in emp_lookup.items():
+                    if last in key:
+                        match = emp
+                        break
+        
+        if match:
+            rt_bonus = min(count * 0.5, 15)
+            await db.employees_v2.update_one(
+                {"_id": match["_id"]},
+                {"$set": {
+                    "rt_mentions": count,
+                    "review_mentions": count,
+                    "review_tracker_bonus": rt_bonus,
+                    "rt_source": "bulk_import",
+                    "rt_updated_at": datetime.now(timezone.utc).isoformat()
+                }}
+            )
+            updated.append({
+                "input_name": name,
+                "matched_to": match.get("display_name") or match.get("name"),
+                "mentions": count,
+                "bonus": rt_bonus
+            })
+        else:
+            not_found.append(name)
+    
+    return {
+        "success": True,
+        "quarter": quarter,
+        "year": year,
+        "updated_count": len(updated),
+        "not_found_count": len(not_found),
+        "updated": updated,
+        "not_found": not_found
+    }
