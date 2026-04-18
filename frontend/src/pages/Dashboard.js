@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Users, FileText, TrendingUp, Award, Target, Fish, Settings, Camera, Download, X, AlertTriangle, Lock, CheckCircle2, Trophy, Star, BarChart3, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
+import { getCurrentQuarter } from "../lib/quarterUtils";
 import FinalizeQuarterModal from "../components/FinalizeQuarterModal";
 import QRTopClicksCard from "../components/QRTopClicksCard";
 import StoreHealthScore from "../components/StoreHealthScore";
@@ -16,9 +17,10 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export default function Dashboard() {
   const [employees, setEmployees] = useState([]);
   
-  // Quarter selection
-  const [selectedYear, setSelectedYear] = useState(2026);
-  const [selectedQuarter, setSelectedQuarter] = useState("Q1");
+  // Quarter selection - defaults to current real-time quarter
+  const currentQ = getCurrentQuarter();
+  const [selectedYear, setSelectedYear] = useState(currentQ.year);
+  const [selectedQuarter, setSelectedQuarter] = useState(currentQ.quarter);
   const [quarterSettings, setQuarterSettings] = useState(null);
   const [latestSnapshot, setLatestSnapshot] = useState(null);
   

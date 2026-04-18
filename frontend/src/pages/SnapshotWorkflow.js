@@ -15,6 +15,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from "../hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
+import { getCurrentQuarter } from "../lib/quarterUtils";
 
 const STATUS_CONFIG = {
   draft: { label: "Draft", color: "bg-slate-500", icon: FileText },
@@ -35,13 +36,14 @@ export default function SnapshotWorkflow() {
   const [deleting, setDeleting] = useState(false);
   
   // Create form state
+  const currentQ = getCurrentQuarter();
   const [formData, setFormData] = useState({
     name: "",
     effective_date: new Date().toISOString().split('T')[0],
     period_start: "",
     period_end: "",
-    quarter: "Q1",
-    year: 2026,
+    quarter: currentQ.quarter,
+    year: currentQ.year,
     notes: ""
   });
 

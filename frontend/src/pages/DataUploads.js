@@ -2,14 +2,16 @@ import { useState, useEffect } from "react";
 import { Upload, FileSpreadsheet, Download, CheckCircle, XCircle, AlertTriangle, RefreshCw, Users, MessageSquare, Star, FileText, Eye, Import, Filter, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
+import { getCurrentQuarter } from "../lib/quarterUtils";
 import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 export default function DataUploads() {
-  const [quarter, setQuarter] = useState("Q1");
-  const [year, setYear] = useState(2026);
+  const currentQ = getCurrentQuarter();
+  const [quarter, setQuarter] = useState(currentQ.quarter);
+  const [year, setYear] = useState(currentQ.year);
   
   // Upload states
   const [posFile, setPosFile] = useState(null);
@@ -37,6 +39,9 @@ export default function DataUploads() {
   // Current data status
   const [dataStatus, setDataStatus] = useState(null);
   const [loadingStatus, setLoadingStatus] = useState(true);
+  
+  // Snapshot processing
+  const [snapshotProcessing, setSnapshotProcessing] = useState(false);
 
   const fetchDataStatus = async () => {
     setLoadingStatus(true);
@@ -165,6 +170,53 @@ export default function DataUploads() {
   const downloadRtTemplate = () => {
     window.open(`${BACKEND_URL}/api/v2/rt/template`, '_blank');
     toast.success("Template download started");
+  };
+
+  // Process & Save Snapshot
+  const handleProcessSnapshot = async () => {
+    setSnapshotProcessing(true);
+    try {
+      // Step 1: Find or create a snapshot for this quarter
+      const listRes = await api.get(`/v2/snapshot-workflow/snapshots?quarter=${quarter}&year=${year}`);
+      const snapshots = listRes.data || [];
+      
+      let snapshotId;
+      const active = snapshots.find(s => s.is_current || s.status === 'completed' || s.status === 'draft');
+      
+      if (active) {
+        snapshotId = active.id;
+      } else {
+        // Create new snapshot
+        const createRes = await api.post('/v2/snapshot-workflow/snapshots', {
+          name: `${quarter} ${year} Snapshot`,
+          effective_date: new Date().toISOString().split('T')[0],
+          quarter,
+          year,
+        });
+        snapshotId = createRes.data?.snapshot?.id;
+      }
+      
+      if (!snapshotId) {
+        toast.error("Could not find or create snapshot");
+        setSnapshotProcessing(false);
+        return;
+      }
+      
+      // Step 2: Sync employees from dashboard to snapshot
+      await api.post(`/v2/snapshot-workflow/snapshots/${snapshotId}/sync-from-employees`);
+      
+      // Step 3: Process/recalculate
+      const processRes = await api.post(`/v2/snapshot-workflow/snapshots/${snapshotId}/process`);
+      
+      toast.success(`Snapshot saved with ${processRes.data?.employee_count || 0} employees`, {
+        description: "Rankings and slides are now updated"
+      });
+      fetchDataStatus();
+    } catch (error) {
+      console.error('Snapshot processing error:', error);
+      toast.error(error.response?.data?.detail || "Snapshot processing failed");
+    }
+    setSnapshotProcessing(false);
   };
 
   // Parse scanned PDF with background job polling
@@ -947,8 +999,38 @@ export default function DataUploads() {
           />
         </div>
 
+        {/* Save Snapshot */}
+        <div className="mt-6 md:mt-8 p-4 md:p-6 bg-gradient-to-r from-blue-900/30 to-emerald-900/30 rounded-xl border border-blue-500/30">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-white text-sm md:text-base">Save & Process Snapshot</h3>
+              <p className="text-xs md:text-sm text-slate-400 mt-1">
+                Finalize all uploaded data into a snapshot for reports and slides
+              </p>
+            </div>
+            <Button
+              onClick={handleProcessSnapshot}
+              disabled={snapshotProcessing || (dataStatus?.employees || 0) === 0}
+              className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
+              data-testid="process-snapshot-btn"
+            >
+              {snapshotProcessing ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Save Snapshot
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+
         {/* Post-Upload Actions */}
-        <div className="mt-6 md:mt-8 p-3 md:p-4 bg-slate-800/50 rounded-xl border border-slate-700/50">
+        <div className="mt-4 p-3 md:p-4 bg-slate-800/50 rounded-xl border border-slate-700/50">
           <h3 className="font-semibold text-white text-sm md:text-base mb-3">After Uploading</h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 md:flex md:flex-wrap md:gap-3">
             <Button

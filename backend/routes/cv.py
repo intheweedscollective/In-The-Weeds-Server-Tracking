@@ -440,32 +440,48 @@ async def upload_cv_server_performance(
         df.columns = [str(c).strip().lower().replace(' ', '_') for c in df.columns]
         
         # Map columns to expected names - handle various NPS report formats
-        if 'server_name' not in df.columns:
-            col_mapping = {}
-            for col in df.columns:
-                col_lower = col.lower()
-                if any(x in col_lower for x in ['server', 'name', 'employee', 'staff', 'team_member']):
-                    if 'server_name' not in col_mapping.values():
-                        col_mapping[col] = 'server_name'
-                elif 'promoter' in col_lower:
-                    col_mapping[col] = 'promoters'
-                elif 'passive' in col_lower:
-                    col_mapping[col] = 'passives'
-                elif 'detractor' in col_lower:
-                    col_mapping[col] = 'detractors'
-                elif 'nps' in col_lower or 'score' in col_lower:
-                    col_mapping[col] = 'nps_score'
-                elif 'total' in col_lower and 'response' in col_lower:
-                    col_mapping[col] = 'total_responses'
-            
-            df = df.rename(columns=col_mapping)
+        col_mapping = {}
+        for col in df.columns:
+            col_lower = col.lower()
+            if any(x in col_lower for x in ['server', 'employee', 'staff', 'team_member']):
+                if 'server_name' not in col_mapping.values():
+                    col_mapping[col] = 'server_name'
+            elif col_lower == 'name':
+                if 'server_name' not in col_mapping.values():
+                    col_mapping[col] = 'server_name'
+            elif 'promoter' in col_lower:
+                col_mapping[col] = 'promoters'
+            elif 'passive' in col_lower:
+                col_mapping[col] = 'passives'
+            elif 'detractor' in col_lower:
+                col_mapping[col] = 'detractors'
+            elif col_lower in ('rating', 'nps_rating', 'nps_score', 'score'):
+                col_mapping[col] = 'rating'
+            elif 'total' in col_lower and 'response' in col_lower:
+                col_mapping[col] = 'total_responses'
+            elif col_lower in ('surveys_sent', 'sent'):
+                col_mapping[col] = 'surveys_sent'
+            elif col_lower in ('surveys_received', 'received', 'responses'):
+                col_mapping[col] = 'surveys_received'
+            elif col_lower in ('avg_rating', 'average_rating', 'avg'):
+                col_mapping[col] = 'avg_rating'
+        
+        df = df.rename(columns=col_mapping)
         
         if 'server_name' not in df.columns:
             return {
                 "success": False,
-                "detail": f"Could not find server name column. Found columns: {', '.join(df.columns)}. Expected a column with 'server', 'name', or 'employee' in it.",
+                "detail": f"Could not find server name column. Found: {', '.join(df.columns)}",
                 "columns_found": list(df.columns)
             }
+        
+        # Detect format: individual ratings vs pre-totaled
+        has_individual_ratings = 'rating' in df.columns or 'avg_rating' in df.columns
+        has_pre_totaled = 'promoters' in df.columns or 'detractors' in df.columns
+        
+        # If individual ratings per server (e.g. avg rating + survey counts), calculate P/D
+        if has_individual_ratings and not has_pre_totaled:
+            logger.info("NPS upload: detected individual rating format, calculating promoters/detractors")
         
         # Process each row
         imported = 0
@@ -478,12 +494,48 @@ async def upload_cv_server_performance(
                 if not server_name or server_name.lower() in ['nan', 'none', '']:
                     continue
                 
-                promoters = int(row.get('promoters', 0) or 0)
-                passives = int(row.get('passives', 0) or 0)
-                detractors = int(row.get('detractors', 0) or 0)
-                total = promoters + passives + detractors
+                if has_pre_totaled:
+                    # Format 1: Pre-totaled columns
+                    promoters = int(row.get('promoters', 0) or 0)
+                    passives = int(row.get('passives', 0) or 0)
+                    detractors = int(row.get('detractors', 0) or 0)
+                    total = promoters + passives + detractors
+                    surveys_received = int(row.get('surveys_received', total) or total)
+                    surveys_sent = int(row.get('surveys_sent', 0) or 0)
+                    avg_rating = float(row.get('avg_rating', 0) or 0)
+                else:
+                    # Format 2: Individual rating or avg rating per server
+                    # Get rating and survey counts to derive P/P/D
+                    avg_rating = float(row.get('rating', 0) or row.get('avg_rating', 0) or 0)
+                    surveys_received = int(row.get('surveys_received', 0) or row.get('total_responses', 0) or 0)
+                    surveys_sent = int(row.get('surveys_sent', 0) or 0)
+                    
+                    if surveys_received == 0 and avg_rating > 0:
+                        surveys_received = 1  # At least 1 response if there's a rating
+                    
+                    if surveys_received > 0 and avg_rating > 0:
+                        # Estimate P/P/D from avg rating:
+                        # 9-10 = promoter, 7-8 = passive, 0-6 = detractor
+                        if avg_rating >= 9:
+                            promoters = surveys_received
+                            passives = 0
+                            detractors = 0
+                        elif avg_rating >= 7:
+                            promoters = 0
+                            passives = surveys_received
+                            detractors = 0
+                        else:
+                            promoters = 0
+                            passives = 0
+                            detractors = surveys_received
+                    else:
+                        promoters = 0
+                        passives = 0
+                        detractors = 0
+                    
+                    total = promoters + passives + detractors
                 
-                # Skip rows with no response data — don't overwrite existing data with zeros
+                # Skip rows with no response data
                 if total == 0:
                     continue
                 
@@ -545,15 +597,25 @@ async def upload_cv_server_performance(
                         })
                 
                 if emp_match:
+                    cv_update = {
+                        "cv_promoters": promoters,
+                        "cv_passives": passives,
+                        "cv_detractors": detractors,
+                        "nps_score": nps,
+                        "cv_score": (promoters * 1) + (detractors * -2),
+                        "cv_source": "manual_upload",
+                        "cv_updated_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                    if avg_rating > 0:
+                        cv_update["cv_avg_rating"] = avg_rating
+                    if surveys_received > 0:
+                        cv_update["cv_surveys_received"] = surveys_received
+                    if surveys_sent > 0:
+                        cv_update["cv_surveys_sent"] = surveys_sent
+                    
                     await db.employees_v2.update_one(
                         {"_id": emp_match["_id"]},
-                        {"$set": {
-                            "cv_promoters": promoters,
-                            "cv_passives": passives,
-                            "cv_detractors": detractors,
-                            "nps_score": nps,
-                            "cv_score": (promoters * 1) + (detractors * -2)
-                        }}
+                        {"$set": cv_update}
                     )
                 
             except Exception as e:
