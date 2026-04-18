@@ -1100,23 +1100,26 @@ async def unified_pos_upload(
             if not name:
                 continue
             
-            guests = emp_data.get('guests', 0) or emp_data.get('total_guests', 0) or 0
+            guests = emp_data.get('guests', 0) or emp_data.get('total_guests', 0) or emp_data.get('guest_count', 0) or 0
             net_sales = emp_data.get('net_sales', 0) or emp_data.get('totals', 0) or 0
+            
+            # Extract individual LBW components
+            liquor = emp_data.get('liquor', 0) or emp_data.get('liquor_sales', 0) or 0
+            beer = emp_data.get('beer', 0) or emp_data.get('beer_sales', 0) or 0
+            wine = emp_data.get('wine', 0) or emp_data.get('wine_sales', 0) or 0
             lbw = emp_data.get('lbw', 0) or 0
             
-            # If lbw not provided, calculate from components
-            if lbw == 0:
-                liquor = emp_data.get('liquor', 0) or 0
-                beer = emp_data.get('beer', 0) or 0
-                wine = emp_data.get('wine', 0) or 0
+            # Always recalculate LBW from components if we have them
+            if liquor > 0 or beer > 0 or wine > 0:
                 lbw = liquor + beer + wine
             
-            glassware = emp_data.get('glassware', 0) or emp_data.get('glassware_sales', 0) or emp_data.get('bar_glassware', 0) or 0
+            glassware = emp_data.get('glassware', 0) or emp_data.get('glassware_sales', 0) or emp_data.get('bar_glassware', 0) or emp_data.get('bar_glassware_sales', 0) or 0
+            loyalty = emp_data.get('loyalty', 0) or emp_data.get('loyalty_sales', 0) or 0
             lsc_count = emp_data.get('lsc_count', 0) or 0
             
             # If lsc from loyalty sales
-            if lsc_count == 0 and emp_data.get('loyalty'):
-                lsc_count = int(emp_data.get('loyalty', 0) / 25)
+            if lsc_count == 0 and loyalty > 0:
+                lsc_count = int(loyalty / 25)
             
             # Calculate derived metrics
             ppa = net_sales / guests if guests > 0 else 0
@@ -1178,9 +1181,16 @@ async def unified_pos_upload(
                 update_fields = {
                     "report_name": name,  # Update report_name to latest from POS
                     "guests": guests,
+                    "guest_count": guests,
                     "net_sales": round(net_sales, 2),
+                    "liquor_sales": round(liquor, 2),
+                    "beer_sales": round(beer, 2),
+                    "wine_sales": round(wine, 2),
                     "lbw": round(lbw, 2),
+                    "lbw_total": round(lbw, 2),
                     "glassware_sales": round(glassware, 2),
+                    "bar_glassware_sales": round(glassware, 2),
+                    "loyalty_sales": round(loyalty, 2),
                     "lsc_count": lsc_count,
                     "ppa": round(ppa, 2),
                     "lbw_per_guest": round(lbw_per_guest, 2),
@@ -1214,9 +1224,16 @@ async def unified_pos_upload(
                     "year": year,
                     "job_title": "Server",
                     "guests": guests,
+                    "guest_count": guests,
                     "net_sales": round(net_sales, 2),
+                    "liquor_sales": round(liquor, 2),
+                    "beer_sales": round(beer, 2),
+                    "wine_sales": round(wine, 2),
                     "lbw": round(lbw, 2),
+                    "lbw_total": round(lbw, 2),
                     "glassware_sales": round(glassware, 2),
+                    "bar_glassware_sales": round(glassware, 2),
+                    "loyalty_sales": round(loyalty, 2),
                     "lsc_count": lsc_count,
                     "ppa": round(ppa, 2),
                     "lbw_per_guest": round(lbw_per_guest, 2),

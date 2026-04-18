@@ -108,6 +108,17 @@ def parse_single_sheet(df: pd.DataFrame) -> Optional[Dict[str, Any]]:
     
     # Validate - must have name and some data
     if employee["name"] and (employee["totals"] > 0 or employee["total_guests"] > 0):
+        # Add aliases for consistency
+        employee["liquor_sales"] = employee["liquor"]
+        employee["beer_sales"] = employee["beer"]
+        employee["wine_sales"] = employee["wine"]
+        employee["food_sales"] = employee["food"]
+        employee["glassware_sales"] = employee["bar_glassware"]
+        employee["glassware"] = employee["bar_glassware"]
+        employee["guests"] = employee["total_guests"]
+        employee["loyalty_sales"] = employee["loyalty"]
+        employee["lbw"] = employee["liquor"] + employee["beer"] + employee["wine"]
+        employee["net_sales"] = employee.get("net_sales") or employee["totals"]
         return employee
     
     return None

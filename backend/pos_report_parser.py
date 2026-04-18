@@ -577,6 +577,14 @@ def _parse_summary_table(file_path: str, sheet_name, header_row: int = 3) -> Lis
                 'ppa': get_val(['ppa', 'ppa $', 'guest avg', 'guest average']),  # Extract PPA directly
             }
             
+            # Add _sales aliases for consistency with other parsers
+            employee['liquor_sales'] = employee['liquor']
+            employee['beer_sales'] = employee['beer']
+            employee['wine_sales'] = employee['wine']
+            employee['food_sales'] = employee['food']
+            employee['glassware_sales'] = employee['glassware']
+            employee['loyalty'] = employee['loyalty_sales']
+            
             # Calculate LBW if not present
             if employee['lbw'] == 0:
                 employee['lbw'] = employee['liquor'] + employee['beer'] + employee['wine']
