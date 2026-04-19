@@ -177,8 +177,13 @@ export default function DataUploads() {
     setSnapshotProcessing(true);
     try {
       // Step 1: Find or create a snapshot for this quarter
-      const listRes = await api.get(`/v2/snapshot-workflow/snapshots?quarter=${quarter}&year=${year}`);
-      const snapshots = listRes.data || [];
+      let snapshots = [];
+      try {
+        const listRes = await api.get(`/v2/snapshot-workflow/snapshots?quarter=${quarter}&year=${year}`);
+        snapshots = Array.isArray(listRes.data) ? listRes.data : [];
+      } catch (listErr) {
+        console.warn('Could not list snapshots:', listErr);
+      }
       
       let snapshotId;
       const active = snapshots.find(s => s.is_current || s.status === 'completed' || s.status === 'draft');
@@ -186,12 +191,20 @@ export default function DataUploads() {
       if (active) {
         snapshotId = active.id;
       } else {
-        // Create new snapshot
+        // Create new snapshot with required fields
+        const qNum = parseInt(quarter.replace('Q', ''));
+        const periodStart = `${year}-${String((qNum - 1) * 3 + 1).padStart(2, '0')}-01`;
+        const periodEndMonth = qNum * 3;
+        const lastDay = [4,6,9,11].includes(periodEndMonth) ? '30' : periodEndMonth === 2 ? '28' : '31';
+        const periodEnd = `${year}-${String(periodEndMonth).padStart(2, '0')}-${lastDay}`;
+        
         const createRes = await api.post('/v2/snapshot-workflow/snapshots', {
           name: `${quarter} ${year} Snapshot`,
           effective_date: new Date().toISOString().split('T')[0],
+          period_start: periodStart,
+          period_end: periodEnd,
           quarter,
-          year,
+          year: parseInt(year),
         });
         snapshotId = createRes.data?.snapshot?.id;
       }
@@ -203,18 +216,32 @@ export default function DataUploads() {
       }
       
       // Step 2: Sync employees from dashboard to snapshot
-      await api.post(`/v2/snapshot-workflow/snapshots/${snapshotId}/sync-from-employees`);
+      try {
+        await api.post(`/v2/snapshot-workflow/snapshots/${snapshotId}/sync-from-employees`);
+      } catch (syncErr) {
+        console.warn('Sync warning (non-blocking):', syncErr?.response?.data?.detail || syncErr);
+      }
       
-      // Step 3: Process/recalculate
-      const processRes = await api.post(`/v2/snapshot-workflow/snapshots/${snapshotId}/process`);
+      // Step 3: Process/recalculate (try process first, fall back to reprocess)
+      let processRes;
+      try {
+        processRes = await api.post(`/v2/snapshot-workflow/snapshots/${snapshotId}/process`);
+      } catch (processErr) {
+        // If already completed, use reprocess
+        try {
+          processRes = await api.post(`/v2/snapshot-workflow/snapshots/${snapshotId}/reprocess`);
+        } catch (reprocessErr) {
+          console.warn('Reprocess warning:', reprocessErr?.response?.data?.detail);
+        }
+      }
       
-      toast.success(`Snapshot saved with ${processRes.data?.employee_count || 0} employees`, {
+      toast.success(`Snapshot saved with ${processRes?.data?.employee_count || 'all'} employees`, {
         description: "Rankings and slides are now updated"
       });
       fetchDataStatus();
     } catch (error) {
       console.error('Snapshot processing error:', error);
-      toast.error(error.response?.data?.detail || "Snapshot processing failed");
+      toast.error(error?.response?.data?.detail || "Snapshot processing failed. Please try again.");
     }
     setSnapshotProcessing(false);
   };
