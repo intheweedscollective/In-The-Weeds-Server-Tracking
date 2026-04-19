@@ -81,7 +81,14 @@ export default function DataUploads() {
         method: 'POST',
         body: formData
       });
-      const data = await response.json();
+      
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { success: false, detail: text || `Server error (${response.status})` };
+      }
       
       if (response.ok && data.success) {
         setPosResult({ success: true, data });
@@ -95,7 +102,7 @@ export default function DataUploads() {
       }
     } catch (error) {
       setPosResult({ success: false, error: error.message });
-      toast.error("POS upload failed");
+      toast.error("POS upload failed: " + error.message);
     }
     setPosUploading(false);
   };
@@ -114,7 +121,14 @@ export default function DataUploads() {
         method: 'POST',
         body: formData
       });
-      const data = await response.json();
+      
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { success: false, detail: text || `Server error (${response.status})` };
+      }
       
       if (response.ok && data.success) {
         setCvResult({ success: true, data });
@@ -126,7 +140,7 @@ export default function DataUploads() {
       }
     } catch (error) {
       setCvResult({ success: false, error: error.message });
-      toast.error("CV upload failed");
+      toast.error("CV upload failed: " + error.message);
     }
     setCvUploading(false);
   };
@@ -146,7 +160,14 @@ export default function DataUploads() {
         method: 'POST',
         body: formData
       });
-      const data = await response.json();
+      
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { success: false, detail: text || `Server error (${response.status})` };
+      }
       
       if (response.ok && data.success) {
         setRtResult({ success: true, data });
@@ -161,7 +182,7 @@ export default function DataUploads() {
       }
     } catch (error) {
       setRtResult({ success: false, error: error.message });
-      toast.error("RT upload failed");
+      toast.error("RT upload failed: " + error.message);
     }
     setRtUploading(false);
   };
