@@ -3,12 +3,14 @@ import { Link } from "react-router-dom";
 import { Trophy, Building2, MapPin, Users, BarChart3, TrendingUp, ArrowLeft, Medal, Target } from "lucide-react";
 import { Button } from "../components/ui/button";
 import api from "../lib/api";
+import { getCurrentQuarter } from "../lib/quarterUtils";
 
 export default function StoreLeaderboard() {
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedYear, setSelectedYear] = useState(2026);
-  const [selectedQuarter, setSelectedQuarter] = useState("Q1");
+  const currentQ = getCurrentQuarter();
+  const [selectedYear, setSelectedYear] = useState(currentQ.year);
+  const [selectedQuarter, setSelectedQuarter] = useState(currentQ.quarter);
 
   useEffect(() => {
     fetchLeaderboard();

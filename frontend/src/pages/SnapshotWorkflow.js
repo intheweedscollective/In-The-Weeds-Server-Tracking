@@ -116,8 +116,8 @@ export default function SnapshotWorkflow() {
         effective_date: new Date().toISOString().split('T')[0],
         period_start: "",
         period_end: "",
-        quarter: "Q1",
-        year: 2026,
+        quarter: currentQ.quarter,
+        year: currentQ.year,
         notes: ""
       });
       await fetchSnapshots();

@@ -3,6 +3,7 @@ import { FileText, Download, Printer, ChevronDown, ChevronUp, Users, Award, Mess
 import { Button } from "../components/ui/button";
 import { Link } from "react-router-dom";
 import api from "../lib/api";
+import { getCurrentQuarter } from "../lib/quarterUtils";
 import { formatNumber, formatCurrency } from "../utils/formatters";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -12,8 +13,9 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
  * Displays Customer Voice and Metric Bonus data for all employees
  */
 export default function QuarterlySummary() {
-  const [selectedYear, setSelectedYear] = useState(2026);
-  const [selectedQuarter, setSelectedQuarter] = useState("Q1");
+  const currentQ = getCurrentQuarter();
+  const [selectedYear, setSelectedYear] = useState(currentQ.year);
+  const [selectedQuarter, setSelectedQuarter] = useState(currentQ.quarter);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedSections, setExpandedSections] = useState({

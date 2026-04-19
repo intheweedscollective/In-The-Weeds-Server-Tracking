@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Settings, Lock, Unlock, Save, RefreshCw, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
+import { getCurrentQuarter } from "../lib/quarterUtils";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 
@@ -14,8 +15,9 @@ export default function QuarterSettings() {
   const [saving, setSaving] = useState(false);
   const [fixingRankings, setFixingRankings] = useState(false);
   const [allSettings, setAllSettings] = useState([]);
-  const [selectedYear, setSelectedYear] = useState(2026);
-  const [selectedQuarter, setSelectedQuarter] = useState("Q1");
+  const currentQ = getCurrentQuarter();
+  const [selectedYear, setSelectedYear] = useState(currentQ.year);
+  const [selectedQuarter, setSelectedQuarter] = useState(currentQ.quarter);
   const [settings, setSettings] = useState(null);
   const [suggestions, setSuggestions] = useState(null);
   const [isNew, setIsNew] = useState(false);

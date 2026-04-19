@@ -4,12 +4,14 @@ import { FileText, Download, BarChart3, Trophy, QrCode, Star, TrendingUp, Calend
 import { Button } from "../components/ui/button";
 import QRTopClicksCard from "../components/QRTopClicksCard";
 import api from "../lib/api";
+import { getCurrentQuarter } from "../lib/quarterUtils";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 export default function Reports() {
-  const [selectedYear, setSelectedYear] = useState(2026);
-  const [selectedQuarter, setSelectedQuarter] = useState("Q1");
+  const currentQ = getCurrentQuarter();
+  const [selectedYear, setSelectedYear] = useState(currentQ.year);
+  const [selectedQuarter, setSelectedQuarter] = useState(currentQ.quarter);
   const [employees, setEmployees] = useState([]);
   const [reviewStats, setReviewStats] = useState(null);
   const [loading, setLoading] = useState(true);

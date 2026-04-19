@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { FileText, Download, Clock, User, Ship, TrendingUp, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
+import { getCurrentQuarter } from "../lib/quarterUtils";
 import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { formatNumber } from "../utils/formatters";
@@ -13,8 +14,9 @@ export default function ReviewGeneration() {
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState({});
-  const [selectedQuarter, setSelectedQuarter] = useState("Q1");
-  const [selectedYear, setSelectedYear] = useState("2026");
+  const currentQ = getCurrentQuarter();
+  const [selectedQuarter, setSelectedQuarter] = useState(currentQ.quarter);
+  const [selectedYear, setSelectedYear] = useState(String(currentQ.year));
   const [expandedTrends, setExpandedTrends] = useState({}); // Track which employee trend charts are expanded
   const [trendData, setTrendData] = useState({}); // Store trend data per employee
 

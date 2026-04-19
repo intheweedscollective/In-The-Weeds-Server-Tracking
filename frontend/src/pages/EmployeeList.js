@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { Users, Search, Filter, Calendar, Plus, CheckSquare, XSquare, FileText } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
+import { getCurrentQuarter } from "../lib/quarterUtils";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
@@ -58,8 +59,9 @@ export default function EmployeeList() {
   const [saving, setSaving] = useState(false);
   
   // V2 Quarter Selection
-  const [selectedYear, setSelectedYear] = useState(2026);
-  const [selectedQuarter, setSelectedQuarter] = useState("Q1");
+  const currentQ = getCurrentQuarter();
+  const [selectedYear, setSelectedYear] = useState(currentQ.year);
+  const [selectedQuarter, setSelectedQuarter] = useState(currentQ.quarter);
   
   const location = useLocation();
 

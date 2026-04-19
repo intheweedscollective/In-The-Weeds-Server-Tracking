@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { Trophy, TrendingUp, TrendingDown, Minus, Flame, Star, Crown, Award, Download, ChevronDown, ChevronUp, Search, RefreshCw, Info } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
+import { getCurrentQuarter } from "../lib/quarterUtils";
 import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../components/ui/tooltip";
@@ -242,8 +243,9 @@ export default function LeaderboardRankings() {
   const [snapshots, setSnapshots] = useState([]);
   const [previousScores, setPreviousScores] = useState({});
   const [loading, setLoading] = useState(true);
-  const [selectedYear, setSelectedYear] = useState(2026);
-  const [selectedQuarter, setSelectedQuarter] = useState("Q1");
+  const currentQ = getCurrentQuarter();
+  const [selectedYear, setSelectedYear] = useState(currentQ.year);
+  const [selectedQuarter, setSelectedQuarter] = useState(currentQ.quarter);
   const [searchQuery, setSearchQuery] = useState("");
   const [downloading, setDownloading] = useState(false);
   
