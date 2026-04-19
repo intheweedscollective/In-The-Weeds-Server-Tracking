@@ -927,6 +927,83 @@ export default function DataUploads() {
             </div>
           </div>
 
+          {/* POS XLSX Upload */}
+          <div className="bg-slate-800/50 rounded-xl border border-blue-500/20 overflow-hidden">
+            <div className="p-4 md:p-6 border-b border-slate-700/50">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-500/20 rounded-lg">
+                  <FileSpreadsheet className="w-5 h-5 text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-white text-sm md:text-base">1b. POS Data (Excel)</h3>
+                  <p className="text-slate-400 text-xs md:text-sm">Server Sales Report XLSX - auto-calculates PPA, LBW, Glass, LSC</p>
+                </div>
+              </div>
+            </div>
+            <div className="p-4 md:p-6">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+                <label className="flex-1">
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={(e) => setPosFile(e.target.files?.[0] || null)}
+                    className="hidden"
+                    data-testid="pos-xlsx-input"
+                  />
+                  <div className={`flex items-center justify-center gap-2 p-3 md:p-4 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${
+                    posFile 
+                      ? 'border-blue-500/50 bg-blue-500/10' 
+                      : 'border-slate-600 hover:border-slate-500 hover:bg-slate-800/50'
+                  }`}>
+                    {posFile ? (
+                      <>
+                        <FileSpreadsheet className="w-5 h-5 text-blue-400 shrink-0" />
+                        <span className="text-blue-400 font-medium truncate text-sm">{posFile.name}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-5 h-5 text-slate-400" />
+                        <span className="text-slate-400 text-sm">Select XLSX file</span>
+                      </>
+                    )}
+                  </div>
+                </label>
+                <Button
+                  onClick={handlePosUpload}
+                  disabled={!posFile || posUploading}
+                  className="bg-blue-600 hover:bg-blue-700"
+                  data-testid="pos-xlsx-upload-btn"
+                >
+                  {posUploading ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4 mr-2" />
+                      Upload
+                    </>
+                  )}
+                </Button>
+              </div>
+              {posResult && (
+                <div className={`mt-3 p-3 rounded-lg ${posResult.success ? 'bg-green-500/10 border border-green-500/30' : 'bg-red-500/10 border border-red-500/30'}`}>
+                  {posResult.success ? (
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-400" />
+                      <span className="text-green-400 text-sm">
+                        Updated {posResult.data?.employees_updated || 0}, created {posResult.data?.employees_created || 0} employees
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <XCircle className="w-4 h-4 text-red-400" />
+                      <span className="text-red-400 text-sm">{posResult.error}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* CV/NPS Upload */}
           <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 overflow-hidden">
             <div className="p-4 md:p-6 border-b border-slate-700/50">
