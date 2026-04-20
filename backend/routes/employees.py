@@ -80,6 +80,11 @@ async def get_employees_v2(year: int = 2026, quarter: str = "Q1", limit: int = 1
         {"_id": 0}
     ).skip(skip).limit(limit).to_list(limit)
     
+    # Always return display_name as name if set (preferred name takes priority)
+    for emp in employees:
+        if emp.get('display_name') and emp.get('display_name') != emp.get('name'):
+            emp['name'] = emp['display_name']
+    
     total = await db.employees_v2.count_documents({"year": year, "quarter": quarter.upper()})
     
     return {
@@ -97,6 +102,8 @@ async def get_employee_v2(employee_id: str):
     employee = await db.employees_v2.find_one({"id": employee_id}, {"_id": 0})
     if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")
+    if employee.get('display_name') and employee.get('display_name') != employee.get('name'):
+        employee['name'] = employee['display_name']
     return employee
 
 

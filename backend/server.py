@@ -1741,6 +1741,10 @@ async def get_employees_v2(year: Optional[int] = None, quarter: Optional[str] = 
         if isinstance(emp.get('created_at'), str):
             emp['created_at'] = datetime.fromisoformat(emp['created_at'])
         
+        # Always return display_name as name if set (preferred name takes priority)
+        if emp.get('display_name') and emp.get('display_name') != emp.get('name'):
+            emp['name'] = emp['display_name']
+        
         # Calculate performance tier if missing
         if not emp.get('performance_tier'):
             rank = i + 1
@@ -1767,6 +1771,10 @@ async def get_employee_v2(employee_id: str):
     
     if isinstance(employee.get('created_at'), str):
         employee['created_at'] = datetime.fromisoformat(employee['created_at'])
+    
+    # Always return display_name as name if set
+    if employee.get('display_name') and employee.get('display_name') != employee.get('name'):
+        employee['name'] = employee['display_name']
     
     return employee
 

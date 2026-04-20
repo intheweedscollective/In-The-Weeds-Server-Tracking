@@ -307,7 +307,14 @@ export default function EmployeeList() {
     setSaving(true);
     try {
       if (editingEmployee) {
-        await api.put(`/v2/snapshot-workflow/employees/${editingEmployee.id}`, dataToSave);
+        // Update employee in employees_v2 (dashboard) - the source of truth
+        await api.put(`/v2/employees/${editingEmployee.id}`, dataToSave);
+        // Also update display_name if changed
+        if (formData.name !== editingEmployee.name) {
+          await api.put(`/v2/employees/${editingEmployee.id}/display-name`, {
+            display_name: formData.name
+          });
+        }
         toast.success(`Updated ${formData.name}`);
       } else {
         await api.post(`/v2/employees`, {

@@ -76,7 +76,7 @@ export default function FullRankings() {
   const updateEmployeeJobTitle = async (employeeId, newJobTitle) => {
     setSavingJobTitle(true);
     try {
-      await api.put(`/v2/snapshot-workflow/employees/${employeeId}`, {
+      await api.put(`/v2/employees/${employeeId}`, {
         job_title: newJobTitle
       });
       toast.success(`Updated to ${newJobTitle}`);
