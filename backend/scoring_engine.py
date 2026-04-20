@@ -103,8 +103,8 @@ class EmployeeV2(BaseModel):
     name: str
     job_title: str = "Server"  # NEW: Job Title for hierarchy-based rankings
     aliases: List[str] = Field(default_factory=list)  # Nicknames for name matching (e.g., ["Trey", "T.Q."])
-    guests: int  # Must be > 0
-    net_sales: float
+    guests: int = 0  # Must be > 0
+    net_sales: float = 0.0
     
     # === ALCOHOL SALES (individual inputs - convenience fields) ===
     liquor_sales: float = 0.0  # Input only
@@ -115,8 +115,8 @@ class EmployeeV2(BaseModel):
     lbw: float = 0.0  # AUTO-CALCULATED: liquor_sales + beer_sales + wine_sales
     
     # === OTHER CORE METRICS ===
-    glassware_sales: float  # Total glassware dollars
-    lsc_count: int  # LSC signups count, >= 0
+    glassware_sales: float = 0.0  # Total glassware dollars
+    lsc_count: int = 0  # LSC signups count, >= 0
     
     # === CUSTOMER VOICE FIELDS (from upload) ===
     cv_promoters: int = 0       # Count of 9-10 scores (service-related only)
