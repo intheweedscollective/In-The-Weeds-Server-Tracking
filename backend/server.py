@@ -2352,10 +2352,25 @@ async def update_employee(employee_id: str, data: EmployeeUpdate):
         EmployeeV2, QuarterSettings
     )
     
-    # Get existing employee
+    # Get existing employee - try by ID first, then search snapshot_workflow
     emp_doc = await db.employees_v2.find_one({"id": employee_id}, {"_id": 0})
     if not emp_doc:
-        raise HTTPException(status_code=404, detail="Employee not found")
+        # Employee might be from snapshot_workflow with a different ID
+        # Search snapshot for this employee to get their name, then find in employees_v2
+        snapshot = await db.snapshot_workflow.find_one(
+            {"status": "completed", "employees.id": employee_id},
+            {"employees.$": 1}
+        )
+        if snapshot and snapshot.get("employees"):
+            snap_emp = snapshot["employees"][0]
+            snap_name = snap_emp.get("name", "")
+            if snap_name:
+                emp_doc = await db.employees_v2.find_one(
+                    {"name": {"$regex": f"^{snap_name}$", "$options": "i"}},
+                    {"_id": 0}
+                )
+        if not emp_doc:
+            raise HTTPException(status_code=404, detail="Employee not found")
     
     # Get quarter settings
     settings_doc = await db.quarter_settings.find_one(
@@ -2804,7 +2819,19 @@ async def update_employee_display_name(employee_id: str, data: dict):
     
     employee = await db.employees_v2.find_one({"id": employee_id})
     if not employee:
-        raise HTTPException(status_code=404, detail="Employee not found")
+        # Fallback: find by name via snapshot_workflow
+        snapshot = await db.snapshot_workflow.find_one(
+            {"status": "completed", "employees.id": employee_id},
+            {"employees.$": 1}
+        )
+        if snapshot and snapshot.get("employees"):
+            snap_name = snapshot["employees"][0].get("name", "")
+            if snap_name:
+                employee = await db.employees_v2.find_one(
+                    {"name": {"$regex": f"^{snap_name}$", "$options": "i"}}
+                )
+        if not employee:
+            raise HTTPException(status_code=404, detail="Employee not found")
     
     # Set report_name if not already set (for backward compatibility)
     current_name = employee.get("name", "")
