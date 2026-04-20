@@ -455,7 +455,7 @@ async def upload_cv_server_performance(
                 col_mapping[col] = 'passives'
             elif 'detractor' in col_lower:
                 col_mapping[col] = 'detractors'
-            elif col_lower in ('rating', 'nps_rating', 'nps_score', 'score'):
+            elif col_lower in ('rating', 'nps_rating', 'nps_score', 'score', 'avg_rating', 'average_rating'):
                 col_mapping[col] = 'rating'
             elif 'total' in col_lower and 'response' in col_lower:
                 col_mapping[col] = 'total_responses'
@@ -465,6 +465,8 @@ async def upload_cv_server_performance(
                 col_mapping[col] = 'surveys_received'
             elif col_lower in ('avg_rating', 'average_rating', 'avg'):
                 col_mapping[col] = 'avg_rating'
+            elif col_lower == 'nps':
+                col_mapping[col] = 'nps_precalc'
         
         df = df.rename(columns=col_mapping)
         

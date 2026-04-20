@@ -705,13 +705,16 @@ async def upload_review_tracker_feedback(
         col_mapping = {}
         for col in df.columns:
             cl = col.lower()
-            if any(x in cl for x in ['review', 'comment', 'feedback', 'text', 'body']):
+            # Skip ID columns
+            if cl.endswith('_id') or cl == 'id':
+                continue
+            if cl == 'review' or cl == 'review_text' or any(x in cl for x in ['comment', 'feedback', 'body']):
                 if 'review_text' not in col_mapping.values():
                     col_mapping[col] = 'review_text'
             elif any(x in cl for x in ['rating', 'score', 'star']):
                 if 'rating' not in col_mapping.values():
                     col_mapping[col] = 'rating'
-            elif any(x in cl for x in ['date', 'time', 'created', 'posted']):
+            elif cl == 'published' or cl == 'date' or any(x in cl for x in ['created', 'posted']):
                 if 'date' not in col_mapping.values():
                     col_mapping[col] = 'date'
             elif any(x in cl for x in ['source', 'platform', 'site']):
@@ -764,6 +767,12 @@ async def upload_review_tracker_feedback(
         
         for _, row in df.iterrows():
             text = str(row.get(review_col, '') or '').lower()
+            # Fall back to original_content if review is empty
+            if (not text or text == 'nan') and 'original_content' in df.columns:
+                text = str(row.get('original_content', '') or '').lower()
+            # Also check title column for short mentions
+            if (not text or text == 'nan') and 'title' in df.columns:
+                text = str(row.get('title', '') or '').lower()
             if not text or text == 'nan':
                 continue
             total_reviews += 1
