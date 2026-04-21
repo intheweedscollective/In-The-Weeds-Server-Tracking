@@ -307,14 +307,8 @@ export default function EmployeeList() {
     setSaving(true);
     try {
       if (editingEmployee) {
-        // Update employee in employees_v2 (dashboard) - the source of truth
+        // Update employee - the PUT endpoint handles display_name directly
         await api.put(`/v2/employees/${editingEmployee.id}`, dataToSave);
-        // Also update display_name if changed
-        if (formData.name !== editingEmployee.name) {
-          await api.put(`/v2/employees/${editingEmployee.id}/display-name`, {
-            display_name: formData.name
-          });
-        }
         toast.success(`Updated ${formData.name}`);
       } else {
         await api.post(`/v2/employees`, {
