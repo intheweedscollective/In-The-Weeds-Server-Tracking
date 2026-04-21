@@ -192,119 +192,156 @@ async def create_employee(data: EmployeeCreate):
 
 
 @employee_router.put("/{employee_id}")
-async def update_employee(employee_id: str, data: EmployeeUpdate):
+async def update_employee(employee_id: str, data: dict):
     """
-    Update an existing employee and recalculate their scores.
+    Update an existing employee. Accepts any fields and persists them directly.
+    Handles snapshot IDs transparently — finds the real employee by name if needed.
     """
-    from scoring_engine import (
-        EmployeeV2, QuarterSettings, calculate_derived_metrics, calculate_customer_voice_score,
-        calculate_review_tracker_bonus, calculate_normalized_scores,
-        calculate_bonus_points, calculate_total_score
-    )
-    from server import sync_employees_to_most_recent_snapshot
-    
     db = get_db()
     
-    # Get existing employee
-    emp_doc = await db.employees_v2.find_one({"id": employee_id}, {"_id": 0})
+    # Find employee - try ID first, then snapshot fallback
+    emp_doc = await db.employees_v2.find_one({"id": employee_id})
     if not emp_doc:
-        raise HTTPException(status_code=404, detail="Employee not found")
-    
-    # Get quarter settings
-    settings_doc = await db.quarter_settings.find_one(
-        {"year": emp_doc['year'], "quarter": emp_doc['quarter']},
-        {"_id": 0}
-    )
-    if not settings_doc:
-        raise HTTPException(status_code=400, detail="No settings found for this quarter")
-    
-    settings = QuarterSettings(**settings_doc)
-    
-    # Update fields that were provided
-    update_data = data.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        emp_doc[key] = value
-    
-    # Convert to EmployeeV2 and recalculate
-    if isinstance(emp_doc.get('created_at'), str):
-        emp_doc['created_at'] = datetime.fromisoformat(emp_doc['created_at'])
-    
-    employee = EmployeeV2(**emp_doc)
-    
-    # Re-run scoring pipeline
-    employee = calculate_derived_metrics(employee)
-    employee = calculate_customer_voice_score(employee)
-    employee = calculate_review_tracker_bonus(employee)
-    employee = calculate_normalized_scores(employee, settings)
-    employee = calculate_bonus_points(employee, settings)
-    employee = calculate_total_score(employee, settings)
-    
-    # Reassign tier
-    score = employee.pre_dar_score or 0
-    job = employee.job_title.lower()
-    if job in ['trainer', 'bartender']:
-        tier_label = job.title()
-    elif score >= settings.a_server_min_score:
-        tier_label = "A-Server"
-    elif score >= settings.b_server_min_score:
-        tier_label = "B-Server"
-    else:
-        tier_label = "C-Server"
-    
-    # Update in database
-    emp_dict = employee.model_dump()
-    emp_dict['tier_label'] = tier_label
-    emp_dict['created_at'] = emp_dict['created_at'].isoformat() if isinstance(emp_dict['created_at'], datetime) else emp_dict['created_at']
-    await db.employees_v2.update_one(
-        {"id": employee_id},
-        {"$set": emp_dict}
-    )
-    
-    # ALSO update the snapshot's embedded employee data
-    await db.snapshots.update_many(
-        {
-            "year": emp_doc['year'],
-            "quarter": emp_doc['quarter'],
-            "employees.id": employee_id
-        },
-        {
-            "$set": {
-                "employees.$.name": emp_dict.get('name', ''),
-                "employees.$.job_title": emp_dict['job_title'],
-                "employees.$.tier_label": tier_label,
-                "employees.$.total_score": emp_dict.get('total_score', 0),
-                "employees.$.pre_dar_score": emp_dict.get('pre_dar_score', 0),
-                "employees.$.weighted_score": emp_dict.get('weighted_score', 0),
-                "employees.$.cv_score": emp_dict.get('cv_score', 0),
-                "employees.$.cv_promoters": emp_dict.get('cv_promoters', 0),
-                "employees.$.cv_detractors": emp_dict.get('cv_detractors', 0),
-                "employees.$.review_tracker_bonus": emp_dict.get('review_tracker_bonus', 0),
-                "employees.$.review_mentions": emp_dict.get('review_mentions', 0),
-                "employees.$.total_metric_bonus": emp_dict.get('total_metric_bonus', 0),
-                "employees.$.nps_score": emp_dict.get('nps_score', 0)
-            }
-        }
-    )
-    
-    # Sync all employees to snapshot to ensure proper sorting
-    await sync_employees_to_most_recent_snapshot(emp_doc['quarter'], emp_doc['year'])
-    
-    logger.info(f"Updated employee {employee.name} in both employees_v2 and snapshots")
-    
-    # Recalculate peer rankings
-    all_employees = await db.employees_v2.find(
-        {"year": emp_doc['year'], "quarter": emp_doc['quarter']},
-        {"_id": 0}
-    ).to_list(1000)
-    
-    sorted_emps = sorted(all_employees, key=lambda x: x.get('pre_dar_score', 0) or 0, reverse=True)
-    for rank, emp in enumerate(sorted_emps, 1):
-        await db.employees_v2.update_one(
-            {"id": emp['id']},
-            {"$set": {"peer_rank": rank}}
+        # Fallback: find via snapshot_workflow by matching ID then name
+        snapshot = await db.snapshot_workflow.find_one(
+            {"status": "completed", "employees.id": employee_id},
+            {"employees.$": 1}
         )
+        if snapshot and snapshot.get("employees"):
+            snap_name = snapshot["employees"][0].get("name", "")
+            if snap_name:
+                emp_doc = await db.employees_v2.find_one(
+                    {"name": {"$regex": f"^{snap_name}$", "$options": "i"}}
+                )
+        if not emp_doc:
+            raise HTTPException(status_code=404, detail="Employee not found")
     
-    return {"success": True, "message": f"Updated {employee.name} - new score: {employee.total_score}"}
+    mongo_id = emp_doc.get("_id")
+    actual_id = emp_doc.get("id", employee_id)
+    
+    # Build update from provided fields
+    update_fields = {}
+    if isinstance(data, dict):
+        update_data = data
+    else:
+        update_data = data.model_dump(exclude_unset=True) if hasattr(data, 'model_dump') else dict(data)
+    
+    for key, value in update_data.items():
+        if key in ('_id', 'id'):
+            continue
+        if value is not None:
+            update_fields[key] = value
+    
+    # Handle display_name / name properly
+    if 'display_name' in update_fields:
+        if 'report_name' not in update_fields:
+            update_fields['report_name'] = emp_doc.get('report_name') or emp_doc.get('name', '')
+    if 'name' in update_fields and 'display_name' not in update_fields:
+        update_fields['display_name'] = update_fields['name']
+        if 'report_name' not in update_fields:
+            update_fields['report_name'] = emp_doc.get('report_name') or emp_doc.get('name', '')
+    
+    update_fields['updated_at'] = datetime.now(timezone.utc).isoformat()
+    
+    # Recalculate scores if POS data fields changed
+    pos_fields = {'guests', 'guest_count', 'net_sales', 'liquor_sales', 'beer_sales',
+                  'wine_sales', 'lbw', 'glassware_sales', 'bar_glassware_sales',
+                  'loyalty_sales', 'lsc_count'}
+    
+    if pos_fields.intersection(update_fields.keys()):
+        merged = {**{k: v for k, v in emp_doc.items() if k != '_id'}, **update_fields}
+        
+        guests = merged.get('guests', 0) or merged.get('guest_count', 0) or 0
+        net_sales = merged.get('net_sales', 0) or 0
+        liquor = merged.get('liquor_sales', 0) or 0
+        beer = merged.get('beer_sales', 0) or 0
+        wine = merged.get('wine_sales', 0) or 0
+        lbw = liquor + beer + wine if (liquor + beer + wine) > 0 else (merged.get('lbw', 0) or 0)
+        glassware = merged.get('glassware_sales', 0) or merged.get('bar_glassware_sales', 0) or 0
+        loyalty = merged.get('loyalty_sales', 0) or 0
+        lsc_count = merged.get('lsc_count', 0) or (int(loyalty / 25) if loyalty > 0 else 0)
+        
+        if guests > 0:
+            update_fields['ppa'] = round(net_sales / guests, 2)
+            update_fields['lbw_per_guest'] = round(lbw / guests, 2) if lbw > 0 else 0
+            update_fields['glassware_per_guest'] = round(glassware / guests, 2) if glassware > 0 else 0
+            update_fields['guests_per_lsc'] = round(guests / lsc_count, 2) if lsc_count > 0 else 0
+        
+        update_fields['lbw'] = lbw
+        update_fields['lbw_total'] = lbw
+        
+        settings_doc = await db.quarter_settings.find_one(
+            {"year": emp_doc.get('year', 2026), "quarter": emp_doc.get('quarter', 'Q2')}, {"_id": 0}
+        )
+        if settings_doc:
+            bm_ppa = settings_doc.get('benchmark_ppa', 55) or 55
+            bm_lbw = settings_doc.get('benchmark_lbw', 8) or 8
+            bm_glass = settings_doc.get('benchmark_glass', 1.25) or 1.25
+            bm_lsc = settings_doc.get('benchmark_lsc', 100) or 100
+            
+            ppa_val = update_fields.get('ppa', merged.get('ppa', 0) or 0)
+            lbw_pg = update_fields.get('lbw_per_guest', merged.get('lbw_per_guest', 0) or 0)
+            glass_pg = update_fields.get('glassware_per_guest', merged.get('glassware_per_guest', 0) or 0)
+            gplsc = update_fields.get('guests_per_lsc', merged.get('guests_per_lsc', 0) or 0)
+            
+            if ppa_val > 0:
+                update_fields['score_ppa'] = round((ppa_val / bm_ppa) * 100, 2)
+            if lbw_pg > 0:
+                update_fields['score_lbw'] = round((lbw_pg / bm_lbw) * 100, 2)
+            if glass_pg > 0:
+                update_fields['score_glass'] = round((glass_pg / bm_glass) * 100, 2)
+            if gplsc > 0:
+                update_fields['score_lsc'] = round((bm_lsc / gplsc) * 100, 2)
+    
+    # Recalculate total if score fields changed
+    score_fields = {'score_ppa', 'score_lbw', 'score_glass', 'score_lsc', 'cv_score',
+                    'review_tracker_bonus', 'total_metric_bonus'}
+    if score_fields.intersection(update_fields.keys()) or pos_fields.intersection(update_fields.keys()):
+        merged = {**{k: v for k, v in emp_doc.items() if k != '_id'}, **update_fields}
+        settings_doc = await db.quarter_settings.find_one(
+            {"year": emp_doc.get('year', 2026), "quarter": emp_doc.get('quarter', 'Q2')}, {"_id": 0}
+        ) or {}
+        
+        w_ppa = settings_doc.get('weight_ppa', 0.25)
+        w_lbw = settings_doc.get('weight_lbw', 0.20)
+        w_glass = settings_doc.get('weight_glass', 0.15)
+        w_lsc = settings_doc.get('weight_lsc', 0.25)
+        
+        weighted = ((merged.get('score_ppa', 0) or 0) * w_ppa +
+                    (merged.get('score_lbw', 0) or 0) * w_lbw +
+                    (merged.get('score_glass', 0) or 0) * w_glass +
+                    (merged.get('score_lsc', 0) or 0) * w_lsc)
+        cv = merged.get('cv_score', 0) or 0
+        rt = merged.get('review_tracker_bonus', 0) or 0
+        bonus = merged.get('total_metric_bonus', 0) or 0
+        total = weighted + cv + rt + bonus
+        
+        update_fields['weighted_score'] = round(weighted, 2)
+        update_fields['total_score'] = round(total, 2)
+        update_fields['pre_dar_score'] = round(total, 2)
+        
+        a_min = settings_doc.get('a_server_min_score', 85)
+        b_min = settings_doc.get('b_server_min_score', 70)
+        job = (update_fields.get('job_title') or merged.get('job_title', '')).lower()
+        if 'trainer' in job:
+            update_fields['tier_label'] = 'Trainer'
+        elif 'bartender' in job:
+            update_fields['tier_label'] = 'Bartender'
+        elif total >= a_min:
+            update_fields['tier_label'] = 'A-Server'
+        elif total >= b_min:
+            update_fields['tier_label'] = 'B-Server'
+        else:
+            update_fields['tier_label'] = 'C-Server'
+    
+    # Save
+    await db.employees_v2.update_one({"_id": mongo_id}, {"$set": update_fields})
+    
+    name = update_fields.get('display_name') or update_fields.get('name') or emp_doc.get('display_name') or emp_doc.get('name', '')
+    return {
+        "success": True,
+        "message": f"Updated {name} - new score: {update_fields.get('total_score', emp_doc.get('total_score', 0))}"
+    }
 
 
 @employee_router.delete("/{employee_id}")
@@ -313,12 +350,24 @@ async def delete_employee(employee_id: str):
     db = get_db()
     
     # First get the employee to know which quarter/year to update
-    employee = await db.employees_v2.find_one({"id": employee_id}, {"_id": 0})
+    employee = await db.employees_v2.find_one({"id": employee_id})
     if not employee:
-        raise HTTPException(status_code=404, detail="Employee not found")
+        # Fallback: find via snapshot
+        snapshot = await db.snapshot_workflow.find_one(
+            {"status": "completed", "employees.id": employee_id},
+            {"employees.$": 1}
+        )
+        if snapshot and snapshot.get("employees"):
+            snap_name = snapshot["employees"][0].get("name", "")
+            if snap_name:
+                employee = await db.employees_v2.find_one(
+                    {"name": {"$regex": f"^{snap_name}$", "$options": "i"}}
+                )
+        if not employee:
+            raise HTTPException(status_code=404, detail="Employee not found")
     
     # Delete from employees_v2
-    result = await db.employees_v2.delete_one({"id": employee_id})
+    result = await db.employees_v2.delete_one({"_id": employee["_id"]})
     
     # Also remove from any snapshots that contain this employee
     year = employee.get("year")
@@ -382,14 +431,26 @@ async def update_employee_display_name(employee_id: str, data: dict):
     
     employee = await db.employees_v2.find_one({"id": employee_id})
     if not employee:
-        raise HTTPException(status_code=404, detail="Employee not found")
+        # Fallback: find via snapshot
+        snapshot = await db.snapshot_workflow.find_one(
+            {"status": "completed", "employees.id": employee_id},
+            {"employees.$": 1}
+        )
+        if snapshot and snapshot.get("employees"):
+            snap_name = snapshot["employees"][0].get("name", "")
+            if snap_name:
+                employee = await db.employees_v2.find_one(
+                    {"name": {"$regex": f"^{snap_name}$", "$options": "i"}}
+                )
+        if not employee:
+            raise HTTPException(status_code=404, detail="Employee not found")
     
     # Set report_name if not already set (for backward compatibility)
     current_name = employee.get("name", "")
     report_name = employee.get("report_name") or current_name
     
     await db.employees_v2.update_one(
-        {"id": employee_id},
+        {"_id": employee["_id"]},
         {"$set": {
             "display_name": display_name,
             "report_name": report_name,
@@ -441,9 +502,21 @@ async def update_employee_cv_stats(employee_id: str, data: dict):
         nps_score = data.get("nps_score", 0) or 0
     
     # Find and update employee
-    employee_doc = await db.employees_v2.find_one({"id": employee_id}, {"_id": 0})
+    employee_doc = await db.employees_v2.find_one({"id": employee_id})
     if not employee_doc:
-        raise HTTPException(status_code=404, detail="Employee not found")
+        # Fallback: find via snapshot
+        snapshot = await db.snapshot_workflow.find_one(
+            {"status": "completed", "employees.id": employee_id},
+            {"employees.$": 1}
+        )
+        if snapshot and snapshot.get("employees"):
+            snap_name = snapshot["employees"][0].get("name", "")
+            if snap_name:
+                employee_doc = await db.employees_v2.find_one(
+                    {"name": {"$regex": f"^{snap_name}$", "$options": "i"}}
+                )
+        if not employee_doc:
+            raise HTTPException(status_code=404, detail="Employee not found")
     
     # Get settings
     settings_doc = await db.quarter_settings.find_one(
