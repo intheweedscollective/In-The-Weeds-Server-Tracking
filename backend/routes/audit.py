@@ -1350,7 +1350,7 @@ async def apply_data_corrections(year: int, quarter: str):
                 {"_id": settings_doc["_id"]},
                 {"$set": updates}
             )
-            results.append(f"Fixed tier thresholds: A>=85, B>=70")
+            results.append("Fixed tier thresholds: A>=85, B>=70")
 
     a_min = 85
     b_min = 70
@@ -1488,3 +1488,110 @@ async def fix_employee_data(year: int, quarter: str, employee_data: dict):
         await db.employees_v2.insert_one(employee_data)
         # Remove _id from response
         return {"success": True, "action": "created", "name": name, "id": employee_data["id"]}
+
+
+
+@audit_router.get("/fix-q2-data")
+async def fix_q2_data():
+    """
+    One-shot fix for Q2 2026 production data:
+    1. Fix NPS data (push promoters/detractors from Server Performance Report)
+    2. Fix display names (Tad, TK, Terry, Keisha, etc.)
+    3. Remove duplicate employees
+    """
+    db = get_db()
+    results = []
+    
+    # === 1. NPS DATA ===
+    nps_data = [
+        {"name": "Treyanna Quick", "prom": 1, "pas": 0, "det": 0, "avg": 10.0, "recv": 1, "sent": 6},
+        {"name": "Matthew Spath", "prom": 1, "pas": 0, "det": 0, "avg": 10.0, "recv": 1, "sent": 8},
+        {"name": "Lakeisha Martin", "prom": 0, "pas": 2, "det": 0, "avg": 7.5, "recv": 2, "sent": 11},
+        {"name": "Thaddeus Hashey", "prom": 1, "pas": 0, "det": 0, "avg": 10.0, "recv": 1, "sent": 6},
+        {"name": "Daniel Mayorga", "prom": 1, "pas": 0, "det": 0, "avg": 10.0, "recv": 1, "sent": 4},
+        {"name": "Craig Simmons", "prom": 1, "pas": 0, "det": 0, "avg": 10.0, "recv": 1, "sent": 8},
+        {"name": "Eddie Garcia", "prom": 1, "pas": 0, "det": 0, "avg": 10.0, "recv": 1, "sent": 7},
+        {"name": "Jose Plancarte Villa", "prom": 1, "pas": 0, "det": 0, "avg": 10.0, "recv": 1, "sent": 7},
+        {"name": "Ashley Jackson", "prom": 1, "pas": 0, "det": 0, "avg": 10.0, "recv": 1, "sent": 7},
+        {"name": "Ethan Dever", "prom": 0, "pas": 0, "det": 1, "avg": 3.0, "recv": 1, "sent": 6},
+        {"name": "Robert Mckinnon", "prom": 2, "pas": 0, "det": 0, "avg": 9.0, "recv": 2, "sent": 5},
+        {"name": "Eric Ostgarden", "prom": 1, "pas": 0, "det": 0, "avg": 10.0, "recv": 1, "sent": 6},
+        {"name": "Adriana Bracamontes", "prom": 0, "pas": 0, "det": 1, "avg": 5.0, "recv": 1, "sent": 7},
+    ]
+    
+    nps_updated = 0
+    for nps in nps_data:
+        total = nps["prom"] + nps["pas"] + nps["det"]
+        nps_score = round(((nps["prom"] - nps["det"]) / total) * 100, 2) if total > 0 else 0
+        cv_score = (nps["prom"] * 1) + (nps["det"] * -2)
+        
+        result = await db.employees_v2.update_one(
+            {"name": {"$regex": f"^{nps['name']}$", "$options": "i"}, "quarter": "Q2", "year": 2026},
+            {"$set": {
+                "cv_promoters": nps["prom"],
+                "cv_passives": nps["pas"],
+                "cv_detractors": nps["det"],
+                "nps_score": nps_score,
+                "cv_score": cv_score,
+                "cv_avg_rating": nps["avg"],
+                "cv_surveys_received": nps["recv"],
+                "cv_surveys_sent": nps["sent"],
+            }}
+        )
+        if result.modified_count > 0:
+            nps_updated += 1
+    results.append(f"NPS: updated {nps_updated}/{len(nps_data)} employees")
+    
+    # === 2. DISPLAY NAMES ===
+    display_name_fixes = {
+        "Thaddeus Hashey": "Tad Hashey",
+        "Thomas Kozan": "TK Kozan",
+        "Terrance Kott": "Terry Kott",
+        "Lakeisha Martin": "Keisha Martin",
+        "Abigail Ostrowski": "Abby Ostrowski",
+        "Eric Ostgarden": "Ikey Ostgarden",
+        "Matthew Spath": "Matt Spath",
+        "Starwars Mckinnon-Herrera": "Starwars McKinnon-Herrera",
+        "Craig Simmons": "Allen Simmons",
+    }
+    
+    dn_updated = 0
+    for formal, preferred in display_name_fixes.items():
+        result = await db.employees_v2.update_one(
+            {"name": {"$regex": f"^{formal}$", "$options": "i"}, "quarter": "Q2", "year": 2026},
+            {"$set": {
+                "display_name": preferred,
+                "report_name": formal,
+            }}
+        )
+        if result.modified_count > 0:
+            dn_updated += 1
+    results.append(f"Display names: updated {dn_updated}/{len(display_name_fixes)}")
+    
+    # === 3. REMOVE DUPLICATES ===
+    # Find and remove duplicate employees by name, keeping the one with most data
+    from collections import defaultdict
+    name_groups = defaultdict(list)
+    async for emp in db.employees_v2.find({"quarter": "Q2", "year": 2026}):
+        name_key = (emp.get("name") or "").lower().strip()
+        name_groups[name_key].append(emp)
+    
+    dupes_removed = 0
+    for name, emps in name_groups.items():
+        if len(emps) > 1:
+            # Keep the one with the highest score or most data
+            emps.sort(key=lambda x: (
+                x.get("total_score") or 0,
+                x.get("cv_promoters") or 0,
+                x.get("rt_mentions") or 0,
+            ), reverse=True)
+            # Remove all but the first (best)
+            for dup in emps[1:]:
+                await db.employees_v2.delete_one({"_id": dup["_id"]})
+                dupes_removed += 1
+                results.append(f"Removed duplicate: {dup.get('name')} (score={dup.get('total_score',0)})")
+    
+    if dupes_removed == 0:
+        results.append("No duplicates found")
+    
+    return {"success": True, "corrections": results}
