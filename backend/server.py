@@ -2417,8 +2417,24 @@ async def update_employee(employee_id: str, data: EmployeeUpdate):
     emp_dict = employee.model_dump()
     emp_dict['tier_label'] = tier_label
     emp_dict['created_at'] = emp_dict['created_at'].isoformat() if isinstance(emp_dict['created_at'], datetime) else emp_dict['created_at']
+    
+    # Preserve fields that aren't in the Pydantic model (display_name, report_name, etc.)
+    preserve_fields = ['display_name', 'report_name', 'rt_source', 'rt_updated_at', 
+                       'cv_source', 'cv_updated_at', 'cv_avg_rating', 'cv_surveys_received', 
+                       'cv_surveys_sent', 'updated_at']
+    for field in preserve_fields:
+        if field in emp_doc and field not in update_data:
+            emp_dict[field] = emp_doc[field]
+    # If display_name was explicitly updated, use that
+    if 'display_name' in update_data:
+        emp_dict['display_name'] = update_data['display_name']
+    
+    # Use the actual employees_v2 ID (not the snapshot ID passed in URL)
+    actual_id = emp_doc.get('id', employee_id)
+    emp_dict['id'] = actual_id
+    
     await db.employees_v2.update_one(
-        {"id": employee_id},
+        {"id": actual_id},
         {"$set": emp_dict}
     )
     
