@@ -22,6 +22,41 @@ def get_db():
     return get_database()
 
 
+async def find_employee(db, employee_id: str):
+    """
+    Find an employee by ID with snapshot fallback.
+    Handles the case where the frontend sends a snapshot_workflow ID 
+    that doesn't match the employees_v2 ID.
+    Returns (employee_doc, mongo_id) or raises 404.
+    """
+    # Try direct ID match first
+    emp = await db.employees_v2.find_one({"id": employee_id})
+    if emp:
+        return emp
+    
+    # Fallback: find via snapshot_workflow
+    snapshot = await db.snapshot_workflow.find_one(
+        {"employees.id": employee_id},
+        {"employees.$": 1}
+    )
+    if snapshot and snapshot.get("employees"):
+        snap_name = snapshot["employees"][0].get("name", "")
+        if snap_name:
+            # Search by name, report_name, or display_name
+            emp = await db.employees_v2.find_one({
+                "$or": [
+                    {"name": {"$regex": f"^{re.escape(snap_name)}$", "$options": "i"}},
+                    {"report_name": {"$regex": f"^{re.escape(snap_name)}$", "$options": "i"}},
+                    {"display_name": {"$regex": f"^{re.escape(snap_name)}$", "$options": "i"}},
+                ]
+            })
+            if emp:
+                return emp
+    
+    raise HTTPException(status_code=404, detail="Employee not found")
+
+
+
 # ============================================================================
 # MODELS
 # ============================================================================
@@ -199,23 +234,7 @@ async def update_employee(employee_id: str, data: dict):
     """
     db = get_db()
     
-    # Find employee - try ID first, then snapshot fallback
-    emp_doc = await db.employees_v2.find_one({"id": employee_id})
-    if not emp_doc:
-        # Fallback: find via snapshot_workflow by matching ID then name
-        snapshot = await db.snapshot_workflow.find_one(
-            {"status": "completed", "employees.id": employee_id},
-            {"employees.$": 1}
-        )
-        if snapshot and snapshot.get("employees"):
-            snap_name = snapshot["employees"][0].get("name", "")
-            if snap_name:
-                emp_doc = await db.employees_v2.find_one(
-                    {"name": {"$regex": f"^{snap_name}$", "$options": "i"}}
-                )
-        if not emp_doc:
-            raise HTTPException(status_code=404, detail="Employee not found")
-    
+    emp_doc = await find_employee(db, employee_id)
     mongo_id = emp_doc.get("_id")
     actual_id = emp_doc.get("id", employee_id)
     
@@ -350,21 +369,7 @@ async def delete_employee(employee_id: str):
     db = get_db()
     
     # First get the employee to know which quarter/year to update
-    employee = await db.employees_v2.find_one({"id": employee_id})
-    if not employee:
-        # Fallback: find via snapshot
-        snapshot = await db.snapshot_workflow.find_one(
-            {"status": "completed", "employees.id": employee_id},
-            {"employees.$": 1}
-        )
-        if snapshot and snapshot.get("employees"):
-            snap_name = snapshot["employees"][0].get("name", "")
-            if snap_name:
-                employee = await db.employees_v2.find_one(
-                    {"name": {"$regex": f"^{snap_name}$", "$options": "i"}}
-                )
-        if not employee:
-            raise HTTPException(status_code=404, detail="Employee not found")
+    employee = await find_employee(db, employee_id)
     
     # Delete from employees_v2
     result = await db.employees_v2.delete_one({"_id": employee["_id"]})
@@ -429,23 +434,7 @@ async def update_employee_display_name(employee_id: str, data: dict):
     if not display_name:
         raise HTTPException(status_code=400, detail="display_name is required")
     
-    employee = await db.employees_v2.find_one({"id": employee_id})
-    if not employee:
-        # Fallback: find via snapshot
-        snapshot = await db.snapshot_workflow.find_one(
-            {"status": "completed", "employees.id": employee_id},
-            {"employees.$": 1}
-        )
-        if snapshot and snapshot.get("employees"):
-            snap_name = snapshot["employees"][0].get("name", "")
-            if snap_name:
-                employee = await db.employees_v2.find_one(
-                    {"name": {"$regex": f"^{snap_name}$", "$options": "i"}}
-                )
-        if not employee:
-            raise HTTPException(status_code=404, detail="Employee not found")
-    
-    # Set report_name if not already set (for backward compatibility)
+    employee = await find_employee(db, employee_id)
     current_name = employee.get("name", "")
     report_name = employee.get("report_name") or current_name
     
@@ -502,21 +491,7 @@ async def update_employee_cv_stats(employee_id: str, data: dict):
         nps_score = data.get("nps_score", 0) or 0
     
     # Find and update employee
-    employee_doc = await db.employees_v2.find_one({"id": employee_id})
-    if not employee_doc:
-        # Fallback: find via snapshot
-        snapshot = await db.snapshot_workflow.find_one(
-            {"status": "completed", "employees.id": employee_id},
-            {"employees.$": 1}
-        )
-        if snapshot and snapshot.get("employees"):
-            snap_name = snapshot["employees"][0].get("name", "")
-            if snap_name:
-                employee_doc = await db.employees_v2.find_one(
-                    {"name": {"$regex": f"^{snap_name}$", "$options": "i"}}
-                )
-        if not employee_doc:
-            raise HTTPException(status_code=404, detail="Employee not found")
+    employee_doc = await find_employee(db, employee_id)
     
     # Get settings
     settings_doc = await db.quarter_settings.find_one(

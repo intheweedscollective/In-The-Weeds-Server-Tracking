@@ -2349,20 +2349,24 @@ async def update_employee(employee_id: str, data: dict):
     Update an existing employee. Accepts any fields and persists them directly.
     Recalculates scores if POS data fields are provided.
     """
-    # Get existing employee - try by ID first, then search snapshot_workflow
+    # Get existing employee - try by ID, then snapshot fallback searching name/report_name/display_name
+    import re as re_mod
     emp_doc = await db.employees_v2.find_one({"id": employee_id})
     if not emp_doc:
-        # Fallback: find via snapshot_workflow
         snapshot = await db.snapshot_workflow.find_one(
-            {"status": "completed", "employees.id": employee_id},
+            {"employees.id": employee_id},
             {"employees.$": 1}
         )
         if snapshot and snapshot.get("employees"):
             snap_name = snapshot["employees"][0].get("name", "")
             if snap_name:
-                emp_doc = await db.employees_v2.find_one(
-                    {"name": {"$regex": f"^{snap_name}$", "$options": "i"}}
-                )
+                emp_doc = await db.employees_v2.find_one({
+                    "$or": [
+                        {"name": {"$regex": f"^{re_mod.escape(snap_name)}$", "$options": "i"}},
+                        {"report_name": {"$regex": f"^{re_mod.escape(snap_name)}$", "$options": "i"}},
+                        {"display_name": {"$regex": f"^{re_mod.escape(snap_name)}$", "$options": "i"}},
+                    ]
+                })
         if not emp_doc:
             raise HTTPException(status_code=404, detail="Employee not found")
     
@@ -2850,17 +2854,20 @@ async def update_employee_display_name(employee_id: str, data: dict):
     
     employee = await db.employees_v2.find_one({"id": employee_id})
     if not employee:
-        # Fallback: find by name via snapshot_workflow
         snapshot = await db.snapshot_workflow.find_one(
-            {"status": "completed", "employees.id": employee_id},
+            {"employees.id": employee_id},
             {"employees.$": 1}
         )
         if snapshot and snapshot.get("employees"):
             snap_name = snapshot["employees"][0].get("name", "")
             if snap_name:
-                employee = await db.employees_v2.find_one(
-                    {"name": {"$regex": f"^{snap_name}$", "$options": "i"}}
-                )
+                employee = await db.employees_v2.find_one({
+                    "$or": [
+                        {"name": {"$regex": f"^{snap_name}$", "$options": "i"}},
+                        {"report_name": {"$regex": f"^{snap_name}$", "$options": "i"}},
+                        {"display_name": {"$regex": f"^{snap_name}$", "$options": "i"}},
+                    ]
+                })
         if not employee:
             raise HTTPException(status_code=404, detail="Employee not found")
     
