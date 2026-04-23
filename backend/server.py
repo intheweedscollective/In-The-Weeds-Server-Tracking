@@ -2497,6 +2497,30 @@ async def update_employee(employee_id: str, data: dict):
         {"$set": update_fields}
     )
     
+    # Also update the snapshot to keep names in sync
+    display = update_fields.get('display_name') or update_fields.get('name')
+    if display:
+        # Update snapshot employee by both possible IDs
+        snap_update = {"employees.$.name": display, "employees.$.display_name": display}
+        if update_fields.get('job_title'):
+            snap_update["employees.$.job_title"] = update_fields['job_title']
+        if update_fields.get('tier_label'):
+            snap_update["employees.$.tier_label"] = update_fields['tier_label']
+        if update_fields.get('total_score'):
+            snap_update["employees.$.total_score"] = update_fields['total_score']
+            snap_update["employees.$.pre_dar_score"] = update_fields.get('pre_dar_score', update_fields['total_score'])
+        
+        quarter = emp_doc.get('quarter', 'Q2')
+        year = emp_doc.get('year', 2026)
+        actual_id = emp_doc.get('id', employee_id)
+        
+        # Try both IDs (employees_v2 ID and the original request ID which may be snapshot ID)
+        for eid in set([actual_id, employee_id]):
+            await db.snapshot_workflow.update_many(
+                {"quarter": quarter, "year": year, "employees.id": eid},
+                {"$set": snap_update}
+            )
+    
     name = update_fields.get('display_name') or update_fields.get('name') or emp_doc.get('display_name') or emp_doc.get('name', '')
     
     return {

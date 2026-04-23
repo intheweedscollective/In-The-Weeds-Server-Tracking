@@ -1728,6 +1728,24 @@ async def get_current_rankings(quarter: Optional[str] = None, year: Optional[int
     # Sort employees by tier before returning
     employees = snapshot.get("employees", [])
     
+    # Overlay display_names from employees_v2 (source of truth for preferred names)
+    emp_v2_lookup = {}
+    async for emp in db.employees_v2.find(
+        {"quarter": snapshot.get("quarter", "").upper(), "year": snapshot.get("year", 2026)},
+        {"_id": 0, "name": 1, "display_name": 1, "report_name": 1}
+    ):
+        for field in ["name", "report_name", "display_name"]:
+            key = (emp.get(field) or "").lower().strip()
+            if key and emp.get("display_name"):
+                emp_v2_lookup[key] = emp.get("display_name")
+    
+    for emp in employees:
+        emp_name = (emp.get("name") or "").lower().strip()
+        preferred = emp_v2_lookup.get(emp_name)
+        if preferred:
+            emp["name"] = preferred
+            emp["display_name"] = preferred
+    
     # Define tier order
     TIER_ORDER = {
         'Trainer': 1,
