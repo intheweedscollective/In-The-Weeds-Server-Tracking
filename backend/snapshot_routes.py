@@ -776,35 +776,40 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
 
 
 @snapshot_router.delete("/employees/{employee_id}")
-async def delete_snapshot_employee(employee_id: str):
+async def delete_snapshot_employee(employee_id: str, quarter: str = "Q2", year: int = 2026):
     """
     Delete an employee from the current active snapshot.
     Used to remove duplicates or incorrect entries.
+    Matches by ID or name.
     """
     db = get_db()
     
-    # Find current active snapshot
+    # Find current active snapshot for this quarter
     snapshot = await db.snapshot_workflow.find_one(
-        {"is_current": True},
-        {"_id": 0}
+        {"is_current": True, "quarter": quarter.upper(), "year": year}
     )
     
     if not snapshot:
         snapshot = await db.snapshot_workflow.find_one(
-            {"status": "completed"},
-            {"_id": 0},
+            {"status": "completed", "quarter": quarter.upper(), "year": year},
             sort=[("completed_at", -1)]
+        )
+    
+    if not snapshot:
+        # Try without quarter filter
+        snapshot = await db.snapshot_workflow.find_one(
+            {"is_current": True}
         )
     
     if not snapshot:
         raise HTTPException(status_code=404, detail="No active snapshot found")
     
-    snapshot_id = snapshot["id"]
+    mongo_id = snapshot["_id"]
     employees = snapshot.get("employees", [])
     
-    # Find all matching entries
+    # Find all matching entries by ID or name
     matching = [(i, e) for i, e in enumerate(employees) 
-                if e.get("id") == employee_id or e.get("name", "").lower() == employee_id.lower()]
+                if e.get("id") == employee_id or (e.get("name") or "").lower() == employee_id.lower()]
     
     if not matching:
         raise HTTPException(status_code=404, detail=f"Employee '{employee_id}' not found in snapshot")
@@ -813,19 +818,20 @@ async def delete_snapshot_employee(employee_id: str):
         # Duplicates found: remove only the lowest-scoring entry
         matching.sort(key=lambda x: x[1].get("pre_dar_score", 0) or x[1].get("total_score", 0) or 0)
         remove_idx = matching[0][0]  # lowest score
+        removed_name = matching[0][1].get("name", "unknown")
         employees.pop(remove_idx)
-        logger.info(f"Removed duplicate (lowest score) for {employee_id}, kept {len(matching)-1} remaining")
+        logger.info(f"Removed duplicate (lowest score) for {removed_name}, kept {len(matching)-1} remaining")
     else:
-        # Single entry: remove it
-        employees = [e for e in employees if e.get("id") != employee_id and e.get("name", "").lower() != employee_id.lower()]
+        removed_name = matching[0][1].get("name", "unknown")
+        employees = [e for e in employees if e.get("id") != employee_id and (e.get("name") or "").lower() != employee_id.lower()]
     
-    # Update snapshot
+    # Update snapshot using MongoDB _id
     await db.snapshot_workflow.update_one(
-        {"id": snapshot_id},
+        {"_id": mongo_id},
         {"$set": {"employees": employees}}
     )
     
-    logger.info(f"Deleted employee {employee_id} from snapshot {snapshot_id}")
+    return {"success": True, "message": f"Deleted {removed_name} from snapshot", "remaining": len(employees)}
     
 
 

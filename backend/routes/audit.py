@@ -1592,6 +1592,46 @@ async def fix_q2_data():
                 results.append(f"Removed duplicate: {dup.get('name')} (score={dup.get('total_score',0)})")
     
     if dupes_removed == 0:
-        results.append("No duplicates found")
+        results.append("No duplicates found in employees_v2")
+    
+    # === 4. DEDUP SNAPSHOT ===
+    snapshot = await db.snapshot_workflow.find_one(
+        {"is_current": True, "quarter": "Q2", "year": 2026}
+    )
+    if not snapshot:
+        snapshot = await db.snapshot_workflow.find_one(
+            {"status": "completed", "quarter": "Q2", "year": 2026},
+            sort=[("completed_at", -1)]
+        )
+    
+    snap_dupes_removed = 0
+    if snapshot:
+        snap_employees = snapshot.get("employees", [])
+        seen = {}
+        deduped = []
+        for emp in snap_employees:
+            name_key = (emp.get("name") or "").lower().strip()
+            score = emp.get("pre_dar_score", 0) or emp.get("total_score", 0) or 0
+            if name_key not in seen:
+                seen[name_key] = len(deduped)
+                deduped.append(emp)
+            else:
+                existing_idx = seen[name_key]
+                existing_score = deduped[existing_idx].get("pre_dar_score", 0) or deduped[existing_idx].get("total_score", 0) or 0
+                if score > existing_score:
+                    results.append(f"Snapshot: replaced {emp.get('name')} (score={existing_score}) with score={score}")
+                    deduped[existing_idx] = emp
+                else:
+                    results.append(f"Snapshot: dropped duplicate {emp.get('name')} (score={score})")
+                snap_dupes_removed += 1
+        
+        if snap_dupes_removed > 0:
+            await db.snapshot_workflow.update_one(
+                {"_id": snapshot["_id"]},
+                {"$set": {"employees": deduped}}
+            )
+            results.append(f"Snapshot deduped: {len(snap_employees)} -> {len(deduped)}")
+        else:
+            results.append("No duplicates in snapshot")
     
     return {"success": True, "corrections": results}
