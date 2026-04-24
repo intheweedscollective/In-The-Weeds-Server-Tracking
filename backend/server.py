@@ -2411,7 +2411,10 @@ async def update_employee(employee_id: str, data: dict):
         lbw = liquor + beer + wine if (liquor + beer + wine) > 0 else (merged.get('lbw', 0) or 0)
         glassware = merged.get('glassware_sales', 0) or merged.get('bar_glassware_sales', 0) or 0
         loyalty = merged.get('loyalty_sales', 0) or 0
-        lsc_count = merged.get('lsc_count', 0) or (int(loyalty / 25) if loyalty > 0 else 0)
+        # Respect user-set lsc_count of 0 - don't override from loyalty_sales
+        lsc_count = merged.get('lsc_count')
+        if lsc_count is None:
+            lsc_count = int(loyalty / 25) if loyalty > 0 else 0
         
         if guests > 0:
             update_fields['ppa'] = round(net_sales / guests, 2)
