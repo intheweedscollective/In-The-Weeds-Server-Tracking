@@ -11,9 +11,10 @@ export default function QRLeaderboard() {
     const fetchData = async () => {
       try {
         const res = await api.get('/qr/employees');
-        // Sort by total clicks
+        // Sort by total clicks (yelp + google + tripadvisor)
         const sorted = res.data.sort((a, b) => 
-          (b.yelp_clicks + b.google_clicks) - (a.yelp_clicks + a.google_clicks)
+          ((b.yelp_clicks || 0) + (b.google_clicks || 0) + (b.tripadvisor_clicks || 0)) -
+          ((a.yelp_clicks || 0) + (a.google_clicks || 0) + (a.tripadvisor_clicks || 0))
         );
         setEmployees(sorted);
       } catch (error) {
@@ -55,7 +56,10 @@ export default function QRLeaderboard() {
         <div className="space-y-3">
           {employees.map((emp, idx) => {
             const rank = idx + 1;
-            const total = emp.yelp_clicks + emp.google_clicks;
+            const yelp = emp.yelp_clicks || 0;
+            const google = emp.google_clicks || 0;
+            const tripadvisor = emp.tripadvisor_clicks || 0;
+            const total = yelp + google + tripadvisor;
             
             return (
               <div 
@@ -82,15 +86,21 @@ export default function QRLeaderboard() {
                   <div className="text-center">
                     <div className="flex items-center gap-1">
                       <Star className="w-4 h-4 text-red-400" />
-                      <span className="text-xl font-bold text-red-400">{emp.yelp_clicks}</span>
+                      <span className="text-xl font-bold text-red-400">{yelp}</span>
                     </div>
                     <p className="text-xs text-slate-500">Yelp</p>
                   </div>
                   <div className="text-center">
                     <div className="flex items-center gap-1">
-                      <span className="text-xl font-bold text-green-400">{emp.google_clicks}</span>
+                      <span className="text-xl font-bold text-green-400">{google}</span>
                     </div>
                     <p className="text-xs text-slate-500">Google</p>
+                  </div>
+                  <div className="text-center">
+                    <div className="flex items-center gap-1">
+                      <span className="text-xl font-bold text-emerald-400">{tripadvisor}</span>
+                    </div>
+                    <p className="text-xs text-slate-500">TripAdvisor</p>
                   </div>
                   <div className="text-center min-w-[80px] bg-blue-500/20 rounded-lg px-4 py-2">
                     <p className="text-2xl font-bold text-blue-400">{total}</p>

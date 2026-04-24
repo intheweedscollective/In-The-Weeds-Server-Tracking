@@ -61,7 +61,7 @@ export default function QRDashboard() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
           <StatCard 
             label="Total Scans" 
             value={stats?.total_scans || 0} 
@@ -79,6 +79,12 @@ export default function QRDashboard() {
             value={stats?.google_scans || 0} 
             icon={TrendingUp} 
             color="text-green-400" 
+          />
+          <StatCard 
+            label="TripAdvisor Scans" 
+            value={stats?.tripadvisor_scans || 0} 
+            icon={Star} 
+            color="text-emerald-400" 
           />
           <StatCard 
             label="Total Employees" 
@@ -99,7 +105,11 @@ export default function QRDashboard() {
           </div>
           
           <div className="divide-y divide-white/5">
-            {employees.map((emp, idx) => (
+            {employees.map((emp, idx) => {
+              const yelp = emp.yelp_clicks || 0;
+              const google = emp.google_clicks || 0;
+              const tripadvisor = emp.tripadvisor_clicks || 0;
+              return (
               <div key={emp.id} className="flex items-center justify-between p-4 hover:bg-white/5 transition-colors">
                 <div className="flex items-center gap-4">
                   <span className="text-2xl font-bold text-slate-500 w-12">#{idx + 1}</span>
@@ -107,20 +117,25 @@ export default function QRDashboard() {
                 </div>
                 <div className="flex items-center gap-6">
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-red-400">{emp.yelp_clicks}</p>
+                    <p className="text-2xl font-bold text-red-400">{yelp}</p>
                     <p className="text-xs text-slate-500">Yelp</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-green-400">{emp.google_clicks}</p>
+                    <p className="text-2xl font-bold text-green-400">{google}</p>
                     <p className="text-xs text-slate-500">Google</p>
                   </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-emerald-400">{tripadvisor}</p>
+                    <p className="text-xs text-slate-500">TripAdvisor</p>
+                  </div>
                   <div className="text-center min-w-[60px]">
-                    <p className="text-2xl font-bold text-blue-400">{emp.yelp_clicks + emp.google_clicks}</p>
+                    <p className="text-2xl font-bold text-blue-400">{yelp + google + tripadvisor}</p>
                     <p className="text-xs text-slate-500">Total</p>
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
             
             {employees.length === 0 && !loading && (
               <div className="p-8 text-center text-slate-400">

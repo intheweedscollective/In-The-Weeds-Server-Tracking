@@ -13,6 +13,28 @@ Build a comprehensive performance review application for restaurant employees.
 
 ### Latest Changes (2026-02 Session)
 
+- **TripAdvisor added to QR Tracker (FIXED 2026-02)**:
+  - Full parity with Yelp & Google across the QR Track Hub.
+  - Backend (`/app/backend/qr_tracking.py`):
+    - New `tripadvisor_clicks` field on QR employees (initialized on create/bulk/sync-from-employees).
+    - New `tripadvisor_url` field in QR Settings (with old-doc backfill in GET).
+    - New `TRIPADVISOR_REVIEW_URL` env fallback (defaults to tripadvisor.com/UserReview).
+    - New `/api/qr/ta/{id}` simplified redirect endpoint (mirrors `/api/qr/go/{id}`).
+    - `/api/qr/scan/{id}/tripadvisor` accepts the third platform.
+    - `/api/qr/stats` now returns `tripadvisor_scans` + every top_10 row has `tripadvisor_clicks`.
+    - Bulk ZIP download emits three PNGs per employee: `Name_google_qr.png`, `Name_yelp_qr.png`, `Name_tripadvisor_qr.png`.
+    - Reset endpoints (per-employee and global) also zero `tripadvisor_clicks`.
+  - Frontend:
+    - `QRSettings.jsx`: TripAdvisor Review URL input field with external-link preview.
+    - `QRLeaderboard.jsx`: TripAdvisor column + included in total.
+    - `QRDashboard.jsx`: 5-column stats grid with TripAdvisor StatCard, per-emp row TripAdvisor count.
+    - `QREmployees.jsx`: TripAdvisor download button per employee, included in ZIP, included in totals.
+    - `QRTopClicksCard.jsx`: TripAdvisor quick-stat tile + per-row count.
+    - `EmployeeCard.jsx` + `EmployeeList.js`: TripAdvisor clicks aggregated into QR Scans total.
+  - Verified via curl: tracking, stats, settings persistence, and per-platform redirect all work.
+
+
+
 - **Snapshot Workflow Edits Not Persisting (FIXED 2026-02)**:
   - Root cause 1: Master `PUT /v2/employees/{id}` only synced `name/title/tier/total_score`
     back to `snapshot_workflow.employees` - metric edits (guests, liquor_sales, etc.) were

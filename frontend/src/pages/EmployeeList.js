@@ -83,7 +83,8 @@ export default function EmployeeList() {
         const nameLower = (qr.name || '').toLowerCase().trim();
         qrDataMap[nameLower] = {
           yelp_clicks: qr.yelp_clicks || 0,
-          google_clicks: qr.google_clicks || 0
+          google_clicks: qr.google_clicks || 0,
+          tripadvisor_clicks: qr.tripadvisor_clicks || 0
         };
       });
       
@@ -91,7 +92,7 @@ export default function EmployeeList() {
         // Match QR data by name (try full name, then first name)
         const empNameLower = (emp.name || '').toLowerCase().trim();
         const empFirstNameLower = empNameLower.split(' ')[0];
-        const qrData = qrDataMap[empNameLower] || qrDataMap[empFirstNameLower] || { yelp_clicks: 0, google_clicks: 0 };
+        const qrData = qrDataMap[empNameLower] || qrDataMap[empFirstNameLower] || { yelp_clicks: 0, google_clicks: 0, tripadvisor_clicks: 0 };
         
         return {
           id: emp.id || emp.name,
@@ -137,6 +138,7 @@ export default function EmployeeList() {
           // QR scan data
           yelp_clicks: qrData.yelp_clicks,
           google_clicks: qrData.google_clicks,
+          tripadvisor_clicks: qrData.tripadvisor_clicks,
           _source: "snapshot"
         };
       });

@@ -6,7 +6,7 @@ import api from "../lib/api";
 export default function QRTopClicksCard({ showViewAll = true, limit = 5 }) {
   const [topClicks, setTopClicks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({ total_scans: 0, yelp_scans: 0, google_scans: 0 });
+  const [stats, setStats] = useState({ total_scans: 0, yelp_scans: 0, google_scans: 0, tripadvisor_scans: 0 });
 
   useEffect(() => {
     fetchTopClicks();
@@ -19,7 +19,8 @@ export default function QRTopClicksCard({ showViewAll = true, limit = 5 }) {
       setStats({
         total_scans: response.data.total_scans || 0,
         yelp_scans: response.data.yelp_scans || 0,
-        google_scans: response.data.google_scans || 0
+        google_scans: response.data.google_scans || 0,
+        tripadvisor_scans: response.data.tripadvisor_scans || 0
       });
     } catch (error) {
       console.error('Failed to fetch QR stats:', error);
@@ -61,7 +62,7 @@ export default function QRTopClicksCard({ showViewAll = true, limit = 5 }) {
       </div>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-2 gap-2 p-4 border-b border-slate-700">
+      <div className="grid grid-cols-3 gap-2 p-4 border-b border-slate-700">
         <div className="flex items-center gap-2 p-2 bg-red-500/10 rounded-lg">
           <span className="text-sm">📍</span>
           <div>
@@ -74,6 +75,13 @@ export default function QRTopClicksCard({ showViewAll = true, limit = 5 }) {
           <div>
             <p className="text-xs text-slate-400">Google</p>
             <p className="text-sm font-bold text-blue-400">{stats.google_scans}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 p-2 bg-emerald-500/10 rounded-lg">
+          <span className="text-sm">🦉</span>
+          <div>
+            <p className="text-xs text-slate-400">TripAdvisor</p>
+            <p className="text-sm font-bold text-emerald-400">{stats.tripadvisor_scans}</p>
           </div>
         </div>
       </div>
@@ -99,6 +107,8 @@ export default function QRTopClicksCard({ showViewAll = true, limit = 5 }) {
                   <span className="text-red-400">{emp.yelp_clicks}</span>
                   <span className="text-slate-500">/</span>
                   <span className="text-blue-400">{emp.google_clicks}</span>
+                  <span className="text-slate-500">/</span>
+                  <span className="text-emerald-400">{emp.tripadvisor_clicks || 0}</span>
                 </div>
                 <div className="flex items-center gap-1 px-2 py-1 bg-violet-500/20 rounded-full">
                   <TrendingUp className="w-3 h-3 text-violet-400" />
