@@ -2536,7 +2536,27 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                     employees[matched_name]["rt_mentions"] = mentions
                     employees[matched_name]["review_tracker_bonus"] = round(min(mentions * 0.5, 15), 1)  # Cap at 15
     
-    return list(employees.values())
+    # Defensive dedupe: guarantee unique employees by display_name so the
+    # Employees tab never shows duplicates even if upstream data drifted.
+    out = list(employees.values())
+    seen = {}
+    for emp in out:
+        key = (
+            (emp.get("display_name") or emp.get("name") or emp.get("report_name") or "")
+            .strip()
+            .lower()
+        )
+        if not key:
+            continue
+        existing = seen.get(key)
+        if existing is None:
+            seen[key] = emp
+        else:
+            existing_score = existing.get("total_score") or existing.get("pre_dar_score") or 0
+            new_score = emp.get("total_score") or emp.get("pre_dar_score") or 0
+            if new_score > existing_score:
+                seen[key] = emp
+    return list(seen.values())
 
 
 async def parse_pos_file(filename: str, contents: bytes) -> Dict[str, Any]:
@@ -2857,6 +2877,115 @@ async def recalculate_tiers(year: int = 2026, quarter: str = "Q1"):
         "total_employees": len(updated_employees)
     }
 
+
+
+
+@snapshot_router.post("/dedupe-current-snapshot")
+async def dedupe_current_snapshot(year: int = 2026, quarter: str = "Q1"):
+    """
+    Remove duplicate employees from the currently active snapshot.
+
+    Duplicate detection key = lowercased `display_name` (fallback: `name`,
+    `report_name`). When multiple entries collide on the same key, the entry
+    with the HIGHEST total_score is kept and the others are dropped. This
+    preserves any edits or score recalculations performed on the winning row.
+
+    Also removes duplicates from `employees_v2` for the same quarter using
+    the same name key so Dashboard counts line up with the snapshot.
+    """
+    db = get_db()
+    q = quarter.upper()
+
+    snapshot = await db.snapshot_workflow.find_one(
+        {"is_current": True, "quarter": q, "year": year}
+    )
+    if not snapshot:
+        snapshot = await db.snapshot_workflow.find_one(
+            {"quarter": q, "year": year, "status": "completed"},
+            sort=[("completed_at", -1)]
+        )
+    if not snapshot:
+        raise HTTPException(status_code=404, detail=f"No snapshot found for {q} {year}")
+
+    employees = snapshot.get("employees", []) or []
+
+    def key_for(e):
+        for f in ("display_name", "name", "report_name"):
+            v = (e.get(f) or "").strip().lower()
+            if v:
+                return v
+        return None
+
+    best = {}
+    order = []
+    for emp in employees:
+        k = key_for(emp)
+        if not k:
+            continue
+        score = emp.get("total_score") or emp.get("pre_dar_score") or 0
+        current = best.get(k)
+        if current is None:
+            best[k] = emp
+            order.append(k)
+        else:
+            current_score = current.get("total_score") or current.get("pre_dar_score") or 0
+            if score > current_score:
+                best[k] = emp
+
+    deduped = [best[k] for k in order]
+    removed_snapshot = len(employees) - len(deduped)
+
+    if removed_snapshot > 0:
+        await db.snapshot_workflow.update_one(
+            {"_id": snapshot["_id"]},
+            {"$set": {
+                "employees": deduped,
+                "employee_count": len(deduped),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }}
+        )
+
+    # Dedupe employees_v2 for the same quarter using the same key strategy.
+    v2_emps = await db.employees_v2.find(
+        {"quarter": q, "year": year},
+        {"_id": 0}
+    ).to_list(2000)
+
+    v2_best = {}
+    v2_order = []
+    for emp in v2_emps:
+        k = key_for(emp)
+        if not k:
+            continue
+        score = emp.get("total_score") or emp.get("pre_dar_score") or 0
+        if k not in v2_best:
+            v2_best[k] = emp
+            v2_order.append(k)
+        else:
+            if score > (v2_best[k].get("total_score") or v2_best[k].get("pre_dar_score") or 0):
+                v2_best[k] = emp
+
+    # Identify ids to delete = all v2 emps whose id is not the "winner"
+    winners_ids = {v2_best[k].get("id") for k in v2_order if v2_best[k].get("id")}
+    ids_to_delete = [e.get("id") for e in v2_emps if e.get("id") and e.get("id") not in winners_ids and key_for(e) in v2_best]
+
+    removed_v2 = 0
+    if ids_to_delete:
+        result = await db.employees_v2.delete_many({"id": {"$in": ids_to_delete}})
+        removed_v2 = result.deleted_count
+
+    return {
+        "success": True,
+        "snapshot_id": snapshot.get("id"),
+        "removed_from_snapshot": removed_snapshot,
+        "remaining_in_snapshot": len(deduped),
+        "removed_from_employees_v2": removed_v2,
+        "message": (
+            f"Removed {removed_snapshot} snapshot duplicates and {removed_v2} v2 duplicates"
+            if (removed_snapshot + removed_v2) > 0
+            else "No duplicates found"
+        ),
+    }
 
 
 # ============================================================================

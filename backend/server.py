@@ -2652,11 +2652,66 @@ async def update_employee_manual_score(employee_id: str, data: dict):
 
 @api_router.delete("/v2/employees/{employee_id}")
 async def delete_employee(employee_id: str):
-    """Delete a single employee"""
-    result = await db.employees_v2.delete_one({"id": employee_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Employee not found")
-    return {"success": True, "message": "Employee deleted"}
+    """
+    Delete a single employee.
+
+    Target the SPECIFIC row the user clicked on (by id) so deleting one of
+    several duplicates leaves the others intact. The employee may live in
+    `employees_v2`, inside `snapshot_workflow.employees`, or both — we try
+    each in turn. Only if the id isn't found anywhere do we fall back to a
+    name-based delete so callers passing a bare name still work.
+    """
+    import re as _re
+
+    deleted_v2 = 0
+    pulled_from_snapshots = 0
+    name_for_message = None
+
+    # 1) Delete from employees_v2 by exact id (keeps same-named duplicates)
+    v2_doc = await db.employees_v2.find_one({"id": employee_id}, {"_id": 0})
+    if v2_doc:
+        name_for_message = v2_doc.get("display_name") or v2_doc.get("name")
+        result = await db.employees_v2.delete_one({"id": employee_id})
+        deleted_v2 = result.deleted_count
+
+    # 2) Pull the matching embedded employee from every snapshot (again, by id)
+    snap_result = await db.snapshot_workflow.update_many(
+        {"employees.id": employee_id},
+        {"$pull": {"employees": {"id": employee_id}}}
+    )
+    pulled_from_snapshots = snap_result.modified_count
+
+    # 3) Nothing matched by id — treat employee_id as a name and delete one
+    # matching row from each source (case-insensitive exact match). This
+    # preserves legitimate other employees who happen to share the name.
+    if deleted_v2 == 0 and pulled_from_snapshots == 0:
+        name_pat = f"^{_re.escape(employee_id)}$"
+        v2_by_name = await db.employees_v2.find_one({
+            "$or": [
+                {"name": {"$regex": name_pat, "$options": "i"}},
+                {"display_name": {"$regex": name_pat, "$options": "i"}},
+                {"report_name": {"$regex": name_pat, "$options": "i"}},
+            ]
+        }, {"_id": 0, "id": 1, "name": 1, "display_name": 1})
+        if v2_by_name:
+            name_for_message = v2_by_name.get("display_name") or v2_by_name.get("name")
+            dr = await db.employees_v2.delete_one({"id": v2_by_name.get("id")})
+            deleted_v2 = dr.deleted_count
+            sr = await db.snapshot_workflow.update_many(
+                {"employees.id": v2_by_name.get("id")},
+                {"$pull": {"employees": {"id": v2_by_name.get("id")}}}
+            )
+            pulled_from_snapshots = sr.modified_count
+
+        if deleted_v2 == 0 and pulled_from_snapshots == 0:
+            raise HTTPException(status_code=404, detail="Employee not found")
+
+    return {
+        "success": True,
+        "message": f"Deleted {name_for_message or 'employee'}",
+        "deleted_from_employees_v2": deleted_v2,
+        "snapshots_updated": pulled_from_snapshots,
+    }
 
 
 

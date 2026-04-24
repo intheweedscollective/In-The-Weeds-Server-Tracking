@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "react-router-dom";
-import { Users, Search, Filter, Calendar, Plus, CheckSquare, XSquare, FileText } from "lucide-react";
+import { Users, Search, Filter, Calendar, Plus, CheckSquare, XSquare, FileText, Copy } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { getCurrentQuarter } from "../lib/quarterUtils";
@@ -225,6 +225,32 @@ export default function EmployeeList() {
     }
   };
 
+  // One-click remove duplicates from the active snapshot + employees_v2
+  const [dedupingNow, setDedupingNow] = useState(false);
+  const removeDuplicates = async () => {
+    setDedupingNow(true);
+    try {
+      const res = await api.post(
+        `/v2/snapshot-workflow/dedupe-current-snapshot?year=${selectedYear}&quarter=${selectedQuarter}`
+      );
+      const { removed_from_snapshot = 0, removed_from_employees_v2 = 0 } = res.data || {};
+      const total = removed_from_snapshot + removed_from_employees_v2;
+      if (total === 0) {
+        toast.info("No duplicates found");
+      } else {
+        toast.success(
+          `Removed ${removed_from_snapshot} from snapshot` +
+          (removed_from_employees_v2 ? ` · ${removed_from_employees_v2} from employees list` : "")
+        );
+      }
+      fetchEmployees();
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || "Failed to remove duplicates");
+    } finally {
+      setDedupingNow(false);
+    }
+  };
+
   // Modal handlers
   const openNewEmployeeModal = () => {
     setEditingEmployee(null);
@@ -408,6 +434,17 @@ export default function EmployeeList() {
               </h1>
             </div>
             <div className="flex items-center gap-2">
+              <Button
+                onClick={removeDuplicates}
+                variant="outline"
+                className="border-amber-600/50 text-amber-300 hover:bg-amber-600/10"
+                disabled={dedupingNow}
+                data-testid="remove-duplicates-btn"
+                title="Remove duplicate employee records from this quarter's snapshot and employees list"
+              >
+                <Copy className="w-4 h-4 mr-2" />
+                {dedupingNow ? "Removing..." : "Remove Duplicates"}
+              </Button>
               <Button
                 onClick={toggleSelectMode}
                 variant={selectMode ? "default" : "outline"}
