@@ -831,14 +831,17 @@ export default function DataUploads() {
                     </div>
                   )}
                   
-                  <div className="max-h-96 overflow-auto">
+                <div className="max-h-96 overflow-auto">
                     <table className="w-full text-xs">
                       <thead className="bg-slate-800/50 sticky top-0">
                         <tr className="text-slate-400">
                           <th className="text-left px-2 py-2 font-medium">Name</th>
                           <th className="text-right px-2 py-2 font-medium">Guests</th>
                           <th className="text-right px-2 py-2 font-medium">PPA</th>
-                          <th className="text-right px-2 py-2 font-medium">LBW</th>
+                          <th className="text-right px-2 py-2 font-medium text-amber-400">Liquor</th>
+                          <th className="text-right px-2 py-2 font-medium text-amber-300">Beer</th>
+                          <th className="text-right px-2 py-2 font-medium text-rose-300">Wine</th>
+                          <th className="text-right px-2 py-2 font-medium text-blue-300">LBW</th>
                           <th className="text-right px-2 py-2 font-medium">LSC</th>
                           <th className="text-right px-2 py-2 font-medium">Glass</th>
                           <th className="text-center px-2 py-2 font-medium">Edit</th>
@@ -856,6 +859,7 @@ export default function DataUploads() {
                                     value={editForm.guest_count}
                                     onChange={(e) => setEditForm({...editForm, guest_count: e.target.value})}
                                     className="w-16 bg-slate-700 border border-slate-600 rounded px-1 py-0.5 text-right text-white text-xs"
+                                    data-testid={`edit-guests-${idx}`}
                                   />
                                 </td>
                                 <td className="px-1 py-1">
@@ -865,9 +869,43 @@ export default function DataUploads() {
                                     value={editForm.ppa}
                                     onChange={(e) => setEditForm({...editForm, ppa: e.target.value})}
                                     className="w-20 bg-slate-700 border border-slate-600 rounded px-1 py-0.5 text-right text-white text-xs"
+                                    data-testid={`edit-ppa-${idx}`}
                                   />
                                 </td>
-                                <td className="px-1 py-1 text-right text-slate-400">
+                                <td className="px-1 py-1">
+                                  <input 
+                                    type="number" 
+                                    step="0.01"
+                                    value={editForm.liquor_sales}
+                                    onChange={(e) => setEditForm({...editForm, liquor_sales: e.target.value})}
+                                    className="w-20 bg-amber-900/30 border border-amber-700/50 rounded px-1 py-0.5 text-right text-amber-200 text-xs"
+                                    placeholder="Liquor"
+                                    data-testid={`edit-liquor-${idx}`}
+                                  />
+                                </td>
+                                <td className="px-1 py-1">
+                                  <input 
+                                    type="number" 
+                                    step="0.01"
+                                    value={editForm.beer_sales}
+                                    onChange={(e) => setEditForm({...editForm, beer_sales: e.target.value})}
+                                    className="w-20 bg-amber-900/30 border border-amber-700/50 rounded px-1 py-0.5 text-right text-amber-200 text-xs"
+                                    placeholder="Beer"
+                                    data-testid={`edit-beer-${idx}`}
+                                  />
+                                </td>
+                                <td className="px-1 py-1">
+                                  <input 
+                                    type="number" 
+                                    step="0.01"
+                                    value={editForm.wine_sales}
+                                    onChange={(e) => setEditForm({...editForm, wine_sales: e.target.value})}
+                                    className="w-20 bg-rose-900/30 border border-rose-700/50 rounded px-1 py-0.5 text-right text-rose-200 text-xs"
+                                    placeholder="Wine"
+                                    data-testid={`edit-wine-${idx}`}
+                                  />
+                                </td>
+                                <td className="px-1 py-1 text-right text-blue-300 font-semibold">
                                   ${((parseFloat(editForm.liquor_sales)||0) + (parseFloat(editForm.beer_sales)||0) + (parseFloat(editForm.wine_sales)||0)).toFixed(0)}
                                 </td>
                                 <td className="px-1 py-1">
@@ -890,7 +928,7 @@ export default function DataUploads() {
                                   />
                                 </td>
                                 <td className="px-1 py-1 text-center">
-                                  <button onClick={saveEditEmployee} className="text-green-400 hover:text-green-300 px-1">Save</button>
+                                  <button onClick={saveEditEmployee} className="text-green-400 hover:text-green-300 px-1" data-testid={`save-emp-${idx}`}>Save</button>
                                   <button onClick={cancelEditEmployee} className="text-slate-400 hover:text-slate-300 px-1">X</button>
                                 </td>
                               </>
@@ -899,7 +937,10 @@ export default function DataUploads() {
                                 <td className="px-2 py-2 text-white">{emp.name}</td>
                                 <td className="px-2 py-2 text-right">{emp.guest_count?.toLocaleString()}</td>
                                 <td className="px-2 py-2 text-right">${emp.ppa?.toFixed(2)}</td>
-                                <td className="px-2 py-2 text-right">${emp.lbw_total?.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+                                <td className="px-2 py-2 text-right text-amber-400">${(emp.liquor_sales || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+                                <td className="px-2 py-2 text-right text-amber-300">${(emp.beer_sales || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+                                <td className="px-2 py-2 text-right text-rose-300">${(emp.wine_sales || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+                                <td className="px-2 py-2 text-right text-blue-300 font-semibold">${(emp.lbw_total ?? ((emp.liquor_sales||0) + (emp.beer_sales||0) + (emp.wine_sales||0))).toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
                                 <td className={`px-2 py-2 text-right ${emp.loyalty_sales === 0 ? 'text-red-400' : 'text-green-400'}`}>
                                   ${emp.loyalty_sales?.toLocaleString(undefined, {maximumFractionDigits: 0})}
                                 </td>
@@ -908,6 +949,7 @@ export default function DataUploads() {
                                   <button 
                                     onClick={() => startEditEmployee(idx)}
                                     className="text-blue-400 hover:text-blue-300 text-xs underline"
+                                    data-testid={`edit-emp-btn-${idx}`}
                                   >
                                     Edit
                                   </button>
@@ -920,7 +962,7 @@ export default function DataUploads() {
                     </table>
                   </div>
                   <p className="text-xs text-slate-500 px-3 py-2 border-t border-slate-700/50">
-                    <span className="text-red-400">Red</span> = $0 (click Edit to fix). Loyalty = $25 per card (e.g., 2 cards = $50)
+                    <span className="text-red-400">Red</span> = $0 (click Edit to fix). LBW = Liquor + Beer + Wine (auto-calculated). Loyalty = $25 per card (e.g., 2 cards = $50)
                   </p>
                 </div>
               )}
