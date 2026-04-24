@@ -474,15 +474,21 @@ async def process_pdf_job(file_bytes: bytes, metadata: dict, job_id: str) -> dic
             if (not ppa or ppa == 0) and guest_count > 0 and net_sales > 0:
                 ppa = round(net_sales / guest_count, 2)
             
+            liquor_sales = safe_float(raw_data_fields.get("liquor_sales", 0))
+            beer_sales = safe_float(raw_data_fields.get("beer_sales", 0))
+            wine_sales = safe_float(raw_data_fields.get("wine_sales", 0))
+            lbw_total = liquor_sales + beer_sales + wine_sales
+
             formatted_employees.append({
                 "name": str(emp.get("name", "Unknown") or "Unknown"),
                 "guest_count": guest_count,
                 "net_sales": net_sales,
                 "ppa": ppa,
                 "food_sales": safe_float(raw_data_fields.get("food_sales", 0)),
-                "liquor_sales": safe_float(raw_data_fields.get("liquor_sales", 0)),
-                "beer_sales": safe_float(raw_data_fields.get("beer_sales", 0)),
-                "wine_sales": safe_float(raw_data_fields.get("wine_sales", 0)),
+                "liquor_sales": liquor_sales,
+                "beer_sales": beer_sales,
+                "wine_sales": wine_sales,
+                "lbw_total": lbw_total,
                 "bar_glassware_sales": safe_float(raw_data_fields.get("bar_glassware_sales", 0) or emp.get("bar_glassware_sales", 0)),
                 "loyalty_sales": safe_float(raw_data_fields.get("loyalty_sales", 0) or emp.get("loyalty_sales", 0)),
             })
@@ -502,7 +508,19 @@ async def process_pdf_job(file_bytes: bytes, metadata: dict, job_id: str) -> dic
 async def process_xlsx_job(file_bytes: bytes, metadata: dict, job_id: str) -> dict:
     """Process an XLSX file for POS data extraction."""
     from pos_ocr import extract_pos_data_from_xlsx, validate_extracted_data
-    
+
+    def safe_float(val, default=0):
+        try:
+            if val is None:
+                return default
+            f = float(val)
+            import math
+            if math.isnan(f) or math.isinf(f):
+                return default
+            return f
+        except (TypeError, ValueError):
+            return default
+
     try:
         await update_job_status(job_id, "processing", progress=70)
         
@@ -518,11 +536,30 @@ async def process_xlsx_job(file_bytes: bytes, metadata: dict, job_id: str) -> di
             }
         
         validated_data = validate_extracted_data(raw_data)
-        
+
+        # Flatten _raw fields to top-level and compute lbw_total so the preview
+        # UI (which displays emp.lbw_total / emp.liquor_sales etc.) works.
+        flattened = []
+        for emp in validated_data.get("employees", []):
+            raw = emp.get("_raw", {}) or {}
+            liquor = safe_float(raw.get("liquor_sales", 0) or emp.get("liquor_sales", 0))
+            beer = safe_float(raw.get("beer_sales", 0) or emp.get("beer_sales", 0))
+            wine = safe_float(raw.get("wine_sales", 0) or emp.get("wine_sales", 0))
+            flat = dict(emp)
+            flat["liquor_sales"] = liquor
+            flat["beer_sales"] = beer
+            flat["wine_sales"] = wine
+            flat["lbw_total"] = liquor + beer + wine
+            flat["food_sales"] = safe_float(raw.get("food_sales", 0) or emp.get("food_sales", 0))
+            flat["bar_glassware_sales"] = safe_float(
+                raw.get("bar_glassware_sales", 0) or emp.get("bar_glassware_sales", 0)
+            )
+            flattened.append(flat)
+
         return {
             "success": True,
-            "employees": validated_data.get("employees", []),
-            "total_extracted": len(validated_data.get("employees", [])),
+            "employees": flattened,
+            "total_extracted": len(flattened),
             "extraction_notes": validated_data.get("extraction_notes", "")
         }
         

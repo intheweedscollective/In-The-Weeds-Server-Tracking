@@ -11,6 +11,31 @@ Build a comprehensive performance review application for restaurant employees.
 
 ## Current State (2026-04-14)
 
+### Latest Changes (2026-02 Session)
+
+- **Snapshot Workflow Edits Not Persisting (FIXED 2026-02)**:
+  - Root cause 1: Master `PUT /v2/employees/{id}` only synced `name/title/tier/total_score`
+    back to `snapshot_workflow.employees` - metric edits (guests, liquor_sales, etc.) were
+    written to `employees_v2` but never to the snapshot. Since `EmployeeList` re-fetches
+    from `/v2/snapshot-workflow/current-rankings` (reads the snapshot), users saw stale
+    values and concluded "changes didn't save".
+  - Root cause 2: The snapshot-UUID fallback in the master PUT searched `employees_v2` by
+    name without filtering by the snapshot's quarter/year, matching a same-named
+    employee in a different quarter and syncing to the wrong snapshot.
+  - Fix: Sync ALL editable metric fields (ppa, lbw, liquor/beer/wine, glassware, guests,
+    scores, tiers, CV/RT fields) to the snapshot employee element, and filter the
+    name-fallback lookup by the originating snapshot's quarter/year.
+  - File: `/app/backend/server.py` `update_employee` (~lines 2346-2575).
+
+- **LBW Not Summing All Three Items on Data Upload (FIXED 2026-02)**:
+  - Root cause: `process_pdf_job` and `process_xlsx_job` in `/app/backend/routes/upload_jobs.py`
+    (used by `/api/v2/upload-jobs/direct`, the endpoint DataUploads.js hits for PDF/XLSX
+    parse+preview) did NOT include `lbw_total` in the response. The preview table
+    (`emp.lbw_total`) showed blank/undefined.
+  - Fix: Compute `lbw_total = liquor + beer + wine` and flatten `_raw` fields up to
+    top level in the job result. XLSX now also adds `safe_float` helper.
+
+
 ### Latest Changes
 - **Complete Rankings Slide Fix (2026-04-14)**:
   - Changed Complete Rankings to read from employees_v2 (dashboard) instead of snapshot_workflow

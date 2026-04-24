@@ -556,15 +556,13 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
     
     # Find current active snapshot
     snapshot = await db.snapshot_workflow.find_one(
-        {"is_current": True},
-        {"_id": 0}
+        {"is_current": True}
     )
     
     if not snapshot:
         # Fallback to most recent completed snapshot
         snapshot = await db.snapshot_workflow.find_one(
             {"status": "completed"},
-            {"_id": 0},
             sort=[("completed_at", -1)]
         )
     
@@ -578,7 +576,8 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
             detail="Cannot edit employees - snapshot is finalized. Reopen the snapshot first."
         )
     
-    snapshot_id = snapshot["id"]
+    snapshot_mongo_id = snapshot["_id"]
+    snapshot_id = snapshot.get("id", "")
     employees = snapshot.get("employees", [])
     
     # Find employee by ID, name, display_name, or report_name (with fuzzy matching)
@@ -722,9 +721,9 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
     # Re-assign tiers for all employees (since one employee's score change affects tiers)
     employees = assign_performance_tiers(employees)
     
-    # Update the snapshot
+    # Update the snapshot using MongoDB _id for reliable update
     await db.snapshot_workflow.update_one(
-        {"id": snapshot_id},
+        {"_id": snapshot_mongo_id},
         {
             "$set": {
                 "employees": employees,

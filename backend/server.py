@@ -2352,21 +2352,44 @@ async def update_employee(employee_id: str, data: dict):
     # Get existing employee - try by ID, then snapshot fallback searching name/report_name/display_name
     import re as re_mod
     emp_doc = await db.employees_v2.find_one({"id": employee_id})
+    snapshot_ctx = None  # Remember matched snapshot for precise sync later
     if not emp_doc:
-        snapshot = await db.snapshot_workflow.find_one(
+        snapshot_ctx = await db.snapshot_workflow.find_one(
             {"employees.id": employee_id},
-            {"employees.$": 1}
+            {"employees.$": 1, "quarter": 1, "year": 1, "id": 1}
         )
-        if snapshot and snapshot.get("employees"):
-            snap_name = snapshot["employees"][0].get("name", "")
+        if snapshot_ctx and snapshot_ctx.get("employees"):
+            snap_emp = snapshot_ctx["employees"][0]
+            snap_name = snap_emp.get("name", "")
+            snap_report = snap_emp.get("report_name", "") or snap_name
+            snap_display = snap_emp.get("display_name", "") or snap_name
+            snap_quarter = (snapshot_ctx.get("quarter") or "").upper()
+            snap_year = snapshot_ctx.get("year")
             if snap_name:
-                emp_doc = await db.employees_v2.find_one({
+                # Search only within the same quarter/year to avoid hitting a
+                # same-named employee from a different quarter.
+                name_query = {
                     "$or": [
-                        {"name": {"$regex": f"^{re_mod.escape(snap_name)}$", "$options": "i"}},
-                        {"report_name": {"$regex": f"^{re_mod.escape(snap_name)}$", "$options": "i"}},
-                        {"display_name": {"$regex": f"^{re_mod.escape(snap_name)}$", "$options": "i"}},
+                        {"name": {"$regex": f"^{re_mod.escape(n)}$", "$options": "i"}}
+                        for n in {snap_name, snap_report, snap_display} if n
+                    ] + [
+                        {"report_name": {"$regex": f"^{re_mod.escape(n)}$", "$options": "i"}}
+                        for n in {snap_name, snap_report, snap_display} if n
+                    ] + [
+                        {"display_name": {"$regex": f"^{re_mod.escape(n)}$", "$options": "i"}}
+                        for n in {snap_name, snap_report, snap_display} if n
                     ]
-                })
+                }
+                if snap_quarter and snap_year:
+                    name_query["quarter"] = snap_quarter
+                    name_query["year"] = snap_year
+                emp_doc = await db.employees_v2.find_one(name_query)
+                # Final fallback across quarters (very rare)
+                if not emp_doc and snap_quarter:
+                    fallback_query = dict(name_query)
+                    fallback_query.pop("quarter", None)
+                    fallback_query.pop("year", None)
+                    emp_doc = await db.employees_v2.find_one(fallback_query)
         if not emp_doc:
             raise HTTPException(status_code=404, detail="Employee not found")
     
@@ -2500,29 +2523,78 @@ async def update_employee(employee_id: str, data: dict):
         {"$set": update_fields}
     )
     
-    # Also update the snapshot to keep names in sync
+    # Also update the snapshot to keep ALL fields in sync so that re-fetches
+    # from /v2/snapshot-workflow/current-rankings reflect user edits.
     display = update_fields.get('display_name') or update_fields.get('name')
+
+    # Build a complete snapshot-employee sync payload from ALL updated fields
+    # (not just name/tier). Metrics edited in Employee List must persist in the
+    # snapshot or users see old values on re-fetch.
+    SNAP_SYNCABLE = {
+        "name", "display_name", "report_name", "job_title", "tier_label",
+        "guests", "guest_count", "net_sales",
+        "liquor_sales", "beer_sales", "wine_sales", "lbw", "lbw_total",
+        "glassware_sales", "bar_glassware_sales",
+        "loyalty_sales", "lsc_count",
+        "ppa", "lbw_per_guest", "glassware_per_guest", "guests_per_lsc",
+        "score_ppa", "score_lbw", "score_glass", "score_lsc",
+        "weighted_score", "total_score", "pre_dar_score",
+        "cv_promoters", "cv_passives", "cv_detractors", "cv_score",
+        "nps_score", "nps_score_pts", "cv_raw_points",
+        "rt_mentions", "review_tracker_bonus",
+        "total_metric_bonus", "aliases",
+    }
+    snap_update = {}
+    for k, v in update_fields.items():
+        if k in SNAP_SYNCABLE:
+            snap_update[f"employees.$.{k}"] = v
+    # Keep name and display_name aligned in the snapshot too
     if display:
-        # Update snapshot employee by both possible IDs
-        snap_update = {"employees.$.name": display, "employees.$.display_name": display}
-        if update_fields.get('job_title'):
-            snap_update["employees.$.job_title"] = update_fields['job_title']
-        if update_fields.get('tier_label'):
-            snap_update["employees.$.tier_label"] = update_fields['tier_label']
-        if update_fields.get('total_score'):
-            snap_update["employees.$.total_score"] = update_fields['total_score']
-            snap_update["employees.$.pre_dar_score"] = update_fields.get('pre_dar_score', update_fields['total_score'])
-        
-        quarter = emp_doc.get('quarter', 'Q2')
-        year = emp_doc.get('year', 2026)
+        snap_update["employees.$.name"] = display
+        snap_update["employees.$.display_name"] = display
+
+    if snap_update:
+        # Prefer the snapshot_ctx quarter/year when the request originated from
+        # a snapshot UUID - otherwise use the employees_v2 quarter/year.
+        if snapshot_ctx:
+            quarter = (snapshot_ctx.get('quarter') or emp_doc.get('quarter', 'Q2')).upper()
+            year = snapshot_ctx.get('year') or emp_doc.get('year', 2026)
+        else:
+            quarter = (emp_doc.get('quarter') or 'Q2').upper()
+            year = emp_doc.get('year', 2026)
         actual_id = emp_doc.get('id', employee_id)
-        
+
         # Try both IDs (employees_v2 ID and the original request ID which may be snapshot ID)
+        updated_any = False
         for eid in set([actual_id, employee_id]):
-            await db.snapshot_workflow.update_many(
+            result = await db.snapshot_workflow.update_many(
                 {"quarter": quarter, "year": year, "employees.id": eid},
                 {"$set": snap_update}
             )
+            if result.modified_count > 0:
+                updated_any = True
+
+        # Fallback: match snapshot employee by name if ID lookup didn't update
+        # anything (snapshot employees often have different UUIDs). Use
+        # arrayFilters to unambiguously target the right embedded element.
+        if not updated_any:
+            match_name = emp_doc.get('report_name') or emp_doc.get('name') or display
+            if match_name:
+                import re as _re
+                name_pat = f"^{_re.escape(match_name)}$"
+                af_snap_update = {f"employees.$[e].{k.split('.')[-1]}": v
+                                  for k, v in snap_update.items()}
+                await db.snapshot_workflow.update_many(
+                    {"quarter": quarter, "year": year},
+                    {"$set": af_snap_update},
+                    array_filters=[{
+                        "$or": [
+                            {"e.name": {"$regex": name_pat, "$options": "i"}},
+                            {"e.report_name": {"$regex": name_pat, "$options": "i"}},
+                            {"e.display_name": {"$regex": name_pat, "$options": "i"}},
+                        ]
+                    }],
+                )
     
     name = update_fields.get('display_name') or update_fields.get('name') or emp_doc.get('display_name') or emp_doc.get('name', '')
     
