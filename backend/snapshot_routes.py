@@ -2538,24 +2538,50 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
     
     # Defensive dedupe: guarantee unique employees by display_name so the
     # Employees tab never shows duplicates even if upstream data drifted.
+    # Also catches nickname/formal-name pairs (Abby/Abigail) that share
+    # identical net_sales+ppa — a strong signal they're the same person.
     out = list(employees.values())
     seen = {}
-    for emp in out:
-        key = (
-            (emp.get("display_name") or emp.get("name") or emp.get("report_name") or "")
+    fuzzy_map = {}  # (first_char, last_token, net_sales, ppa) -> primary key
+
+    def _name_of(e):
+        return (
+            (e.get("display_name") or e.get("name") or e.get("report_name") or "")
             .strip()
             .lower()
         )
+
+    def _fuzzy_of(e):
+        full = _name_of(e)
+        parts = full.split()
+        if len(parts) < 2:
+            return None
+        return (
+            parts[0][0],
+            parts[-1],
+            round(float(e.get("net_sales") or 0), 2),
+            round(float(e.get("ppa") or 0), 2),
+        )
+
+    for emp in out:
+        key = _name_of(emp)
         if not key:
             continue
+        fk = _fuzzy_of(emp)
+        if fk and fk in fuzzy_map and fuzzy_map[fk] != key:
+            key = fuzzy_map[fk]
         existing = seen.get(key)
         if existing is None:
             seen[key] = emp
+            if fk:
+                fuzzy_map[fk] = key
         else:
             existing_score = existing.get("total_score") or existing.get("pre_dar_score") or 0
             new_score = emp.get("total_score") or emp.get("pre_dar_score") or 0
             if new_score > existing_score:
                 seen[key] = emp
+            if fk and fk not in fuzzy_map:
+                fuzzy_map[fk] = key
     return list(seen.values())
 
 
@@ -2909,28 +2935,60 @@ async def dedupe_current_snapshot(year: int = 2026, quarter: str = "Q1"):
 
     employees = snapshot.get("employees", []) or []
 
-    def key_for(e):
+    def name_key(e):
+        """Primary exact-match key: lowercased display_name/name/report_name."""
         for f in ("display_name", "name", "report_name"):
             v = (e.get(f) or "").strip().lower()
             if v:
                 return v
         return None
 
+    def fuzzy_key(e):
+        """
+        Secondary semantic key to catch same-person-different-spelling dupes
+        like 'Abby Ostrowski' vs 'Abigail Ostrowski'. Uses (first char of
+        first name, last token) which groups common nickname pairs.
+        Requires that net_sales + ppa also match exactly to avoid false
+        positives on coincidentally similar names.
+        """
+        full = (e.get("display_name") or e.get("name") or e.get("report_name") or "").strip().lower()
+        if not full:
+            return None
+        parts = full.split()
+        if len(parts) < 2:
+            return None
+        first_char = parts[0][0]
+        last_token = parts[-1]
+        ns = e.get("net_sales") or 0
+        ppa = e.get("ppa") or 0
+        return (first_char, last_token, round(float(ns), 2), round(float(ppa), 2))
+
     best = {}
     order = []
+    secondary = {}  # fuzzy_key -> primary key
     for emp in employees:
-        k = key_for(emp)
+        k = name_key(emp)
         if not k:
             continue
+        # Check fuzzy duplicate first (redirects to the already-seen primary key)
+        fk = fuzzy_key(emp)
+        if fk and fk in secondary and secondary[fk] != k:
+            # This row is a semantic dup of an already-seen primary key.
+            k = secondary[fk]
         score = emp.get("total_score") or emp.get("pre_dar_score") or 0
         current = best.get(k)
         if current is None:
             best[k] = emp
             order.append(k)
+            if fk:
+                secondary[fk] = k
         else:
             current_score = current.get("total_score") or current.get("pre_dar_score") or 0
             if score > current_score:
+                # Preserve which primary key this fuzzy group anchors on
                 best[k] = emp
+            if fk and fk not in secondary:
+                secondary[fk] = k
 
     deduped = [best[k] for k in order]
     removed_snapshot = len(employees) - len(deduped)
@@ -2953,21 +3011,33 @@ async def dedupe_current_snapshot(year: int = 2026, quarter: str = "Q1"):
 
     v2_best = {}
     v2_order = []
+    v2_secondary = {}
     for emp in v2_emps:
-        k = key_for(emp)
+        k = name_key(emp)
         if not k:
             continue
-        score = emp.get("total_score") or emp.get("pre_dar_score") or 0
+        fk = fuzzy_key(emp)
+        if fk and fk in v2_secondary and v2_secondary[fk] != k:
+            k = v2_secondary[fk]
         if k not in v2_best:
             v2_best[k] = emp
             v2_order.append(k)
+            if fk:
+                v2_secondary[fk] = k
         else:
-            if score > (v2_best[k].get("total_score") or v2_best[k].get("pre_dar_score") or 0):
+            if (emp.get("total_score") or emp.get("pre_dar_score") or 0) > (
+                v2_best[k].get("total_score") or v2_best[k].get("pre_dar_score") or 0
+            ):
                 v2_best[k] = emp
+            if fk and fk not in v2_secondary:
+                v2_secondary[fk] = k
 
     # Identify ids to delete = all v2 emps whose id is not the "winner"
     winners_ids = {v2_best[k].get("id") for k in v2_order if v2_best[k].get("id")}
-    ids_to_delete = [e.get("id") for e in v2_emps if e.get("id") and e.get("id") not in winners_ids and key_for(e) in v2_best]
+    ids_to_delete = [
+        e.get("id") for e in v2_emps
+        if e.get("id") and e.get("id") not in winners_ids
+    ]
 
     removed_v2 = 0
     if ids_to_delete:
