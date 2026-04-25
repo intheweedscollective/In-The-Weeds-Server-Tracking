@@ -2296,14 +2296,36 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                 first_name_lower = name_lower.split()[0] if name_lower else ""
                 existing_emp = (existing_employees.get(name_lower) or 
                                existing_employees.get(first_name_lower))
-                
-                # Extract raw values
-                guest_count = emp_data.get("guest_count", 0) or 0
-                liquor_sales = emp_data.get("liquor_sales", 0) or 0
-                beer_sales = emp_data.get("beer_sales", 0) or 0
-                wine_sales = emp_data.get("wine_sales", 0) or 0
-                glassware_sales = emp_data.get("glassware_sales", 0) or emp_data.get("bar_glassware_sales", 0) or 0
-                loyalty_sales = emp_data.get("loyalty_sales", 0) or 0
+
+                # USER-EDIT PROTECTION
+                # If a row already exists in the snapshot (i.e. the user has
+                # edited it via the live-edit table or the Employees tab),
+                # PREFER the user's value over the raw POS upload value for
+                # every editable metric. Without this, clicking "Save Snapshot"
+                # would overwrite all manual corrections with the original
+                # parsed POS values.
+                def pick(field, default=0):
+                    if existing_emp is not None and existing_emp.get(field) not in (None, "", 0):
+                        return existing_emp.get(field)
+                    val = emp_data.get(field, default)
+                    return val if val is not None else default
+
+                # Allow zero-as-edit only when the user explicitly set 0
+                # (e.g. lsc_count=0). We track this separately so we don't
+                # spuriously preserve missing fields from old snapshots.
+                def pick_allow_zero(field, default=0):
+                    if existing_emp is not None and field in existing_emp:
+                        return existing_emp.get(field) if existing_emp.get(field) is not None else default
+                    val = emp_data.get(field, default)
+                    return val if val is not None else default
+
+                # Extract raw values, preferring existing edits
+                guest_count = pick("guest_count") or pick("guests") or 0
+                liquor_sales = pick("liquor_sales")
+                beer_sales = pick("beer_sales")
+                wine_sales = pick("wine_sales")
+                glassware_sales = pick("bar_glassware_sales") or pick("glassware_sales")
+                loyalty_sales = pick_allow_zero("loyalty_sales")
                 
                 # ALWAYS recalculate LBW from components (don't trust pre-calculated value)
                 lbw_total = liquor_sales + beer_sales + wine_sales
@@ -2353,19 +2375,20 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                     "name": display_name,  # Show display name
                     "display_name": display_name,
                     "report_name": report_name,  # Full POS name for matching
+                    "aliases": existing_emp.get("aliases", []) if existing_emp else [],
                     "quarter": snapshot.get("quarter"),
                     "year": snapshot.get("year"),
                     "job_title": job_title,
                     "guests": guest_count,
                     "guest_count": guest_count,
-                    "net_sales": emp_data.get("net_sales", 0),
-                    "ppa": emp_data.get("ppa", 0),
+                    "net_sales": pick("net_sales"),
+                    "ppa": pick("ppa"),
                     "lbw_per_guest": lbw_per_guest,
                     "glassware_per_guest": glassware_per_guest,
                     "guests_per_lsc": guests_per_lsc,
                     "lsc_count": lsc_count,
                     "loyalty_sales": loyalty_sales,
-                    "food_sales": emp_data.get("food_sales", 0),
+                    "food_sales": pick("food_sales"),
                     "liquor_sales": liquor_sales,
                     "beer_sales": beer_sales,
                     "wine_sales": wine_sales,
