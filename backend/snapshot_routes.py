@@ -896,9 +896,13 @@ async def rebuild_snapshot_from_pos():
         
         emp = {
             "id": existing.get("id") or str(uuid.uuid4()),
-            "name": first_name,
-            "display_name": first_name,
-            "report_name": full_name,
+            # Preserve any user-edited display_name/aliases from a previous
+            # snapshot pass; only fall back to derived names when the existing
+            # record didn't override them.
+            "name": existing.get("name") or first_name,
+            "display_name": existing.get("display_name") or first_name,
+            "report_name": existing.get("report_name") or full_name,
+            "aliases": existing.get("aliases") or [],
             "job_title": existing.get("job_title") or "Server",
             "quarter": snapshot.get("quarter"),
             "year": snapshot.get("year"),

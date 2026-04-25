@@ -2349,10 +2349,14 @@ async def update_employee(employee_id: str, data: dict):
     Update an existing employee. Accepts any fields and persists them directly.
     Recalculates scores if POS data fields are provided.
     """
-    # Get existing employee - try by ID, then snapshot fallback searching name/report_name/display_name
+    # Get existing employee - try by ID, then snapshot fallback searching name/report_name/display_name.
+    # Final fallback: if a snapshot embedded record exists but no v2 record matches it
+    # (orphan snapshot row from a previous partial save), CREATE a v2 record from the snap data
+    # so the user's edit always succeeds — instead of 404'ing.
     import re as re_mod
     emp_doc = await db.employees_v2.find_one({"id": employee_id})
     snapshot_ctx = None  # Remember matched snapshot for precise sync later
+    snap_emp_clone = None  # Used when we need to create a v2 record from snapshot data
     if not emp_doc:
         snapshot_ctx = await db.snapshot_workflow.find_one(
             {"employees.id": employee_id},
@@ -2363,33 +2367,53 @@ async def update_employee(employee_id: str, data: dict):
             snap_name = snap_emp.get("name", "")
             snap_report = snap_emp.get("report_name", "") or snap_name
             snap_display = snap_emp.get("display_name", "") or snap_name
+            snap_aliases = snap_emp.get("aliases") or []
             snap_quarter = (snapshot_ctx.get("quarter") or "").upper()
             snap_year = snapshot_ctx.get("year")
-            if snap_name:
-                # Search only within the same quarter/year to avoid hitting a
-                # same-named employee from a different quarter.
+
+            # Build candidate name set: includes any aliases stored on the snap row
+            candidates = {n for n in [snap_name, snap_report, snap_display] if n}
+            for a in snap_aliases:
+                if isinstance(a, str) and a.strip():
+                    candidates.add(a.strip())
+
+            if candidates:
                 name_query = {
-                    "$or": [
-                        {"name": {"$regex": f"^{re_mod.escape(n)}$", "$options": "i"}}
-                        for n in {snap_name, snap_report, snap_display} if n
-                    ] + [
-                        {"report_name": {"$regex": f"^{re_mod.escape(n)}$", "$options": "i"}}
-                        for n in {snap_name, snap_report, snap_display} if n
-                    ] + [
-                        {"display_name": {"$regex": f"^{re_mod.escape(n)}$", "$options": "i"}}
-                        for n in {snap_name, snap_report, snap_display} if n
-                    ]
+                    "$or": (
+                        [{"name": {"$regex": f"^{re_mod.escape(n)}$", "$options": "i"}} for n in candidates] +
+                        [{"report_name": {"$regex": f"^{re_mod.escape(n)}$", "$options": "i"}} for n in candidates] +
+                        [{"display_name": {"$regex": f"^{re_mod.escape(n)}$", "$options": "i"}} for n in candidates] +
+                        [{"aliases": {"$elemMatch": {"$regex": f"^{re_mod.escape(n)}$", "$options": "i"}}} for n in candidates]
+                    )
                 }
                 if snap_quarter and snap_year:
                     name_query["quarter"] = snap_quarter
                     name_query["year"] = snap_year
                 emp_doc = await db.employees_v2.find_one(name_query)
-                # Final fallback across quarters (very rare)
+
+                # Cross-quarter fallback (very rare)
                 if not emp_doc and snap_quarter:
                     fallback_query = dict(name_query)
                     fallback_query.pop("quarter", None)
                     fallback_query.pop("year", None)
                     emp_doc = await db.employees_v2.find_one(fallback_query)
+
+            # ORPHAN ROW RECOVERY: snapshot has the employee but no v2 link
+            # exists — happens when someone renames an employee in a way that
+            # makes the snapshot and v2 names diverge with no overlap. Create
+            # a v2 record on-the-fly from the snapshot data so the edit
+            # succeeds. The snapshot sync below will keep everything aligned.
+            if not emp_doc:
+                snap_emp_clone = {k: v for k, v in snap_emp.items() if k != "_id"}
+                snap_emp_clone["id"] = employee_id
+                snap_emp_clone["quarter"] = snap_quarter or "Q2"
+                snap_emp_clone["year"] = snap_year or 2026
+                snap_emp_clone["created_at"] = datetime.now(timezone.utc).isoformat()
+                snap_emp_clone["updated_at"] = snap_emp_clone["created_at"]
+                # Insert (will mutate dict to add _id)
+                await db.employees_v2.insert_one(snap_emp_clone)
+                emp_doc = snap_emp_clone
+
         if not emp_doc:
             raise HTTPException(status_code=404, detail="Employee not found")
     
@@ -2564,9 +2588,14 @@ async def update_employee(employee_id: str, data: dict):
             year = emp_doc.get('year', 2026)
         actual_id = emp_doc.get('id', employee_id)
 
-        # Try both IDs (employees_v2 ID and the original request ID which may be snapshot ID)
+        # Try BOTH IDs (employees_v2 ID and the original request ID which may
+        # be a snapshot UUID). When the snapshot row was orphaned, the only
+        # way to update it is by the original request ID — using actual_id
+        # alone would miss it.
         updated_any = False
-        for eid in set([actual_id, employee_id]):
+        for eid in {actual_id, employee_id}:
+            if not eid:
+                continue
             result = await db.snapshot_workflow.update_many(
                 {"quarter": quarter, "year": year, "employees.id": eid},
                 {"$set": snap_update}
