@@ -1,0 +1,60 @@
+{
+  "summary": "Iteration 22 testing complete. All 8 backend tests PASSED (orphan PUT recovery, targeted DELETE, fuzzy nickname dedup, QR TripAdvisor stats/settings/track, CV adjustment XLSX upload, snapshot rebuild display_name preservation). All 3 frontend feature checks PASSED (sidebar 'Snapshots' removed but route still works, /uploads has Quick-Edit banner + SnapshotLiveEdit table, /cv-adjustment honors ?quarter=Q2&year=2026 URL params).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "All pages", "issues": ["Onboarding modal ('Welcome to Performance Review' Step 1 of 7) appears on every page visit and overlaps content (CV Adjustment Period selector partly hidden behind modal). Carry-over from prior iterations - dismissal not persisted."]}
+    ]
+  },
+  "passed_tests": [
+    "PUT /api/v2/employees/{orphan-uuid} -> 200, employees_v2 row created via orphan recovery, display_name='Orphan Display' set, job_title='Server' retained, report_name preserved",
+    "DELETE /api/v2/employees/{id} -> targets specific id_a, leaves duplicate id_b with same name 'TestDup' intact",
+    "POST /api/v2/snapshot-workflow/dedupe-current-snapshot?year=2026&quarter=Q1 -> 200, fuzzy merges 'Abigail Test'/'Abby Test' nickname pair",
+    "GET /api/qr/stats includes tripadvisor_scans field",
+    "GET /api/qr/settings includes tripadvisor_url field",
+    "POST /api/qr/employees creates emp with tripadvisor_clicks=0; GET /api/qr/ta/{id} tracks scan and increments tripadvisor_clicks",
+    "POST /api/v2/cv/adjustment/upload?quarter=Q2&year=2026 with XLSX -> 200, returns session_id + feedback_items",
+    "Snapshot rebuild via sync-from-employees preserves display_name='Test Renamed' on employees_v2 with override",
+    "Sidebar contains 'Snapshot Workflow' but no standalone 'Snapshots' entry",
+    "Direct visit to /snapshots route still renders (deep-link preserved)",
+    "/uploads page shows 'Quick-Edit & Re-Upload Mode' banner and SnapshotLiveEdit table at top (4 employees visible for Q2 2026)",
+    "/cv-adjustment?quarter=Q2&year=2026 -> Period selector with Q2 + 2026 selected (data-testid=cv-quarter-select / cv-year-select)"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_22_features.py",
+    "/app/test_reports/pytest/iteration_22_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL (carry-over): Add persistence (localStorage flag) for the onboarding 'Welcome to Performance Review' modal so it doesn't appear on every page load. Currently overlays /cv-adjustment Period selector and other key UI."
+  ],
+  "critical_code_review_comments": [
+    "PUT /v2/employees orphan-recovery flow correctly clones snapshot row to employees_v2 and persists display_name/job_title while preserving report_name as the original POS-derived name",
+    "DELETE /v2/employees correctly uses id-based matching (not name), preserving same-name duplicates - matches stated behavior in review request",
+    "QR TripAdvisor wiring complete: stats, settings, and per-employee tracking endpoints all functional; tripadvisor_clicks default 0 backfill works",
+    "CV adjustment XLSX upload accepts .xlsx multipart with quarter/year query params and returns full session payload",
+    "Snapshot sync-from-employees preserves display_name override - confirmed via DB inspection after rebuild",
+    "Frontend SidebarLayout.jsx (line 38) keeps 'Snapshot Workflow' nav item; standalone 'Snapshots' is correctly absent from the navGroups array",
+    "DataUploads.js renders <SnapshotLiveEdit /> at top with the new amber 'Quick-Edit & Re-Upload Mode' banner above it",
+    "CVAdjustment.js correctly initializes quarter/year state from useSearchParams() with getCurrentQuarter() fallback - verified Q2/2026 from URL"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_22_features.py"
+  ],
+  "success_rate": {
+    "backend": "100% (8/8 tests passed)",
+    "frontend": "100% (3/3 feature checks passed)"
+  },
+  "seed_data_creation": "Test data injected and cleaned up automatically: orphan-test-* row in active snapshot (Q2 2026, snapshot_workflow collection), 2x TestDup rows, Abigail Test/Abby Test pair, persist-test-* employees_v2 doc. All cleanup ran in fixture finally blocks.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Active snapshot for Q2 2026 lives in 'snapshot_workflow' collection (id=72030efa-..., is_current=False, status=in_progress, has embedded employees array). Q1 2026 snapshot lives in 'snapshots' collection. The fixture in test_iteration_22_features.py probes both collections in order: snapshot_workflow -> snapshots -> snapshots_v2. /tmp/ssd.pdf is NOT present so native_pdf parser test was correctly skipped per review-request instructions. Backend URL: https://staff-score-engine.preview.emergentagent.com. Onboarding modal is the only carry-over UX issue across all pages.",
+  "test_credentials": "N/A - all endpoints are open (no auth)",
+  "skipped_tests": [
+    "POS PDF native parser (/api/v2/upload-jobs/direct with extraction_method='native_pdf') - skipped because /tmp/ssd.pdf does not exist in the preview environment, per review request fallback instruction"
+  ]
+}
