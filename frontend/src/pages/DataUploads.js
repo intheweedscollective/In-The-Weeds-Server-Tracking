@@ -5,6 +5,7 @@ import api from "../lib/api";
 import { getCurrentQuarter } from "../lib/quarterUtils";
 import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import SnapshotLiveEdit from "../components/SnapshotLiveEdit";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -624,7 +625,7 @@ export default function DataUploads() {
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-xl md:text-3xl font-bold text-white mb-1 md:mb-2">Data Uploads</h1>
-          <p className="text-sm md:text-base text-slate-400">Upload your data files to calculate employee scores</p>
+          <p className="text-sm md:text-base text-slate-400">Quick-edit & re-upload view of the active snapshot</p>
         </div>
 
         {/* Quarter Selector - Stack on mobile */}
@@ -678,22 +679,26 @@ export default function DataUploads() {
           </div>
         </div>
 
-        {/* Upload Order Guide - Compact on mobile */}
-        <div className="mb-4 md:mb-6 p-3 md:p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
+        {/* Quick-Edit Mode Banner */}
+        <div className="mb-4 md:mb-6 p-3 md:p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl">
           <div className="flex items-start gap-2 md:gap-3">
-            <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-blue-400 mt-0.5 shrink-0" />
-            <div>
-              <h4 className="font-medium text-blue-400 text-sm mb-1">How It Works</h4>
-              <p className="text-xs md:text-sm text-slate-300 mb-2">
-                Uploads update the <strong>Dashboard</strong> immediately. Create a <strong>Snapshot</strong> to capture point-in-time data for reports.
+            <AlertTriangle className="w-4 h-4 md:w-5 md:h-5 text-amber-400 mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <h4 className="font-medium text-amber-300 text-sm mb-1">Quick-Edit & Re-Upload Mode</h4>
+              <p className="text-xs md:text-sm text-slate-300">
+                This page is for <strong>spot-fixing parsed data</strong> and <strong>re-uploading individual files</strong> when one came in wrong.
+                For a brand-new quarter, start a <a href="/snapshot-workflow" className="text-blue-400 hover:underline font-medium">Snapshot Workflow</a> instead — that's the canonical "new ingest" path.
               </p>
-              <ol className="text-xs md:text-sm text-slate-400 space-y-0.5 list-decimal list-inside">
-                <li><strong className="text-white">POS</strong> - Employee metrics (PPA, LBW, LSC, Glass)</li>
-                <li><strong className="text-white">CV/NPS</strong> - Customer Voice scores</li>
-                <li><strong className="text-white">RT</strong> - Review mention bonuses</li>
-              </ol>
+              <p className="text-xs text-slate-400 mt-2">
+                Re-uploading replaces existing data for {quarter} {year}. Edits made on the table below save directly to the active snapshot.
+              </p>
             </div>
           </div>
+        </div>
+
+        {/* Live Snapshot Edit — primary content of this page */}
+        <div className="mb-4 md:mb-6">
+          <SnapshotLiveEdit quarter={quarter} year={year} />
         </div>
 
         {/* Upload Cards */}
@@ -706,7 +711,7 @@ export default function DataUploads() {
                   <FileText className="w-5 h-5 text-blue-400" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-white text-sm md:text-base">1. POS Data (Scanned PDF)</h3>
+                  <h3 className="font-semibold text-white text-sm md:text-base">Re-upload POS (Scanned PDF)</h3>
                   <p className="text-slate-400 text-xs md:text-sm">Server Sales Report PDFs with automatic OCR error correction</p>
                 </div>
               </div>
@@ -977,7 +982,7 @@ export default function DataUploads() {
                   <FileSpreadsheet className="w-5 h-5 text-blue-400" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-white text-sm md:text-base">1b. POS Data (Excel)</h3>
+                  <h3 className="font-semibold text-white text-sm md:text-base">Re-upload POS (Excel)</h3>
                   <p className="text-slate-400 text-xs md:text-sm">Server Sales Report XLSX - auto-calculates PPA, LBW, Glass, LSC</p>
                 </div>
               </div>
@@ -1055,7 +1060,7 @@ export default function DataUploads() {
                     <MessageSquare className="w-5 h-5 text-green-400" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-white text-sm md:text-base">2. Customer Voice / NPS</h3>
+                    <h3 className="font-semibold text-white text-sm md:text-base">Re-upload Customer Voice / NPS</h3>
                     <p className="text-slate-400 text-xs md:text-sm">Server Performance Report from Loyalty Voice</p>
                   </div>
                 </div>
@@ -1153,7 +1158,7 @@ export default function DataUploads() {
 
           {/* ReviewTracker Upload */}
           <UploadCard
-            title="3. ReviewTracker (Public Reviews)"
+            title="Re-upload ReviewTracker (Public Reviews)"
             description="Raw review export - AI scans for employee name mentions"
             icon={Star}
             file={rtFile}
