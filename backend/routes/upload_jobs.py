@@ -7,7 +7,7 @@ Jobs are stored in MongoDB for persistence across restarts.
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 from datetime import datetime, timezone, timedelta
-from typing import Optional
+from typing import Optional, Any
 import asyncio
 import uuid
 import base64
@@ -438,10 +438,55 @@ async def process_pdf_job(file_bytes: bytes, metadata: dict, job_id: str) -> dic
     
     try:
         await update_job_status(job_id, "processing", progress=65)
-        
-        # Extract data from PDF
-        raw_data = await extract_pos_data_from_pdf(file_bytes)
-        
+
+        # Try the deterministic native PDF parser FIRST. It works on any
+        # digitally-generated POS report and is dramatically more accurate
+        # than the AI OCR pipeline for those (no hallucinations, no kerning
+        # mistakes). Falls back to AI OCR only when the PDF is image-only or
+        # the native parser yields no usable data.
+        raw_data: dict[str, Any]
+        used_native = False
+        try:
+            from native_pos_parser import (
+                extract_pos_data_from_pdf_bytes_native,
+                is_pdf_native_extractable,
+            )
+            if is_pdf_native_extractable(file_bytes):
+                native = extract_pos_data_from_pdf_bytes_native(file_bytes)
+                if native.get("success") and native.get("employees"):
+                    # Re-shape into the dict the legacy validator expects.
+                    # The validator reads top-level fields, NOT _raw, so we
+                    # put metric fields at the top level too.
+                    raw_data = {
+                        "employees": [
+                            {
+                                "name": e["name"],
+                                "guest_count": e["guest_count"],
+                                "net_sales": e["net_sales"],
+                                "ppa": e["ppa"],
+                                "food_sales": e["food_sales"],
+                                "liquor_sales": e["liquor_sales"],
+                                "beer_sales": e["beer_sales"],
+                                "wine_sales": e["wine_sales"],
+                                "bar_glassware_sales": e["bar_glassware_sales"],
+                                "loyalty_sales": e["loyalty_sales"],
+                            }
+                            for e in native["employees"]
+                        ],
+                        "extraction_notes": native.get("extraction_notes", ""),
+                        "extraction_method": "native_pdf",
+                    }
+                    used_native = True
+                    logger.info(
+                        f"Native PDF parser extracted {len(native['employees'])} employees"
+                    )
+        except Exception as e:
+            logger.warning(f"Native parser failed, falling back to AI OCR: {e}")
+
+        # AI OCR fallback (image-only PDFs or native parser failed)
+        if not used_native:
+            raw_data = await extract_pos_data_from_pdf(file_bytes)
+
         await update_job_status(job_id, "processing", progress=80)
         
         if "error" in raw_data and not raw_data.get("employees"):
