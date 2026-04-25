@@ -11,6 +11,7 @@ import {
   FileSpreadsheet, Filter, ThumbsUp, ThumbsDown, Minus,
   ChevronDown, ChevronUp, Info, ArrowLeft, Send
 } from 'lucide-react';
+import { getCurrentQuarter } from '../lib/quarterUtils';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -55,14 +56,24 @@ export default function CVAdjustment() {
   const [expandedItems, setExpandedItems] = useState(new Set());
   const [sessions, setSessions] = useState([]);
   const [employees, setEmployees] = useState([]);
-  
-  const quarter = 'Q1';
-  const year = 2026;
+
+  // Quarter/year are derived from URL query params (when launched from a
+  // snapshot) or fall back to the current calendar quarter. The previous
+  // hardcoded `Q1 2026` meant uploads from any other quarter silently filed
+  // under the wrong period and never showed up in the active snapshot.
+  const [quarter, setQuarter] = useState(() => {
+    return (searchParams.get('quarter') || getCurrentQuarter().quarter || 'Q1').toUpperCase();
+  });
+  const [year, setYear] = useState(() => {
+    const y = searchParams.get('year');
+    return y ? parseInt(y, 10) : (getCurrentQuarter().year || new Date().getFullYear());
+  });
 
   useEffect(() => {
     fetchSessions();
     fetchEmployees();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quarter, year]);
 
   const fetchEmployees = async () => {
     try {
@@ -328,6 +339,32 @@ export default function CVAdjustment() {
               <p className="text-slate-600 mt-1 text-sm md:text-base">
                 Remove feedback that isn't the server's fault and recalculate NPS
               </p>
+              <div className="flex items-center gap-3 mt-2">
+                <span className="text-xs uppercase tracking-wide text-slate-500">Period:</span>
+                <select
+                  value={quarter}
+                  onChange={(e) => setQuarter(e.target.value)}
+                  disabled={!!snapshotId}
+                  className="bg-white border border-slate-300 text-slate-700 text-sm rounded px-2 py-1 disabled:bg-slate-100"
+                  data-testid="cv-quarter-select"
+                >
+                  <option value="Q1">Q1</option>
+                  <option value="Q2">Q2</option>
+                  <option value="Q3">Q3</option>
+                  <option value="Q4">Q4</option>
+                </select>
+                <select
+                  value={year}
+                  onChange={(e) => setYear(parseInt(e.target.value, 10))}
+                  disabled={!!snapshotId}
+                  className="bg-white border border-slate-300 text-slate-700 text-sm rounded px-2 py-1 disabled:bg-slate-100"
+                  data-testid="cv-year-select"
+                >
+                  {[year - 1, year, year + 1].map(y => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              </div>
               {snapshotId && (
                 <p className="text-blue-600 text-sm mt-1">
                   Linked to Snapshot • Adjusted data will be imported when ready

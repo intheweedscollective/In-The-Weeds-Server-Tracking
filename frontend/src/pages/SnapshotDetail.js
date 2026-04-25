@@ -711,7 +711,7 @@ export default function SnapshotDetail() {
                               variant="outline"
                               size="sm"
                               className="border-slate-600 text-slate-300 hover:bg-slate-700 text-xs sm:text-sm"
-                              onClick={() => navigate(`/cv-adjustment?snapshot=${snapshotId}`)}
+                              onClick={() => navigate(`/cv-adjustment?snapshot=${snapshotId}&quarter=${snapshot?.quarter || 'Q1'}&year=${snapshot?.year || 2026}`)}
                             >
                               <Settings2 className="w-4 h-4 mr-1 sm:mr-2" />
                               <span className="hidden sm:inline">NPS Adjustment Tool</span>
