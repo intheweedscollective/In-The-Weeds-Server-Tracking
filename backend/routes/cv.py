@@ -679,13 +679,57 @@ async def upload_cv_adjustment_file(
         
         items = []
         for idx, row in df.iterrows():
+            # NaN-safe string getter — pandas NaN is a truthy float, so the
+            # naive `row.get(k) or ''` trick produces literal "nan" text.
+            def _safe_str(*keys):
+                for k in keys:
+                    v = row.get(k)
+                    if v is None:
+                        continue
+                    try:
+                        if pd.isna(v):
+                            continue
+                    except (TypeError, ValueError):
+                        pass
+                    s = str(v).strip()
+                    if s and s.lower() != "nan":
+                        return s
+                return ""
+
+            def _safe_int(*keys):
+                for k in keys:
+                    v = row.get(k)
+                    if v is None:
+                        continue
+                    try:
+                        if pd.isna(v):
+                            continue
+                        return int(float(v))
+                    except (TypeError, ValueError):
+                        continue
+                return 0
+
+            rating = _safe_int("rating", "nps_rating", "nps", "score")
+
+            # Classify into NPS buckets so the frontend's stats + filter
+            # tabs work. 9-10 = promoter, 7-8 = passive, 0-6 = detractor.
+            if rating >= 9:
+                nps_category = "promoter"
+            elif rating >= 7:
+                nps_category = "passive"
+            elif rating > 0:
+                nps_category = "detractor"
+            else:
+                nps_category = None  # Unrated rows excluded from NPS math
+
             item = {
                 "id": str(uuid.uuid4()),
                 "index": idx,
-                "rating": int(row.get('rating', row.get('nps_rating', 0)) or 0),
-                "comment": str(row.get('comment', row.get('feedback', row.get('comments', ''))) or ''),
-                "server_name": str(row.get('server_name', row.get('server', row.get('employee', ''))) or ''),
-                "submitted_at": str(row.get('date', row.get('submitted_at', '')) or ''),
+                "rating": rating,
+                "nps_category": nps_category,
+                "comment": _safe_str("comment", "feedback", "comments"),
+                "server_name": _safe_str("server_name", "server", "employee", "name"),
+                "submitted_at": _safe_str("date", "submitted_at"),
                 "status": "pending",  # pending, approved, excluded
                 "auto_detected": False,
                 "detection_reasons": []
@@ -703,6 +747,15 @@ async def upload_cv_adjustment_file(
                 pass
             
             items.append(item)
+
+        # Pre-compute NPS aggregates so the response carries the right
+        # baseline values (frontend uses `original_nps` if present, falls
+        # back to client-side recalculation).
+        promoters_total = sum(1 for i in items if i["nps_category"] == "promoter")
+        passives_total = sum(1 for i in items if i["nps_category"] == "passive")
+        detractors_total = sum(1 for i in items if i["nps_category"] == "detractor")
+        rated_total = promoters_total + passives_total + detractors_total
+        original_nps = round(((promoters_total - detractors_total) / rated_total) * 100, 1) if rated_total else 0.0
         
         session = {
             "id": session_id,
@@ -712,12 +765,17 @@ async def upload_cv_adjustment_file(
             "created_at": datetime.now(timezone.utc).isoformat(),
             "status": "pending",
             "items": items,
+            "original_nps": original_nps,
             "summary": {
                 "total": len(items),
                 "pending": len(items),
                 "approved": 0,
                 "excluded": 0,
-                "auto_detected": len([i for i in items if i.get("auto_detected")])
+                "auto_detected": len([i for i in items if i.get("auto_detected")]),
+                "promoter_count": promoters_total,
+                "passive_count": passives_total,
+                "detractor_count": detractors_total,
+                "rated_total": rated_total,
             }
         }
         
@@ -727,9 +785,14 @@ async def upload_cv_adjustment_file(
         return {
             "success": True,
             "session_id": session_id,
+            "original_nps": original_nps,
+            "adjusted_nps": original_nps,
             "summary": {
                 "total_feedback": len(items),
                 "auto_detected": session["summary"]["auto_detected"],
+                "promoter_count": promoters_total,
+                "passive_count": passives_total,
+                "detractor_count": detractors_total,
             },
             "feedback_items": items,
             "total_items": len(items),
