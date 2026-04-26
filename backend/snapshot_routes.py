@@ -1919,6 +1919,63 @@ async def sync_pos_from_employees_v2(snapshot_id: str):
     
     if not employees_v2:
         raise HTTPException(status_code=404, detail="No employees found in employees_v2")
+
+    # PRE-PUSH DEDUP. employees_v2 may contain ghost rows from orphan-row
+    # recovery (rename diverged from POS report_name). Without this, every
+    # Save Snapshot pushes the duplicate into the snapshot. Winner = highest
+    # total_score; losers deleted from employees_v2.
+    def _name_key(rec):
+        for f in ("display_name", "name", "report_name"):
+            v = (rec.get(f) or "").strip().lower()
+            if v:
+                return v
+        return None
+
+    def _fuzzy_key(rec):
+        full = (rec.get("display_name") or rec.get("name") or rec.get("report_name") or "").strip().lower()
+        parts = full.split()
+        if len(parts) < 2:
+            return None
+        return (
+            parts[0][0],
+            parts[-1],
+            round(float(rec.get("net_sales") or 0), 2),
+            round(float(rec.get("ppa") or 0), 2),
+        )
+
+    primary_dd: dict[str, dict] = {}
+    primary_order_dd: list[str] = []
+    fuzzy_to_primary_dd: dict[tuple, str] = {}
+    losers_dd: list[str] = []
+    for _emp in employees_v2:
+        _key = _name_key(_emp)
+        if not _key:
+            continue
+        _fk = _fuzzy_key(_emp)
+        if _fk and _fk in fuzzy_to_primary_dd and fuzzy_to_primary_dd[_fk] != _key:
+            _key = fuzzy_to_primary_dd[_fk]
+        _score = _emp.get("total_score") or _emp.get("pre_dar_score") or 0
+        _winner = primary_dd.get(_key)
+        if _winner is None:
+            primary_dd[_key] = _emp
+            primary_order_dd.append(_key)
+            if _fk:
+                fuzzy_to_primary_dd[_fk] = _key
+        else:
+            _cur = _winner.get("total_score") or _winner.get("pre_dar_score") or 0
+            if _score > _cur:
+                if _winner.get("id"):
+                    losers_dd.append(_winner.get("id"))
+                primary_dd[_key] = _emp
+            else:
+                if _emp.get("id"):
+                    losers_dd.append(_emp.get("id"))
+            if _fk and _fk not in fuzzy_to_primary_dd:
+                fuzzy_to_primary_dd[_fk] = _key
+
+    if losers_dd:
+        await db.employees_v2.delete_many({"id": {"$in": losers_dd}})
+    employees_v2 = [primary_dd[k] for k in primary_order_dd]
     
     # Find POS upload and update its parsed_data
     uploads = snapshot.get("uploads", [])
@@ -2035,6 +2092,64 @@ async def fix_snapshot_employee_ids(snapshot_id: str):
     
     if not employees_v2:
         raise HTTPException(status_code=404, detail="No employees found in employees_v2")
+
+    # PRE-PUSH DEDUP. employees_v2 may legitimately contain "ghost" rows
+    # created during orphan-row recovery (e.g. user renamed Glennice -> Lennie
+    # without an explicit merge step). Without dedup here the snapshot
+    # accumulates 2 rows for the same person every Save-Snapshot.
+    # Winner = highest total_score; losers deleted from employees_v2.
+    def _name_key(rec):
+        for f in ("display_name", "name", "report_name"):
+            v = (rec.get(f) or "").strip().lower()
+            if v:
+                return v
+        return None
+
+    def _fuzzy_key(rec):
+        full = (rec.get("display_name") or rec.get("name") or rec.get("report_name") or "").strip().lower()
+        parts = full.split()
+        if len(parts) < 2:
+            return None
+        return (
+            parts[0][0],
+            parts[-1],
+            round(float(rec.get("net_sales") or 0), 2),
+            round(float(rec.get("ppa") or 0), 2),
+        )
+
+    primary: dict[str, dict] = {}
+    primary_order: list[str] = []
+    fuzzy_to_primary: dict[tuple, str] = {}
+    losers: list[str] = []
+    for emp in employees_v2:
+        key = _name_key(emp)
+        if not key:
+            continue
+        fk = _fuzzy_key(emp)
+        if fk and fk in fuzzy_to_primary and fuzzy_to_primary[fk] != key:
+            key = fuzzy_to_primary[fk]
+        score = emp.get("total_score") or emp.get("pre_dar_score") or 0
+        winner = primary.get(key)
+        if winner is None:
+            primary[key] = emp
+            primary_order.append(key)
+            if fk:
+                fuzzy_to_primary[fk] = key
+        else:
+            cur_score = winner.get("total_score") or winner.get("pre_dar_score") or 0
+            if score > cur_score:
+                if winner.get("id"):
+                    losers.append(winner.get("id"))
+                primary[key] = emp
+            else:
+                if emp.get("id"):
+                    losers.append(emp.get("id"))
+            if fk and fk not in fuzzy_to_primary:
+                fuzzy_to_primary[fk] = key
+
+    if losers:
+        await db.employees_v2.delete_many({"id": {"$in": losers}})
+    employees_v2 = [primary[k] for k in primary_order]
 
     # FORCE RE-SCORING. Stale records may have been written by a legacy code
     # path that didn't cap LSC at 100, producing 200+ point totals. Re-run

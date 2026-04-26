@@ -2403,14 +2403,26 @@ async def update_employee(employee_id: str, data: dict):
             # makes the snapshot and v2 names diverge with no overlap. Create
             # a v2 record on-the-fly from the snapshot data so the edit
             # succeeds. The snapshot sync below will keep everything aligned.
+            #
+            # IMPORTANT: also copy the original snapshot names into `aliases`
+            # so future name-based lookups (e.g. another PUT, sync-from-employees
+            # dedup, POS-upload merge) can find this record without creating
+            # ANOTHER duplicate. Without this, every rename pass produced a
+            # ghost row that re-appeared on the next Save Snapshot.
             if not emp_doc:
                 snap_emp_clone = {k: v for k, v in snap_emp.items() if k != "_id"}
                 snap_emp_clone["id"] = employee_id
                 snap_emp_clone["quarter"] = snap_quarter or "Q2"
                 snap_emp_clone["year"] = snap_year or 2026
+                # Preserve the snapshot's old names as aliases so the user's
+                # rename doesn't sever the link to the original employee.
+                existing_aliases = list(snap_emp_clone.get("aliases") or [])
+                for alias_name in (snap_name, snap_report, snap_display):
+                    if alias_name and alias_name not in existing_aliases:
+                        existing_aliases.append(alias_name)
+                snap_emp_clone["aliases"] = existing_aliases
                 snap_emp_clone["created_at"] = datetime.now(timezone.utc).isoformat()
                 snap_emp_clone["updated_at"] = snap_emp_clone["created_at"]
-                # Insert (will mutate dict to add _id)
                 await db.employees_v2.insert_one(snap_emp_clone)
                 emp_doc = snap_emp_clone
 
