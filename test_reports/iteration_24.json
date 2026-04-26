@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 24 backend verification - both fixes confirmed working. CV NPS Adjustment upload now uses cv_adjustment.parse_feedback_report (correct 'Check Category' column for comments) and computes original_nps + nps_category server-side. New /api/qr/leaderboard-data merged endpoint and /api/qr/leaderboard/slide PNG sort by (conversion_rate, mentions, clicks) desc with 0-click rows pinned to bottom. Iteration 23 P0 regressions still green.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/v2/cv/adjustment/upload", "issue": "Non-xlsx/csv uploads return generic 500 instead of 400; the /server-performance/upload sibling guards extensions explicitly. Consider adding the same guard for parity / better UX."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_24.py",
+    "/app/test_reports/pytest/iteration_24.xml",
+    "/app/backend/tests/test_save_snapshot_p0_fix.py"
+  ],
+  "action_items": [
+    "(Optional) Add explicit .xlsx/.xls/.csv extension guard on /api/v2/cv/adjustment/upload so invalid files return HTTP 400 rather than 500."
+  ],
+  "critical_code_review_comments": [
+    "routes/cv.py upload_cv_adjustment_file: confirmed it now delegates to cv_adjustment.parse_feedback_report (which handles NaN -> '' and uses 'Check Category' as the comment column) and calculate_nps for accurate counts. Field shape adapted to legacy frontend keys including nps_category, auto_detected, detection_reasons.",
+    "qr_tracking.get_leaderboard_with_mentions: sort key uses '-1 if total_clicks == 0 else conversion_rate' with reverse=True - correctly pins zero-click rows to the bottom. Within the non-zero block, tuple ordering on (conversion_rate, rt_mentions, total_clicks) matches the slide's tie-breakers.",
+    "Minor: routes/cv.py is ~1000 lines and has accumulated many endpoints; could be split per-feature when convenient (informational, not blocking)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_24.py (NEW)"
+  ],
+  "success_rate": {"backend": "100% (7/7 new + 8/8 P0 regressions)", "frontend": "not tested (backend-only request)"},
+  "test_credentials": "n/a (no auth on these endpoints)",
+  "seed_data_creation": "Each upload test creates a cv_adjustment_sessions row and deletes it in a finally block via direct mongo cleanup (MONGO_URL/DB_NAME from /app/backend/.env).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Test file at /app/backend/tests/test_iteration_24.py is reusable. It depends on /tmp/feedback.xlsx (25 items, expected NPS 72.0, 21P/1P/3D) and /tmp/transaction.xlsx. If those files are removed, the CV upload tests will fail at the assert os.path.exists check. The P0 regression smoke probes are intentionally lightweight - the deeper coverage lives in test_save_snapshot_p0_fix.py (8 tests, all green this iteration).",
+  "verification_results": {
+    "cv_adjustment_upload_with_transaction": {"original_nps": 72.0, "promoter_count": 21, "passive_count": 1, "detractor_count": 3, "total_items": 25, "nan_comments": 0, "nps_category_populated": true, "auto_detected": ">=1"},
+    "cv_adjustment_upload_no_transaction": "same totals as above",
+    "cv_adjustment_upload_invalid_ext": "non-200 returned (currently 500)",
+    "qr_leaderboard_data": "returns {employees, count, quarter, year}; 0-click rows pinned to bottom; non-zero block sorted by (conversion_rate, rt_mentions, total_clicks) desc - validated programmatically",
+    "qr_leaderboard_slide_png": "200 image/png, valid PNG magic bytes, >1KB",
+    "iteration_23_p0_regressions": "8/8 passing (ghost not resurrected, nps_manual_override, raw POS edits persist, targeted delete with same-name dup, orphan PUT recovery, QR tripadvisor, CV adjustment upload q/y, current rankings active)"
+  }
+}
