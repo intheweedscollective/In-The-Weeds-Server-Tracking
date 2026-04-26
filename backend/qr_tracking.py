@@ -676,3 +676,32 @@ def register_qr_routes(app_router, db):
     set_qr_db(db)
     app_router.include_router(qr_router)
 
+
+@qr_router.get("/leaderboard/slide")
+async def download_qr_leaderboard_slide(
+    quarter: str = "Q2",
+    year: int = 2026,
+    title: str | None = None,
+):
+    """Render and return a 16:9 PNG of the QR Tracker leaderboard."""
+    from fastapi.responses import Response
+    from qr_leaderboard_slide import generate_qr_leaderboard_slide
+
+    employees = await _db.qr_employees.find({}, {"_id": 0}).to_list(200)
+    employees.sort(
+        key=lambda e: (e.get("yelp_clicks") or 0)
+                      + (e.get("google_clicks") or 0)
+                      + (e.get("tripadvisor_clicks") or 0),
+        reverse=True,
+    )
+
+    png = generate_qr_leaderboard_slide(employees, quarter=quarter, year=year, title=title)
+    safe_q = (quarter or "Q").replace("/", "_")
+    return Response(
+        content=png,
+        media_type="image/png",
+        headers={
+            "Content-Disposition": f'attachment; filename="qr_leaderboard_{safe_q}_{year}.png"'
+        },
+    )
+

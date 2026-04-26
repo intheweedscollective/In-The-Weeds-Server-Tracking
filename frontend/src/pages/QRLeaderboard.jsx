@@ -1,11 +1,15 @@
 import { useState, useEffect } from "react";
-import { Trophy, Star, Medal, Crown } from "lucide-react";
+import { Trophy, Star, Medal, Crown, Download } from "lucide-react";  // eslint-disable-line no-unused-vars
 import { toast } from "sonner";
 import api from "../lib/api";
+import { Button } from "../components/ui/button";
+import { getCurrentQuarter } from "../lib/quarterUtils";
 
 export default function QRLeaderboard() {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
+  const { quarter, year } = getCurrentQuarter();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -25,6 +29,29 @@ export default function QRLeaderboard() {
     fetchData();
   }, []);
 
+  const downloadSlide = async () => {
+    setDownloading(true);
+    try {
+      const res = await api.get(
+        `/qr/leaderboard/slide?quarter=${quarter}&year=${year}`,
+        { responseType: 'blob' }
+      );
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `qr_leaderboard_${quarter}_${year}.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success(`Downloaded ${quarter} ${year} leaderboard slide`);
+    } catch (e) {
+      toast.error('Slide download failed');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const getRankIcon = (rank) => {
     if (rank === 1) return <Crown className="w-6 h-6 text-yellow-400" />;
     if (rank === 2) return <Medal className="w-6 h-6 text-slate-300" />;
@@ -43,13 +70,24 @@ export default function QRLeaderboard() {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4 md:p-6">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-8 relative">
           <div className="inline-flex items-center justify-center gap-3 mb-2">
             <Trophy className="w-10 h-10 text-yellow-400" />
             <h1 className="text-4xl font-bold text-white">QR Leaderboard</h1>
             <Trophy className="w-10 h-10 text-yellow-400" />
           </div>
           <p className="text-slate-400">Top performers by total QR code scans</p>
+          <div className="mt-4 flex justify-center">
+            <Button
+              onClick={downloadSlide}
+              disabled={downloading || employees.length === 0}
+              className="bg-violet-600 hover:bg-violet-700 text-white"
+              data-testid="qr-leaderboard-download-slide"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              {downloading ? 'Generating…' : 'Download 16:9 Slide'}
+            </Button>
+          </div>
         </div>
 
         {/* Leaderboard */}
