@@ -2526,6 +2526,45 @@ async def update_current_snapshot(db, snapshot_id: str, quarter: str, year: int)
     )
 
 
+DEFAULT_NICKNAME_MAP = {
+    # User-confirmed mappings (Q2 2026 Bubba Gump LV crew)
+    'keisha': 'lakeisha',
+    'trey': 'treyanna', 'treyana': 'treyanna',
+    'tad': 'thaddeus', 'thad': 'thaddeus',
+    'tk': 'thomas',
+    'ikey': 'eric',
+    'lennie': 'glennice',
+    'matt': 'matthew',
+    # Generic
+    'abby': 'abigail',
+    'terry': 'terrance',
+    'allen': 'craig',  # Allen in reviews = Craig Simmons in POS
+    'mike': 'michael',
+    'dan': 'daniel', 'rob': 'robert', 'bob': 'robert',
+    'jim': 'james', 'joe': 'joseph', 'chris': 'christopher',
+    'nick': 'nicholas', 'tom': 'thomas', 'will': 'william',
+    'sam': 'samuel', 'alex': 'alexander', 'ben': 'benjamin',
+    'liz': 'elizabeth', 'beth': 'elizabeth', 'kate': 'katherine',
+    'jen': 'jennifer', 'meg': 'megan', 'steph': 'stephanie',
+}
+
+
+async def load_nickname_map(db) -> dict[str, str]:
+    """Merge DEFAULT_NICKNAME_MAP with user-managed entries from
+    `nickname_aliases` collection. User entries override defaults.
+    Schema: { nickname: 'keisha', formal: 'lakeisha' }."""
+    merged = dict(DEFAULT_NICKNAME_MAP)
+    try:
+        async for doc in db.nickname_aliases.find({}, {"_id": 0, "nickname": 1, "formal": 1}):
+            nick = (doc.get("nickname") or "").strip().lower()
+            formal = (doc.get("formal") or "").strip().lower()
+            if nick and formal:
+                merged[nick] = formal
+    except Exception as e:
+        logger.warning(f"Failed to load custom nicknames, using defaults: {e}")
+    return merged
+
+
 async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Merge data from all uploads in a snapshot into employee records.
@@ -2533,33 +2572,14 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
     Preserves manually set job_titles, display_names, and other edits from existing snapshot data.
     """
     # ------------------------------------------------------------------
-    # Nickname map shared by CV + RT merges. Keys are the casual/short
-    # name shoppers tend to use in reviews + NPS responses; values are
-    # the formal first name on the POS report. This lets us match
-    # 'Keisha Martin' -> 'Lakeisha Martin' or 'Lennie' -> 'Glennice',
-    # rather than dropping the response on the floor.
+    # Nickname map shared by CV + RT merges. Loaded from DB
+    # `nickname_aliases` collection (managed by the Settings UI) on top
+    # of DEFAULT_NICKNAME_MAP. Lets us match 'Keisha Martin' ->
+    # 'Lakeisha Martin' or 'Lennie' -> 'Glennice', rather than dropping
+    # the response on the floor.
     # ------------------------------------------------------------------
-    nickname_map = {
-        # User-confirmed mappings (Q2 2026 Bubba Gump LV crew)
-        'keisha': 'lakeisha',
-        'trey': 'treyanna', 'treyana': 'treyanna',
-        'tad': 'thaddeus', 'thad': 'thaddeus',
-        'tk': 'thomas',
-        'ikey': 'eric',
-        'lennie': 'glennice',
-        'matt': 'matthew',
-        # Generic
-        'abby': 'abigail',
-        'terry': 'terrance',
-        'allen': 'craig',  # Allen in reviews = Craig Simmons in POS
-        'mike': 'michael',
-        'dan': 'daniel', 'rob': 'robert', 'bob': 'robert',
-        'jim': 'james', 'joe': 'joseph', 'chris': 'christopher',
-        'nick': 'nicholas', 'tom': 'thomas', 'will': 'william',
-        'sam': 'samuel', 'alex': 'alexander', 'ben': 'benjamin',
-        'liz': 'elizabeth', 'beth': 'elizabeth', 'kate': 'katherine',
-        'jen': 'jennifer', 'meg': 'megan', 'steph': 'stephanie',
-    }
+    db = get_db()
+    nickname_map = await load_nickname_map(db)
     # Reverse map so we can also match POS 'lakeisha' against CV 'keisha'.
     reverse_nickname_map: dict[str, list[str]] = {}
     for nick, formal in nickname_map.items():
@@ -3780,3 +3800,66 @@ async def get_workflow_status(snapshot_id: str):
         "dar_applied": snapshot.get("dar_applied", False),
         "total_dar_deductions": snapshot.get("total_dar_deductions", 0),
     }
+
+
+
+# ============================================================================
+# NICKNAME ALIASES (managed by Settings UI)
+# ============================================================================
+# Lets the operator add custom nickname -> formal-name mappings so CV / RT
+# merges route shortened names ("Keisha" -> "Lakeisha") to the right
+# employee. Defaults still live in DEFAULT_NICKNAME_MAP and are not
+# editable; this collection is purely additive.
+
+@snapshot_router.get("/nicknames")
+async def list_nicknames():
+    """Return defaults + user-managed nicknames so the UI can show both."""
+    db = get_db()
+    user_aliases = await db.nickname_aliases.find(
+        {}, {"_id": 0, "id": 1, "nickname": 1, "formal": 1, "created_at": 1}
+    ).to_list(500)
+    return {
+        "defaults": [
+            {"nickname": k, "formal": v}
+            for k, v in sorted(DEFAULT_NICKNAME_MAP.items())
+        ],
+        "user": user_aliases,
+    }
+
+
+@snapshot_router.post("/nicknames")
+async def create_nickname(payload: Dict[str, Any]):
+    """Add a user-managed nickname -> formal mapping."""
+    db = get_db()
+    nickname = (payload.get("nickname") or "").strip().lower()
+    formal = (payload.get("formal") or "").strip().lower()
+    if not nickname or not formal:
+        raise HTTPException(status_code=400,
+                            detail="Both 'nickname' and 'formal' are required")
+    existing = await db.nickname_aliases.find_one({"nickname": nickname})
+    if existing:
+        await db.nickname_aliases.update_one(
+            {"nickname": nickname},
+            {"$set": {"formal": formal,
+                      "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        return {"success": True, "id": existing.get("id"), "updated": True}
+    doc = {
+        "id": str(uuid.uuid4()),
+        "nickname": nickname,
+        "formal": formal,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.nickname_aliases.insert_one(doc)
+    doc.pop("_id", None)
+    return {"success": True, **doc, "updated": False}
+
+
+@snapshot_router.delete("/nicknames/{alias_id}")
+async def delete_nickname(alias_id: str):
+    """Remove a user-managed alias (defaults can't be deleted)."""
+    db = get_db()
+    res = await db.nickname_aliases.delete_one({"id": alias_id})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Alias not found")
+    return {"success": True, "deleted": alias_id}

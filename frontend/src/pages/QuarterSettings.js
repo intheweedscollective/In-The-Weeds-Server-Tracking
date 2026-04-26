@@ -5,6 +5,7 @@ import api from "../lib/api";
 import { getCurrentQuarter } from "../lib/quarterUtils";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
+import NicknameManager from "../components/NicknameManager";
 
 // NOTE: SLIDE_THEMES and SEASONAL_THEMES removed - functionality deprecated
 
@@ -904,6 +905,11 @@ export default function QuarterSettings() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Nickname Aliases — affects CV/RT employee matching */}
+        <div className="mt-8" data-testid="nickname-section">
+          <NicknameManager />
         </div>
       </div>
     </div>
