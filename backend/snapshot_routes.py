@@ -2035,6 +2035,47 @@ async def fix_snapshot_employee_ids(snapshot_id: str):
     
     if not employees_v2:
         raise HTTPException(status_code=404, detail="No employees found in employees_v2")
+
+    # FORCE RE-SCORING. Stale records may have been written by a legacy code
+    # path that didn't cap LSC at 100, producing 200+ point totals. Re-run
+    # the canonical scoring engine here so every employee gets correct
+    # capped scores before they're written into the snapshot.
+    from snapshot_manager import calculate_employee_scores
+
+    benchmarks = await db.snapshot_benchmarks.find_one(
+        {"quarter": quarter, "year": year}
+    ) if "snapshot_benchmarks" in await db.list_collection_names() else None
+    if not benchmarks:
+        # Use the same defaults as snapshot_manager
+        benchmarks = {"ppa": 55.0, "lbw": 8.0, "glass": 1.25, "lsc": 100.0}
+
+    rescored = []
+    for emp in employees_v2:
+        try:
+            scored = calculate_employee_scores(emp, benchmarks)
+            rescored.append(scored)
+            # Persist the corrected scores back to employees_v2 so future reads
+            # see the right values too.
+            await db.employees_v2.update_one(
+                {"id": emp.get("id")},
+                {"$set": {
+                    "score_ppa": scored.get("score_ppa"),
+                    "score_lbw": scored.get("score_lbw"),
+                    "score_glass": scored.get("score_glass"),
+                    "score_lsc": scored.get("score_lsc"),
+                    "bonus_ppa": scored.get("bonus_ppa"),
+                    "bonus_lbw": scored.get("bonus_lbw"),
+                    "bonus_glass": scored.get("bonus_glass"),
+                    "bonus_lsc": scored.get("bonus_lsc"),
+                    "total_metric_bonus": scored.get("total_metric_bonus"),
+                    "weighted_score": scored.get("weighted_score"),
+                    "pre_dar_score": scored.get("pre_dar_score"),
+                    "total_score": scored.get("total_score"),
+                }}
+            )
+        except Exception:
+            rescored.append(emp)
+    employees_v2 = rescored
     
     # Get quarter settings for tier calculation
     settings = await db.quarter_settings.find_one(
@@ -2876,6 +2917,112 @@ async def parse_rt_file(filename: str, contents: bytes) -> Dict[str, Any]:
         "reviews_sample": reviews[:10]  # Include sample for debugging
     }
 
+
+
+@snapshot_router.post("/rescore-all")
+async def rescore_all_employees(year: int = 2026, quarter: str = "Q1"):
+    """
+    Force re-run of the canonical scoring engine on every employees_v2
+    record for the given quarter/year. Use this after a stale write (manual
+    edit, legacy code path) produced uncapped LSC scores or 200+ point
+    totals. Rewrites score_ppa/lbw/glass/lsc, weighted_score, total_score
+    and metric bonuses with the correct capped formulas. Snapshot rebuilds
+    after this will see consistent values.
+    """
+    from snapshot_manager import calculate_employee_scores
+    db = get_db()
+    q = quarter.upper()
+
+    employees_v2 = await db.employees_v2.find(
+        {"quarter": q, "year": year}, {"_id": 0}
+    ).to_list(500)
+    if not employees_v2:
+        raise HTTPException(status_code=404, detail=f"No employees for {q} {year}")
+
+    benchmarks = None
+    if "snapshot_benchmarks" in await db.list_collection_names():
+        benchmarks = await db.snapshot_benchmarks.find_one(
+            {"quarter": q, "year": year}
+        )
+    if not benchmarks:
+        benchmarks = {"ppa": 55.0, "lbw": 8.0, "glass": 1.25, "lsc": 100.0}
+
+    rescored = 0
+    over_100_before = 0
+    over_100_after = 0
+    for emp in employees_v2:
+        if (emp.get("total_score") or 0) > 100:
+            over_100_before += 1
+        try:
+            scored = calculate_employee_scores(emp, benchmarks)
+            if (scored.get("total_score") or 0) > 100:
+                over_100_after += 1
+            await db.employees_v2.update_one(
+                {"id": emp.get("id")},
+                {"$set": {
+                    "score_ppa": scored.get("score_ppa"),
+                    "score_lbw": scored.get("score_lbw"),
+                    "score_glass": scored.get("score_glass"),
+                    "score_lsc": scored.get("score_lsc"),
+                    "bonus_ppa": scored.get("bonus_ppa"),
+                    "bonus_lbw": scored.get("bonus_lbw"),
+                    "bonus_glass": scored.get("bonus_glass"),
+                    "bonus_lsc": scored.get("bonus_lsc"),
+                    "total_metric_bonus": scored.get("total_metric_bonus"),
+                    "weighted_score": scored.get("weighted_score"),
+                    "pre_dar_score": scored.get("pre_dar_score"),
+                    "total_score": scored.get("total_score"),
+                }}
+            )
+            rescored += 1
+        except Exception:
+            continue
+
+    # Also propagate the corrected scores into any active snapshot so
+    # /current-rankings reflects them right away.
+    snap = await db.snapshot_workflow.find_one(
+        {"is_current": True, "quarter": q, "year": year}
+    )
+    snapshot_synced = 0
+    if snap:
+        for emp in employees_v2:
+            updated = await db.employees_v2.find_one({"id": emp.get("id")}, {"_id": 0})
+            if not updated:
+                continue
+            res = await db.snapshot_workflow.update_one(
+                {"_id": snap["_id"], "employees.id": emp.get("id")},
+                {"$set": {
+                    "employees.$.weighted_score": updated.get("weighted_score"),
+                    "employees.$.total_score": updated.get("total_score"),
+                    "employees.$.pre_dar_score": updated.get("pre_dar_score"),
+                    "employees.$.total_metric_bonus": updated.get("total_metric_bonus"),
+                    "employees.$.score_ppa": updated.get("score_ppa"),
+                    "employees.$.score_lbw": updated.get("score_lbw"),
+                    "employees.$.score_glass": updated.get("score_glass"),
+                    "employees.$.score_lsc": updated.get("score_lsc"),
+                    "employees.$.bonus_ppa": updated.get("bonus_ppa"),
+                    "employees.$.bonus_lbw": updated.get("bonus_lbw"),
+                    "employees.$.bonus_glass": updated.get("bonus_glass"),
+                    "employees.$.bonus_lsc": updated.get("bonus_lsc"),
+                }}
+            )
+            if res.modified_count > 0:
+                snapshot_synced += 1
+
+    return {
+        "success": True,
+        "quarter": q,
+        "year": year,
+        "rescored_count": rescored,
+        "snapshot_employees_synced": snapshot_synced,
+        "scores_over_100_before": over_100_before,
+        "scores_over_100_after": over_100_after,
+        "message": (
+            f"Rescored {rescored} employees. " +
+            (f"{over_100_before} had >100pt scores, now {over_100_after}."
+             if over_100_before else "All scores already capped correctly.")
+        ),
+    }
 
 
 @snapshot_router.post("/recalculate-tiers")
