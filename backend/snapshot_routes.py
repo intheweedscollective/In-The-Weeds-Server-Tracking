@@ -3161,7 +3161,32 @@ async def parse_rt_file(
         f"parse_rt_file: matching against {len(known_names)} known names "
         f"({target_quarter} {target_year}, snapshot={snapshot_id})"
     )
-    
+
+    # Build name variations ONCE (was being rebuilt per row before). Layer
+    # DEFAULT_NICKNAME_MAP on top of explicit user-confirmed mappings.
+    import re
+    name_variations: dict[str, list[str]] = {
+        "lakeisha": ["lakeisha", "keisha"],
+        "treyanna": ["treyanna", "treyana", "trey"],
+        "thaddeus": ["thaddeus", "tad", "thad"],
+        "thomas": ["thomas", "tk", "tom"],
+        "eric": ["eric", "ikey"],
+        "glennice": ["glennice", "lennie"],
+        "matthew": ["matthew", "matt"],
+        "starwars": ["starwars", "star wars"],
+    }
+    for nick, formal in DEFAULT_NICKNAME_MAP.items():
+        name_variations.setdefault(formal, [formal]).append(nick)
+        seen = set()
+        name_variations[formal] = [
+            v for v in name_variations[formal] if not (v in seen or seen.add(v))
+        ]
+    # Pre-compile regex patterns per variation so we don't recompile 710x
+    variation_patterns: dict[str, list[tuple[str, "re.Pattern"]]] = {
+        formal: [(v, re.compile(r'\b' + re.escape(v) + r'\b')) for v in variants]
+        for formal, variants in name_variations.items()
+    }
+
     for row in reader:
         # Get review text from various possible column names
         review_text = row.get("Review", row.get("review", row.get("Content", row.get("content", ""))))
@@ -3173,30 +3198,6 @@ async def parse_rt_file(
         # Track which employees were mentioned in this review (avoid double-counting)
         mentioned_in_review = set()
         
-        # Build name variations using DEFAULT_NICKNAME_MAP (formal -> nicks)
-        # so the RT parser stays in sync with merge_snapshot_data.
-        name_variations: dict[str, list[str]] = {
-            # User-confirmed (also covered via DEFAULT_NICKNAME_MAP below
-            # but listed here for clarity / explicit precedence)
-            "lakeisha": ["lakeisha", "keisha"],
-            "treyanna": ["treyanna", "treyana", "trey"],
-            "thaddeus": ["thaddeus", "tad", "thad"],
-            "thomas": ["thomas", "tk", "tom"],
-            "eric": ["eric", "ikey"],
-            "glennice": ["glennice", "lennie"],
-            "matthew": ["matthew", "matt"],
-            "starwars": ["starwars", "star wars"],
-        }
-        # Layer DEFAULT_NICKNAME_MAP on top so future entries propagate
-        # automatically (DEFAULT keyed by nickname -> formal).
-        for nick, formal in DEFAULT_NICKNAME_MAP.items():
-            name_variations.setdefault(formal, [formal]).append(nick)
-            # dedupe while preserving order
-            seen = set()
-            name_variations[formal] = [
-                v for v in name_variations[formal] if not (v in seen or seen.add(v))
-            ]
-        
         # Check each known employee
         for name in known_names:
             if not name or name in mentioned_in_review:
@@ -3207,18 +3208,12 @@ async def parse_rt_file(
             if not first_name or len(first_name) < 3:
                 continue
             
-            # Get variations to search for
-            variations = name_variations.get(first_name, [first_name])
-            
-            # Check if any variation appears in review
-            found = False
-            for variant in variations:
-                # Use word boundary check
-                import re
-                pattern = r'\b' + re.escape(variant) + r'\b'
-                if re.search(pattern, review_text_lower):
-                    found = True
-                    break
+            # Use pre-compiled pattern set for this first name (or fallback)
+            patterns = variation_patterns.get(
+                first_name,
+                [(first_name, re.compile(r'\b' + re.escape(first_name) + r'\b'))]
+            )
+            found = any(p.search(review_text_lower) for _, p in patterns)
             
             if found:
                 # Store the original capitalized name
