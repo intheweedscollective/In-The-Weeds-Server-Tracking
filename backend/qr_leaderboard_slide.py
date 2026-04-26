@@ -115,7 +115,22 @@ def generate_qr_leaderboard_slide(
             + (e.get("rt_tripadvisor_mentions") or 0)
         )
 
-    employees = sorted(employees, key=total_clicks, reverse=True)
+    def conversion_rate(e):
+        c = total_clicks(e)
+        return (total_mentions(e) / c * 100) if c else 0.0
+
+    # Sort: highest conversion rate first; tie-breaker mentions desc;
+    # second tie-breaker clicks desc. Employees with 0 clicks land at the
+    # bottom regardless of mentions so we don't reward inactive QRs.
+    employees = sorted(
+        employees,
+        key=lambda e: (
+            -1 if total_clicks(e) == 0 else conversion_rate(e),
+            total_mentions(e),
+            total_clicks(e),
+        ),
+        reverse=True,
+    )
 
     # ----- Left brand panel ------------------------------------------------
     panel_w = 360

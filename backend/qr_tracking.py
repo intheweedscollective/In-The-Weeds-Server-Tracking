@@ -772,3 +772,109 @@ async def download_qr_leaderboard_slide(
         },
     )
 
+
+@qr_router.get("/leaderboard-data")
+async def get_leaderboard_with_mentions(
+    quarter: str = "Q2",
+    year: int = 2026,
+):
+    """
+    Returns the merged clicks-vs-mentions list used by both the on-screen
+    leaderboard and the downloadable slide. Every employee from
+    qr_employees AND employees_v2 (for the given quarter/year) appears
+    exactly once, with both click counts and review mention counts
+    populated. Sorted by conversion rate desc -> mentions desc -> clicks
+    desc so the same row order shows up in the UI and the PNG.
+    """
+    qr_emps = await _db.qr_employees.find({}, {"_id": 0}).to_list(500)
+    v2_emps = await _db.employees_v2.find(
+        {"quarter": (quarter or "").upper(), "year": year},
+        {"_id": 0, "id": 1, "name": 1, "display_name": 1, "report_name": 1,
+         "rt_mentions": 1, "review_tracker_mentions": 1,
+         "rt_yelp_mentions": 1, "rt_google_mentions": 1, "rt_tripadvisor_mentions": 1},
+    ).to_list(500)
+
+    def keys_for(rec):
+        out = set()
+        for f in ("name", "display_name", "report_name"):
+            v = (rec.get(f) or "").strip().lower()
+            if v:
+                out.add(v)
+                first = v.split()[0]
+                if first:
+                    out.add(first)
+        return out
+
+    v2_index: dict[str, dict] = {}
+    for v in v2_emps:
+        for k in keys_for(v):
+            v2_index.setdefault(k, v)
+
+    seen_keys: set[str] = set()
+    merged: list[dict] = []
+
+    def mentions_total(v2_rec):
+        if not v2_rec:
+            return 0
+        return int(
+            (v2_rec.get("rt_mentions") or 0)
+            + (v2_rec.get("review_tracker_mentions") or 0)
+            + (v2_rec.get("rt_yelp_mentions") or 0)
+            + (v2_rec.get("rt_google_mentions") or 0)
+            + (v2_rec.get("rt_tripadvisor_mentions") or 0)
+        )
+
+    # Pass 1: every qr_employee (with their clicks) merged with v2 mentions
+    for q in qr_emps:
+        ks = keys_for(q)
+        if not ks or any(k in seen_keys for k in ks):
+            continue
+        seen_keys.update(ks)
+        v2_match = next((v2_index[k] for k in ks if k in v2_index), None)
+        yelp = q.get("yelp_clicks") or 0
+        google = q.get("google_clicks") or 0
+        ta = q.get("tripadvisor_clicks") or 0
+        clicks = yelp + google + ta
+        m = mentions_total(v2_match)
+        merged.append({
+            "id": q.get("id"),
+            "name": q.get("name"),
+            "yelp_clicks": yelp,
+            "google_clicks": google,
+            "tripadvisor_clicks": ta,
+            "total_clicks": clicks,
+            "rt_mentions": m,
+            "conversion_rate": round((m / clicks * 100), 1) if clicks else 0.0,
+        })
+
+    # Pass 2: employees_v2 records absent from qr_employees (clicks=0)
+    for v in v2_emps:
+        ks = keys_for(v)
+        if not ks or any(k in seen_keys for k in ks):
+            continue
+        seen_keys.update(ks)
+        m = mentions_total(v)
+        merged.append({
+            "id": v.get("id"),
+            "name": v.get("display_name") or v.get("name") or v.get("report_name"),
+            "yelp_clicks": 0,
+            "google_clicks": 0,
+            "tripadvisor_clicks": 0,
+            "total_clicks": 0,
+            "rt_mentions": m,
+            "conversion_rate": 0.0,
+        })
+
+    # Sort: conversion rate desc -> mentions desc -> clicks desc.
+    # Employees with 0 clicks pinned to the bottom regardless of mentions.
+    merged.sort(
+        key=lambda e: (
+            -1 if e["total_clicks"] == 0 else e["conversion_rate"],
+            e["rt_mentions"],
+            e["total_clicks"],
+        ),
+        reverse=True,
+    )
+    return {"employees": merged, "quarter": quarter.upper(), "year": year, "count": len(merged)}
+
+
