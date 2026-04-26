@@ -2549,7 +2549,20 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
         if report_name and report_name != name: existing_employees[report_name] = emp
         if first_name and first_name != name: existing_employees[first_name] = emp
     
-    for upload in snapshot.get("uploads", []):
+    # Always process POS first so the `employees` dict has its base rows
+    # before CV / RT merges run. The upload list is ordered by upload time,
+    # which means a CV file attached BEFORE the POS file would be merged
+    # into an empty dict (and silently dropped).
+    _UPLOAD_ORDER = {
+        UploadType.POS_REPORT.value: 0,
+        UploadType.CUSTOMER_VOICE.value: 1,
+        UploadType.REVIEW_TRACKER.value: 2,
+    }
+    ordered_uploads = sorted(
+        snapshot.get("uploads", []),
+        key=lambda u: _UPLOAD_ORDER.get(u.get("upload_type"), 99),
+    )
+    for upload in ordered_uploads:
         upload_type = upload.get("upload_type")
         parsed_data = upload.get("parsed_data", {})
         
