@@ -2453,6 +2453,14 @@ async def update_employee(employee_id: str, data: dict):
             update_fields['report_name'] = emp_doc.get('report_name') or emp_doc.get('name', '')
     
     update_fields['updated_at'] = datetime.now(timezone.utc).isoformat()
+
+    # If the caller is editing NPS or CV stats directly, mark the row as a
+    # manual override so subsequent /process passes won't redistribute
+    # store-level CV data over the user's value. Cleared automatically when
+    # a fresh CV upload is processed (handled in merge_snapshot_data).
+    nps_override_fields = {"nps_score", "cv_promoters", "cv_passives", "cv_detractors"}
+    if nps_override_fields.intersection(update_fields.keys()):
+        update_fields["nps_manual_override"] = True
     
     # Recalculate derived metrics and scores if POS data fields changed
     pos_fields = {'guests', 'guest_count', 'net_sales', 'liquor_sales', 'beer_sales', 
@@ -2579,6 +2587,7 @@ async def update_employee(employee_id: str, data: dict):
         "nps_score", "nps_score_pts", "cv_raw_points",
         "rt_mentions", "review_tracker_bonus",
         "total_metric_bonus", "aliases",
+        "nps_manual_override",
     }
     snap_update = {}
     for k, v in update_fields.items():

@@ -1976,68 +1976,108 @@ async def sync_pos_from_employees_v2(snapshot_id: str):
     if losers_dd:
         await db.employees_v2.delete_many({"id": {"$in": losers_dd}})
     employees_v2 = [primary_dd[k] for k in primary_order_dd]
-    
-    # Find POS upload and update its parsed_data
+
+    # ------------------------------------------------------------------
+    # REBUILD pos_upload.parsed_data.employees ENTIRELY from employees_v2.
+    #
+    # The OLD logic merged old pos rows with v2 data — but rows the user
+    # had DELETED from employees_v2 still lived in pos_upload, so
+    # merge_snapshot_data resurrected them on the next /process. Equally,
+    # rename → display_name divergence created two rows in the upload
+    # because old pos kept the original name and v2 had the new one.
+    #
+    # Treating employees_v2 as the source of truth eliminates both
+    # classes of bug. We carry every field merge_snapshot_data needs so
+    # downstream scoring still works.
+    # ------------------------------------------------------------------
     uploads = snapshot.get("uploads", [])
     pos_upload_idx = next(
         (i for i, u in enumerate(uploads) if u.get("upload_type") == "pos_report"),
         None
     )
-    
-    if pos_upload_idx is None:
-        # Create a new POS upload record from employees_v2
-        pos_employees = []
-    else:
-        pos_employees = uploads[pos_upload_idx].get("parsed_data", {}).get("employees", [])
-    
-    # Build employee lookup from employees_v2
-    v2_lookup = {}
-    for emp in employees_v2:
-        name_key = emp.get("name", "").strip().lower()
-        if name_key:
-            v2_lookup[name_key] = emp
-    
-    # Update or add employees from v2
+
+    # Index old pos rows by name_key so we can RECOVER raw fields the v2
+    # record may not store (e.g. food_sales, bar_glassware_sales for a
+    # snapshot that pre-dated those fields on v2).
+    old_pos_by_key: dict[str, dict] = {}
+    if pos_upload_idx is not None:
+        for old_emp in uploads[pos_upload_idx].get("parsed_data", {}).get("employees", []):
+            for fld in ("display_name", "name", "report_name"):
+                k = (old_emp.get(fld) or "").strip().lower()
+                if k and k not in old_pos_by_key:
+                    old_pos_by_key[k] = old_emp
+
+    def _coalesce(*vals, default=0):
+        for v in vals:
+            if v not in (None, ""):
+                return v
+        return default
+
     updated_employees = []
-    for emp in pos_employees:
-        name_key = emp.get("name", "").strip().lower()
-        v2_emp = v2_lookup.get(name_key)
-        
-        if v2_emp:
-            # Update with v2 data
-            emp.update({
-                "ppa": v2_emp.get("ppa", emp.get("ppa", 0)),
-                "lbw_per_guest": v2_emp.get("lbw_per_guest", emp.get("lbw_per_guest", 0)),
-                "glassware_per_guest": v2_emp.get("glassware_per_guest", emp.get("glassware_per_guest", 0)),
-                "guests_per_lsc": v2_emp.get("guests_per_lsc", emp.get("guests_per_lsc", 0)),
-                "guest_count": v2_emp.get("guests", emp.get("guest_count", 0)),
-                "net_sales": v2_emp.get("net_sales", emp.get("net_sales", 0)),
-                "loyalty_sales": v2_emp.get("loyalty_sales", emp.get("loyalty_sales", 0)),
-            })
-            # Remove from lookup so we can add remaining v2 employees
-            del v2_lookup[name_key]
-        
-        updated_employees.append(emp)
-    
-    # Add any employees from v2 that weren't in POS upload
-    for name_key, v2_emp in v2_lookup.items():
+    for v2_emp in employees_v2:
+        # Match against old pos rows by ANY of the names so we can pull
+        # forward fields the v2 doc lacks.
+        old = None
+        for fld in ("name", "display_name", "report_name"):
+            k = (v2_emp.get(fld) or "").strip().lower()
+            if k and k in old_pos_by_key:
+                old = old_pos_by_key[k]
+                break
+
+        # Canonical name = display_name (falls back to name/report_name).
+        # merge_snapshot_data keys its lookup off this so naming MUST
+        # align with what the snapshot.employees array uses.
+        canonical = (v2_emp.get("display_name")
+                     or v2_emp.get("name")
+                     or v2_emp.get("report_name")
+                     or "").strip()
+        if not canonical:
+            continue
+
+        liquor = _coalesce(v2_emp.get("liquor_sales"), old and old.get("liquor_sales"))
+        beer = _coalesce(v2_emp.get("beer_sales"), old and old.get("beer_sales"))
+        wine = _coalesce(v2_emp.get("wine_sales"), old and old.get("wine_sales"))
+        glassware = _coalesce(
+            v2_emp.get("bar_glassware_sales"),
+            v2_emp.get("glassware_sales"),
+            old and old.get("bar_glassware_sales"),
+            old and old.get("glassware_sales"),
+        )
+        loyalty = _coalesce(v2_emp.get("loyalty_sales"), old and old.get("loyalty_sales"))
+        guests = _coalesce(
+            v2_emp.get("guest_count"),
+            v2_emp.get("guests"),
+            old and old.get("guest_count"),
+            old and old.get("guests"),
+        )
+
         updated_employees.append({
-            "name": v2_emp.get("name"),
-            "ppa": v2_emp.get("ppa", 0),
-            "lbw_per_guest": v2_emp.get("lbw_per_guest", 0),
-            "glassware_per_guest": v2_emp.get("glassware_per_guest", 0),
-            "guests_per_lsc": v2_emp.get("guests_per_lsc", 0),
-            "guest_count": v2_emp.get("guests", 0),
-            "net_sales": v2_emp.get("net_sales", 0),
-            "loyalty_sales": v2_emp.get("loyalty_sales", 0),
-            "liquor_sales": v2_emp.get("liquor_sales", 0),
-            "beer_sales": v2_emp.get("beer_sales", 0),
-            "wine_sales": v2_emp.get("wine_sales", 0),
+            "name": canonical,
+            "display_name": v2_emp.get("display_name") or canonical,
+            "report_name": v2_emp.get("report_name") or canonical,
+            "job_title": v2_emp.get("job_title") or (old and old.get("job_title")) or "Server",
+            "guest_count": guests,
+            "guests": guests,
+            "net_sales": _coalesce(v2_emp.get("net_sales"), old and old.get("net_sales")),
+            "ppa": _coalesce(v2_emp.get("ppa"), old and old.get("ppa")),
+            "liquor_sales": liquor,
+            "beer_sales": beer,
+            "wine_sales": wine,
+            "bar_glassware_sales": glassware,
+            "loyalty_sales": loyalty,
+            "food_sales": _coalesce(v2_emp.get("food_sales"), old and old.get("food_sales")),
+            # Pre-derived per-guest metrics (merge_snapshot_data will
+            # recompute if missing/zero).
+            "lbw_per_guest": _coalesce(v2_emp.get("lbw_per_guest"), old and old.get("lbw_per_guest")),
+            "glassware_per_guest": _coalesce(v2_emp.get("glassware_per_guest"), old and old.get("glassware_per_guest")),
+            "guests_per_lsc": _coalesce(v2_emp.get("guests_per_lsc"), old and old.get("guests_per_lsc")),
+            "lsc_count": _coalesce(v2_emp.get("lsc_count"), old and old.get("lsc_count")),
         })
-    
-    # Update POS upload
+
+    # Update POS upload with the rebuilt list.
     if pos_upload_idx is not None:
         uploads[pos_upload_idx]["parsed_data"]["employees"] = updated_employees
+        uploads[pos_upload_idx]["parsed_data"]["record_count"] = len(updated_employees)
         uploads[pos_upload_idx]["source"] = "synced_from_employees_v2"
     else:
         uploads.append({
@@ -2047,25 +2087,62 @@ async def sync_pos_from_employees_v2(snapshot_id: str):
             "status": "parsed",
             "parsed_data": {"employees": updated_employees, "record_count": len(updated_employees)}
         })
-    
-    # Update snapshot
+
+    # ------------------------------------------------------------------
+    # Also dedupe + prune snapshot.employees so existing_employees lookup
+    # in merge_snapshot_data doesn't pick up ghost rows the user already
+    # deleted. We keep the row whose name_key matches an employees_v2
+    # entry (the survivors), preserving the user's manual edits.
+    # ------------------------------------------------------------------
+    snap_employees = snapshot.get("employees", []) or []
+    valid_keys = set()
+    for v2_emp in employees_v2:
+        for fld in ("display_name", "name", "report_name"):
+            k = (v2_emp.get(fld) or "").strip().lower()
+            if k:
+                valid_keys.add(k)
+
+    pruned: list[dict] = []
+    seen_keys: set[str] = set()
+    for s_emp in snap_employees:
+        keys = []
+        for fld in ("display_name", "name", "report_name"):
+            k = (s_emp.get(fld) or "").strip().lower()
+            if k:
+                keys.append(k)
+        # Skip entries whose names no longer exist in employees_v2.
+        if keys and not any(k in valid_keys for k in keys):
+            continue
+        # Collapse intra-snapshot dupes by primary name_key.
+        primary = next((k for k in keys if k), None)
+        if primary and primary in seen_keys:
+            continue
+        if primary:
+            seen_keys.add(primary)
+        pruned.append(s_emp)
+
     await db.snapshot_workflow.update_one(
         {"id": snapshot_id},
         {
             "$set": {
                 "uploads": uploads,
+                "employees": pruned,
                 "upload_progress.pos_report": True,
                 "updated_at": datetime.now(timezone.utc).isoformat()
             }
         }
     )
-    
-    logger.info(f"Synced {len(updated_employees)} employees from employees_v2 to snapshot {snapshot_id}")
-    
+
+    logger.info(
+        f"Synced {len(updated_employees)} employees from employees_v2 to snapshot {snapshot_id} "
+        f"(pruned snapshot.employees {len(snap_employees)} -> {len(pruned)})"
+    )
+
     return {
         "success": True,
         "message": f"Synced {len(updated_employees)} employees from employees_v2",
-        "employee_count": len(updated_employees)
+        "employee_count": len(updated_employees),
+        "snapshot_employees_pruned": len(snap_employees) - len(pruned),
     }
 
 
@@ -2562,6 +2639,8 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                     "dar_penalty": existing_emp.get("dar_penalty", 0) if existing_emp else 0,
                     # Preserve calculated scores if they exist
                     "total_metric_bonus": existing_emp.get("total_metric_bonus", 0) if existing_emp else 0,
+                    # PRESERVE manual-override flags so CV merge below skips them
+                    "nps_manual_override": existing_emp.get("nps_manual_override", False) if existing_emp else False,
                 }
         
         elif upload_type == UploadType.CUSTOMER_VOICE.value:
@@ -2580,6 +2659,9 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                 for cv_data in cv_employees:
                     name = cv_data.get("name", "").strip().lower()
                     if name in employees:
+                        # Respect manual user overrides on NPS/CV.
+                        if employees[name].get("nps_manual_override"):
+                            continue
                         # Get values from parsed data
                         promoters = cv_data.get("promoters", 0) or 0
                         passives = cv_data.get("passives", 0) or 0
@@ -2628,6 +2710,9 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                     if total_guests > 0 and total_promoters > 0:
                         # Distribute CV data proportionally by guest count
                         for name, emp in employees.items():
+                            # Respect manual user overrides on NPS/CV.
+                            if emp.get("nps_manual_override"):
+                                continue
                             guest_count = emp.get("guest_count", 0) or 0
                             if guest_count > 0:
                                 ratio = guest_count / total_guests
