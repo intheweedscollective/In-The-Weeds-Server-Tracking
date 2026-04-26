@@ -660,7 +660,18 @@ async def upload_cv_adjustment_file(
     Creates an adjustment session for manual review.
     """
     db = get_db()
-    
+
+    if not feedback_file.filename.lower().endswith(('.xlsx', '.xls', '.csv')):
+        raise HTTPException(
+            status_code=400,
+            detail="Feedback file must be Excel (.xlsx, .xls) or CSV (.csv)"
+        )
+    if transaction_file is not None and not transaction_file.filename.lower().endswith(('.xlsx', '.xls', '.csv')):
+        raise HTTPException(
+            status_code=400,
+            detail="Transaction file must be Excel (.xlsx, .xls) or CSV (.csv)"
+        )
+
     try:
         import pandas as pd
         from cv_adjustment import (
