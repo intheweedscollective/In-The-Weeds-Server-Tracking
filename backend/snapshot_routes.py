@@ -2532,6 +2532,71 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
     POS data is the base, CV and RT data are merged on top.
     Preserves manually set job_titles, display_names, and other edits from existing snapshot data.
     """
+    # ------------------------------------------------------------------
+    # Nickname map shared by CV + RT merges. Keys are the casual/short
+    # name shoppers tend to use in reviews + NPS responses; values are
+    # the formal first name on the POS report. This lets us match
+    # 'Keisha Martin' -> 'Lakeisha Martin' or 'Lennie' -> 'Glennice',
+    # rather than dropping the response on the floor.
+    # ------------------------------------------------------------------
+    nickname_map = {
+        # User-confirmed mappings (Q2 2026 Bubba Gump LV crew)
+        'keisha': 'lakeisha',
+        'trey': 'treyanna', 'treyana': 'treyanna',
+        'tad': 'thaddeus', 'thad': 'thaddeus',
+        'tk': 'thomas',
+        'ikey': 'eric',
+        'lennie': 'glennice',
+        'matt': 'matthew',
+        # Generic
+        'abby': 'abigail',
+        'terry': 'terrance',
+        'allen': 'craig',  # Allen in reviews = Craig Simmons in POS
+        'mike': 'michael',
+        'dan': 'daniel', 'rob': 'robert', 'bob': 'robert',
+        'jim': 'james', 'joe': 'joseph', 'chris': 'christopher',
+        'nick': 'nicholas', 'tom': 'thomas', 'will': 'william',
+        'sam': 'samuel', 'alex': 'alexander', 'ben': 'benjamin',
+        'liz': 'elizabeth', 'beth': 'elizabeth', 'kate': 'katherine',
+        'jen': 'jennifer', 'meg': 'megan', 'steph': 'stephanie',
+    }
+    # Reverse map so we can also match POS 'lakeisha' against CV 'keisha'.
+    reverse_nickname_map: dict[str, list[str]] = {}
+    for nick, formal in nickname_map.items():
+        reverse_nickname_map.setdefault(formal, []).append(nick)
+
+    def find_employee_match(external_name: str, employees_dict: dict) -> Optional[str]:
+        """Fuzzy-match a name from CV / RT against the POS-keyed employees
+        dict. Tries: (1) direct lower-case key match, (2) nickname
+        expansion of first name + exact last-name match, (3) reverse
+        nickname (POS uses formal name, external file uses nickname),
+        (4) first-name prefix on a unique last name."""
+        if not external_name:
+            return None
+        ext = external_name.strip().lower()
+        if ext in employees_dict:
+            return ext
+        parts = ext.split()
+        if len(parts) < 2:
+            return None
+        first, last = parts[0], parts[-1]
+        expanded_first = nickname_map.get(first, first)
+
+        for emp_name in employees_dict.keys():
+            emp_parts = emp_name.split()
+            if len(emp_parts) < 2:
+                continue
+            emp_first, emp_last = emp_parts[0], emp_parts[-1]
+            if emp_last != last:
+                continue
+            # Direct first-name / nickname-expansion / reverse nickname
+            if (emp_first == expanded_first
+                    or emp_first.startswith(first)
+                    or first.startswith(emp_first[:3])
+                    or first in reverse_nickname_map.get(emp_first, [])):
+                return emp_name
+        return None
+
     employees = {}
     
     # Build lookup of existing employee data to preserve edits
@@ -2696,18 +2761,25 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
             # Merge CV/NPS Toolkit data
             cv_employees = parsed_data.get("employees", [])
             
-            # Check if we have individual employee data or just store-level ("Unknown")
+            # Check if we have individual employee data or just store-level ("Unknown").
+            # Use fuzzy matcher so nickname-only names ('Keisha', 'Lennie')
+            # still classify as individual data and trigger the per-row merge.
             has_individual_data = any(
-                emp.get("name", "").strip().lower() != "unknown" and 
-                emp.get("name", "").strip().lower() in employees
+                (emp.get("name", "").strip().lower() != "unknown")
+                and find_employee_match(emp.get("name", ""), employees)
                 for emp in cv_employees
             )
             
             if has_individual_data:
                 # Individual employee CV data - merge directly
                 for cv_data in cv_employees:
-                    name = cv_data.get("name", "").strip().lower()
-                    if name in employees:
+                    raw_name = cv_data.get("name", "").strip()
+                    if not raw_name or raw_name.lower() == "unknown":
+                        continue
+                    # Fuzzy match against POS-keyed employees (handles
+                    # nicknames: Keisha->Lakeisha, Lennie->Glennice, etc.)
+                    name = find_employee_match(raw_name, employees)
+                    if name and name in employees:
                         # Respect manual user overrides on NPS/CV.
                         if employees[name].get("nps_manual_override"):
                             continue
@@ -2795,59 +2867,12 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                                 )
         
         elif upload_type == UploadType.REVIEW_TRACKER.value:
-            # Merge RT data with fuzzy name matching
-            # Build a mapping of common nicknames to full names
-            # Format: 'nickname_in_reviews': 'name_in_pos'
-            nickname_map = {
-                'trey': 'treyanna', 'tad': 'thaddeus', 'abby': 'abigail',
-                'ikey': 'eric', 'lennie': 'glennice', 'terry': 'terrance',
-                'allen': 'craig',  # Allen in reviews = Craig Simmons in POS
-                'matt': 'matthew', 'mike': 'michael',
-                'dan': 'daniel', 'rob': 'robert', 'bob': 'robert',
-                'jim': 'james', 'joe': 'joseph', 'chris': 'christopher',
-                'nick': 'nicholas', 'tom': 'thomas', 'will': 'william',
-                'sam': 'samuel', 'alex': 'alexander', 'ben': 'benjamin',
-                'liz': 'elizabeth', 'beth': 'elizabeth', 'kate': 'katherine',
-                'jen': 'jennifer', 'meg': 'megan', 'steph': 'stephanie',
-            }
-            
-            def find_employee_match(rt_name, employees_dict):
-                """Find matching employee using fuzzy logic."""
-                rt_name_lower = rt_name.strip().lower()
-                
-                # Direct match
-                if rt_name_lower in employees_dict:
-                    return rt_name_lower
-                
-                # Split into first/last
-                parts = rt_name_lower.split()
-                if len(parts) >= 2:
-                    first_name = parts[0]
-                    last_name = parts[-1]
-                    
-                    # Try nickname expansion
-                    expanded_first = nickname_map.get(first_name, first_name)
-                    
-                    # Search for match by last name + first name prefix
-                    for emp_name in employees_dict.keys():
-                        emp_parts = emp_name.split()
-                        if len(emp_parts) >= 2:
-                            emp_first = emp_parts[0]
-                            emp_last = emp_parts[-1]
-                            
-                            # Match by last name and (first name starts with OR nickname matches)
-                            if emp_last == last_name:
-                                if emp_first.startswith(first_name) or emp_first.startswith(expanded_first):
-                                    return emp_name
-                                if first_name.startswith(emp_first[:3]) or expanded_first == emp_first:
-                                    return emp_name
-                
-                return None
-            
+            # Merge RT data with the shared fuzzy matcher (nickname_map +
+            # reverse mapping defined at the top of merge_snapshot_data).
             for rt_data in parsed_data.get("employees", []):
                 rt_name = rt_data.get("name", "").strip()
                 matched_name = find_employee_match(rt_name, employees)
-                
+
                 if matched_name:
                     mentions = rt_data.get("mentions", 0)
                     employees[matched_name]["rt_mentions"] = mentions
