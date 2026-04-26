@@ -663,99 +663,69 @@ async def upload_cv_adjustment_file(
     
     try:
         import pandas as pd
-        
+        from cv_adjustment import (
+            parse_feedback_report,
+            parse_transaction_report,
+            match_feedback_to_transactions,
+            calculate_nps,
+        )
+
         contents = await feedback_file.read()
-        
         if feedback_file.filename.endswith('.csv'):
             df = pd.read_csv(io.BytesIO(contents))
         else:
             df = pd.read_excel(io.BytesIO(contents))
-        
-        # Normalize columns
-        df.columns = [str(c).strip().lower().replace(' ', '_') for c in df.columns]
-        
-        # Create session
-        session_id = str(uuid.uuid4())
-        
-        items = []
-        for idx, row in df.iterrows():
-            # NaN-safe string getter — pandas NaN is a truthy float, so the
-            # naive `row.get(k) or ''` trick produces literal "nan" text.
-            def _safe_str(*keys):
-                for k in keys:
-                    v = row.get(k)
-                    if v is None:
-                        continue
-                    try:
-                        if pd.isna(v):
-                            continue
-                    except (TypeError, ValueError):
-                        pass
-                    s = str(v).strip()
-                    if s and s.lower() != "nan":
-                        return s
-                return ""
 
-            def _safe_int(*keys):
-                for k in keys:
-                    v = row.get(k)
-                    if v is None:
-                        continue
-                    try:
-                        if pd.isna(v):
-                            continue
-                        return int(float(v))
-                    except (TypeError, ValueError):
-                        continue
-                return 0
+        # Use the dedicated parser that already knows the real column
+        # structure (Comment lives in 'Check Category' on production
+        # exports, NaN values must become empty strings, etc.).
+        feedback_items = parse_feedback_report(df)
 
-            rating = _safe_int("rating", "nps_rating", "nps", "score")
-
-            # Classify into NPS buckets so the frontend's stats + filter
-            # tabs work. 9-10 = promoter, 7-8 = passive, 0-6 = detractor.
-            if rating >= 9:
-                nps_category = "promoter"
-            elif rating >= 7:
-                nps_category = "passive"
-            elif rating > 0:
-                nps_category = "detractor"
+        # Optional transaction file — adds check_total / shift / store
+        if transaction_file is not None:
+            t_contents = await transaction_file.read()
+            if transaction_file.filename.endswith('.csv'):
+                t_df = pd.read_csv(io.BytesIO(t_contents))
             else:
-                nps_category = None  # Unrated rows excluded from NPS math
+                t_df = pd.read_excel(io.BytesIO(t_contents))
+            transactions = parse_transaction_report(t_df)
+            feedback_items = match_feedback_to_transactions(feedback_items, transactions)
 
-            item = {
-                "id": str(uuid.uuid4()),
-                "index": idx,
-                "rating": rating,
-                "nps_category": nps_category,
-                "comment": _safe_str("comment", "feedback", "comments"),
-                "server_name": _safe_str("server_name", "server", "employee", "name"),
-                "submitted_at": _safe_str("date", "submitted_at"),
-                "status": "pending",  # pending, approved, excluded
-                "auto_detected": False,
-                "detection_reasons": []
-            }
-            
-            # Auto-detect non-server issues
-            try:
-                from cv_adjustment import detect_non_server_issues
-                is_non_server, reasons, category = detect_non_server_issues(item["comment"])
-                if is_non_server:
-                    item["auto_detected"] = True
-                    item["detection_reasons"] = reasons
-                    item["detection_category"] = category
-            except ImportError:
-                pass
-            
-            items.append(item)
+        session_id = str(uuid.uuid4())
+
+        # Adapt to the legacy item shape the frontend already understands
+        # (id, rating, nps_category, comment, server_name, etc.) and add
+        # auto-detection flags that the older upload path also computed.
+        items = []
+        for fi in feedback_items:
+            items.append({
+                "id": fi.get("id") or str(uuid.uuid4()),
+                "index": len(items),
+                "rating": fi.get("rating", 0),
+                "nps_category": fi.get("nps_category"),
+                "comment": fi.get("comment", ""),
+                "server_name": fi.get("server_name") or "",
+                "submitted_at": fi.get("response_date") or fi.get("date_of_business") or "",
+                "customer_name": fi.get("customer_name", ""),
+                "check_number": fi.get("check_number", ""),
+                "shift": fi.get("shift", ""),
+                "revenue_center": fi.get("revenue_center", ""),
+                "store_name": fi.get("store_name", ""),
+                "status": "pending",
+                "auto_detected": bool(fi.get("auto_flagged_non_server", False)),
+                "detection_reasons": fi.get("auto_flag_reasons", []),
+                "detection_category": fi.get("issue_category", "unknown"),
+                "excluded": False,
+            })
 
         # Pre-compute NPS aggregates so the response carries the right
-        # baseline values (frontend uses `original_nps` if present, falls
-        # back to client-side recalculation).
-        promoters_total = sum(1 for i in items if i["nps_category"] == "promoter")
-        passives_total = sum(1 for i in items if i["nps_category"] == "passive")
-        detractors_total = sum(1 for i in items if i["nps_category"] == "detractor")
-        rated_total = promoters_total + passives_total + detractors_total
-        original_nps = round(((promoters_total - detractors_total) / rated_total) * 100, 1) if rated_total else 0.0
+        # baseline values (frontend uses `original_nps` if present).
+        nps_calc = calculate_nps(items, exclude_flagged=False)
+        promoters_total = nps_calc["promoters"]
+        passives_total = nps_calc["passives"]
+        detractors_total = nps_calc["detractors"]
+        rated_total = nps_calc["total_responses"]
+        original_nps = nps_calc["nps_score"]
         
         session = {
             "id": session_id,
