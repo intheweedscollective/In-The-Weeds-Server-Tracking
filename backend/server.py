@@ -2454,6 +2454,14 @@ async def update_employee(employee_id: str, data: dict):
     
     update_fields['updated_at'] = datetime.now(timezone.utc).isoformat()
 
+    # Mirror guests <-> guest_count so a PUT that supplies only one keeps both
+    # in lockstep. Otherwise reprocess writes the stale field back over the
+    # user's edit during snapshot rebuild.
+    if 'guests' in update_fields and 'guest_count' not in update_fields:
+        update_fields['guest_count'] = update_fields['guests']
+    elif 'guest_count' in update_fields and 'guests' not in update_fields:
+        update_fields['guests'] = update_fields['guest_count']
+
     # If the caller is editing NPS or CV stats directly, mark the row as a
     # manual override so subsequent /process passes won't redistribute
     # store-level CV data over the user's value. Cleared automatically when
