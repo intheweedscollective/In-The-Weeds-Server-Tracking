@@ -39,12 +39,12 @@ export default function QRLeaderboard() {
       const url = URL.createObjectURL(res.data);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `qr_leaderboard_${quarter}_${year}.png`;
+      a.download = `qr_clicks_vs_mentions_${quarter}_${year}.png`;
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      toast.success(`Downloaded ${quarter} ${year} leaderboard slide`);
+      toast.success(`Downloaded ${quarter} ${year} clicks vs mentions report`);
     } catch (e) {
       toast.error('Slide download failed');
     } finally {
@@ -85,7 +85,7 @@ export default function QRLeaderboard() {
               data-testid="qr-leaderboard-download-slide"
             >
               <Download className="w-4 h-4 mr-2" />
-              {downloading ? 'Generating…' : 'Download 16:9 Slide'}
+              {downloading ? 'Generating…' : 'Download Clicks vs Mentions Report'}
             </Button>
           </div>
         </div>

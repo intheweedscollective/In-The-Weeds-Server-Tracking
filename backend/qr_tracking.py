@@ -683,25 +683,92 @@ async def download_qr_leaderboard_slide(
     year: int = 2026,
     title: str | None = None,
 ):
-    """Render and return a 16:9 PNG of the QR Tracker leaderboard."""
+    """Render and return a 16:9 PNG of the QR Click vs RT-Mentions report."""
     from fastapi.responses import Response
     from qr_leaderboard_slide import generate_qr_leaderboard_slide
 
-    employees = await _db.qr_employees.find({}, {"_id": 0}).to_list(200)
-    employees.sort(
-        key=lambda e: (e.get("yelp_clicks") or 0)
-                      + (e.get("google_clicks") or 0)
-                      + (e.get("tripadvisor_clicks") or 0),
-        reverse=True,
-    )
+    qr_emps = await _db.qr_employees.find({}, {"_id": 0}).to_list(500)
 
-    png = generate_qr_leaderboard_slide(employees, quarter=quarter, year=year, title=title)
+    # Merge ReviewTracker mentions from employees_v2 (which is where RT
+    # mentions are persisted by the snapshot pipeline). We index by
+    # lowercased name for forgiving cross-collection matching.
+    v2_emps = await _db.employees_v2.find(
+        {"quarter": (quarter or "").upper(), "year": year},
+        {"_id": 0, "name": 1, "display_name": 1, "report_name": 1,
+         "rt_mentions": 1, "review_tracker_mentions": 1,
+         "rt_yelp_mentions": 1, "rt_google_mentions": 1, "rt_tripadvisor_mentions": 1},
+    ).to_list(500)
+
+    def keys_for(rec):
+        out = set()
+        for f in ("name", "display_name", "report_name"):
+            v = (rec.get(f) or "").strip().lower()
+            if v:
+                out.add(v)
+                # Also add first name for nickname tolerance
+                first = v.split()[0]
+                if first:
+                    out.add(first)
+        return out
+
+    v2_index: dict[str, dict] = {}
+    for v in v2_emps:
+        for k in keys_for(v):
+            v2_index.setdefault(k, v)
+
+    # Make sure every employees_v2 person appears (even those with 0 clicks)
+    # so the slide truly lists ALL employees.
+    qr_index: dict[str, dict] = {}
+    for q in qr_emps:
+        for k in keys_for(q):
+            qr_index.setdefault(k, q)
+
+    # Build the merged list keyed by name
+    seen_keys: set[str] = set()
+    merged: list[dict] = []
+
+    def absorb(rec, mentions_record):
+        # Augment a copy with rt_mentions fields from v2
+        out = dict(rec)
+        if mentions_record:
+            for f in ("rt_mentions", "review_tracker_mentions",
+                      "rt_yelp_mentions", "rt_google_mentions",
+                      "rt_tripadvisor_mentions"):
+                if mentions_record.get(f) is not None:
+                    out[f] = mentions_record.get(f)
+        return out
+
+    # Pass 1: all qr_employees first (preserves their click data)
+    for q in qr_emps:
+        ks = keys_for(q)
+        if not ks:
+            continue
+        if any(k in seen_keys for k in ks):
+            continue
+        seen_keys.update(ks)
+        v2_match = next((v2_index[k] for k in ks if k in v2_index), None)
+        merged.append(absorb(q, v2_match))
+
+    # Pass 2: employees_v2 records that weren't in qr_employees
+    for v in v2_emps:
+        ks = keys_for(v)
+        if not ks:
+            continue
+        if any(k in seen_keys for k in ks):
+            continue
+        seen_keys.update(ks)
+        merged.append(absorb({
+            "name": v.get("display_name") or v.get("name") or v.get("report_name"),
+            "yelp_clicks": 0, "google_clicks": 0, "tripadvisor_clicks": 0,
+        }, v))
+
+    png = generate_qr_leaderboard_slide(merged, quarter=quarter, year=year, title=title)
     safe_q = (quarter or "Q").replace("/", "_")
     return Response(
         content=png,
         media_type="image/png",
         headers={
-            "Content-Disposition": f'attachment; filename="qr_leaderboard_{safe_q}_{year}.png"'
+            "Content-Disposition": f'attachment; filename="qr_clicks_vs_mentions_{safe_q}_{year}.png"'
         },
     )
 

@@ -83,165 +83,236 @@ def generate_qr_leaderboard_slide(
     title: str | None = None,
 ) -> bytes:
     """
-    Render the QR leaderboard to a 1920x1080 PNG.
+    Render the QR Click vs Review Mentions report to a 1920x1080 PNG.
 
-    `employees` should be a list of dicts with keys:
-        name, yelp_clicks, google_clicks, tripadvisor_clicks
-    Will be ranked by total clicks descending.
+    Each row shows:
+      * Total QR Clicks (Yelp + Google + TripAdvisor combined)
+      * Review Mentions (Review Tracker mentions, all platforms combined)
+      * Conversion (mentions / clicks * 100)
+
+    Lists ALL employees, falling into a 2-column grid when there are more than
+    14 rows so the slide never truncates.
+
+    `employees` items may include:
+        name, yelp_clicks, google_clicks, tripadvisor_clicks,
+        rt_mentions or review_tracker_mentions
     """
     width, height = 1920, 1080
     img = Image.new("RGB", (width, height), BG)
     draw = ImageDraw.Draw(img)
 
-    # Sort defensively
-    def total(e):
+    def total_clicks(e):
         return (e.get("yelp_clicks") or 0) + (e.get("google_clicks") or 0) + (e.get("tripadvisor_clicks") or 0)
 
-    employees = sorted(employees, key=total, reverse=True)
+    def total_mentions(e):
+        # Combine ALL RT platforms into one number. Many shapes exist in the
+        # codebase — try them all and sum.
+        return int(
+            (e.get("rt_mentions") or 0)
+            + (e.get("review_tracker_mentions") or 0)
+            + (e.get("rt_yelp_mentions") or 0)
+            + (e.get("rt_google_mentions") or 0)
+            + (e.get("rt_tripadvisor_mentions") or 0)
+        )
+
+    employees = sorted(employees, key=total_clicks, reverse=True)
 
     # ----- Left brand panel ------------------------------------------------
-    panel_w = 460
+    panel_w = 360
     draw.rectangle([(0, 0), (panel_w, height)], fill=BG_PANEL)
 
-    # Logo (try to load the standard asset; fall back to text)
     logo_path = "/app/backend/assets/bubba_gump_logo.png"
-    logo_y = 70
+    logo_y = 50
     if os.path.exists(logo_path):
         try:
             logo = Image.open(logo_path).convert("RGBA")
-            logo.thumbnail((280, 280))
+            logo.thumbnail((220, 220))
             img.paste(logo, ((panel_w - logo.width) // 2, logo_y), logo)
-            logo_y += logo.height + 30
+            logo_y += logo.height + 20
         except Exception:
-            logo_y = 80
+            logo_y = 60
     else:
-        logo_y = 80
+        logo_y = 60
 
-    # Title block
-    title_text = title or "QR REVIEW\nLEADERBOARD"
-    f_title = _font(54, bold=True)
-    y = logo_y + 40
+    title_text = title or "QR CLICKS\nvs\nREVIEWS"
+    f_title = _font(40, bold=True)
+    y = logo_y + 20
     for line in title_text.split("\n"):
         _draw_centered(draw, line, panel_w / 2, y, f_title, GOLD)
-        y += 65
+        y += 50
 
-    f_period = _font(32, bold=True)
-    _draw_centered(draw, f"{quarter} {year}", panel_w / 2, y + 30, f_period, TEXT)
+    f_period = _font(26, bold=True)
+    _draw_centered(draw, f"{quarter} {year}", panel_w / 2, y + 25, f_period, TEXT)
 
-    # Legend
-    f_legend_label = _font(20, bold=True)
-    f_legend = _font(18)
-    legend_y = height - 280
-    legend_items = [
-        (GOLD, "1st - Champion"),
-        (SILVER, "2nd - Runner Up"),
-        (BRONZE, "3rd - Third Place"),
-        (GREEN_500, "Top 5 - Honor Roll"),
-    ]
-    _draw_centered(draw, "RANK LEGEND", panel_w / 2, legend_y, f_legend_label, GOLD)
-    for i, (color, label) in enumerate(legend_items):
-        cy = legend_y + 40 + i * 36
-        # color square
-        draw.rectangle([panel_w / 2 - 130, cy - 12, panel_w / 2 - 100, cy + 12], fill=color)
-        # label
-        draw.text((panel_w / 2 - 90, cy - 10), label, font=f_legend, fill=TEXT)
+    # Aggregate stats on left panel
+    grand_clicks = sum(total_clicks(e) for e in employees)
+    grand_mentions = sum(total_mentions(e) for e in employees)
+    conv = (grand_mentions / grand_clicks * 100) if grand_clicks else 0
+
+    stats_y = y + 95
+    f_stat_label = _font(16, bold=True)
+    f_stat_value = _font(38, bold=True)
+
+    def stat_block(label, value, color, top):
+        _draw_centered(draw, label, panel_w / 2, top, f_stat_label, TEXT_DIM)
+        _draw_centered(draw, value, panel_w / 2, top + 30, f_stat_value, color)
+
+    stat_block("TOTAL CLICKS", str(grand_clicks), VIOLET, stats_y)
+    stat_block("REVIEW MENTIONS", str(grand_mentions), EMERALD, stats_y + 90)
+    stat_block("CONVERSION", f"{conv:.1f}%", GOLD, stats_y + 180)
+
+    # Legend at the bottom of the panel
+    legend_y = height - 130
+    f_legend = _font(15)
+    draw.text((30, legend_y),
+              "Clicks  = Yelp + Google + TripAdvisor",
+              font=f_legend, fill=TEXT_DIM)
+    draw.text((30, legend_y + 24),
+              "Mentions = ReviewTracker mentions",
+              font=f_legend, fill=TEXT_DIM)
+    draw.text((30, legend_y + 48),
+              "(combined across all platforms)",
+              font=f_legend, fill=TEXT_DIM)
 
     # ----- Right side: title + table ---------------------------------------
-    table_x = panel_w + 60
-    table_y = 70
-    table_w = width - table_x - 60
+    table_x = panel_w + 40
+    table_y = 50
+    table_w = width - table_x - 40
 
-    f_header = _font(44, bold=True)
-    draw.text((table_x, table_y), "Top Reviewers by QR Scans", font=f_header, fill=TEXT)
-    draw.text((table_x, table_y + 60), f"Live data — {quarter} {year}", font=_font(22), fill=TEXT_DIM)
+    f_header = _font(38, bold=True)
+    draw.text((table_x, table_y), "QR Clicks vs Review Mentions", font=f_header, fill=TEXT)
+    draw.text((table_x, table_y + 50),
+              f"All staff — sorted by total clicks ({len(employees)} employees)",
+              font=_font(18), fill=TEXT_DIM)
 
-    # Column layout (after header)
-    col_x = {
-        "rank": table_x + 10,
-        "name": table_x + 90,
-        "yelp": table_x + table_w - 460,
-        "google": table_x + table_w - 340,
-        "tripadvisor": table_x + table_w - 220,
-        "total": table_x + table_w - 90,
-    }
+    # ----- Determine layout: 1 col vs 2 col --------------------------------
+    head_y = table_y + 105
+    available_h = height - head_y - 70
+    use_two_col = len(employees) > 14
+    cols = 2 if use_two_col else 1
+    col_w = (table_w - (40 if use_two_col else 0)) / cols
+    rows_per_col = -(-len(employees) // cols)  # ceil division
+    row_h = max(34, min(48, int(available_h / max(rows_per_col, 1))))
 
-    head_y = table_y + 130
-    f_col = _font(22, bold=True)
-    draw.rectangle([(table_x, head_y - 8), (table_x + table_w, head_y + 36)], fill=HEADER_BG)
-    draw.text((col_x["rank"], head_y), "Rank", font=f_col, fill=TEXT)
-    draw.text((col_x["name"], head_y), "Employee", font=f_col, fill=TEXT)
-    _draw_centered(draw, "Yelp",        col_x["yelp"],        head_y + 14, f_col, RED)
-    _draw_centered(draw, "Google",      col_x["google"],      head_y + 14, f_col, BLUE_500)
-    _draw_centered(draw, "TripAdvisor", col_x["tripadvisor"], head_y + 14, f_col, EMERALD)
-    _draw_centered(draw, "Total",       col_x["total"],       head_y + 14, f_col, VIOLET)
+    # ----- Per-column band positions (relative to col origin) --------------
+    BAND_RANK = 0
+    BAND_NAME = 1
+    BAND_CLK = 2
+    BAND_MEN = 3
+    BAND_CONV = 4
 
-    # Rows — show top 12
-    visible = employees[:12]
-    if not visible:
-        # Nothing to render
-        f_empty = _font(28)
-        draw.text((table_x + 40, head_y + 80), "No QR scan data yet — generate codes for your team to start tracking.",
+    def band_x(col_origin: float, band: int) -> float:
+        # Within each column: rank | name | clicks | mentions | conv
+        rank_w = 40
+        name_w = col_w - rank_w - 70 - 70 - 80
+        clk_w = 70
+        men_w = 70
+        conv_w = 80
+        if band == BAND_RANK:
+            return col_origin + rank_w / 2
+        if band == BAND_NAME:
+            return col_origin + rank_w + 5
+        if band == BAND_CLK:
+            return col_origin + rank_w + name_w + clk_w / 2
+        if band == BAND_MEN:
+            return col_origin + rank_w + name_w + clk_w + men_w / 2
+        if band == BAND_CONV:
+            return col_origin + rank_w + name_w + clk_w + men_w + conv_w / 2
+        return col_origin
+
+    # ----- Header rows for each column ------------------------------------
+    f_col_head = _font(16, bold=True)
+    for c in range(cols):
+        col_origin = table_x + c * (col_w + 40)
+        draw.rectangle(
+            [(col_origin, head_y - 6), (col_origin + col_w, head_y + 26)],
+            fill=HEADER_BG,
+        )
+        draw.text((col_origin + 10, head_y), "#", font=f_col_head, fill=TEXT_DIM)
+        draw.text((band_x(col_origin, BAND_NAME), head_y), "Employee",
+                  font=f_col_head, fill=TEXT_DIM)
+        _draw_centered(draw, "Clicks", band_x(col_origin, BAND_CLK), head_y + 12,
+                       f_col_head, VIOLET)
+        _draw_centered(draw, "Mentions", band_x(col_origin, BAND_MEN), head_y + 12,
+                       f_col_head, EMERALD)
+        _draw_centered(draw, "Conv %", band_x(col_origin, BAND_CONV), head_y + 12,
+                       f_col_head, GOLD)
+
+    # ----- Rows -----------------------------------------------------------
+    if not employees:
+        f_empty = _font(22)
+        draw.text((table_x + 20, head_y + 80),
+                  "No QR scan data yet — generate codes for your team to start tracking.",
                   font=f_empty, fill=TEXT_DIM)
         out = io.BytesIO()
         img.save(out, format="PNG", optimize=True)
         return out.getvalue()
 
-    max_total = max(total(e) for e in visible) or 1
-    row_h = 64
-    row_y = head_y + 56
-    f_row_name = _font(26, bold=True)
-    f_row_num = _font(28, bold=True)
-    f_row_total = _font(34, bold=True)
-    f_rank_badge = _font(28, bold=True)
+    f_row_name = _font(int(row_h * 0.5), bold=True)
+    f_row_num = _font(int(row_h * 0.55), bold=True)
+    f_row_rank = _font(int(row_h * 0.45), bold=True)
+    f_row_conv = _font(int(row_h * 0.45), bold=True)
 
-    for i, emp in enumerate(visible):
-        cy = row_y + i * row_h
-        # row alternating bg
-        if i % 2 == 0:
-            draw.rectangle([(table_x, cy - 6), (table_x + table_w, cy + row_h - 14)], fill=ROW_ALT)
+    name_truncate_chars = 22 if use_two_col else 36
 
-        rank = i + 1
-        rank_color = GOLD if rank == 1 else SILVER if rank == 2 else BRONZE if rank == 3 else (
-            GREEN_500 if rank <= 5 else TEXT_DIM)
+    rows_start_y = head_y + 36
 
-        # rank badge
-        badge_r = 22
-        bx = col_x["rank"] + 8
-        by = cy + 16
-        draw.ellipse([bx - badge_r, by - badge_r, bx + badge_r, by + badge_r], fill=rank_color)
-        _draw_centered(draw, str(rank), bx, by, f_rank_badge,
-                       (15, 23, 42) if rank in (1, 2, 4, 5) else TEXT)
+    for idx, emp in enumerate(employees):
+        rank = idx + 1
+        col_idx = idx // rows_per_col if use_two_col else 0
+        within_col_idx = idx if not use_two_col else (idx % rows_per_col)
 
-        # name
+        col_origin = table_x + col_idx * (col_w + 40)
+        cy = rows_start_y + within_col_idx * row_h
+
+        # Alternating row background
+        if within_col_idx % 2 == 0:
+            draw.rectangle(
+                [(col_origin, cy), (col_origin + col_w, cy + row_h - 4)],
+                fill=ROW_ALT,
+            )
+
+        # Rank badge
+        rank_color = (
+            GOLD if rank == 1 else SILVER if rank == 2 else BRONZE if rank == 3 else
+            GREEN_500 if rank <= 5 else TEXT_DIM
+        )
+        rank_label_color = (15, 23, 42) if rank in (1, 2, 4, 5) else TEXT
+        if rank <= 5:
+            badge_r = int(row_h * 0.32)
+            bx = col_origin + 22
+            by = cy + row_h / 2 - 2
+            draw.ellipse(
+                [bx - badge_r, by - badge_r, bx + badge_r, by + badge_r],
+                fill=rank_color,
+            )
+            _draw_centered(draw, str(rank), bx, by, f_row_rank, rank_label_color)
+        else:
+            _draw_centered(draw, str(rank), col_origin + 22, cy + row_h / 2 - 2,
+                           f_row_rank, TEXT_DIM)
+
+        # Name
         name = (emp.get("name") or "—").strip()
-        if len(name) > 28:
-            name = name[:27] + "…"
-        draw.text((col_x["name"], cy + 6), name, font=f_row_name, fill=TEXT)
+        if len(name) > name_truncate_chars:
+            name = name[: name_truncate_chars - 1] + "…"
+        draw.text(
+            (band_x(col_origin, BAND_NAME), cy + (row_h - int(row_h * 0.5)) / 2 - 2),
+            name, font=f_row_name, fill=TEXT,
+        )
 
-        # platform values (heatmap-tinted)
-        yelp = int(emp.get("yelp_clicks") or 0)
-        google = int(emp.get("google_clicks") or 0)
-        ta = int(emp.get("tripadvisor_clicks") or 0)
-        tot = yelp + google + ta
+        # Numbers
+        clk = total_clicks(emp)
+        men = total_mentions(emp)
+        cnv = (men / clk * 100) if clk else 0
 
-        _draw_centered(draw, str(yelp),   col_x["yelp"],   cy + 18, f_row_num, _heat_color(yelp, max_total))
-        _draw_centered(draw, str(google), col_x["google"], cy + 18, f_row_num, _heat_color(google, max_total))
-        _draw_centered(draw, str(ta),     col_x["tripadvisor"], cy + 18, f_row_num, _heat_color(ta, max_total))
-
-        # total — pill-style on right
-        pill_w, pill_h = 110, 44
-        px = col_x["total"] - pill_w / 2
-        py = cy + 18 - pill_h / 2
-        draw.rounded_rectangle([(px, py), (px + pill_w, py + pill_h)],
-                               radius=12, fill=(VIOLET[0] // 3, VIOLET[1] // 3, VIOLET[2] // 3))
-        _draw_centered(draw, str(tot), col_x["total"], cy + 18, f_row_total, VIOLET)
-
-    # Footer
-    footer_y = height - 60
-    draw.line([(table_x, footer_y - 20), (table_x + table_w, footer_y - 20)], fill=GRID, width=1)
-    draw.text((table_x, footer_y - 5),
-              "Drop a review — every scan ranks your favorite server.",
-              font=_font(20), fill=TEXT_DIM)
+        _draw_centered(draw, str(clk), band_x(col_origin, BAND_CLK), cy + row_h / 2 - 2,
+                       f_row_num, VIOLET)
+        _draw_centered(draw, str(men), band_x(col_origin, BAND_MEN), cy + row_h / 2 - 2,
+                       f_row_num, EMERALD if men else TEXT_DIM)
+        conv_color = GREEN_500 if cnv >= 30 else YELLOW_500 if cnv >= 10 else RED if clk else TEXT_DIM
+        conv_text = f"{cnv:.1f}%" if clk else "—"
+        _draw_centered(draw, conv_text, band_x(col_origin, BAND_CONV), cy + row_h / 2 - 2,
+                       f_row_conv, conv_color)
 
     out = io.BytesIO()
     img.save(out, format="PNG", optimize=True)
