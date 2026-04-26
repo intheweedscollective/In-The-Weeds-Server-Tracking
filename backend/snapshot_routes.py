@@ -298,7 +298,9 @@ async def upload_to_snapshot(
             elif upload_type_enum == UploadType.CUSTOMER_VOICE:
                 final_parsed_data = await parse_cv_file(file.filename, contents)
             elif upload_type_enum == UploadType.REVIEW_TRACKER:
-                final_parsed_data = await parse_rt_file(file.filename, contents)
+                final_parsed_data = await parse_rt_file(
+                    file.filename, contents, snapshot_id=snapshot_id
+                )
         except Exception as e:
             parse_error = str(e)
             logger.error(f"Parse error for {upload_type}: {e}")
@@ -3096,10 +3098,14 @@ async def parse_cv_file(filename: str, contents: bytes) -> Dict[str, Any]:
     return {"employees": employees, "record_count": len(employees)}
 
 
-async def parse_rt_file(filename: str, contents: bytes) -> Dict[str, Any]:
+async def parse_rt_file(
+    filename: str, contents: bytes, snapshot_id: Optional[str] = None
+) -> Dict[str, Any]:
     """
     Parse ReviewTracker CSV file.
-    Extracts employee mentions from review text using GPT-4o name detection.
+    Extracts employee mentions from review text using known-name detection.
+    Resolves the candidate name list from the target snapshot (preferred)
+    or falls back to employees_v2 for the snapshot's quarter/year.
     """
     import csv
     from io import StringIO
@@ -3114,23 +3120,47 @@ async def parse_rt_file(filename: str, contents: bytes) -> Dict[str, Any]:
     reviews = []
     employee_mentions = {}
     
-    # Get list of known employee names from the database for matching
     db = get_db()
-    known_employees = await db.employees_v2.find(
-        {"quarter": "Q1", "year": 2026},
-        {"_id": 0, "name": 1}
-    ).to_list(100)
-    known_names = [e.get("name", "").lower() for e in known_employees if e.get("name")]
-    
-    # Also try from snapshot_workflow if no employees_v2
-    if not known_names:
-        latest_snapshot = await db.snapshot_workflow.find_one(
-            {"status": "completed"},
-            {"_id": 0, "employees": 1},
-            sort=[("effective_date", -1)]
+
+    # Resolve quarter/year from the snapshot we're attaching to so
+    # we look up the right employees. Old code hard-coded Q1 2026 and
+    # returned 0 mentions for any other quarter.
+    target_quarter = "Q1"
+    target_year = 2026
+    snapshot_doc = None
+    if snapshot_id:
+        snapshot_doc = await db.snapshot_workflow.find_one(
+            {"id": snapshot_id}, {"_id": 0, "quarter": 1, "year": 1, "employees": 1}
         )
-        if latest_snapshot:
-            known_names = [e.get("name", "").lower() for e in latest_snapshot.get("employees", []) if e.get("name")]
+        if snapshot_doc:
+            target_quarter = (snapshot_doc.get("quarter") or "Q1").upper()
+            target_year = snapshot_doc.get("year") or 2026
+
+    # Prefer the snapshot's own employee list — it always carries the
+    # current display_name / report_name the user has manually edited.
+    known_employees: list[dict] = []
+    if snapshot_doc and snapshot_doc.get("employees"):
+        known_employees = [
+            {"name": (e.get("display_name") or e.get("name") or "").strip()}
+            for e in snapshot_doc["employees"]
+            if (e.get("display_name") or e.get("name"))
+        ]
+
+    if not known_employees:
+        known_employees = await db.employees_v2.find(
+            {"quarter": target_quarter, "year": target_year},
+            {"_id": 0, "name": 1, "display_name": 1}
+        ).to_list(200)
+        known_employees = [
+            {"name": (e.get("display_name") or e.get("name") or "").strip()}
+            for e in known_employees if (e.get("display_name") or e.get("name"))
+        ]
+
+    known_names = [e["name"].lower() for e in known_employees if e["name"]]
+    logger.info(
+        f"parse_rt_file: matching against {len(known_names)} known names "
+        f"({target_quarter} {target_year}, snapshot={snapshot_id})"
+    )
     
     for row in reader:
         # Get review text from various possible column names
@@ -3143,19 +3173,29 @@ async def parse_rt_file(filename: str, contents: bytes) -> Dict[str, Any]:
         # Track which employees were mentioned in this review (avoid double-counting)
         mentioned_in_review = set()
         
-        # Build name variations for special cases
-        name_variations = {
-            "starwars": ["starwars", "star wars", "star"],
-            "treyanne": ["treyanne", "trey"],
+        # Build name variations using DEFAULT_NICKNAME_MAP (formal -> nicks)
+        # so the RT parser stays in sync with merge_snapshot_data.
+        name_variations: dict[str, list[str]] = {
+            # User-confirmed (also covered via DEFAULT_NICKNAME_MAP below
+            # but listed here for clarity / explicit precedence)
+            "lakeisha": ["lakeisha", "keisha"],
+            "treyanna": ["treyanna", "treyana", "trey"],
             "thaddeus": ["thaddeus", "tad", "thad"],
-            "abigail": ["abigail", "abby"],
-            "glennice": ["glennice", "lennie"],
-            "terrance": ["terrance", "terry"],
-            "matthew": ["matthew", "matt"],
+            "thomas": ["thomas", "tk", "tom"],
             "eric": ["eric", "ikey"],
-            "robert": ["robert", "rob", "bob"],
-            "daniel": ["daniel", "dan"],
+            "glennice": ["glennice", "lennie"],
+            "matthew": ["matthew", "matt"],
+            "starwars": ["starwars", "star wars"],
         }
+        # Layer DEFAULT_NICKNAME_MAP on top so future entries propagate
+        # automatically (DEFAULT keyed by nickname -> formal).
+        for nick, formal in DEFAULT_NICKNAME_MAP.items():
+            name_variations.setdefault(formal, [formal]).append(nick)
+            # dedupe while preserving order
+            seen = set()
+            name_variations[formal] = [
+                v for v in name_variations[formal] if not (v in seen or seen.add(v))
+            ]
         
         # Check each known employee
         for name in known_names:
