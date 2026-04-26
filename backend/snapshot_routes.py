@@ -1900,7 +1900,7 @@ async def generate_snapshot_workflow_slide(
 
 
 @snapshot_router.post("/snapshots/{snapshot_id}/sync-from-employees")
-async def sync_pos_from_employees_v2(snapshot_id: str):
+async def sync_pos_from_employees_v2(snapshot_id: str, force: bool = False):
     """
     Sync POS data from employees_v2 collection to the snapshot.
     This ensures the snapshot uses the same verified data as the Employee tab.
@@ -1976,6 +1976,42 @@ async def sync_pos_from_employees_v2(snapshot_id: str):
     if losers_dd:
         await db.employees_v2.delete_many({"id": {"$in": losers_dd}})
     employees_v2 = [primary_dd[k] for k in primary_order_dd]
+
+    # ------------------------------------------------------------------
+    # SAFETY GUARD: refuse to overwrite POS upload if employees_v2 is
+    # suspiciously thin compared to it. A fresh PDF upload populates POS
+    # with 25-35 rows but `/process` has to run before employees_v2 mirrors
+    # them. If sync-from-employees fires in that window, a naive rebuild
+    # would destroy 30 real POS rows and leave 0-5 stale v2 rows behind.
+    #
+    # Heuristic: bail out (with explicit error) if v2 has fewer than 50%
+    # of the rows the POS upload currently holds. Caller must force=true
+    # in the query string to override (e.g. legitimate cleanup of a
+    # ghost-heavy v2). This guard is purely additive and does not affect
+    # the original intent (de-resurrect ghosts after delete).
+    # ------------------------------------------------------------------
+    uploads_pre = snapshot.get("uploads", [])
+    pos_idx_pre = next(
+        (i for i, u in enumerate(uploads_pre) if u.get("upload_type") == "pos_report"),
+        None
+    )
+    pos_count_pre = 0
+    if pos_idx_pre is not None:
+        pos_count_pre = len(
+            uploads_pre[pos_idx_pre].get("parsed_data", {}).get("employees", []) or []
+        )
+    v2_count = len(employees_v2)
+    if pos_count_pre >= 10 and v2_count < pos_count_pre * 0.5 and not force:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"sync-from-employees aborted: employees_v2 has only {v2_count} rows "
+                f"but the POS upload holds {pos_count_pre}. This usually means the "
+                f"snapshot was never processed yet — running sync would destroy POS "
+                f"data. Run /process first to build employees_v2 from POS, OR pass "
+                f"?force=true if you really intend to overwrite POS from a thin v2."
+            )
+        )
 
     # ------------------------------------------------------------------
     # REBUILD pos_upload.parsed_data.employees ENTIRELY from employees_v2.
