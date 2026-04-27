@@ -19,41 +19,38 @@ from typing import Any, Dict, List, Tuple
 from PIL import Image, ImageDraw, ImageFont
 
 
-def _ref_cell_color(value: float, metric_type: str) -> str:
+def _ref_cell_color(value: float, metric_type: str, has_detractors: bool = False) -> str:
     """Color thresholds per the user's spec:
        - >100% benchmark = blue (exceeding)
        - 80-100% = green (meeting)
        - 60-80% = yellow (work in progress)
        - <60% = red (needs immediate improvement)
-    For CV/RT/Bonus point columns we keep the same legend semantically by
-    using value-based bands that mirror the percentage tiers."""
+
+    For CV/RT/Bonus columns: red is reserved for ZERO or NEGATIVE net
+    score. Any positive net feedback (even if some detractors offset it)
+    is at least yellow — the score itself reflects the offset, the color
+    just signals "they got positive feedback overall"."""
     if metric_type == "percentage":
         if value > 100: return REF_COLORS["blue"]
         if value >= 80: return REF_COLORS["green"]
         if value >= 60: return REF_COLORS["yellow"]
         return REF_COLORS["red"]
     if metric_type == "cv":
-        # CV bench is +11 (matches snapshot legend) — apply same thresholds
-        # as percentage relative to 11.
-        pct = (value / 11.0) * 100 if 11 else 0
-        if pct > 100: return REF_COLORS["blue"]
-        if pct >= 80: return REF_COLORS["green"]
-        if pct >= 60: return REF_COLORS["yellow"]
-        return REF_COLORS["red"]
+        # Net combined score: NPS%/10 + promoters - 2*detractors
+        if value <= 0:    return REF_COLORS["red"]   # no positive feedback or net negative
+        if value > 11:    return REF_COLORS["blue"]   # exceeding benchmark
+        if value >= 8:    return REF_COLORS["green"]  # ~75%+ of bench
+        return REF_COLORS["yellow"]                    # any positive feedback
     if metric_type == "rt":
-        # RT bench is +5 mentions
-        pct = (value / 5.0) * 100 if value else 0
-        if pct > 100: return REF_COLORS["blue"]
-        if pct >= 80: return REF_COLORS["green"]
-        if pct >= 60: return REF_COLORS["yellow"]
-        return REF_COLORS["red"]
+        if value <= 0:    return REF_COLORS["red"]
+        if value >= 10:   return REF_COLORS["blue"]
+        if value >= 5:    return REF_COLORS["green"]
+        return REF_COLORS["yellow"]
     if metric_type == "bonus":
-        # Bonus bench is +5 pts
-        pct = (value / 5.0) * 100 if value else 0
-        if pct > 100: return REF_COLORS["blue"]
-        if pct >= 80: return REF_COLORS["green"]
-        if pct >= 60: return REF_COLORS["yellow"]
-        return REF_COLORS["red"]
+        if value <= 0:    return REF_COLORS["red"]
+        if value >= 5:    return REF_COLORS["blue"]
+        if value >= 3:    return REF_COLORS["green"]
+        return REF_COLORS["yellow"]
     return REF_COLORS["green"]
 
 
@@ -263,6 +260,7 @@ def _draw_table(
         cv_score = emp.get("cv_score", 0) or 0
         rt_mentions = emp.get("review_mentions", 0) or emp.get("rt_mentions", 0) or 0
         bonus = emp.get("bonus_points", 0) or emp.get("metric_bonus", 0) or 0
+        cv_detractors = emp.get("cv_detractors", 0) or 0
 
         score_color = _score_color(score, a_min, b_min)
 
@@ -274,7 +272,7 @@ def _draw_table(
             (f"{lbw_pct:.0f}%", _ref_cell_color(lbw_pct, "percentage"), "center", cell_font),
             (f"{glass_pct:.0f}%", _ref_cell_color(glass_pct, "percentage"), "center", cell_font),
             (f"{lsc_pct:.0f}%", _ref_cell_color(lsc_pct, "percentage"), "center", cell_font),
-            (f"+{cv_score:.1f}", _ref_cell_color(cv_score, "cv"), "center", cell_font),
+            (f"+{cv_score:.1f}", _ref_cell_color(cv_score, "cv", cv_detractors > 0), "center", cell_font),
             (f"+{rt_mentions:.1f}", _ref_cell_color(rt_mentions, "rt"), "center", cell_font),
             (f"+{bonus:.1f}", _ref_cell_color(bonus, "bonus"), "center", cell_font),
             (f"{score:.1f}", score_color, "center", cell_font),

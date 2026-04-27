@@ -35,9 +35,12 @@ COLORS = {
 }
 
 
-def get_cell_color(value: float, metric_type: str = "percentage") -> str:
+def get_cell_color(value: float, metric_type: str = "percentage", has_detractors: bool = False) -> str:
     """Determine cell color. Thresholds per user spec:
-       <60% red, <80% yellow, <100% green, >100% blue."""
+       - Percentage cols: <60 red, <80 yellow, <100 green, >100 blue
+       - CV col: red ONLY if net cv_score <= 0 (zero feedback or detractors
+                 net-negative). Any positive net is at least yellow.
+       - RT/Bonus: zero red; otherwise tiered absolute thresholds."""
     if metric_type == "percentage":
         if value > 100:
             return COLORS["blue"]
@@ -48,38 +51,29 @@ def get_cell_color(value: float, metric_type: str = "percentage") -> str:
         else:
             return COLORS["red"]
     elif metric_type == "cv":
-        # CV bench is 11 — apply same percentage tiers
-        pct = (value / 11.0) * 100 if value else 0
-        if pct > 100:
-            return COLORS["blue"]
-        elif pct >= 80:
-            return COLORS["green"]
-        elif pct >= 60:
-            return COLORS["yellow"]
-        else:
+        if value <= 0:
             return COLORS["red"]
+        if value > 11:
+            return COLORS["blue"]
+        if value >= 8:
+            return COLORS["green"]
+        return COLORS["yellow"]
     elif metric_type == "rt":
-        # RT bench is 5 mentions
-        pct = (value / 5.0) * 100 if value else 0
-        if pct > 100:
-            return COLORS["blue"]
-        elif pct >= 80:
-            return COLORS["green"]
-        elif pct >= 60:
-            return COLORS["yellow"]
-        else:
+        if value <= 0:
             return COLORS["red"]
+        if value >= 10:
+            return COLORS["blue"]
+        if value >= 5:
+            return COLORS["green"]
+        return COLORS["yellow"]
     elif metric_type == "bonus":
-        # Bonus bench is 5 pts
-        pct = (value / 5.0) * 100 if value else 0
-        if pct > 100:
-            return COLORS["blue"]
-        elif pct >= 80:
-            return COLORS["green"]
-        elif pct >= 60:
-            return COLORS["yellow"]
-        else:
+        if value <= 0:
             return COLORS["red"]
+        if value >= 5:
+            return COLORS["blue"]
+        if value >= 3:
+            return COLORS["green"]
+        return COLORS["yellow"]
     return COLORS["green"]
 
 
@@ -230,7 +224,8 @@ def build_full_rankings_pdf(
         cv_score = emp.get("cv_score", 0) or 0
         rt_mentions = emp.get("review_mentions", 0) or emp.get("rt_mentions", 0) or 0
         bonus = emp.get("bonus_points", 0) or emp.get("metric_bonus", 0) or 0
-        
+        cv_detractors = emp.get("cv_detractors", 0) or 0
+
         # Row data with colors
         row_data = [
             (pos_label, None, "center"),
@@ -240,7 +235,7 @@ def build_full_rankings_pdf(
             (f"{lbw_pct:.0f}%", get_cell_color(lbw_pct, "percentage"), "center"),
             (f"{glass_pct:.0f}%", get_cell_color(glass_pct, "percentage"), "center"),
             (f"{lsc_pct:.0f}%", get_cell_color(lsc_pct, "percentage"), "center"),
-            (f"+{cv_score:.1f}", get_cell_color(cv_score, "cv"), "center"),
+            (f"+{cv_score:.1f}", get_cell_color(cv_score, "cv", cv_detractors > 0), "center"),
             (f"+{rt_mentions:.1f}", get_cell_color(rt_mentions, "rt"), "center"),
             (f"+{bonus:.1f}", get_cell_color(bonus, "bonus"), "center"),
             (f"{score:.1f}", None, "right"),
