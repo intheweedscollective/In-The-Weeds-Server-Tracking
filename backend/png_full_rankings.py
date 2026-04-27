@@ -147,39 +147,39 @@ def _draw_sidebar(img: Image.Image, draw: ImageDraw.ImageDraw, quarter: str) -> 
                    _load_font(48, True), REF_COLORS["text_white"], anchor="mm")
 
     # ---- Title (LARGE — fills sidebar like the reference) ----
-    title_y = 360
+    title_y = 340
     _draw_text(draw, (cx, title_y), f"{quarter} SERVER",
-               _load_font(72, True), REF_COLORS["text_white"], anchor="mm")
-    _draw_text(draw, (cx, title_y + 90), "PERFORMANCE",
-               _load_font(96, True), REF_COLORS["red"], anchor="mm")
-    _draw_text(draw, (cx, title_y + 180), "SNAPSHOT",
-               _load_font(72, True), REF_COLORS["text_white"], anchor="mm")
-    _draw_text(draw, (cx, title_y + 245),
+               _load_font(54, True), REF_COLORS["text_white"], anchor="mm")
+    _draw_text(draw, (cx, title_y + 75), "PERFORMANCE",
+               _load_font(70, True), REF_COLORS["red"], anchor="mm")
+    _draw_text(draw, (cx, title_y + 150), "SNAPSHOT",
+               _load_font(54, True), REF_COLORS["text_white"], anchor="mm")
+    _draw_text(draw, (cx, title_y + 210),
                datetime.now().strftime("%B %d, %Y"),
-               _load_font(34, True), REF_COLORS["red"], anchor="mm")
+               _load_font(28, True), REF_COLORS["red"], anchor="mm")
 
     # ---- Legend ----
-    legend_y = title_y + 305
+    legend_y = title_y + 250
     items = [
         ("EXCEEDING ALL",   "EXPECTATIONS", REF_COLORS["blue"]),
         ("MEETING",         "EXPECTATIONS", REF_COLORS["green"]),
         ("WORK IN",         "PROGRESS",     REF_COLORS["yellow"]),
         ("NEEDS IMMEDIATE", "IMPROVEMENT",  REF_COLORS["red"]),
     ]
-    label_font = _load_font(28, True)
+    label_font = _load_font(22, True)
     swatch_x = 50
-    swatch_w = 50
-    swatch_h = 72
-    text_x = swatch_x + swatch_w + 20
+    swatch_w = 42
+    swatch_h = 60
+    text_x = swatch_x + swatch_w + 18
     for i, (l1, l2, color) in enumerate(items):
-        y = legend_y + i * 88
+        y = legend_y + i * 72
         draw.rectangle((swatch_x, y, swatch_x + swatch_w, y + swatch_h), fill=color)
-        _draw_text(draw, (text_x, y + 10), l1, label_font, color, anchor="lt")
-        _draw_text(draw, (text_x, y + 42), l2, label_font, color, anchor="lt")
+        _draw_text(draw, (text_x, y + 8),  l1, label_font, color, anchor="lt")
+        _draw_text(draw, (text_x, y + 34), l2, label_font, color, anchor="lt")
 
     # ---- Footer ----
-    foot_font = _load_font(26, True)
-    footer_y = SLIDE_HEIGHT - 110
+    foot_font = _load_font(20, True)
+    footer_y = SLIDE_HEIGHT - 140
     for j, line in enumerate([
         "DON'T WAIT TO IMPACT",
         "THIS NUMBER.",
@@ -188,7 +188,7 @@ def _draw_sidebar(img: Image.Image, draw: ImageDraw.ImageDraw, quarter: str) -> 
         "PLEASE SEE MANAGEMENT.",
     ]):
         if line:
-            _draw_text(draw, (cx, footer_y + j * 32), line, foot_font,
+            _draw_text(draw, (cx, footer_y + j * 26), line, foot_font,
                        REF_COLORS["text_white"], anchor="mm")
 
 

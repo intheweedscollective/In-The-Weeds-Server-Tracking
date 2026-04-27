@@ -110,25 +110,25 @@ def build_full_rankings_pdf(
         except Exception:
             pass
 
-    title_y = logo_y - 1.85 * inch
+    title_y = logo_y - 1.65 * inch
     c.setFillColor(colors.HexColor(COLORS["text_white"]))
-    c.setFont("Helvetica-Bold", 42)
+    c.setFont("Helvetica-Bold", 32)
     c.drawCentredString(cx, title_y, f"{quarter} SERVER")
 
     c.setFillColor(colors.HexColor(COLORS["red"]))
-    c.setFont("Helvetica-Bold", 56)
-    c.drawCentredString(cx, title_y - 0.75 * inch, "PERFORMANCE")
+    c.setFont("Helvetica-Bold", 42)
+    c.drawCentredString(cx, title_y - 0.55 * inch, "PERFORMANCE")
 
     c.setFillColor(colors.HexColor(COLORS["text_white"]))
-    c.setFont("Helvetica-Bold", 42)
-    c.drawCentredString(cx, title_y - 1.45 * inch, "SNAPSHOT")
+    c.setFont("Helvetica-Bold", 32)
+    c.drawCentredString(cx, title_y - 1.1 * inch, "SNAPSHOT")
 
     c.setFillColor(colors.HexColor(COLORS["red"]))
-    c.setFont("Helvetica-Bold", 20)
-    c.drawCentredString(cx, title_y - 1.95 * inch,
+    c.setFont("Helvetica-Bold", 16)
+    c.drawCentredString(cx, title_y - 1.5 * inch,
                         datetime.now().strftime("%B %d, %Y"))
 
-    legend_y = title_y - 2.55 * inch
+    legend_y = title_y - 2.1 * inch
     legend_items = [
         ("EXCEEDING ALL",   "EXPECTATIONS", COLORS["blue"]),
         ("MEETING",         "EXPECTATIONS", COLORS["green"]),
