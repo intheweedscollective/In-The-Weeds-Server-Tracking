@@ -2600,8 +2600,13 @@ async def update_employee(employee_id: str, data: dict):
     # manual override so subsequent /process passes won't redistribute
     # store-level CV data over the user's value. Cleared automatically when
     # a fresh CV upload is processed (handled in merge_snapshot_data).
+    # Skip the flag if the value is unchanged from emp_doc (idempotent PUT).
     nps_override_fields = {"nps_score", "cv_promoters", "cv_passives", "cv_detractors"}
-    if nps_override_fields.intersection(update_fields.keys()):
+    nps_changed = any(
+        k in update_fields and update_fields[k] != emp_doc.get(k)
+        for k in nps_override_fields
+    )
+    if nps_changed:
         update_fields["nps_manual_override"] = True
     
     # Recalculate derived metrics and scores if POS data fields changed
@@ -2722,14 +2727,11 @@ async def update_employee(employee_id: str, data: dict):
             else:
                 update_fields['tier_label'] = 'C-Server'
 
-            # Skip the legacy full-rebuild block below
-            settings_doc = None  # marker so we don't try to use it again
-
         # Legacy full-rebuild path — only when POS-data fields actually
         # changed. Uses raw percentages × weights (snapshot pipeline caps
         # them differently, but for POS edits we accept the divergence
         # since we'd otherwise need to recreate the whole scoring engine).
-        if full_rebuild and settings_doc is not None:
+        if full_rebuild:
             w_ppa = settings_doc.get('weight_ppa', 0.30)
             w_lbw = settings_doc.get('weight_lbw', 0.25)
             w_glass = settings_doc.get('weight_glass', 0.20)

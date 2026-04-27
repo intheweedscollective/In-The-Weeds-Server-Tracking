@@ -3187,6 +3187,50 @@ async def parse_rt_file(
         for formal, variants in name_variations.items()
     }
 
+    # ------------------------------------------------------------------
+    # Unmatched-name detection: scan each review for capitalized first
+    # names that look like server attributions ("Mac was great", "thanks
+    # to Marcus") which DIDN'T match any known employee. Surfaces gaps in
+    # the nickname map before they cost employees credit.
+    # ------------------------------------------------------------------
+    # Pattern: a capitalized 3+ letter word, optionally followed by
+    # sentiment / service verbs. Used together with a stop-word filter.
+    unmatched_re = re.compile(
+        r'\b([A-Z][a-z]{2,15})\b\s+(?:was|is|did|made|gave|brought|served|took|delivered|helped|recommended|made\s+sure|went|knew|provided)',
+        re.IGNORECASE,
+    )
+    common_words_to_skip = {
+        # Pronouns / sentence-starters
+        "the", "this", "that", "these", "those", "they", "she", "he",
+        "we", "you", "all", "our", "their", "his", "her", "its",
+        "and", "but", "or", "yet", "for", "nor", "so", "not", "no",
+        "what", "who", "whom", "whose", "which", "where", "when", "why", "how",
+        "even", "also", "still", "really", "very", "quite", "just",
+        "after", "before", "while", "during", "since", "until",
+        # Generic role / restaurant / non-name nouns that pass the regex
+        "service", "food", "drinks", "menu", "place", "experience",
+        "staff", "team", "server", "servers", "waiter", "waitress", "host",
+        "hostess", "bartender", "manager", "everything", "everyone",
+        "shrimp", "lobster", "fish", "steak", "burger", "salad", "soup",
+        "drink", "beer", "wine", "cocktail", "dessert", "appetizer",
+        "bubba", "gump", "vegas", "restaurant", "atmosphere", "ambiance",
+        "music", "view", "table", "seat", "booth", "kitchen", "bar",
+        "jambalaya", "good", "great", "amazing", "wonderful", "excellent",
+        "bad", "poor", "terrible", "awful", "okay",
+        "first", "second", "third", "next", "last", "another",
+        "lunch", "dinner", "breakfast", "brunch", "happy",
+    }
+    unmatched_first_names: dict[str, int] = {}
+    # Build a set of all variants + first names that ARE known so we can
+    # skip them quickly.
+    known_lookup: set[str] = set()
+    for variants in name_variations.values():
+        known_lookup.update(variants)
+    for name in known_names:
+        first = name.split()[0].lower() if name else ""
+        if first:
+            known_lookup.add(first)
+
     for row in reader:
         # Get review text from various possible column names
         review_text = row.get("Review", row.get("review", row.get("Content", row.get("content", ""))))
@@ -3225,7 +3269,19 @@ async def parse_rt_file(
                     employee_mentions[original_name] = 0
                 employee_mentions[original_name] += 1
                 mentioned_in_review.add(name)
-        
+
+        # Capture potential unmatched-name candidates after the known-name
+        # pass. Only flag names NOT already matched by any known variation.
+        for cand in unmatched_re.findall(review_text):
+            cand_l = cand.strip().lower()
+            if (
+                cand_l in known_lookup
+                or cand_l in common_words_to_skip
+                or len(cand_l) < 3
+            ):
+                continue
+            unmatched_first_names[cand_l] = unmatched_first_names.get(cand_l, 0) + 1
+
         reviews.append({
             "text": review_text[:200],
             "rating": row.get("Rating", row.get("rating", "")),
@@ -3236,14 +3292,29 @@ async def parse_rt_file(
         {"name": name, "mentions": count}
         for name, count in employee_mentions.items()
     ]
-    
-    logger.info(f"Parsed RT file: {len(reviews)} reviews, {len(employees)} employees mentioned")
-    
+
+    # Sort + filter unmatched candidates: only show names with >=2 hits to
+    # cut noise. UI offers them as nickname-mapping suggestions.
+    unmatched_suggestions = sorted(
+        [
+            {"name": name.title(), "mentions": count}
+            for name, count in unmatched_first_names.items()
+            if count >= 2
+        ],
+        key=lambda x: -x["mentions"]
+    )[:20]
+
+    logger.info(
+        f"Parsed RT file: {len(reviews)} reviews, {len(employees)} employees "
+        f"mentioned, {len(unmatched_suggestions)} unmatched-name candidates"
+    )
+
     return {
-        "employees": employees, 
+        "employees": employees,
         "record_count": len(employees),
         "total_reviews": len(reviews),
-        "reviews_sample": reviews[:10]  # Include sample for debugging
+        "reviews_sample": reviews[:10],  # Include sample for debugging
+        "unmatched_suggestions": unmatched_suggestions,
     }
 
 
@@ -3836,6 +3907,53 @@ async def get_workflow_status(snapshot_id: str):
         "total_dar_deductions": snapshot.get("total_dar_deductions", 0),
     }
 
+
+
+@snapshot_router.get("/nicknames/unmatched-suggestions")
+async def get_unmatched_nickname_suggestions(
+    quarter: str = "Q2", year: int = 2026
+):
+    """
+    Surface name-candidates from the active snapshot's most recent RT
+    upload that the parser couldn't match to any known employee. Each
+    entry returns {name, mentions}; the UI lets the user one-click create
+    a nickname alias mapping to a real employee.
+    """
+    db = get_db()
+    snap = await db.snapshot_workflow.find_one(
+        {"quarter": quarter.upper(), "year": year, "is_current": True},
+        {"_id": 0, "uploads": 1, "employees": 1}
+    )
+    if not snap:
+        snap = await db.snapshot_workflow.find_one(
+            {"quarter": quarter.upper(), "year": year},
+            {"_id": 0, "uploads": 1, "employees": 1},
+            sort=[("updated_at", -1)]
+        )
+    if not snap:
+        return {"unmatched": [], "employees": []}
+
+    rt_upload = next(
+        (u for u in (snap.get("uploads") or [])
+         if u.get("upload_type") == "review_tracker"),
+        None
+    )
+    unmatched = []
+    if rt_upload:
+        unmatched = (rt_upload.get("parsed_data") or {}).get("unmatched_suggestions", [])
+
+    # Also return the live employees so the UI can populate the
+    # "map to which employee" dropdown without a second roundtrip.
+    employees = [
+        {
+            "id": e.get("id"),
+            "name": e.get("display_name") or e.get("name"),
+            "first_name": ((e.get("display_name") or e.get("name") or "")
+                           .split()[0] if (e.get("display_name") or e.get("name")) else ""),
+        }
+        for e in (snap.get("employees") or [])
+    ]
+    return {"unmatched": unmatched, "employees": employees}
 
 
 # ============================================================================

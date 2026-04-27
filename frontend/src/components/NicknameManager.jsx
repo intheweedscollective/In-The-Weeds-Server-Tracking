@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { UserPlus, Trash2, RefreshCw, Lightbulb } from "lucide-react";
+import { UserPlus, Trash2, RefreshCw, Lightbulb, Search, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { getCurrentQuarter } from "../lib/quarterUtils";
 
 /**
  * NicknameManager
@@ -20,19 +21,30 @@ export default function NicknameManager() {
   const [userAliases, setUserAliases] = useState([]);
   const [nickname, setNickname] = useState("");
   const [formal, setFormal] = useState("");
+  // Auto-suggest panel (RT-based) state
+  const [suggestions, setSuggestions] = useState([]);
+  const [snapshotEmployees, setSnapshotEmployees] = useState([]);
+  const [resolvingName, setResolvingName] = useState(null); // unmatched name being mapped
+  const [resolveTarget, setResolveTarget] = useState(""); // employee first-name selected
+  const { quarter, year } = getCurrentQuarter();
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get("/v2/snapshot-workflow/nicknames");
-      setDefaults(res.data?.defaults || []);
-      setUserAliases(res.data?.user || []);
+      const [aliasesRes, sugRes] = await Promise.all([
+        api.get("/v2/snapshot-workflow/nicknames"),
+        api.get(`/v2/snapshot-workflow/nicknames/unmatched-suggestions?quarter=${quarter}&year=${year}`),
+      ]);
+      setDefaults(aliasesRes.data?.defaults || []);
+      setUserAliases(aliasesRes.data?.user || []);
+      setSuggestions(sugRes.data?.unmatched || []);
+      setSnapshotEmployees(sugRes.data?.employees || []);
     } catch (e) {
       toast.error("Could not load nicknames");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [quarter, year]);
 
   useEffect(() => {
     fetchAll();
@@ -76,6 +88,32 @@ export default function NicknameManager() {
     }
   };
 
+  const handleResolveSuggestion = async (suggestionName, formalFirstName) => {
+    // Map an unmatched RT name → existing employee's first name as alias.
+    if (!formalFirstName) {
+      toast.error("Pick an employee to map this nickname to");
+      return;
+    }
+    try {
+      await api.post("/v2/snapshot-workflow/nicknames", {
+        nickname: suggestionName.toLowerCase(),
+        formal: formalFirstName.toLowerCase(),
+      });
+      toast.success(`${suggestionName} → ${formalFirstName} added`);
+      setResolvingName(null);
+      setResolveTarget("");
+      fetchAll();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Failed to add alias");
+    }
+  };
+
+  const handleDismissSuggestion = (suggestionName) => {
+    // Local-only dismissal — the next RT upload re-surfaces it if it's
+    // still unmatched, so this is just clutter reduction.
+    setSuggestions((s) => s.filter((x) => x.name !== suggestionName));
+  };
+
   return (
     <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5 md:p-6">
       <div className="flex items-start justify-between flex-wrap gap-3 mb-4">
@@ -102,6 +140,88 @@ export default function NicknameManager() {
           Refresh
         </Button>
       </div>
+
+      {/* Auto-suggestions from latest RT upload */}
+      {suggestions.length > 0 && (
+        <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-5" data-testid="unmatched-suggestions-panel">
+          <p className="text-xs text-amber-900 font-semibold uppercase tracking-wide mb-2 flex items-center gap-1.5">
+            <Search className="w-3.5 h-3.5" />
+            Unmatched Names from {quarter} {year} Reviews ({suggestions.length})
+          </p>
+          <p className="text-xs text-amber-800 mb-3">
+            These names appeared in customer reviews but didn't match any employee. Map each one to a real
+            server so future uploads route the credit correctly.
+          </p>
+          <div className="space-y-2">
+            {suggestions.map((sug) => (
+              <div
+                key={sug.name}
+                className="flex items-center gap-2 bg-white border border-amber-200 rounded-md px-3 py-2"
+                data-testid={`suggestion-${sug.name.toLowerCase()}`}
+              >
+                <span className="font-semibold text-gray-900 min-w-[90px]">{sug.name}</span>
+                <span className="text-xs text-gray-500 flex-shrink-0">
+                  {sug.mentions} mention{sug.mentions !== 1 ? "s" : ""}
+                </span>
+                {resolvingName === sug.name ? (
+                  <>
+                    <select
+                      value={resolveTarget}
+                      onChange={(e) => setResolveTarget(e.target.value)}
+                      className="flex-1 text-sm border border-gray-300 rounded px-2 py-1 bg-white"
+                      data-testid={`resolve-select-${sug.name.toLowerCase()}`}
+                    >
+                      <option value="">Map to…</option>
+                      {snapshotEmployees.map((emp) => (
+                        <option key={emp.id} value={emp.first_name}>
+                          {emp.name}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      size="sm"
+                      onClick={() => handleResolveSuggestion(sug.name, resolveTarget)}
+                      className="bg-green-600 hover:bg-green-700 text-white h-8 px-3"
+                      disabled={!resolveTarget}
+                      data-testid={`resolve-confirm-${sug.name.toLowerCase()}`}
+                    >
+                      Save
+                    </Button>
+                    <button
+                      onClick={() => { setResolvingName(null); setResolveTarget(""); }}
+                      className="text-gray-400 hover:text-gray-600 p-1"
+                      title="Cancel"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </>
+                ) : (
+                  <div className="flex items-center gap-1 ml-auto">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => { setResolvingName(sug.name); setResolveTarget(""); }}
+                      className="text-amber-700 hover:bg-amber-100 h-8 px-2 text-xs"
+                      data-testid={`map-suggestion-${sug.name.toLowerCase()}`}
+                    >
+                      <Plus className="w-3.5 h-3.5 mr-1" />
+                      Map to employee
+                    </Button>
+                    <button
+                      onClick={() => handleDismissSuggestion(sug.name)}
+                      className="text-gray-400 hover:text-gray-600 p-1"
+                      title="Dismiss (will reappear on next RT upload if still unmatched)"
+                      data-testid={`dismiss-suggestion-${sug.name.toLowerCase()}`}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Add new alias */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-5">
