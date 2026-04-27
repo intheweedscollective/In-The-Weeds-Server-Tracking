@@ -9,7 +9,21 @@ Build a comprehensive performance review application for restaurant employees.
 - **Database**: MongoDB
 - **AI**: OpenAI GPT-4o (via Emergent LLM Key)
 
-## Current State (2026-04-25)
+## Current State (2026-04-27)
+
+### Latest Changes (2026-04-27 Session)
+
+- **P0: Snapshot Report (PNG/PDF) Visual Layout Mirror — FIXED 2026-04-27**
+  - User-reference template required: dark-navy body rows (matching header), each metric cell as a colored "tile" with thin navy gutters acting as borders, first three columns (Rank/Name/Trend) on dark-navy without color fill.
+  - Fixed sign artefact "+-44.3" by switching to Python `{:+.1f}` formatting (now renders true negatives correctly).
+  - Trend column now renders ▲ (green) for improving / — (gray) for flat / ▼ (red) for declining instead of literal "=".
+  - Date format moved from `%Y-%m-%d` → `%B %d, %Y` (e.g. "April 27, 2026").
+  - Score column now uses absolute thresholds (≥100 blue, 80–100 green, 70–80 yellow, <70 red) matching reference instead of A/B tier logic.
+  - Files: `/app/backend/png_full_rankings.py` (full rewrite), `/app/backend/pdf_full_rankings.py` (full rewrite, now 16:9 canvas).
+  - Verified via live endpoint `GET /api/v2/full-rankings/2026/Q1/snapshot-png` + `analyze_file_tool` (8/8 layout checks pass).
+
+- **P2: Yodeck slide column labels updated — FIXED 2026-04-27**
+  - `/app/backend/yodeck_slides.py` line 1244: "PPA / LBW / LSC / GLASS" → "PPA % / LBW % / LSC % / GLASS %" so viewers don't confuse percentages with absolute scores.
 
 ### Latest Changes (2026-02 Session - Continued)
 

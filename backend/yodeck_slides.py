@@ -1241,7 +1241,7 @@ def generate_tier_slide(
     
     # Column headers
     header_y = 165
-    headers = [("RANK", 120), ("NAME", 220), ("PPA", 650), ("LBW", 750), ("LSC", 850), ("GLASS", 950), ("SCORE", SLIDE_WIDTH - 180)]
+    headers = [("RANK", 120), ("NAME", 220), ("PPA %", 650), ("LBW %", 750), ("LSC %", 850), ("GLASS %", 950), ("SCORE", SLIDE_WIDTH - 180)]
     for text, x in headers:
         draw.text((x, header_y), text, font=font_header, fill=colors["text_muted"])
     

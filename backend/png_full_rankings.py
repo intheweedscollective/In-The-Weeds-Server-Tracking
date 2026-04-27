@@ -1,14 +1,14 @@
 """
-Full Rankings PNG Generator — Snapshot Style (replica of the reference
-slide).
+Full Rankings PNG Generator — Snapshot Style.
 
-Output: 1920×1920 PNG with:
-  - Dark navy bg + wide left sidebar (logo + Q SERVER PERFORMANCE
-    SNAPSHOT title + date + 4-color legend + footer)
-  - Right-side data table with white/light-gray alternating rows, dark
-    navy header bar, and FULLY-FILLED color-coded cells (blue/green/
-    yellow/red) per the legend.
-  - Score column colored by tier threshold (A=green, B=yellow, C=red).
+Output: 1920×1080 PNG (16:9) replicating the user's reference template:
+  - Dark navy canvas + left sidebar (logo + Q SERVER PERFORMANCE
+    SNAPSHOT title + date + 4-color legend + footer copy).
+  - Right table on dark navy bg with each metric cell rendered as a
+    colored "tile" (blue/green/yellow/red), separated by thin navy
+    gutters that look like cell borders.
+  - First three columns (Rank / Name / Trend) sit on the dark navy
+    row bg with white text — no fill.
 """
 from __future__ import annotations
 import io
@@ -19,91 +19,84 @@ from typing import Any, Dict, List, Tuple
 from PIL import Image, ImageDraw, ImageFont
 
 
-def _ref_cell_color(value: float, metric_type: str, has_detractors: bool = False) -> str:
-    """Color thresholds per the user's spec:
-       - >100% benchmark = blue (exceeding)
-       - 80-100% = green (meeting)
-       - 60-80% = yellow (work in progress)
-       - <60% = red (needs immediate improvement)
-
-    For CV/RT/Bonus columns: red is reserved for ZERO or NEGATIVE net
-    score. Any positive net feedback (even if some detractors offset it)
-    is at least yellow — the score itself reflects the offset, the color
-    just signals "they got positive feedback overall"."""
-    if metric_type == "percentage":
-        if value > 100: return REF_COLORS["blue"]
-        if value >= 80: return REF_COLORS["green"]
-        if value >= 60: return REF_COLORS["yellow"]
-        return REF_COLORS["red"]
-    if metric_type == "cv":
-        # Net combined score: NPS%/10 + promoters - 2*detractors
-        if value <= 0:    return REF_COLORS["red"]   # no positive feedback or net negative
-        if value > 11:    return REF_COLORS["blue"]   # exceeding benchmark
-        if value >= 8:    return REF_COLORS["green"]  # ~75%+ of bench
-        return REF_COLORS["yellow"]                    # any positive feedback
-    if metric_type == "rt":
-        if value <= 0:    return REF_COLORS["red"]
-        if value >= 10:   return REF_COLORS["blue"]
-        if value >= 5:    return REF_COLORS["green"]
-        return REF_COLORS["yellow"]
-    if metric_type == "bonus":
-        if value <= 0:    return REF_COLORS["red"]
-        if value >= 5:    return REF_COLORS["blue"]
-        if value >= 3:    return REF_COLORS["green"]
-        return REF_COLORS["yellow"]
-    return REF_COLORS["green"]
-
-
-def _ref_text_color(bg: str) -> str:
-    # Yellow gets black text per reference
-    return "#000000" if bg == REF_COLORS["yellow"] else REF_COLORS["text_white"]
-
-
 SLIDE_WIDTH = 1920
 SLIDE_HEIGHT = 1080
 SIDEBAR_WIDTH = 500
 
 # Colors sampled directly from the user's reference slide.
 REF_COLORS = {
-    "background": "#0F172A",  # Sidebar/canvas dark navy
-    "header_bg": "#0F172A",   # Header bar — same dark navy as sidebar
-    "blue":   "#0C769E",      # Exceeding Expectations
-    "green":  "#33CC33",      # Meeting Expectations
-    "yellow": "#FFFF00",      # Work in Progress
-    "red":    "#FF0000",      # Needs Immediate Improvement
+    "background": "#0F172A",  # Sidebar / canvas dark navy
+    "header_bg":  "#0F172A",  # Header bar — same dark navy
+    "row_bg":     "#0F172A",  # Body row bg — dark navy (matches reference)
+    "blue":       "#0C769E",  # Exceeding Expectations
+    "green":      "#33CC33",  # Meeting Expectations
+    "yellow":     "#FFFF00",  # Work in Progress
+    "red":        "#FF0000",  # Needs Immediate Improvement
     "text_white": "#FFFFFF",
-    "text_red":   "#FF0000",
+    "text_dark":  "#000000",
+    "trend_up":   "#33CC33",
+    "trend_flat": "#9CA3AF",
 }
-
-# Row backgrounds — light, NOT navy. Match the reference style.
-ROW_LIGHT = "#FFFFFF"
-ROW_DARK = "#F0F2F5"
-TEXT_DARK = "#0F172A"
 
 LOGO_PATH = "/app/backend/assets/bubba_gump_logo.png"
 
 
+# ---------------------------------------------------------------------------
+# Color thresholds
+# ---------------------------------------------------------------------------
+def _ref_cell_color(value: float, metric_type: str) -> str:
+    """Match the reference slide's coloring exactly.
+
+    - Percentage cols (PPA/LBW/GLASS/LSC):
+        >100 blue · 80-100 green · 60-80 yellow · <60 red
+    - CV (NPS%/10 + promoters - 2*detractors): zero/neg = red
+    - RT mentions / Bonus: zero = red
+    - Score: >=100 blue · 80-100 green · 70-80 yellow · <70 red
+    """
+    if metric_type == "percentage":
+        if value > 100: return REF_COLORS["blue"]
+        if value >= 80: return REF_COLORS["green"]
+        if value >= 60: return REF_COLORS["yellow"]
+        return REF_COLORS["red"]
+    if metric_type == "cv":
+        if value <= 0:  return REF_COLORS["red"]
+        if value > 11:  return REF_COLORS["blue"]
+        if value >= 8:  return REF_COLORS["green"]
+        return REF_COLORS["yellow"]
+    if metric_type == "rt":
+        if value <= 0:  return REF_COLORS["red"]
+        if value >= 10: return REF_COLORS["blue"]
+        if value >= 5:  return REF_COLORS["green"]
+        return REF_COLORS["yellow"]
+    if metric_type == "bonus":
+        if value <= 0:  return REF_COLORS["red"]
+        if value >= 5:  return REF_COLORS["blue"]
+        if value >= 3:  return REF_COLORS["green"]
+        return REF_COLORS["yellow"]
+    if metric_type == "score":
+        if value >= 100: return REF_COLORS["blue"]
+        if value >= 80:  return REF_COLORS["green"]
+        if value >= 70:  return REF_COLORS["yellow"]
+        return REF_COLORS["red"]
+    return REF_COLORS["green"]
+
+
+def _ref_text_color(bg: str) -> str:
+    # Yellow tile gets black text per reference; everything else is white.
+    return REF_COLORS["text_dark"] if bg == REF_COLORS["yellow"] else REF_COLORS["text_white"]
+
+
+# ---------------------------------------------------------------------------
+# Font + text helpers
+# ---------------------------------------------------------------------------
 def _load_font(size: int, bold: bool = True) -> ImageFont.FreeTypeFont:
-    candidates = (
-        ["DejaVuSans-Bold.ttf"] if bold else ["DejaVuSans.ttf"]
-    )
-    for name in candidates:
-        path = f"/usr/share/fonts/truetype/dejavu/{name}"
-        if os.path.exists(path):
-            try:
-                return ImageFont.truetype(path, size)
-            except Exception:
-                pass
-    # Fallback
-    for path in (
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    ):
-        if os.path.exists(path):
-            try:
-                return ImageFont.truetype(path, size)
-            except Exception:
-                pass
+    name = "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf"
+    path = f"/usr/share/fonts/truetype/dejavu/{name}"
+    if os.path.exists(path):
+        try:
+            return ImageFont.truetype(path, size)
+        except Exception:
+            pass
     return ImageFont.load_default()
 
 
@@ -111,18 +104,18 @@ def _draw_text(draw, xy, text, font, fill, anchor: str = "lt"):
     draw.text(xy, str(text), font=font, fill=fill, anchor=anchor)
 
 
-def _score_color(score: float, a_min: float, b_min: float) -> str:
-    if score >= a_min:
-        return REF_COLORS["green"]
-    if score >= b_min:
-        return REF_COLORS["yellow"]
-    return REF_COLORS["red"]
+def _signed(val: float) -> str:
+    """Render +X.X for positive, -X.X for negative (no '+-' artefacts)."""
+    return f"{val:+.1f}"
 
 
+# ---------------------------------------------------------------------------
+# Sidebar
+# ---------------------------------------------------------------------------
 def _draw_sidebar(img: Image.Image, draw: ImageDraw.ImageDraw, quarter: str) -> None:
     cx = SIDEBAR_WIDTH // 2
 
-    # ---- Logo (large, top of sidebar) ----
+    # ---- Logo ----
     logo_y = 165
     logo_w_target = 260
     logo_drawn = False
@@ -146,7 +139,7 @@ def _draw_sidebar(img: Image.Image, draw: ImageDraw.ImageDraw, quarter: str) -> 
         _draw_text(draw, (cx, logo_y + 50), "SHRIMP CO.",
                    _load_font(20, True), REF_COLORS["text_white"], anchor="mm")
 
-    # ---- Title (Q1 SERVER / PERFORMANCE / SNAPSHOT / date) ----
+    # ---- Title ----
     title_y = 360
     _draw_text(draw, (cx, title_y), f"{quarter} SERVER",
                _load_font(40, True), REF_COLORS["text_white"], anchor="mm")
@@ -154,16 +147,18 @@ def _draw_sidebar(img: Image.Image, draw: ImageDraw.ImageDraw, quarter: str) -> 
                _load_font(54, True), REF_COLORS["red"], anchor="mm")
     _draw_text(draw, (cx, title_y + 110), "SNAPSHOT",
                _load_font(40, True), REF_COLORS["text_white"], anchor="mm")
-    _draw_text(draw, (cx, title_y + 165), datetime.now().strftime("%Y-%m-%d"),
+    # Date — formatted "Month DD, YYYY" per reference
+    _draw_text(draw, (cx, title_y + 165),
+               datetime.now().strftime("%B %d, %Y"),
                _load_font(22, True), REF_COLORS["red"], anchor="mm")
 
     # ---- Legend ----
     legend_y = title_y + 220
     items = [
         ("EXCEEDING ALL", "EXPECTATIONS", REF_COLORS["blue"]),
-        ("MEETING", "EXPECTATIONS", REF_COLORS["green"]),
-        ("WORK IN", "PROGRESS", REF_COLORS["yellow"]),
-        ("NEEDS IMMEDIATE", "IMPROVEMENT", REF_COLORS["red"]),
+        ("MEETING",       "EXPECTATIONS", REF_COLORS["green"]),
+        ("WORK IN",       "PROGRESS",     REF_COLORS["yellow"]),
+        ("NEEDS IMMEDIATE","IMPROVEMENT", REF_COLORS["red"]),
     ]
     label_font = _load_font(17, True)
     swatch_x = 50
@@ -173,10 +168,8 @@ def _draw_sidebar(img: Image.Image, draw: ImageDraw.ImageDraw, quarter: str) -> 
     for i, (l1, l2, color) in enumerate(items):
         y = legend_y + i * 75
         draw.rectangle((swatch_x, y, swatch_x + swatch_w, y + swatch_h), fill=color)
-        # Match reference: titles colored to match swatch
-        title_color = color
-        _draw_text(draw, (text_x, y + 6), l1, label_font, title_color, anchor="lt")
-        _draw_text(draw, (text_x, y + 28), l2, label_font, title_color, anchor="lt")
+        _draw_text(draw, (text_x, y + 6),  l1, label_font, color, anchor="lt")
+        _draw_text(draw, (text_x, y + 28), l2, label_font, color, anchor="lt")
 
     # ---- Footer ----
     foot_font = _load_font(18, True)
@@ -193,20 +186,19 @@ def _draw_sidebar(img: Image.Image, draw: ImageDraw.ImageDraw, quarter: str) -> 
                        REF_COLORS["text_white"], anchor="mm")
 
 
+# ---------------------------------------------------------------------------
+# Table
+# ---------------------------------------------------------------------------
 def _draw_table(
     draw: ImageDraw.ImageDraw,
     rankings: List[Dict[str, Any]],
-    a_min: float,
-    b_min: float,
 ) -> None:
-    # ---- Geometry ----
     table_x = SIDEBAR_WIDTH + 30
     table_y = 60
     table_w = SLIDE_WIDTH - table_x - 40
 
     headers = ["Rank", "Name", "Trend", "PPA", "LBW", "GLASS",
                "LSC", "CV", "RT", "Bonus", "Score"]
-    # Proportional column widths summing to 1.0 — Name col wider for legibility
     col_props = [0.06, 0.14, 0.06, 0.085, 0.085, 0.085,
                  0.085, 0.085, 0.085, 0.09, 0.09]
     col_widths = [int(p * table_w) for p in col_props]
@@ -232,70 +224,76 @@ def _draw_table(
     n = max(1, len(rankings))
     row_h = max(28, min(40, avail // n))
 
-    name_font = _load_font(max(14, row_h - 16), True)
-    cell_font = _load_font(max(13, row_h - 18), True)
-    rank_font = _load_font(max(15, row_h - 16), True)
+    name_font  = _load_font(max(14, row_h - 16), True)
+    cell_font  = _load_font(max(13, row_h - 18), True)
+    rank_font  = _load_font(max(15, row_h - 16), True)
+    trend_font = _load_font(max(18, row_h - 12), True)
+
+    # The body is dark navy (header_bg). Cell tiles draw on top with a
+    # 2-3px gap on every side — that gap IS the visible border per the
+    # reference design.
+    draw.rectangle(
+        (table_x, body_top, table_x + table_w, body_bottom),
+        fill=REF_COLORS["row_bg"]
+    )
 
     cy = body_top
-    for idx, emp in enumerate(rankings):
+    for emp in rankings:
         if cy + row_h > body_bottom:
             break
 
-        # Alt row background — LIGHT (not navy). Matches reference.
-        bg = ROW_LIGHT if idx % 2 == 0 else ROW_DARK
-        draw.rectangle(
-            (table_x, cy, table_x + table_w, cy + row_h),
-            fill=bg
-        )
-
-        pos_label = emp.get("position_label", "")
-        name = (emp.get("name", "") or "")[:14]
-        score = emp.get("total_score", 0) or 0
-
-        # Same percentage math as the PDF generator
-        ppa_pct = ((emp.get("ppa_points", {}).get("earned", 0) or 0) / 30) * 100
-        lbw_pct = ((emp.get("lbw_points", {}).get("earned", 0) or 0) / 25) * 100
-        glass_pct = ((emp.get("glassware_points", {}).get("earned", 0) or 0) / 20) * 100
-        lsc_pct = ((emp.get("lsc_points", {}).get("earned", 0) or 0) / 30) * 100
-        cv_score = emp.get("cv_score", 0) or 0
+        pos_label   = emp.get("position_label", "")
+        name        = (emp.get("name", "") or "")[:14]
+        score       = emp.get("total_score", 0) or 0
+        ppa_pct     = ((emp.get("ppa_points", {}).get("earned", 0) or 0) / 30) * 100
+        lbw_pct     = ((emp.get("lbw_points", {}).get("earned", 0) or 0) / 25) * 100
+        glass_pct   = ((emp.get("glassware_points", {}).get("earned", 0) or 0) / 20) * 100
+        lsc_pct     = ((emp.get("lsc_points", {}).get("earned", 0) or 0) / 30) * 100
+        cv_score    = emp.get("cv_score", 0) or 0
         rt_mentions = emp.get("review_mentions", 0) or emp.get("rt_mentions", 0) or 0
-        bonus = emp.get("bonus_points", 0) or emp.get("metric_bonus", 0) or 0
-        cv_detractors = emp.get("cv_detractors", 0) or 0
+        bonus       = emp.get("bonus_points", 0) or emp.get("metric_bonus", 0) or 0
 
-        score_color = _score_color(score, a_min, b_min)
+        # Trend symbol — "▲" green if improving, "—" gray if flat.
+        trend_dir = (emp.get("trend") or "up").lower()
+        if trend_dir in ("up", "improving", "improved"):
+            trend_glyph, trend_col = "\u25B2", REF_COLORS["trend_up"]
+        elif trend_dir in ("down", "declining"):
+            trend_glyph, trend_col = "\u25BC", REF_COLORS["red"]
+        else:
+            trend_glyph, trend_col = "\u2014", REF_COLORS["trend_flat"]
 
-        cells: List[Tuple[str, str | None, str, ImageFont.FreeTypeFont]] = [
-            (pos_label, None, "center", rank_font),
-            (name, None, "left", name_font),
-            ("=", None, "center", cell_font),
-            (f"{ppa_pct:.0f}%", _ref_cell_color(ppa_pct, "percentage"), "center", cell_font),
-            (f"{lbw_pct:.0f}%", _ref_cell_color(lbw_pct, "percentage"), "center", cell_font),
-            (f"{glass_pct:.0f}%", _ref_cell_color(glass_pct, "percentage"), "center", cell_font),
-            (f"{lsc_pct:.0f}%", _ref_cell_color(lsc_pct, "percentage"), "center", cell_font),
-            (f"+{cv_score:.1f}", _ref_cell_color(cv_score, "cv", cv_detractors > 0), "center", cell_font),
-            (f"+{rt_mentions:.1f}", _ref_cell_color(rt_mentions, "rt"), "center", cell_font),
-            (f"+{bonus:.1f}", _ref_cell_color(bonus, "bonus"), "center", cell_font),
-            (f"{score:.1f}", score_color, "center", cell_font),
+        cells: List[Tuple[str, str | None, str, ImageFont.FreeTypeFont, str | None]] = [
+            (pos_label,                              None,                                      "center", rank_font,  REF_COLORS["text_white"]),
+            (name,                                   None,                                      "left",   name_font,  REF_COLORS["text_white"]),
+            (trend_glyph,                            None,                                      "center", trend_font, trend_col),
+            (f"{ppa_pct:.0f}%",                      _ref_cell_color(ppa_pct,   "percentage"),  "center", cell_font,  None),
+            (f"{lbw_pct:.0f}%",                      _ref_cell_color(lbw_pct,   "percentage"),  "center", cell_font,  None),
+            (f"{glass_pct:.0f}%",                    _ref_cell_color(glass_pct, "percentage"),  "center", cell_font,  None),
+            (f"{lsc_pct:.0f}%",                      _ref_cell_color(lsc_pct,   "percentage"),  "center", cell_font,  None),
+            (_signed(cv_score),                      _ref_cell_color(cv_score,  "cv"),          "center", cell_font,  None),
+            (_signed(rt_mentions),                   _ref_cell_color(rt_mentions,"rt"),         "center", cell_font,  None),
+            (_signed(bonus),                         _ref_cell_color(bonus,     "bonus"),       "center", cell_font,  None),
+            (f"{score:.1f}",                         _ref_cell_color(score,     "score"),       "center", cell_font,  None),
         ]
 
         x = table_x
-        for (text, cell_color, align, font), w in zip(cells, col_widths):
+        for (text, cell_color, align, font, override_text_color), w in zip(cells, col_widths):
             if cell_color:
-                # 2px gap on all sides — matches reference's slight bezel
-                pad = 2
+                # Tile with 3px gap creates the visible "border" on dark navy.
+                pad = 3
                 draw.rectangle(
                     (x + pad, cy + pad, x + w - pad, cy + row_h - pad),
                     fill=cell_color
                 )
                 tcolor = _ref_text_color(cell_color)
             else:
-                # Black text on the light row bg for first 3 columns
-                tcolor = TEXT_DARK
+                tcolor = override_text_color or REF_COLORS["text_white"]
+
             ty = cy + row_h // 2
             if align == "center":
                 _draw_text(draw, (x + w // 2, ty), text, font, tcolor, anchor="mm")
             elif align == "left":
-                _draw_text(draw, (x + 10, ty), text, font, tcolor, anchor="lm")
+                _draw_text(draw, (x + 12, ty), text, font, tcolor, anchor="lm")
             else:
                 _draw_text(draw, (x + w - 10, ty), text, font, tcolor, anchor="rm")
             x += w
@@ -309,15 +307,17 @@ def build_full_rankings_png(
     year: int,
     thresholds: Dict[str, float] | None = None,
 ) -> bytes:
-    """Render the Server Performance Snapshot as a 1920×1080 PNG (16:9)."""
-    a_min = (thresholds or {}).get("a_min", 85)
-    b_min = (thresholds or {}).get("b_min", 70)
+    """Render the Server Performance Snapshot as a 1920×1080 PNG (16:9).
 
+    Note: `thresholds` is accepted for API compatibility but the reference
+    template drives the score color from absolute thresholds (see
+    `_ref_cell_color(value, 'score')`), not the per-quarter A/B tiers.
+    """
     img = Image.new("RGB", (SLIDE_WIDTH, SLIDE_HEIGHT), REF_COLORS["background"])
     draw = ImageDraw.Draw(img)
 
     _draw_sidebar(img, draw, quarter)
-    _draw_table(draw, rankings, a_min, b_min)
+    _draw_table(draw, rankings)
 
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
