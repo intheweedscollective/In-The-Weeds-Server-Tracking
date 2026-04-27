@@ -18,16 +18,58 @@ from typing import Any, Dict, List, Tuple
 
 from PIL import Image, ImageDraw, ImageFont
 
-from pdf_full_rankings import COLORS, get_cell_color, get_text_color_for_bg
+
+def _ref_cell_color(value: float, metric_type: str) -> str:
+    """Same threshold logic as pdf_full_rankings.get_cell_color but
+    returns the EXACT colors from the user's reference slide."""
+    if metric_type == "percentage":
+        if value >= 100: return REF_COLORS["blue"]
+        if value >= 90:  return REF_COLORS["green"]
+        if value >= 75:  return REF_COLORS["yellow"]
+        return REF_COLORS["red"]
+    if metric_type == "cv":
+        if value >= 16: return REF_COLORS["blue"]
+        if value >= 11: return REF_COLORS["green"]
+        if value >= 6:  return REF_COLORS["yellow"]
+        return REF_COLORS["red"]
+    if metric_type == "rt":
+        if value >= 15: return REF_COLORS["blue"]
+        if value >= 8:  return REF_COLORS["green"]
+        if value >= 3:  return REF_COLORS["yellow"]
+        return REF_COLORS["red"]
+    if metric_type == "bonus":
+        if value >= 10: return REF_COLORS["blue"]
+        if value >= 5:  return REF_COLORS["green"]
+        if value >= 1:  return REF_COLORS["yellow"]
+        return REF_COLORS["red"]
+    return REF_COLORS["green"]
+
+
+def _ref_text_color(bg: str) -> str:
+    # Yellow gets black text per reference
+    return "#000000" if bg == REF_COLORS["yellow"] else REF_COLORS["text_white"]
+
 
 SLIDE_WIDTH = 1920
-SLIDE_HEIGHT = 1920
-SIDEBAR_WIDTH = 460
+SLIDE_HEIGHT = 1080
+SIDEBAR_WIDTH = 500
+
+# Colors sampled directly from the user's reference slide.
+REF_COLORS = {
+    "background": "#0F172A",  # Sidebar/canvas dark navy
+    "header_bg": "#0F172A",   # Header bar — same dark navy as sidebar
+    "blue":   "#0C769E",      # Exceeding Expectations
+    "green":  "#33CC33",      # Meeting Expectations
+    "yellow": "#FFFF00",      # Work in Progress
+    "red":    "#FF0000",      # Needs Immediate Improvement
+    "text_white": "#FFFFFF",
+    "text_red":   "#FF0000",
+}
 
 # Row backgrounds — light, NOT navy. Match the reference style.
 ROW_LIGHT = "#FFFFFF"
-ROW_DARK = "#EAEEF3"
-TEXT_DARK = "#0D1E31"
+ROW_DARK = "#F0F2F5"
+TEXT_DARK = "#0F172A"
 
 LOGO_PATH = "/app/backend/assets/bubba_gump_logo.png"
 
@@ -62,18 +104,18 @@ def _draw_text(draw, xy, text, font, fill, anchor: str = "lt"):
 
 def _score_color(score: float, a_min: float, b_min: float) -> str:
     if score >= a_min:
-        return COLORS["green"]
+        return REF_COLORS["green"]
     if score >= b_min:
-        return COLORS["yellow"]
-    return COLORS["red"]
+        return REF_COLORS["yellow"]
+    return REF_COLORS["red"]
 
 
 def _draw_sidebar(img: Image.Image, draw: ImageDraw.ImageDraw, quarter: str) -> None:
     cx = SIDEBAR_WIDTH // 2
 
-    # ---- Logo (much larger now, matching reference) ----
-    logo_y = 280
-    logo_w_target = 320
+    # ---- Logo (large, top of sidebar) ----
+    logo_y = 165
+    logo_w_target = 260
     logo_drawn = False
     if os.path.exists(LOGO_PATH):
         try:
@@ -86,51 +128,50 @@ def _draw_sidebar(img: Image.Image, draw: ImageDraw.ImageDraw, quarter: str) -> 
         except Exception:
             logo_drawn = False
     if not logo_drawn:
-        # Stylized circle fallback
-        r = 150
+        r = 110
         draw.ellipse((cx - r, logo_y - r, cx + r, logo_y + r), fill="#1a3050")
-        _draw_text(draw, (cx, logo_y - 35), "BUBBA",
-                   _load_font(50, True), COLORS["text_white"], anchor="mm")
-        _draw_text(draw, (cx, logo_y + 15), "GUMP",
-                   _load_font(64, True), COLORS["red"], anchor="mm")
-        _draw_text(draw, (cx, logo_y + 70), "SHRIMP CO.",
-                   _load_font(28, True), COLORS["text_white"], anchor="mm")
+        _draw_text(draw, (cx, logo_y - 25), "BUBBA",
+                   _load_font(36, True), REF_COLORS["text_white"], anchor="mm")
+        _draw_text(draw, (cx, logo_y + 10), "GUMP",
+                   _load_font(48, True), REF_COLORS["red"], anchor="mm")
+        _draw_text(draw, (cx, logo_y + 50), "SHRIMP CO.",
+                   _load_font(20, True), REF_COLORS["text_white"], anchor="mm")
 
     # ---- Title (Q1 SERVER / PERFORMANCE / SNAPSHOT / date) ----
-    title_y = 540
+    title_y = 360
     _draw_text(draw, (cx, title_y), f"{quarter} SERVER",
-               _load_font(54, True), COLORS["text_white"], anchor="mm")
-    _draw_text(draw, (cx, title_y + 80), "PERFORMANCE",
-               _load_font(72, True), COLORS["red"], anchor="mm")
-    _draw_text(draw, (cx, title_y + 160), "SNAPSHOT",
-               _load_font(54, True), COLORS["text_white"], anchor="mm")
-    _draw_text(draw, (cx, title_y + 235), datetime.now().strftime("%Y-%m-%d"),
-               _load_font(30, True), COLORS["red"], anchor="mm")
+               _load_font(40, True), REF_COLORS["text_white"], anchor="mm")
+    _draw_text(draw, (cx, title_y + 55), "PERFORMANCE",
+               _load_font(54, True), REF_COLORS["red"], anchor="mm")
+    _draw_text(draw, (cx, title_y + 110), "SNAPSHOT",
+               _load_font(40, True), REF_COLORS["text_white"], anchor="mm")
+    _draw_text(draw, (cx, title_y + 165), datetime.now().strftime("%Y-%m-%d"),
+               _load_font(22, True), REF_COLORS["red"], anchor="mm")
 
     # ---- Legend ----
-    legend_y = title_y + 340
+    legend_y = title_y + 220
     items = [
-        ("EXCEEDING ALL", "EXPECTATIONS", COLORS["blue"]),
-        ("MEETING", "EXPECTATIONS", COLORS["green"]),
-        ("WORK IN", "PROGRESS", COLORS["yellow"]),
-        ("NEEDS IMMEDIATE", "IMPROVEMENT", COLORS["red"]),
+        ("EXCEEDING ALL", "EXPECTATIONS", REF_COLORS["blue"]),
+        ("MEETING", "EXPECTATIONS", REF_COLORS["green"]),
+        ("WORK IN", "PROGRESS", REF_COLORS["yellow"]),
+        ("NEEDS IMMEDIATE", "IMPROVEMENT", REF_COLORS["red"]),
     ]
-    label_font = _load_font(22, True)
+    label_font = _load_font(17, True)
     swatch_x = 50
-    swatch_w = 50
-    swatch_h = 64
-    text_x = swatch_x + swatch_w + 18
+    swatch_w = 35
+    swatch_h = 50
+    text_x = swatch_x + swatch_w + 14
     for i, (l1, l2, color) in enumerate(items):
-        y = legend_y + i * 110
+        y = legend_y + i * 75
         draw.rectangle((swatch_x, y, swatch_x + swatch_w, y + swatch_h), fill=color)
         # Match reference: titles colored to match swatch
-        title_color = color if color != COLORS["yellow"] else "#F2D900"
+        title_color = color
         _draw_text(draw, (text_x, y + 6), l1, label_font, title_color, anchor="lt")
-        _draw_text(draw, (text_x, y + 36), l2, label_font, title_color, anchor="lt")
+        _draw_text(draw, (text_x, y + 28), l2, label_font, title_color, anchor="lt")
 
     # ---- Footer ----
-    foot_font = _load_font(22, True)
-    footer_y = SLIDE_HEIGHT - 200
+    foot_font = _load_font(18, True)
+    footer_y = SLIDE_HEIGHT - 130
     for j, line in enumerate([
         "DON'T WAIT TO IMPACT",
         "THIS NUMBER.",
@@ -139,8 +180,8 @@ def _draw_sidebar(img: Image.Image, draw: ImageDraw.ImageDraw, quarter: str) -> 
         "PLEASE SEE MANAGEMENT.",
     ]):
         if line:
-            _draw_text(draw, (cx, footer_y + j * 32), line, foot_font,
-                       COLORS["text_white"], anchor="mm")
+            _draw_text(draw, (cx, footer_y + j * 24), line, foot_font,
+                       REF_COLORS["text_white"], anchor="mm")
 
 
 def _draw_table(
@@ -163,28 +204,28 @@ def _draw_table(
     col_widths[-1] += table_w - sum(col_widths)
 
     # ---- Header bar ----
-    header_h = 70
+    header_h = 52
     draw.rectangle(
         (table_x, table_y, table_x + table_w, table_y + header_h),
-        fill=COLORS["header_bg"]
+        fill=REF_COLORS["header_bg"]
     )
-    header_font = _load_font(26, True)
+    header_font = _load_font(20, True)
     x = table_x
     for header, w in zip(headers, col_widths):
         _draw_text(draw, (x + w // 2, table_y + header_h // 2),
-                   header, header_font, COLORS["text_white"], anchor="mm")
+                   header, header_font, REF_COLORS["text_white"], anchor="mm")
         x += w
 
     # ---- Body ----
     body_top = table_y + header_h
-    body_bottom = SLIDE_HEIGHT - 60
+    body_bottom = SLIDE_HEIGHT - 30
     avail = body_bottom - body_top
     n = max(1, len(rankings))
-    row_h = max(46, min(72, avail // n))
+    row_h = max(28, min(40, avail // n))
 
-    name_font = _load_font(max(20, row_h - 28), True)
-    cell_font = _load_font(max(20, row_h - 30), True)
-    rank_font = _load_font(max(22, row_h - 28), True)
+    name_font = _load_font(max(14, row_h - 16), True)
+    cell_font = _load_font(max(13, row_h - 18), True)
+    rank_font = _load_font(max(15, row_h - 16), True)
 
     cy = body_top
     for idx, emp in enumerate(rankings):
@@ -217,25 +258,26 @@ def _draw_table(
             (pos_label, None, "center", rank_font),
             (name, None, "left", name_font),
             ("=", None, "center", cell_font),
-            (f"{ppa_pct:.0f}%", get_cell_color(ppa_pct, "percentage"), "center", cell_font),
-            (f"{lbw_pct:.0f}%", get_cell_color(lbw_pct, "percentage"), "center", cell_font),
-            (f"{glass_pct:.0f}%", get_cell_color(glass_pct, "percentage"), "center", cell_font),
-            (f"{lsc_pct:.0f}%", get_cell_color(lsc_pct, "percentage"), "center", cell_font),
-            (f"+{cv_score:.1f}", get_cell_color(cv_score, "cv"), "center", cell_font),
-            (f"+{rt_mentions:.1f}", get_cell_color(rt_mentions, "rt"), "center", cell_font),
-            (f"+{bonus:.1f}", get_cell_color(bonus, "bonus"), "center", cell_font),
+            (f"{ppa_pct:.0f}%", _ref_cell_color(ppa_pct, "percentage"), "center", cell_font),
+            (f"{lbw_pct:.0f}%", _ref_cell_color(lbw_pct, "percentage"), "center", cell_font),
+            (f"{glass_pct:.0f}%", _ref_cell_color(glass_pct, "percentage"), "center", cell_font),
+            (f"{lsc_pct:.0f}%", _ref_cell_color(lsc_pct, "percentage"), "center", cell_font),
+            (f"+{cv_score:.1f}", _ref_cell_color(cv_score, "cv"), "center", cell_font),
+            (f"+{rt_mentions:.1f}", _ref_cell_color(rt_mentions, "rt"), "center", cell_font),
+            (f"+{bonus:.1f}", _ref_cell_color(bonus, "bonus"), "center", cell_font),
             (f"{score:.1f}", score_color, "center", cell_font),
         ]
 
         x = table_x
         for (text, cell_color, align, font), w in zip(cells, col_widths):
             if cell_color:
-                pad = 3
+                # 2px gap on all sides — matches reference's slight bezel
+                pad = 2
                 draw.rectangle(
                     (x + pad, cy + pad, x + w - pad, cy + row_h - pad),
                     fill=cell_color
                 )
-                tcolor = get_text_color_for_bg(cell_color)
+                tcolor = _ref_text_color(cell_color)
             else:
                 # Black text on the light row bg for first 3 columns
                 tcolor = TEXT_DARK
@@ -243,9 +285,9 @@ def _draw_table(
             if align == "center":
                 _draw_text(draw, (x + w // 2, ty), text, font, tcolor, anchor="mm")
             elif align == "left":
-                _draw_text(draw, (x + 12, ty), text, font, tcolor, anchor="lm")
+                _draw_text(draw, (x + 10, ty), text, font, tcolor, anchor="lm")
             else:
-                _draw_text(draw, (x + w - 12, ty), text, font, tcolor, anchor="rm")
+                _draw_text(draw, (x + w - 10, ty), text, font, tcolor, anchor="rm")
             x += w
 
         cy += row_h
@@ -257,11 +299,11 @@ def build_full_rankings_png(
     year: int,
     thresholds: Dict[str, float] | None = None,
 ) -> bytes:
-    """Render the Server Performance Snapshot as a 1920×1920 PNG."""
+    """Render the Server Performance Snapshot as a 1920×1080 PNG (16:9)."""
     a_min = (thresholds or {}).get("a_min", 85)
     b_min = (thresholds or {}).get("b_min", 70)
 
-    img = Image.new("RGB", (SLIDE_WIDTH, SLIDE_HEIGHT), COLORS["background"])
+    img = Image.new("RGB", (SLIDE_WIDTH, SLIDE_HEIGHT), REF_COLORS["background"])
     draw = ImageDraw.Draw(img)
 
     _draw_sidebar(img, draw, quarter)
