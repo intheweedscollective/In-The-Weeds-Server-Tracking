@@ -18,57 +18,65 @@ from reportlab.platypus import (
 from reportlab.pdfgen import canvas
 
 
-# Colors from the design
+# Colors — locked to the user-spec palette. PNG generator uses the same
+# values, so PDF + PNG outputs are visually identical.
 COLORS = {
-    "background": "#0D1E31",      # Dark navy background
-    "header_bg": "#1a2d47",       # Slightly lighter header
+    "background": "#0F172A",      # Dark navy background (matches PNG)
+    "header_bg": "#0F172A",       # Same navy as bg per spec
     "text_white": "#FFFFFF",
     "text_red": "#FF0000",
-    "blue": "#00AEEF",            # Exceeding expectations
-    "green": "#00B050",           # Meeting expectations  
-    "yellow": "#F6EA0C",          # Work in progress
-    "red": "#E52D27",             # Needs improvement
-    "row_dark": "#0D1E31",
-    "row_light": "#142638",
+    "blue": "#0C769E",            # Exceeding expectations
+    "green": "#33CC33",           # Meeting expectations
+    "yellow": "#FFFF00",          # Work in progress
+    "red": "#FF0000",             # Needs immediate improvement
+    "row_dark": "#F0F2F5",        # Light alt-row gray (PNG matches)
+    "row_light": "#FFFFFF",       # White rows
     "border": "#2a4060",
 }
 
 
 def get_cell_color(value: float, metric_type: str = "percentage") -> str:
-    """Determine cell color based on value and metric type."""
+    """Determine cell color. Thresholds per user spec:
+       <60% red, <80% yellow, <100% green, >100% blue."""
     if metric_type == "percentage":
-        if value >= 100:
+        if value > 100:
             return COLORS["blue"]
-        elif value >= 90:
+        elif value >= 80:
             return COLORS["green"]
-        elif value >= 75:
+        elif value >= 60:
             return COLORS["yellow"]
         else:
             return COLORS["red"]
     elif metric_type == "cv":
-        if value >= 16:
+        # CV bench is 11 — apply same percentage tiers
+        pct = (value / 11.0) * 100 if value else 0
+        if pct > 100:
             return COLORS["blue"]
-        elif value >= 11:
+        elif pct >= 80:
             return COLORS["green"]
-        elif value >= 6:
+        elif pct >= 60:
             return COLORS["yellow"]
         else:
             return COLORS["red"]
     elif metric_type == "rt":
-        if value >= 15:
+        # RT bench is 5 mentions
+        pct = (value / 5.0) * 100 if value else 0
+        if pct > 100:
             return COLORS["blue"]
-        elif value >= 8:
+        elif pct >= 80:
             return COLORS["green"]
-        elif value >= 3:
+        elif pct >= 60:
             return COLORS["yellow"]
         else:
             return COLORS["red"]
     elif metric_type == "bonus":
-        if value >= 10:
+        # Bonus bench is 5 pts
+        pct = (value / 5.0) * 100 if value else 0
+        if pct > 100:
             return COLORS["blue"]
-        elif value >= 5:
+        elif pct >= 80:
             return COLORS["green"]
-        elif value >= 1:
+        elif pct >= 60:
             return COLORS["yellow"]
         else:
             return COLORS["red"]
