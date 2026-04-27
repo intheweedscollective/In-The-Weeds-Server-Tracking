@@ -43,6 +43,7 @@ export default function FullRankings() {
   const [downloading, setDownloading] = useState(false);
   const [downloadingPrintable, setDownloadingPrintable] = useState(false);
   const [downloadingSnapshotPdf, setDownloadingSnapshotPdf] = useState(false);
+  const [downloadingSnapshotPng, setDownloadingSnapshotPng] = useState(false);
   const [downloadingReview, setDownloadingReview] = useState(null);
   const currentQ = getCurrentQuarter();
   const [selectedYear, setSelectedYear] = useState(currentQ.year);
@@ -395,6 +396,40 @@ export default function FullRankings() {
     }
   };
 
+  const handleDownloadSnapshotPng = async () => {
+    // 1920×1080 PNG version of the Server Performance Snapshot for digital
+    // signage (Yodeck etc., which doesn't render PDFs natively).
+    setDownloadingSnapshotPng(true);
+    try {
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      const filename = `Server_Performance_Snapshot_${selectedQuarter}_${selectedYear}.png`;
+      const apiPath = `/v2/full-rankings/${selectedYear}/${selectedQuarter}/snapshot-png`;
+
+      if (isIOS) {
+        window.open(`${BACKEND_URL}/api${apiPath}`, '_blank');
+        toast.success("Snapshot PNG opened. Tap share to save.");
+        setDownloadingSnapshotPng(false);
+        return;
+      }
+
+      const response = await api.get(apiPath, { responseType: 'blob' });
+      const blob = new Blob([response.data], { type: 'image/png' });
+      const objectUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1000);
+      toast.success("Performance Snapshot PNG downloaded!");
+    } catch (error) {
+      toast.error("Failed to download Performance Snapshot PNG");
+    } finally {
+      setDownloadingSnapshotPng(false);
+    }
+  };
+
   const handleDownloadReview = async (employeeId, employeeName) => {
     setDownloadingReview(employeeId);
     try {
@@ -557,6 +592,27 @@ export default function FullRankings() {
                 <>
                   <FileDown className="w-4 h-4" />
                   Performance Snapshot PDF
+                </>
+              )}
+            </Button>
+
+            <Button
+              onClick={handleDownloadSnapshotPng}
+              disabled={downloadingSnapshotPng || rankings.length === 0}
+              variant="outline"
+              className="border-cyan-500 text-cyan-600 hover:bg-cyan-50 flex items-center gap-2"
+              data-testid="download-snapshot-png-btn"
+              title="Same Server Performance Snapshot rendered as a 1920×1080 PNG for digital signage (Yodeck etc.). Use this on TV displays and Slack — PDFs don't render natively on most digital sign platforms."
+            >
+              {downloadingSnapshotPng ? (
+                <>
+                  <div className="animate-spin h-4 w-4 border-2 border-cyan-500 border-t-transparent rounded-full" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Image className="w-4 h-4" />
+                  Performance Snapshot PNG
                 </>
               )}
             </Button>
