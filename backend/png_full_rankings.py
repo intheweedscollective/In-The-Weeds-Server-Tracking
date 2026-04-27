@@ -20,27 +20,39 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 def _ref_cell_color(value: float, metric_type: str) -> str:
-    """Same threshold logic as pdf_full_rankings.get_cell_color but
-    returns the EXACT colors from the user's reference slide."""
+    """Color thresholds per the user's spec:
+       - >100% benchmark = blue (exceeding)
+       - 80-100% = green (meeting)
+       - 60-80% = yellow (work in progress)
+       - <60% = red (needs immediate improvement)
+    For CV/RT/Bonus point columns we keep the same legend semantically by
+    using value-based bands that mirror the percentage tiers."""
     if metric_type == "percentage":
-        if value >= 100: return REF_COLORS["blue"]
-        if value >= 90:  return REF_COLORS["green"]
-        if value >= 75:  return REF_COLORS["yellow"]
+        if value > 100: return REF_COLORS["blue"]
+        if value >= 80: return REF_COLORS["green"]
+        if value >= 60: return REF_COLORS["yellow"]
         return REF_COLORS["red"]
     if metric_type == "cv":
-        if value >= 16: return REF_COLORS["blue"]
-        if value >= 11: return REF_COLORS["green"]
-        if value >= 6:  return REF_COLORS["yellow"]
+        # CV bench is +11 (matches snapshot legend) — apply same thresholds
+        # as percentage relative to 11.
+        pct = (value / 11.0) * 100 if 11 else 0
+        if pct > 100: return REF_COLORS["blue"]
+        if pct >= 80: return REF_COLORS["green"]
+        if pct >= 60: return REF_COLORS["yellow"]
         return REF_COLORS["red"]
     if metric_type == "rt":
-        if value >= 15: return REF_COLORS["blue"]
-        if value >= 8:  return REF_COLORS["green"]
-        if value >= 3:  return REF_COLORS["yellow"]
+        # RT bench is +5 mentions
+        pct = (value / 5.0) * 100 if value else 0
+        if pct > 100: return REF_COLORS["blue"]
+        if pct >= 80: return REF_COLORS["green"]
+        if pct >= 60: return REF_COLORS["yellow"]
         return REF_COLORS["red"]
     if metric_type == "bonus":
-        if value >= 10: return REF_COLORS["blue"]
-        if value >= 5:  return REF_COLORS["green"]
-        if value >= 1:  return REF_COLORS["yellow"]
+        # Bonus bench is +5 pts
+        pct = (value / 5.0) * 100 if value else 0
+        if pct > 100: return REF_COLORS["blue"]
+        if pct >= 80: return REF_COLORS["green"]
+        if pct >= 60: return REF_COLORS["yellow"]
         return REF_COLORS["red"]
     return REF_COLORS["green"]
 
