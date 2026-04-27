@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useLocation } from "react-router-dom";
-import { Trophy, Calendar, Filter, ChevronDown, ChevronUp, Download, FileText, Medal, Award, Star, Users, Image, MessageCircle, RefreshCw, Edit3, Check, X, Search, TrendingUp, TrendingDown, Target, ArrowUp, Info } from "lucide-react";
+import { Trophy, Calendar, Filter, ChevronDown, ChevronUp, Download, FileText, FileDown, Medal, Award, Star, Users, Image, MessageCircle, RefreshCw, Edit3, Check, X, Search, TrendingUp, TrendingDown, Target, ArrowUp, Info } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { getCurrentQuarter } from "../lib/quarterUtils";
@@ -42,6 +42,7 @@ export default function FullRankings() {
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
   const [downloadingPrintable, setDownloadingPrintable] = useState(false);
+  const [downloadingSnapshotPdf, setDownloadingSnapshotPdf] = useState(false);
   const [downloadingReview, setDownloadingReview] = useState(null);
   const currentQ = getCurrentQuarter();
   const [selectedYear, setSelectedYear] = useState(currentQ.year);
@@ -359,6 +360,41 @@ export default function FullRankings() {
     }
   };
 
+  const handleDownloadSnapshotPdf = async () => {
+    // The detailed Server Performance Snapshot — wide PDF with sidebar,
+    // legend, and the full Rank/Name/PPA/LBW/GLASS/LSC/CV/RT/Bonus/Score
+    // table. Different from the rainbow tier-card PNG download.
+    setDownloadingSnapshotPdf(true);
+    try {
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      const filename = `Server_Performance_Snapshot_${selectedQuarter}_${selectedYear}.pdf`;
+      const apiPath = `/v2/full-rankings/${selectedYear}/${selectedQuarter}/snapshot-pdf`;
+
+      if (isIOS) {
+        window.open(`${BACKEND_URL}/api${apiPath}`, '_blank');
+        toast.success("Snapshot PDF opened. Tap share to save.");
+        setDownloadingSnapshotPdf(false);
+        return;
+      }
+
+      const response = await api.get(apiPath, { responseType: 'blob' });
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const objectUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1000);
+      toast.success("Performance Snapshot PDF downloaded!");
+    } catch (error) {
+      toast.error("Failed to download Performance Snapshot PDF");
+    } finally {
+      setDownloadingSnapshotPdf(false);
+    }
+  };
+
   const handleDownloadReview = async (employeeId, employeeName) => {
     setDownloadingReview(employeeId);
     try {
@@ -500,6 +536,27 @@ export default function FullRankings() {
                 <>
                   <Star className="w-4 h-4" />
                   Printable
+                </>
+              )}
+            </Button>
+
+            <Button
+              onClick={handleDownloadSnapshotPdf}
+              disabled={downloadingSnapshotPdf || rankings.length === 0}
+              variant="outline"
+              className="border-red-500 text-red-600 hover:bg-red-50 flex items-center gap-2"
+              data-testid="download-snapshot-pdf-btn"
+              title="Detailed Server Performance Snapshot — wide PDF with the full metric table (PPA/LBW/GLASS/LSC/CV/RT/Bonus/Score), Bubba Gump branding, and color-coded performance legend. Best for printing and posting."
+            >
+              {downloadingSnapshotPdf ? (
+                <>
+                  <div className="animate-spin h-4 w-4 border-2 border-red-500 border-t-transparent rounded-full" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <FileDown className="w-4 h-4" />
+                  Performance Snapshot PDF
                 </>
               )}
             </Button>

@@ -2103,6 +2103,74 @@ async def get_full_hierarchy_rankings(year: int, quarter: str, tier_filter: Opti
     }
 
 
+@api_router.get("/v2/full-rankings/{year}/{quarter}/snapshot-pdf")
+async def download_full_rankings_snapshot_pdf(year: int, quarter: str):
+    """
+    Download the detailed Server Performance Snapshot PDF — wide-format
+    document with the Bubba Gump sidebar, color-coded legend, and the
+    full Rank/Name/Trend/PPA/LBW/GLASS/LSC/CV/RT/Bonus/Score table.
+
+    This is the printable PDF managers post for staff. The PNG-only
+    `/pdf` endpoint above produces the tier-card slide instead.
+    """
+    employees_v2 = await db.employees_v2.find(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    ).to_list(500)
+
+    if not employees_v2:
+        raise HTTPException(status_code=404, detail=f"No employees found for {quarter} {year}")
+
+    settings_doc = await db.quarter_settings.find_one(
+        {"year": year, "quarter": quarter.upper()}, {"_id": 0}
+    ) or {}
+
+    settings = QuarterSettings(
+        year=year,
+        quarter=quarter.upper(),
+        benchmark_ppa=settings_doc.get("benchmark_ppa", 55.0),
+        benchmark_lbw=settings_doc.get("benchmark_lbw", 8.0),
+        benchmark_glass=settings_doc.get("benchmark_glass", 1.0),
+        benchmark_lsc=settings_doc.get("benchmark_lsc", 100.0),
+        benchmark_cv=settings_doc.get("benchmark_cv", 5.0),
+        weight_ppa=settings_doc.get("weight_ppa", 0.25),
+        weight_lbw=settings_doc.get("weight_lbw", 0.20),
+        weight_glass=settings_doc.get("weight_glass", 0.15),
+        weight_lsc=settings_doc.get("weight_lsc", 0.25),
+        weight_cv=settings_doc.get("weight_cv", 0.15),
+        bonus_rate=settings_doc.get("bonus_rate", 0.2),
+        bonus_cap=settings_doc.get("bonus_cap", 5.0),
+        a_server_min_score=settings_doc.get("a_server_min_score", 85.0),
+        b_server_min_score=settings_doc.get("b_server_min_score", 70.0),
+    )
+
+    employees: List[EmployeeV2] = []
+    for emp_data in employees_v2:
+        try:
+            employees.append(EmployeeV2(**emp_data))
+        except Exception:
+            continue
+
+    rankings = generate_hierarchy_rankings(employees, settings)
+
+    pdf_bytes = build_full_rankings_pdf(
+        rankings=rankings,
+        quarter=quarter.upper(),
+        year=year,
+        thresholds={
+            "a_min": settings.a_server_min_score,
+            "b_min": settings.b_server_min_score,
+        },
+    )
+
+    filename = f"Server_Performance_Snapshot_{quarter.upper()}_{year}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
 @api_router.get("/v2/full-rankings/{year}/{quarter}/pdf")
 async def download_full_rankings_pdf(year: int, quarter: str):
     """
