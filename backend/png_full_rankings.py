@@ -89,13 +89,24 @@ def _ref_cell_color(value: float, metric_type: str) -> str:
 # Font + text helpers
 # ---------------------------------------------------------------------------
 def _load_font(size: int, bold: bool = True) -> ImageFont.FreeTypeFont:
-    name = "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf"
-    path = f"/usr/share/fonts/truetype/dejavu/{name}"
-    if os.path.exists(path):
-        try:
-            return ImageFont.truetype(path, size)
-        except Exception:
-            pass
+    # Try multiple paths in order — first one that exists wins.
+    candidates_bold = [
+        "/root/.venv/lib/python3.11/site-packages/matplotlib/mpl-data/fonts/ttf/DejaVuSans-Bold.ttf",
+        "/app/backend/assets/fonts/Poppins-SemiBold.ttf",
+        "/app/backend/assets/fonts/Aptos-Narrow-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    ]
+    candidates_regular = [
+        "/root/.venv/lib/python3.11/site-packages/matplotlib/mpl-data/fonts/ttf/DejaVuSans.ttf",
+        "/app/backend/assets/fonts/Poppins-Regular.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ]
+    for path in (candidates_bold if bold else candidates_regular):
+        if os.path.exists(path):
+            try:
+                return ImageFont.truetype(path, size)
+            except Exception:
+                continue
     return ImageFont.load_default()
 
 
