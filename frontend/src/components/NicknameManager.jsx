@@ -24,6 +24,7 @@ export default function NicknameManager() {
   // Auto-suggest panel (RT-based) state
   const [suggestions, setSuggestions] = useState([]);
   const [snapshotEmployees, setSnapshotEmployees] = useState([]);
+  const [dismissedNames, setDismissedNames] = useState([]);
   const [resolvingName, setResolvingName] = useState(null); // unmatched name being mapped
   const [resolveTarget, setResolveTarget] = useState(""); // employee first-name selected
   const { quarter, year } = getCurrentQuarter();
@@ -39,6 +40,7 @@ export default function NicknameManager() {
       setUserAliases(aliasesRes.data?.user || []);
       setSuggestions(sugRes.data?.unmatched || []);
       setSnapshotEmployees(sugRes.data?.employees || []);
+      setDismissedNames(sugRes.data?.dismissed || []);
     } catch (e) {
       toast.error("Could not load nicknames");
     } finally {
@@ -108,10 +110,29 @@ export default function NicknameManager() {
     }
   };
 
-  const handleDismissSuggestion = (suggestionName) => {
-    // Local-only dismissal — the next RT upload re-surfaces it if it's
-    // still unmatched, so this is just clutter reduction.
-    setSuggestions((s) => s.filter((x) => x.name !== suggestionName));
+  const handleDismissSuggestion = async (suggestionName) => {
+    // Persistent dismissal — survives RT re-uploads. Used for former
+    // employees and review-text false-positives the stop-word list
+    // missed. Reverse via the Dismissed list section if needed.
+    try {
+      await api.post("/v2/snapshot-workflow/nicknames/dismissals", {
+        name: suggestionName.toLowerCase(),
+      });
+      toast.success(`${suggestionName} hidden permanently`);
+      fetchAll();
+    } catch (e) {
+      toast.error("Could not dismiss");
+    }
+  };
+
+  const handleRestoreDismissal = async (name) => {
+    try {
+      await api.delete(`/v2/snapshot-workflow/nicknames/dismissals/${encodeURIComponent(name)}`);
+      toast.success(`${name} restored to suggestions`);
+      fetchAll();
+    } catch (e) {
+      toast.error("Restore failed");
+    }
   };
 
   return (
@@ -293,6 +314,37 @@ export default function NicknameManager() {
           </div>
         )}
       </div>
+
+      {/* Dismissed names (former employees, etc.) */}
+      {dismissedNames.length > 0 && (
+        <div className="mb-5">
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">
+            Dismissed ({dismissedNames.length})
+          </h3>
+          <p className="text-xs text-gray-500 mb-2 italic">
+            Names that won't appear in suggestions again. Click "Restore" to add back.
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {dismissedNames.map((name) => (
+              <div
+                key={name}
+                className="inline-flex items-center gap-1 bg-gray-100 border border-gray-300 rounded-full px-2.5 py-1 text-xs"
+                data-testid={`dismissed-${name}`}
+              >
+                <span className="font-mono text-gray-700">{name}</span>
+                <button
+                  onClick={() => handleRestoreDismissal(name)}
+                  className="text-blue-500 hover:text-blue-700 ml-1 font-medium"
+                  title={`Restore ${name} to suggestions`}
+                  data-testid={`restore-${name}`}
+                >
+                  restore
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Defaults (read-only) */}
       <div>

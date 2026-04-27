@@ -3917,7 +3917,9 @@ async def get_unmatched_nickname_suggestions(
     Surface name-candidates from the active snapshot's most recent RT
     upload that the parser couldn't match to any known employee. Each
     entry returns {name, mentions}; the UI lets the user one-click create
-    a nickname alias mapping to a real employee.
+    a nickname alias mapping to a real employee. Names persistently
+    dismissed via /nicknames/dismissals (e.g. former employees) are
+    filtered out.
     """
     db = get_db()
     snap = await db.snapshot_workflow.find_one(
@@ -3931,16 +3933,34 @@ async def get_unmatched_nickname_suggestions(
             sort=[("updated_at", -1)]
         )
     if not snap:
-        return {"unmatched": [], "employees": []}
+        return {"unmatched": [], "employees": [], "dismissed": []}
 
     rt_upload = next(
         (u for u in (snap.get("uploads") or [])
          if u.get("upload_type") == "review_tracker"),
         None
     )
-    unmatched = []
+    raw_unmatched = []
     if rt_upload:
-        unmatched = (rt_upload.get("parsed_data") or {}).get("unmatched_suggestions", [])
+        raw_unmatched = (rt_upload.get("parsed_data") or {}).get("unmatched_suggestions", [])
+
+    # Filter against the persistent dismissal blacklist AND any nicknames
+    # that have been added since the last RT parse (so newly-mapped names
+    # disappear from suggestions immediately, no re-upload required).
+    dismissed_set = set()
+    async for doc in db.nickname_dismissals.find({}, {"_id": 0, "name": 1}):
+        n = (doc.get("name") or "").strip().lower()
+        if n:
+            dismissed_set.add(n)
+
+    nickname_map = await load_nickname_map(db)
+    known_nicknames = set(nickname_map.keys())  # e.g. 'adri', 'star'
+
+    unmatched = [
+        s for s in raw_unmatched
+        if s.get("name", "").strip().lower() not in dismissed_set
+        and s.get("name", "").strip().lower() not in known_nicknames
+    ]
 
     # Also return the live employees so the UI can populate the
     # "map to which employee" dropdown without a second roundtrip.
@@ -3953,7 +3973,46 @@ async def get_unmatched_nickname_suggestions(
         }
         for e in (snap.get("employees") or [])
     ]
-    return {"unmatched": unmatched, "employees": employees}
+    return {
+        "unmatched": unmatched,
+        "employees": employees,
+        "dismissed": sorted(dismissed_set),
+    }
+
+
+@snapshot_router.post("/nicknames/dismissals")
+async def add_nickname_dismissal(payload: Dict[str, Any]):
+    """Permanently hide an unmatched-name suggestion (former employees,
+    review-only mentions like dish names that the stop-word list missed,
+    etc.). Idempotent — re-posting the same name no-ops cleanly."""
+    db = get_db()
+    name = (payload.get("name") or "").strip().lower()
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
+    reason = (payload.get("reason") or "").strip() or None
+    existing = await db.nickname_dismissals.find_one({"name": name})
+    if existing:
+        return {"success": True, "id": existing.get("id"), "name": name, "updated": False}
+    doc = {
+        "id": str(uuid.uuid4()),
+        "name": name,
+        "reason": reason,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.nickname_dismissals.insert_one(doc)
+    doc.pop("_id", None)
+    return {"success": True, **doc, "updated": True}
+
+
+@snapshot_router.delete("/nicknames/dismissals/{name}")
+async def remove_nickname_dismissal(name: str):
+    """Restore an unmatched-name suggestion previously dismissed. Useful
+    if the operator changes their mind (e.g. a former employee returns)."""
+    db = get_db()
+    res = await db.nickname_dismissals.delete_one({"name": name.strip().lower()})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail=f"No dismissal found for {name!r}")
+    return {"success": True, "restored": name}
 
 
 # ============================================================================
