@@ -1,12 +1,5 @@
 """
-Full Rankings PDF Generator — Snapshot Style.
-
-Mirrors `png_full_rankings.py` exactly so the PDF matches the digital PNG:
-  - Diamond-pattern image as full-page background.
-  - Solid dark-navy header bar.
-  - Rank / Name / Trend cells: WHITE fill, dark text.
-  - Metric cells: rounded colored tiles with thin black border, separated
-    by a white grid gutter for definition.
+Full Rankings PDF Generator — Mirrors `png_full_rankings.py`.
 """
 import io
 import os
@@ -36,7 +29,10 @@ COLORS = {
 }
 
 LOGO_PATH = "/app/backend/assets/bubba_gump_logo.png"
-BG_IMAGE_PATH = "/app/backend/assets/snapshot_bg.jpg"
+
+
+def _rt_value(mentions: float) -> float:
+    return min(0.5 * (mentions or 0), 15.0)
 
 
 def get_cell_color(value: float, metric_type: str = "percentage") -> str:
@@ -68,10 +64,6 @@ def get_cell_color(value: float, metric_type: str = "percentage") -> str:
     return COLORS["green"]
 
 
-def get_text_color_for_bg(bg_color: str) -> str:
-    return COLORS["text_dark"] if bg_color == COLORS["yellow"] else COLORS["text_white"]
-
-
 def _signed(val: float) -> str:
     if val == 0:
         return "0.0"
@@ -97,18 +89,9 @@ def build_full_rankings_pdf(
     page_height = 9 * inch
     c = canvas.Canvas(buffer, pagesize=(page_width, page_height))
 
-    # ---- Background image ----
-    if os.path.exists(BG_IMAGE_PATH):
-        try:
-            c.drawImage(ImageReader(BG_IMAGE_PATH), 0, 0,
-                        width=page_width, height=page_height,
-                        preserveAspectRatio=False, mask='auto')
-        except Exception:
-            c.setFillColor(colors.HexColor(COLORS["background"]))
-            c.rect(0, 0, page_width, page_height, fill=True, stroke=False)
-    else:
-        c.setFillColor(colors.HexColor(COLORS["background"]))
-        c.rect(0, 0, page_width, page_height, fill=True, stroke=False)
+    # Solid dark navy background
+    c.setFillColor(colors.HexColor(COLORS["background"]))
+    c.rect(0, 0, page_width, page_height, fill=True, stroke=False)
 
     # ==================== LEFT SIDEBAR ====================
     sidebar_width = 3.0 * inch
@@ -119,7 +102,7 @@ def build_full_rankings_pdf(
         try:
             logo = ImageReader(LOGO_PATH)
             iw, ih = logo.getSize()
-            target_w = 1.8 * inch
+            target_w = 1.95 * inch
             ratio = target_w / iw
             target_h = ih * ratio
             c.drawImage(logo, cx - target_w / 2, logo_y - target_h / 2,
@@ -129,23 +112,23 @@ def build_full_rankings_pdf(
 
     title_y = logo_y - 1.4 * inch
     c.setFillColor(colors.HexColor(COLORS["text_white"]))
-    c.setFont("Helvetica-Bold", 20)
+    c.setFont("Helvetica-Bold", 24)
     c.drawCentredString(cx, title_y, f"{quarter} SERVER")
 
     c.setFillColor(colors.HexColor(COLORS["red"]))
-    c.setFont("Helvetica-Bold", 24)
-    c.drawCentredString(cx, title_y - 0.4 * inch, "PERFORMANCE")
+    c.setFont("Helvetica-Bold", 30)
+    c.drawCentredString(cx, title_y - 0.45 * inch, "PERFORMANCE")
 
     c.setFillColor(colors.HexColor(COLORS["text_white"]))
-    c.setFont("Helvetica-Bold", 20)
-    c.drawCentredString(cx, title_y - 0.78 * inch, "SNAPSHOT")
+    c.setFont("Helvetica-Bold", 24)
+    c.drawCentredString(cx, title_y - 0.9 * inch, "SNAPSHOT")
 
     c.setFillColor(colors.HexColor(COLORS["red"]))
-    c.setFont("Helvetica-Bold", 11)
-    c.drawCentredString(cx, title_y - 1.08 * inch,
+    c.setFont("Helvetica-Bold", 13)
+    c.drawCentredString(cx, title_y - 1.25 * inch,
                         datetime.now().strftime("%B %d, %Y"))
 
-    legend_y = title_y - 1.55 * inch
+    legend_y = title_y - 1.8 * inch
     legend_items = [
         ("EXCEEDING ALL",   "EXPECTATIONS", COLORS["blue"]),
         ("MEETING",         "EXPECTATIONS", COLORS["green"]),
@@ -153,18 +136,18 @@ def build_full_rankings_pdf(
         ("NEEDS IMMEDIATE", "IMPROVEMENT",  COLORS["red"]),
     ]
     for i, (line1, line2, color) in enumerate(legend_items):
-        y_pos = legend_y - (i * 0.55 * inch)
+        y_pos = legend_y - (i * 0.6 * inch)
         c.setFillColor(colors.HexColor(color))
-        c.rect(0.35 * inch, y_pos - 0.05 * inch, 0.22 * inch, 0.4 * inch,
+        c.rect(0.35 * inch, y_pos - 0.05 * inch, 0.25 * inch, 0.45 * inch,
                fill=True, stroke=False)
         c.setFillColor(colors.HexColor(color))
-        c.setFont("Helvetica-Bold", 9.5)
-        c.drawString(0.65 * inch, y_pos + 0.2 * inch, line1)
-        c.drawString(0.65 * inch, y_pos + 0.05 * inch, line2)
+        c.setFont("Helvetica-Bold", 11)
+        c.drawString(0.7 * inch, y_pos + 0.25 * inch, line1)
+        c.drawString(0.7 * inch, y_pos + 0.08 * inch, line2)
 
     footer_y = 0.7 * inch
     c.setFillColor(colors.HexColor(COLORS["text_white"]))
-    c.setFont("Helvetica-Bold", 9)
+    c.setFont("Helvetica-Bold", 11)
     c.drawCentredString(cx, footer_y + 0.35 * inch, "DON'T WAIT TO IMPACT")
     c.drawCentredString(cx, footer_y + 0.18 * inch, "THIS NUMBER.")
     c.drawCentredString(cx, footer_y - 0.08 * inch, "IF YOU HAVE QUESTIONS")
@@ -176,9 +159,9 @@ def build_full_rankings_pdf(
     table_top = page_height - 0.3 * inch
 
     headers = ["Rank", "Name", "Trend", "PPA", "LBW", "GLASS",
-               "LSC", "CV", "RT", "Bonus", "Score"]
+               "LSC", "CV", "RT", "Metric Bonus", "Score"]
     col_props = [0.06, 0.13, 0.06, 0.085, 0.085, 0.085,
-                 0.085, 0.085, 0.085, 0.095, 0.095]
+                 0.085, 0.085, 0.085, 0.105, 0.085]
     col_widths = [p * table_width for p in col_props]
     col_widths[-1] += table_width - sum(col_widths)
 
@@ -213,13 +196,18 @@ def build_full_rankings_pdf(
         pos_label   = emp.get("position_label", "")
         name        = (emp.get("name", "") or "")[:14]
         score       = emp.get("total_score", 0) or 0
-        ppa_pct     = ((emp.get("ppa_points", {}).get("earned", 0) or 0) / 30) * 100
-        lbw_pct     = ((emp.get("lbw_points", {}).get("earned", 0) or 0) / 25) * 100
-        glass_pct   = ((emp.get("glassware_points", {}).get("earned", 0) or 0) / 20) * 100
-        lsc_pct     = ((emp.get("lsc_points", {}).get("earned", 0) or 0) / 30) * 100
+        ppa_pct     = emp.get("ppa_percentage") or (
+            ((emp.get("ppa_points", {}).get("earned", 0) or 0) / 30) * 100)
+        lbw_pct     = emp.get("lbw_percentage") or (
+            ((emp.get("lbw_points", {}).get("earned", 0) or 0) / 25) * 100)
+        glass_pct   = emp.get("glassware_percentage") or (
+            ((emp.get("glassware_points", {}).get("earned", 0) or 0) / 20) * 100)
+        lsc_pct     = emp.get("lsc_percentage") or (
+            ((emp.get("lsc_points", {}).get("earned", 0) or 0) / 30) * 100)
         cv_score    = emp.get("cv_score", 0) or 0
-        rt_mentions = emp.get("review_mentions", 0) or emp.get("rt_mentions", 0) or 0
-        bonus       = emp.get("bonus_points", 0) or emp.get("metric_bonus", 0) or 0
+        mentions    = emp.get("review_mentions", 0) or emp.get("rt_mentions", 0) or 0
+        rt_value    = _rt_value(mentions)
+        metric_bonus = emp.get("metric_bonus", 0) or 0
 
         trend_dir = (emp.get("trend") or "up").lower()
         if trend_dir in ("up", "improving", "improved"):
@@ -229,7 +217,6 @@ def build_full_rankings_pdf(
         else:
             trend_glyph, trend_col = "\u2014", COLORS["trend_flat"]
 
-        # (text, fill_hex or None for white-bg, align, override_text, is_white)
         row_data = [
             (pos_label,            None,                                      "center", COLORS["text_dark"], True),
             (name,                 None,                                      "left",   COLORS["text_dark"], True),
@@ -239,14 +226,14 @@ def build_full_rankings_pdf(
             (f"{glass_pct:.0f}%",  get_cell_color(glass_pct,  "percentage"),  "center", None,                False),
             (f"{lsc_pct:.0f}%",    get_cell_color(lsc_pct,    "percentage"),  "center", None,                False),
             (_signed(cv_score),    get_cell_color(cv_score,   "cv"),          "center", None,                False),
-            (_signed(rt_mentions), get_cell_color(rt_mentions,"rt"),          "center", None,                False),
-            (_signed(bonus),       get_cell_color(bonus,      "bonus"),       "center", None,                False),
+            (_signed(rt_value),    get_cell_color(rt_value,   "rt"),          "center", None,                False),
+            (_signed(metric_bonus),get_cell_color(metric_bonus,"bonus"),      "center", None,                False),
             (f"{score:.1f}",       get_cell_color(score,      "score"),       "center", None,                False),
         ]
 
         x_pos = table_x
         for (text, fill_hex, align, override_text, is_white), w in zip(row_data, col_widths):
-            # White grid block (gutter) under every cell.
+            # White gutter block behind every cell.
             c.setFillColor(colors.HexColor(COLORS["grid"]))
             c.rect(x_pos, cy, w, row_h, fill=True, stroke=False)
 
@@ -261,7 +248,7 @@ def build_full_rankings_pdf(
                 text_color = override_text or COLORS["text_dark"]
             else:
                 _draw_tile(c, tile_x, tile_y, tile_w, tile_h, fill_hex, radius)
-                text_color = get_text_color_for_bg(fill_hex)
+                text_color = COLORS["text_dark"]  # All grid numbers BLACK per spec.
 
             c.setFillColor(colors.HexColor(text_color))
             c.setFont("Helvetica-Bold", 9.5)

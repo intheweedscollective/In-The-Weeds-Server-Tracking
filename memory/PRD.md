@@ -13,7 +13,21 @@ Build a comprehensive performance review application for restaurant employees.
 
 ### Latest Changes (2026-04-27 Session)
 
-- **P0: Snapshot Report — visual style iterated to match reference exactly (FIXED 2026-04-27)**
+- **P0: Snapshot Report — Pixel-accurate clone of reference (FIXED 2026-04-27 v3)**
+  - User feedback: revert diamond bg, sidebar text was illegible, grid numbers must be BLACK (not white), RT column was empty, "Bonus" column should read "Metric Bonus".
+  - Implementation:
+    * Reverted to SOLID dark navy bg matching reference exactly.
+    * Sidebar fonts upsized for legibility on dark navy: Q SERVER 46pt, PERFORMANCE 58pt, SNAPSHOT 46pt, date 24pt, legend 20pt, footer 20pt.
+    * All numbers inside colored grid tiles render in BLACK text (no more white-on-color contrast issues).
+    * **RT column** now populated via `RT = min(mentions × 0.5, 15)` — 0.5 pts per ReviewTracker name mention, capped at 15.
+    * **"Bonus" column header** renamed to **"Metric Bonus"** and reads from `metric_bonus` field only (POS-metric benchmark exceedance points only — excludes review_bonus).
+    * Trend ▲ / — preserved.
+  - Files: `/app/backend/png_full_rankings.py`, `/app/backend/pdf_full_rankings.py`.
+  - Verified via `/api/v2/full-rankings/2026/Q1/snapshot-png` (HTTP 200, 207 KB) + `analyze_file_tool` 6/6 visual checks pass.
+
+- **CV Score formula confirmation pending from user** — currently `CV = (NPS%/10) + (Promoters × 1) − (Detractors × 2)` per `scoring_engine.py`. User flagged it may be incorrect; awaiting their confirmation before adjusting.
+
+- **P0: Snapshot Report (PNG/PDF) Visual Layout Mirror — FIXED 2026-04-27 (initial pass)**
   - Iter 2 feedback from user: column spacing should match reference, cells need white grid dividers + thin black border for definition, Name column must NOT be black/navy, and the diamond-pattern image must be the slide-wide background.
   - Implementation:
     * Diamond bg image (`/app/backend/assets/snapshot_bg.jpg`) loaded as the full 1920×1080 canvas.
