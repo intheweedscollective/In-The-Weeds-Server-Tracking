@@ -94,15 +94,15 @@ def build_full_rankings_pdf(
     c.rect(0, 0, page_width, page_height, fill=True, stroke=False)
 
     # ==================== LEFT SIDEBAR ====================
-    sidebar_width = 3.0 * inch
+    sidebar_width = 4.0 * inch
     cx = sidebar_width / 2
 
-    logo_y = page_height - 1.2 * inch
+    logo_y = page_height - 1.6 * inch
     if os.path.exists(LOGO_PATH):
         try:
             logo = ImageReader(LOGO_PATH)
             iw, ih = logo.getSize()
-            target_w = 1.95 * inch
+            target_w = 2.9 * inch
             ratio = target_w / iw
             target_h = ih * ratio
             c.drawImage(logo, cx - target_w / 2, logo_y - target_h / 2,
@@ -110,25 +110,25 @@ def build_full_rankings_pdf(
         except Exception:
             pass
 
-    title_y = logo_y - 1.4 * inch
+    title_y = logo_y - 1.85 * inch
     c.setFillColor(colors.HexColor(COLORS["text_white"]))
-    c.setFont("Helvetica-Bold", 24)
+    c.setFont("Helvetica-Bold", 42)
     c.drawCentredString(cx, title_y, f"{quarter} SERVER")
 
     c.setFillColor(colors.HexColor(COLORS["red"]))
-    c.setFont("Helvetica-Bold", 30)
-    c.drawCentredString(cx, title_y - 0.45 * inch, "PERFORMANCE")
+    c.setFont("Helvetica-Bold", 56)
+    c.drawCentredString(cx, title_y - 0.75 * inch, "PERFORMANCE")
 
     c.setFillColor(colors.HexColor(COLORS["text_white"]))
-    c.setFont("Helvetica-Bold", 24)
-    c.drawCentredString(cx, title_y - 0.9 * inch, "SNAPSHOT")
+    c.setFont("Helvetica-Bold", 42)
+    c.drawCentredString(cx, title_y - 1.45 * inch, "SNAPSHOT")
 
     c.setFillColor(colors.HexColor(COLORS["red"]))
-    c.setFont("Helvetica-Bold", 13)
-    c.drawCentredString(cx, title_y - 1.25 * inch,
+    c.setFont("Helvetica-Bold", 20)
+    c.drawCentredString(cx, title_y - 1.95 * inch,
                         datetime.now().strftime("%B %d, %Y"))
 
-    legend_y = title_y - 1.8 * inch
+    legend_y = title_y - 2.55 * inch
     legend_items = [
         ("EXCEEDING ALL",   "EXPECTATIONS", COLORS["blue"]),
         ("MEETING",         "EXPECTATIONS", COLORS["green"]),
@@ -136,22 +136,22 @@ def build_full_rankings_pdf(
         ("NEEDS IMMEDIATE", "IMPROVEMENT",  COLORS["red"]),
     ]
     for i, (line1, line2, color) in enumerate(legend_items):
-        y_pos = legend_y - (i * 0.6 * inch)
+        y_pos = legend_y - (i * 0.7 * inch)
         c.setFillColor(colors.HexColor(color))
-        c.rect(0.35 * inch, y_pos - 0.05 * inch, 0.25 * inch, 0.45 * inch,
+        c.rect(0.45 * inch, y_pos - 0.05 * inch, 0.36 * inch, 0.55 * inch,
                fill=True, stroke=False)
         c.setFillColor(colors.HexColor(color))
-        c.setFont("Helvetica-Bold", 11)
-        c.drawString(0.7 * inch, y_pos + 0.25 * inch, line1)
-        c.drawString(0.7 * inch, y_pos + 0.08 * inch, line2)
+        c.setFont("Helvetica-Bold", 17)
+        c.drawString(0.95 * inch, y_pos + 0.32 * inch, line1)
+        c.drawString(0.95 * inch, y_pos + 0.1 * inch, line2)
 
-    footer_y = 0.7 * inch
+    footer_y = 0.85 * inch
     c.setFillColor(colors.HexColor(COLORS["text_white"]))
-    c.setFont("Helvetica-Bold", 11)
-    c.drawCentredString(cx, footer_y + 0.35 * inch, "DON'T WAIT TO IMPACT")
-    c.drawCentredString(cx, footer_y + 0.18 * inch, "THIS NUMBER.")
+    c.setFont("Helvetica-Bold", 16)
+    c.drawCentredString(cx, footer_y + 0.5 * inch, "DON'T WAIT TO IMPACT")
+    c.drawCentredString(cx, footer_y + 0.27 * inch, "THIS NUMBER.")
     c.drawCentredString(cx, footer_y - 0.08 * inch, "IF YOU HAVE QUESTIONS")
-    c.drawCentredString(cx, footer_y - 0.25 * inch, "PLEASE SEE MANAGEMENT.")
+    c.drawCentredString(cx, footer_y - 0.31 * inch, "PLEASE SEE MANAGEMENT.")
 
     # ==================== MAIN TABLE ====================
     table_x = sidebar_width + 0.2 * inch

@@ -19,7 +19,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 SLIDE_WIDTH = 1920
 SLIDE_HEIGHT = 1080
-SIDEBAR_WIDTH = 500
+SIDEBAR_WIDTH = 660
 
 REF_COLORS = {
     "background":  "#0F172A",
@@ -116,8 +116,8 @@ def _draw_sidebar(img: Image.Image, draw: ImageDraw.ImageDraw, quarter: str) -> 
     cx = SIDEBAR_WIDTH // 2
 
     # ---- Logo ----
-    logo_y = 165
-    logo_w_target = 280
+    logo_y = 175
+    logo_w_target = 340
     logo_drawn = False
     if os.path.exists(LOGO_PATH):
         try:
@@ -130,44 +130,44 @@ def _draw_sidebar(img: Image.Image, draw: ImageDraw.ImageDraw, quarter: str) -> 
         except Exception:
             logo_drawn = False
     if not logo_drawn:
-        r = 110
+        r = 140
         draw.ellipse((cx - r, logo_y - r, cx + r, logo_y + r), fill="#1a3050")
         _draw_text(draw, (cx, logo_y), "BUBBA GUMP",
-                   _load_font(36, True), REF_COLORS["text_white"], anchor="mm")
+                   _load_font(48, True), REF_COLORS["text_white"], anchor="mm")
 
-    # ---- Title (sized for legibility on dark navy) ----
+    # ---- Title (LARGE — fills sidebar like the reference) ----
     title_y = 360
     _draw_text(draw, (cx, title_y), f"{quarter} SERVER",
-               _load_font(46, True), REF_COLORS["text_white"], anchor="mm")
-    _draw_text(draw, (cx, title_y + 60), "PERFORMANCE",
-               _load_font(58, True), REF_COLORS["red"], anchor="mm")
-    _draw_text(draw, (cx, title_y + 120), "SNAPSHOT",
-               _load_font(46, True), REF_COLORS["text_white"], anchor="mm")
-    _draw_text(draw, (cx, title_y + 175),
+               _load_font(72, True), REF_COLORS["text_white"], anchor="mm")
+    _draw_text(draw, (cx, title_y + 90), "PERFORMANCE",
+               _load_font(96, True), REF_COLORS["red"], anchor="mm")
+    _draw_text(draw, (cx, title_y + 180), "SNAPSHOT",
+               _load_font(72, True), REF_COLORS["text_white"], anchor="mm")
+    _draw_text(draw, (cx, title_y + 245),
                datetime.now().strftime("%B %d, %Y"),
-               _load_font(24, True), REF_COLORS["red"], anchor="mm")
+               _load_font(34, True), REF_COLORS["red"], anchor="mm")
 
     # ---- Legend ----
-    legend_y = title_y + 235
+    legend_y = title_y + 305
     items = [
         ("EXCEEDING ALL",   "EXPECTATIONS", REF_COLORS["blue"]),
         ("MEETING",         "EXPECTATIONS", REF_COLORS["green"]),
         ("WORK IN",         "PROGRESS",     REF_COLORS["yellow"]),
         ("NEEDS IMMEDIATE", "IMPROVEMENT",  REF_COLORS["red"]),
     ]
-    label_font = _load_font(20, True)
+    label_font = _load_font(28, True)
     swatch_x = 50
-    swatch_w = 38
-    swatch_h = 56
-    text_x = swatch_x + swatch_w + 16
+    swatch_w = 50
+    swatch_h = 72
+    text_x = swatch_x + swatch_w + 20
     for i, (l1, l2, color) in enumerate(items):
-        y = legend_y + i * 80
+        y = legend_y + i * 88
         draw.rectangle((swatch_x, y, swatch_x + swatch_w, y + swatch_h), fill=color)
-        _draw_text(draw, (text_x, y + 8),  l1, label_font, color, anchor="lt")
-        _draw_text(draw, (text_x, y + 32), l2, label_font, color, anchor="lt")
+        _draw_text(draw, (text_x, y + 10), l1, label_font, color, anchor="lt")
+        _draw_text(draw, (text_x, y + 42), l2, label_font, color, anchor="lt")
 
     # ---- Footer ----
-    foot_font = _load_font(20, True)
+    foot_font = _load_font(26, True)
     footer_y = SLIDE_HEIGHT - 110
     for j, line in enumerate([
         "DON'T WAIT TO IMPACT",
@@ -177,7 +177,7 @@ def _draw_sidebar(img: Image.Image, draw: ImageDraw.ImageDraw, quarter: str) -> 
         "PLEASE SEE MANAGEMENT.",
     ]):
         if line:
-            _draw_text(draw, (cx, footer_y + j * 26), line, foot_font,
+            _draw_text(draw, (cx, footer_y + j * 32), line, foot_font,
                        REF_COLORS["text_white"], anchor="mm")
 
 
