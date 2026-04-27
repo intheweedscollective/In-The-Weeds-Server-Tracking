@@ -13,7 +13,18 @@ Build a comprehensive performance review application for restaurant employees.
 
 ### Latest Changes (2026-04-27 Session)
 
-- **P0: Snapshot Report (PNG/PDF) Visual Layout Mirror — FIXED 2026-04-27**
+- **P0: Snapshot Report — visual style iterated to match reference exactly (FIXED 2026-04-27)**
+  - Iter 2 feedback from user: column spacing should match reference, cells need white grid dividers + thin black border for definition, Name column must NOT be black/navy, and the diamond-pattern image must be the slide-wide background.
+  - Implementation:
+    * Diamond bg image (`/app/backend/assets/snapshot_bg.jpg`) loaded as the full 1920×1080 canvas.
+    * `Rank / Name / Trend` cells switched from dark-navy to WHITE fill with dark text (matching reference).
+    * Every cell now drawn as a rounded-rect tile (4px radius) with a 1px black outline + a white gutter behind the cell — together they produce the white-grid + black-border effect in the reference.
+    * Zero values render as plain `0.0` (no `+0.0`).
+    * Title/date proportions tightened so "PERFORMANCE" no longer overshadows the rest of the sidebar.
+  - Files: `/app/backend/png_full_rankings.py`, `/app/backend/pdf_full_rankings.py`.
+  - Verified via `/api/v2/full-rankings/2026/Q1/snapshot-png` (HTTP 200, 601 KB) + `analyze_file_tool` 5/5 visual checks pass.
+
+- **P0: Snapshot Report (PNG/PDF) Visual Layout Mirror — FIXED 2026-04-27 (initial pass)**
   - User-reference template required: dark-navy body rows (matching header), each metric cell as a colored "tile" with thin navy gutters acting as borders, first three columns (Rank/Name/Trend) on dark-navy without color fill.
   - Fixed sign artefact "+-44.3" by switching to Python `{:+.1f}` formatting (now renders true negatives correctly).
   - Trend column now renders ▲ (green) for improving / — (gray) for flat / ▼ (red) for declining instead of literal "=".
