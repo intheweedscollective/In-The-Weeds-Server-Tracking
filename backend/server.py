@@ -2660,48 +2660,109 @@ async def update_employee(employee_id: str, data: dict):
                 update_fields['score_lsc'] = round((bm_lsc / gplsc) * 100, 2)
     
     # Recalculate total score if any score fields changed
-    score_fields = {'score_ppa', 'score_lbw', 'score_glass', 'score_lsc', 'cv_score', 
-                    'review_tracker_bonus', 'total_metric_bonus'}
+    score_fields = {'score_ppa', 'score_lbw', 'score_glass', 'score_lsc', 'cv_score',
+                    'review_tracker_bonus', 'total_metric_bonus',
+                    # CV inputs — editing any of these must rebuild cv_score
+                    'nps_score', 'cv_promoters', 'cv_passives', 'cv_detractors'}
     if score_fields.intersection(update_fields.keys()) or pos_fields.intersection(update_fields.keys()):
         merged = {**{k: v for k, v in emp_doc.items() if k != '_id'}, **update_fields}
         settings_doc = settings_doc if 'settings_doc' in dir() else await db.quarter_settings.find_one(
             {"year": emp_doc.get('year', 2026), "quarter": emp_doc.get('quarter', 'Q2')}, {"_id": 0}
         ) or {}
-        
-        # Get weights
-        w_ppa = settings_doc.get('weight_ppa', 0.30)
-        w_lbw = settings_doc.get('weight_lbw', 0.25)
-        w_glass = settings_doc.get('weight_glass', 0.20)
-        w_lsc = settings_doc.get('weight_lsc', 0.25)
-        
-        s_ppa = merged.get('score_ppa', 0) or 0
-        s_lbw = merged.get('score_lbw', 0) or 0
-        s_glass = merged.get('score_glass', 0) or 0
-        s_lsc = merged.get('score_lsc', 0) or 0
-        cv = merged.get('cv_score', 0) or 0
-        rt = merged.get('review_tracker_bonus', 0) or 0
-        bonus = merged.get('total_metric_bonus', 0) or 0
-        
-        weighted = (s_ppa * w_ppa) + (s_lbw * w_lbw) + (s_glass * w_glass) + (s_lsc * w_lsc)
-        total = weighted + cv + rt + bonus
-        update_fields['weighted_score'] = round(weighted, 2)
-        update_fields['total_score'] = round(total, 2)
-        update_fields['pre_dar_score'] = round(total, 2)
-        
-        # Tier assignment
-        a_min = settings_doc.get('a_server_min_score', 85)
-        b_min = settings_doc.get('b_server_min_score', 70)
-        job = (update_fields.get('job_title') or merged.get('job_title', '')).lower()
-        if 'trainer' in job:
-            update_fields['tier_label'] = 'Trainer'
-        elif 'bartender' in job or 'bar' in job:
-            update_fields['tier_label'] = 'Bartender'
-        elif total >= a_min:
-            update_fields['tier_label'] = 'A-Server'
-        elif total >= b_min:
-            update_fields['tier_label'] = 'B-Server'
-        else:
-            update_fields['tier_label'] = 'C-Server'
+
+        # ---- Recompute CV Score (NPS%/10 + promoters - 2*detractors) ----
+        # cv_score in the new spec is the COMBINED Customer Voice value.
+        # Recompute whenever the user edits NPS or promoter/detractor counts.
+        cv_inputs = {'nps_score', 'cv_promoters', 'cv_passives', 'cv_detractors'}
+        old_cv = emp_doc.get('cv_score') or 0
+        if cv_inputs.intersection(update_fields.keys()):
+            nps_val = merged.get('nps_score') or 0
+            nps_norm = max(0, min(100, nps_val))
+            promo = merged.get('cv_promoters') or 0
+            detr = merged.get('cv_detractors') or 0
+            cv_recalc = round(nps_norm * 0.10 + promo * 1 + detr * -2, 2)
+            update_fields['cv_score'] = cv_recalc
+            update_fields['nps_contribution'] = round(nps_norm * 0.10, 2)
+            update_fields['cv_raw_points'] = round(promo * 1 + detr * -2, 2)
+            merged['cv_score'] = cv_recalc
+
+        # If ONLY CV / RT / bonus changed (no POS data), apply delta math
+        # rather than rebuilding the weighted_score from scratch — the
+        # snapshot pipeline caps percentages differently and a full rebuild
+        # would produce a much larger number than the user expects.
+        non_cv_score_fields = pos_fields | {'score_ppa', 'score_lbw', 'score_glass', 'score_lsc'}
+        full_rebuild = bool(non_cv_score_fields.intersection(update_fields.keys()))
+
+        if not full_rebuild:
+            # Delta math: shift existing total_score by the difference in
+            # cv_score / RT bonus / metric bonus.
+            old_rt = emp_doc.get('review_tracker_bonus') or 0
+            old_bonus = emp_doc.get('total_metric_bonus') or 0
+            new_cv = merged.get('cv_score') or 0
+            new_rt = merged.get('review_tracker_bonus') or 0
+            new_bonus = merged.get('total_metric_bonus') or 0
+            delta = (new_cv - old_cv) + (new_rt - old_rt) + (new_bonus - old_bonus)
+            old_total = emp_doc.get('total_score') or 0
+            new_total = round(old_total + delta, 2)
+            update_fields['total_score'] = new_total
+            update_fields['pre_dar_score'] = new_total
+
+            # Tier label refresh based on new total
+            a_min = settings_doc.get('a_server_min_score', 85)
+            b_min = settings_doc.get('b_server_min_score', 70)
+            job = (update_fields.get('job_title') or merged.get('job_title', '') or '').lower()
+            if 'trainer' in job:
+                update_fields['tier_label'] = 'Trainer'
+            elif 'bartender' in job or 'bar' in job:
+                update_fields['tier_label'] = 'Bartender'
+            elif new_total >= a_min:
+                update_fields['tier_label'] = 'A-Server'
+            elif new_total >= b_min:
+                update_fields['tier_label'] = 'B-Server'
+            else:
+                update_fields['tier_label'] = 'C-Server'
+
+            # Skip the legacy full-rebuild block below
+            settings_doc = None  # marker so we don't try to use it again
+
+        # Legacy full-rebuild path — only when POS-data fields actually
+        # changed. Uses raw percentages × weights (snapshot pipeline caps
+        # them differently, but for POS edits we accept the divergence
+        # since we'd otherwise need to recreate the whole scoring engine).
+        if full_rebuild and settings_doc is not None:
+            w_ppa = settings_doc.get('weight_ppa', 0.30)
+            w_lbw = settings_doc.get('weight_lbw', 0.25)
+            w_glass = settings_doc.get('weight_glass', 0.20)
+            w_lsc = settings_doc.get('weight_lsc', 0.25)
+
+            s_ppa = merged.get('score_ppa', 0) or 0
+            s_lbw = merged.get('score_lbw', 0) or 0
+            s_glass = merged.get('score_glass', 0) or 0
+            s_lsc = merged.get('score_lsc', 0) or 0
+            cv = merged.get('cv_score', 0) or 0
+            rt = merged.get('review_tracker_bonus', 0) or 0
+            bonus = merged.get('total_metric_bonus', 0) or 0
+
+            weighted = (s_ppa * w_ppa) + (s_lbw * w_lbw) + (s_glass * w_glass) + (s_lsc * w_lsc)
+            total = weighted + cv + rt + bonus
+            update_fields['weighted_score'] = round(weighted, 2)
+            update_fields['total_score'] = round(total, 2)
+            update_fields['pre_dar_score'] = round(total, 2)
+
+            # Tier assignment
+            a_min = settings_doc.get('a_server_min_score', 85)
+            b_min = settings_doc.get('b_server_min_score', 70)
+            job = (update_fields.get('job_title') or merged.get('job_title', '') or '').lower()
+            if 'trainer' in job:
+                update_fields['tier_label'] = 'Trainer'
+            elif 'bartender' in job or 'bar' in job:
+                update_fields['tier_label'] = 'Bartender'
+            elif total >= a_min:
+                update_fields['tier_label'] = 'A-Server'
+            elif total >= b_min:
+                update_fields['tier_label'] = 'B-Server'
+            else:
+                update_fields['tier_label'] = 'C-Server'
     
     # Save to employees_v2
     await db.employees_v2.update_one(
@@ -2726,7 +2787,7 @@ async def update_employee(employee_id: str, data: dict):
         "score_ppa", "score_lbw", "score_glass", "score_lsc",
         "weighted_score", "total_score", "pre_dar_score",
         "cv_promoters", "cv_passives", "cv_detractors", "cv_score",
-        "nps_score", "nps_score_pts", "cv_raw_points",
+        "nps_score", "nps_score_pts", "nps_contribution", "cv_raw_points",
         "rt_mentions", "review_tracker_bonus",
         "total_metric_bonus", "aliases",
         "nps_manual_override",
