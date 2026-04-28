@@ -2144,6 +2144,9 @@ async def download_full_rankings_snapshot_png(year: int, quarter: str):
 
     employees: List[EmployeeV2] = []
     for emp_data in employees_v2:
+        # Normalize rt_mentions → review_mentions (model only has review_mentions).
+        if not emp_data.get("review_mentions") and emp_data.get("rt_mentions"):
+            emp_data["review_mentions"] = emp_data["rt_mentions"]
         try:
             employees.append(EmployeeV2(**emp_data))
         except Exception:
@@ -2212,6 +2215,9 @@ async def download_full_rankings_snapshot_pdf(year: int, quarter: str):
 
     employees: List[EmployeeV2] = []
     for emp_data in employees_v2:
+        # Normalize rt_mentions → review_mentions (model only has review_mentions).
+        if not emp_data.get("review_mentions") and emp_data.get("rt_mentions"):
+            emp_data["review_mentions"] = emp_data["rt_mentions"]
         try:
             employees.append(EmployeeV2(**emp_data))
         except Exception:
