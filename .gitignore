@@ -145,13 +145,6 @@ frontend/node_modules/.cache/default-development/68.pack
 frontend/node_modules/.cache/default-development/69.pack
 frontend/node_modules/.cache/default-development/70.pack
 frontend/node_modules/.cache/default-development/73.pack
--e 
-# Environment and credential files
-# NOTE: .env files MUST be tracked for Emergent deployment.
-credentials.json
-*.pem
-*.key
-.credentials
 frontend/node_modules/.cache/default-development/75.pack
 frontend/node_modules/.cache/default-development/76.pack
 frontend/node_modules/.cache/default-development/77.pack
@@ -161,47 +154,9 @@ frontend/node_modules/.cache/default-development/81.pack
 frontend/node_modules/.cache/default-development/82.pack
 frontend/node_modules/.cache/default-development/80.pack
 frontend/node_modules/.cache/default-development/80.pack
--e 
-# Environment and credential files
-.env
-.env.*
-*.env
-credentials.json
-*.pem
-*.key
-.credentials
--e 
-# Environment and credential files
-.env
-.env.*
-*.env
-credentials.json
-*.pem
-*.key
-.credentials
--e 
-# Environment and credential files
-.env
-.env.*
-*.env
-credentials.json
-*.pem
-*.key
-.credentials
--e 
-# Environment and credential files
-.env
-.env.*
-*.env
-credentials.json
-*.pem
-*.key
-.credentials
--e 
-# Environment and credential files
-.env
-.env.*
-*.env
+
+# Environment & credentials
+# NOTE: .env files MUST be tracked for Emergent deployment.
 credentials.json
 *.pem
 *.key
