@@ -452,85 +452,126 @@ async def fix_ppa_endpoint(quarter: str = "Q1", year: int = 2026):
 @admin_router.post("/fix-all-rankings")
 async def fix_all_rankings(quarter: str = "Q1", year: int = 2026):
     """
-    EMERGENCY FIX: Recalculate ALL employee rankings and sync to ONLY the most recent snapshot.
-    Historical snapshots are preserved for comparison.
+    EMERGENCY FIX: Recalculate ALL employee rankings and sync to ALL snapshots
+    for this quarter. Historical snapshots are fixed too so stale scores don't
+    linger. Also backfills `review_mentions` from `rt_mentions` so the RT
+    column renders correctly.
     """
     from scoring_engine import EmployeeV2, QuarterSettings, run_full_scoring
-    
+
     db = get_db()
     logger.info(f"=== FIXING ALL RANKINGS for {quarter} {year} ===")
-    
-    # First, fix PPA values
+
+    # 1. Fix PPA values
     ppa_fixed = await _fix_ppa_values(quarter, year)
     logger.info(f"Fixed PPA for {ppa_fixed} employees")
-    
-    # Get settings
+
+    # 2. Backfill review_mentions from rt_mentions (EmployeeV2 model only has
+    #    review_mentions — rt_mentions gets dropped on deserialization, so
+    #    the RT column would render as 0 without this step).
+    rt_backfill = await db.employees_v2.update_many(
+        {
+            "year": year,
+            "quarter": quarter.upper(),
+            "$or": [
+                {"review_mentions": None},
+                {"review_mentions": {"$exists": False}},
+            ],
+        },
+        [{"$set": {"review_mentions": {"$ifNull": ["$rt_mentions", 0]}}}],
+    )
+    logger.info(f"Backfilled review_mentions on {rt_backfill.modified_count} employees")
+
+    # 3. Get settings
     settings_doc = await db.quarter_settings.find_one(
         {"year": year, "quarter": quarter.upper()},
         {"_id": 0}
     )
     if not settings_doc:
         raise HTTPException(status_code=404, detail=f"Settings not found for {quarter} {year}")
-    
+
     settings = QuarterSettings(**settings_doc)
-    
-    # Get all employees
+
+    # 4. Load all employees (re-fetch after backfill)
     employees_docs = await db.employees_v2.find(
         {"year": year, "quarter": quarter.upper()},
         {"_id": 0}
     ).to_list(500)
-    
+
     if not employees_docs:
         return {"error": "No employees found", "fixed": 0}
-    
-    # Convert to EmployeeV2 objects
+
+    # Normalize rt_mentions -> review_mentions as a safety net before
+    # building EmployeeV2 instances.
+    for d in employees_docs:
+        if not d.get("review_mentions") and d.get("rt_mentions"):
+            d["review_mentions"] = d["rt_mentions"]
+
     employees = [EmployeeV2(**doc) for doc in employees_docs]
-    
-    # Run full scoring pipeline
+
+    # 5. Run full scoring pipeline (caps each POS metric at 100, applies
+    #    weights, adds CV + RT + metric bonuses).
     employees = run_full_scoring(employees, settings)
-    
-    # Update each employee in database
+
+    # 6. Persist each recomputed employee
     updated_count = 0
     for emp in employees:
-        emp_dict = emp.model_dump()
         await db.employees_v2.update_one(
             {"id": emp.id},
-            {"$set": emp_dict}
+            {"$set": emp.model_dump()}
         )
         updated_count += 1
-    
+
     logger.info(f"Updated {updated_count} employees")
-    
-    # Sync to the most recent snapshot
-    most_recent = await db.snapshot_workflow.find_one(
-        {"year": year, "quarter": quarter.upper(), "status": {"$in": ["completed", "in_progress"]}},
-        sort=[("effective_date", -1), ("completed_at", -1)]
-    )
-    
-    snapshot_synced = None
-    if most_recent:
-        # Get fresh employee data
-        fresh_employees = await db.employees_v2.find(
-            {"year": year, "quarter": quarter.upper()},
-            {"_id": 0}
-        ).to_list(500)
-        
+
+    # 7. Sync fresh scores into every snapshot for this quarter (not just
+    #    the most recent — historical snapshots had stale weighted_score
+    #    values from the old formula).
+    fresh_employees = await db.employees_v2.find(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    ).to_list(500)
+
+    snaps = await db.snapshot_workflow.find(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 1, "is_current": 1, "status": 1, "employees": 1}
+    ).to_list(200)
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    snapshots_synced = 0
+    for snap in snaps:
+        existing = snap.get("employees") or []
+        # snapshot.employees can be a dict keyed by name, or a list.
+        if isinstance(existing, dict):
+            fresh_by_id = {e.get("id"): e for e in fresh_employees if e.get("id")}
+            rebuilt = {}
+            for k, v in existing.items():
+                if isinstance(v, dict) and v.get("id") in fresh_by_id:
+                    rebuilt[k] = fresh_by_id[v["id"]]
+                else:
+                    rebuilt[k] = v
+            employees_update = rebuilt
+        else:
+            employees_update = fresh_employees
+
         await db.snapshot_workflow.update_one(
-            {"_id": most_recent["_id"]},
-            {"$set": {
-                "employees": fresh_employees,
-                "synced_at": datetime.now(timezone.utc).isoformat()
-            }}
+            {"_id": snap["_id"]},
+            {"$set": {"employees": employees_update, "synced_at": now_iso}},
         )
-        snapshot_synced = str(most_recent["_id"])
-        logger.info(f"Synced to snapshot {snapshot_synced}")
-    
+        snapshots_synced += 1
+
+    logger.info(f"Synced {snapshots_synced} snapshots")
+
     return {
         "success": True,
         "ppa_fixed": ppa_fixed,
-        "employees_updated": updated_count,
-        "snapshot_synced": snapshot_synced,
-        "message": f"Fixed rankings for {updated_count} employees"
+        "rt_backfill": rt_backfill.modified_count,
+        "employees_fixed": updated_count,
+        "snapshots_fixed": snapshots_synced,
+        "message": (
+            f"Fixed rankings for {updated_count} employees, synced "
+            f"{snapshots_synced} snapshots"
+        ),
     }
 
 
