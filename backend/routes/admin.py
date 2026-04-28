@@ -501,11 +501,16 @@ async def fix_all_rankings(quarter: str = "Q1", year: int = 2026):
     if not employees_docs:
         return {"error": "No employees found", "fixed": 0}
 
-    # Normalize rt_mentions -> review_mentions as a safety net before
-    # building EmployeeV2 instances.
+    # Normalize legacy/alternate field names so EmployeeV2 picks them up
+    # (EmployeeV2 only has `review_mentions` and `glassware_sales`; the POS
+    # parser writes `rt_mentions` and `bar_glassware_sales`). Without this,
+    # RT column renders as 0 and glassware_per_guest gets wiped by
+    # calculate_derived_metrics (glassware_sales / guests = 0 / guests = 0).
     for d in employees_docs:
         if not d.get("review_mentions") and d.get("rt_mentions"):
             d["review_mentions"] = d["rt_mentions"]
+        if not d.get("glassware_sales") and d.get("bar_glassware_sales"):
+            d["glassware_sales"] = d["bar_glassware_sales"]
 
     employees = [EmployeeV2(**doc) for doc in employees_docs]
 
