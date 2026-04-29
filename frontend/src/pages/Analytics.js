@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { BarChart3, TrendingUp, Target, Download, Calendar, Info, ArrowUp, ArrowDown, Minus, X, Users, Filter } from "lucide-react";
 import api from "../lib/api";
+import { getCurrentQuarter } from "../lib/quarterUtils";
 import { Button } from "../components/ui/button";
 import { formatCurrency, formatNumber } from "../utils/formatters";
 import { toast } from "sonner";
@@ -48,8 +49,9 @@ export default function Analytics() {
   const [filteredEmployees, setFilteredEmployees] = useState([]);
   
   // V2 Quarter Selection
-  const [selectedYear, setSelectedYear] = useState(2026);
-  const [selectedQuarter, setSelectedQuarter] = useState("Q1");
+  const currentQ = getCurrentQuarter();
+  const [selectedYear, setSelectedYear] = useState(currentQ.year);
+  const [selectedQuarter, setSelectedQuarter] = useState(currentQ.quarter);
 
   // Filter employees by zone
   const filterByZone = (metricKey, zone) => {

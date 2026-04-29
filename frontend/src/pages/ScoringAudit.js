@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
+import { getCurrentQuarter } from "../lib/quarterUtils";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 
@@ -39,8 +40,9 @@ export default function ScoringAudit() {
   const [allEmployeesAudit, setAllEmployeesAudit] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [quarter] = useState("Q1");
-  const [year] = useState(2026);
+  const currentQ = getCurrentQuarter();
+  const [quarter] = useState(currentQ.quarter);
+  const [year] = useState(currentQ.year);
   const [fixingAll, setFixingAll] = useState(false);
   const [recalculating, setRecalculating] = useState(false);
 

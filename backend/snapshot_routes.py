@@ -298,7 +298,9 @@ async def upload_to_snapshot(
             elif upload_type_enum == UploadType.CUSTOMER_VOICE:
                 final_parsed_data = await parse_cv_file(file.filename, contents)
             elif upload_type_enum == UploadType.REVIEW_TRACKER:
-                final_parsed_data = await parse_rt_file(file.filename, contents)
+                final_parsed_data = await parse_rt_file(
+                    file.filename, contents, snapshot_id=snapshot_id
+                )
         except Exception as e:
             parse_error = str(e)
             logger.error(f"Parse error for {upload_type}: {e}")
@@ -556,15 +558,13 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
     
     # Find current active snapshot
     snapshot = await db.snapshot_workflow.find_one(
-        {"is_current": True},
-        {"_id": 0}
+        {"is_current": True}
     )
     
     if not snapshot:
         # Fallback to most recent completed snapshot
         snapshot = await db.snapshot_workflow.find_one(
             {"status": "completed"},
-            {"_id": 0},
             sort=[("completed_at", -1)]
         )
     
@@ -578,7 +578,8 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
             detail="Cannot edit employees - snapshot is finalized. Reopen the snapshot first."
         )
     
-    snapshot_id = snapshot["id"]
+    snapshot_mongo_id = snapshot["_id"]
+    snapshot_id = snapshot.get("id", "")
     employees = snapshot.get("employees", [])
     
     # Find employee by ID, name, display_name, or report_name (with fuzzy matching)
@@ -722,9 +723,9 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
     # Re-assign tiers for all employees (since one employee's score change affects tiers)
     employees = assign_performance_tiers(employees)
     
-    # Update the snapshot
+    # Update the snapshot using MongoDB _id for reliable update
     await db.snapshot_workflow.update_one(
-        {"id": snapshot_id},
+        {"_id": snapshot_mongo_id},
         {
             "$set": {
                 "employees": employees,
@@ -776,35 +777,40 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
 
 
 @snapshot_router.delete("/employees/{employee_id}")
-async def delete_snapshot_employee(employee_id: str):
+async def delete_snapshot_employee(employee_id: str, quarter: str = "Q2", year: int = 2026):
     """
     Delete an employee from the current active snapshot.
     Used to remove duplicates or incorrect entries.
+    Matches by ID or name.
     """
     db = get_db()
     
-    # Find current active snapshot
+    # Find current active snapshot for this quarter
     snapshot = await db.snapshot_workflow.find_one(
-        {"is_current": True},
-        {"_id": 0}
+        {"is_current": True, "quarter": quarter.upper(), "year": year}
     )
     
     if not snapshot:
         snapshot = await db.snapshot_workflow.find_one(
-            {"status": "completed"},
-            {"_id": 0},
+            {"status": "completed", "quarter": quarter.upper(), "year": year},
             sort=[("completed_at", -1)]
+        )
+    
+    if not snapshot:
+        # Try without quarter filter
+        snapshot = await db.snapshot_workflow.find_one(
+            {"is_current": True}
         )
     
     if not snapshot:
         raise HTTPException(status_code=404, detail="No active snapshot found")
     
-    snapshot_id = snapshot["id"]
+    mongo_id = snapshot["_id"]
     employees = snapshot.get("employees", [])
     
-    # Find all matching entries
+    # Find all matching entries by ID or name
     matching = [(i, e) for i, e in enumerate(employees) 
-                if e.get("id") == employee_id or e.get("name", "").lower() == employee_id.lower()]
+                if e.get("id") == employee_id or (e.get("name") or "").lower() == employee_id.lower()]
     
     if not matching:
         raise HTTPException(status_code=404, detail=f"Employee '{employee_id}' not found in snapshot")
@@ -813,19 +819,20 @@ async def delete_snapshot_employee(employee_id: str):
         # Duplicates found: remove only the lowest-scoring entry
         matching.sort(key=lambda x: x[1].get("pre_dar_score", 0) or x[1].get("total_score", 0) or 0)
         remove_idx = matching[0][0]  # lowest score
+        removed_name = matching[0][1].get("name", "unknown")
         employees.pop(remove_idx)
-        logger.info(f"Removed duplicate (lowest score) for {employee_id}, kept {len(matching)-1} remaining")
+        logger.info(f"Removed duplicate (lowest score) for {removed_name}, kept {len(matching)-1} remaining")
     else:
-        # Single entry: remove it
-        employees = [e for e in employees if e.get("id") != employee_id and e.get("name", "").lower() != employee_id.lower()]
+        removed_name = matching[0][1].get("name", "unknown")
+        employees = [e for e in employees if e.get("id") != employee_id and (e.get("name") or "").lower() != employee_id.lower()]
     
-    # Update snapshot
+    # Update snapshot using MongoDB _id
     await db.snapshot_workflow.update_one(
-        {"id": snapshot_id},
+        {"_id": mongo_id},
         {"$set": {"employees": employees}}
     )
     
-    logger.info(f"Deleted employee {employee_id} from snapshot {snapshot_id}")
+    return {"success": True, "message": f"Deleted {removed_name} from snapshot", "remaining": len(employees)}
     
 
 
@@ -891,9 +898,13 @@ async def rebuild_snapshot_from_pos():
         
         emp = {
             "id": existing.get("id") or str(uuid.uuid4()),
-            "name": first_name,
-            "display_name": first_name,
-            "report_name": full_name,
+            # Preserve any user-edited display_name/aliases from a previous
+            # snapshot pass; only fall back to derived names when the existing
+            # record didn't override them.
+            "name": existing.get("name") or first_name,
+            "display_name": existing.get("display_name") or first_name,
+            "report_name": existing.get("report_name") or full_name,
+            "aliases": existing.get("aliases") or [],
             "job_title": existing.get("job_title") or "Server",
             "quarter": snapshot.get("quarter"),
             "year": snapshot.get("year"),
@@ -1728,6 +1739,24 @@ async def get_current_rankings(quarter: Optional[str] = None, year: Optional[int
     # Sort employees by tier before returning
     employees = snapshot.get("employees", [])
     
+    # Overlay display_names from employees_v2 (source of truth for preferred names)
+    emp_v2_lookup = {}
+    async for emp in db.employees_v2.find(
+        {"quarter": snapshot.get("quarter", "").upper(), "year": snapshot.get("year", 2026)},
+        {"_id": 0, "name": 1, "display_name": 1, "report_name": 1}
+    ):
+        for field in ["name", "report_name", "display_name"]:
+            key = (emp.get(field) or "").lower().strip()
+            if key and emp.get("display_name"):
+                emp_v2_lookup[key] = emp.get("display_name")
+    
+    for emp in employees:
+        emp_name = (emp.get("name") or "").lower().strip()
+        preferred = emp_v2_lookup.get(emp_name)
+        if preferred:
+            emp["name"] = preferred
+            emp["display_name"] = preferred
+    
     # Define tier order
     TIER_ORDER = {
         'Trainer': 1,
@@ -1873,7 +1902,7 @@ async def generate_snapshot_workflow_slide(
 
 
 @snapshot_router.post("/snapshots/{snapshot_id}/sync-from-employees")
-async def sync_pos_from_employees_v2(snapshot_id: str):
+async def sync_pos_from_employees_v2(snapshot_id: str, force: bool = False):
     """
     Sync POS data from employees_v2 collection to the snapshot.
     This ensures the snapshot uses the same verified data as the Employee tab.
@@ -1892,68 +1921,201 @@ async def sync_pos_from_employees_v2(snapshot_id: str):
     
     if not employees_v2:
         raise HTTPException(status_code=404, detail="No employees found in employees_v2")
-    
-    # Find POS upload and update its parsed_data
+
+    # PRE-PUSH DEDUP. employees_v2 may contain ghost rows from orphan-row
+    # recovery (rename diverged from POS report_name). Without this, every
+    # Save Snapshot pushes the duplicate into the snapshot. Winner = highest
+    # total_score; losers deleted from employees_v2.
+    def _name_key(rec):
+        for f in ("display_name", "name", "report_name"):
+            v = (rec.get(f) or "").strip().lower()
+            if v:
+                return v
+        return None
+
+    def _fuzzy_key(rec):
+        full = (rec.get("display_name") or rec.get("name") or rec.get("report_name") or "").strip().lower()
+        parts = full.split()
+        if len(parts) < 2:
+            return None
+        return (
+            parts[0][0],
+            parts[-1],
+            round(float(rec.get("net_sales") or 0), 2),
+            round(float(rec.get("ppa") or 0), 2),
+        )
+
+    primary_dd: dict[str, dict] = {}
+    primary_order_dd: list[str] = []
+    fuzzy_to_primary_dd: dict[tuple, str] = {}
+    losers_dd: list[str] = []
+    for _emp in employees_v2:
+        _key = _name_key(_emp)
+        if not _key:
+            continue
+        _fk = _fuzzy_key(_emp)
+        if _fk and _fk in fuzzy_to_primary_dd and fuzzy_to_primary_dd[_fk] != _key:
+            _key = fuzzy_to_primary_dd[_fk]
+        _score = _emp.get("total_score") or _emp.get("pre_dar_score") or 0
+        _winner = primary_dd.get(_key)
+        if _winner is None:
+            primary_dd[_key] = _emp
+            primary_order_dd.append(_key)
+            if _fk:
+                fuzzy_to_primary_dd[_fk] = _key
+        else:
+            _cur = _winner.get("total_score") or _winner.get("pre_dar_score") or 0
+            if _score > _cur:
+                if _winner.get("id"):
+                    losers_dd.append(_winner.get("id"))
+                primary_dd[_key] = _emp
+            else:
+                if _emp.get("id"):
+                    losers_dd.append(_emp.get("id"))
+            if _fk and _fk not in fuzzy_to_primary_dd:
+                fuzzy_to_primary_dd[_fk] = _key
+
+    if losers_dd:
+        await db.employees_v2.delete_many({"id": {"$in": losers_dd}})
+    employees_v2 = [primary_dd[k] for k in primary_order_dd]
+
+    # ------------------------------------------------------------------
+    # SAFETY GUARD: refuse to overwrite POS upload if employees_v2 is
+    # suspiciously thin compared to it. A fresh PDF upload populates POS
+    # with 25-35 rows but `/process` has to run before employees_v2 mirrors
+    # them. If sync-from-employees fires in that window, a naive rebuild
+    # would destroy 30 real POS rows and leave 0-5 stale v2 rows behind.
+    #
+    # Heuristic: bail out (with explicit error) if v2 has fewer than 50%
+    # of the rows the POS upload currently holds. Caller must force=true
+    # in the query string to override (e.g. legitimate cleanup of a
+    # ghost-heavy v2). This guard is purely additive and does not affect
+    # the original intent (de-resurrect ghosts after delete).
+    # ------------------------------------------------------------------
+    uploads_pre = snapshot.get("uploads", [])
+    pos_idx_pre = next(
+        (i for i, u in enumerate(uploads_pre) if u.get("upload_type") == "pos_report"),
+        None
+    )
+    pos_count_pre = 0
+    if pos_idx_pre is not None:
+        pos_count_pre = len(
+            uploads_pre[pos_idx_pre].get("parsed_data", {}).get("employees", []) or []
+        )
+    v2_count = len(employees_v2)
+    if pos_count_pre >= 10 and v2_count < pos_count_pre * 0.5 and not force:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"sync-from-employees aborted: employees_v2 has only {v2_count} rows "
+                f"but the POS upload holds {pos_count_pre}. This usually means the "
+                f"snapshot was never processed yet — running sync would destroy POS "
+                f"data. Run /process first to build employees_v2 from POS, OR pass "
+                f"?force=true if you really intend to overwrite POS from a thin v2."
+            )
+        )
+
+    # ------------------------------------------------------------------
+    # REBUILD pos_upload.parsed_data.employees ENTIRELY from employees_v2.
+    #
+    # The OLD logic merged old pos rows with v2 data — but rows the user
+    # had DELETED from employees_v2 still lived in pos_upload, so
+    # merge_snapshot_data resurrected them on the next /process. Equally,
+    # rename → display_name divergence created two rows in the upload
+    # because old pos kept the original name and v2 had the new one.
+    #
+    # Treating employees_v2 as the source of truth eliminates both
+    # classes of bug. We carry every field merge_snapshot_data needs so
+    # downstream scoring still works.
+    # ------------------------------------------------------------------
     uploads = snapshot.get("uploads", [])
     pos_upload_idx = next(
         (i for i, u in enumerate(uploads) if u.get("upload_type") == "pos_report"),
         None
     )
-    
-    if pos_upload_idx is None:
-        # Create a new POS upload record from employees_v2
-        pos_employees = []
-    else:
-        pos_employees = uploads[pos_upload_idx].get("parsed_data", {}).get("employees", [])
-    
-    # Build employee lookup from employees_v2
-    v2_lookup = {}
-    for emp in employees_v2:
-        name_key = emp.get("name", "").strip().lower()
-        if name_key:
-            v2_lookup[name_key] = emp
-    
-    # Update or add employees from v2
+
+    # Index old pos rows by name_key so we can RECOVER raw fields the v2
+    # record may not store (e.g. food_sales, bar_glassware_sales for a
+    # snapshot that pre-dated those fields on v2).
+    old_pos_by_key: dict[str, dict] = {}
+    if pos_upload_idx is not None:
+        for old_emp in uploads[pos_upload_idx].get("parsed_data", {}).get("employees", []):
+            for fld in ("display_name", "name", "report_name"):
+                k = (old_emp.get(fld) or "").strip().lower()
+                if k and k not in old_pos_by_key:
+                    old_pos_by_key[k] = old_emp
+
+    def _coalesce(*vals, default=0):
+        for v in vals:
+            if v not in (None, ""):
+                return v
+        return default
+
     updated_employees = []
-    for emp in pos_employees:
-        name_key = emp.get("name", "").strip().lower()
-        v2_emp = v2_lookup.get(name_key)
-        
-        if v2_emp:
-            # Update with v2 data
-            emp.update({
-                "ppa": v2_emp.get("ppa", emp.get("ppa", 0)),
-                "lbw_per_guest": v2_emp.get("lbw_per_guest", emp.get("lbw_per_guest", 0)),
-                "glassware_per_guest": v2_emp.get("glassware_per_guest", emp.get("glassware_per_guest", 0)),
-                "guests_per_lsc": v2_emp.get("guests_per_lsc", emp.get("guests_per_lsc", 0)),
-                "guest_count": v2_emp.get("guests", emp.get("guest_count", 0)),
-                "net_sales": v2_emp.get("net_sales", emp.get("net_sales", 0)),
-                "loyalty_sales": v2_emp.get("loyalty_sales", emp.get("loyalty_sales", 0)),
-            })
-            # Remove from lookup so we can add remaining v2 employees
-            del v2_lookup[name_key]
-        
-        updated_employees.append(emp)
-    
-    # Add any employees from v2 that weren't in POS upload
-    for name_key, v2_emp in v2_lookup.items():
+    for v2_emp in employees_v2:
+        # Match against old pos rows by ANY of the names so we can pull
+        # forward fields the v2 doc lacks.
+        old = None
+        for fld in ("name", "display_name", "report_name"):
+            k = (v2_emp.get(fld) or "").strip().lower()
+            if k and k in old_pos_by_key:
+                old = old_pos_by_key[k]
+                break
+
+        # Canonical name = display_name (falls back to name/report_name).
+        # merge_snapshot_data keys its lookup off this so naming MUST
+        # align with what the snapshot.employees array uses.
+        canonical = (v2_emp.get("display_name")
+                     or v2_emp.get("name")
+                     or v2_emp.get("report_name")
+                     or "").strip()
+        if not canonical:
+            continue
+
+        liquor = _coalesce(v2_emp.get("liquor_sales"), old and old.get("liquor_sales"))
+        beer = _coalesce(v2_emp.get("beer_sales"), old and old.get("beer_sales"))
+        wine = _coalesce(v2_emp.get("wine_sales"), old and old.get("wine_sales"))
+        glassware = _coalesce(
+            v2_emp.get("bar_glassware_sales"),
+            v2_emp.get("glassware_sales"),
+            old and old.get("bar_glassware_sales"),
+            old and old.get("glassware_sales"),
+        )
+        loyalty = _coalesce(v2_emp.get("loyalty_sales"), old and old.get("loyalty_sales"))
+        guests = _coalesce(
+            v2_emp.get("guest_count"),
+            v2_emp.get("guests"),
+            old and old.get("guest_count"),
+            old and old.get("guests"),
+        )
+
         updated_employees.append({
-            "name": v2_emp.get("name"),
-            "ppa": v2_emp.get("ppa", 0),
-            "lbw_per_guest": v2_emp.get("lbw_per_guest", 0),
-            "glassware_per_guest": v2_emp.get("glassware_per_guest", 0),
-            "guests_per_lsc": v2_emp.get("guests_per_lsc", 0),
-            "guest_count": v2_emp.get("guests", 0),
-            "net_sales": v2_emp.get("net_sales", 0),
-            "loyalty_sales": v2_emp.get("loyalty_sales", 0),
-            "liquor_sales": v2_emp.get("liquor_sales", 0),
-            "beer_sales": v2_emp.get("beer_sales", 0),
-            "wine_sales": v2_emp.get("wine_sales", 0),
+            "name": canonical,
+            "display_name": v2_emp.get("display_name") or canonical,
+            "report_name": v2_emp.get("report_name") or canonical,
+            "job_title": v2_emp.get("job_title") or (old and old.get("job_title")) or "Server",
+            "guest_count": guests,
+            "guests": guests,
+            "net_sales": _coalesce(v2_emp.get("net_sales"), old and old.get("net_sales")),
+            "ppa": _coalesce(v2_emp.get("ppa"), old and old.get("ppa")),
+            "liquor_sales": liquor,
+            "beer_sales": beer,
+            "wine_sales": wine,
+            "bar_glassware_sales": glassware,
+            "loyalty_sales": loyalty,
+            "food_sales": _coalesce(v2_emp.get("food_sales"), old and old.get("food_sales")),
+            # Pre-derived per-guest metrics (merge_snapshot_data will
+            # recompute if missing/zero).
+            "lbw_per_guest": _coalesce(v2_emp.get("lbw_per_guest"), old and old.get("lbw_per_guest")),
+            "glassware_per_guest": _coalesce(v2_emp.get("glassware_per_guest"), old and old.get("glassware_per_guest")),
+            "guests_per_lsc": _coalesce(v2_emp.get("guests_per_lsc"), old and old.get("guests_per_lsc")),
+            "lsc_count": _coalesce(v2_emp.get("lsc_count"), old and old.get("lsc_count")),
         })
-    
-    # Update POS upload
+
+    # Update POS upload with the rebuilt list.
     if pos_upload_idx is not None:
         uploads[pos_upload_idx]["parsed_data"]["employees"] = updated_employees
+        uploads[pos_upload_idx]["parsed_data"]["record_count"] = len(updated_employees)
         uploads[pos_upload_idx]["source"] = "synced_from_employees_v2"
     else:
         uploads.append({
@@ -1963,25 +2125,62 @@ async def sync_pos_from_employees_v2(snapshot_id: str):
             "status": "parsed",
             "parsed_data": {"employees": updated_employees, "record_count": len(updated_employees)}
         })
-    
-    # Update snapshot
+
+    # ------------------------------------------------------------------
+    # Also dedupe + prune snapshot.employees so existing_employees lookup
+    # in merge_snapshot_data doesn't pick up ghost rows the user already
+    # deleted. We keep the row whose name_key matches an employees_v2
+    # entry (the survivors), preserving the user's manual edits.
+    # ------------------------------------------------------------------
+    snap_employees = snapshot.get("employees", []) or []
+    valid_keys = set()
+    for v2_emp in employees_v2:
+        for fld in ("display_name", "name", "report_name"):
+            k = (v2_emp.get(fld) or "").strip().lower()
+            if k:
+                valid_keys.add(k)
+
+    pruned: list[dict] = []
+    seen_keys: set[str] = set()
+    for s_emp in snap_employees:
+        keys = []
+        for fld in ("display_name", "name", "report_name"):
+            k = (s_emp.get(fld) or "").strip().lower()
+            if k:
+                keys.append(k)
+        # Skip entries whose names no longer exist in employees_v2.
+        if keys and not any(k in valid_keys for k in keys):
+            continue
+        # Collapse intra-snapshot dupes by primary name_key.
+        primary = next((k for k in keys if k), None)
+        if primary and primary in seen_keys:
+            continue
+        if primary:
+            seen_keys.add(primary)
+        pruned.append(s_emp)
+
     await db.snapshot_workflow.update_one(
         {"id": snapshot_id},
         {
             "$set": {
                 "uploads": uploads,
+                "employees": pruned,
                 "upload_progress.pos_report": True,
                 "updated_at": datetime.now(timezone.utc).isoformat()
             }
         }
     )
-    
-    logger.info(f"Synced {len(updated_employees)} employees from employees_v2 to snapshot {snapshot_id}")
-    
+
+    logger.info(
+        f"Synced {len(updated_employees)} employees from employees_v2 to snapshot {snapshot_id} "
+        f"(pruned snapshot.employees {len(snap_employees)} -> {len(pruned)})"
+    )
+
     return {
         "success": True,
         "message": f"Synced {len(updated_employees)} employees from employees_v2",
-        "employee_count": len(updated_employees)
+        "employee_count": len(updated_employees),
+        "snapshot_employees_pruned": len(snap_employees) - len(pruned),
     }
 
 
@@ -2008,6 +2207,105 @@ async def fix_snapshot_employee_ids(snapshot_id: str):
     
     if not employees_v2:
         raise HTTPException(status_code=404, detail="No employees found in employees_v2")
+
+    # PRE-PUSH DEDUP. employees_v2 may legitimately contain "ghost" rows
+    # created during orphan-row recovery (e.g. user renamed Glennice -> Lennie
+    # without an explicit merge step). Without dedup here the snapshot
+    # accumulates 2 rows for the same person every Save-Snapshot.
+    # Winner = highest total_score; losers deleted from employees_v2.
+    def _name_key(rec):
+        for f in ("display_name", "name", "report_name"):
+            v = (rec.get(f) or "").strip().lower()
+            if v:
+                return v
+        return None
+
+    def _fuzzy_key(rec):
+        full = (rec.get("display_name") or rec.get("name") or rec.get("report_name") or "").strip().lower()
+        parts = full.split()
+        if len(parts) < 2:
+            return None
+        return (
+            parts[0][0],
+            parts[-1],
+            round(float(rec.get("net_sales") or 0), 2),
+            round(float(rec.get("ppa") or 0), 2),
+        )
+
+    primary: dict[str, dict] = {}
+    primary_order: list[str] = []
+    fuzzy_to_primary: dict[tuple, str] = {}
+    losers: list[str] = []
+    for emp in employees_v2:
+        key = _name_key(emp)
+        if not key:
+            continue
+        fk = _fuzzy_key(emp)
+        if fk and fk in fuzzy_to_primary and fuzzy_to_primary[fk] != key:
+            key = fuzzy_to_primary[fk]
+        score = emp.get("total_score") or emp.get("pre_dar_score") or 0
+        winner = primary.get(key)
+        if winner is None:
+            primary[key] = emp
+            primary_order.append(key)
+            if fk:
+                fuzzy_to_primary[fk] = key
+        else:
+            cur_score = winner.get("total_score") or winner.get("pre_dar_score") or 0
+            if score > cur_score:
+                if winner.get("id"):
+                    losers.append(winner.get("id"))
+                primary[key] = emp
+            else:
+                if emp.get("id"):
+                    losers.append(emp.get("id"))
+            if fk and fk not in fuzzy_to_primary:
+                fuzzy_to_primary[fk] = key
+
+    if losers:
+        await db.employees_v2.delete_many({"id": {"$in": losers}})
+    employees_v2 = [primary[k] for k in primary_order]
+
+    # FORCE RE-SCORING. Stale records may have been written by a legacy code
+    # path that didn't cap LSC at 100, producing 200+ point totals. Re-run
+    # the canonical scoring engine here so every employee gets correct
+    # capped scores before they're written into the snapshot.
+    from snapshot_manager import calculate_employee_scores
+
+    benchmarks = await db.snapshot_benchmarks.find_one(
+        {"quarter": quarter, "year": year}
+    ) if "snapshot_benchmarks" in await db.list_collection_names() else None
+    if not benchmarks:
+        # Use the same defaults as snapshot_manager
+        benchmarks = {"ppa": 55.0, "lbw": 8.0, "glass": 1.25, "lsc": 100.0}
+
+    rescored = []
+    for emp in employees_v2:
+        try:
+            scored = calculate_employee_scores(emp, benchmarks)
+            rescored.append(scored)
+            # Persist the corrected scores back to employees_v2 so future reads
+            # see the right values too.
+            await db.employees_v2.update_one(
+                {"id": emp.get("id")},
+                {"$set": {
+                    "score_ppa": scored.get("score_ppa"),
+                    "score_lbw": scored.get("score_lbw"),
+                    "score_glass": scored.get("score_glass"),
+                    "score_lsc": scored.get("score_lsc"),
+                    "bonus_ppa": scored.get("bonus_ppa"),
+                    "bonus_lbw": scored.get("bonus_lbw"),
+                    "bonus_glass": scored.get("bonus_glass"),
+                    "bonus_lsc": scored.get("bonus_lsc"),
+                    "total_metric_bonus": scored.get("total_metric_bonus"),
+                    "weighted_score": scored.get("weighted_score"),
+                    "pre_dar_score": scored.get("pre_dar_score"),
+                    "total_score": scored.get("total_score"),
+                }}
+            )
+        except Exception:
+            rescored.append(emp)
+    employees_v2 = rescored
     
     # Get quarter settings for tier calculation
     settings = await db.quarter_settings.find_one(
@@ -2230,12 +2528,97 @@ async def update_current_snapshot(db, snapshot_id: str, quarter: str, year: int)
     )
 
 
+DEFAULT_NICKNAME_MAP = {
+    # User-confirmed mappings (Q2 2026 Bubba Gump LV crew)
+    'keisha': 'lakeisha',
+    'trey': 'treyanna', 'treyana': 'treyanna',
+    'tad': 'thaddeus', 'thad': 'thaddeus',
+    'tk': 'thomas',
+    'ikey': 'eric',
+    'lennie': 'glennice',
+    'matt': 'matthew',
+    # Generic
+    'abby': 'abigail',
+    'terry': 'terrance',
+    'allen': 'craig',  # Allen in reviews = Craig Simmons in POS
+    'mike': 'michael',
+    'dan': 'daniel', 'rob': 'robert', 'bob': 'robert',
+    'jim': 'james', 'joe': 'joseph', 'chris': 'christopher',
+    'nick': 'nicholas', 'tom': 'thomas', 'will': 'william',
+    'sam': 'samuel', 'alex': 'alexander', 'ben': 'benjamin',
+    'liz': 'elizabeth', 'beth': 'elizabeth', 'kate': 'katherine',
+    'jen': 'jennifer', 'meg': 'megan', 'steph': 'stephanie',
+}
+
+
+async def load_nickname_map(db) -> dict[str, str]:
+    """Merge DEFAULT_NICKNAME_MAP with user-managed entries from
+    `nickname_aliases` collection. User entries override defaults.
+    Schema: { nickname: 'keisha', formal: 'lakeisha' }."""
+    merged = dict(DEFAULT_NICKNAME_MAP)
+    try:
+        async for doc in db.nickname_aliases.find({}, {"_id": 0, "nickname": 1, "formal": 1}):
+            nick = (doc.get("nickname") or "").strip().lower()
+            formal = (doc.get("formal") or "").strip().lower()
+            if nick and formal:
+                merged[nick] = formal
+    except Exception as e:
+        logger.warning(f"Failed to load custom nicknames, using defaults: {e}")
+    return merged
+
+
 async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Merge data from all uploads in a snapshot into employee records.
     POS data is the base, CV and RT data are merged on top.
     Preserves manually set job_titles, display_names, and other edits from existing snapshot data.
     """
+    # ------------------------------------------------------------------
+    # Nickname map shared by CV + RT merges. Loaded from DB
+    # `nickname_aliases` collection (managed by the Settings UI) on top
+    # of DEFAULT_NICKNAME_MAP. Lets us match 'Keisha Martin' ->
+    # 'Lakeisha Martin' or 'Lennie' -> 'Glennice', rather than dropping
+    # the response on the floor.
+    # ------------------------------------------------------------------
+    db = get_db()
+    nickname_map = await load_nickname_map(db)
+    # Reverse map so we can also match POS 'lakeisha' against CV 'keisha'.
+    reverse_nickname_map: dict[str, list[str]] = {}
+    for nick, formal in nickname_map.items():
+        reverse_nickname_map.setdefault(formal, []).append(nick)
+
+    def find_employee_match(external_name: str, employees_dict: dict) -> Optional[str]:
+        """Fuzzy-match a name from CV / RT against the POS-keyed employees
+        dict. Tries: (1) direct lower-case key match, (2) nickname
+        expansion of first name + exact last-name match, (3) reverse
+        nickname (POS uses formal name, external file uses nickname),
+        (4) first-name prefix on a unique last name."""
+        if not external_name:
+            return None
+        ext = external_name.strip().lower()
+        if ext in employees_dict:
+            return ext
+        parts = ext.split()
+        if len(parts) < 2:
+            return None
+        first, last = parts[0], parts[-1]
+        expanded_first = nickname_map.get(first, first)
+
+        for emp_name in employees_dict.keys():
+            emp_parts = emp_name.split()
+            if len(emp_parts) < 2:
+                continue
+            emp_first, emp_last = emp_parts[0], emp_parts[-1]
+            if emp_last != last:
+                continue
+            # Direct first-name / nickname-expansion / reverse nickname
+            if (emp_first == expanded_first
+                    or emp_first.startswith(first)
+                    or first.startswith(emp_first[:3])
+                    or first in reverse_nickname_map.get(emp_first, [])):
+                return emp_name
+        return None
+
     employees = {}
     
     # Build lookup of existing employee data to preserve edits
@@ -2253,7 +2636,20 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
         if report_name and report_name != name: existing_employees[report_name] = emp
         if first_name and first_name != name: existing_employees[first_name] = emp
     
-    for upload in snapshot.get("uploads", []):
+    # Always process POS first so the `employees` dict has its base rows
+    # before CV / RT merges run. The upload list is ordered by upload time,
+    # which means a CV file attached BEFORE the POS file would be merged
+    # into an empty dict (and silently dropped).
+    _UPLOAD_ORDER = {
+        UploadType.POS_REPORT.value: 0,
+        UploadType.CUSTOMER_VOICE.value: 1,
+        UploadType.REVIEW_TRACKER.value: 2,
+    }
+    ordered_uploads = sorted(
+        snapshot.get("uploads", []),
+        key=lambda u: _UPLOAD_ORDER.get(u.get("upload_type"), 99),
+    )
+    for upload in ordered_uploads:
         upload_type = upload.get("upload_type")
         parsed_data = upload.get("parsed_data", {})
         
@@ -2269,14 +2665,36 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                 first_name_lower = name_lower.split()[0] if name_lower else ""
                 existing_emp = (existing_employees.get(name_lower) or 
                                existing_employees.get(first_name_lower))
-                
-                # Extract raw values
-                guest_count = emp_data.get("guest_count", 0) or 0
-                liquor_sales = emp_data.get("liquor_sales", 0) or 0
-                beer_sales = emp_data.get("beer_sales", 0) or 0
-                wine_sales = emp_data.get("wine_sales", 0) or 0
-                glassware_sales = emp_data.get("glassware_sales", 0) or emp_data.get("bar_glassware_sales", 0) or 0
-                loyalty_sales = emp_data.get("loyalty_sales", 0) or 0
+
+                # USER-EDIT PROTECTION
+                # If a row already exists in the snapshot (i.e. the user has
+                # edited it via the live-edit table or the Employees tab),
+                # PREFER the user's value over the raw POS upload value for
+                # every editable metric. Without this, clicking "Save Snapshot"
+                # would overwrite all manual corrections with the original
+                # parsed POS values.
+                def pick(field, default=0):
+                    if existing_emp is not None and existing_emp.get(field) not in (None, "", 0):
+                        return existing_emp.get(field)
+                    val = emp_data.get(field, default)
+                    return val if val is not None else default
+
+                # Allow zero-as-edit only when the user explicitly set 0
+                # (e.g. lsc_count=0). We track this separately so we don't
+                # spuriously preserve missing fields from old snapshots.
+                def pick_allow_zero(field, default=0):
+                    if existing_emp is not None and field in existing_emp:
+                        return existing_emp.get(field) if existing_emp.get(field) is not None else default
+                    val = emp_data.get(field, default)
+                    return val if val is not None else default
+
+                # Extract raw values, preferring existing edits
+                guest_count = pick("guest_count") or pick("guests") or 0
+                liquor_sales = pick("liquor_sales")
+                beer_sales = pick("beer_sales")
+                wine_sales = pick("wine_sales")
+                glassware_sales = pick("bar_glassware_sales") or pick("glassware_sales")
+                loyalty_sales = pick_allow_zero("loyalty_sales")
                 
                 # ALWAYS recalculate LBW from components (don't trust pre-calculated value)
                 lbw_total = liquor_sales + beer_sales + wine_sales
@@ -2326,19 +2744,20 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                     "name": display_name,  # Show display name
                     "display_name": display_name,
                     "report_name": report_name,  # Full POS name for matching
+                    "aliases": existing_emp.get("aliases", []) if existing_emp else [],
                     "quarter": snapshot.get("quarter"),
                     "year": snapshot.get("year"),
                     "job_title": job_title,
                     "guests": guest_count,
                     "guest_count": guest_count,
-                    "net_sales": emp_data.get("net_sales", 0),
-                    "ppa": emp_data.get("ppa", 0),
+                    "net_sales": pick("net_sales"),
+                    "ppa": pick("ppa"),
                     "lbw_per_guest": lbw_per_guest,
                     "glassware_per_guest": glassware_per_guest,
                     "guests_per_lsc": guests_per_lsc,
                     "lsc_count": lsc_count,
                     "loyalty_sales": loyalty_sales,
-                    "food_sales": emp_data.get("food_sales", 0),
+                    "food_sales": pick("food_sales"),
                     "liquor_sales": liquor_sales,
                     "beer_sales": beer_sales,
                     "wine_sales": wine_sales,
@@ -2356,24 +2775,36 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                     "dar_penalty": existing_emp.get("dar_penalty", 0) if existing_emp else 0,
                     # Preserve calculated scores if they exist
                     "total_metric_bonus": existing_emp.get("total_metric_bonus", 0) if existing_emp else 0,
+                    # PRESERVE manual-override flags so CV merge below skips them
+                    "nps_manual_override": existing_emp.get("nps_manual_override", False) if existing_emp else False,
                 }
         
         elif upload_type == UploadType.CUSTOMER_VOICE.value:
             # Merge CV/NPS Toolkit data
             cv_employees = parsed_data.get("employees", [])
             
-            # Check if we have individual employee data or just store-level ("Unknown")
+            # Check if we have individual employee data or just store-level ("Unknown").
+            # Use fuzzy matcher so nickname-only names ('Keisha', 'Lennie')
+            # still classify as individual data and trigger the per-row merge.
             has_individual_data = any(
-                emp.get("name", "").strip().lower() != "unknown" and 
-                emp.get("name", "").strip().lower() in employees
+                (emp.get("name", "").strip().lower() != "unknown")
+                and find_employee_match(emp.get("name", ""), employees)
                 for emp in cv_employees
             )
             
             if has_individual_data:
                 # Individual employee CV data - merge directly
                 for cv_data in cv_employees:
-                    name = cv_data.get("name", "").strip().lower()
-                    if name in employees:
+                    raw_name = cv_data.get("name", "").strip()
+                    if not raw_name or raw_name.lower() == "unknown":
+                        continue
+                    # Fuzzy match against POS-keyed employees (handles
+                    # nicknames: Keisha->Lakeisha, Lennie->Glennice, etc.)
+                    name = find_employee_match(raw_name, employees)
+                    if name and name in employees:
+                        # Respect manual user overrides on NPS/CV.
+                        if employees[name].get("nps_manual_override"):
+                            continue
                         # Get values from parsed data
                         promoters = cv_data.get("promoters", 0) or 0
                         passives = cv_data.get("passives", 0) or 0
@@ -2422,6 +2853,9 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                     if total_guests > 0 and total_promoters > 0:
                         # Distribute CV data proportionally by guest count
                         for name, emp in employees.items():
+                            # Respect manual user overrides on NPS/CV.
+                            if emp.get("nps_manual_override"):
+                                continue
                             guest_count = emp.get("guest_count", 0) or 0
                             if guest_count > 0:
                                 ratio = guest_count / total_guests
@@ -2455,65 +2889,64 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                                 )
         
         elif upload_type == UploadType.REVIEW_TRACKER.value:
-            # Merge RT data with fuzzy name matching
-            # Build a mapping of common nicknames to full names
-            # Format: 'nickname_in_reviews': 'name_in_pos'
-            nickname_map = {
-                'trey': 'treyanna', 'tad': 'thaddeus', 'abby': 'abigail',
-                'ikey': 'eric', 'lennie': 'glennice', 'terry': 'terrance',
-                'allen': 'craig',  # Allen in reviews = Craig Simmons in POS
-                'matt': 'matthew', 'mike': 'michael',
-                'dan': 'daniel', 'rob': 'robert', 'bob': 'robert',
-                'jim': 'james', 'joe': 'joseph', 'chris': 'christopher',
-                'nick': 'nicholas', 'tom': 'thomas', 'will': 'william',
-                'sam': 'samuel', 'alex': 'alexander', 'ben': 'benjamin',
-                'liz': 'elizabeth', 'beth': 'elizabeth', 'kate': 'katherine',
-                'jen': 'jennifer', 'meg': 'megan', 'steph': 'stephanie',
-            }
-            
-            def find_employee_match(rt_name, employees_dict):
-                """Find matching employee using fuzzy logic."""
-                rt_name_lower = rt_name.strip().lower()
-                
-                # Direct match
-                if rt_name_lower in employees_dict:
-                    return rt_name_lower
-                
-                # Split into first/last
-                parts = rt_name_lower.split()
-                if len(parts) >= 2:
-                    first_name = parts[0]
-                    last_name = parts[-1]
-                    
-                    # Try nickname expansion
-                    expanded_first = nickname_map.get(first_name, first_name)
-                    
-                    # Search for match by last name + first name prefix
-                    for emp_name in employees_dict.keys():
-                        emp_parts = emp_name.split()
-                        if len(emp_parts) >= 2:
-                            emp_first = emp_parts[0]
-                            emp_last = emp_parts[-1]
-                            
-                            # Match by last name and (first name starts with OR nickname matches)
-                            if emp_last == last_name:
-                                if emp_first.startswith(first_name) or emp_first.startswith(expanded_first):
-                                    return emp_name
-                                if first_name.startswith(emp_first[:3]) or expanded_first == emp_first:
-                                    return emp_name
-                
-                return None
-            
+            # Merge RT data with the shared fuzzy matcher (nickname_map +
+            # reverse mapping defined at the top of merge_snapshot_data).
             for rt_data in parsed_data.get("employees", []):
                 rt_name = rt_data.get("name", "").strip()
                 matched_name = find_employee_match(rt_name, employees)
-                
+
                 if matched_name:
                     mentions = rt_data.get("mentions", 0)
                     employees[matched_name]["rt_mentions"] = mentions
                     employees[matched_name]["review_tracker_bonus"] = round(min(mentions * 0.5, 15), 1)  # Cap at 15
     
-    return list(employees.values())
+    # Defensive dedupe: guarantee unique employees by display_name so the
+    # Employees tab never shows duplicates even if upstream data drifted.
+    # Also catches nickname/formal-name pairs (Abby/Abigail) that share
+    # identical net_sales+ppa — a strong signal they're the same person.
+    out = list(employees.values())
+    seen = {}
+    fuzzy_map = {}  # (first_char, last_token, net_sales, ppa) -> primary key
+
+    def _name_of(e):
+        return (
+            (e.get("display_name") or e.get("name") or e.get("report_name") or "")
+            .strip()
+            .lower()
+        )
+
+    def _fuzzy_of(e):
+        full = _name_of(e)
+        parts = full.split()
+        if len(parts) < 2:
+            return None
+        return (
+            parts[0][0],
+            parts[-1],
+            round(float(e.get("net_sales") or 0), 2),
+            round(float(e.get("ppa") or 0), 2),
+        )
+
+    for emp in out:
+        key = _name_of(emp)
+        if not key:
+            continue
+        fk = _fuzzy_of(emp)
+        if fk and fk in fuzzy_map and fuzzy_map[fk] != key:
+            key = fuzzy_map[fk]
+        existing = seen.get(key)
+        if existing is None:
+            seen[key] = emp
+            if fk:
+                fuzzy_map[fk] = key
+        else:
+            existing_score = existing.get("total_score") or existing.get("pre_dar_score") or 0
+            new_score = emp.get("total_score") or emp.get("pre_dar_score") or 0
+            if new_score > existing_score:
+                seen[key] = emp
+            if fk and fk not in fuzzy_map:
+                fuzzy_map[fk] = key
+    return list(seen.values())
 
 
 async def parse_pos_file(filename: str, contents: bytes) -> Dict[str, Any]:
@@ -2665,10 +3098,14 @@ async def parse_cv_file(filename: str, contents: bytes) -> Dict[str, Any]:
     return {"employees": employees, "record_count": len(employees)}
 
 
-async def parse_rt_file(filename: str, contents: bytes) -> Dict[str, Any]:
+async def parse_rt_file(
+    filename: str, contents: bytes, snapshot_id: Optional[str] = None
+) -> Dict[str, Any]:
     """
     Parse ReviewTracker CSV file.
-    Extracts employee mentions from review text using GPT-4o name detection.
+    Extracts employee mentions from review text using known-name detection.
+    Resolves the candidate name list from the target snapshot (preferred)
+    or falls back to employees_v2 for the snapshot's quarter/year.
     """
     import csv
     from io import StringIO
@@ -2683,24 +3120,117 @@ async def parse_rt_file(filename: str, contents: bytes) -> Dict[str, Any]:
     reviews = []
     employee_mentions = {}
     
-    # Get list of known employee names from the database for matching
     db = get_db()
-    known_employees = await db.employees_v2.find(
-        {"quarter": "Q1", "year": 2026},
-        {"_id": 0, "name": 1}
-    ).to_list(100)
-    known_names = [e.get("name", "").lower() for e in known_employees if e.get("name")]
-    
-    # Also try from snapshot_workflow if no employees_v2
-    if not known_names:
-        latest_snapshot = await db.snapshot_workflow.find_one(
-            {"status": "completed"},
-            {"_id": 0, "employees": 1},
-            sort=[("effective_date", -1)]
+
+    # Resolve quarter/year from the snapshot we're attaching to so
+    # we look up the right employees. Old code hard-coded Q1 2026 and
+    # returned 0 mentions for any other quarter.
+    target_quarter = "Q1"
+    target_year = 2026
+    snapshot_doc = None
+    if snapshot_id:
+        snapshot_doc = await db.snapshot_workflow.find_one(
+            {"id": snapshot_id}, {"_id": 0, "quarter": 1, "year": 1, "employees": 1}
         )
-        if latest_snapshot:
-            known_names = [e.get("name", "").lower() for e in latest_snapshot.get("employees", []) if e.get("name")]
-    
+        if snapshot_doc:
+            target_quarter = (snapshot_doc.get("quarter") or "Q1").upper()
+            target_year = snapshot_doc.get("year") or 2026
+
+    # Prefer the snapshot's own employee list — it always carries the
+    # current display_name / report_name the user has manually edited.
+    known_employees: list[dict] = []
+    if snapshot_doc and snapshot_doc.get("employees"):
+        known_employees = [
+            {"name": (e.get("display_name") or e.get("name") or "").strip()}
+            for e in snapshot_doc["employees"]
+            if (e.get("display_name") or e.get("name"))
+        ]
+
+    if not known_employees:
+        known_employees = await db.employees_v2.find(
+            {"quarter": target_quarter, "year": target_year},
+            {"_id": 0, "name": 1, "display_name": 1}
+        ).to_list(200)
+        known_employees = [
+            {"name": (e.get("display_name") or e.get("name") or "").strip()}
+            for e in known_employees if (e.get("display_name") or e.get("name"))
+        ]
+
+    known_names = [e["name"].lower() for e in known_employees if e["name"]]
+    logger.info(
+        f"parse_rt_file: matching against {len(known_names)} known names "
+        f"({target_quarter} {target_year}, snapshot={snapshot_id})"
+    )
+
+    # Build name variations ONCE (was being rebuilt per row before). Layer
+    # DEFAULT_NICKNAME_MAP on top of explicit user-confirmed mappings.
+    import re
+    name_variations: dict[str, list[str]] = {
+        "lakeisha": ["lakeisha", "keisha"],
+        "treyanna": ["treyanna", "treyana", "trey"],
+        "thaddeus": ["thaddeus", "tad", "thad"],
+        "thomas": ["thomas", "tk", "tom"],
+        "eric": ["eric", "ikey"],
+        "glennice": ["glennice", "lennie"],
+        "matthew": ["matthew", "matt"],
+        "starwars": ["starwars", "star wars"],
+    }
+    for nick, formal in DEFAULT_NICKNAME_MAP.items():
+        name_variations.setdefault(formal, [formal]).append(nick)
+        seen = set()
+        name_variations[formal] = [
+            v for v in name_variations[formal] if not (v in seen or seen.add(v))
+        ]
+    # Pre-compile regex patterns per variation so we don't recompile 710x
+    variation_patterns: dict[str, list[tuple[str, "re.Pattern"]]] = {
+        formal: [(v, re.compile(r'\b' + re.escape(v) + r'\b')) for v in variants]
+        for formal, variants in name_variations.items()
+    }
+
+    # ------------------------------------------------------------------
+    # Unmatched-name detection: scan each review for capitalized first
+    # names that look like server attributions ("Mac was great", "thanks
+    # to Marcus") which DIDN'T match any known employee. Surfaces gaps in
+    # the nickname map before they cost employees credit.
+    # ------------------------------------------------------------------
+    # Pattern: a capitalized 3+ letter word, optionally followed by
+    # sentiment / service verbs. Used together with a stop-word filter.
+    unmatched_re = re.compile(
+        r'\b([A-Z][a-z]{2,15})\b\s+(?:was|is|did|made|gave|brought|served|took|delivered|helped|recommended|made\s+sure|went|knew|provided)',
+        re.IGNORECASE,
+    )
+    common_words_to_skip = {
+        # Pronouns / sentence-starters
+        "the", "this", "that", "these", "those", "they", "she", "he",
+        "we", "you", "all", "our", "their", "his", "her", "its",
+        "and", "but", "or", "yet", "for", "nor", "so", "not", "no",
+        "what", "who", "whom", "whose", "which", "where", "when", "why", "how",
+        "even", "also", "still", "really", "very", "quite", "just",
+        "after", "before", "while", "during", "since", "until",
+        # Generic role / restaurant / non-name nouns that pass the regex
+        "service", "food", "drinks", "menu", "place", "experience",
+        "staff", "team", "server", "servers", "waiter", "waitress", "host",
+        "hostess", "bartender", "manager", "everything", "everyone",
+        "shrimp", "lobster", "fish", "steak", "burger", "salad", "soup",
+        "drink", "beer", "wine", "cocktail", "dessert", "appetizer",
+        "bubba", "gump", "vegas", "restaurant", "atmosphere", "ambiance",
+        "music", "view", "table", "seat", "booth", "kitchen", "bar",
+        "jambalaya", "good", "great", "amazing", "wonderful", "excellent",
+        "bad", "poor", "terrible", "awful", "okay",
+        "first", "second", "third", "next", "last", "another",
+        "lunch", "dinner", "breakfast", "brunch", "happy",
+    }
+    unmatched_first_names: dict[str, int] = {}
+    # Build a set of all variants + first names that ARE known so we can
+    # skip them quickly.
+    known_lookup: set[str] = set()
+    for variants in name_variations.values():
+        known_lookup.update(variants)
+    for name in known_names:
+        first = name.split()[0].lower() if name else ""
+        if first:
+            known_lookup.add(first)
+
     for row in reader:
         # Get review text from various possible column names
         review_text = row.get("Review", row.get("review", row.get("Content", row.get("content", ""))))
@@ -2712,20 +3242,6 @@ async def parse_rt_file(filename: str, contents: bytes) -> Dict[str, Any]:
         # Track which employees were mentioned in this review (avoid double-counting)
         mentioned_in_review = set()
         
-        # Build name variations for special cases
-        name_variations = {
-            "starwars": ["starwars", "star wars", "star"],
-            "treyanne": ["treyanne", "trey"],
-            "thaddeus": ["thaddeus", "tad", "thad"],
-            "abigail": ["abigail", "abby"],
-            "glennice": ["glennice", "lennie"],
-            "terrance": ["terrance", "terry"],
-            "matthew": ["matthew", "matt"],
-            "eric": ["eric", "ikey"],
-            "robert": ["robert", "rob", "bob"],
-            "daniel": ["daniel", "dan"],
-        }
-        
         # Check each known employee
         for name in known_names:
             if not name or name in mentioned_in_review:
@@ -2736,18 +3252,12 @@ async def parse_rt_file(filename: str, contents: bytes) -> Dict[str, Any]:
             if not first_name or len(first_name) < 3:
                 continue
             
-            # Get variations to search for
-            variations = name_variations.get(first_name, [first_name])
-            
-            # Check if any variation appears in review
-            found = False
-            for variant in variations:
-                # Use word boundary check
-                import re
-                pattern = r'\b' + re.escape(variant) + r'\b'
-                if re.search(pattern, review_text_lower):
-                    found = True
-                    break
+            # Use pre-compiled pattern set for this first name (or fallback)
+            patterns = variation_patterns.get(
+                first_name,
+                [(first_name, re.compile(r'\b' + re.escape(first_name) + r'\b'))]
+            )
+            found = any(p.search(review_text_lower) for _, p in patterns)
             
             if found:
                 # Store the original capitalized name
@@ -2759,7 +3269,19 @@ async def parse_rt_file(filename: str, contents: bytes) -> Dict[str, Any]:
                     employee_mentions[original_name] = 0
                 employee_mentions[original_name] += 1
                 mentioned_in_review.add(name)
-        
+
+        # Capture potential unmatched-name candidates after the known-name
+        # pass. Only flag names NOT already matched by any known variation.
+        for cand in unmatched_re.findall(review_text):
+            cand_l = cand.strip().lower()
+            if (
+                cand_l in known_lookup
+                or cand_l in common_words_to_skip
+                or len(cand_l) < 3
+            ):
+                continue
+            unmatched_first_names[cand_l] = unmatched_first_names.get(cand_l, 0) + 1
+
         reviews.append({
             "text": review_text[:200],
             "rating": row.get("Rating", row.get("rating", "")),
@@ -2770,16 +3292,137 @@ async def parse_rt_file(filename: str, contents: bytes) -> Dict[str, Any]:
         {"name": name, "mentions": count}
         for name, count in employee_mentions.items()
     ]
-    
-    logger.info(f"Parsed RT file: {len(reviews)} reviews, {len(employees)} employees mentioned")
-    
+
+    # Sort + filter unmatched candidates: only show names with >=2 hits to
+    # cut noise. UI offers them as nickname-mapping suggestions.
+    unmatched_suggestions = sorted(
+        [
+            {"name": name.title(), "mentions": count}
+            for name, count in unmatched_first_names.items()
+            if count >= 2
+        ],
+        key=lambda x: -x["mentions"]
+    )[:20]
+
+    logger.info(
+        f"Parsed RT file: {len(reviews)} reviews, {len(employees)} employees "
+        f"mentioned, {len(unmatched_suggestions)} unmatched-name candidates"
+    )
+
     return {
-        "employees": employees, 
+        "employees": employees,
         "record_count": len(employees),
         "total_reviews": len(reviews),
-        "reviews_sample": reviews[:10]  # Include sample for debugging
+        "reviews_sample": reviews[:10],  # Include sample for debugging
+        "unmatched_suggestions": unmatched_suggestions,
     }
 
+
+
+@snapshot_router.post("/rescore-all")
+async def rescore_all_employees(year: int = 2026, quarter: str = "Q1"):
+    """
+    Force re-run of the canonical scoring engine on every employees_v2
+    record for the given quarter/year. Use this after a stale write (manual
+    edit, legacy code path) produced uncapped LSC scores or 200+ point
+    totals. Rewrites score_ppa/lbw/glass/lsc, weighted_score, total_score
+    and metric bonuses with the correct capped formulas. Snapshot rebuilds
+    after this will see consistent values.
+    """
+    from snapshot_manager import calculate_employee_scores
+    db = get_db()
+    q = quarter.upper()
+
+    employees_v2 = await db.employees_v2.find(
+        {"quarter": q, "year": year}, {"_id": 0}
+    ).to_list(500)
+    if not employees_v2:
+        raise HTTPException(status_code=404, detail=f"No employees for {q} {year}")
+
+    benchmarks = None
+    if "snapshot_benchmarks" in await db.list_collection_names():
+        benchmarks = await db.snapshot_benchmarks.find_one(
+            {"quarter": q, "year": year}
+        )
+    if not benchmarks:
+        benchmarks = {"ppa": 55.0, "lbw": 8.0, "glass": 1.25, "lsc": 100.0}
+
+    rescored = 0
+    over_100_before = 0
+    over_100_after = 0
+    for emp in employees_v2:
+        if (emp.get("total_score") or 0) > 100:
+            over_100_before += 1
+        try:
+            scored = calculate_employee_scores(emp, benchmarks)
+            if (scored.get("total_score") or 0) > 100:
+                over_100_after += 1
+            await db.employees_v2.update_one(
+                {"id": emp.get("id")},
+                {"$set": {
+                    "score_ppa": scored.get("score_ppa"),
+                    "score_lbw": scored.get("score_lbw"),
+                    "score_glass": scored.get("score_glass"),
+                    "score_lsc": scored.get("score_lsc"),
+                    "bonus_ppa": scored.get("bonus_ppa"),
+                    "bonus_lbw": scored.get("bonus_lbw"),
+                    "bonus_glass": scored.get("bonus_glass"),
+                    "bonus_lsc": scored.get("bonus_lsc"),
+                    "total_metric_bonus": scored.get("total_metric_bonus"),
+                    "weighted_score": scored.get("weighted_score"),
+                    "pre_dar_score": scored.get("pre_dar_score"),
+                    "total_score": scored.get("total_score"),
+                }}
+            )
+            rescored += 1
+        except Exception:
+            continue
+
+    # Also propagate the corrected scores into any active snapshot so
+    # /current-rankings reflects them right away.
+    snap = await db.snapshot_workflow.find_one(
+        {"is_current": True, "quarter": q, "year": year}
+    )
+    snapshot_synced = 0
+    if snap:
+        for emp in employees_v2:
+            updated = await db.employees_v2.find_one({"id": emp.get("id")}, {"_id": 0})
+            if not updated:
+                continue
+            res = await db.snapshot_workflow.update_one(
+                {"_id": snap["_id"], "employees.id": emp.get("id")},
+                {"$set": {
+                    "employees.$.weighted_score": updated.get("weighted_score"),
+                    "employees.$.total_score": updated.get("total_score"),
+                    "employees.$.pre_dar_score": updated.get("pre_dar_score"),
+                    "employees.$.total_metric_bonus": updated.get("total_metric_bonus"),
+                    "employees.$.score_ppa": updated.get("score_ppa"),
+                    "employees.$.score_lbw": updated.get("score_lbw"),
+                    "employees.$.score_glass": updated.get("score_glass"),
+                    "employees.$.score_lsc": updated.get("score_lsc"),
+                    "employees.$.bonus_ppa": updated.get("bonus_ppa"),
+                    "employees.$.bonus_lbw": updated.get("bonus_lbw"),
+                    "employees.$.bonus_glass": updated.get("bonus_glass"),
+                    "employees.$.bonus_lsc": updated.get("bonus_lsc"),
+                }}
+            )
+            if res.modified_count > 0:
+                snapshot_synced += 1
+
+    return {
+        "success": True,
+        "quarter": q,
+        "year": year,
+        "rescored_count": rescored,
+        "snapshot_employees_synced": snapshot_synced,
+        "scores_over_100_before": over_100_before,
+        "scores_over_100_after": over_100_after,
+        "message": (
+            f"Rescored {rescored} employees. " +
+            (f"{over_100_before} had >100pt scores, now {over_100_after}."
+             if over_100_before else "All scores already capped correctly.")
+        ),
+    }
 
 
 @snapshot_router.post("/recalculate-tiers")
@@ -2834,6 +3477,159 @@ async def recalculate_tiers(year: int = 2026, quarter: str = "Q1"):
         "total_employees": len(updated_employees)
     }
 
+
+
+
+@snapshot_router.post("/dedupe-current-snapshot")
+async def dedupe_current_snapshot(year: int = 2026, quarter: str = "Q1"):
+    """
+    Remove duplicate employees from the currently active snapshot.
+
+    Duplicate detection key = lowercased `display_name` (fallback: `name`,
+    `report_name`). When multiple entries collide on the same key, the entry
+    with the HIGHEST total_score is kept and the others are dropped. This
+    preserves any edits or score recalculations performed on the winning row.
+
+    Also removes duplicates from `employees_v2` for the same quarter using
+    the same name key so Dashboard counts line up with the snapshot.
+    """
+    db = get_db()
+    q = quarter.upper()
+
+    snapshot = await db.snapshot_workflow.find_one(
+        {"is_current": True, "quarter": q, "year": year}
+    )
+    if not snapshot:
+        snapshot = await db.snapshot_workflow.find_one(
+            {"quarter": q, "year": year, "status": "completed"},
+            sort=[("completed_at", -1)]
+        )
+    if not snapshot:
+        raise HTTPException(status_code=404, detail=f"No snapshot found for {q} {year}")
+
+    employees = snapshot.get("employees", []) or []
+
+    def name_key(e):
+        """Primary exact-match key: lowercased display_name/name/report_name."""
+        for f in ("display_name", "name", "report_name"):
+            v = (e.get(f) or "").strip().lower()
+            if v:
+                return v
+        return None
+
+    def fuzzy_key(e):
+        """
+        Secondary semantic key to catch same-person-different-spelling dupes
+        like 'Abby Ostrowski' vs 'Abigail Ostrowski'. Uses (first char of
+        first name, last token) which groups common nickname pairs.
+        Requires that net_sales + ppa also match exactly to avoid false
+        positives on coincidentally similar names.
+        """
+        full = (e.get("display_name") or e.get("name") or e.get("report_name") or "").strip().lower()
+        if not full:
+            return None
+        parts = full.split()
+        if len(parts) < 2:
+            return None
+        first_char = parts[0][0]
+        last_token = parts[-1]
+        ns = e.get("net_sales") or 0
+        ppa = e.get("ppa") or 0
+        return (first_char, last_token, round(float(ns), 2), round(float(ppa), 2))
+
+    best = {}
+    order = []
+    secondary = {}  # fuzzy_key -> primary key
+    for emp in employees:
+        k = name_key(emp)
+        if not k:
+            continue
+        # Check fuzzy duplicate first (redirects to the already-seen primary key)
+        fk = fuzzy_key(emp)
+        if fk and fk in secondary and secondary[fk] != k:
+            # This row is a semantic dup of an already-seen primary key.
+            k = secondary[fk]
+        score = emp.get("total_score") or emp.get("pre_dar_score") or 0
+        current = best.get(k)
+        if current is None:
+            best[k] = emp
+            order.append(k)
+            if fk:
+                secondary[fk] = k
+        else:
+            current_score = current.get("total_score") or current.get("pre_dar_score") or 0
+            if score > current_score:
+                # Preserve which primary key this fuzzy group anchors on
+                best[k] = emp
+            if fk and fk not in secondary:
+                secondary[fk] = k
+
+    deduped = [best[k] for k in order]
+    removed_snapshot = len(employees) - len(deduped)
+
+    if removed_snapshot > 0:
+        await db.snapshot_workflow.update_one(
+            {"_id": snapshot["_id"]},
+            {"$set": {
+                "employees": deduped,
+                "employee_count": len(deduped),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }}
+        )
+
+    # Dedupe employees_v2 for the same quarter using the same key strategy.
+    v2_emps = await db.employees_v2.find(
+        {"quarter": q, "year": year},
+        {"_id": 0}
+    ).to_list(2000)
+
+    v2_best = {}
+    v2_order = []
+    v2_secondary = {}
+    for emp in v2_emps:
+        k = name_key(emp)
+        if not k:
+            continue
+        fk = fuzzy_key(emp)
+        if fk and fk in v2_secondary and v2_secondary[fk] != k:
+            k = v2_secondary[fk]
+        if k not in v2_best:
+            v2_best[k] = emp
+            v2_order.append(k)
+            if fk:
+                v2_secondary[fk] = k
+        else:
+            if (emp.get("total_score") or emp.get("pre_dar_score") or 0) > (
+                v2_best[k].get("total_score") or v2_best[k].get("pre_dar_score") or 0
+            ):
+                v2_best[k] = emp
+            if fk and fk not in v2_secondary:
+                v2_secondary[fk] = k
+
+    # Identify ids to delete = all v2 emps whose id is not the "winner"
+    winners_ids = {v2_best[k].get("id") for k in v2_order if v2_best[k].get("id")}
+    ids_to_delete = [
+        e.get("id") for e in v2_emps
+        if e.get("id") and e.get("id") not in winners_ids
+    ]
+
+    removed_v2 = 0
+    if ids_to_delete:
+        result = await db.employees_v2.delete_many({"id": {"$in": ids_to_delete}})
+        removed_v2 = result.deleted_count
+
+    return {
+        "success": True,
+        "snapshot_id": snapshot.get("id"),
+        "removed_from_snapshot": removed_snapshot,
+        "remaining_in_snapshot": len(deduped),
+        "removed_from_employees_v2": removed_v2,
+        "message": (
+            f"Removed {removed_snapshot} snapshot duplicates and {removed_v2} v2 duplicates"
+            if (removed_snapshot + removed_v2) > 0
+            else "No duplicates found"
+        ),
+    }
 
 
 # ============================================================================
@@ -3110,3 +3906,172 @@ async def get_workflow_status(snapshot_id: str):
         "dar_applied": snapshot.get("dar_applied", False),
         "total_dar_deductions": snapshot.get("total_dar_deductions", 0),
     }
+
+
+
+@snapshot_router.get("/nicknames/unmatched-suggestions")
+async def get_unmatched_nickname_suggestions(
+    quarter: str = "Q2", year: int = 2026
+):
+    """
+    Surface name-candidates from the active snapshot's most recent RT
+    upload that the parser couldn't match to any known employee. Each
+    entry returns {name, mentions}; the UI lets the user one-click create
+    a nickname alias mapping to a real employee. Names persistently
+    dismissed via /nicknames/dismissals (e.g. former employees) are
+    filtered out.
+    """
+    db = get_db()
+    snap = await db.snapshot_workflow.find_one(
+        {"quarter": quarter.upper(), "year": year, "is_current": True},
+        {"_id": 0, "uploads": 1, "employees": 1}
+    )
+    if not snap:
+        snap = await db.snapshot_workflow.find_one(
+            {"quarter": quarter.upper(), "year": year},
+            {"_id": 0, "uploads": 1, "employees": 1},
+            sort=[("updated_at", -1)]
+        )
+    if not snap:
+        return {"unmatched": [], "employees": [], "dismissed": []}
+
+    rt_upload = next(
+        (u for u in (snap.get("uploads") or [])
+         if u.get("upload_type") == "review_tracker"),
+        None
+    )
+    raw_unmatched = []
+    if rt_upload:
+        raw_unmatched = (rt_upload.get("parsed_data") or {}).get("unmatched_suggestions", [])
+
+    # Filter against the persistent dismissal blacklist AND any nicknames
+    # that have been added since the last RT parse (so newly-mapped names
+    # disappear from suggestions immediately, no re-upload required).
+    dismissed_set = set()
+    async for doc in db.nickname_dismissals.find({}, {"_id": 0, "name": 1}):
+        n = (doc.get("name") or "").strip().lower()
+        if n:
+            dismissed_set.add(n)
+
+    nickname_map = await load_nickname_map(db)
+    known_nicknames = set(nickname_map.keys())  # e.g. 'adri', 'star'
+
+    unmatched = [
+        s for s in raw_unmatched
+        if s.get("name", "").strip().lower() not in dismissed_set
+        and s.get("name", "").strip().lower() not in known_nicknames
+    ]
+
+    # Also return the live employees so the UI can populate the
+    # "map to which employee" dropdown without a second roundtrip.
+    employees = [
+        {
+            "id": e.get("id"),
+            "name": e.get("display_name") or e.get("name"),
+            "first_name": ((e.get("display_name") or e.get("name") or "")
+                           .split()[0] if (e.get("display_name") or e.get("name")) else ""),
+        }
+        for e in (snap.get("employees") or [])
+    ]
+    return {
+        "unmatched": unmatched,
+        "employees": employees,
+        "dismissed": sorted(dismissed_set),
+    }
+
+
+@snapshot_router.post("/nicknames/dismissals")
+async def add_nickname_dismissal(payload: Dict[str, Any]):
+    """Permanently hide an unmatched-name suggestion (former employees,
+    review-only mentions like dish names that the stop-word list missed,
+    etc.). Idempotent — re-posting the same name no-ops cleanly."""
+    db = get_db()
+    name = (payload.get("name") or "").strip().lower()
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
+    reason = (payload.get("reason") or "").strip() or None
+    existing = await db.nickname_dismissals.find_one({"name": name})
+    if existing:
+        return {"success": True, "id": existing.get("id"), "name": name, "updated": False}
+    doc = {
+        "id": str(uuid.uuid4()),
+        "name": name,
+        "reason": reason,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.nickname_dismissals.insert_one(doc)
+    doc.pop("_id", None)
+    return {"success": True, **doc, "updated": True}
+
+
+@snapshot_router.delete("/nicknames/dismissals/{name}")
+async def remove_nickname_dismissal(name: str):
+    """Restore an unmatched-name suggestion previously dismissed. Useful
+    if the operator changes their mind (e.g. a former employee returns)."""
+    db = get_db()
+    res = await db.nickname_dismissals.delete_one({"name": name.strip().lower()})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail=f"No dismissal found for {name!r}")
+    return {"success": True, "restored": name}
+
+
+# ============================================================================
+# NICKNAME ALIASES (managed by Settings UI)
+# ============================================================================
+# Lets the operator add custom nickname -> formal-name mappings so CV / RT
+# merges route shortened names ("Keisha" -> "Lakeisha") to the right
+# employee. Defaults still live in DEFAULT_NICKNAME_MAP and are not
+# editable; this collection is purely additive.
+
+@snapshot_router.get("/nicknames")
+async def list_nicknames():
+    """Return defaults + user-managed nicknames so the UI can show both."""
+    db = get_db()
+    user_aliases = await db.nickname_aliases.find(
+        {}, {"_id": 0, "id": 1, "nickname": 1, "formal": 1, "created_at": 1}
+    ).to_list(500)
+    return {
+        "defaults": [
+            {"nickname": k, "formal": v}
+            for k, v in sorted(DEFAULT_NICKNAME_MAP.items())
+        ],
+        "user": user_aliases,
+    }
+
+
+@snapshot_router.post("/nicknames")
+async def create_nickname(payload: Dict[str, Any]):
+    """Add a user-managed nickname -> formal mapping."""
+    db = get_db()
+    nickname = (payload.get("nickname") or "").strip().lower()
+    formal = (payload.get("formal") or "").strip().lower()
+    if not nickname or not formal:
+        raise HTTPException(status_code=400,
+                            detail="Both 'nickname' and 'formal' are required")
+    existing = await db.nickname_aliases.find_one({"nickname": nickname})
+    if existing:
+        await db.nickname_aliases.update_one(
+            {"nickname": nickname},
+            {"$set": {"formal": formal,
+                      "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        return {"success": True, "id": existing.get("id"), "updated": True}
+    doc = {
+        "id": str(uuid.uuid4()),
+        "nickname": nickname,
+        "formal": formal,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.nickname_aliases.insert_one(doc)
+    doc.pop("_id", None)
+    return {"success": True, **doc, "updated": False}
+
+
+@snapshot_router.delete("/nicknames/{alias_id}")
+async def delete_nickname(alias_id: str):
+    """Remove a user-managed alias (defaults can't be deleted)."""
+    db = get_db()
+    res = await db.nickname_aliases.delete_one({"id": alias_id})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Alias not found")
+    return {"success": True, "deleted": alias_id}

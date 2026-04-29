@@ -91,6 +91,10 @@ export default function QREmployees() {
     if (platform === 'google') {
       return `${BACKEND_URL}/api/qr/go/${employeeId}`;
     }
+    // Use the simple /ta/ endpoint for TripAdvisor
+    if (platform === 'tripadvisor') {
+      return `${BACKEND_URL}/api/qr/ta/${employeeId}`;
+    }
     return `${BACKEND_URL}/api/qr/scan/${employeeId}/${platform}`;
   };
 
@@ -142,17 +146,19 @@ export default function QREmployees() {
         const emp = employees[i];
         const safeName = emp.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
         
-        // Generate Google QR (primary)
-        const googleUrl = generateQRUrl(emp.id, 'google');
-        const googleQR = await generateStyledQRDataUrl(googleUrl, {
-          size: 400,
-          logoSize: 160,
-          showFrame: false
-        });
-        
-        // Convert data URL to blob
-        const googleBlob = await (await fetch(googleQR)).blob();
-        zip.file(`${safeName}_google_qr.png`, googleBlob);
+        // Generate one styled QR per platform so the ZIP contains Google, Yelp,
+        // and TripAdvisor codes for each employee.
+        const platforms = ['google', 'yelp', 'tripadvisor'];
+        for (const platform of platforms) {
+          const url = generateQRUrl(emp.id, platform);
+          const qrDataUrl = await generateStyledQRDataUrl(url, {
+            size: 400,
+            logoSize: 160,
+            showFrame: false
+          });
+          const blob = await (await fetch(qrDataUrl)).blob();
+          zip.file(`${safeName}_${platform}_qr.png`, blob);
+        }
         
         // Update progress
         if ((i + 1) % 5 === 0) {
@@ -248,7 +254,7 @@ export default function QREmployees() {
                 <div className="flex items-center gap-2 md:gap-4 min-w-0">
                   <span className="text-base md:text-xl font-semibold text-white truncate">{emp.name}</span>
                   <span className="text-xs md:text-sm text-slate-400 shrink-0">
-                    Scans: <span className="text-blue-400 font-bold">{emp.yelp_clicks + emp.google_clicks}</span>
+                    Scans: <span className="text-blue-400 font-bold">{(emp.yelp_clicks || 0) + (emp.google_clicks || 0) + (emp.tripadvisor_clicks || 0)}</span>
                   </span>
                 </div>
                 <div className="flex items-center gap-1 md:gap-2 shrink-0">
@@ -308,6 +314,18 @@ export default function QREmployees() {
                     Yelp QR
                   </Button>
                   
+                  {/* Download TripAdvisor QR */}
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="border-emerald-500/50 text-emerald-400 text-xs md:text-sm"
+                    onClick={() => downloadQR(emp.id, emp.name, 'tripadvisor')}
+                    data-testid={`download-tripadvisor-qr-${emp.id}`}
+                  >
+                    <Download className="w-3.5 h-3.5 mr-1" />
+                    TripAdvisor QR
+                  </Button>
+                  
                   {/* Copy URL */}
                   <Button 
                     size="sm" 
@@ -333,8 +351,9 @@ export default function QREmployees() {
                 
                 {/* Click Stats */}
                 <div className="flex gap-4 mt-3 text-xs text-slate-400">
-                  <span>Google: <span className="text-green-400 font-medium">{emp.google_clicks}</span></span>
-                  <span>Yelp: <span className="text-red-400 font-medium">{emp.yelp_clicks}</span></span>
+                  <span>Google: <span className="text-green-400 font-medium">{emp.google_clicks || 0}</span></span>
+                  <span>Yelp: <span className="text-red-400 font-medium">{emp.yelp_clicks || 0}</span></span>
+                  <span>TripAdvisor: <span className="text-emerald-400 font-medium">{emp.tripadvisor_clicks || 0}</span></span>
                 </div>
               </div>
             </div>

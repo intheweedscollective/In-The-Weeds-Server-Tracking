@@ -1,0 +1,52 @@
+{
+  "summary": "Iteration 27 backend regression suite: CV scoring formula (NPS%/10 + promoters*1 + detractors*-2) + delta-math for CV-input edits + new 1920x1080 PNG / PDF snapshot endpoints. 12/12 tests PASS. All main-agent-stated behaviors verified against live Q2 2026 data: (a) PUT with nps_score=50 on Treyanna recalculated cv_score to exactly 6.0 (50*0.10 + 1*1 + 0*-2), shifted total_score by (6.0 - 11.0) = -5.0 delta exactly (from 94.46 to 89.46), set nps_manual_override=true, and the snapshot.employees record mirrored the v2 record field-for-field (cv_score, total_score, nps_manual_override all aligned). (b) nps_contribution=5.0 + cv_raw_points=1.0 decomposed correctly. (c) Second test with nps=80+promoters=5 produced cv=13.0 exactly and delta-math preserved. (d) Name-only PUT kept total_score and cv_score unchanged (no CV recompute). (e) liquor_sales=999 triggered the full POS rebuild branch (weighted_score + total_score both recomputed). (f) GET /api/v2/full-rankings/2026/Q2/snapshot-png returned 200 image/png, size exactly 1920x1080, palette colors (#33CC33, #FFFF00, #FF0000, #0C769E, white, navy) found in top-40 colors on right-half crop. (g) snapshot-pdf returned 200 application/pdf with %PDF magic bytes. (h) Both endpoints return 404 for empty Q4 2026. (i) Regressions green: /api/qr/leaderboard-data 200; nickname CRUD at /api/v2/snapshot-workflow/nicknames (GET/POST/DELETE) works with 31+ defaults including treyanna/thaddeus; RT parser surface reachable. Treyanna restored to baseline (nps=100, cv=11.0, total=94.46) after test run.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PUT /api/v2/employees/{id}", "issue": "Idempotent restore to nps_score=100 (same value) still flips nps_manual_override=true. Not a bug per se (any CV-input PUT intentionally sets the flag), but worth noting: a pure no-op PUT still marks the row as manually overridden. Agent note said this is expected/idempotent, confirmed not breaking."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_27_cv_and_png.py",
+    "/app/test_reports/pytest/iteration_27.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py update_employee (line ~2480-2857) correctly splits delta-math vs full-rebuild branches via the `full_rebuild` flag at line 2694. The delta-math branch at 2696-2726 correctly uses (new_cv - old_cv) + (new_rt - old_rt) + (new_bonus - old_bonus) to shift total_score, and sets `settings_doc = None` as a sentinel to skip the legacy rebuild block. This works but the sentinel pattern is fragile - if a future edit accidentally reads settings_doc after line 2726 it will NoneType-error. Recommend an explicit early-continue or a `rebuild_done` boolean instead of overloading settings_doc.",
+    "server.py line 2604-2605: nps_override_fields intersection marks nps_manual_override=True on ANY PUT touching nps_score/cv_promoters/cv_passives/cv_detractors - even if the value is unchanged. Consider comparing to emp_doc before flipping to avoid noisy overrides on idempotent PUTs (e.g., the reset path in our tests re-flags to true even though the effective value is identical). Low priority.",
+    "scoring_engine.py:445 calculate_customer_voice_score: cv_score = nps_contribution + cv_bonus is the correct consolidation. Verified downstream merge_snapshot_data no longer double-adds nps_contribution on top of weighted_score (snapshot_routes.py).",
+    "png_full_rankings.py REF_COLORS dict (line 70-79) matches user spec exactly (#0C769E, #33CC33, #FFFF00, #FF0000). get_cell_color thresholds at <60 red / <80 yellow / <100 green / >=100 blue match spec. Verified at render time by pixel-sampling the right-half crop.",
+    "png_full_rankings.py:329 DeprecationWarning: Image.Image.getdata() deprecated in Pillow 14 (2027). Not blocking - only affects test pixel-sampling, not production render path.",
+    "snapshot_routes.py is still 3906 lines (over the 700-line guideline). Modularization previously flagged in iteration 26, still pending. Not blocking."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_27_cv_and_png.py (NEW)",
+    "/app/test_reports/pytest/iteration_27.xml (NEW)",
+    "/app/test_reports/iteration_27.json (NEW)"
+  ],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "not tested (backend-only request)"},
+  "test_credentials": "n/a (no auth on tested endpoints)",
+  "seed_data_creation": "No new seed data. Tests use live Q2 2026 employees_v2 rows. Each mutating test captures pre-state, PUTs, asserts, and restores original value in a finally block. Non-Treyanna victim tests pick a random non-Treyanna employee. Treyanna restored to baseline (nps=100 -> cv=11.0, total=94.46) verified at end of test run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Test file /app/backend/tests/test_iteration_27_cv_and_png.py is reusable as regression coverage. Key assertions: (1) cv_score formula NPS%/10 + promoters*1 + detractors*-2 (NOT promoters + detractors*-2 only), (2) delta-math on CV-input edits preserves the snapshot pipeline's capped weighted_score by shifting total by exactly (new_cv - old_cv), (3) new snapshot-png/snapshot-pdf endpoints at /api/v2/full-rankings/{year}/{quarter}/snapshot-png|snapshot-pdf, (4) nickname CRUD is at /api/v2/snapshot-workflow/nicknames (NOT /api/nicknames/aliases as I initially guessed - confirmed via snapshot_routes.py:3849). Q2 2026 active snapshot: 72030efa-0df3-478d-9284-d0a02f1c90a3 (30 employees). Treyanna baseline after this run: nps=100, cv=11.0, total=94.46, override=true, promoters=1, detractors=0. The idempotent-PUT-flips-override edge case is worth tracking but not breaking.",
+  "verification_results": {
+    "cv_formula_nps50_treyanna": "cv_score=6.0 (50*0.10 + 1 + 0) - PASS",
+    "delta_math_total_shift": "old_total=94.46 old_cv=11.0 new_cv=6.0 -> new_total=89.46 (delta=-5.0 exact) - PASS",
+    "nps_manual_override_flag": "true after PUT - PASS",
+    "snapshot_employees_mirror": "cv_score, total_score, nps_manual_override all synced to snapshot.employees - PASS",
+    "nps_contribution_decomposed": "nps_contribution=5.0, cv_raw_points=1.0 - PASS",
+    "cv_promoters_formula": "nps=80+promo=5 -> cv=13.0, delta-math preserves - PASS",
+    "name_only_preserves_total": "name-only PUT: total_score unchanged - PASS",
+    "pos_full_rebuild": "liquor_sales=999 -> weighted_score recomputed - PASS",
+    "snapshot_png_1920x1080": "200 image/png, Image.size=(1920,1080), palette #33CC33/#FFFF00/#FF0000/#0C769E + white + navy all in top-40 - PASS",
+    "snapshot_pdf_magic_bytes": "200 application/pdf, starts with %PDF - PASS",
+    "png_404_empty_quarter": "Q4 2026 -> 404 - PASS",
+    "pdf_404_empty_quarter": "Q4 2026 -> 404 - PASS",
+    "qr_leaderboard_regression": "200 - PASS",
+    "nickname_crud_regression": "GET returns 31+ defaults + user list; POST creates with id; DELETE removes - PASS",
+    "rt_parser_surface_regression": "snapshot-workflow list endpoint reachable - PASS",
+    "treyanna_restored_post_test": "nps=100, cv=11.0, total=94.46 (override flag remains true per idempotent PUT behavior, not breaking)"
+  }
+}

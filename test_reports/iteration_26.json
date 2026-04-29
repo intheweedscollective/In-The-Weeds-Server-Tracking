@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 26 backend verification - both RT parser fixes confirmed working. parse_rt_file now correctly resolves quarter/year from snapshot_id parameter (no longer hardcoded Q1 2026), and DEFAULT_NICKNAME_MAP (31 entries) is layered on top of the explicit user-confirmed mappings (Trey/Treyana/Treyanna, Tad/Thad/Thaddeus, Keisha/Lakeisha, TK/Thomas, Ikey/Eric, Lennie/Glennice, Matt/Matthew, Starwars). Direct end-to-end upload tests against temp in_progress Q2 and Q1 snapshots all pass; nickname expansion correctly routes Trey/Treyanna/Treyana -> Treyanna Quick (3+ mentions), Tad/Thad -> Thaddeus Hashey, Keisha -> Lakeisha Martin, Ikey -> Eric Ostgarden, Matt -> Matthew Spath. /process correctly populates snap.employees[i].rt_mentions and review_tracker_bonus = min(mentions*0.5, 15) (capped at 15 verified for 32-mention case). 400 status guard on completed snapshot works, in_progress accepts. P0 sync-from-employees guard and nickname CRUD endpoint regressions also green. Production state cross-check: Q2 2026 employees_v2 has 30 records, 28 with rt_mentions>0 - matches main agent's report.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_26_rt_parsing.py",
+    "/app/test_reports/pytest/iteration_26.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "parse_rt_file (snapshot_routes.py:3101) now correctly threads snapshot_id through, prefers snapshot.employees for matching (so user's manual display_name edits propagate), and falls back to employees_v2 keyed by the snapshot's actual quarter/year. Logging includes (quarter, year, snapshot_id) for future debugging.",
+    "name_variations construction (line ~3178) places explicit user-confirmed mappings first (lakeisha/treyanna/thaddeus/thomas/eric/glennice/matthew/starwars) and then layers DEFAULT_NICKNAME_MAP entries on top via setdefault+append+order-preserving dedupe. Behavior is correct - explicit precedence is preserved while still picking up new defaults automatically.",
+    "First-name length>=3 dedupe filter (line ~3207) intentionally drops 2-char first names (e.g., 'TK') from matching - documented in agent context note. This is fine as 'TK' is mapped via DEFAULT_NICKNAME_MAP as nickname->Thomas, and the parser only iterates known POS first names so it would only fire if a POS employee had first_name='TK', which is the noise-prevention intent.",
+    "snapshot_routes.py is 3906 lines - file size is well above the 700-line guideline and continues to grow. Modularization (split CRUD vs upload vs scoring vs sync) is recommended whenever convenient, not blocking.",
+    "Minor: build of name_variations happens inside the per-row loop (line 3178) - it's identical for every row so it could be hoisted before the loop for a small perf win on large CSVs (710-row file). Not a correctness issue, informational only."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_26_rt_parsing.py (NEW)"
+  ],
+  "success_rate": {"backend": "100% (8/8 active, 1 skipped due to missing /tmp/feedback.xlsx fixture)", "frontend": "not tested (backend-only request)"},
+  "test_credentials": "n/a (no auth on these endpoints)",
+  "seed_data_creation": "Each test inserts a temp snapshot directly into mongo with id prefix `iter26-` + uuid suffix and status=in_progress (or completed for the guard test), seeded with 5 POS employees: Treyanna Quick, Thaddeus Hashey, Lakeisha Martin, Eric Ostgarden, Matthew Spath. Cleanup runs in finally blocks via db.snapshot_workflow.delete_one. Nickname alias test creates a uuid-suffixed alias and deletes it (both via API and direct mongo) in finally. Production Q1/Q2 snapshots are NEVER mutated.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Test file at /app/backend/tests/test_iteration_26_rt_parsing.py is reusable. The CV adjustment regression test (test_cv_adjustment_upload_returns_nps) is currently skipped because /tmp/feedback.xlsx does not exist in this environment - if that file is restored, the assertion will run. The Q2 2026 active snapshot is 72030efa-0df3-478d-9284-d0a02f1c90a3 (status=completed, 30 employees) and Q1 2026 is e20ede2c-1bb1-4b2f-85e2-81d99a7243de (status=completed, 34 employees). Both confirmed to have actual quarter/year strings 'Q1'/'Q2' (not integers). employees_v2: Q2 2026 count=30, rt_mentions>0 for 28.",
+  "verification_results": {
+    "rt_upload_q2_temp_snapshot": "200 OK; mentions parsed: Treyanna Quick>=3 (trey+treyanna+treyana), Thaddeus Hashey>=2 (tad+thad), Lakeisha Martin>=1 (keisha), Eric Ostgarden>=1 (ikey), Matthew Spath>=1 (matt)",
+    "rt_upload_q1_regression": "200 OK; Q1 snapshot mentions matched correctly (Treyanna+Matthew)",
+    "completed_snapshot_guard": "400 'Cannot upload to a completed snapshot'",
+    "in_progress_snapshot_accepts": "200 OK",
+    "process_populates_rt_fields": "trey rt_mentions=4, bonus=2.0; thad rt_mentions=32, bonus=15.0 (capped); matt rt_mentions=1, bonus=0.5",
+    "production_q2_2026_state": "employees_v2 count=30, with rt_mentions>0 = 28 (matches expected)",
+    "nickname_crud_regression": "GET 200 with 31 defaults including all explicit mappings; POST creates and DELETE removes alias",
+    "p0_sync_safety_guard": "200 (employees_v2 healthy >=50%)"
+  }
+}

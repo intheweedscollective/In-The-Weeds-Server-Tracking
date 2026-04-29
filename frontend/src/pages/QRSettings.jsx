@@ -20,6 +20,7 @@ export default function QRSettings() {
   const [settings, setSettings] = useState({
     yelp_url: "",
     google_url: "",
+    tripadvisor_url: "",
     qr_style: "circle",
     qr_color: "#000000",
     qr_bg_color: "#FFFFFF",
@@ -119,12 +120,35 @@ export default function QRSettings() {
                     onChange={(e) => setSettings({...settings, google_url: e.target.value})}
                     placeholder="https://www.google.com/maps/place/..."
                     className="bg-slate-800 border-slate-700"
+                    data-testid="qr-settings-google-url"
                   />
                   {settings.google_url && (
                     <Button 
                       variant="outline" 
                       className="border-slate-600"
                       onClick={() => window.open(settings.google_url, '_blank')}
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm text-emerald-400 mb-2">TripAdvisor Review URL</label>
+                <div className="flex gap-2">
+                  <Input
+                    value={settings.tripadvisor_url || ""}
+                    onChange={(e) => setSettings({...settings, tripadvisor_url: e.target.value})}
+                    placeholder="https://www.tripadvisor.com/UserReviewEdit-..."
+                    className="bg-slate-800 border-slate-700"
+                    data-testid="qr-settings-tripadvisor-url"
+                  />
+                  {settings.tripadvisor_url && (
+                    <Button 
+                      variant="outline" 
+                      className="border-slate-600"
+                      onClick={() => window.open(settings.tripadvisor_url, '_blank')}
                     >
                       <ExternalLink className="w-4 h-4" />
                     </Button>

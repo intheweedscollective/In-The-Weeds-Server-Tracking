@@ -9,7 +9,105 @@ Build a comprehensive performance review application for restaurant employees.
 - **Database**: MongoDB
 - **AI**: OpenAI GPT-4o (via Emergent LLM Key)
 
-## Current State (2026-04-14)
+## Current State (2026-04-27)
+
+### Latest Changes (2026-04-27 Session)
+
+- **P0: Snapshot Report — Pixel-accurate clone of reference (FIXED 2026-04-27 v3)**
+  - User feedback: revert diamond bg, sidebar text was illegible, grid numbers must be BLACK (not white), RT column was empty, "Bonus" column should read "Metric Bonus".
+  - Implementation:
+    * Reverted to SOLID dark navy bg matching reference exactly.
+    * Sidebar fonts upsized for legibility on dark navy: Q SERVER 46pt, PERFORMANCE 58pt, SNAPSHOT 46pt, date 24pt, legend 20pt, footer 20pt.
+    * All numbers inside colored grid tiles render in BLACK text (no more white-on-color contrast issues).
+    * **RT column** now populated via `RT = min(mentions × 0.5, 15)` — 0.5 pts per ReviewTracker name mention, capped at 15.
+    * **"Bonus" column header** renamed to **"Metric Bonus"** and reads from `metric_bonus` field only (POS-metric benchmark exceedance points only — excludes review_bonus).
+    * Trend ▲ / — preserved.
+  - Files: `/app/backend/png_full_rankings.py`, `/app/backend/pdf_full_rankings.py`.
+  - Verified via `/api/v2/full-rankings/2026/Q1/snapshot-png` (HTTP 200, 207 KB) + `analyze_file_tool` 6/6 visual checks pass.
+
+- **CV Score formula confirmation pending from user** — currently `CV = (NPS%/10) + (Promoters × 1) − (Detractors × 2)` per `scoring_engine.py`. User flagged it may be incorrect; awaiting their confirmation before adjusting.
+
+- **P0: Snapshot Report (PNG/PDF) Visual Layout Mirror — FIXED 2026-04-27 (initial pass)**
+  - Iter 2 feedback from user: column spacing should match reference, cells need white grid dividers + thin black border for definition, Name column must NOT be black/navy, and the diamond-pattern image must be the slide-wide background.
+  - Implementation:
+    * Diamond bg image (`/app/backend/assets/snapshot_bg.jpg`) loaded as the full 1920×1080 canvas.
+    * `Rank / Name / Trend` cells switched from dark-navy to WHITE fill with dark text (matching reference).
+    * Every cell now drawn as a rounded-rect tile (4px radius) with a 1px black outline + a white gutter behind the cell — together they produce the white-grid + black-border effect in the reference.
+    * Zero values render as plain `0.0` (no `+0.0`).
+    * Title/date proportions tightened so "PERFORMANCE" no longer overshadows the rest of the sidebar.
+  - Files: `/app/backend/png_full_rankings.py`, `/app/backend/pdf_full_rankings.py`.
+  - Verified via `/api/v2/full-rankings/2026/Q1/snapshot-png` (HTTP 200, 601 KB) + `analyze_file_tool` 5/5 visual checks pass.
+
+- **P0: Snapshot Report (PNG/PDF) Visual Layout Mirror — FIXED 2026-04-27 (initial pass)**
+  - User-reference template required: dark-navy body rows (matching header), each metric cell as a colored "tile" with thin navy gutters acting as borders, first three columns (Rank/Name/Trend) on dark-navy without color fill.
+  - Fixed sign artefact "+-44.3" by switching to Python `{:+.1f}` formatting (now renders true negatives correctly).
+  - Trend column now renders ▲ (green) for improving / — (gray) for flat / ▼ (red) for declining instead of literal "=".
+  - Date format moved from `%Y-%m-%d` → `%B %d, %Y` (e.g. "April 27, 2026").
+  - Score column now uses absolute thresholds (≥100 blue, 80–100 green, 70–80 yellow, <70 red) matching reference instead of A/B tier logic.
+  - Files: `/app/backend/png_full_rankings.py` (full rewrite), `/app/backend/pdf_full_rankings.py` (full rewrite, now 16:9 canvas).
+  - Verified via live endpoint `GET /api/v2/full-rankings/2026/Q1/snapshot-png` + `analyze_file_tool` (8/8 layout checks pass).
+
+- **P2: Yodeck slide column labels updated — FIXED 2026-04-27**
+  - `/app/backend/yodeck_slides.py` line 1244: "PPA / LBW / LSC / GLASS" → "PPA % / LBW % / LSC % / GLASS %" so viewers don't confuse percentages with absolute scores.
+
+### Latest Changes (2026-02 Session - Continued)
+
+- **P0: Save Snapshot Reverts Edits + Resurrects Duplicates (FIXED 2026-04-25)**:
+  - **Bug**: Clicking "Save Snapshot" on the Quick-Edit page reverted manual NPS/LBW edits to raw POS values AND resurrected previously-deleted duplicate employees.
+  - **Root cause 1 (ghost resurrection)**: `sync_pos_from_employees_v2` merged employees_v2 INTO existing `pos_upload.parsed_data.employees`, so deleted rows lingered in the POS list and got re-merged into `snapshot.employees` on the next `/process` call.
+  - **Root cause 2 (NPS revert)**: Reprocess ran store-level CV redistribution against ALL rows including ones the user had just hand-edited; user's NPS value got overwritten by `(promoters - detractors) / total * 100` from the distributed store-level upload.
+  - **Fix 1**: `sync_pos_from_employees_v2` now REBUILDS `pos_upload.parsed_data.employees` ENTIRELY from `employees_v2` (plus salvages legacy fields like `food_sales` from the old POS rows). Also prunes orphan rows from `snapshot.employees` whose ids no longer exist in employees_v2.
+  - **Fix 2**: `update_employee` (server.py) writes `nps_manual_override=true` on both `employees_v2` and `snapshot.employees` whenever PUT body contains any of {nps_score, cv_promoters, cv_passives, cv_detractors}. `merge_snapshot_data` (snapshot_routes.py) now skips CV redistribution for flagged rows.
+  - **Fix 3 (bonus)**: Mirror `guests` <-> `guest_count` in the PUT payload so one-field edits keep both in sync.
+  - **Files**: `/app/backend/snapshot_routes.py` (`sync_pos_from_employees_v2`, `merge_snapshot_data`), `/app/backend/server.py` (`update_employee`).
+  - **Test coverage**: `/app/backend/tests/test_save_snapshot_bug.py` (smoke) + iteration 23 (16/16 backend tests pass via testing agent).
+
+### Latest Changes (2026-02 Session)
+
+- **TripAdvisor added to QR Tracker (FIXED 2026-02)**:
+  - Full parity with Yelp & Google across the QR Track Hub.
+  - Backend (`/app/backend/qr_tracking.py`):
+    - New `tripadvisor_clicks` field on QR employees (initialized on create/bulk/sync-from-employees).
+    - New `tripadvisor_url` field in QR Settings (with old-doc backfill in GET).
+    - New `TRIPADVISOR_REVIEW_URL` env fallback (defaults to tripadvisor.com/UserReview).
+    - New `/api/qr/ta/{id}` simplified redirect endpoint (mirrors `/api/qr/go/{id}`).
+    - `/api/qr/scan/{id}/tripadvisor` accepts the third platform.
+    - `/api/qr/stats` now returns `tripadvisor_scans` + every top_10 row has `tripadvisor_clicks`.
+    - Bulk ZIP download emits three PNGs per employee: `Name_google_qr.png`, `Name_yelp_qr.png`, `Name_tripadvisor_qr.png`.
+    - Reset endpoints (per-employee and global) also zero `tripadvisor_clicks`.
+  - Frontend:
+    - `QRSettings.jsx`: TripAdvisor Review URL input field with external-link preview.
+    - `QRLeaderboard.jsx`: TripAdvisor column + included in total.
+    - `QRDashboard.jsx`: 5-column stats grid with TripAdvisor StatCard, per-emp row TripAdvisor count.
+    - `QREmployees.jsx`: TripAdvisor download button per employee, included in ZIP, included in totals.
+    - `QRTopClicksCard.jsx`: TripAdvisor quick-stat tile + per-row count.
+    - `EmployeeCard.jsx` + `EmployeeList.js`: TripAdvisor clicks aggregated into QR Scans total.
+  - Verified via curl: tracking, stats, settings persistence, and per-platform redirect all work.
+
+
+
+- **Snapshot Workflow Edits Not Persisting (FIXED 2026-02)**:
+  - Root cause 1: Master `PUT /v2/employees/{id}` only synced `name/title/tier/total_score`
+    back to `snapshot_workflow.employees` - metric edits (guests, liquor_sales, etc.) were
+    written to `employees_v2` but never to the snapshot. Since `EmployeeList` re-fetches
+    from `/v2/snapshot-workflow/current-rankings` (reads the snapshot), users saw stale
+    values and concluded "changes didn't save".
+  - Root cause 2: The snapshot-UUID fallback in the master PUT searched `employees_v2` by
+    name without filtering by the snapshot's quarter/year, matching a same-named
+    employee in a different quarter and syncing to the wrong snapshot.
+  - Fix: Sync ALL editable metric fields (ppa, lbw, liquor/beer/wine, glassware, guests,
+    scores, tiers, CV/RT fields) to the snapshot employee element, and filter the
+    name-fallback lookup by the originating snapshot's quarter/year.
+  - File: `/app/backend/server.py` `update_employee` (~lines 2346-2575).
+
+- **LBW Not Summing All Three Items on Data Upload (FIXED 2026-02)**:
+  - Root cause: `process_pdf_job` and `process_xlsx_job` in `/app/backend/routes/upload_jobs.py`
+    (used by `/api/v2/upload-jobs/direct`, the endpoint DataUploads.js hits for PDF/XLSX
+    parse+preview) did NOT include `lbw_total` in the response. The preview table
+    (`emp.lbw_total`) showed blank/undefined.
+  - Fix: Compute `lbw_total = liquor + beer + wine` and flatten `_raw` fields up to
+    top level in the job result. XLSX now also adds `safe_float` helper.
+
 
 ### Latest Changes
 - **Complete Rankings Slide Fix (2026-04-14)**:

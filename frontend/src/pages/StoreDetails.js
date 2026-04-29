@@ -4,14 +4,16 @@ import { Building2, MapPin, Users, BarChart3, Trophy, ArrowLeft, Settings, Trend
 import { Button } from "../components/ui/button";
 import { toast } from "sonner";
 import api from "../lib/api";
+import { getCurrentQuarter } from "../lib/quarterUtils";
 
 export default function StoreDetails() {
   const { storeId } = useParams();
   const [store, setStore] = useState(null);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [selectedYear, setSelectedYear] = useState(2026);
-  const [selectedQuarter, setSelectedQuarter] = useState("Q1");
+  const currentQ = getCurrentQuarter();
+  const [selectedYear, setSelectedYear] = useState(currentQ.year);
+  const [selectedQuarter, setSelectedQuarter] = useState(currentQ.quarter);
 
   useEffect(() => {
     fetchStoreDetails();

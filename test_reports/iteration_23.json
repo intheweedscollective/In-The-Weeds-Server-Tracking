@@ -1,0 +1,66 @@
+{
+  "summary": "Iteration 23 verifies the P0 'Save Snapshot reverts manual edits + resurrects deleted duplicates' fix. 16/16 backend tests PASS (8 new in test_save_snapshot_p0_fix.py + 8 existing iteration 22 regressions). Smoke test test_save_snapshot_bug.py also PASSES end-to-end against the live preview backend. Ghost is no longer resurrected in snapshot.employees OR pos_upload.parsed_data.employees after delete + sync-from-employees + reprocess. nps_manual_override=true is correctly written to both employees_v2 and snapshot.employees and survives CV redistribution during reprocess. Raw L/B/W edits persist through sync + reprocess, lbw_total recomputes correctly. Iteration 22 features (orphan PUT recovery, targeted DELETE, dedupe-current-snapshot, QR TripAdvisor, CV adjustment XLSX upload) still work. /v2/snapshot-workflow/current-rankings returns 200 with employees array.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "PUT /api/v2/employees/{id}",
+        "issue": "When the body contains 'guests' (without 'guest_count'), only 'guests' is updated in employees_v2. 'guest_count' stays at its old value. After /reprocess, downstream pipeline writes guest_count back into snapshot.employees.guests, effectively reverting the user's edit. Fix: in server.py update_employee, mirror 'guests' <-> 'guest_count' when either is supplied so they stay in lockstep before sync-from-employees fires. NOTE: this is OUTSIDE the current P0 fix scope (which targets L/B/W + NPS); reported for completeness because the review request listed 'guests' as a raw POS field that must persist."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "DELETE /api/v2/employees/{ghost_id} -> 200, ghost removed from employees_v2 and snapshot.employees (id-targeted, preserves same-name duplicate)",
+    "POST /api/v2/snapshot-workflow/snapshots/{id}/sync-from-employees rebuilds pos_upload.parsed_data.employees from employees_v2 (no ghost row)",
+    "POST .../reprocess does NOT resurrect ghost in snapshot.employees or in pos_upload.parsed_data.employees",
+    "PUT /api/v2/employees/{id} with nps_score sets nps_manual_override=true on both employees_v2 AND snapshot.employees row",
+    "After sync-from-employees + reprocess, manual NPS=92.5 + nps_manual_override=true persists (CV redistribution skipped for flagged rows)",
+    "PUT /api/v2/employees/{id} with liquor_sales/beer_sales/wine_sales persists through sync + reprocess; lbw=L+B+W recomputed",
+    "POST /api/v2/snapshot-workflow/dedupe-current-snapshot fuzzy-merges nickname pairs (Abigail/Abby)",
+    "Orphan PUT recovery: PUT /v2/employees/{snap-only-id} clones the snapshot row into employees_v2 with new display_name",
+    "Targeted DELETE preserves a same-name duplicate row by id",
+    "GET /api/qr/stats includes tripadvisor_scans field",
+    "GET /api/qr/settings includes tripadvisor_url field",
+    "POST /api/qr/employees + GET /api/qr/ta/{id} increments tripadvisor_clicks",
+    "POST /api/v2/cv/adjustment/upload?quarter=Q2&year=2026 with feedback_file XLSX -> 200 with session_id/feedback_items",
+    "GET /api/v2/snapshot-workflow/current-rankings -> 200 returns active snapshot data",
+    "Smoke test (tests/test_save_snapshot_bug.py) end-to-end PASS against preview backend"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_save_snapshot_p0_fix.py",
+    "/app/backend/tests/test_save_snapshot_bug.py",
+    "/app/backend/tests/test_iteration_22_features.py",
+    "/app/test_reports/pytest/p0_fix_results.xml",
+    "/app/test_reports/pytest/iteration_22_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: Mirror 'guests' <-> 'guest_count' in server.py update_employee (~line 2440) so editing one keeps the other in sync. Currently only 'guests' is written when the caller sends 'guests' in the JSON body, then reprocess restores guest_count's stale value into snapshot.employees.guests. Workaround: UI can send both fields together. Not required for the P0 fix to be considered complete (L/B/W + NPS all work).",
+    "CARRY-OVER (from iteration 22): Persist dismissal of the 'Welcome to Performance Review' onboarding modal via localStorage; currently appears on every page load and overlays /cv-adjustment Period selector."
+  ],
+  "critical_code_review_comments": [
+    "snapshot_routes.sync_pos_from_employees_v2 correctly rebuilds pos_upload.parsed_data.employees ENTIRELY from employees_v2 instead of merging stale POS rows -- ghost-resurrection root cause is fixed at the source",
+    "snapshot.employees pruning ('snapshot_employees_pruned' counter in sync response) confirms orphan rows whose ids no longer exist in employees_v2 are dropped from the embedded array",
+    "server.update_employee correctly injects nps_manual_override=true when ANY of {nps_score, cv_promoters, cv_passives, cv_detractors} is in the update payload, propagated to BOTH employees_v2 AND snapshot.employees via SNAP_SYNCABLE",
+    "merge_snapshot_data honors nps_manual_override on a per-row basis -- store-level CV redistribution skipped only for flagged rows, others still get redistributed normally",
+    "MINOR: server.update_employee does not mirror guests <-> guest_count, leaving them out of sync after a guests-only PUT (see action items)",
+    "Iteration 22 functionality (orphan recovery, targeted delete, fuzzy dedup, QR TripAdvisor, CV upload) remains fully intact -- no regressions"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_save_snapshot_p0_fix.py (new file -- 8 pytest cases covering the P0 fix and listed regressions)"
+  ],
+  "success_rate": {
+    "backend": "100% (16/16: 8 new P0 + 8 iteration 22 regressions)",
+    "frontend": "N/A - backend only per review request"
+  },
+  "test_credentials": "N/A - all endpoints are open (no auth)",
+  "seed_data_creation": "Each test seeds uniquely-suffixed test rows (P0Surv_*, P0Ghost_*, P0NPS_*, P0POS_*, P0Dup_*, P0Orph_*) into employees_v2 + snapshot.employees + pos_upload.parsed_data.employees. All cleaned up in finally blocks; verified no residue in the active Q1 2026 snapshot (e20ede2c-...).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Active is_current=True snapshots: e20ede2c-...(Q1 2026, 34 emps) and 5131256b-...(Q2 2026, 2 emps). Tests select Q1 by default via the find_one ordering. The fix scope (sync-from-employees rebuild + nps_manual_override flag) is verified PASSING end-to-end. One tangential bug discovered around 'guests' field not mirroring 'guest_count' on PUT; flagged in action items. Use /app/backend/tests/test_save_snapshot_p0_fix.py as the iteration 23 regression baseline going forward.",
+  "rca of the issue": "ROOT CAUSE OF ORIGINAL P0 (now fixed): (1) sync_pos_from_employees_v2 used to merge employees_v2 INTO existing pos_upload.parsed_data.employees, so deleted rows lingered in the POS list and were re-merged into snapshot.employees on the next /process. The fix replaces parsed_data.employees outright from employees_v2, plus prunes snapshot.employees for ids missing from employees_v2. (2) Manual NPS edits were clobbered because reprocess ran CV redistribution against ALL rows including ones the user had just hand-edited. The fix writes nps_manual_override=true on the row in employees_v2 + snapshot.employees, and merge_snapshot_data now skips redistribution for flagged rows. Both root causes are addressed and verified."
+}

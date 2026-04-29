@@ -455,7 +455,7 @@ async def upload_cv_server_performance(
                 col_mapping[col] = 'passives'
             elif 'detractor' in col_lower:
                 col_mapping[col] = 'detractors'
-            elif col_lower in ('rating', 'nps_rating', 'nps_score', 'score'):
+            elif col_lower in ('rating', 'nps_rating', 'nps_score', 'score', 'avg_rating', 'average_rating'):
                 col_mapping[col] = 'rating'
             elif 'total' in col_lower and 'response' in col_lower:
                 col_mapping[col] = 'total_responses'
@@ -465,6 +465,8 @@ async def upload_cv_server_performance(
                 col_mapping[col] = 'surveys_received'
             elif col_lower in ('avg_rating', 'average_rating', 'avg'):
                 col_mapping[col] = 'avg_rating'
+            elif col_lower == 'nps':
+                col_mapping[col] = 'nps_precalc'
         
         df = df.rename(columns=col_mapping)
         
@@ -658,49 +660,83 @@ async def upload_cv_adjustment_file(
     Creates an adjustment session for manual review.
     """
     db = get_db()
-    
+
+    if not feedback_file.filename.lower().endswith(('.xlsx', '.xls', '.csv')):
+        raise HTTPException(
+            status_code=400,
+            detail="Feedback file must be Excel (.xlsx, .xls) or CSV (.csv)"
+        )
+    if transaction_file is not None and not transaction_file.filename.lower().endswith(('.xlsx', '.xls', '.csv')):
+        raise HTTPException(
+            status_code=400,
+            detail="Transaction file must be Excel (.xlsx, .xls) or CSV (.csv)"
+        )
+
     try:
         import pandas as pd
-        
+        from cv_adjustment import (
+            parse_feedback_report,
+            parse_transaction_report,
+            match_feedback_to_transactions,
+            calculate_nps,
+        )
+
         contents = await feedback_file.read()
-        
         if feedback_file.filename.endswith('.csv'):
             df = pd.read_csv(io.BytesIO(contents))
         else:
             df = pd.read_excel(io.BytesIO(contents))
-        
-        # Normalize columns
-        df.columns = [str(c).strip().lower().replace(' ', '_') for c in df.columns]
-        
-        # Create session
+
+        # Use the dedicated parser that already knows the real column
+        # structure (Comment lives in 'Check Category' on production
+        # exports, NaN values must become empty strings, etc.).
+        feedback_items = parse_feedback_report(df)
+
+        # Optional transaction file — adds check_total / shift / store
+        if transaction_file is not None:
+            t_contents = await transaction_file.read()
+            if transaction_file.filename.endswith('.csv'):
+                t_df = pd.read_csv(io.BytesIO(t_contents))
+            else:
+                t_df = pd.read_excel(io.BytesIO(t_contents))
+            transactions = parse_transaction_report(t_df)
+            feedback_items = match_feedback_to_transactions(feedback_items, transactions)
+
         session_id = str(uuid.uuid4())
-        
+
+        # Adapt to the legacy item shape the frontend already understands
+        # (id, rating, nps_category, comment, server_name, etc.) and add
+        # auto-detection flags that the older upload path also computed.
         items = []
-        for idx, row in df.iterrows():
-            item = {
-                "id": str(uuid.uuid4()),
-                "index": idx,
-                "rating": int(row.get('rating', row.get('nps_rating', 0)) or 0),
-                "comment": str(row.get('comment', row.get('feedback', row.get('comments', ''))) or ''),
-                "server_name": str(row.get('server_name', row.get('server', row.get('employee', ''))) or ''),
-                "submitted_at": str(row.get('date', row.get('submitted_at', '')) or ''),
-                "status": "pending",  # pending, approved, excluded
-                "auto_detected": False,
-                "detection_reasons": []
-            }
-            
-            # Auto-detect non-server issues
-            try:
-                from cv_adjustment import detect_non_server_issues
-                is_non_server, reasons, category = detect_non_server_issues(item["comment"])
-                if is_non_server:
-                    item["auto_detected"] = True
-                    item["detection_reasons"] = reasons
-                    item["detection_category"] = category
-            except ImportError:
-                pass
-            
-            items.append(item)
+        for fi in feedback_items:
+            items.append({
+                "id": fi.get("id") or str(uuid.uuid4()),
+                "index": len(items),
+                "rating": fi.get("rating", 0),
+                "nps_category": fi.get("nps_category"),
+                "comment": fi.get("comment", ""),
+                "server_name": fi.get("server_name") or "",
+                "submitted_at": fi.get("response_date") or fi.get("date_of_business") or "",
+                "customer_name": fi.get("customer_name", ""),
+                "check_number": fi.get("check_number", ""),
+                "shift": fi.get("shift", ""),
+                "revenue_center": fi.get("revenue_center", ""),
+                "store_name": fi.get("store_name", ""),
+                "status": "pending",
+                "auto_detected": bool(fi.get("auto_flagged_non_server", False)),
+                "detection_reasons": fi.get("auto_flag_reasons", []),
+                "detection_category": fi.get("issue_category", "unknown"),
+                "excluded": False,
+            })
+
+        # Pre-compute NPS aggregates so the response carries the right
+        # baseline values (frontend uses `original_nps` if present).
+        nps_calc = calculate_nps(items, exclude_flagged=False)
+        promoters_total = nps_calc["promoters"]
+        passives_total = nps_calc["passives"]
+        detractors_total = nps_calc["detractors"]
+        rated_total = nps_calc["total_responses"]
+        original_nps = nps_calc["nps_score"]
         
         session = {
             "id": session_id,
@@ -710,12 +746,17 @@ async def upload_cv_adjustment_file(
             "created_at": datetime.now(timezone.utc).isoformat(),
             "status": "pending",
             "items": items,
+            "original_nps": original_nps,
             "summary": {
                 "total": len(items),
                 "pending": len(items),
                 "approved": 0,
                 "excluded": 0,
-                "auto_detected": len([i for i in items if i.get("auto_detected")])
+                "auto_detected": len([i for i in items if i.get("auto_detected")]),
+                "promoter_count": promoters_total,
+                "passive_count": passives_total,
+                "detractor_count": detractors_total,
+                "rated_total": rated_total,
             }
         }
         
@@ -725,9 +766,14 @@ async def upload_cv_adjustment_file(
         return {
             "success": True,
             "session_id": session_id,
+            "original_nps": original_nps,
+            "adjusted_nps": original_nps,
             "summary": {
                 "total_feedback": len(items),
                 "auto_detected": session["summary"]["auto_detected"],
+                "promoter_count": promoters_total,
+                "passive_count": passives_total,
+                "detractor_count": detractors_total,
             },
             "feedback_items": items,
             "total_items": len(items),

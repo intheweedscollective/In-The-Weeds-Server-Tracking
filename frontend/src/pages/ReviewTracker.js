@@ -3,6 +3,7 @@ import { Star, Filter, MessageSquare, Award, AlertCircle, Ban, Undo2, Upload, Us
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { toast } from "sonner";
+import { getCurrentQuarter } from "../lib/quarterUtils";
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -11,8 +12,9 @@ export default function ReviewTracker() {
   const [cvStats, setCvStats] = useState(null);
   const [rtStats, setRtStats] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [selectedQuarter, setSelectedQuarter] = useState("Q1");
-  const [selectedYear, setSelectedYear] = useState(2026);
+  const currentQ = getCurrentQuarter();
+  const [selectedQuarter, setSelectedQuarter] = useState(currentQ.quarter);
+  const [selectedYear, setSelectedYear] = useState(currentQ.year);
   const [filterEmployee, setFilterEmployee] = useState("");
   const [activeTab, setActiveTab] = useState("rt"); // "rt", "cv", or "cv-edit"
   const [showExcluded, setShowExcluded] = useState(false);

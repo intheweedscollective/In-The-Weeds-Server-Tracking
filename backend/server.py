@@ -1741,6 +1741,10 @@ async def get_employees_v2(year: Optional[int] = None, quarter: Optional[str] = 
         if isinstance(emp.get('created_at'), str):
             emp['created_at'] = datetime.fromisoformat(emp['created_at'])
         
+        # Always return display_name as name if set (preferred name takes priority)
+        if emp.get('display_name') and emp.get('display_name') != emp.get('name'):
+            emp['name'] = emp['display_name']
+        
         # Calculate performance tier if missing
         if not emp.get('performance_tier'):
             rank = i + 1
@@ -1767,6 +1771,10 @@ async def get_employee_v2(employee_id: str):
     
     if isinstance(employee.get('created_at'), str):
         employee['created_at'] = datetime.fromisoformat(employee['created_at'])
+    
+    # Always return display_name as name if set
+    if employee.get('display_name') and employee.get('display_name') != employee.get('name'):
+        employee['name'] = employee['display_name']
     
     return employee
 
@@ -2095,6 +2103,152 @@ async def get_full_hierarchy_rankings(year: int, quarter: str, tier_filter: Opti
     }
 
 
+@api_router.get("/v2/full-rankings/{year}/{quarter}/snapshot-png")
+async def download_full_rankings_snapshot_png(year: int, quarter: str):
+    """
+    Download the detailed Server Performance Snapshot as a 1920×1080 PNG —
+    same layout as the snapshot-pdf endpoint but rendered as an image so
+    it can be displayed on Yodeck digital signage (which doesn't render
+    PDFs natively).
+    """
+    from png_full_rankings import build_full_rankings_png
+
+    employees_v2 = await db.employees_v2.find(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    ).to_list(500)
+
+    if not employees_v2:
+        raise HTTPException(status_code=404, detail=f"No employees found for {quarter} {year}")
+
+    settings_doc = await db.quarter_settings.find_one(
+        {"year": year, "quarter": quarter.upper()}, {"_id": 0}
+    ) or {}
+    settings = QuarterSettings(
+        year=year, quarter=quarter.upper(),
+        benchmark_ppa=settings_doc.get("benchmark_ppa", 55.0),
+        benchmark_lbw=settings_doc.get("benchmark_lbw", 8.0),
+        benchmark_glass=settings_doc.get("benchmark_glass", 1.0),
+        benchmark_lsc=settings_doc.get("benchmark_lsc", 100.0),
+        benchmark_cv=settings_doc.get("benchmark_cv", 5.0),
+        weight_ppa=settings_doc.get("weight_ppa", 0.25),
+        weight_lbw=settings_doc.get("weight_lbw", 0.20),
+        weight_glass=settings_doc.get("weight_glass", 0.15),
+        weight_lsc=settings_doc.get("weight_lsc", 0.25),
+        weight_cv=settings_doc.get("weight_cv", 0.15),
+        bonus_rate=settings_doc.get("bonus_rate", 0.2),
+        bonus_cap=settings_doc.get("bonus_cap", 5.0),
+        a_server_min_score=settings_doc.get("a_server_min_score", 85.0),
+        b_server_min_score=settings_doc.get("b_server_min_score", 70.0),
+    )
+
+    employees: List[EmployeeV2] = []
+    for emp_data in employees_v2:
+        # Normalize alt field names (model only has review_mentions/
+        # glassware_sales; parser writes rt_mentions/bar_glassware_sales).
+        if not emp_data.get("review_mentions") and emp_data.get("rt_mentions"):
+            emp_data["review_mentions"] = emp_data["rt_mentions"]
+        if not emp_data.get("glassware_sales") and emp_data.get("bar_glassware_sales"):
+            emp_data["glassware_sales"] = emp_data["bar_glassware_sales"]
+        try:
+            employees.append(EmployeeV2(**emp_data))
+        except Exception:
+            continue
+
+    rankings = generate_hierarchy_rankings(employees, settings)
+
+    png_bytes = build_full_rankings_png(
+        rankings=rankings,
+        quarter=quarter.upper(),
+        year=year,
+        thresholds={
+            "a_min": settings.a_server_min_score,
+            "b_min": settings.b_server_min_score,
+        },
+    )
+
+    filename = f"Server_Performance_Snapshot_{quarter.upper()}_{year}.png"
+    return Response(
+        content=png_bytes,
+        media_type="image/png",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+@api_router.get("/v2/full-rankings/{year}/{quarter}/snapshot-pdf")
+async def download_full_rankings_snapshot_pdf(year: int, quarter: str):
+    """
+    Download the detailed Server Performance Snapshot PDF — wide-format
+    document with the Bubba Gump sidebar, color-coded legend, and the
+    full Rank/Name/Trend/PPA/LBW/GLASS/LSC/CV/RT/Bonus/Score table.
+
+    This is the printable PDF managers post for staff. The PNG-only
+    `/pdf` endpoint above produces the tier-card slide instead.
+    """
+    employees_v2 = await db.employees_v2.find(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0}
+    ).to_list(500)
+
+    if not employees_v2:
+        raise HTTPException(status_code=404, detail=f"No employees found for {quarter} {year}")
+
+    settings_doc = await db.quarter_settings.find_one(
+        {"year": year, "quarter": quarter.upper()}, {"_id": 0}
+    ) or {}
+
+    settings = QuarterSettings(
+        year=year,
+        quarter=quarter.upper(),
+        benchmark_ppa=settings_doc.get("benchmark_ppa", 55.0),
+        benchmark_lbw=settings_doc.get("benchmark_lbw", 8.0),
+        benchmark_glass=settings_doc.get("benchmark_glass", 1.0),
+        benchmark_lsc=settings_doc.get("benchmark_lsc", 100.0),
+        benchmark_cv=settings_doc.get("benchmark_cv", 5.0),
+        weight_ppa=settings_doc.get("weight_ppa", 0.25),
+        weight_lbw=settings_doc.get("weight_lbw", 0.20),
+        weight_glass=settings_doc.get("weight_glass", 0.15),
+        weight_lsc=settings_doc.get("weight_lsc", 0.25),
+        weight_cv=settings_doc.get("weight_cv", 0.15),
+        bonus_rate=settings_doc.get("bonus_rate", 0.2),
+        bonus_cap=settings_doc.get("bonus_cap", 5.0),
+        a_server_min_score=settings_doc.get("a_server_min_score", 85.0),
+        b_server_min_score=settings_doc.get("b_server_min_score", 70.0),
+    )
+
+    employees: List[EmployeeV2] = []
+    for emp_data in employees_v2:
+        # Normalize alt field names (model only has review_mentions/
+        # glassware_sales; parser writes rt_mentions/bar_glassware_sales).
+        if not emp_data.get("review_mentions") and emp_data.get("rt_mentions"):
+            emp_data["review_mentions"] = emp_data["rt_mentions"]
+        if not emp_data.get("glassware_sales") and emp_data.get("bar_glassware_sales"):
+            emp_data["glassware_sales"] = emp_data["bar_glassware_sales"]
+        try:
+            employees.append(EmployeeV2(**emp_data))
+        except Exception:
+            continue
+
+    rankings = generate_hierarchy_rankings(employees, settings)
+
+    pdf_bytes = build_full_rankings_pdf(
+        rankings=rankings,
+        quarter=quarter.upper(),
+        year=year,
+        thresholds={
+            "a_min": settings.a_server_min_score,
+            "b_min": settings.b_server_min_score,
+        },
+    )
+
+    filename = f"Server_Performance_Snapshot_{quarter.upper()}_{year}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
 @api_router.get("/v2/full-rankings/{year}/{quarter}/pdf")
 async def download_full_rankings_pdf(year: int, quarter: str):
     """
@@ -2336,115 +2490,385 @@ async def create_employee(data: EmployeeCreate):
 
 
 @api_router.put("/v2/employees/{employee_id}")
-async def update_employee(employee_id: str, data: EmployeeUpdate):
+async def update_employee(employee_id: str, data: dict):
     """
-    Update an existing employee and recalculate their scores.
+    Update an existing employee. Accepts any fields and persists them directly.
+    Recalculates scores if POS data fields are provided.
     """
-    from scoring_engine import (
-        EmployeeV2, QuarterSettings
-    )
-    
-    # Get existing employee
-    emp_doc = await db.employees_v2.find_one({"id": employee_id}, {"_id": 0})
+    # Get existing employee - try by ID, then snapshot fallback searching name/report_name/display_name.
+    # Final fallback: if a snapshot embedded record exists but no v2 record matches it
+    # (orphan snapshot row from a previous partial save), CREATE a v2 record from the snap data
+    # so the user's edit always succeeds — instead of 404'ing.
+    import re as re_mod
+    emp_doc = await db.employees_v2.find_one({"id": employee_id})
+    snapshot_ctx = None  # Remember matched snapshot for precise sync later
+    snap_emp_clone = None  # Used when we need to create a v2 record from snapshot data
     if not emp_doc:
-        raise HTTPException(status_code=404, detail="Employee not found")
-    
-    # Get quarter settings
-    settings_doc = await db.quarter_settings.find_one(
-        {"year": emp_doc['year'], "quarter": emp_doc['quarter']},
-        {"_id": 0}
-    )
-    if not settings_doc:
-        raise HTTPException(status_code=400, detail="No settings found for this quarter")
-    
-    settings = QuarterSettings(**settings_doc)
-    
-    # Update fields that were provided
-    update_data = data.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        emp_doc[key] = value
-    
-    # Convert to EmployeeV2 and recalculate
-    if isinstance(emp_doc.get('created_at'), str):
-        emp_doc['created_at'] = datetime.fromisoformat(emp_doc['created_at'])
-    
-    employee = EmployeeV2(**emp_doc)
-    
-    # Re-run scoring pipeline
-    employee = calculate_derived_metrics(employee)
-    employee = calculate_customer_voice_score(employee)
-    employee = calculate_review_tracker_bonus(employee)
-    employee = calculate_normalized_scores(employee, settings)
-    employee = calculate_bonus_points(employee, settings)
-    employee = calculate_total_score(employee, settings)
-    
-    # Reassign tier
-    score = employee.pre_dar_score or 0
-    job = employee.job_title.lower()
-    if job in ['trainer', 'bartender']:
-        tier_label = job.title()
-    elif score >= settings.a_server_min_score:
-        tier_label = "A-Server"
-    elif score >= settings.b_server_min_score:
-        tier_label = "B-Server"
-    else:
-        tier_label = "C-Server"
-    
-    # Update in database
-    emp_dict = employee.model_dump()
-    emp_dict['tier_label'] = tier_label
-    emp_dict['created_at'] = emp_dict['created_at'].isoformat() if isinstance(emp_dict['created_at'], datetime) else emp_dict['created_at']
-    await db.employees_v2.update_one(
-        {"id": employee_id},
-        {"$set": emp_dict}
-    )
-    
-    # ALSO update the snapshot's embedded employee data
-    # This ensures the snapshot stays in sync with employee changes
-    await db.snapshots.update_many(
-        {
-            "year": emp_doc['year'],
-            "quarter": emp_doc['quarter'],
-            "employees.id": employee_id
-        },
-        {
-            "$set": {
-                "employees.$.name": emp_dict.get('name', ''),
-                "employees.$.job_title": emp_dict['job_title'],
-                "employees.$.tier_label": tier_label,
-                "employees.$.total_score": emp_dict.get('total_score', 0),
-                "employees.$.pre_dar_score": emp_dict.get('pre_dar_score', 0),
-                "employees.$.weighted_score": emp_dict.get('weighted_score', 0),
-                "employees.$.cv_score": emp_dict.get('cv_score', 0),
-                "employees.$.cv_promoters": emp_dict.get('cv_promoters', 0),
-                "employees.$.cv_detractors": emp_dict.get('cv_detractors', 0),
-                "employees.$.review_tracker_bonus": emp_dict.get('review_tracker_bonus', 0),
-                "employees.$.review_mentions": emp_dict.get('review_mentions', 0),
-                "employees.$.total_metric_bonus": emp_dict.get('total_metric_bonus', 0),
-                "employees.$.nps_score": emp_dict.get('nps_score', 0)
-            }
-        }
-    )
-    
-    # Sync all employees to snapshot to ensure proper sorting
-    await sync_employees_to_most_recent_snapshot(emp_doc['quarter'], emp_doc['year'])
-    
-    logging.info(f"Updated employee {employee.name} in both employees_v2 and snapshots")
-    
-    # Recalculate peer rankings
-    all_employees = await db.employees_v2.find(
-        {"year": emp_doc['year'], "quarter": emp_doc['quarter']},
-        {"_id": 0}
-    ).to_list(1000)
-    
-    sorted_emps = sorted(all_employees, key=lambda x: x.get('pre_dar_score', 0) or 0, reverse=True)
-    for rank, emp in enumerate(sorted_emps, 1):
-        await db.employees_v2.update_one(
-            {"id": emp['id']},
-            {"$set": {"peer_rank": rank}}
+        snapshot_ctx = await db.snapshot_workflow.find_one(
+            {"employees.id": employee_id},
+            {"employees.$": 1, "quarter": 1, "year": 1, "id": 1}
         )
+        if snapshot_ctx and snapshot_ctx.get("employees"):
+            snap_emp = snapshot_ctx["employees"][0]
+            snap_name = snap_emp.get("name", "")
+            snap_report = snap_emp.get("report_name", "") or snap_name
+            snap_display = snap_emp.get("display_name", "") or snap_name
+            snap_aliases = snap_emp.get("aliases") or []
+            snap_quarter = (snapshot_ctx.get("quarter") or "").upper()
+            snap_year = snapshot_ctx.get("year")
+
+            # Build candidate name set: includes any aliases stored on the snap row
+            candidates = {n for n in [snap_name, snap_report, snap_display] if n}
+            for a in snap_aliases:
+                if isinstance(a, str) and a.strip():
+                    candidates.add(a.strip())
+
+            if candidates:
+                name_query = {
+                    "$or": (
+                        [{"name": {"$regex": f"^{re_mod.escape(n)}$", "$options": "i"}} for n in candidates] +
+                        [{"report_name": {"$regex": f"^{re_mod.escape(n)}$", "$options": "i"}} for n in candidates] +
+                        [{"display_name": {"$regex": f"^{re_mod.escape(n)}$", "$options": "i"}} for n in candidates] +
+                        [{"aliases": {"$elemMatch": {"$regex": f"^{re_mod.escape(n)}$", "$options": "i"}}} for n in candidates]
+                    )
+                }
+                if snap_quarter and snap_year:
+                    name_query["quarter"] = snap_quarter
+                    name_query["year"] = snap_year
+                emp_doc = await db.employees_v2.find_one(name_query)
+
+                # Cross-quarter fallback (very rare)
+                if not emp_doc and snap_quarter:
+                    fallback_query = dict(name_query)
+                    fallback_query.pop("quarter", None)
+                    fallback_query.pop("year", None)
+                    emp_doc = await db.employees_v2.find_one(fallback_query)
+
+            # ORPHAN ROW RECOVERY: snapshot has the employee but no v2 link
+            # exists — happens when someone renames an employee in a way that
+            # makes the snapshot and v2 names diverge with no overlap. Create
+            # a v2 record on-the-fly from the snapshot data so the edit
+            # succeeds. The snapshot sync below will keep everything aligned.
+            #
+            # IMPORTANT: also copy the original snapshot names into `aliases`
+            # so future name-based lookups (e.g. another PUT, sync-from-employees
+            # dedup, POS-upload merge) can find this record without creating
+            # ANOTHER duplicate. Without this, every rename pass produced a
+            # ghost row that re-appeared on the next Save Snapshot.
+            if not emp_doc:
+                snap_emp_clone = {k: v for k, v in snap_emp.items() if k != "_id"}
+                snap_emp_clone["id"] = employee_id
+                snap_emp_clone["quarter"] = snap_quarter or "Q2"
+                snap_emp_clone["year"] = snap_year or 2026
+                # Preserve the snapshot's old names as aliases so the user's
+                # rename doesn't sever the link to the original employee.
+                existing_aliases = list(snap_emp_clone.get("aliases") or [])
+                for alias_name in (snap_name, snap_report, snap_display):
+                    if alias_name and alias_name not in existing_aliases:
+                        existing_aliases.append(alias_name)
+                snap_emp_clone["aliases"] = existing_aliases
+                snap_emp_clone["created_at"] = datetime.now(timezone.utc).isoformat()
+                snap_emp_clone["updated_at"] = snap_emp_clone["created_at"]
+                await db.employees_v2.insert_one(snap_emp_clone)
+                emp_doc = snap_emp_clone
+
+        if not emp_doc:
+            raise HTTPException(status_code=404, detail="Employee not found")
     
-    return {"success": True, "message": f"Updated {employee.name} - new score: {employee.total_score}"}
+    actual_id = emp_doc.get("id", employee_id)
+    mongo_id = emp_doc.get("_id")
+    
+    # Build update - only include fields that were actually sent
+    update_fields = {}
+    for key, value in data.items():
+        if key in ('_id', 'id'):
+            continue
+        if value is not None:
+            update_fields[key] = value
+    
+    # If display_name is being set, always persist it
+    if 'display_name' in update_fields:
+        # Also preserve report_name for POS matching
+        if 'report_name' not in update_fields:
+            update_fields['report_name'] = emp_doc.get('report_name') or emp_doc.get('name', '')
+    
+    # If name is being set and no display_name provided, treat name as display_name
+    if 'name' in update_fields and 'display_name' not in update_fields:
+        update_fields['display_name'] = update_fields['name']
+        if 'report_name' not in update_fields:
+            update_fields['report_name'] = emp_doc.get('report_name') or emp_doc.get('name', '')
+    
+    update_fields['updated_at'] = datetime.now(timezone.utc).isoformat()
+
+    # Mirror guests <-> guest_count so a PUT that supplies only one keeps both
+    # in lockstep. Otherwise reprocess writes the stale field back over the
+    # user's edit during snapshot rebuild.
+    if 'guests' in update_fields and 'guest_count' not in update_fields:
+        update_fields['guest_count'] = update_fields['guests']
+    elif 'guest_count' in update_fields and 'guests' not in update_fields:
+        update_fields['guests'] = update_fields['guest_count']
+
+    # If the caller is editing NPS or CV stats directly, mark the row as a
+    # manual override so subsequent /process passes won't redistribute
+    # store-level CV data over the user's value. Cleared automatically when
+    # a fresh CV upload is processed (handled in merge_snapshot_data).
+    # Skip the flag if the value is unchanged from emp_doc (idempotent PUT).
+    nps_override_fields = {"nps_score", "cv_promoters", "cv_passives", "cv_detractors"}
+    nps_changed = any(
+        k in update_fields and update_fields[k] != emp_doc.get(k)
+        for k in nps_override_fields
+    )
+    if nps_changed:
+        update_fields["nps_manual_override"] = True
+    
+    # Recalculate derived metrics and scores if POS data fields changed
+    pos_fields = {'guests', 'guest_count', 'net_sales', 'liquor_sales', 'beer_sales', 
+                  'wine_sales', 'lbw', 'glassware_sales', 'bar_glassware_sales', 
+                  'loyalty_sales', 'lsc_count'}
+    if pos_fields.intersection(update_fields.keys()):
+        # Merge updates into emp_doc for recalculation
+        merged = {**{k: v for k, v in emp_doc.items() if k != '_id'}, **update_fields}
+        
+        guests = merged.get('guests', 0) or merged.get('guest_count', 0) or 0
+        net_sales = merged.get('net_sales', 0) or 0
+        liquor = merged.get('liquor_sales', 0) or 0
+        beer = merged.get('beer_sales', 0) or 0
+        wine = merged.get('wine_sales', 0) or 0
+        lbw = liquor + beer + wine if (liquor + beer + wine) > 0 else (merged.get('lbw', 0) or 0)
+        glassware = merged.get('glassware_sales', 0) or merged.get('bar_glassware_sales', 0) or 0
+        loyalty = merged.get('loyalty_sales', 0) or 0
+        # Respect user-set lsc_count of 0 - don't override from loyalty_sales
+        lsc_count = merged.get('lsc_count')
+        if lsc_count is None:
+            lsc_count = int(loyalty / 25) if loyalty > 0 else 0
+        
+        if guests > 0:
+            update_fields['ppa'] = round(net_sales / guests, 2)
+            update_fields['lbw_per_guest'] = round(lbw / guests, 2) if lbw > 0 else 0
+            update_fields['glassware_per_guest'] = round(glassware / guests, 2) if glassware > 0 else 0
+            update_fields['guests_per_lsc'] = round(guests / lsc_count, 2) if lsc_count > 0 else 0
+        
+        update_fields['lbw'] = lbw
+        update_fields['lbw_total'] = lbw
+        
+        # Get benchmarks for scoring
+        settings_doc = await db.quarter_settings.find_one(
+            {"year": emp_doc.get('year', 2026), "quarter": emp_doc.get('quarter', 'Q2')},
+            {"_id": 0}
+        )
+        if settings_doc:
+            bm_ppa = settings_doc.get('benchmark_ppa', 55) or 55
+            bm_lbw = settings_doc.get('benchmark_lbw', 8) or 8
+            bm_glass = settings_doc.get('benchmark_glass', 1.25) or 1.25
+            bm_lsc = settings_doc.get('benchmark_lsc', 100) or 100
+            
+            ppa_val = update_fields.get('ppa', merged.get('ppa', 0) or 0)
+            lbw_pg = update_fields.get('lbw_per_guest', merged.get('lbw_per_guest', 0) or 0)
+            glass_pg = update_fields.get('glassware_per_guest', merged.get('glassware_per_guest', 0) or 0)
+            gplsc = update_fields.get('guests_per_lsc', merged.get('guests_per_lsc', 0) or 0)
+            
+            if ppa_val > 0:
+                update_fields['score_ppa'] = round((ppa_val / bm_ppa) * 100, 2)
+            if lbw_pg > 0:
+                update_fields['score_lbw'] = round((lbw_pg / bm_lbw) * 100, 2)
+            if glass_pg > 0:
+                update_fields['score_glass'] = round((glass_pg / bm_glass) * 100, 2)
+            if gplsc > 0:
+                update_fields['score_lsc'] = round((bm_lsc / gplsc) * 100, 2)
+    
+    # Recalculate total score if any score fields changed
+    score_fields = {'score_ppa', 'score_lbw', 'score_glass', 'score_lsc', 'cv_score',
+                    'review_tracker_bonus', 'total_metric_bonus',
+                    # CV inputs — editing any of these must rebuild cv_score
+                    'nps_score', 'cv_promoters', 'cv_passives', 'cv_detractors'}
+    if score_fields.intersection(update_fields.keys()) or pos_fields.intersection(update_fields.keys()):
+        merged = {**{k: v for k, v in emp_doc.items() if k != '_id'}, **update_fields}
+        settings_doc = settings_doc if 'settings_doc' in dir() else await db.quarter_settings.find_one(
+            {"year": emp_doc.get('year', 2026), "quarter": emp_doc.get('quarter', 'Q2')}, {"_id": 0}
+        ) or {}
+
+        # ---- Recompute CV Score (NPS%/10 + promoters - 2*detractors) ----
+        # cv_score in the new spec is the COMBINED Customer Voice value.
+        # Recompute whenever the user edits NPS or promoter/detractor counts.
+        cv_inputs = {'nps_score', 'cv_promoters', 'cv_passives', 'cv_detractors'}
+        old_cv = emp_doc.get('cv_score') or 0
+        if cv_inputs.intersection(update_fields.keys()):
+            nps_val = merged.get('nps_score') or 0
+            nps_norm = max(0, min(100, nps_val))
+            promo = merged.get('cv_promoters') or 0
+            detr = merged.get('cv_detractors') or 0
+            cv_recalc = round(nps_norm * 0.10 + promo * 1 + detr * -2, 2)
+            update_fields['cv_score'] = cv_recalc
+            update_fields['nps_contribution'] = round(nps_norm * 0.10, 2)
+            update_fields['cv_raw_points'] = round(promo * 1 + detr * -2, 2)
+            merged['cv_score'] = cv_recalc
+
+        # If ONLY CV / RT / bonus changed (no POS data), apply delta math
+        # rather than rebuilding the weighted_score from scratch — the
+        # snapshot pipeline caps percentages differently and a full rebuild
+        # would produce a much larger number than the user expects.
+        non_cv_score_fields = pos_fields | {'score_ppa', 'score_lbw', 'score_glass', 'score_lsc'}
+        full_rebuild = bool(non_cv_score_fields.intersection(update_fields.keys()))
+
+        if not full_rebuild:
+            # Delta math: shift existing total_score by the difference in
+            # cv_score / RT bonus / metric bonus.
+            old_rt = emp_doc.get('review_tracker_bonus') or 0
+            old_bonus = emp_doc.get('total_metric_bonus') or 0
+            new_cv = merged.get('cv_score') or 0
+            new_rt = merged.get('review_tracker_bonus') or 0
+            new_bonus = merged.get('total_metric_bonus') or 0
+            delta = (new_cv - old_cv) + (new_rt - old_rt) + (new_bonus - old_bonus)
+            old_total = emp_doc.get('total_score') or 0
+            new_total = round(old_total + delta, 2)
+            update_fields['total_score'] = new_total
+            update_fields['pre_dar_score'] = new_total
+
+            # Tier label refresh based on new total
+            a_min = settings_doc.get('a_server_min_score', 85)
+            b_min = settings_doc.get('b_server_min_score', 70)
+            job = (update_fields.get('job_title') or merged.get('job_title', '') or '').lower()
+            if 'trainer' in job:
+                update_fields['tier_label'] = 'Trainer'
+            elif 'bartender' in job or 'bar' in job:
+                update_fields['tier_label'] = 'Bartender'
+            elif new_total >= a_min:
+                update_fields['tier_label'] = 'A-Server'
+            elif new_total >= b_min:
+                update_fields['tier_label'] = 'B-Server'
+            else:
+                update_fields['tier_label'] = 'C-Server'
+
+        # Legacy full-rebuild path — only when POS-data fields actually
+        # changed. Uses raw percentages × weights (snapshot pipeline caps
+        # them differently, but for POS edits we accept the divergence
+        # since we'd otherwise need to recreate the whole scoring engine).
+        if full_rebuild:
+            w_ppa = settings_doc.get('weight_ppa', 0.30)
+            w_lbw = settings_doc.get('weight_lbw', 0.25)
+            w_glass = settings_doc.get('weight_glass', 0.20)
+            w_lsc = settings_doc.get('weight_lsc', 0.25)
+
+            s_ppa = merged.get('score_ppa', 0) or 0
+            s_lbw = merged.get('score_lbw', 0) or 0
+            s_glass = merged.get('score_glass', 0) or 0
+            s_lsc = merged.get('score_lsc', 0) or 0
+            cv = merged.get('cv_score', 0) or 0
+            rt = merged.get('review_tracker_bonus', 0) or 0
+            bonus = merged.get('total_metric_bonus', 0) or 0
+
+            weighted = (s_ppa * w_ppa) + (s_lbw * w_lbw) + (s_glass * w_glass) + (s_lsc * w_lsc)
+            total = weighted + cv + rt + bonus
+            update_fields['weighted_score'] = round(weighted, 2)
+            update_fields['total_score'] = round(total, 2)
+            update_fields['pre_dar_score'] = round(total, 2)
+
+            # Tier assignment
+            a_min = settings_doc.get('a_server_min_score', 85)
+            b_min = settings_doc.get('b_server_min_score', 70)
+            job = (update_fields.get('job_title') or merged.get('job_title', '') or '').lower()
+            if 'trainer' in job:
+                update_fields['tier_label'] = 'Trainer'
+            elif 'bartender' in job or 'bar' in job:
+                update_fields['tier_label'] = 'Bartender'
+            elif total >= a_min:
+                update_fields['tier_label'] = 'A-Server'
+            elif total >= b_min:
+                update_fields['tier_label'] = 'B-Server'
+            else:
+                update_fields['tier_label'] = 'C-Server'
+    
+    # Save to employees_v2
+    await db.employees_v2.update_one(
+        {"_id": mongo_id},
+        {"$set": update_fields}
+    )
+    
+    # Also update the snapshot to keep ALL fields in sync so that re-fetches
+    # from /v2/snapshot-workflow/current-rankings reflect user edits.
+    display = update_fields.get('display_name') or update_fields.get('name')
+
+    # Build a complete snapshot-employee sync payload from ALL updated fields
+    # (not just name/tier). Metrics edited in Employee List must persist in the
+    # snapshot or users see old values on re-fetch.
+    SNAP_SYNCABLE = {
+        "name", "display_name", "report_name", "job_title", "tier_label",
+        "guests", "guest_count", "net_sales",
+        "liquor_sales", "beer_sales", "wine_sales", "lbw", "lbw_total",
+        "glassware_sales", "bar_glassware_sales",
+        "loyalty_sales", "lsc_count",
+        "ppa", "lbw_per_guest", "glassware_per_guest", "guests_per_lsc",
+        "score_ppa", "score_lbw", "score_glass", "score_lsc",
+        "weighted_score", "total_score", "pre_dar_score",
+        "cv_promoters", "cv_passives", "cv_detractors", "cv_score",
+        "nps_score", "nps_score_pts", "nps_contribution", "cv_raw_points",
+        "rt_mentions", "review_tracker_bonus",
+        "total_metric_bonus", "aliases",
+        "nps_manual_override",
+    }
+    snap_update = {}
+    for k, v in update_fields.items():
+        if k in SNAP_SYNCABLE:
+            snap_update[f"employees.$.{k}"] = v
+    # Keep name and display_name aligned in the snapshot too
+    if display:
+        snap_update["employees.$.name"] = display
+        snap_update["employees.$.display_name"] = display
+
+    if snap_update:
+        # Prefer the snapshot_ctx quarter/year when the request originated from
+        # a snapshot UUID - otherwise use the employees_v2 quarter/year.
+        if snapshot_ctx:
+            quarter = (snapshot_ctx.get('quarter') or emp_doc.get('quarter', 'Q2')).upper()
+            year = snapshot_ctx.get('year') or emp_doc.get('year', 2026)
+        else:
+            quarter = (emp_doc.get('quarter') or 'Q2').upper()
+            year = emp_doc.get('year', 2026)
+        actual_id = emp_doc.get('id', employee_id)
+
+        # Try BOTH IDs (employees_v2 ID and the original request ID which may
+        # be a snapshot UUID). When the snapshot row was orphaned, the only
+        # way to update it is by the original request ID — using actual_id
+        # alone would miss it.
+        updated_any = False
+        for eid in {actual_id, employee_id}:
+            if not eid:
+                continue
+            result = await db.snapshot_workflow.update_many(
+                {"quarter": quarter, "year": year, "employees.id": eid},
+                {"$set": snap_update}
+            )
+            if result.modified_count > 0:
+                updated_any = True
+
+        # Fallback: match snapshot employee by name if ID lookup didn't update
+        # anything (snapshot employees often have different UUIDs). Use
+        # arrayFilters to unambiguously target the right embedded element.
+        if not updated_any:
+            match_name = emp_doc.get('report_name') or emp_doc.get('name') or display
+            if match_name:
+                import re as _re
+                name_pat = f"^{_re.escape(match_name)}$"
+                af_snap_update = {f"employees.$[e].{k.split('.')[-1]}": v
+                                  for k, v in snap_update.items()}
+                await db.snapshot_workflow.update_many(
+                    {"quarter": quarter, "year": year},
+                    {"$set": af_snap_update},
+                    array_filters=[{
+                        "$or": [
+                            {"e.name": {"$regex": name_pat, "$options": "i"}},
+                            {"e.report_name": {"$regex": name_pat, "$options": "i"}},
+                            {"e.display_name": {"$regex": name_pat, "$options": "i"}},
+                        ]
+                    }],
+                )
+    
+    name = update_fields.get('display_name') or update_fields.get('name') or emp_doc.get('display_name') or emp_doc.get('name', '')
+    
+    return {
+        "success": True,
+        "message": f"Updated {name} - new score: {update_fields.get('total_score', emp_doc.get('total_score', 0))}"
+    }
 
 
 @api_router.put("/v2/employees/{employee_id}/manual-score")
@@ -2495,11 +2919,66 @@ async def update_employee_manual_score(employee_id: str, data: dict):
 
 @api_router.delete("/v2/employees/{employee_id}")
 async def delete_employee(employee_id: str):
-    """Delete a single employee"""
-    result = await db.employees_v2.delete_one({"id": employee_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Employee not found")
-    return {"success": True, "message": "Employee deleted"}
+    """
+    Delete a single employee.
+
+    Target the SPECIFIC row the user clicked on (by id) so deleting one of
+    several duplicates leaves the others intact. The employee may live in
+    `employees_v2`, inside `snapshot_workflow.employees`, or both — we try
+    each in turn. Only if the id isn't found anywhere do we fall back to a
+    name-based delete so callers passing a bare name still work.
+    """
+    import re as _re
+
+    deleted_v2 = 0
+    pulled_from_snapshots = 0
+    name_for_message = None
+
+    # 1) Delete from employees_v2 by exact id (keeps same-named duplicates)
+    v2_doc = await db.employees_v2.find_one({"id": employee_id}, {"_id": 0})
+    if v2_doc:
+        name_for_message = v2_doc.get("display_name") or v2_doc.get("name")
+        result = await db.employees_v2.delete_one({"id": employee_id})
+        deleted_v2 = result.deleted_count
+
+    # 2) Pull the matching embedded employee from every snapshot (again, by id)
+    snap_result = await db.snapshot_workflow.update_many(
+        {"employees.id": employee_id},
+        {"$pull": {"employees": {"id": employee_id}}}
+    )
+    pulled_from_snapshots = snap_result.modified_count
+
+    # 3) Nothing matched by id — treat employee_id as a name and delete one
+    # matching row from each source (case-insensitive exact match). This
+    # preserves legitimate other employees who happen to share the name.
+    if deleted_v2 == 0 and pulled_from_snapshots == 0:
+        name_pat = f"^{_re.escape(employee_id)}$"
+        v2_by_name = await db.employees_v2.find_one({
+            "$or": [
+                {"name": {"$regex": name_pat, "$options": "i"}},
+                {"display_name": {"$regex": name_pat, "$options": "i"}},
+                {"report_name": {"$regex": name_pat, "$options": "i"}},
+            ]
+        }, {"_id": 0, "id": 1, "name": 1, "display_name": 1})
+        if v2_by_name:
+            name_for_message = v2_by_name.get("display_name") or v2_by_name.get("name")
+            dr = await db.employees_v2.delete_one({"id": v2_by_name.get("id")})
+            deleted_v2 = dr.deleted_count
+            sr = await db.snapshot_workflow.update_many(
+                {"employees.id": v2_by_name.get("id")},
+                {"$pull": {"employees": {"id": v2_by_name.get("id")}}}
+            )
+            pulled_from_snapshots = sr.modified_count
+
+        if deleted_v2 == 0 and pulled_from_snapshots == 0:
+            raise HTTPException(status_code=404, detail="Employee not found")
+
+    return {
+        "success": True,
+        "message": f"Deleted {name_for_message or 'employee'}",
+        "deleted_from_employees_v2": deleted_v2,
+        "snapshots_updated": pulled_from_snapshots,
+    }
 
 
 
@@ -2796,7 +3275,22 @@ async def update_employee_display_name(employee_id: str, data: dict):
     
     employee = await db.employees_v2.find_one({"id": employee_id})
     if not employee:
-        raise HTTPException(status_code=404, detail="Employee not found")
+        snapshot = await db.snapshot_workflow.find_one(
+            {"employees.id": employee_id},
+            {"employees.$": 1}
+        )
+        if snapshot and snapshot.get("employees"):
+            snap_name = snapshot["employees"][0].get("name", "")
+            if snap_name:
+                employee = await db.employees_v2.find_one({
+                    "$or": [
+                        {"name": {"$regex": f"^{snap_name}$", "$options": "i"}},
+                        {"report_name": {"$regex": f"^{snap_name}$", "$options": "i"}},
+                        {"display_name": {"$regex": f"^{snap_name}$", "$options": "i"}},
+                    ]
+                })
+        if not employee:
+            raise HTTPException(status_code=404, detail="Employee not found")
     
     # Set report_name if not already set (for backward compatibility)
     current_name = employee.get("name", "")

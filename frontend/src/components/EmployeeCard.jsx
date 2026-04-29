@@ -30,7 +30,7 @@ export const EmployeeCard = ({
   // New bonus metrics
   const rtBonus = employee.review_tracker_bonus || 0;
   const metricBonus = employee.total_metric_bonus || 0;
-  const qrScans = (employee.yelp_clicks || 0) + (employee.google_clicks || 0);
+  const qrScans = (employee.yelp_clicks || 0) + (employee.google_clicks || 0) + (employee.tripadvisor_clicks || 0);
   
   return (
     <div 

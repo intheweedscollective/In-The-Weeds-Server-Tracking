@@ -95,17 +95,29 @@ const ONBOARDING_STEPS = [
   }
 ];
 
+// Bump this when ONBOARDING_STEPS changes meaningfully so users see the
+// updated tour. localStorage key includes this so old "seen" flags don't
+// prevent the new content from showing once.
+const ONBOARDING_VERSION = "v2";
+const LS_KEY = `hasSeenOnboarding_${ONBOARDING_VERSION}`;
+
 export default function OnboardingGuide({ onComplete }) {
   const [isOpen, setIsOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState(false);
 
   useEffect(() => {
-    const seen = localStorage.getItem('hasSeenOnboarding');
+    const seen = localStorage.getItem(LS_KEY);
     if (!seen) {
       setIsOpen(true);
     } else {
       setHasSeenOnboarding(true);
+    }
+    // Best-effort: clean up legacy keys so we don't accumulate old flags.
+    try {
+      localStorage.removeItem("hasSeenOnboarding");
+    } catch {
+      /* localStorage might be disabled in private mode — non-fatal */
     }
   }, []);
 
@@ -121,14 +133,14 @@ export default function OnboardingGuide({ onComplete }) {
   }, [isOpen]);
 
   const handleComplete = () => {
-    localStorage.setItem('hasSeenOnboarding', 'true');
+    localStorage.setItem(LS_KEY, 'true');
     setHasSeenOnboarding(true);
     setIsOpen(false);
     if (onComplete) onComplete();
   };
 
   const handleSkip = () => {
-    localStorage.setItem('hasSeenOnboarding', 'true');
+    localStorage.setItem(LS_KEY, 'true');
     setHasSeenOnboarding(true);
     setIsOpen(false);
   };
@@ -159,11 +171,11 @@ export default function OnboardingGuide({ onComplete }) {
     return (
       <button
         onClick={handleReopen}
-        className="fixed bottom-4 right-4 z-40 bg-primary text-white p-3 rounded-full shadow-lg hover:bg-primary/90 transition-all hover:scale-105"
-        title="Quick Start Guide"
+        className="fixed bottom-6 left-6 z-30 bg-primary text-white p-2.5 rounded-full shadow-lg hover:bg-primary/90 transition-all hover:scale-105 opacity-70 hover:opacity-100"
+        title="Quick Start Guide — re-open onboarding"
         data-testid="onboarding-trigger"
       >
-        <Rocket className="w-5 h-5" />
+        <Rocket className="w-4 h-4" />
       </button>
     );
   }
@@ -173,20 +185,23 @@ export default function OnboardingGuide({ onComplete }) {
       <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-primary to-secondary p-6 text-white relative">
-          <button 
+          <button
             onClick={handleSkip}
-            className="absolute top-4 right-4 text-white/70 hover:text-white transition-colors"
+            className="absolute top-3 right-3 text-white bg-white/15 hover:bg-white/25 rounded-full p-1.5 transition-colors"
+            data-testid="onboarding-close-btn"
+            title="Close (Esc)"
+            aria-label="Close onboarding"
           >
             <X className="w-5 h-5" />
           </button>
           
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center">
+          <div className="flex items-center gap-4 pr-12">
+            <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
               {Icon && <Icon className="w-7 h-7 text-white" />}
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-white/70 text-sm">Step {currentStep + 1} of {ONBOARDING_STEPS.length}</p>
-              <h2 className="text-xl font-serif font-bold">{step.title}</h2>
+              <h2 className="text-xl font-serif font-bold truncate">{step.title}</h2>
             </div>
           </div>
         </div>

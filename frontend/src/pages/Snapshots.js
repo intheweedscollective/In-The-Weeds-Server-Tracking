@@ -7,6 +7,7 @@ import { Label } from "../components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { useToast } from "../hooks/use-toast";
 import api from "../lib/api";
+import { getCurrentQuarter } from "../lib/quarterUtils";
 
 export default function Snapshots() {
   const { toast } = useToast();
@@ -19,11 +20,12 @@ export default function Snapshots() {
   
   // New snapshot form
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const currentQ = getCurrentQuarter();
   const [newSnapshot, setNewSnapshot] = useState({
     snapshot_date: new Date().toISOString().split('T')[0],
     title: "",
-    year: new Date().getFullYear(),
-    quarter: "Q1"
+    year: currentQ.year,
+    quarter: currentQ.quarter
   });
   
   // Selected background for preview
@@ -79,8 +81,8 @@ export default function Snapshots() {
       setNewSnapshot({
         snapshot_date: new Date().toISOString().split('T')[0],
         title: "",
-        year: new Date().getFullYear(),
-        quarter: "Q1"
+        year: currentQ.year,
+        quarter: currentQ.quarter
       });
       await fetchSnapshots();
     } catch (error) {

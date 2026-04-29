@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { ShieldCheck, AlertTriangle, CheckCircle, XCircle, RefreshCw, Trash2, Database, Users, Star, MessageSquare, UserMinus, Search, Download, Upload } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
+import { getCurrentQuarter } from "../lib/quarterUtils";
 import { Button } from "../components/ui/button";
 import { Checkbox } from "../components/ui/checkbox";
 
@@ -11,8 +12,9 @@ export default function DataIntegrity() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState({});
-  const [quarter] = useState("Q1");
-  const [year] = useState(2026);
+  const currentQ = getCurrentQuarter();
+  const [quarter] = useState(currentQ.quarter);
+  const [year] = useState(currentQ.year);
   
   // Employee cleanup state
   const [cleanupData, setCleanupData] = useState(null);

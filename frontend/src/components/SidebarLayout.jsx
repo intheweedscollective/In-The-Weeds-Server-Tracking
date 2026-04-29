@@ -5,7 +5,6 @@ import {
   Trophy, 
   Users, 
   Star, 
-  Camera, 
   FileText, 
   Monitor,
   BarChart3, 
@@ -47,7 +46,6 @@ const navGroups = [
     items: [
       { path: "/rankings", label: "Rankings", icon: Trophy },
       { path: "/leaderboard", label: "Leaderboard", icon: BarChart3 },
-      { path: "/snapshots", label: "Snapshots", icon: Camera },
       { path: "/analytics", label: "Analytics", icon: BarChart3 }
     ]
   },

@@ -17,11 +17,13 @@ class QREmployee(BaseModel):
     name: str
     yelp_clicks: int = 0
     google_clicks: int = 0
+    tripadvisor_clicks: int = 0
     created_at: Optional[str] = None
 
 class QRSettings(BaseModel):
     yelp_url: str = ""
     google_url: str = ""
+    tripadvisor_url: str = ""
     qr_style: str = "circle"
     qr_color: str = "#000000"
     qr_bg_color: str = "#FFFFFF"
@@ -34,7 +36,7 @@ class ScanRecord(BaseModel):
     id: Optional[str] = None
     employee_id: str
     employee_name: str
-    platform: str  # 'yelp' or 'google'
+    platform: str  # 'yelp', 'google' or 'tripadvisor'
     scanned_at: str
     user_agent: Optional[str] = None
     ip_address: Optional[str] = None
@@ -57,7 +59,7 @@ qr_router = APIRouter(prefix="/qr", tags=["QR Tracking"])
 async def get_qr_employees():
     """Get all QR employees sorted by total clicks"""
     employees = await _db.qr_employees.find({}, {"_id": 0}).to_list(100)
-    employees.sort(key=lambda x: (x.get('yelp_clicks', 0) + x.get('google_clicks', 0)), reverse=True)
+    employees.sort(key=lambda x: (x.get('yelp_clicks', 0) + x.get('google_clicks', 0) + x.get('tripadvisor_clicks', 0)), reverse=True)
     return employees
 
 @qr_router.post("/employees")
@@ -68,6 +70,7 @@ async def create_qr_employee(employee: QREmployee):
     emp_dict['created_at'] = datetime.now(timezone.utc).isoformat()
     emp_dict['yelp_clicks'] = 0
     emp_dict['google_clicks'] = 0
+    emp_dict['tripadvisor_clicks'] = 0
     
     await _db.qr_employees.insert_one(emp_dict)
     emp_dict.pop('_id', None)
@@ -85,6 +88,7 @@ async def bulk_create_qr_employees(names: List[str]):
                 "name": name.strip(),
                 "yelp_clicks": 0,
                 "google_clicks": 0,
+                "tripadvisor_clicks": 0,
                 "created_at": datetime.now(timezone.utc).isoformat()
             }
             await _db.qr_employees.insert_one(emp)
@@ -154,7 +158,7 @@ async def sync_qr_names_from_main(quarter: str = "Q1", year: int = 2026):
             updated.append({
                 "old": qr_name,
                 "new": new_name,
-                "clicks": emp.get('google_clicks', 0) + emp.get('yelp_clicks', 0)
+                "clicks": emp.get('google_clicks', 0) + emp.get('yelp_clicks', 0) + emp.get('tripadvisor_clicks', 0)
             })
     
     # Check for missing employees and add them
@@ -170,6 +174,7 @@ async def sync_qr_names_from_main(quarter: str = "Q1", year: int = 2026):
                 "name": full_name,
                 "yelp_clicks": 0,
                 "google_clicks": 0,
+                "tripadvisor_clicks": 0,
                 "created_at": datetime.now(timezone.utc).isoformat()
             }
             await _db.qr_employees.insert_one(new_emp)
@@ -252,23 +257,24 @@ async def reset_qr_employee_clicks(employee_id: str):
     """Reset an employee's click counts"""
     await _db.qr_employees.update_one(
         {"id": employee_id},
-        {"$set": {"yelp_clicks": 0, "google_clicks": 0}}
+        {"$set": {"yelp_clicks": 0, "google_clicks": 0, "tripadvisor_clicks": 0}}
     )
     return {"success": True}
 
 
 # ==================== SCAN TRACKING ====================
 
-# Google review URL - read from environment, with fallback
+# Review URLs - read from environment, with fallback
 GOOGLE_REVIEW_URL = os.environ.get("GOOGLE_REVIEW_URL", "https://search.google.com/local/writereview?placeid=ChIJB6hQQjHEyIARLUX1F3jayRo")
+TRIPADVISOR_REVIEW_URL = os.environ.get("TRIPADVISOR_REVIEW_URL", "https://www.tripadvisor.com/UserReview")
 
 @qr_router.get("/scan/{employee_id}/{platform}")
 async def track_scan(employee_id: str, platform: str):
     """Track a QR code scan and redirect to review page"""
     from fastapi.responses import RedirectResponse
     
-    # Always default to Google if platform is invalid
-    if platform not in ['yelp', 'google']:
+    # Default to Google if platform is invalid
+    if platform not in ['yelp', 'google', 'tripadvisor']:
         platform = 'google'
     
     # Try to track the scan (but don't fail if employee not found)
@@ -293,8 +299,14 @@ async def track_scan(employee_id: str, platform: str):
         # Log but don't fail - redirect is more important
         logging.error(f"Failed to track scan: {e}")
     
-    # Get redirect URL - use settings if available, otherwise hardcoded fallback
-    redirect_url = GOOGLE_REVIEW_URL  # Default fallback
+    # Get redirect URL - use settings if available, otherwise env/hardcoded fallback
+    # Platform-specific default ensures tripadvisor doesn't fall through to Google.
+    platform_defaults = {
+        "google": GOOGLE_REVIEW_URL,
+        "tripadvisor": TRIPADVISOR_REVIEW_URL,
+        "yelp": "",
+    }
+    redirect_url = platform_defaults.get(platform) or GOOGLE_REVIEW_URL
     
     try:
         settings = await _db.qr_settings.find_one({"id": "global_settings"})
@@ -307,6 +319,44 @@ async def track_scan(employee_id: str, platform: str):
     
     # ALWAYS redirect - never show an error page
     return RedirectResponse(url=redirect_url, status_code=302)
+
+
+@qr_router.get("/ta/{employee_id}")
+async def tripadvisor_scan_redirect(employee_id: str):
+    """
+    Simplified TripAdvisor QR scan endpoint - always redirects to TripAdvisor reviews.
+    Mirrors /go/{id} behaviour for maximum compatibility.
+    """
+    from fastapi.responses import RedirectResponse
+    
+    try:
+        employee = await _db.qr_employees.find_one({"id": employee_id})
+        if employee:
+            await _db.qr_employees.update_one(
+                {"id": employee_id},
+                {"$inc": {"tripadvisor_clicks": 1}}
+            )
+            await _db.qr_scans.insert_one({
+                "id": str(uuid.uuid4()),
+                "employee_id": employee_id,
+                "employee_name": employee.get("name", "Unknown"),
+                "platform": "tripadvisor",
+                "scanned_at": datetime.now(timezone.utc).isoformat()
+            })
+            logging.info(f"QR scan tracked: {employee.get('name')} (tripadvisor)")
+        else:
+            logging.warning(f"QR scan: Employee not found: {employee_id}")
+    except Exception as e:
+        logging.error(f"QR scan tracking error: {e}")
+    
+    try:
+        settings = await _db.qr_settings.find_one({"id": "global_settings"})
+        if settings and settings.get("tripadvisor_url"):
+            return RedirectResponse(url=settings["tripadvisor_url"], status_code=302)
+    except Exception:
+        pass
+    
+    return RedirectResponse(url=TRIPADVISOR_REVIEW_URL, status_code=302)
 
 
 @qr_router.get("/go/{employee_id}")
@@ -389,7 +439,7 @@ async def reset_all_qr_scans():
     # Reset all employee click counts
     employees_result = await _db.qr_employees.update_many(
         {},
-        {"$set": {"google_clicks": 0, "yelp_clicks": 0}}
+        {"$set": {"google_clicks": 0, "yelp_clicks": 0, "tripadvisor_clicks": 0}}
     )
     
     return {
@@ -405,19 +455,24 @@ async def reset_all_qr_scans():
 async def get_qr_settings():
     """Get QR settings"""
     settings = await _db.qr_settings.find_one({"id": "global_settings"}, {"_id": 0})
+    defaults = {
+        "id": "global_settings",
+        "yelp_url": "",
+        "google_url": "",
+        "tripadvisor_url": "",
+        "qr_style": "circle",
+        "qr_color": "#000000",
+        "qr_bg_color": "#FFFFFF",
+        "qr_frame": "rounded",
+        "qr_frame_color": "#000000",
+        "qr_logo": "shrimp_icon",
+        "qr_size": 300
+    }
     if not settings:
-        return {
-            "id": "global_settings",
-            "yelp_url": "",
-            "google_url": "",
-            "qr_style": "circle",
-            "qr_color": "#000000",
-            "qr_bg_color": "#FFFFFF",
-            "qr_frame": "rounded",
-            "qr_frame_color": "#000000",
-            "qr_logo": "shrimp_icon",
-            "qr_size": 300
-        }
+        return defaults
+    # Backfill any missing fields (e.g. older docs without tripadvisor_url)
+    for k, v in defaults.items():
+        settings.setdefault(k, v)
     return settings
 
 @qr_router.post("/settings")
@@ -444,21 +499,24 @@ async def get_qr_stats():
     
     total_yelp = sum(e.get('yelp_clicks', 0) for e in employees)
     total_google = sum(e.get('google_clicks', 0) for e in employees)
-    total_scans = total_yelp + total_google
+    total_tripadvisor = sum(e.get('tripadvisor_clicks', 0) for e in employees)
+    total_scans = total_yelp + total_google + total_tripadvisor
     
-    employees.sort(key=lambda x: (x.get('yelp_clicks', 0) + x.get('google_clicks', 0)), reverse=True)
+    employees.sort(key=lambda x: (x.get('yelp_clicks', 0) + x.get('google_clicks', 0) + x.get('tripadvisor_clicks', 0)), reverse=True)
     top_10 = employees[:10]
     
     return {
         "total_scans": total_scans,
         "yelp_scans": total_yelp,
         "google_scans": total_google,
+        "tripadvisor_scans": total_tripadvisor,
         "total_employees": len(employees),
         "top_10": [{
             "name": e.get('name'),
             "yelp_clicks": e.get('yelp_clicks', 0),
             "google_clicks": e.get('google_clicks', 0),
-            "total": e.get('yelp_clicks', 0) + e.get('google_clicks', 0)
+            "tripadvisor_clicks": e.get('tripadvisor_clicks', 0),
+            "total": e.get('yelp_clicks', 0) + e.get('google_clicks', 0) + e.get('tripadvisor_clicks', 0)
         } for e in top_10]
     }
 
@@ -466,14 +524,15 @@ async def get_qr_stats():
 async def get_top_10_scans():
     """Get top 10 employees by total scans - for dashboard integration"""
     employees = await _db.qr_employees.find({}, {"_id": 0}).to_list(100)
-    employees.sort(key=lambda x: (x.get('yelp_clicks', 0) + x.get('google_clicks', 0)), reverse=True)
+    employees.sort(key=lambda x: (x.get('yelp_clicks', 0) + x.get('google_clicks', 0) + x.get('tripadvisor_clicks', 0)), reverse=True)
     
     return [{
         "rank": i + 1,
         "name": e.get('name'),
         "yelp_clicks": e.get('yelp_clicks', 0),
         "google_clicks": e.get('google_clicks', 0),
-        "total": e.get('yelp_clicks', 0) + e.get('google_clicks', 0)
+        "tripadvisor_clicks": e.get('tripadvisor_clicks', 0),
+        "total": e.get('yelp_clicks', 0) + e.get('google_clicks', 0) + e.get('tripadvisor_clicks', 0)
     } for i, e in enumerate(employees[:10])]
 
 
@@ -500,6 +559,7 @@ async def sync_qr_from_main_employees(quarter: str = "Q1", year: int = 2026):
                 "name": name,
                 "yelp_clicks": 0,
                 "google_clicks": 0,
+                "tripadvisor_clicks": 0,
                 "created_at": datetime.now(timezone.utc).isoformat()
             }
             await _db.qr_employees.insert_one(qr_emp)
@@ -552,30 +612,34 @@ async def download_all_qr_codes_zip():
     
     try:
         with zipfile.ZipFile(temp_file.name, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            # Platform -> URL-path mapping for tracking endpoints.
+            platforms = [
+                ("google", lambda eid: f"{base_url}/api/qr/go/{eid}"),
+                ("yelp", lambda eid: f"{base_url}/api/qr/scan/{eid}/yelp"),
+                ("tripadvisor", lambda eid: f"{base_url}/api/qr/ta/{eid}"),
+            ]
             for emp in employees:
                 emp_id = emp.get("id")
                 emp_name = emp.get("name", "Unknown")
-                
-                # Create safe filename
                 safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', emp_name)
-                
-                # Generate Google QR using simplified endpoint for maximum compatibility
-                # Using /go/ endpoint which is shorter and always redirects to Google
-                google_tracking_url = f"{base_url}/api/qr/go/{emp_id}"
-                google_qr = qrcode.QRCode(
-                    version=1,
-                    error_correction=qrcode.constants.ERROR_CORRECT_H,
-                    box_size=10,
-                    border=2
-                )
-                google_qr.add_data(google_tracking_url)
-                google_qr.make(fit=True)
-                google_img = google_qr.make_image(fill_color=settings.get("qr_color", "#000000"),
-                                                  back_color=settings.get("qr_bg_color", "#FFFFFF"))
-                
-                google_buffer = BytesIO()
-                google_img.save(google_buffer, format='PNG')
-                zip_file.writestr(f"{safe_name}_qr.png", google_buffer.getvalue())
+
+                for platform, url_builder in platforms:
+                    tracking_url = url_builder(emp_id)
+                    qr = qrcode.QRCode(
+                        version=1,
+                        error_correction=qrcode.constants.ERROR_CORRECT_H,
+                        box_size=10,
+                        border=2
+                    )
+                    qr.add_data(tracking_url)
+                    qr.make(fit=True)
+                    img = qr.make_image(
+                        fill_color=settings.get("qr_color", "#000000"),
+                        back_color=settings.get("qr_bg_color", "#FFFFFF"),
+                    )
+                    buf = BytesIO()
+                    img.save(buf, format='PNG')
+                    zip_file.writestr(f"{safe_name}_{platform}_qr.png", buf.getvalue())
         
         # Read the file and create streaming response
         def iterfile():
@@ -611,4 +675,206 @@ def register_qr_routes(app_router, db):
     """Set up the QR tracking module"""
     set_qr_db(db)
     app_router.include_router(qr_router)
+
+
+@qr_router.get("/leaderboard/slide")
+async def download_qr_leaderboard_slide(
+    quarter: str = "Q2",
+    year: int = 2026,
+    title: str | None = None,
+):
+    """Render and return a 16:9 PNG of the QR Click vs RT-Mentions report."""
+    from fastapi.responses import Response
+    from qr_leaderboard_slide import generate_qr_leaderboard_slide
+
+    qr_emps = await _db.qr_employees.find({}, {"_id": 0}).to_list(500)
+
+    # Merge ReviewTracker mentions from employees_v2 (which is where RT
+    # mentions are persisted by the snapshot pipeline). We index by
+    # lowercased name for forgiving cross-collection matching.
+    v2_emps = await _db.employees_v2.find(
+        {"quarter": (quarter or "").upper(), "year": year},
+        {"_id": 0, "name": 1, "display_name": 1, "report_name": 1,
+         "rt_mentions": 1, "review_tracker_mentions": 1,
+         "rt_yelp_mentions": 1, "rt_google_mentions": 1, "rt_tripadvisor_mentions": 1},
+    ).to_list(500)
+
+    def keys_for(rec):
+        out = set()
+        for f in ("name", "display_name", "report_name"):
+            v = (rec.get(f) or "").strip().lower()
+            if v:
+                out.add(v)
+                # Also add first name for nickname tolerance
+                first = v.split()[0]
+                if first:
+                    out.add(first)
+        return out
+
+    v2_index: dict[str, dict] = {}
+    for v in v2_emps:
+        for k in keys_for(v):
+            v2_index.setdefault(k, v)
+
+    # Make sure every employees_v2 person appears (even those with 0 clicks)
+    # so the slide truly lists ALL employees.
+    qr_index: dict[str, dict] = {}
+    for q in qr_emps:
+        for k in keys_for(q):
+            qr_index.setdefault(k, q)
+
+    # Build the merged list keyed by name
+    seen_keys: set[str] = set()
+    merged: list[dict] = []
+
+    def absorb(rec, mentions_record):
+        # Augment a copy with rt_mentions fields from v2
+        out = dict(rec)
+        if mentions_record:
+            for f in ("rt_mentions", "review_tracker_mentions",
+                      "rt_yelp_mentions", "rt_google_mentions",
+                      "rt_tripadvisor_mentions"):
+                if mentions_record.get(f) is not None:
+                    out[f] = mentions_record.get(f)
+        return out
+
+    # Pass 1: all qr_employees first (preserves their click data)
+    for q in qr_emps:
+        ks = keys_for(q)
+        if not ks:
+            continue
+        if any(k in seen_keys for k in ks):
+            continue
+        seen_keys.update(ks)
+        v2_match = next((v2_index[k] for k in ks if k in v2_index), None)
+        merged.append(absorb(q, v2_match))
+
+    # Pass 2: employees_v2 records that weren't in qr_employees
+    for v in v2_emps:
+        ks = keys_for(v)
+        if not ks:
+            continue
+        if any(k in seen_keys for k in ks):
+            continue
+        seen_keys.update(ks)
+        merged.append(absorb({
+            "name": v.get("display_name") or v.get("name") or v.get("report_name"),
+            "yelp_clicks": 0, "google_clicks": 0, "tripadvisor_clicks": 0,
+        }, v))
+
+    png = generate_qr_leaderboard_slide(merged, quarter=quarter, year=year, title=title)
+    safe_q = (quarter or "Q").replace("/", "_")
+    return Response(
+        content=png,
+        media_type="image/png",
+        headers={
+            "Content-Disposition": f'attachment; filename="qr_clicks_vs_mentions_{safe_q}_{year}.png"'
+        },
+    )
+
+
+@qr_router.get("/leaderboard-data")
+async def get_leaderboard_with_mentions(
+    quarter: str = "Q2",
+    year: int = 2026,
+):
+    """
+    Returns the merged clicks-vs-mentions list used by both the on-screen
+    leaderboard and the downloadable slide. Every employee from
+    qr_employees AND employees_v2 (for the given quarter/year) appears
+    exactly once, with both click counts and review mention counts
+    populated. Sorted by conversion rate desc -> mentions desc -> clicks
+    desc so the same row order shows up in the UI and the PNG.
+    """
+    qr_emps = await _db.qr_employees.find({}, {"_id": 0}).to_list(500)
+    v2_emps = await _db.employees_v2.find(
+        {"quarter": (quarter or "").upper(), "year": year},
+        {"_id": 0, "id": 1, "name": 1, "display_name": 1, "report_name": 1,
+         "rt_mentions": 1, "review_tracker_mentions": 1,
+         "rt_yelp_mentions": 1, "rt_google_mentions": 1, "rt_tripadvisor_mentions": 1},
+    ).to_list(500)
+
+    def keys_for(rec):
+        out = set()
+        for f in ("name", "display_name", "report_name"):
+            v = (rec.get(f) or "").strip().lower()
+            if v:
+                out.add(v)
+                first = v.split()[0]
+                if first:
+                    out.add(first)
+        return out
+
+    v2_index: dict[str, dict] = {}
+    for v in v2_emps:
+        for k in keys_for(v):
+            v2_index.setdefault(k, v)
+
+    seen_keys: set[str] = set()
+    merged: list[dict] = []
+
+    def mentions_total(v2_rec):
+        if not v2_rec:
+            return 0
+        return int(
+            (v2_rec.get("rt_mentions") or 0)
+            + (v2_rec.get("review_tracker_mentions") or 0)
+            + (v2_rec.get("rt_yelp_mentions") or 0)
+            + (v2_rec.get("rt_google_mentions") or 0)
+            + (v2_rec.get("rt_tripadvisor_mentions") or 0)
+        )
+
+    # Pass 1: every qr_employee (with their clicks) merged with v2 mentions
+    for q in qr_emps:
+        ks = keys_for(q)
+        if not ks or any(k in seen_keys for k in ks):
+            continue
+        seen_keys.update(ks)
+        v2_match = next((v2_index[k] for k in ks if k in v2_index), None)
+        yelp = q.get("yelp_clicks") or 0
+        google = q.get("google_clicks") or 0
+        ta = q.get("tripadvisor_clicks") or 0
+        clicks = yelp + google + ta
+        m = mentions_total(v2_match)
+        merged.append({
+            "id": q.get("id"),
+            "name": q.get("name"),
+            "yelp_clicks": yelp,
+            "google_clicks": google,
+            "tripadvisor_clicks": ta,
+            "total_clicks": clicks,
+            "rt_mentions": m,
+            "conversion_rate": round((m / clicks * 100), 1) if clicks else 0.0,
+        })
+
+    # Pass 2: employees_v2 records absent from qr_employees (clicks=0)
+    for v in v2_emps:
+        ks = keys_for(v)
+        if not ks or any(k in seen_keys for k in ks):
+            continue
+        seen_keys.update(ks)
+        m = mentions_total(v)
+        merged.append({
+            "id": v.get("id"),
+            "name": v.get("display_name") or v.get("name") or v.get("report_name"),
+            "yelp_clicks": 0,
+            "google_clicks": 0,
+            "tripadvisor_clicks": 0,
+            "total_clicks": 0,
+            "rt_mentions": m,
+            "conversion_rate": 0.0,
+        })
+
+    # Sort: conversion rate desc -> mentions desc -> clicks desc.
+    # Employees with 0 clicks pinned to the bottom regardless of mentions.
+    merged.sort(
+        key=lambda e: (
+            -1 if e["total_clicks"] == 0 else e["conversion_rate"],
+            e["rt_mentions"],
+            e["total_clicks"],
+        ),
+        reverse=True,
+    )
+    return {"employees": merged, "quarter": quarter.upper(), "year": year, "count": len(merged)}
+
 
