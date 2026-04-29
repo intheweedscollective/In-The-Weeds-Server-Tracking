@@ -255,11 +255,12 @@ def calculate_employee_scores(
     capped_glass = min(score_glass, 100)
     capped_lsc = min(score_lsc, 100)
     
-    # Calculate weighted score (75 pts max from POS metrics)
+    # Calculate weighted score (85 pts max from POS metrics)
+    # PPA 25% + LSC 25% + LBW 20% + Glass 15% = 85% (CV/RT/bonuses fill the rest)
     weighted_score = round(
         capped_ppa * 0.25 +
-        capped_lbw * 0.15 +
-        capped_glass * 0.10 +
+        capped_lbw * 0.20 +
+        capped_glass * 0.15 +
         capped_lsc * 0.25,
         2
     )

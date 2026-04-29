@@ -210,8 +210,8 @@ class QuarterSettings(BaseModel):
     
     # === METRIC WEIGHTS (User Confirmed - sum to 0.75 for POS metrics) ===
     weight_ppa: float = 0.25      # PPA at 25%
-    weight_lbw: float = 0.15      # LBW at 15% (was 0.20)
-    weight_glass: float = 0.10    # Glassware at 10% (was 0.15)
+    weight_lbw: float = 0.20      # LBW at 20%
+    weight_glass: float = 0.15    # Glassware at 15%
     weight_lsc: float = 0.25      # LSC at 25%
     weight_cv: float = 0.00       # CV is now a separate bonus, not weighted
     
@@ -620,13 +620,13 @@ def calculate_total_score(employee: EmployeeV2, settings: QuarterSettings) -> Em
     capped_glass = min((employee.score_glass or 0), 100)
     capped_lsc = min((employee.score_lsc or 0), 100)
     
-    # Calculate weighted POS score (75% of base):
-    # PPA: 25%, LSC: 25%, LBW: 15%, Glassware: 10%
+    # Calculate weighted POS score (85% of base):
+    # PPA: 25%, LSC: 25%, LBW: 20%, Glassware: 15%
     weighted_pos_score = round(
         capped_ppa * 0.25 +    # PPA at 25%
         capped_lsc * 0.25 +    # LSC at 25%
-        capped_lbw * 0.15 +    # LBW at 15%
-        capped_glass * 0.10,   # Glassware at 10%
+        capped_lbw * 0.20 +    # LBW at 20%
+        capped_glass * 0.15,   # Glassware at 15%
         2
     )
     
