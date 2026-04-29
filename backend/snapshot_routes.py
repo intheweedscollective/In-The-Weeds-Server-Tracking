@@ -702,7 +702,7 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
     if "rt_mentions" in updates or "review_mentions" in updates:
         rt_mentions = emp.get("rt_mentions", 0) or 0
         # RT Bonus = mentions × 0.5, capped at 15 pts
-        emp["review_tracker_bonus"] = min(rt_mentions * 0.5, 15.0)
+        emp["review_tracker_bonus"] = min(rt_mentions * 0.3, 20)
         logger.info(f"Recalculated RT bonus for {emp.get('name')}: mentions={rt_mentions}, bonus={emp['review_tracker_bonus']}")
     
     # Recalculate scores using the scoring formula
@@ -712,7 +712,7 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
     benchmarks = {
         "ppa": 55.0,
         "lbw": 8.0,
-        "glass": 1.25,
+        "glass": 1.35,
         "lsc": 100.0
     }
     
@@ -936,7 +936,7 @@ async def rebuild_snapshot_from_pos():
     
     # Calculate scores
     from snapshot_manager import calculate_employee_scores, assign_performance_tiers
-    benchmarks = {"ppa": 55.0, "lbw": 8.0, "glass": 1.25, "lsc": 100.0}
+    benchmarks = {"ppa": 55.0, "lbw": 8.0, "glass": 1.35, "lsc": 100.0}
     
     scored_employees = []
     for emp in new_employees:
@@ -1309,7 +1309,7 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
         benchmarks = {
             "ppa": settings.get("benchmark_ppa", 55.0) if settings else 55.0,
             "lbw": settings.get("benchmark_lbw", 8.0) if settings else 8.0,
-            "glass": settings.get("benchmark_glass", 1.25) if settings else 1.25,
+            "glass": settings.get("benchmark_glass", 1.35) if settings else 1.35,
             "lsc": settings.get("benchmark_lsc", 100.0) if settings else 100.0,
         }
         
@@ -1572,7 +1572,7 @@ async def process_snapshot(snapshot_id: str):
         benchmarks = {
             "ppa": settings.get("benchmark_ppa", 55.0) if settings else 55.0,
             "lbw": settings.get("benchmark_lbw", 8.0) if settings else 8.0,
-            "glass": settings.get("benchmark_glass", 1.25) if settings else 1.25,
+            "glass": settings.get("benchmark_glass", 1.35) if settings else 1.35,
             "lsc": settings.get("benchmark_lsc", 100.0) if settings else 100.0,
         }
         
@@ -2277,7 +2277,7 @@ async def fix_snapshot_employee_ids(snapshot_id: str):
     ) if "snapshot_benchmarks" in await db.list_collection_names() else None
     if not benchmarks:
         # Use the same defaults as snapshot_manager
-        benchmarks = {"ppa": 55.0, "lbw": 8.0, "glass": 1.25, "lsc": 100.0}
+        benchmarks = {"ppa": 55.0, "lbw": 8.0, "glass": 1.35, "lsc": 100.0}
 
     rescored = []
     for emp in employees_v2:
@@ -2898,7 +2898,7 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                 if matched_name:
                     mentions = rt_data.get("mentions", 0)
                     employees[matched_name]["rt_mentions"] = mentions
-                    employees[matched_name]["review_tracker_bonus"] = round(min(mentions * 0.5, 15), 1)  # Cap at 15
+                    employees[matched_name]["review_tracker_bonus"] = round(min(mentions * 0.3, 20), 1)  # Cap at 15
     
     # Defensive dedupe: guarantee unique employees by display_name so the
     # Employees tab never shows duplicates even if upstream data drifted.
@@ -3345,7 +3345,7 @@ async def rescore_all_employees(year: int = 2026, quarter: str = "Q1"):
             {"quarter": q, "year": year}
         )
     if not benchmarks:
-        benchmarks = {"ppa": 55.0, "lbw": 8.0, "glass": 1.25, "lsc": 100.0}
+        benchmarks = {"ppa": 55.0, "lbw": 8.0, "glass": 1.35, "lsc": 100.0}
 
     rescored = 0
     over_100_before = 0

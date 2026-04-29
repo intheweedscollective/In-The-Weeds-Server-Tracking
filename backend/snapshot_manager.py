@@ -239,7 +239,7 @@ def calculate_employee_scores(
     # Get benchmarks
     benchmark_ppa = benchmarks.get("ppa", 55.0)
     benchmark_lbw = benchmarks.get("lbw", 8.0)
-    benchmark_glass = benchmarks.get("glass", 1.25)
+    benchmark_glass = benchmarks.get("glass", 1.35)
     benchmark_lsc = benchmarks.get("lsc", 100.0)
     
     # Calculate normalized scores (percentage of benchmark)

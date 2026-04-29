@@ -279,7 +279,7 @@ async def get_review_stats_endpoint(quarter: str = "Q1", year: int = 2026):
         total_mentions = 0
         for emp in employees:
             mentions = emp.get("rt_mentions") or emp.get("review_mentions") or 0
-            points = emp.get("review_tracker_bonus") or min(mentions * 0.5, 15)
+            points = emp.get("review_tracker_bonus") or min(mentions * 0.3, 20)
             if mentions > 0:
                 stats["by_employee"][emp["name"]] = {
                     "mentions": mentions,
@@ -388,7 +388,7 @@ async def create_review(review: CustomerReviewCreate):
             })
             if emp:
                 current_mentions = (emp.get("rt_mentions") or 0) + 1
-                rt_bonus = min(current_mentions * 0.5, 15)
+                rt_bonus = min(current_mentions * 0.3, 20)
                 await db.employees_v2.update_one(
                     {"_id": emp["_id"]},
                     {"$set": {
@@ -789,7 +789,7 @@ async def upload_review_tracker_feedback(
         # Update employee records with mention counts
         employees_updated = 0
         for emp_id, mentions in mention_counts.items():
-            rt_bonus = min(mentions * 0.5, 15)
+            rt_bonus = min(mentions * 0.3, 20)
             result = await db.employees_v2.update_one(
                 {"id": emp_id, "quarter": quarter, "year": year},
                 {"$set": {

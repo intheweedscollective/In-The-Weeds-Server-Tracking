@@ -328,7 +328,7 @@ class ScoringAuditSystem:
         # Review Tracker Breakdown
         rt_mentions = employee.get("review_mentions", 0)
         rt_bonus = employee.get("review_tracker_bonus", 0)
-        expected_rt_bonus = min(rt_mentions * 0.5, 15)  # Capped at 15 pts
+        expected_rt_bonus = min(rt_mentions * 0.3, 20)  # Capped at 20 pts
         
         verification["breakdown"]["review_tracker"] = {
             "mentions": rt_mentions,

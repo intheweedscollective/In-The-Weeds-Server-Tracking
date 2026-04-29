@@ -58,9 +58,9 @@ CV_DETRACTOR_POINTS = -2  # -2 per detractor (6 or below)
 # NPS Score: Direct ratio (77% = 7.7 pts, max 10 pts)
 NPS_MAX_POINTS = 10
 
-# Review Tracker Bonus
-RT_POINTS_PER_MENTION = 0.5  # Each mention = 0.5 points
-RT_MAX_POINTS = 15  # Cap at 15 points (30 mentions)
+# Review Tracker Bonus — per v3 handout: +0.3 per mention, quarterly cap +20
+RT_POINTS_PER_MENTION = 0.3  # Each mention = 0.3 points
+RT_MAX_POINTS = 20           # Cap at 20 points (~67 mentions)
 
 # Metric Bonus Settings (User Confirmed)
 # 5 pts max per metric, linear scale from 100%-120%
@@ -204,7 +204,7 @@ class QuarterSettings(BaseModel):
     # === BENCHMARKS (editable before lock) ===
     benchmark_ppa: float = 55.0
     benchmark_lbw: float = 8.0
-    benchmark_glass: float = 1.25  # Per handout: $1.25 per person
+    benchmark_glass: float = 1.35  # Per handout v3: $1.35 per person
     benchmark_lsc: float = 100.0   # Guests per LSC (lower is better)
     benchmark_cv: float = 5.0     # Expected CV score (baseline for reference)
     
@@ -1077,7 +1077,7 @@ def generate_hierarchy_rankings(employees: List[EmployeeV2], settings: QuarterSe
         
         # Review Bonus: RT mentions × 0.5 (capped at 15 pts)
         review_mentions = emp.review_mentions or 0
-        review_bonus = min(review_mentions * 0.5, 15)
+        review_bonus = min(review_mentions * 0.3, 20)
         
         # Metric Bonus: bonuses from exceeding benchmarks in metrics (PPA, LBW, LSC, Glass)
         metric_bonus = emp.total_metric_bonus or 0

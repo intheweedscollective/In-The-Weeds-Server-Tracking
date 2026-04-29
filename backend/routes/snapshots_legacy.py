@@ -126,7 +126,7 @@ def register_snapshots_legacy_routes(router: APIRouter, db):
                 
                 # RT contribution
                 rt_mentions = existing.get("rt_mentions", 0) or 0
-                rt_contribution = min(rt_mentions * 0.5, 15)
+                rt_contribution = min(rt_mentions * 0.3, 20)
                 
                 weighted_score = (
                     capped_ppa * 0.25 +
@@ -462,7 +462,7 @@ def register_snapshots_legacy_routes(router: APIRouter, db):
                         # Calculate scores using benchmarks
                         benchmark_ppa = settings.benchmark_ppa or 55
                         benchmark_lbw = settings.benchmark_lbw or 8
-                        benchmark_glass = settings.benchmark_glass or 1.25
+                        benchmark_glass = settings.benchmark_glass or 1.35
                         benchmark_lsc = settings.benchmark_lsc or 100
                         
                         score_ppa = (ppa / benchmark_ppa) * 100 if benchmark_ppa > 0 else 0
@@ -702,7 +702,7 @@ def register_snapshots_legacy_routes(router: APIRouter, db):
                     
                     benchmark_ppa = settings.benchmark_ppa or 55
                     benchmark_lbw = settings.benchmark_lbw or 8
-                    benchmark_glass = settings.benchmark_glass or 1.25
+                    benchmark_glass = settings.benchmark_glass or 1.35
                     benchmark_lsc = settings.benchmark_lsc or 100
                     
                     score_ppa = (ppa / benchmark_ppa) * 100 if benchmark_ppa > 0 else 0

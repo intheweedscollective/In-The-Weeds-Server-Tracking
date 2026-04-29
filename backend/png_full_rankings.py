@@ -42,7 +42,7 @@ LOGO_PATH = "/app/backend/assets/bubba_gump_logo.png"
 
 # RT formula: 0.5 pts per name mention, capped at 15.
 def _rt_value(mentions: float) -> float:
-    return min(0.5 * (mentions or 0), 15.0)
+    return min(0.3 * (mentions or 0), 20.0)
 
 
 # ---------------------------------------------------------------------------

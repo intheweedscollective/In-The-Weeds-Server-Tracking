@@ -473,7 +473,7 @@ async def fix_all_employee_scores(quarter: str = "Q1", year: int = 2026):
             if settings_doc:
                 bm_ppa = settings_doc.get('benchmark_ppa', 55) or 55
                 bm_lbw = settings_doc.get('benchmark_lbw', 8) or 8
-                bm_glass = settings_doc.get('benchmark_glass', 1.25) or 1.25
+                bm_glass = settings_doc.get('benchmark_glass', 1.35) or 1.35
                 bm_lsc = settings_doc.get('benchmark_lsc', 100) or 100
                 ppa_val = new_ppa if 'ppa' in derived_updates else (emp.get('ppa', 0) or 0)
                 lbw_val = new_lbw_pg if 'lbw_per_guest' in derived_updates else (emp.get('lbw_per_guest', 0) or 0)
@@ -528,7 +528,7 @@ async def fix_all_employee_scores(quarter: str = "Q1", year: int = 2026):
         
         # Calculate RT bonus from rt_mentions (0.5 pts per mention, capped at 15)
         rt_mentions = emp.get('rt_mentions', 0) or emp.get('review_mentions', 0) or 0
-        rt_bonus = min(rt_mentions * 0.5, 15)
+        rt_bonus = min(rt_mentions * 0.3, 20)
         
         # Get CV score
         cv_score = emp.get('cv_score', 0) or 0
@@ -1130,7 +1130,7 @@ async def unified_pos_upload(
             # Calculate scores using benchmarks
             benchmark_ppa = settings.benchmark_ppa or 55
             benchmark_lbw = settings.benchmark_lbw or 8
-            benchmark_glass = settings.benchmark_glass or 1.25
+            benchmark_glass = settings.benchmark_glass or 1.35
             benchmark_lsc = settings.benchmark_lsc or 100
             
             score_ppa = (ppa / benchmark_ppa) * 100 if benchmark_ppa > 0 else 0
@@ -1171,7 +1171,7 @@ async def unified_pos_upload(
                 # Preserve existing CV/RT data AND display_name when updating POS data
                 cv_score = match.get("cv_score", 0) or 0
                 rt_mentions = match.get("rt_mentions", 0) or 0
-                rt_contribution = min(rt_mentions * 0.5, 15)
+                rt_contribution = min(rt_mentions * 0.3, 20)
                 total_metric_bonus = match.get("total_metric_bonus", 0) or 0
                 
                 # Recalculate weighted with RT
@@ -2294,7 +2294,7 @@ async def download_full_rankings_pdf(year: int, quarter: str):
             "score_lsc": emp.get("score_lsc", 0) or 0,
             "cv_score": emp.get("cv_score", 0) or 0,
             "rt_mentions": emp.get("rt_mentions", 0) or emp.get("review_mentions", 0) or 0,
-            "rt_bonus": emp.get("review_tracker_bonus", 0) or min((emp.get("rt_mentions", 0) or 0) * 0.5, 15),
+            "rt_bonus": emp.get("review_tracker_bonus", 0) or min((emp.get("rt_mentions", 0) or 0) * 0.3, 20),
             "total_metric_bonus": emp.get("total_metric_bonus", 0) or 0,
         }
         slide_employees.append(slide_emp)
@@ -2659,7 +2659,7 @@ async def update_employee(employee_id: str, data: dict):
         if settings_doc:
             bm_ppa = settings_doc.get('benchmark_ppa', 55) or 55
             bm_lbw = settings_doc.get('benchmark_lbw', 8) or 8
-            bm_glass = settings_doc.get('benchmark_glass', 1.25) or 1.25
+            bm_glass = settings_doc.get('benchmark_glass', 1.35) or 1.35
             bm_lsc = settings_doc.get('benchmark_lsc', 100) or 100
             
             ppa_val = update_fields.get('ppa', merged.get('ppa', 0) or 0)

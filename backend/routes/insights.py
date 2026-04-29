@@ -129,7 +129,7 @@ async def get_store_health_score(quarter: str = "Q1", year: int = 2026):
     benchmarks = {
         "ppa": settings.get("benchmark_ppa", 55) if settings else 55,
         "lbw": settings.get("benchmark_lbw", 8) if settings else 8,
-        "glass": settings.get("benchmark_glass", 1.25) if settings else 1.25,
+        "glass": settings.get("benchmark_glass", 1.35) if settings else 1.35,
         "lsc": settings.get("benchmark_lsc", 100) if settings else 100,
         "labor_pct": target_labor_pct
     }
@@ -236,7 +236,7 @@ async def get_coaching_radar(quarter: str = "Q1", year: int = 2026):
     benchmarks = {
         "ppa": settings.get("benchmark_ppa", 55) if settings else 55,
         "lbw": settings.get("benchmark_lbw", 8) if settings else 8,
-        "glass": settings.get("benchmark_glass", 1.25) if settings else 1.25,
+        "glass": settings.get("benchmark_glass", 1.35) if settings else 1.35,
         "lsc": settings.get("benchmark_lsc", 1) if settings else 1
     }
     

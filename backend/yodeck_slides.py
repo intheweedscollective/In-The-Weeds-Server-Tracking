@@ -1178,7 +1178,7 @@ def generate_complete_rankings_slide(
             "score_lsc": r.get("score_lsc") or (r.get("lsc_points", {}).get("percentage") if isinstance(r.get("lsc_points"), dict) else 0) or 0,
             "cv_score": r.get("cv_score") or 0,
             "rt_mentions": r.get("review_mentions") or r.get("rt_mentions") or 0,
-            "rt_bonus": r.get("rt_bonus") or min((r.get("review_mentions") or r.get("rt_mentions") or 0) * 0.5, 15),
+            "rt_bonus": r.get("rt_bonus") or min((r.get("review_mentions") or r.get("rt_mentions") or 0) * 0.3, 20),
         }
         employees.append(emp)
     

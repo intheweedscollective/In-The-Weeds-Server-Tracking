@@ -174,7 +174,7 @@ async def get_yodeck_complete_rankings_slide(year: int, quarter: str, format: st
             "score_lsc": emp.get("score_lsc", 0) or 0,
             "cv_score": emp.get("cv_score", 0) or 0,
             "rt_mentions": emp.get("rt_mentions", 0) or emp.get("review_mentions", 0) or 0,
-            "rt_bonus": emp.get("review_tracker_bonus", 0) or min((emp.get("rt_mentions", 0) or 0) * 0.5, 15),
+            "rt_bonus": emp.get("review_tracker_bonus", 0) or min((emp.get("rt_mentions", 0) or 0) * 0.3, 20),
             "total_metric_bonus": emp.get("total_metric_bonus", 0) or 0,
         }
         slide_employees.append(slide_emp)
