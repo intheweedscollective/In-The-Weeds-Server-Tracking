@@ -531,11 +531,41 @@ async def fix_all_rankings(quarter: str = "Q1", year: int = 2026):
 
     # 7. Sync fresh scores into every snapshot for this quarter (not just
     #    the most recent — historical snapshots had stale weighted_score
-    #    values from the old formula).
+    #    values from the old formula). Also overlay the freshly computed
+    #    tier_label / position_label so the leaderboard endpoint (which
+    #    reads `tier_label` directly from the snapshot) matches the
+    #    snapshot view (which recomputes tiers live).
     fresh_employees = await db.employees_v2.find(
         {"year": year, "quarter": quarter.upper()},
         {"_id": 0}
     ).to_list(500)
+
+    # Build the hierarchy rankings (same logic the snapshot view uses) so
+    # we can stamp tier_label / position_label onto each fresh employee.
+    from scoring_engine import generate_hierarchy_rankings
+    fresh_emp_objs = []
+    for d in fresh_employees:
+        d2 = dict(d)
+        if not d2.get("review_mentions") and d2.get("rt_mentions"):
+            d2["review_mentions"] = d2["rt_mentions"]
+        if not d2.get("glassware_sales") and d2.get("bar_glassware_sales"):
+            d2["glassware_sales"] = d2["bar_glassware_sales"]
+        try:
+            fresh_emp_objs.append(EmployeeV2(**d2))
+        except Exception:
+            continue
+    rankings = generate_hierarchy_rankings(fresh_emp_objs, settings)
+    rank_by_id = {r.get("employee_id"): r for r in rankings if r.get("employee_id")}
+
+    # Overlay tier_label, position_label, peer_rank onto fresh_employees.
+    for emp in fresh_employees:
+        ranked = rank_by_id.get(emp.get("id"))
+        if not ranked:
+            continue
+        emp["tier_label"] = ranked.get("tier_label")
+        emp["position_label"] = ranked.get("position_label")
+        emp["peer_rank"] = ranked.get("peer_rank")
+        emp["performance_tier"] = ranked.get("performance_tier")
 
     snaps = await db.snapshot_workflow.find(
         {"year": year, "quarter": quarter.upper()},
@@ -566,6 +596,19 @@ async def fix_all_rankings(quarter: str = "Q1", year: int = 2026):
         snapshots_synced += 1
 
     logger.info(f"Synced {snapshots_synced} snapshots")
+
+    # Persist tier_label updates back to employees_v2 too, so any other
+    # endpoint reading from the v2 collection sees consistent tiers.
+    for emp in fresh_employees:
+        await db.employees_v2.update_one(
+            {"id": emp.get("id")},
+            {"$set": {
+                "tier_label": emp.get("tier_label"),
+                "position_label": emp.get("position_label"),
+                "peer_rank": emp.get("peer_rank"),
+                "performance_tier": emp.get("performance_tier"),
+            }}
+        )
 
     return {
         "success": True,
