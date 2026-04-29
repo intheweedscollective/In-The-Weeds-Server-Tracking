@@ -156,7 +156,18 @@ frontend/node_modules/.cache/default-development/80.pack
 frontend/node_modules/.cache/default-development/80.pack
 
 # Environment & credentials
-# NOTE: .env files MUST be tracked for Emergent deployment.
+# Backend .env has REAL secrets — NEVER commit. Production values live in
+# Emergent's secrets manager. Use backend/.env.example as the schema.
+backend/.env
+
+# Frontend .env is safe to commit — it only has REACT_APP_BACKEND_URL
+# (the public preview URL) and dev-server settings. No secrets.
+!frontend/.env
+
+# Allow .env.example files everywhere (they only have placeholders).
+!*.env.example
+!**/.env.example
+
 credentials.json
 *.pem
 *.key
