@@ -5,6 +5,7 @@ import { Button } from "../components/ui/button";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { getCurrentQuarter } from "../lib/quarterUtils";
+import { getDisplayFirstName } from "../utils/displayName";
 
 export default function StoreDetails() {
   const { storeId } = useParams();
@@ -163,7 +164,7 @@ export default function StoreDetails() {
           <div className="divide-y divide-slate-700">
             {stats?.top_performers?.length > 0 ? (
               stats.top_performers.map((emp, idx) => (
-                <div key={emp.name} className="flex items-center justify-between p-4">
+                <div key={getDisplayFirstName(emp)} className="flex items-center justify-between p-4">
                   <div className="flex items-center gap-3">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
                       idx === 0 ? 'bg-amber-500 text-white' :
@@ -173,7 +174,7 @@ export default function StoreDetails() {
                     }`}>
                       {idx + 1}
                     </div>
-                    <span className="font-medium text-white">{emp.name}</span>
+                    <span className="font-medium text-white">{getDisplayFirstName(emp)}</span>
                   </div>
                   <span className="text-lg font-bold text-primary">{emp.score?.toFixed(2)}</span>
                 </div>

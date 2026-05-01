@@ -5,6 +5,7 @@ import {
   Globe, MapPin, ChevronRight, BarChart3 
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { getDisplayFirstName } from "../utils/displayName";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -233,7 +234,7 @@ export default function GlobalOverview() {
                 </div>
                 
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium truncate text-sm">{emp.name}</div>
+                  <div className="font-medium truncate text-sm">{getDisplayFirstName(emp)}</div>
                   <div className="text-xs text-muted-foreground flex items-center gap-1">
                     <MapPin className="w-3 h-3" />
                     {emp.store_code}

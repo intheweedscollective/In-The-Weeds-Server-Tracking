@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../components/ui/tooltip";
 import { formatNumber, formatCurrency } from "../utils/formatters";
 import { TrendIndicator } from "../components/TrendIndicator";
+import { getDisplayFirstName } from "../utils/displayName";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -865,7 +866,7 @@ export default function FullRankings() {
                             <div>
                               <div className="flex items-center gap-2">
                                 <span className="font-semibold text-foreground" data-testid={`employee-name-${employee.position}`}>
-                                  {employee.name}
+                                  {getDisplayFirstName(employee)}
                                 </span>
                                 {(() => {
                                   const percentile = Math.round((1 - (employee.position - 1) / totalEmployees) * 100);
@@ -915,7 +916,7 @@ export default function FullRankings() {
                                     </TooltipTrigger>
                                     <TooltipContent className="bg-slate-800 text-white p-3 max-w-xs border border-slate-600">
                                       <div className="text-xs space-y-1">
-                                        <div className="font-bold text-primary mb-2">{employee.name}'s Customer Voice</div>
+                                        <div className="font-bold text-primary mb-2">{getDisplayFirstName(employee)}'s Customer Voice</div>
                                         {promoters > 0 && (
                                           <div className="flex justify-between">
                                             <span>Promoters ({promoters} × +0.5):</span>
@@ -1099,7 +1100,7 @@ export default function FullRankings() {
                                   <div className="space-y-4">
                                     <div className="flex items-center gap-2 mb-3">
                                       <span className="text-lg font-serif font-bold text-slate-200">Metric Breakdown</span>
-                                      <span className="text-sm text-slate-400">• {employee.name}</span>
+                                      <span className="text-sm text-slate-400">• {getDisplayFirstName(employee)}</span>
                                     </div>
                                     
                                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -1389,7 +1390,7 @@ export default function FullRankings() {
                         {getMetricIcon(index + 1)}
                       </div>
                       <div>
-                        <h4 className="font-semibold text-foreground">{employee.name}</h4>
+                        <h4 className="font-semibold text-foreground">{getDisplayFirstName(employee)}</h4>
                         <p className="text-sm text-slate-400 capitalize">{employee.tier_label || employee.job_title || 'Server'}</p>
                       </div>
                     </div>
@@ -1443,7 +1444,7 @@ export default function FullRankings() {
                             </div>
                             
                             <div>
-                              <h4 className="font-semibold text-foreground text-sm">{employee.name}</h4>
+                              <h4 className="font-semibold text-foreground text-sm">{getDisplayFirstName(employee)}</h4>
                               <p className="text-xs text-slate-400 capitalize">{employee.tier_label || employee.job_title || 'Server'}</p>
                             </div>
                           </div>
@@ -1504,7 +1505,7 @@ export default function FullRankings() {
                           </div>
                         </td>
                         <td className="py-3 px-2">
-                          <div className="font-semibold text-foreground">{employee.name}</div>
+                          <div className="font-semibold text-foreground">{getDisplayFirstName(employee)}</div>
                           <div className="text-xs text-slate-400 capitalize">{employee.tier_label || employee.job_title || 'Server'}</div>
                         </td>
                         <td className="py-3 px-2 text-center">

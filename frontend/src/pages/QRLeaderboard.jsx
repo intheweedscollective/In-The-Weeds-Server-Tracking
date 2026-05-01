@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import api from "../lib/api";
 import { Button } from "../components/ui/button";
 import { getCurrentQuarter } from "../lib/quarterUtils";
+import { getDisplayFirstName } from "../utils/displayName";
 
 export default function QRLeaderboard() {
   const [employees, setEmployees] = useState([]);
@@ -117,9 +118,9 @@ export default function QRLeaderboard() {
                     <div className="min-w-0 flex-1">
                       <p
                         className={`font-semibold truncate ${rank <= 3 ? 'text-base sm:text-xl text-white' : 'text-sm sm:text-base text-white'}`}
-                        title={emp.name}
+                        title={getDisplayFirstName(emp)}
                       >
-                        {emp.name}
+                        {getDisplayFirstName(emp)}
                       </p>
                       {rank <= 3 && (
                         <p className="text-[10px] sm:text-sm text-slate-400">

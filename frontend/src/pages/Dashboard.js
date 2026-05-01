@@ -11,6 +11,7 @@ import CoachingRadar from "../components/CoachingRadar";
 import ReviewImpactTracker from "../components/ReviewImpactTracker";
 import { formatNumber } from "../utils/formatters";
 import { TrendIndicator } from "../components/TrendIndicator";
+import { getDisplayFirstName } from "../utils/displayName";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -585,7 +586,7 @@ export default function Dashboard() {
                           {idx + 1}
                         </div>
                         <div>
-                          <h3 className="font-semibold text-white">{employee.name}</h3>
+                          <h3 className="font-semibold text-white">{getDisplayFirstName(employee)}</h3>
                           <p className="text-xs text-slate-400 capitalize">{employee.job_title || 'Server'}</p>
                         </div>
                       </div>
@@ -951,11 +952,11 @@ export default function Dashboard() {
                   // Generate justification based on top 2 driving metrics
                   let justification = '';
                   if (top2Metrics.length >= 2) {
-                    justification = `${emp.name}'s success is driven by ${top2Metrics[0].name} (${top2Metrics[0].display}, ${top2Metrics[0].vsAvg.toFixed(0)}% above avg) and ${top2Metrics[1].name} (${top2Metrics[1].display}, ${top2Metrics[1].vsAvg.toFixed(0)}% above avg).`;
+                    justification = `${getDisplayFirstName(emp)}'s success is driven by ${top2Metrics[0].name} (${top2Metrics[0].display}, ${top2Metrics[0].vsAvg.toFixed(0)}% above avg) and ${top2Metrics[1].name} (${top2Metrics[1].display}, ${top2Metrics[1].vsAvg.toFixed(0)}% above avg).`;
                   } else if (top2Metrics.length === 1) {
-                    justification = `${emp.name}'s success is driven by ${top2Metrics[0].name} (${top2Metrics[0].display}, ${top2Metrics[0].vsAvg.toFixed(0)}% above avg).`;
+                    justification = `${getDisplayFirstName(emp)}'s success is driven by ${top2Metrics[0].name} (${top2Metrics[0].display}, ${top2Metrics[0].vsAvg.toFixed(0)}% above avg).`;
                   } else {
-                    justification = `${emp.name} shows balanced performance across all metrics, scoring ${((score - avgScore) / avgScore * 100).toFixed(0)}% above the restaurant average.`;
+                    justification = `${getDisplayFirstName(emp)} shows balanced performance across all metrics, scoring ${((score - avgScore) / avgScore * 100).toFixed(0)}% above the restaurant average.`;
                   }
                   
                   // Get momentum for this employee
@@ -971,7 +972,7 @@ export default function Dashboard() {
                       <div className="flex-1">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <h3 className="font-serif font-bold text-lg text-gray-900">{emp.name}</h3>
+                            <h3 className="font-serif font-bold text-lg text-gray-900">{getDisplayFirstName(emp)}</h3>
                             <span className="px-2 py-0.5 bg-green-100 text-green-800 text-xs font-bold rounded-full">
                               +{((score - avgScore) / avgScore * 100).toFixed(0)}% vs avg
                             </span>
@@ -1042,7 +1043,7 @@ export default function Dashboard() {
                   if ((emp.glassware_per_guest || 0) < 1) weakAreas.push('Glassware');
                   if ((emp.cv_score || 0) < 0) weakAreas.push('Customer Voice');
                   
-                  let justification = `${emp.name} scored ${score.toFixed(1)}, which is ${(bMin - score).toFixed(1)} points below the B-Server threshold. `;
+                  let justification = `${getDisplayFirstName(emp)} scored ${score.toFixed(1)}, which is ${(bMin - score).toFixed(1)} points below the B-Server threshold. `;
                   if (weakAreas.length > 0) {
                     justification += `Key areas for improvement: ${weakAreas.join(', ')}. `;
                   }
@@ -1056,7 +1057,7 @@ export default function Dashboard() {
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center justify-between mb-2">
-                            <h3 className="font-serif font-bold text-lg text-gray-900">{emp.name}</h3>
+                            <h3 className="font-serif font-bold text-lg text-gray-900">{getDisplayFirstName(emp)}</h3>
                             <span className="text-xl font-bold text-red-600">{score.toFixed(1)}</span>
                           </div>
                           

@@ -5,6 +5,7 @@ import { getCurrentQuarter } from "../lib/quarterUtils";
 import { Button } from "../components/ui/button";
 import { formatCurrency, formatNumber } from "../utils/formatters";
 import { toast } from "sonner";
+import { getDisplayFirstName } from "../utils/displayName";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -843,7 +844,7 @@ export default function Analytics() {
                                   activeFilter.zone === ZONE_TYPES.MEDIUM ? 'text-yellow-700' :
                                   'text-blue-700'
                                 }`}>#{idx + 1}</span>
-                                <span className="font-semibold text-foreground truncate">{emp.name}</span>
+                                <span className="font-semibold text-foreground truncate">{getDisplayFirstName(emp)}</span>
                               </div>
                               {emp.ranking && (
                                 <span className="text-xs bg-slate-100 text-slate-300 px-2 py-0.5 rounded-full">
@@ -890,7 +891,7 @@ export default function Analytics() {
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-primary">#{idx + 1}</span>
-                          <span className="font-semibold text-foreground truncate">{emp.name}</span>
+                          <span className="font-semibold text-foreground truncate">{getDisplayFirstName(emp)}</span>
                           {emp.ranking && (
                             <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-semibold">
                               {emp.ranking}
@@ -938,7 +939,7 @@ export default function Analytics() {
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
                                 <span className="font-bold text-primary">#{idx + 1}</span>
-                                <span className="font-semibold text-foreground truncate">{emp.name}</span>
+                                <span className="font-semibold text-foreground truncate">{getDisplayFirstName(emp)}</span>
                               </div>
                               <div className="text-sm text-slate-400 truncate">{emp.performance_tier || 'Not Assessed'}</div>
                               <div className="text-xs text-gray-400">Overall Rank: #{emp.peer_rank || "N/A"}</div>

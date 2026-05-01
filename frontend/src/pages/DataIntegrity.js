@@ -5,6 +5,7 @@ import api from "../lib/api";
 import { getCurrentQuarter } from "../lib/quarterUtils";
 import { Button } from "../components/ui/button";
 import { Checkbox } from "../components/ui/checkbox";
+import { getDisplayFirstName } from "../utils/displayName";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -501,7 +502,7 @@ export default function DataIntegrity() {
                             className="h-4 w-4"
                           />
                           <div className="flex-1 min-w-0">
-                            <div className="text-sm text-white truncate">{emp.name}</div>
+                            <div className="text-sm text-white truncate">{getDisplayFirstName(emp)}</div>
                             <div className="text-xs text-red-400">{emp.reason}</div>
                           </div>
                           <span className="text-xs text-slate-500 shrink-0">Score: {emp.score?.toFixed(1) || 0}</span>
@@ -522,7 +523,7 @@ export default function DataIntegrity() {
                             className="h-4 w-4"
                           />
                           <div className="flex-1 min-w-0">
-                            <div className="text-sm text-white truncate">{emp.name}</div>
+                            <div className="text-sm text-white truncate">{getDisplayFirstName(emp)}</div>
                             <div className="text-xs text-yellow-400">{emp.reason}</div>
                           </div>
                           <span className="text-xs text-slate-500 shrink-0">Score: {emp.score?.toFixed(1) || 0}</span>

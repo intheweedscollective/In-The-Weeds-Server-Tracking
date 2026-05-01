@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import api from "../lib/api";
 import { getCurrentQuarter } from "../lib/quarterUtils";
 import { formatNumber, formatCurrency } from "../utils/formatters";
+import { getDisplayFirstName } from "../utils/displayName";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -230,7 +231,7 @@ export default function QuarterlySummary() {
                               {idx + 1}
                             </span>
                           </td>
-                          <td className="py-2 pr-4 font-medium text-white print:text-slate-900">{emp.name}</td>
+                          <td className="py-2 pr-4 font-medium text-white print:text-slate-900">{getDisplayFirstName(emp)}</td>
                           <td className="py-2 pr-4 text-center text-green-400 print:text-green-600">{emp.cv_promoters || 0}</td>
                           <td className="py-2 pr-4 text-center text-red-400 print:text-red-600">{emp.cv_detractors || 0}</td>
                           <td className={`py-2 text-right font-bold ${
@@ -288,7 +289,7 @@ export default function QuarterlySummary() {
                               {idx + 1}
                             </span>
                           </td>
-                          <td className="py-2 pr-4 font-medium text-white print:text-slate-900">{emp.name}</td>
+                          <td className="py-2 pr-4 font-medium text-white print:text-slate-900">{getDisplayFirstName(emp)}</td>
                           <td className="py-2 pr-4 text-center text-slate-300 print:text-slate-700">
                             {formatCurrency(emp.ppa || 0)}
                           </td>
@@ -339,7 +340,7 @@ export default function QuarterlySummary() {
                     {employees.map((emp, idx) => (
                       <tr key={emp.id || emp.name} className={`border-b border-slate-700/50 print:border-slate-200 ${idx % 2 === 0 ? '' : 'bg-slate-800/30 print:bg-slate-50'}`}>
                         <td className="py-2 pr-3 text-slate-400 print:text-slate-600">{idx + 1}</td>
-                        <td className="py-2 pr-3 font-medium text-white print:text-slate-900">{emp.name}</td>
+                        <td className="py-2 pr-3 font-medium text-white print:text-slate-900">{getDisplayFirstName(emp)}</td>
                         <td className="py-2 pr-3 text-slate-400 print:text-slate-600 capitalize text-xs">{emp.job_title || 'Server'}</td>
                         <td className="py-2 pr-3 text-right font-bold text-primary print:text-blue-600">{(emp.total_score || 0).toFixed(2)}</td>
                         <td className="py-2 pr-3 text-center text-green-400 print:text-green-600">{emp.cv_promoters || 0}</td>

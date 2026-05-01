@@ -8,6 +8,7 @@ import api from "../lib/api";
 import { getCurrentQuarter } from "../lib/quarterUtils";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
+import { getDisplayFirstName } from "../utils/displayName";
 
 const StatusBadge = ({ status }) => {
   const styles = {
@@ -282,7 +283,7 @@ export default function ScoringAudit() {
             ) : (
               filteredEmployees.map((emp) => (
                 <div 
-                  key={emp.name}
+                  key={getDisplayFirstName(emp)}
                   className={`p-3 md:p-4 flex items-center justify-between hover:bg-slate-800/50 transition-colors ${
                     emp.status === 'FAIL' ? 'bg-red-500/5' : ''
                   }`}
@@ -298,7 +299,7 @@ export default function ScoringAudit() {
                       )}
                     </div>
                     <div className="min-w-0">
-                      <p className="font-medium text-white text-sm md:text-base truncate">{emp.name}</p>
+                      <p className="font-medium text-white text-sm md:text-base truncate">{getDisplayFirstName(emp)}</p>
                       {emp.status === 'FAIL' && emp.status_details && (
                         <p className="text-xs text-red-400 truncate">{emp.status_details}</p>
                       )}

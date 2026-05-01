@@ -2,6 +2,7 @@ import { X, Target } from "lucide-react";
 import { Button } from "./ui/button";
 import { formatCurrency, formatNumber } from "../utils/formatters";
 import { HelpTooltip } from "./HelpTooltip";
+import { getDisplayFirstName } from "../utils/displayName";
 
 /**
  * EmployeeDetailsModal - Displays detailed employee scoring breakdown
@@ -21,7 +22,7 @@ export const EmployeeDetailsModal = ({
         <div className="p-6 border-b border-gray-200 sticky top-0 bg-slate-800 z-10">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-serif font-black text-primary">{employee.name}</h2>
+              <h2 className="text-2xl font-serif font-black text-primary">{getDisplayFirstName(employee)}</h2>
               <p className="text-slate-400">
                 Rank #{employee.peer_rank || '-'} of {totalEmployees} • {employee.performance_tier || 'Not Assessed'}
               </p>

@@ -5,6 +5,7 @@ import { Button } from "../components/ui/button";
 import QRTopClicksCard from "../components/QRTopClicksCard";
 import api from "../lib/api";
 import { getCurrentQuarter } from "../lib/quarterUtils";
+import { getDisplayFirstName } from "../utils/displayName";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -179,7 +180,7 @@ export default function Reports() {
                 <div className="p-8 text-center text-slate-400">Loading...</div>
               ) : topPerformers.length > 0 ? (
                 topPerformers.map((emp, idx) => (
-                  <div key={emp.name} className="flex items-center justify-between p-4">
+                  <div key={getDisplayFirstName(emp)} className="flex items-center justify-between p-4">
                     <div className="flex items-center gap-3">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
                         idx === 0 ? 'bg-amber-500 text-white' : 
@@ -190,7 +191,7 @@ export default function Reports() {
                         {idx + 1}
                       </div>
                       <div>
-                        <span className="font-medium text-white">{emp.name}</span>
+                        <span className="font-medium text-white">{getDisplayFirstName(emp)}</span>
                         <p className="text-xs text-slate-500 capitalize">{emp.job_title || 'Server'}</p>
                       </div>
                     </div>

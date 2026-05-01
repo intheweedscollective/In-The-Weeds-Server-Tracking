@@ -4,6 +4,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { toast } from "sonner";
 import { getCurrentQuarter } from "../lib/quarterUtils";
+import { getDisplayFirstName } from "../utils/displayName";
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -501,7 +502,7 @@ export default function ReviewTracker() {
                   {filteredMentions.map((emp, idx) => {
                     const rtPoints = Math.min((emp.mentions || 0) * 0.5, 15);
                     return (
-                      <tr key={emp.name} className="hover:bg-slate-700/30 transition-colors">
+                      <tr key={getDisplayFirstName(emp)} className="hover:bg-slate-700/30 transition-colors">
                         <td className="px-3 md:px-4 py-2 md:py-3">
                           <div className={`w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center text-white font-bold text-xs md:text-sm ${
                             idx === 0 ? "bg-yellow-500" : idx === 1 ? "bg-gray-400" : idx === 2 ? "bg-amber-600" : "bg-slate-600"
@@ -510,7 +511,7 @@ export default function ReviewTracker() {
                           </div>
                         </td>
                         <td className="px-3 md:px-4 py-2 md:py-3">
-                          <span className="font-medium text-white text-sm">{emp.name}</span>
+                          <span className="font-medium text-white text-sm">{getDisplayFirstName(emp)}</span>
                         </td>
                         <td className="px-3 md:px-4 py-2 md:py-3 text-center">
                           <span className="text-lg md:text-xl font-bold text-blue-400">{emp.mentions || 0}</span>
@@ -577,7 +578,7 @@ export default function ReviewTracker() {
                     return (
                       <tr key={emp.id} className={`transition-colors ${isEditing ? "bg-purple-900/20" : "hover:bg-slate-700/30"}`}>
                         <td className="px-3 md:px-4 py-2 md:py-3">
-                          <span className="font-medium text-white text-sm">{emp.name}</span>
+                          <span className="font-medium text-white text-sm">{getDisplayFirstName(emp)}</span>
                         </td>
                         <td className="px-3 md:px-4 py-2 md:py-3 text-center">
                           {isEditing ? (

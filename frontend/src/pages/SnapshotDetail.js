@@ -13,6 +13,7 @@ import { Input } from "../components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../components/ui/dialog";
 import { useToast } from "../hooks/use-toast";
 import api from "../lib/api";
+import { getDisplayFirstName } from "../utils/displayName";
 
 const STATUS_CONFIG = {
   draft: { label: "Draft", color: "bg-slate-500", textColor: "text-slate-300" },
@@ -882,7 +883,7 @@ export default function SnapshotDetail() {
                         {idx + 1}
                       </span>
                       <div>
-                        <p className="text-white font-medium">{emp.name}</p>
+                        <p className="text-white font-medium">{getDisplayFirstName(emp)}</p>
                         <p className={`text-xs ${
                           emp.tier_label?.includes('Trainer') ? 'text-purple-400' :
                           emp.tier_label?.includes('Bartender') ? 'text-blue-400' :

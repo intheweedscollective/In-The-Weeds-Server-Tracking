@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { QrCode, TrendingUp } from "lucide-react";
 import api from "../lib/api";
+import { getDisplayFirstName } from "../utils/displayName";
 
 export default function QRTopClicksCard({ showViewAll = true, limit = 5 }) {
   const [topClicks, setTopClicks] = useState([]);
@@ -90,7 +91,7 @@ export default function QRTopClicksCard({ showViewAll = true, limit = 5 }) {
       <div className="divide-y divide-slate-700">
         {topClicks.length > 0 ? (
           topClicks.map((emp, idx) => (
-            <div key={emp.name} className="flex items-center justify-between p-4 hover:bg-slate-750 transition-colors">
+            <div key={getDisplayFirstName(emp)} className="flex items-center justify-between p-4 hover:bg-slate-750 transition-colors">
               <div className="flex items-center gap-3">
                 <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold ${
                   idx === 0 ? 'bg-amber-500 text-white' : 
@@ -100,7 +101,7 @@ export default function QRTopClicksCard({ showViewAll = true, limit = 5 }) {
                 }`}>
                   {idx + 1}
                 </div>
-                <span className="font-medium text-white">{emp.name}</span>
+                <span className="font-medium text-white">{getDisplayFirstName(emp)}</span>
               </div>
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1 text-xs">

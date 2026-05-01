@@ -1,5 +1,6 @@
 import { Trophy, Medal, Award } from "lucide-react";
 import { formatNumber, formatCurrency } from "../utils/formatters";
+import { getDisplayFirstName } from "../utils/displayName";
 
 // V2 Metrics Configuration
 const V2_METRICS = {
@@ -76,7 +77,7 @@ export const TopPerformersGrid = ({ employees }) => {
                         {getMetricIcon(idx + 1)}
                       </div>
                       <span className="text-sm font-medium text-white truncate max-w-[120px]">
-                        {emp.name}
+                        {getDisplayFirstName(emp)}
                       </span>
                     </div>
                     <span className="text-sm font-bold text-primary">
@@ -135,7 +136,7 @@ export const TopOverallCard = ({ employees }) => {
                   {getMetricIcon(idx + 1)}
                 </div>
                 <div>
-                  <span className="font-semibold text-white">{emp.name}</span>
+                  <span className="font-semibold text-white">{getDisplayFirstName(emp)}</span>
                   <span className="ml-2 text-xs text-slate-400">{emp.tier_label}</span>
                 </div>
               </div>

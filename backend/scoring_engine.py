@@ -100,7 +100,8 @@ class EmployeeV2(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     
     # === CANONICAL FIELDS (from upload) ===
-    name: str
+    name: str              # Report name (backend-only — used for ingestion/matching)
+    display_name: Optional[str] = None  # User-facing. First word rendered everywhere.
     job_title: str = "Server"  # NEW: Job Title for hierarchy-based rankings
     aliases: List[str] = Field(default_factory=list)  # Nicknames for name matching (e.g., ["Trey", "T.Q."])
     guests: int = 0  # Must be > 0
@@ -1023,9 +1024,48 @@ def classify_employee_role(employee: EmployeeV2, settings: QuarterSettings) -> D
 
 
 def get_first_name(full_name: str) -> str:
-    """Extract first name only from full name for privacy on public displays."""
+    """DEPRECATED: use get_display_first_name(employee) instead.
+
+    Kept for backwards compatibility with legacy callers that only have a
+    bare name string. For any employee-aware rendering path, use
+    `get_display_first_name` so Display Name takes precedence over raw
+    report_name.
+    """
     if not full_name:
         return "Unknown"
+    parts = full_name.strip().split()
+    if parts:
+        return parts[0]
+    return full_name
+
+
+def get_display_first_name(employee) -> str:
+    """Return the ONLY string allowed in user-facing outputs.
+
+    Rules (per product directive):
+      1. Prefer `display_name`. Return its first word.
+      2. If display_name is empty, fallback to first word of `name`
+         (report_name is stored there for legacy snapshot rows).
+      3. Never return a full name or last name.
+      4. Case is preserved; whitespace is trimmed.
+
+    Accepts either an EmployeeV2 pydantic model OR a dict. Safe to call
+    on incomplete records — returns "Unknown" if both fields are missing.
+    """
+    if employee is None:
+        return "Unknown"
+    if hasattr(employee, "model_dump"):
+        display = getattr(employee, "display_name", None)
+        report = getattr(employee, "name", None)
+    else:
+        display = employee.get("display_name")
+        report = employee.get("name") or employee.get("report_name")
+    for candidate in (display, report):
+        if candidate and str(candidate).strip():
+            parts = str(candidate).strip().split()
+            if parts:
+                return parts[0]
+    return "Unknown"
     parts = full_name.strip().split()
     if parts:
         return parts[0]
@@ -1106,7 +1146,7 @@ def generate_hierarchy_rankings(employees: List[EmployeeV2], settings: QuarterSe
             "position_label": position_label,  # Bar1, A1, etc.
             "tier_label": tier,
             "employee_id": emp.id,
-            "name": get_first_name(emp.name) if first_name_only else emp.name,
+            "name": get_display_first_name(emp) if first_name_only else (emp.display_name or emp.name),
             "job_title": emp.job_title or "Server",
             "total_score": round(item["score"], 2),
             "bonus_points": round(metric_bonus + review_bonus, 2),
