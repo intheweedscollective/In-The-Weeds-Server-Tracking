@@ -1230,12 +1230,24 @@ export default function FullRankings() {
                                     </div>
                                     
                                     {/* Improvement Plan Section */}
-                                    <div className="mt-6 bg-slate-800 rounded-xl p-5 border border-slate-600 shadow-sm">
-                                      <div className="flex items-center gap-2 mb-4">
+                                    <div className="mt-6 bg-slate-800 rounded-xl p-5 border border-slate-600 shadow-sm" data-testid={`improvement-plan-${employee.position}`}>
+                                      <div className="flex items-center gap-2 mb-2">
                                         <Target className="w-5 h-5 text-blue-400" />
                                         <span className="text-lg font-serif font-bold text-white">Improvement Plan</span>
                                       </div>
-                                      
+
+                                      {/* Context blurb — answers the FAQ */}
+                                      <div className="mb-4 text-xs sm:text-sm text-slate-300 bg-slate-900/60 border border-slate-700 rounded-lg p-3 leading-relaxed">
+                                        <p className="mb-1.5">
+                                          <span className="font-semibold text-blue-400">Goal:</span> {getDisplayFirstName(employee)} doesn&apos;t need to hit every benchmark — focus on the <span className="font-semibold text-amber-300">red cards</span> below first.
+                                          Closing one or two of those usually adds enough points to {(employee.peer_rank || 0) > 1 ? 'pass the next person' : 'extend their lead'}.
+                                        </p>
+                                        <p className="text-slate-400 text-[11px] sm:text-xs">
+                                          <span className="font-semibold text-slate-300">Metric units:</span>
+                                          {' '}PPA = $ per guest · LBW = liquor/beer/wine $ per guest · Glass = glassware $ per guest · LSC = guests per loyalty sign-up (lower is better).
+                                        </p>
+                                      </div>
+
                                       {/* Gap Analysis vs Benchmarks */}
                                       <div className="mb-5">
                                         <h4 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
@@ -1245,40 +1257,45 @@ export default function FullRankings() {
                                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                                           {(() => {
                                             const gaps = [
-                                              { 
-                                                label: 'PPA', 
-                                                current: emp.ppa || 0, 
+                                              {
+                                                label: 'PPA',
+                                                hint: '$ / guest',
+                                                current: emp.ppa || 0,
                                                 target: benchmarks.benchmark_ppa || 55,
-                                                format: v => `$${v.toFixed(2)}`
+                                                format: v => `$${v.toFixed(2)}`,
                                               },
-                                              { 
-                                                label: 'LBW', 
-                                                current: emp.lbw_per_guest || 0, 
+                                              {
+                                                label: 'LBW',
+                                                hint: '$ / guest',
+                                                current: emp.lbw_per_guest || 0,
                                                 target: benchmarks.benchmark_lbw || 8,
-                                                format: v => `$${v.toFixed(2)}`
+                                                format: v => `$${v.toFixed(2)}`,
                                               },
-                                              { 
-                                                label: 'Glass', 
-                                                current: emp.glassware_per_guest || 0, 
-                                                target: benchmarks.benchmark_glass || 1.25,
-                                                format: v => `$${v.toFixed(2)}`
+                                              {
+                                                label: 'Glass',
+                                                hint: '$ / guest',
+                                                current: emp.glassware_per_guest || 0,
+                                                target: benchmarks.benchmark_glass || 1.35,
+                                                format: v => `$${v.toFixed(2)}`,
                                               },
-                                              { 
-                                                label: 'LSC', 
-                                                current: emp.guests_per_lsc || 999, 
+                                              {
+                                                label: 'LSC',
+                                                hint: 'guests per sign-up · lower is better',
+                                                current: emp.guests_per_lsc || 999,
                                                 target: benchmarks.benchmark_lsc || 100,
                                                 format: v => v.toFixed(0),
-                                                inverse: true // Lower is better
-                                              }
+                                                inverse: true,
+                                              },
                                             ];
                                             return gaps.map((g) => {
-                                              const diff = g.inverse 
-                                                ? g.target - g.current 
+                                              const diff = g.inverse
+                                                ? g.target - g.current
                                                 : g.current - g.target;
                                               const isGood = diff >= 0;
                                               return (
-                                                <div key={g.label} className={`p-3 rounded-lg ${isGood ? 'bg-green-900/40 border border-green-500/50' : 'bg-red-900/40 border border-red-500/50'}`}>
-                                                  <div className="text-xs text-slate-300 mb-1">{g.label}</div>
+                                                <div key={g.label} className={`p-3 rounded-lg ${isGood ? 'bg-green-900/40 border border-green-500/50' : 'bg-red-900/40 border border-red-500/50'}`} data-testid={`gap-${g.label.toLowerCase()}-${employee.position}`}>
+                                                  <div className="text-xs text-slate-300 mb-0.5 font-semibold">{g.label}</div>
+                                                  <div className="text-[10px] text-slate-500 mb-1">{g.hint}</div>
                                                   <div className={`text-lg font-bold ${isGood ? 'text-green-400' : 'text-red-400'}`}>
                                                     {isGood ? '+' : '-'}{g.format(Math.abs(diff))}
                                                   </div>
@@ -1291,49 +1308,58 @@ export default function FullRankings() {
                                           })()}
                                         </div>
                                       </div>
-                                      
-                                      {/* To Pass Next Employee */}
-                                      {employeeAbove && (employee.peer_rank || 0) > 1 && (
-                                        <div className="border-t border-slate-600 pt-4">
-                                          <h4 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
-                                            <ArrowUp className="w-4 h-4 text-blue-400" />
-                                            <span className="truncate">To Pass #{(employee.peer_rank || 0) - 1} ({employeeAbove.name})</span>
-                                          </h4>
-                                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
-                                            <div className="bg-blue-900/40 rounded-lg p-2 sm:p-3 border border-blue-500/50">
-                                              <div className="text-xs text-slate-300">Gap</div>
-                                              <div className="text-base sm:text-lg font-bold text-blue-400">
-                                                +{((employeeAbove.total_score || 0) - (employee.total_score || 0)).toFixed(1)}
-                                              </div>
-                                              <div className="text-xs text-slate-400 hidden sm:block">pts needed</div>
+
+                                      {/* Two-pronged path forward */}
+                                      <div className="grid sm:grid-cols-2 gap-4">
+                                        {/* To Pass Next Employee */}
+                                        {employeeAbove && (employee.peer_rank || 0) > 1 && (
+                                          <div className="border border-slate-600 rounded-lg p-3 bg-slate-900/40" data-testid={`pass-next-${employee.position}`}>
+                                            <h4 className="text-sm font-semibold text-slate-200 mb-2 flex items-center gap-2">
+                                              <ArrowUp className="w-4 h-4 text-blue-400" />
+                                              <span className="truncate">Pass #{(employee.peer_rank || 0) - 1} ({getDisplayFirstName(employeeAbove)})</span>
+                                            </h4>
+                                            <div className="text-3xl font-bold text-blue-400 leading-none mb-1">
+                                              +{((employeeAbove.total_score || 0) - (employee.total_score || 0)).toFixed(1)}
                                             </div>
-                                            <div className="bg-slate-700/50 rounded-lg p-2 sm:p-3">
-                                              <div className="text-xs text-slate-400">PPA</div>
-                                              <div className="text-sm font-semibold text-white">
-                                                ${(employeeAbove.ppa || getEmployeeDetails(employeeAbove.employee_id)?.ppa || 0).toFixed(0)}
-                                              </div>
-                                            </div>
-                                            <div className="bg-slate-700/50 rounded-lg p-2 sm:p-3">
-                                              <div className="text-xs text-slate-400">LBW</div>
-                                              <div className="text-sm font-semibold text-white">
-                                                ${(employeeAbove.lbw_per_guest || getEmployeeDetails(employeeAbove.employee_id)?.lbw_per_guest || 0).toFixed(2)}
-                                              </div>
-                                            </div>
-                                            <div className="bg-slate-700/50 rounded-lg p-2 sm:p-3">
-                                              <div className="text-xs text-slate-400">Glass</div>
-                                              <div className="text-sm font-semibold text-white">
-                                                ${(employeeAbove.glassware_per_guest || getEmployeeDetails(employeeAbove.employee_id)?.glassware_per_guest || 0).toFixed(2)}
-                                              </div>
-                                            </div>
-                                            <div className="bg-slate-700/50 rounded-lg p-2 sm:p-3">
-                                              <div className="text-xs text-slate-400">LSC</div>
-                                              <div className="text-sm font-semibold text-white">
-                                                {(employeeAbove.guests_per_lsc || getEmployeeDetails(employeeAbove.employee_id)?.guests_per_lsc || 0).toFixed(0)}
-                                              </div>
-                                            </div>
+                                            <p className="text-[11px] text-slate-400">
+                                              total points needed to leapfrog them in the rankings.
+                                            </p>
                                           </div>
-                                        </div>
-                                      )}
+                                        )}
+
+                                        {/* To Reach Next Tier */}
+                                        {(() => {
+                                          const score = employee.total_score || 0;
+                                          const aMin = benchmarks.a_server_min_score || 85;
+                                          const bMin = benchmarks.b_server_min_score || 70;
+                                          let nextTier = null;
+                                          let nextThreshold = 0;
+                                          if (score < bMin) {
+                                            nextTier = 'B-Server';
+                                            nextThreshold = bMin;
+                                          } else if (score < aMin) {
+                                            nextTier = 'A-Server';
+                                            nextThreshold = aMin;
+                                          } else {
+                                            return null; // Already at top tier
+                                          }
+                                          const gap = (nextThreshold - score).toFixed(1);
+                                          return (
+                                            <div className="border border-slate-600 rounded-lg p-3 bg-slate-900/40" data-testid={`next-tier-${employee.position}`}>
+                                              <h4 className="text-sm font-semibold text-slate-200 mb-2 flex items-center gap-2">
+                                                <Award className="w-4 h-4 text-amber-400" />
+                                                <span>Reach {nextTier} (≥{nextThreshold})</span>
+                                              </h4>
+                                              <div className="text-3xl font-bold text-amber-400 leading-none mb-1">
+                                                +{gap}
+                                              </div>
+                                              <p className="text-[11px] text-slate-400">
+                                                points to graduate to the next performance tier.
+                                              </p>
+                                            </div>
+                                          );
+                                        })()}
+                                      </div>
                                     </div>
                                   </div>
                                 );
