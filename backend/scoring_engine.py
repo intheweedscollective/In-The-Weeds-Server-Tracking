@@ -218,6 +218,12 @@ class QuarterSettings(BaseModel):
     # === BONUS SETTINGS (User Confirmed) ===
     bonus_rate: float = 0.25  # (score - 100) / 20 * 5 = linear to 5 pts at 120%
     bonus_cap: float = 5.0   # Max bonus per metric
+
+    # === REVIEW TRACKER (Per-Quarter — historical quarters stay frozen) ===
+    # v2 model (pre-Q2 2026): 0.5 pts/mention, cap 15
+    # v3 model (Q2 2026+):    0.3 pts/mention, cap 20
+    rt_points_per_mention: float = 0.3
+    rt_max_points: float = 20.0
     
     # === SERVER TIER THRESHOLDS (Settings-driven) ===
     a_server_min_score: float = 85.0   # Total Score >= 85 = A-Server
@@ -462,17 +468,23 @@ def calculate_customer_voice_score(employee: EmployeeV2) -> EmployeeV2:
     return employee
 
 
-def calculate_review_tracker_bonus(employee: EmployeeV2) -> EmployeeV2:
+def calculate_review_tracker_bonus(
+    employee: EmployeeV2,
+    settings: Optional["QuarterSettings"] = None,
+) -> EmployeeV2:
     """
     Calculate Review Tracker bonus from external review mentions.
-    
-    Formula: RT mentions × 0.5 points each, capped at 15 points
+
+    Per-quarter coefficients (settings.rt_points_per_mention, settings.rt_max_points)
+    — historical quarters keep their original rule (e.g. Q1 2026 = 0.5/cap 15,
+    Q2 2026+ = 0.3/cap 20 per v3 handout). Falls back to module constants if
+    settings is not supplied.
     """
-    review_bonus = (employee.review_mentions or 0) * RT_POINTS_PER_MENTION
-    # Cap at 15 points
-    review_bonus = min(review_bonus, RT_MAX_POINTS)
+    coef = settings.rt_points_per_mention if settings else RT_POINTS_PER_MENTION
+    cap  = settings.rt_max_points         if settings else RT_MAX_POINTS
+    review_bonus = (employee.review_mentions or 0) * coef
+    review_bonus = min(review_bonus, cap)
     employee.review_tracker_bonus = round(review_bonus, 2)
-    
     return employee
 
 
@@ -747,9 +759,9 @@ def run_full_scoring(employees: List[EmployeeV2], settings: QuarterSettings) -> 
     for emp in employees:
         calculate_customer_voice_score(emp)
     
-    # Step 4: Calculate Review Tracker bonus
+    # Step 4: Calculate Review Tracker bonus (per-quarter coefficients)
     for emp in employees:
-        calculate_review_tracker_bonus(emp)
+        calculate_review_tracker_bonus(emp, settings)
     
     # Step 5: Apply combined CV + RT cap (max 20 per quarter)
     for emp in employees:
@@ -1075,9 +1087,12 @@ def generate_hierarchy_rankings(employees: List[EmployeeV2], settings: QuarterSe
         
         emp = item["employee"]
         
-        # Review Bonus: RT mentions × 0.5 (capped at 15 pts)
+        # Review Bonus — per-quarter coefficients (historical quarters stay frozen).
         review_mentions = emp.review_mentions or 0
-        review_bonus = min(review_mentions * 0.3, 20)
+        review_bonus = min(
+            review_mentions * settings.rt_points_per_mention,
+            settings.rt_max_points,
+        )
         
         # Metric Bonus: bonuses from exceeding benchmarks in metrics (PPA, LBW, LSC, Glass)
         metric_bonus = emp.total_metric_bonus or 0
