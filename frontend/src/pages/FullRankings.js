@@ -1343,7 +1343,59 @@ export default function FullRankings() {
                                           } else {
                                             return null; // Already at top tier
                                           }
-                                          const gap = (nextThreshold - score).toFixed(1);
+                                          const gap = nextThreshold - score;
+
+                                          // Compute gain available from each lever.
+                                          // Score weights: PPA 25%, LSC 25%, LBW 20%, Glass 15%.
+                                          // Each "%-point" of metric_score adds (weight) to total_score, capped at 100.
+                                          const metricCap = 100;
+                                          const ppaPct   = (emp.ppa || 0) / (benchmarks.benchmark_ppa || 55) * 100;
+                                          const lbwPct   = (emp.lbw_per_guest || 0) / (benchmarks.benchmark_lbw || 8) * 100;
+                                          const glassPct = (emp.glassware_per_guest || 0) / (benchmarks.benchmark_glass || 1.35) * 100;
+                                          const lscPct   = (emp.guests_per_lsc && emp.guests_per_lsc > 0)
+                                            ? (benchmarks.benchmark_lsc || 100) / emp.guests_per_lsc * 100
+                                            : 0;
+
+                                          const rtCoef = benchmarks.rt_points_per_mention || 0.3;
+                                          const rtCap  = benchmarks.rt_max_points || 20;
+                                          const currentRt = Math.min((emp.review_mentions || emp.rt_mentions || 0) * rtCoef, rtCap);
+
+                                          const levers = [
+                                            {
+                                              label: 'Hit PPA benchmark',
+                                              detail: `$${(emp.ppa || 0).toFixed(2)} → $${(benchmarks.benchmark_ppa || 55).toFixed(2)}`,
+                                              gain: Math.max(0, (Math.min(metricCap, 100) - Math.min(metricCap, ppaPct)) * 0.25),
+                                              show: ppaPct < metricCap,
+                                            },
+                                            {
+                                              label: 'Hit LSC benchmark',
+                                              detail: `${(emp.guests_per_lsc || 0).toFixed(0)} → ${(benchmarks.benchmark_lsc || 100).toFixed(0)} guests/sign-up`,
+                                              gain: Math.max(0, (Math.min(metricCap, 100) - Math.min(metricCap, lscPct)) * 0.25),
+                                              show: lscPct < metricCap,
+                                            },
+                                            {
+                                              label: 'Hit LBW benchmark',
+                                              detail: `$${(emp.lbw_per_guest || 0).toFixed(2)} → $${(benchmarks.benchmark_lbw || 8).toFixed(2)}`,
+                                              gain: Math.max(0, (Math.min(metricCap, 100) - Math.min(metricCap, lbwPct)) * 0.20),
+                                              show: lbwPct < metricCap,
+                                            },
+                                            {
+                                              label: 'Hit Glass benchmark',
+                                              detail: `$${(emp.glassware_per_guest || 0).toFixed(2)} → $${(benchmarks.benchmark_glass || 1.35).toFixed(2)}`,
+                                              gain: Math.max(0, (Math.min(metricCap, 100) - Math.min(metricCap, glassPct)) * 0.15),
+                                              show: glassPct < metricCap,
+                                            },
+                                            {
+                                              label: `Earn ${Math.ceil(gap / rtCoef)} more review mentions`,
+                                              detail: `${rtCoef}pt each, cap at ${rtCap}pt total`,
+                                              gain: Math.min(rtCap - currentRt, gap),
+                                              show: currentRt < rtCap,
+                                            },
+                                          ]
+                                            .filter(l => l.show && l.gain > 0.05)
+                                            .sort((a, b) => b.gain - a.gain)
+                                            .slice(0, 4);
+
                                           return (
                                             <div className="border border-slate-600 rounded-lg p-3 bg-slate-900/40" data-testid={`next-tier-${employee.position}`}>
                                               <h4 className="text-sm font-semibold text-slate-200 mb-2 flex items-center gap-2">
@@ -1351,11 +1403,29 @@ export default function FullRankings() {
                                                 <span>Reach {nextTier} (≥{nextThreshold})</span>
                                               </h4>
                                               <div className="text-3xl font-bold text-amber-400 leading-none mb-1">
-                                                +{gap}
+                                                +{gap.toFixed(1)}
                                               </div>
-                                              <p className="text-[11px] text-slate-400">
-                                                points to graduate to the next performance tier.
+                                              <p className="text-[11px] text-slate-400 mb-3">
+                                                points to graduate. Top opportunities:
                                               </p>
+                                              <ul className="space-y-1.5">
+                                                {levers.length === 0 && (
+                                                  <li className="text-[11px] text-slate-500 italic">
+                                                    All metrics at cap — focus on Customer Voice (promoters/NPS) or sustained mentions.
+                                                  </li>
+                                                )}
+                                                {levers.map((l, idx) => (
+                                                  <li key={idx} className="flex items-start justify-between gap-2 text-[11px]">
+                                                    <div className="min-w-0 flex-1">
+                                                      <div className="text-slate-200 font-medium truncate">{l.label}</div>
+                                                      <div className="text-slate-500 truncate">{l.detail}</div>
+                                                    </div>
+                                                    <div className="shrink-0 px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300 font-bold">
+                                                      +{l.gain.toFixed(1)}
+                                                    </div>
+                                                  </li>
+                                                ))}
+                                              </ul>
                                             </div>
                                           );
                                         })()}
