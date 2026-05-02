@@ -228,7 +228,11 @@ def calculate_employee_scores(
 ) -> Dict[str, Any]:
     """
     Calculate all scores for an employee based on benchmarks.
-    Returns employee dict with calculated scores.
+
+    `benchmarks` dict may optionally include `weight_ppa`, `weight_lsc`,
+    `weight_lbw`, `weight_glass` to override the default v3-2 weights
+    (27.5/27.5/20/15). If omitted, v3-2 defaults are used. This allows
+    per-quarter weight customization without breaking legacy callers.
     """
     # Get raw metrics
     ppa = employee.get("ppa", 0) or 0
@@ -255,13 +259,16 @@ def calculate_employee_scores(
     capped_glass = min(score_glass, 100)
     capped_lsc = min(score_lsc, 100)
     
-    # Calculate weighted score (85 pts max from POS metrics)
-    # PPA 25% + LSC 25% + LBW 20% + Glass 15% = 85% (CV/RT/bonuses fill the rest)
+    # Calculate weighted score using per-quarter weights (from benchmarks dict)
+    weight_ppa   = benchmarks.get("weight_ppa",   0.275)
+    weight_lsc   = benchmarks.get("weight_lsc",   0.275)
+    weight_lbw   = benchmarks.get("weight_lbw",   0.20)
+    weight_glass = benchmarks.get("weight_glass", 0.15)
     weighted_score = round(
-        capped_ppa * 0.25 +
-        capped_lbw * 0.20 +
-        capped_glass * 0.15 +
-        capped_lsc * 0.25,
+        capped_ppa   * weight_ppa +
+        capped_lbw   * weight_lbw +
+        capped_glass * weight_glass +
+        capped_lsc   * weight_lsc,
         2
     )
     

@@ -209,12 +209,14 @@ class QuarterSettings(BaseModel):
     benchmark_lsc: float = 100.0   # Guests per LSC (lower is better)
     benchmark_cv: float = 5.0     # Expected CV score (baseline for reference)
     
-    # === METRIC WEIGHTS (User Confirmed - sum to 0.75 for POS metrics) ===
-    weight_ppa: float = 0.25      # PPA at 25%
-    weight_lbw: float = 0.20      # LBW at 20%
-    weight_glass: float = 0.15    # Glassware at 15%
-    weight_lsc: float = 0.25      # LSC at 25%
-    weight_cv: float = 0.00       # CV is now a separate bonus, not weighted
+    # === METRIC WEIGHTS (Per-Quarter — historical quarters stay frozen) ===
+    # v3 model (Q1 2026 and earlier): 25/25/20/15
+    # v3-2 model (Q2 2026+):         27.5/27.5/20/15
+    weight_ppa: float = 0.275
+    weight_lsc: float = 0.275
+    weight_lbw: float = 0.20
+    weight_glass: float = 0.15
+    weight_cv: float = 0.00       # CV is kept as a bonus (promoter/detractor formula), not weighted
     
     # === BONUS SETTINGS (User Confirmed) ===
     bonus_rate: float = 0.25  # (score - 100) / 20 * 5 = linear to 5 pts at 120%
@@ -633,13 +635,12 @@ def calculate_total_score(employee: EmployeeV2, settings: QuarterSettings) -> Em
     capped_glass = min((employee.score_glass or 0), 100)
     capped_lsc = min((employee.score_lsc or 0), 100)
     
-    # Calculate weighted POS score (85% of base):
-    # PPA: 25%, LSC: 25%, LBW: 20%, Glassware: 15%
+    # Calculate weighted POS score using per-quarter weights
     weighted_pos_score = round(
-        capped_ppa * 0.25 +    # PPA at 25%
-        capped_lsc * 0.25 +    # LSC at 25%
-        capped_lbw * 0.20 +    # LBW at 20%
-        capped_glass * 0.15,   # Glassware at 15%
+        capped_ppa * settings.weight_ppa +
+        capped_lsc * settings.weight_lsc +
+        capped_lbw * settings.weight_lbw +
+        capped_glass * settings.weight_glass,
         2
     )
     
