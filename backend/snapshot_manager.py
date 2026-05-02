@@ -231,7 +231,7 @@ def calculate_employee_scores(
 
     `benchmarks` dict may optionally include `weight_ppa`, `weight_lsc`,
     `weight_lbw`, `weight_glass` to override the default v3-2 weights
-    (27.5/27.5/20/15). If omitted, v3-2 defaults are used. This allows
+    (27.5/27.5/20/15). If omitted, v3 defaults are used. This allows
     per-quarter weight customization without breaking legacy callers.
     """
     # Get raw metrics
@@ -260,8 +260,8 @@ def calculate_employee_scores(
     capped_lsc = min(score_lsc, 100)
     
     # Calculate weighted score using per-quarter weights (from benchmarks dict)
-    weight_ppa   = benchmarks.get("weight_ppa",   0.275)
-    weight_lsc   = benchmarks.get("weight_lsc",   0.275)
+    weight_ppa   = benchmarks.get("weight_ppa",   0.25)
+    weight_lsc   = benchmarks.get("weight_lsc",   0.25)
     weight_lbw   = benchmarks.get("weight_lbw",   0.20)
     weight_glass = benchmarks.get("weight_glass", 0.15)
     weighted_score = round(

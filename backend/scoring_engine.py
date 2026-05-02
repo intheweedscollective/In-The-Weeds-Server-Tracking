@@ -212,8 +212,8 @@ class QuarterSettings(BaseModel):
     # === METRIC WEIGHTS (Per-Quarter — historical quarters stay frozen) ===
     # v3 model (Q1 2026 and earlier): 25/25/20/15
     # v3-2 model (Q2 2026+):         27.5/27.5/20/15
-    weight_ppa: float = 0.275
-    weight_lsc: float = 0.275
+    weight_ppa: float = 0.25
+    weight_lsc: float = 0.25
     weight_lbw: float = 0.20
     weight_glass: float = 0.15
     weight_cv: float = 0.00       # CV is kept as a bonus (promoter/detractor formula), not weighted
