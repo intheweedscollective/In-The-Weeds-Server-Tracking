@@ -412,7 +412,20 @@ async def assemble_and_process(job_id: str):
 async def process_pdf_job(file_bytes: bytes, metadata: dict, job_id: str) -> dict:
     """Process a PDF file for POS data extraction."""
     import math
+    import os
     from pos_ocr import extract_pos_data_from_pdf, validate_extracted_data
+
+    # DEBUG: persist raw PDF bytes for offline parser debugging.
+    # Controlled by env var so it can be disabled in production.
+    if os.environ.get("POS_DEBUG_DUMP", "0") == "1":
+        try:
+            os.makedirs("/tmp/pos_debug", exist_ok=True)
+            dump_path = f"/tmp/pos_debug/{job_id}.pdf"
+            with open(dump_path, "wb") as f:
+                f.write(file_bytes)
+            logger.info(f"[POS_DEBUG] Dumped {len(file_bytes)} bytes to {dump_path}")
+        except Exception as dump_err:
+            logger.warning(f"[POS_DEBUG] Failed to dump PDF: {dump_err}")
     
     def safe_float(val, default=0):
         if val is None:
