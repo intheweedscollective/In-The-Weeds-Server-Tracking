@@ -303,7 +303,7 @@ export default function SnapshotDetail() {
       liquor_sales: emp.liquor_sales || emp._raw?.liquor_sales || 0,
       beer_sales: emp.beer_sales || emp._raw?.beer_sales || 0,
       wine_sales: emp.wine_sales || emp._raw?.wine_sales || 0,
-      glassware_sales: emp.glassware_sales || emp._raw?.bar_glassware_sales || 0,
+      glassware_sales: emp.glassware_sales || emp.bar_glassware_sales || emp._raw?.bar_glassware_sales || 0,
       lsc_count: lscCount,
       guest_count: emp.guest_count || 0,
     });
@@ -1029,8 +1029,8 @@ export default function SnapshotDetail() {
                         <td className={`px-2 py-2 text-center text-sm ${isValueFlagged('wine_sales', emp.wine_sales || emp._raw?.wine_sales, historicalAvg.wine_sales) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
                           ${(emp.wine_sales || emp._raw?.wine_sales || 0).toFixed(0)}
                         </td>
-                        <td className={`px-2 py-2 text-center text-sm ${isValueFlagged('glassware_sales', emp.glassware_sales || emp._raw?.bar_glassware_sales, historicalAvg.glassware_sales) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
-                          ${(emp.glassware_sales || emp._raw?.bar_glassware_sales || 0).toFixed(0)}
+                        <td className={`px-2 py-2 text-center text-sm ${isValueFlagged('glassware_sales', emp.glassware_sales || emp.bar_glassware_sales || emp._raw?.bar_glassware_sales, historicalAvg.glassware_sales) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
+                          ${(emp.glassware_sales || emp.bar_glassware_sales || emp._raw?.bar_glassware_sales || 0).toFixed(0)}
                         </td>
                         <td className={`px-2 py-2 text-center text-sm ${isValueFlagged('lsc_count', emp.lsc_count || Math.round((emp.loyalty_sales || 0) / 25), historicalAvg.lsc_count) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
                           {emp.lsc_count || Math.round((emp.loyalty_sales || 0) / 25) || 0}
@@ -1060,7 +1060,7 @@ export default function SnapshotDetail() {
                       isValueFlagged('liquor_sales', e.liquor_sales || e._raw?.liquor_sales, historicalAvg.liquor_sales) ||
                       isValueFlagged('beer_sales', e.beer_sales || e._raw?.beer_sales, historicalAvg.beer_sales) ||
                       isValueFlagged('wine_sales', e.wine_sales || e._raw?.wine_sales, historicalAvg.wine_sales) ||
-                      isValueFlagged('glassware_sales', e.glassware_sales || e._raw?.bar_glassware_sales, historicalAvg.glassware_sales) ||
+                      isValueFlagged('glassware_sales', e.glassware_sales || e.bar_glassware_sales || e._raw?.bar_glassware_sales, historicalAvg.glassware_sales) ||
                       isValueFlagged('lsc_count', e.lsc_count, historicalAvg.lsc_count)
                     ).length} items need attention
                   </span>
