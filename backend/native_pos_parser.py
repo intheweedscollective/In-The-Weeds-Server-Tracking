@@ -90,21 +90,52 @@ def _smart_float(token: str) -> float | None:
         return None
 
 
-def _join_column_tokens(tokens: list[str]) -> float | None:
-    """Combine the 1-2-3 tokens that fall into the same column band.
+def _normalize_glyph_token(token: str) -> str:
+    """Fix common font-glyph mis-encodings that appear in the BGLV Server
+    Sales Report PDF. Applied ONLY to tokens that look like they *should*
+    be numeric (i.e. contain at least one digit or match a known artifact).
+    Known substitutions:
+      * lowercase 'so' -> '50'   (seen as "2.857 so", "1.760 so")
+      * isolated 'o'   -> '0'
+      * isolated 'l'   -> '1'
+    """
+    if token.lower() == "so":
+        return "50"
+    # If the token has at least one digit, fix letter-for-digit confusions
+    if any(c.isdigit() for c in token):
+        fixed = token
+        fixed = fixed.replace("O", "0").replace("o", "0")
+        fixed = fixed.replace("l", "1")
+        return fixed
+    return token
 
-    PDFs often split a "697.00" into ["697", "00"] when the period glyph
-    fails to extract. We join them with '.'. Single-token whole numbers >= 100
-    with no decimal are also treated as cents-shifted (e.g. "69700" -> 697.00).
+
+def _join_column_tokens(tokens: list[str]) -> float | None:
+    """Combine the 1-N tokens that fall into the same column band.
+
+    PDFs sometimes split a "697.00" into ["697", "00"] when the period glyph
+    fails to extract, or "1,685.50" into ["1.685", "50"], or "1,707.25" into
+    ["1", "707", "25"]. We detect a trailing 2-digit cents token and
+    concatenate the stripped integer portion, preserving the decimal.
     """
     if not tokens:
         return None
 
     if len(tokens) == 1:
-        t = tokens[0]
+        t = _normalize_glyph_token(tokens[0])
         v = _smart_float(t)
         if v is None:
             return None
+        # Pattern "4.10300" or "1.13750": one period, >=4 digits after it.
+        # The period is a thousands separator (was originally a comma) and
+        # the last 2 digits are cents. Reconstruct as X,XXX.YY.
+        if t.count(".") == 1:
+            left, right = t.replace(",", "").split(".")
+            if left.isdigit() and right.isdigit() and len(right) >= 4:
+                try:
+                    return float(f"{int(left + right[:-2])}.{right[-2:]}")
+                except ValueError:
+                    pass
         # Implicit-cents heuristic: a long all-digit token is almost certainly
         # missing its decimal. The Server Sales Report only ever has dollar
         # amounts with 2 decimals, so this is safe.
@@ -112,13 +143,38 @@ def _join_column_tokens(tokens: list[str]) -> float | None:
             return round(v / 100.0, 2)
         return v
 
-    if len(tokens) == 2:
-        a, b = tokens
-        if "." not in a and "." not in b:
-            return _smart_float(f"{a}.{b}")
-        return _smart_float(a + b)
+    # Normalize glyph artifacts across all tokens before combining
+    tokens = [_normalize_glyph_token(t) for t in tokens]
+    last = tokens[-1]
+    # Case A: trailing token is exactly 2 digits = cents. Everything before it
+    # is the integer portion (stripped of thousands-separator , and . noise).
+    if last.isdigit() and len(last) == 2:
+        int_part = "".join(t.replace(",", "").replace(".", "") for t in tokens[:-1])
+        if int_part.isdigit():
+            try:
+                return float(f"{int_part}.{last}")
+            except ValueError:
+                pass
 
-    return _smart_float("".join(tokens))
+    # Case B: trailing token contains a period (e.g. "838.42") — it IS the
+    # decimal portion. Anything before is the high-order digits.
+    if "." in last and _is_numeric(last):
+        int_prefix = "".join(t.replace(",", "").replace(".", "") for t in tokens[:-1])
+        try:
+            tail_val = float(last.replace(",", ""))
+        except ValueError:
+            tail_val = None
+        if tail_val is not None:
+            if int_prefix.isdigit() and int_prefix:
+                try:
+                    return float(f"{int_prefix}{last.replace(',', '')}")
+                except ValueError:
+                    return tail_val
+            return tail_val
+
+    # Fallback: try smart_float of the raw concatenated string
+    joined = "".join(tokens).replace(",", "")
+    return _smart_float(joined)
 
 
 def _is_numeric(s: str) -> bool:
@@ -178,7 +234,7 @@ def _parse_metric_row(row: list[tuple]) -> dict[str, float]:
 # ---------------------------------------------------------------------------
 
 def _grab_label_value(label: str, full_text: str) -> float | None:
-    """Find `label` followed by 1-2 numeric tokens and return the joined value.
+    """Find `label` followed by 1-3 numeric tokens and return the joined value.
 
     The Server Sales Report renders in two distinct layouts depending on
     the page's font kerning quirks:
@@ -188,23 +244,26 @@ def _grab_label_value(label: str, full_text: str) -> float | None:
         so each label is followed by ONLY its column-1 (Net Sls) value:
         `Food 10,034.61 Liquor 846.00 Beer 598.00 ...`
 
-    Either way, the 1-2 tokens immediately after the label give us the Net
+    Either way, the 1-3 tokens immediately after the label give us the Net
     Sls value, which is the field we care about most. Two-token splits like
     `Food 8,138 61` (period dropped by glyph extraction) are joined as
-    "8138.61".
+    "8138.61". Three-token splits like "13 567 98" → 13567.98. Also accepts
+    the OCR artifact "so" as a trailing cents-token (= "50").
     """
-    pat = rf"\b{re.escape(label)}\b[\s.\-]+([\d.,]+)(?:\s+([\d.,]+))?"
+    # Token = one or more digits/commas/periods, or the literal "so" glyph.
+    token_re = r"(?:[\d.,]+|so)"
+    pat = rf"\b{re.escape(label)}\b[\s.\-]+({token_re})(?:\s+({token_re}))?(?:\s+({token_re}))?"
     for m in re.finditer(pat, full_text, flags=re.IGNORECASE):
-        a = m.group(1)
-        b = m.group(2)
-        if not _is_numeric(a):
+        toks = [g for g in m.groups() if g]
+        # Only keep tokens that have a digit OR are the known 'so' glyph
+        toks = [
+            t for t in toks
+            if any(c.isdigit() for c in t) or t.lower() == "so"
+        ]
+        # If the first token isn't numeric (just "so" alone), skip this match.
+        if not toks or not any(c.isdigit() for c in toks[0]):
             continue
-        # Only join with b if b is numeric AND a has no decimal AND together
-        # they look like a split value
-        if b and _is_numeric(b) and "." not in a and "." not in b and len(b) <= 2:
-            v = _join_column_tokens([a, b])
-        else:
-            v = _join_column_tokens([a])
+        v = _join_column_tokens(toks)
         if v is not None and v > 0:
             return v
     return None
@@ -274,6 +333,12 @@ def _extract_name(rows: list[list[tuple]]) -> str | None:
             # Strip any leading/trailing non-alpha punctuation (bullets, dashes)
             cleaned = re.sub(r"^[^A-Za-z]+", "", cand).strip()
             cleaned = re.sub(r"[^A-Za-z\s'\-.]+$", "", cleaned).strip()
+            # Reject tiny glyph-artifact rows (e.g. stray "av", "so", "EOC").
+            # A real server name has either a space (first + last) OR at
+            # least 4 alphabetic characters.
+            alpha_count = sum(1 for c in cleaned if c.isalpha())
+            if " " not in cleaned and alpha_count < 4:
+                continue
             return cleaned or cand
     return None
 
@@ -299,6 +364,23 @@ def _parse_page(page) -> dict[str, Any] | None:
     guest_count = _extract_guest_count(rows)
 
     metrics: dict[str, dict[str, float]] = {}
+    # Category labels that should NEVER co-appear in the same row. If two of
+    # them land in the same cluster, the row is skewed/merged (PyMuPDF
+    # sometimes zigzags tokens across two physically-distinct rows) and its
+    # numeric tokens cannot be trusted. Skip those rows so the regex fallback
+    # (which uses clean column-ordered text) fills the values instead.
+    CATEGORY_LABELS = ("food", "liquor", "beer", "wine", "bar glassware", "loyalty", "totals")
+    def _is_merged(line: str, matched_label: str) -> bool:
+        # Count distinct category-label tokens that appear as whole-word
+        # matches in this row's text. More than one = merged row.
+        hits = 0
+        for cand in CATEGORY_LABELS:
+            if re.search(rf"\b{re.escape(cand)}\b", line):
+                hits += 1
+                if hits >= 2:
+                    return True
+        return False
+
     for r in rows:
         line = " ".join(w[4] for w in r).lower().strip()
         if not line:
@@ -308,12 +390,20 @@ def _parse_page(page) -> dict[str, Any] | None:
             continue
         for label, key in LABEL_KEYS:
             if line.startswith(label):
+                if _is_merged(line, label):
+                    # Row contains 2+ category labels — likely skewed/zigzagged.
+                    # Leave metrics[key] unset; regex fallback will handle it.
+                    break
                 metrics[key] = _parse_metric_row(r)
                 break
 
     # If the page collapsed everything to one row (bad font kerning), key
     # metrics will be missing or wrong. Fall back to regex on raw text.
     page_text = page.get_text("text") or ""
+    # Normalize common label-glyph mis-encodings before regex matching.
+    # Seen in the wild: "L,quor" (comma instead of 'i'), "Aquanum" for
+    # "Aquarium" (not a target label but harmless to normalize), etc.
+    page_text = re.sub(r"\bL,quor\b", "Liquor", page_text, flags=re.IGNORECASE)
     page_text_clean = re.sub(r"\s+", " ", page_text.replace("\n", " "))
 
     def _val(metric_key: str, col: str = "netsls") -> float:
@@ -330,16 +420,43 @@ def _parse_page(page) -> dict[str, Any] | None:
     net_sales = totals_cols.get("netsls") or 0
     ppa = totals_cols.get("guestavg") or 0
 
+    # Plausibility bounds: a single category's Net Sls on a per-server weekly
+    # report can't exceed $100k. Anything larger is column-overflow garbage
+    # (two columns of digits concatenated). Null those out so the regex
+    # fallback below re-derives the correct value from clean text.
+    CATEGORY_MAX = 100_000.0
+    if food > CATEGORY_MAX:
+        food = 0
+    if liquor > CATEGORY_MAX:
+        liquor = 0
+    if beer > CATEGORY_MAX:
+        beer = 0
+    if wine > CATEGORY_MAX:
+        wine = 0
+    if glass > CATEGORY_MAX:
+        glass = 0
+
     # Regex fallback: fill in any field that came up zero/missing using the
     # raw page text. Each label-grab is independent so we can mix-and-match
     # column-band hits with regex hits.
+    #
+    # "Implausibly tiny" rule: if the column-band path produced a non-zero
+    # but very small value (< $10) on a page with meaningful guest traffic,
+    # it was almost certainly a tokenization artifact where a glyph like
+    # "so"/"o" landed outside the column band and only the integer prefix
+    # (e.g. "2.857") was captured. Treat those as broken and let the regex
+    # fallback — which sees clean column-ordered text — supply the value.
+    IMPLAUSIBLY_TINY = 10.0
     label_to_key = [
         ("Food", "food"), ("Liquor", "liquor"), ("Beer", "beer"),
         ("Wine", "wine"), ("Bar Glassware", "glassware"),
     ]
     fixups = {"food": food, "liquor": liquor, "beer": beer, "wine": wine, "glassware": glass}
     for label_text, key in label_to_key:
-        if fixups[key]:
+        current = fixups[key]
+        # Skip regex only if we have a value that clears the tiny threshold.
+        # Wine is routinely <$10 for low-volume servers so it's exempt.
+        if current and (current >= IMPLAUSIBLY_TINY or key == "wine"):
             continue
         v = _grab_label_value(label_text, page_text_clean)
         if v is not None:
