@@ -917,16 +917,22 @@ export default function FullRankings() {
                                     <TooltipContent className="bg-slate-800 text-white p-3 max-w-xs border border-slate-600">
                                       <div className="text-xs space-y-1">
                                         <div className="font-bold text-primary mb-2">{getDisplayFirstName(employee)}'s Customer Voice</div>
+                                        {(employee.nps_score || 0) > 0 && (
+                                          <div className="flex justify-between">
+                                            <span>NPS ({Number(employee.nps_score).toFixed(0)}% / 10):</span>
+                                            <span className="text-blue-400">+{((employee.nps_score || 0) / 10).toFixed(1)} pts</span>
+                                          </div>
+                                        )}
                                         {promoters > 0 && (
                                           <div className="flex justify-between">
-                                            <span>Promoters ({promoters} × +0.5):</span>
-                                            <span className="text-green-400">+{(promoters * 0.5).toFixed(1)} pts</span>
+                                            <span>Promoters ({promoters} × +1):</span>
+                                            <span className="text-green-400">+{promoters} pts</span>
                                           </div>
                                         )}
                                         {detractors > 0 && (
                                           <div className="flex justify-between">
-                                            <span>Detractors ({detractors} × -1):</span>
-                                            <span className="text-red-400">-{detractors} pts</span>
+                                            <span>Detractors ({detractors} × -2):</span>
+                                            <span className="text-red-400">-{detractors * 2} pts</span>
                                           </div>
                                         )}
                                         <div className="border-t border-slate-600 pt-1 mt-1 flex justify-between font-bold">

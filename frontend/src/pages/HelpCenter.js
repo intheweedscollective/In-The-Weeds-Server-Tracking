@@ -65,7 +65,7 @@ const faqs = [
       },
       {
         q: "How does Customer Voice scoring work?",
-        a: "Customer Voice = (Promoters × 0.5) - (Detractors × 1). This is UNCAPPED, meaning exceptional service with many promoters can significantly boost scores. Passives (7-8 ratings) = 0 points."
+        a: "Customer Voice = NPS%/10 + (Promoters × 1) − (Detractors × 2). The NPS% portion contributes up to ~10 pts (e.g. NPS 77% = 7.7 pts). Promoters (9-10) add +1 pt each, Detractors (1-6) subtract 2 pts each, Passives (7-8) = 0 points. UNCAPPED — exceptional service can significantly boost scores."
       },
       {
         q: "What is the Metric Bonus?",
@@ -170,7 +170,7 @@ const troubleshooting = [
     symptoms: ["Total score seems wrong", "Customer Voice points are off", "Metric bonus not showing"],
     solutions: [
       "Go to Scoring Audit page to verify all calculations step-by-step",
-      "Check that you're using the correct formula: CV = (Promoters × 0.5) - (Detractors × 1)",
+      "Check that you're using the correct formula: CV = NPS%/10 + (Promoters × 1) − (Detractors × 2)",
       "Verify benchmark settings in Quarter Settings match your expectations",
       "Use 'Fix All' button on Scoring Audit to recalculate all scores"
     ],
@@ -515,7 +515,7 @@ export default function HelpCenter() {
             <div className="bg-slate-800/50 rounded-lg p-4">
               <p className="text-slate-400 mb-2">Customer Voice =</p>
               <p className="text-white font-mono">
-                (Promoters × 0.5) - (Detractors × 1) <span className="text-green-400">[uncapped]</span>
+                NPS%/10 + (Promoters × 1) − (Detractors × 2) <span className="text-green-400">[uncapped]</span>
               </p>
             </div>
             <div className="bg-slate-800/50 rounded-lg p-4">

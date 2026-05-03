@@ -202,9 +202,9 @@ export default function QuarterlySummary() {
             >
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:grid-cols-4 mb-4">
                 <StatCard label="Total CV Points" value={stats.totalCVScore.toFixed(1)} color="purple" />
-                <StatCard label="Promoters" value={stats.totalPromoters} color="green" sublabel={`+${(stats.totalPromoters * 0.5).toFixed(1)} pts`} />
+                <StatCard label="Promoters" value={stats.totalPromoters} color="green" sublabel={`+${stats.totalPromoters} pts`} />
                 <StatCard label="Passives" value={stats.totalPassives} color="slate" sublabel="0 pts" />
-                <StatCard label="Detractors" value={stats.totalDetractors} color="red" sublabel={`-${stats.totalDetractors} pts`} />
+                <StatCard label="Detractors" value={stats.totalDetractors} color="red" sublabel={`−${stats.totalDetractors * 2} pts`} />
               </div>
 
               {/* Top CV Performers */}

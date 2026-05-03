@@ -224,12 +224,14 @@ const CustomerVoiceCategory = ({ employee }) => {
         </div>
       </div>
       <div className="flex items-center gap-4 text-sm flex-wrap">
-        <span className="text-green-400">{employee.cv_promoters || 0} promoters (+{((employee.cv_promoters || 0) * 0.5).toFixed(1)} pts)</span>
+        <span className="text-green-400">{employee.cv_promoters || 0} promoters (+{(employee.cv_promoters || 0) * 1} pts)</span>
         <span className="text-slate-500">|</span>
-        <span className="text-red-400">{employee.cv_detractors || 0} detractors ({(employee.cv_detractors || 0) * -1} pts)</span>
+        <span className="text-red-400">{employee.cv_detractors || 0} detractors ({(employee.cv_detractors || 0) * -2} pts)</span>
+        <span className="text-slate-500">|</span>
+        <span className="text-blue-400">NPS {employee.nps_score != null ? `${Number(employee.nps_score).toFixed(1)}%` : '—'} (+{((employee.nps_score || 0) / 10).toFixed(1)} pts)</span>
       </div>
       <div className="mt-2 text-xs text-slate-400">
-        Formula: Promoters×0.5 + Detractors×-1 (uncapped)
+        Formula: NPS%/10 + Promoters×1 − Detractors×2 (uncapped)
       </div>
     </div>
   );

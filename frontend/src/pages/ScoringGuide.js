@@ -233,7 +233,7 @@ export default function ScoringGuide() {
                     <ThumbsUp className="w-5 h-5 text-green-400" />
                     <div>
                       <p className="text-white font-medium">Promoter (9-10 rating)</p>
-                      <p className="text-green-400 font-bold">+0.5 pts each</p>
+                      <p className="text-green-400 font-bold">+1 pt each</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3 p-2 bg-slate-700/50 rounded">
@@ -247,7 +247,14 @@ export default function ScoringGuide() {
                     <ThumbsDown className="w-5 h-5 text-red-400" />
                     <div>
                       <p className="text-white font-medium">Detractor (1-6 rating)</p>
-                      <p className="text-red-400 font-bold">-1 pt each</p>
+                      <p className="text-red-400 font-bold">−2 pts each</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 p-2 bg-blue-500/10 rounded border border-blue-500/20">
+                    <Star className="w-5 h-5 text-blue-400" />
+                    <div>
+                      <p className="text-white font-medium">NPS contribution</p>
+                      <p className="text-blue-400 font-bold">NPS% / 10 (≈ 0–10 pts)</p>
                     </div>
                   </div>
                 </div>
@@ -255,7 +262,7 @@ export default function ScoringGuide() {
               
               <div className="bg-purple-900/30 border border-purple-500/30 rounded-lg p-4">
                 <p className="text-sm text-purple-300">
-                  <strong>Formula:</strong> Customer Voice = (Promoters × 0.5) - (Detractors × 1)
+                  <strong>Formula:</strong> Customer Voice = NPS%/10 + (Promoters × 1) − (Detractors × 2)
                 </p>
                 <p className="text-xs text-slate-400 mt-2">
                   This score is displayed as a combined total on all leaderboards and employee cards.
