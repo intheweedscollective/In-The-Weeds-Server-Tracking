@@ -39,6 +39,7 @@ const StatusBadge = ({ status }) => {
 
 export default function ScoringAudit() {
   const [allEmployeesAudit, setAllEmployeesAudit] = useState(null);
+  const [quarterSettings, setQuarterSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const currentQ = getCurrentQuarter();
@@ -54,6 +55,17 @@ export default function ScoringAudit() {
       setAllEmployeesAudit(response.data);
     } catch (error) {
       toast.error("Failed to fetch audit data");
+    }
+  }, [quarter, year]);
+
+  // Fetch the per-quarter scoring weights/coefficients so the formula card
+  // shows the correct numbers (Q1 used 0.5/cap 15; Q2+ uses 0.3/cap 20).
+  const fetchQuarterSettings = useCallback(async () => {
+    try {
+      const response = await api.get(`/v2/quarter-settings/${year}/${quarter}`);
+      setQuarterSettings(response.data);
+    } catch (error) {
+      // Non-fatal: formula will fall back to defaults
     }
   }, [quarter, year]);
 
@@ -114,14 +126,14 @@ export default function ScoringAudit() {
     const init = async () => {
       setLoading(true);
       try {
-        await fetchAllEmployeesAudit();
+        await Promise.all([fetchAllEmployeesAudit(), fetchQuarterSettings()]);
       } catch (error) {
         console.error("Error loading audit data:", error);
       }
       setLoading(false);
     };
     init();
-  }, [fetchAllEmployeesAudit]);
+  }, [fetchAllEmployeesAudit, fetchQuarterSettings]);
 
   const filteredEmployees = (allEmployeesAudit?.employees || allEmployeesAudit?.audits || []).filter(emp =>
     (emp.name || "").toLowerCase().includes(searchTerm.toLowerCase())
@@ -326,13 +338,25 @@ export default function ScoringAudit() {
         <div className="mt-6 p-4 bg-slate-800/30 rounded-xl border border-slate-700/50">
           <h3 className="font-semibold text-white text-sm mb-3 flex items-center gap-2">
             <Calculator className="w-4 h-4 text-blue-400" />
-            Score Formula
+            Score Formula <span className="text-xs font-normal text-slate-500">({quarter} {year})</span>
           </h3>
           <div className="text-xs text-slate-400 space-y-1">
-            <p><span className="text-white">Total Score</span> = Weighted POS + Customer Voice + Metric Bonus + RT Bonus</p>
-            <p><span className="text-slate-300">Weighted POS:</span> PPA×25% + LSC×25% + LBW×20% + Glass×15%</p>
-            <p><span className="text-slate-300">Customer Voice:</span> NPS%/10 + (Promoters×1) − (Detractors×2) [uncapped]</p>
-            <p><span className="text-slate-300">RT Bonus:</span> Mentions × 0.5 pts (max 15)</p>
+            {(() => {
+              const wPpa = Math.round(((quarterSettings?.weight_ppa) ?? 0.25) * 100);
+              const wLsc = Math.round(((quarterSettings?.weight_lsc) ?? 0.25) * 100);
+              const wLbw = Math.round(((quarterSettings?.weight_lbw) ?? 0.20) * 100);
+              const wGla = Math.round(((quarterSettings?.weight_glass) ?? 0.15) * 100);
+              const rtPts = (quarterSettings?.rt_points_per_mention) ?? 0.3;
+              const rtCap = (quarterSettings?.rt_max_points) ?? 20;
+              return (
+                <>
+                  <p><span className="text-white">Total Score</span> = Weighted POS + Customer Voice + Metric Bonus + RT Bonus</p>
+                  <p><span className="text-slate-300">Weighted POS:</span> PPA×{wPpa}% + LSC×{wLsc}% + LBW×{wLbw}% + Glass×{wGla}%</p>
+                  <p><span className="text-slate-300">Customer Voice:</span> NPS%/10 + (Promoters×1) − (Detractors×2) [uncapped]</p>
+                  <p><span className="text-slate-300">RT Bonus:</span> Mentions × {rtPts} pts (max {Math.round(rtCap)})</p>
+                </>
+              );
+            })()}
           </div>
         </div>
       </div>
