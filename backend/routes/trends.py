@@ -518,10 +518,12 @@ async def get_biweekly_trend_data(
 # ============================================================================
 
 @trends_router.get("/momentum/{year}/{quarter}")
-async def get_all_employee_momentum(year: int, quarter: str, lookback_snapshots: int = 4):
+async def get_all_employee_momentum(year: int, quarter: str, lookback_snapshots: int = 1):
     """
     Calculate momentum/trend for ALL employees in a quarter.
-    Compares current score against rolling average of previous snapshots.
+    Compares each employee's current snapshot score against the score from
+    the immediately preceding snapshot (lookback_snapshots=1, default).
+    Pass `lookback_snapshots=N` to compare against a rolling N-snapshot avg.
     
     Returns:
         Dictionary mapping employee_id to trend data:
