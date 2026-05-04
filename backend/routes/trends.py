@@ -567,22 +567,46 @@ async def get_all_employee_momentum(year: int, quarter: str, lookback_snapshots:
         }
     
     # Build employee score history from snapshots
-    # Most recent snapshot is the "current" score
-    employee_history = {}  # {employee_id: [scores from oldest to newest]}
-    
+    # Most recent snapshot is the "current" score.
+    # Key by NAME (not id) because each snapshot has its own employee
+    # records with fresh UUIDs — the same person has different `id`s in
+    # different snapshots, so id-keyed grouping makes everyone look like
+    # a 1-snapshot newcomer with a "stable" trend.
+    employee_history = {}  # {employee_name: {"name": ..., "scores": [...]}}
+
+    def _hist_key(emp: dict) -> str:
+        # Use the canonical `name` field (which has been alias-normalised by
+        # the snapshot pipeline — e.g. "Matthew Spath" report_name → "Matt
+        # Spath" name). report_name often varies between weekly POS reports
+        # so it's NOT reliable for cross-snapshot grouping.
+        return (emp.get("name") or emp.get("report_name") or "").strip().lower()
+
     for snapshot in reversed(snapshots):  # Oldest first
         for emp in snapshot.get("employees", []):
-            emp_id = emp.get("id") or emp.get("name")
-            if emp_id not in employee_history:
-                employee_history[emp_id] = {
+            key = _hist_key(emp)
+            if not key:
+                continue
+            if key not in employee_history:
+                employee_history[key] = {
                     "name": emp.get("name"),
                     "scores": []
                 }
-            employee_history[emp_id]["scores"].append(emp.get("total_score", 0) or 0)
+            employee_history[key]["scores"].append(emp.get("total_score", 0) or 0)
     
     # Calculate momentum for each employee
     momentum_data = {}
-    
+
+    def _emit(key: str, payload: dict):
+        # Emit under multiple keys so frontends keyed by id/name/lower-name
+        # all hit. Frontend tries `momentumData[employee.employee_id] ||
+        # momentumData[employee.name]`.
+        if key:
+            momentum_data[key] = payload
+        nm = payload.get("employee_name")
+        if nm:
+            momentum_data[nm] = payload          # exact-case display name
+            momentum_data[nm.lower()] = payload  # lowercase fallback
+
     for emp_id, data in employee_history.items():
         scores = data["scores"]
         name = data["name"]
@@ -594,7 +618,7 @@ async def get_all_employee_momentum(year: int, quarter: str, lookback_snapshots:
         
         if len(scores) == 1:
             # Only one data point, no trend
-            momentum_data[emp_id] = {
+            _emit(emp_id, {
                 "current_score": round(current_score, 2),
                 "rolling_avg": round(current_score, 2),
                 "change": 0,
@@ -602,7 +626,7 @@ async def get_all_employee_momentum(year: int, quarter: str, lookback_snapshots:
                 "percent_change": 0,
                 "snapshots_used": 1,
                 "employee_name": name
-            }
+            })
         else:
             # Calculate rolling average of previous scores (excluding current)
             previous_scores = scores[:-1][-lookback_snapshots:]  # Last N scores before current
@@ -619,15 +643,16 @@ async def get_all_employee_momentum(year: int, quarter: str, lookback_snapshots:
             else:
                 direction = "stable"
             
-            momentum_data[emp_id] = {
+            _emit(emp_id, {
                 "current_score": round(current_score, 2),
                 "rolling_avg": round(rolling_avg, 2),
                 "change": round(change, 2),
                 "direction": direction,
                 "percent_change": round(percent_change, 1),
                 "snapshots_used": len(previous_scores),
-                "employee_name": name
-            }
+                "employee_name": name,
+                "previous_score": round(scores[-2], 2),
+            })
     
     return momentum_data
 
