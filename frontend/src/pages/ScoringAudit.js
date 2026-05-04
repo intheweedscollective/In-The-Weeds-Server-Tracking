@@ -123,9 +123,9 @@ export default function ScoringAudit() {
     init();
   }, [fetchAllEmployeesAudit]);
 
-  const filteredEmployees = allEmployeesAudit?.employees?.filter(emp =>
-    emp.name.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
+  const filteredEmployees = (allEmployeesAudit?.employees || allEmployeesAudit?.audits || []).filter(emp =>
+    (emp.name || "").toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const passCount = filteredEmployees.filter(e => e.status === 'PASS').length;
   const failCount = filteredEmployees.filter(e => e.status === 'FAIL').length;
@@ -309,10 +309,10 @@ export default function ScoringAudit() {
                   <div className="flex items-center gap-2 md:gap-4 shrink-0">
                     <div className="text-right hidden sm:block">
                       <p className="text-xs text-slate-400">Score</p>
-                      <p className="text-sm md:text-lg font-bold text-white">{emp.stored_score?.toFixed(1)}</p>
+                      <p className="text-sm md:text-lg font-bold text-white">{(emp.stored_score ?? emp.score ?? 0).toFixed(1)}</p>
                     </div>
                     <div className="sm:hidden text-white font-bold text-sm">
-                      {emp.stored_score?.toFixed(1)}
+                      {(emp.stored_score ?? emp.score ?? 0).toFixed(1)}
                     </div>
                     <StatusBadge status={emp.status} />
                   </div>
