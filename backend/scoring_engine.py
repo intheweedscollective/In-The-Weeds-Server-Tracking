@@ -1,33 +1,33 @@
 """
-Restaurant Performance Engine v2.4
-Q1 2026 HYBRID Scoring Model - Bubba Gump Shrimp Co.
+Restaurant Performance Engine v3
+Bubba Gump Shrimp Co. — Per-Quarter Scoring Model.
 
-SCORING MODEL (Hybrid - Spec NPS + Current Promoter Logic):
-============================================================
+The active per-quarter constants (rt_points_per_mention, rt_max_points,
+cv_promoter_points, cv_detractor_points, weight_*) come from the
+QuarterSettings document. The numbers below describe the Q2 2026+ default
+("v3") model. Q1 2026 ("v2") is preserved for historical accuracy and
+uses the legacy weights documented in the QuarterSettings model.
 
-1. WEIGHTED POS METRICS (75 pts max):
-   - PPA: 25%
-   - LSC: 25%
-   - LBW: 15%
-   - Glassware: 10%
+Q2 2026+ DEFAULT MODEL:
+========================
 
-2. REVIEW TRACKER: +0.5 pts per mention (capped at 15 pts)
+1. WEIGHTED POS METRICS (85 pts max):
+   - PPA:       25%
+   - LSC:       25%
+   - LBW:       20%
+   - Glassware: 15%
 
-3. CUSTOMER VOICE (NPS from Spec + Promoters from Current):
-   
-   NPS Score (max 10 pts - from Spec):
-   - NPS 90-100 = 10 pts
-   - NPS 80-89 = 9 pts
-   - NPS 70-79 = 8 pts
-   - NPS 60-69 = 7 pts
-   - NPS 50-59 = 6 pts
-   - Below 50 = scaled proportionally
-   
-   Promoter/Detractor Points (NO CAP - from Current):
-   - Promoter (9-10 rating): +1 pt each
-   - Detractor (6 or below): -2 pts each
-   
-   Full CV Formula: (Promoters × 1) + (RT Mentions × 0.5) - (Detractors × 2)
+2. REVIEW TRACKER: +0.3 pts per mention (capped at 20 pts)
+   (Q1 2026 legacy: +0.5 pts/mention, capped at 15)
+
+3. CUSTOMER VOICE — UNCAPPED:
+   CV = NPS%/10 + (Promoters × cv_promoter_points) − (Detractors × cv_detractor_points)
+        ^^^^^^^^   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        0–10 pts   Q2 default = 1 (Q1 legacy = 0.5)  Q2 default = 2 (Q1 legacy = 1)
+
+   Promoter = guest survey rating 9-10
+   Passive  = guest survey rating 7-8 (zero contribution)
+   Detractor = guest survey rating 1-6
 
 4. METRIC BONUSES (up to 20 pts total):
    - 5 pts max per metric (PPA, LSC, LBW, Glassware)
@@ -35,7 +35,7 @@ SCORING MODEL (Hybrid - Spec NPS + Current Promoter Logic):
 
 5. DAR: Disciplinary penalties (admin-only, applied at final stage)
 
-TOTAL SCORE = Weighted POS (75 max) + Review Tracker + CV Score + Metric Bonuses (20 max) - DAR
+TOTAL = Weighted POS + Customer Voice + Metric Bonuses + Review Tracker − DAR
 """
 
 from typing import Optional, Dict, Any, List, Tuple
@@ -77,13 +77,16 @@ CV_MIN_POINTS = -6
 CV_MAX_POINTS = 10
 
 
-# MAX SCORE BREAKDOWN (User Confirmed Model):
-# Weighted POS: 75 pts (PPA 25 + LSC 25 + LBW 15 + Glass 10)
+# MAX SCORE BREAKDOWN (Q2 2026+ active model):
+# Weighted POS: 85 pts (PPA 25 + LSC 25 + LBW 20 + Glass 15)
 # Metric Bonuses: 20 pts (PPA 5 + LSC 5 + LBW 5 + Glass 5)
-# Review Tracker Bonus: Mentions × 0.5 pts (capped at 15 pts)
-# Customer Voice: NPS Bonus (0-10 pts) + Survey Points (+1 promoter, -2 detractor, NO CAP)
-# CV Formula: (Promoters × 1) + (RT Mentions × 0.5) - (Detractors × 2)
-# TOTAL: 95+ pts base possible, plus uncapped CV bonuses
+# Review Tracker Bonus: Mentions × 0.3 pts (capped at 20 pts) — Q2+ default
+#   (Q1 2026 used the legacy +0.5 pts/mention, capped at 15)
+# Customer Voice (UNCAPPED):
+#   = NPS%/10 (0–10 pts) + (Promoters × cv_promoter_points) − (Detractors × cv_detractor_points)
+#   Q2 defaults: cv_promoter_points = 1, cv_detractor_points = 2
+#   Q1 legacy:   cv_promoter_points = 0.5, cv_detractor_points = 1
+# TOTAL: ~125 pts base possible, plus uncapped CV bonuses
 
 
 # ============================================================================

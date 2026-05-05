@@ -357,7 +357,7 @@ export default function DataIntegrity() {
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-slate-400">Customer Voice Total:</span>
                   <span className="font-bold text-purple-400">
-                    {((stats?.cv?.promoters || 0) * 0.5) - (stats?.cv?.detractors || 0)} pts
+                    {((stats?.cv?.promoters || 0) * 1) - ((stats?.cv?.detractors || 0) * 2)} pts
                   </span>
                 </div>
               </div>

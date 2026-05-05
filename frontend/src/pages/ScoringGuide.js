@@ -1,13 +1,34 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { 
   Calculator, TrendingUp, Award, MessageSquare, AlertTriangle,
   ChevronDown, ChevronUp, HelpCircle, Target, DollarSign,
   Users, Star, ThumbsUp, ThumbsDown, Minus, Building2
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import api from "../utils/api";
+import { getCurrentQuarter } from "../utils/quarter";
 
 export default function ScoringGuide() {
   const [expandedSections, setExpandedSections] = useState(new Set(['overview']));
+  const [qSettings, setQSettings] = useState(null);
+  const { quarter, year } = getCurrentQuarter();
+
+  useEffect(() => {
+    api.get(`/v2/quarter-settings/${year}/${quarter}`)
+      .then((r) => setQSettings(r.data))
+      .catch(() => setQSettings(null));
+  }, [year, quarter]);
+
+  // Dynamic scoring constants (fall back to current Q2 v3 defaults).
+  const RT_PTS = qSettings?.rt_points_per_mention ?? 0.3;
+  const RT_CAP = qSettings?.rt_max_points ?? 20;
+  const RT_MAX_MENTIONS = Math.ceil(RT_CAP / RT_PTS);
+  const CV_PROMOTER_PTS = qSettings?.cv_promoter_points ?? 1;
+  const CV_DETRACTOR_PTS = qSettings?.cv_detractor_points ?? 2;
+  const W_PPA = Math.round((qSettings?.weight_ppa ?? 0.25) * 100);
+  const W_LSC = Math.round((qSettings?.weight_lsc ?? 0.25) * 100);
+  const W_LBW = Math.round((qSettings?.weight_lbw ?? 0.20) * 100);
+  const W_GLASS = Math.round((qSettings?.weight_glass ?? 0.15) * 100);
 
   const toggleSection = (section) => {
     setExpandedSections(prev => {
@@ -89,7 +110,7 @@ export default function ScoringGuide() {
             
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-center">
               <div className="bg-green-500/10 rounded-lg p-3 border border-green-500/20">
-                <p className="text-2xl font-bold text-green-400">75</p>
+                <p className="text-2xl font-bold text-green-400">{W_PPA + W_LSC + W_LBW + W_GLASS}</p>
                 <p className="text-xs text-slate-400">POS Max</p>
               </div>
               <div className="bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
@@ -101,7 +122,7 @@ export default function ScoringGuide() {
                 <p className="text-xs text-slate-400">Cust. Voice</p>
               </div>
               <div className="bg-pink-500/10 rounded-lg p-3 border border-pink-500/20">
-                <p className="text-2xl font-bold text-pink-400">15</p>
+                <p className="text-2xl font-bold text-pink-400">{Math.round(RT_CAP)}</p>
                 <p className="text-xs text-slate-400">RT Max</p>
               </div>
               <div className="bg-blue-500/10 rounded-lg p-3 border border-blue-500/20 col-span-2 md:col-span-1">
@@ -116,7 +137,7 @@ export default function ScoringGuide() {
         <div className="space-y-4">
           
           {/* POS Metrics */}
-          <Section id="pos" title="Weighted POS Metrics (75 pts max)" icon={DollarSign} color="green">
+          <Section id="pos" title={`Weighted POS Metrics (${W_PPA + W_LSC + W_LBW + W_GLASS} pts max)`} icon={DollarSign} color="green">
             <p className="text-slate-300 mb-4">
               Core performance metrics from your POS system. Each metric is compared to a benchmark and weighted.
             </p>
@@ -134,27 +155,27 @@ export default function ScoringGuide() {
                 <tbody className="text-slate-400">
                   <tr className="border-b border-slate-700">
                     <td className="py-2 font-medium text-white">PPA (Per Person Avg)</td>
-                    <td className="text-center">25%</td>
-                    <td className="text-center text-green-400">25 pts</td>
-                    <td className="text-center">$55.00</td>
+                    <td className="text-center">{W_PPA}%</td>
+                    <td className="text-center text-green-400">{W_PPA} pts</td>
+                    <td className="text-center">${(qSettings?.benchmark_ppa ?? 55).toFixed(2)}</td>
                   </tr>
                   <tr className="border-b border-slate-700">
                     <td className="py-2 font-medium text-white">LSC (Loyalty Sales)</td>
-                    <td className="text-center">25%</td>
-                    <td className="text-center text-green-400">25 pts</td>
-                    <td className="text-center">1:100 ratio</td>
+                    <td className="text-center">{W_LSC}%</td>
+                    <td className="text-center text-green-400">{W_LSC} pts</td>
+                    <td className="text-center">1:{Math.round(qSettings?.benchmark_lsc ?? 100)} ratio</td>
                   </tr>
                   <tr className="border-b border-slate-700">
                     <td className="py-2 font-medium text-white">LBW (Liquor/Beer/Wine)</td>
-                    <td className="text-center">15%</td>
-                    <td className="text-center text-green-400">15 pts</td>
-                    <td className="text-center">$8.00/guest</td>
+                    <td className="text-center">{W_LBW}%</td>
+                    <td className="text-center text-green-400">{W_LBW} pts</td>
+                    <td className="text-center">${(qSettings?.benchmark_lbw ?? 8).toFixed(2)}/guest</td>
                   </tr>
                   <tr>
                     <td className="py-2 font-medium text-white">Glassware</td>
-                    <td className="text-center">10%</td>
-                    <td className="text-center text-green-400">10 pts</td>
-                    <td className="text-center">$1.25/guest</td>
+                    <td className="text-center">{W_GLASS}%</td>
+                    <td className="text-center text-green-400">{W_GLASS} pts</td>
+                    <td className="text-center">${(qSettings?.benchmark_glass ?? 1.35).toFixed(2)}/guest</td>
                   </tr>
                 </tbody>
               </table>
@@ -233,7 +254,7 @@ export default function ScoringGuide() {
                     <ThumbsUp className="w-5 h-5 text-green-400" />
                     <div>
                       <p className="text-white font-medium">Promoter (9-10 rating)</p>
-                      <p className="text-green-400 font-bold">+1 pt each</p>
+                      <p className="text-green-400 font-bold">+{CV_PROMOTER_PTS} pt{CV_PROMOTER_PTS !== 1 ? 's' : ''} each</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3 p-2 bg-slate-700/50 rounded">
@@ -247,7 +268,7 @@ export default function ScoringGuide() {
                     <ThumbsDown className="w-5 h-5 text-red-400" />
                     <div>
                       <p className="text-white font-medium">Detractor (1-6 rating)</p>
-                      <p className="text-red-400 font-bold">−2 pts each</p>
+                      <p className="text-red-400 font-bold">−{CV_DETRACTOR_PTS} pt{CV_DETRACTOR_PTS !== 1 ? 's' : ''} each</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3 p-2 bg-blue-500/10 rounded border border-blue-500/20">
@@ -262,7 +283,7 @@ export default function ScoringGuide() {
               
               <div className="bg-purple-900/30 border border-purple-500/30 rounded-lg p-4">
                 <p className="text-sm text-purple-300">
-                  <strong>Formula:</strong> Customer Voice = NPS%/10 + (Promoters × 1) − (Detractors × 2)
+                  <strong>Formula:</strong> Customer Voice = NPS%/10 + (Promoters × {CV_PROMOTER_PTS}) − (Detractors × {CV_DETRACTOR_PTS})
                 </p>
                 <p className="text-xs text-slate-400 mt-2">
                   This score is displayed as a combined total on all leaderboards and employee cards.
@@ -272,32 +293,40 @@ export default function ScoringGuide() {
           </Section>
 
           {/* Review Tracker */}
-          <Section id="rt" title="Review Tracker (15 pts max)" icon={Star} color="pink">
+          <Section id="rt" title={`Review Tracker (${Math.round(RT_CAP)} pts max)`} icon={Star} color="pink">
             <p className="text-slate-300 mb-4">
               Points for being mentioned in online reviews (Yelp, Google, TripAdvisor, etc.)
             </p>
             
             <div className="bg-slate-800/50 rounded-lg p-4">
               <p className="text-sm text-slate-400 mb-3">
-                <strong className="text-white">Formula:</strong> 0.5 pts per mention, capped at 30 mentions
+                <strong className="text-white">Formula:</strong> {RT_PTS} pts per mention, capped at {RT_MAX_MENTIONS} mentions ({Math.round(RT_CAP)} pts)
               </p>
               <div className="grid grid-cols-4 gap-2 text-center text-sm">
-                <div className="bg-slate-700/50 rounded p-2">
-                  <p className="text-pink-400 font-bold">10</p>
-                  <p className="text-slate-500">= 5 pts</p>
-                </div>
-                <div className="bg-slate-700/50 rounded p-2">
-                  <p className="text-pink-400 font-bold">20</p>
-                  <p className="text-slate-500">= 10 pts</p>
-                </div>
-                <div className="bg-slate-700/50 rounded p-2">
-                  <p className="text-pink-400 font-bold">30</p>
-                  <p className="text-slate-500">= 15 pts</p>
-                </div>
-                <div className="bg-slate-700/50 rounded p-2">
-                  <p className="text-pink-400 font-bold">40+</p>
-                  <p className="text-slate-500">= 15 pts (max)</p>
-                </div>
+                {(() => {
+                  const sample1 = Math.round(RT_MAX_MENTIONS / 3);
+                  const sample2 = Math.round((2 * RT_MAX_MENTIONS) / 3);
+                  return (
+                    <>
+                      <div className="bg-slate-700/50 rounded p-2">
+                        <p className="text-pink-400 font-bold">{sample1}</p>
+                        <p className="text-slate-500">= {(sample1 * RT_PTS).toFixed(1)} pts</p>
+                      </div>
+                      <div className="bg-slate-700/50 rounded p-2">
+                        <p className="text-pink-400 font-bold">{sample2}</p>
+                        <p className="text-slate-500">= {(sample2 * RT_PTS).toFixed(1)} pts</p>
+                      </div>
+                      <div className="bg-slate-700/50 rounded p-2">
+                        <p className="text-pink-400 font-bold">{RT_MAX_MENTIONS}</p>
+                        <p className="text-slate-500">= {Math.round(RT_CAP)} pts</p>
+                      </div>
+                      <div className="bg-slate-700/50 rounded p-2">
+                        <p className="text-pink-400 font-bold">{RT_MAX_MENTIONS + 5}+</p>
+                        <p className="text-slate-500">= {Math.round(RT_CAP)} pts (max)</p>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </div>
           </Section>

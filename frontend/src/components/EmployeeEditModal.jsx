@@ -286,7 +286,7 @@ const CustomerVoiceSection = ({ formData, onChange }) => (
           placeholder="0"
           className="border-green-200"
         />
-        <p className="text-xs text-green-600 mt-1">+0.5 pts each</p>
+        <p className="text-xs text-green-600 mt-1">+1 pt each</p>
       </div>
       <div>
         <label className="block text-sm font-medium text-slate-300 mb-1">Passives (7-8)</label>
@@ -307,7 +307,7 @@ const CustomerVoiceSection = ({ formData, onChange }) => (
           placeholder="0"
           className="border-red-200"
         />
-        <p className="text-xs text-red-600 mt-1">-1 pt each</p>
+        <p className="text-xs text-red-600 mt-1">−2 pts each</p>
       </div>
       <div>
         <label className="block text-sm font-medium text-purple-400 mb-1">RT Mentions</label>
@@ -318,7 +318,7 @@ const CustomerVoiceSection = ({ formData, onChange }) => (
           placeholder="0"
           className="border-purple-200"
         />
-        <p className="text-xs text-purple-600 mt-1">+0.5 pts (max 15)</p>
+        <p className="text-xs text-purple-600 mt-1">{(0.3).toFixed(1)} pts per mention (max 20)</p>
       </div>
     </div>
   </div>

@@ -147,14 +147,16 @@ export default function QuarterSettings() {
   };
 
   const handleSave = async () => {
-    // Validate POS weights sum to 0.75 (PPA 25% + LSC 25% + LBW 15% + Glass 10%)
-    // Note: CV/RT are bonus systems, not weighted percentages
+    // Validate POS weights are within a reasonable range. Default Q2+ model
+    // sums to 0.85 (PPA 25% + LSC 25% + LBW 20% + Glass 15%); legacy Q1
+    // model summed to 0.75. CV/RT/Metric Bonuses are added on top — they
+    // are NOT weighted percentages.
     const posWeightSum = formData.weight_ppa + formData.weight_lbw + formData.weight_glass + formData.weight_lsc;
     
-    // Allow flexibility - weights can sum to anywhere between 0.70 and 1.0
+    // Allow flexibility - weights can sum to anywhere between 0.50 and 1.05
     // The scoring formula uses these as multipliers, so any reasonable sum works
     if (posWeightSum < 0.50 || posWeightSum > 1.05) {
-      toast.error(`POS weights should sum to between 0.50 and 1.0 (currently ${posWeightSum.toFixed(2)})`);
+      toast.error(`POS weights should sum to between 0.50 and 1.05 (currently ${posWeightSum.toFixed(2)})`);
       return;
     }
 
@@ -444,7 +446,7 @@ export default function QuarterSettings() {
             
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">PPA (25%)</label>
+                <label className="text-sm font-medium">PPA ({Math.round((formData.weight_ppa || 0) * 100)}%)</label>
                 <Input
                   type="number"
                   step="0.05"
@@ -457,7 +459,7 @@ export default function QuarterSettings() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">LBW (20%)</label>
+                <label className="text-sm font-medium">LBW ({Math.round((formData.weight_lbw || 0) * 100)}%)</label>
                 <Input
                   type="number"
                   step="0.05"
@@ -470,7 +472,7 @@ export default function QuarterSettings() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Glass (15%)</label>
+                <label className="text-sm font-medium">Glass ({Math.round((formData.weight_glass || 0) * 100)}%)</label>
                 <Input
                   type="number"
                   step="0.05"
@@ -483,7 +485,7 @@ export default function QuarterSettings() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">LSC (25%)</label>
+                <label className="text-sm font-medium">LSC ({Math.round((formData.weight_lsc || 0) * 100)}%)</label>
                 <Input
                   type="number"
                   step="0.05"
@@ -501,7 +503,10 @@ export default function QuarterSettings() {
             <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-sm text-blue-800">
                 <strong>Note:</strong> Customer Voice (CV) points are added directly to the total score as raw points, not as a weighted percentage.
-                Formula: (Promoters × 1) + (Mentions × 0.5) - (Detractors × 2)
+                Formula: NPS%/10 + (Promoters × {formData.cv_promoter_points ?? 1}) − (Detractors × {formData.cv_detractor_points ?? 2})
+              </p>
+              <p className="text-xs text-blue-700 mt-1">
+                The Review Tracker bonus ({formData.rt_points_per_mention ?? 0.3} pts/mention, max {Math.round(formData.rt_max_points ?? 20)}) is a SEPARATE bonus added on top of CV.
               </p>
             </div>
           </div>

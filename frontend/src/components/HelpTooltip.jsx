@@ -33,7 +33,7 @@ const HELP_TOPICS = {
   },
   "rt-bonus": {
     title: "Review Tracker Bonus",
-    content: "Each positive mention on external reviews = +0.5 pts. Maximum 15 pts (30 mentions).",
+    content: "Each positive mention on external reviews earns RT bonus points. Q2+ rule: 0.3 pts per mention, capped at 20 pts. Older quarters (Q1) used 0.5 pts/mention with a 15 pt cap.",
     link: "/help#scoring-formula",
     linkText: "How RT works"
   },

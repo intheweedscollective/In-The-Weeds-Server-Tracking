@@ -600,13 +600,13 @@ async def download_rt_template():
         "Instructions:",
         "1. Fill in the 'Mentions' column with each employee's mention count",
         "2. Employee names are pre-filled from the most recent snapshot",
-        "3. Each mention = +0.5 points (capped at 15 pts)",
+        "3. Each mention = +0.3 points (capped at 20 pts) — Q2+ rule",
         "",
         "Scoring Color Thresholds:",
         "  0 mentions = 0 pts (Red)",
-        "  1-5 mentions = 0.5-2.5 pts (Yellow)",
-        "  6-10 mentions = 3.0-5.0 pts (Green)",
-        "  11+ mentions = 5.5-15 pts (Blue, capped at 15)",
+        "  1-9 mentions = 0.3-2.7 pts (Yellow)",
+        "  10-19 mentions = 3.0-5.7 pts (Green)",
+        "  20+ mentions = 6.0-20 pts (Blue, capped at 20)",
     ]
     for idx, line in enumerate(instructions, 1):
         ws_inst.cell(row=idx, column=1, value=line)

@@ -73,7 +73,7 @@ const faqs = [
       },
       {
         q: "How does Review Tracker bonus work?",
-        a: "Each positive mention on external review platforms (Google, Yelp, TripAdvisor, etc.) = +0.5 points. Maximum 15 points (30 mentions). Upload RT data via the Data Uploads page."
+        a: "Each positive mention on external review platforms (Google, Yelp, TripAdvisor, etc.) earns RT bonus points. Q2+ rule: +0.3 pts per mention, capped at 20 points (~67 mentions). Q1 2026 used the legacy +0.5 pts/mention with a 15 pt cap. Upload RT data via the Data Uploads page."
       },
       {
         q: "What are the Server Tier thresholds?",
@@ -92,7 +92,7 @@ const faqs = [
       },
       {
         q: "What counts as a Promoter vs Detractor?",
-        a: "Promoter: Rating 9-10 (+0.5 pts each). Passive: Rating 7-8 (0 pts). Detractor: Rating 1-6 (-1 pt each). The Customer Voice score displayed is the combined total of these points."
+        a: "Promoter: Rating 9-10 (+1 pt each). Passive: Rating 7-8 (0 pts). Detractor: Rating 1-6 (−2 pts each). The Customer Voice score also adds NPS%/10. Q1 2026 used the legacy weights (Promoter +0.5, Detractor −1) and is preserved for historical accuracy."
       },
       {
         q: "Why is Customer Voice uncapped?",

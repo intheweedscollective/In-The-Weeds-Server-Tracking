@@ -783,9 +783,10 @@ export default function FullRankings() {
                           <TooltipContent className="bg-slate-800 text-white p-3 max-w-xs">
                             <div className="text-xs space-y-1">
                               <div className="font-bold mb-1">Customer Voice (Combined Total):</div>
-                              <div className="font-semibold text-primary">Promoter/Detractor Points:</div>
-                              <div>• Each Promoter (9-10) = +0.5 pt</div>
-                              <div>• Each Detractor (≤6) = -1 pt</div>
+                              <div className="font-semibold text-primary">NPS + Promoter/Detractor Points:</div>
+                              <div>• NPS contribution = NPS% / 10 (≈ 0–10 pts)</div>
+                              <div>• Each Promoter (9-10) = +{quarterSettings?.cv_promoter_points ?? 1} pt</div>
+                              <div>• Each Detractor (≤6) = -{quarterSettings?.cv_detractor_points ?? 2} pt{(quarterSettings?.cv_detractor_points ?? 2) !== 1 ? 's' : ''}</div>
                               <div className="mt-2 text-green-400 font-semibold">No cap on CV points!</div>
                             </div>
                           </TooltipContent>
@@ -801,8 +802,8 @@ export default function FullRankings() {
                           <TooltipContent className="bg-slate-800 text-white p-3 max-w-xs">
                             <div className="text-xs space-y-1">
                               <div className="font-bold mb-1">Review Tracker Bonus:</div>
-                              <div>• Each mention = +0.5 pts</div>
-                              <div>• Capped at 15 pts max</div>
+                              <div>• Each mention = +{quarterSettings?.rt_points_per_mention ?? 0.3} pts</div>
+                              <div>• Capped at {Math.round(quarterSettings?.rt_max_points ?? 20)} pts max</div>
                               <div className="mt-1 text-slate-400">From ReviewTrackers.com</div>
                             </div>
                           </TooltipContent>
@@ -828,10 +829,10 @@ export default function FullRankings() {
                         </Tooltip>
                       </TooltipProvider>
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell text-white">PPA (25%)</th>
-                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell text-white">LBW (20%)</th>
-                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell text-white">LSC (25%)</th>
-                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell text-white">Glass (15%)</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell text-white">PPA ({Math.round((quarterSettings?.weight_ppa ?? 0.25) * 100)}%)</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell text-white">LBW ({Math.round((quarterSettings?.weight_lbw ?? 0.20) * 100)}%)</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell text-white">LSC ({Math.round((quarterSettings?.weight_lsc ?? 0.25) * 100)}%)</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell text-white">Glass ({Math.round((quarterSettings?.weight_glass ?? 0.15) * 100)}%)</th>
                     <th className="px-2 py-3 text-center text-xs font-bold uppercase tracking-wider text-white"></th>
                   </tr>
                 </thead>
@@ -964,7 +965,7 @@ export default function FullRankings() {
                                 <TooltipContent className="bg-slate-800 text-white p-3 max-w-xs border border-slate-600">
                                   <div className="text-xs">
                                     <div className="font-bold text-primary mb-1">Review Tracker</div>
-                                    <div>{employee.review_mentions || 0} mentions × 0.5 pts = +{formatNumber(employee.review_bonus || 0)} pts (max 15)</div>
+                                    <div>{employee.review_mentions || 0} mentions × {quarterSettings?.rt_points_per_mention ?? 0.3} pts = +{formatNumber(employee.review_bonus || 0)} pts (max {Math.round(quarterSettings?.rt_max_points ?? 20)})</div>
                                   </div>
                                 </TooltipContent>
                               </Tooltip>

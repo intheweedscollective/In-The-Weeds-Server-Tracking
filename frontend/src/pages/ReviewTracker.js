@@ -29,6 +29,20 @@ export default function ReviewTracker() {
   const [editPromoters, setEditPromoters] = useState(0);
   const [editDetractors, setEditDetractors] = useState(0);
 
+  // Per-quarter scoring constants (loaded from quarter_settings to keep
+  // formulas consistent with whatever the active quarter is using).
+  const [qSettings, setQSettings] = useState(null);
+  useEffect(() => {
+    fetch(`${API_URL}/api/v2/quarter-settings/${selectedYear}/${selectedQuarter}`)
+      .then((r) => r.json())
+      .then((d) => setQSettings(d))
+      .catch(() => setQSettings(null));
+  }, [selectedYear, selectedQuarter]);
+  const RT_PTS = qSettings?.rt_points_per_mention ?? 0.3;
+  const RT_CAP = qSettings?.rt_max_points ?? 20;
+  const CV_PROM = qSettings?.cv_promoter_points ?? 1;
+  const CV_DET = qSettings?.cv_detractor_points ?? 2;
+
   // Fetch data
   const fetchData = useCallback(async () => {
     try {
@@ -477,7 +491,7 @@ export default function ReviewTracker() {
               Employee Mention Counts
             </h2>
             <p className="text-xs md:text-sm text-slate-400 mt-1">
-              Each mention = +0.5 pts (capped at 15)
+              Each mention = +{RT_PTS} pts (capped at {Math.round(RT_CAP)})
             </p>
           </div>
           
@@ -500,7 +514,7 @@ export default function ReviewTracker() {
                 </thead>
                 <tbody className="divide-y divide-slate-700">
                   {filteredMentions.map((emp, idx) => {
-                    const rtPoints = Math.min((emp.mentions || 0) * 0.5, 15);
+                    const rtPoints = Math.min((emp.mentions || 0) * RT_PTS, RT_CAP);
                     return (
                       <tr key={getDisplayFirstName(emp)} className="hover:bg-slate-700/30 transition-colors">
                         <td className="px-3 md:px-4 py-2 md:py-3">
@@ -573,7 +587,7 @@ export default function ReviewTracker() {
                     const isEditing = editingEmployee === emp.id;
                     const currentPromoters = isEditing ? editPromoters : emp.cv_promoters;
                     const currentDetractors = isEditing ? editDetractors : emp.cv_detractors;
-                    const calculatedScore = (currentPromoters * 0.5) - (currentDetractors * 1);
+                    const calculatedScore = (currentPromoters * CV_PROM) - (currentDetractors * CV_DET);
                     
                     return (
                       <tr key={emp.id} className={`transition-colors ${isEditing ? "bg-purple-900/20" : "hover:bg-slate-700/30"}`}>
