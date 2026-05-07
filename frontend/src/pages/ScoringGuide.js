@@ -5,8 +5,8 @@ import {
   Users, Star, ThumbsUp, ThumbsDown, Minus, Building2
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
-import api from "../utils/api";
-import { getCurrentQuarter } from "../utils/quarter";
+import api from "../lib/api";
+import { getCurrentQuarter } from "../lib/quarterUtils";
 
 export default function ScoringGuide() {
   const [expandedSections, setExpandedSections] = useState(new Set(['overview']));
