@@ -45,6 +45,7 @@ from routes.insights import insights_router
 from routes.pos_upload import pos_upload_router, pdf_jobs
 from routes.scheduler import scheduler_router
 from routes.snapshots_legacy import register_snapshots_legacy_routes
+from routes.auth import auth_router
 
 # pdf_jobs is now imported from pos_upload module
 from yodeck_slides import (
@@ -3856,6 +3857,7 @@ api_router.include_router(reviews_router)
 api_router.include_router(insights_router)
 api_router.include_router(pos_upload_router)
 api_router.include_router(scheduler_router)
+api_router.include_router(auth_router)
 
 # Register legacy snapshots routes (uses db.snapshots collection)
 register_snapshots_legacy_routes(api_router, db)
@@ -3866,10 +3868,24 @@ register_snapshots_legacy_routes(api_router, db)
 # Include the router in the main app
 app.include_router(api_router)
 
+# CORS — must allow credentials so the cross-origin session_token cookie
+# is sent on /api requests. allow_credentials=True is incompatible with
+# allow_origins=["*"], so we expand the env var into an explicit allowlist.
+# The default list covers BOTH the preview URL and the production domain.
+_default_origins = (
+    "https://staff-score-engine.preview.emergentagent.com,"
+    "https://eatery-reports.emergent.host,"
+    "http://localhost:3000"
+)
+_origins_raw = os.environ.get("CORS_ORIGINS") or _default_origins
+_origins = [o.strip() for o in _origins_raw.split(",") if o.strip() and o.strip() != "*"]
+if not _origins:
+    _origins = _default_origins.split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=False,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_credentials=True,
+    allow_origins=_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -3887,6 +3903,68 @@ class NoCacheMiddleware(BaseHTTPMiddleware):
         return response
 
 app.add_middleware(NoCacheMiddleware)
+
+
+# ---------------------------------------------------------------------------
+# AUTH GATE — protect every state-changing /api/v2/* endpoint.
+#
+# Read-only GETs stay public so the rankings/snapshots can be shared as a
+# public link. Anything that creates, edits, or deletes data requires the
+# session_token cookie set by /api/auth/session AND the user's email must
+# be in the ALLOWED_ADMIN_EMAILS whitelist (see routes/auth.py).
+#
+# Routes explicitly EXEMPTED from the gate (in addition to all GETs):
+#   • /api/auth/*          — auth flow itself
+#   • /api/health, /api/   — health checks
+# ---------------------------------------------------------------------------
+from routes.auth import _get_session_user as _auth_get_session_user, ALLOWED_EMAILS
+
+_AUTH_PROTECTED_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+_AUTH_PUBLIC_PREFIXES = (
+    "/api/auth/",
+    "/api/health",
+)
+
+class AdminAuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        path = request.url.path
+        method = request.method.upper()
+
+        # Public reads + auth flow + non-API requests pass through unchanged.
+        if (
+            method not in _AUTH_PROTECTED_METHODS
+            or not path.startswith("/api/")
+            or any(path.startswith(p) for p in _AUTH_PUBLIC_PREFIXES)
+        ):
+            return await call_next(request)
+
+        # Protected: require valid session whose email is on the whitelist.
+        try:
+            user = await _auth_get_session_user(
+                db,
+                request.cookies.get("session_token"),
+                request.headers.get("authorization"),
+            )
+        except Exception:
+            user = None
+
+        if not user:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Sign in required to make changes."},
+            )
+        if not user.is_admin:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(
+                status_code=403,
+                content={"detail": f"{user.email} is not authorized to edit this app. Contact the owner to be added."},
+            )
+
+        return await call_next(request)
+
+
+app.add_middleware(AdminAuthMiddleware)
 
 # Configure logging
 logging.basicConfig(
