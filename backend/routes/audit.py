@@ -1147,10 +1147,12 @@ async def sync_dashboard_to_snapshot(year: int, quarter: str, employee_name: Opt
         "guest_count", "net_sales", "loyalty_sales", "lsc_count",
         "liquor_sales", "beer_sales", "wine_sales", "bar_glassware_sales",
         "score_ppa", "score_lbw", "score_glass", "score_lsc",
+        "weighted_score",  # ← critical: was missing, causing snapshot to retain stale uncapped values
         "cv_score", "cv_nps", "cv_responses", "cv_promoters", "cv_detractors",
+        "nps_score", "nps_contribution", "cv_raw_points",
         "rt_mentions", "review_mentions", "review_tracker_bonus",
         "total_score", "pre_dar_score", "total_metric_bonus",
-        "tier_label", "performance_tier", "rank",
+        "tier_label", "performance_tier", "rank", "job_title",
     ]
 
     updated = []

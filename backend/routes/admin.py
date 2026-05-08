@@ -5,7 +5,7 @@ Extracted from server.py for better maintainability.
 """
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 import logging
@@ -45,11 +45,11 @@ class OfficialRTStats(BaseModel):
 
 class OfficialCVStats(BaseModel):
     """Official Customer Voice (Loyalty Voice) stats as shown in their UI."""
-    nps_score: float = 0.0
-    promoters: int = 0
-    passives: int = 0
-    detractors: int = 0
-    total_responses: int = 0
+    nps_score: float = Field(default=0.0, ge=-100.0, le=100.0)
+    promoters: int = Field(default=0, ge=0)
+    passives: int = Field(default=0, ge=0)
+    detractors: int = Field(default=0, ge=0)
+    total_responses: int = Field(default=0, ge=0)
     quarter: str = "Q1"
     year: int = 2026
 

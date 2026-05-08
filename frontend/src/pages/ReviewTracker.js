@@ -234,12 +234,17 @@ export default function ReviewTracker() {
   // Save employee CV stats
   const saveEmployeeCvStats = async (employeeId) => {
     try {
+      // Survey counts can never be negative — clamp to 0 even if a stale
+      // value somehow made it into state (e.g., user pressed ↓ past zero
+      // on the number input, which most browsers don't enforce against).
+      const promoters = Math.max(0, parseInt(editPromoters) || 0);
+      const detractors = Math.max(0, parseInt(editDetractors) || 0);
       const res = await fetch(`${API_URL}/api/v2/employees/${employeeId}/cv-stats`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          cv_promoters: parseInt(editPromoters) || 0,
-          cv_detractors: parseInt(editDetractors) || 0,
+          cv_promoters: promoters,
+          cv_detractors: detractors,
           quarter: selectedQuarter,
           year: selectedYear
         })
@@ -599,8 +604,14 @@ export default function ReviewTracker() {
                             <Input
                               type="number"
                               min="0"
+                              step="1"
                               value={editPromoters}
-                              onChange={(e) => setEditPromoters(e.target.value)}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                if (v === "") { setEditPromoters(""); return; }
+                                const n = parseInt(v, 10);
+                                setEditPromoters(Number.isFinite(n) && n >= 0 ? n : 0);
+                              }}
                               className="w-16 md:w-20 text-center bg-slate-700 border-green-500 text-green-400 font-bold text-sm"
                             />
                           ) : (
@@ -612,8 +623,14 @@ export default function ReviewTracker() {
                             <Input
                               type="number"
                               min="0"
+                              step="1"
                               value={editDetractors}
-                              onChange={(e) => setEditDetractors(e.target.value)}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                if (v === "") { setEditDetractors(""); return; }
+                                const n = parseInt(v, 10);
+                                setEditDetractors(Number.isFinite(n) && n >= 0 ? n : 0);
+                              }}
                               className="w-16 md:w-20 text-center bg-slate-700 border-red-500 text-red-400 font-bold text-sm"
                             />
                           ) : (

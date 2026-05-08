@@ -2740,19 +2740,24 @@ async def update_employee(employee_id: str, data: dict):
                 update_fields['tier_label'] = 'C-Server'
 
         # Legacy full-rebuild path — only when POS-data fields actually
-        # changed. Uses raw percentages × weights (snapshot pipeline caps
-        # them differently, but for POS edits we accept the divergence
-        # since we'd otherwise need to recreate the whole scoring engine).
+        # changed. Caps each score at 100% (consistent with the snapshot
+        # pipeline) so a server with extreme metrics like LSC=330% can't
+        # inflate weighted_score beyond the documented max of
+        # sum(weights) × 100.
         if full_rebuild:
-            w_ppa = settings_doc.get('weight_ppa', 0.30)
-            w_lbw = settings_doc.get('weight_lbw', 0.25)
-            w_glass = settings_doc.get('weight_glass', 0.20)
+            # Default to current Q2+ active model when settings are missing
+            # any field. Q1 legacy used 0.25/0.15/0.10/0.25 — but those are
+            # already in the QuarterSettings doc, so the .get() fallbacks
+            # below should rarely be hit in practice.
+            w_ppa = settings_doc.get('weight_ppa', 0.25)
+            w_lbw = settings_doc.get('weight_lbw', 0.20)
+            w_glass = settings_doc.get('weight_glass', 0.15)
             w_lsc = settings_doc.get('weight_lsc', 0.25)
 
-            s_ppa = merged.get('score_ppa', 0) or 0
-            s_lbw = merged.get('score_lbw', 0) or 0
-            s_glass = merged.get('score_glass', 0) or 0
-            s_lsc = merged.get('score_lsc', 0) or 0
+            s_ppa = min(merged.get('score_ppa', 0) or 0, 100)
+            s_lbw = min(merged.get('score_lbw', 0) or 0, 100)
+            s_glass = min(merged.get('score_glass', 0) or 0, 100)
+            s_lsc = min(merged.get('score_lsc', 0) or 0, 100)
             cv = merged.get('cv_score', 0) or 0
             rt = merged.get('review_tracker_bonus', 0) or 0
             bonus = merged.get('total_metric_bonus', 0) or 0
@@ -3336,9 +3341,9 @@ async def update_employee_cv_stats(employee_id: str, data: dict):
     """
     quarter = data.get("quarter", "Q1")
     year = data.get("year", 2026)
-    cv_promoters = int(data.get("cv_promoters", 0))
-    cv_detractors = int(data.get("cv_detractors", 0))
-    cv_passives = int(data.get("cv_passives", 0))
+    cv_promoters = max(0, int(data.get("cv_promoters", 0) or 0))
+    cv_detractors = max(0, int(data.get("cv_detractors", 0) or 0))
+    cv_passives = max(0, int(data.get("cv_passives", 0) or 0))
     
     # Find employee
     employee = await db.employees_v2.find_one({

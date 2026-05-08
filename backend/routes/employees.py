@@ -346,9 +346,13 @@ async def update_employee_cv_stats(employee_id: str, data: dict):
     from server import sync_employees_to_most_recent_snapshot
     
     db = get_db()
-    cv_promoters = int(data.get("cv_promoters", 0))
-    cv_detractors = int(data.get("cv_detractors", 0))
-    cv_passives = int(data.get("cv_passives", 0))
+    # Clamp at zero — survey counts can't be negative. Without this, a
+    # decrement spinner on the edit form could produce nonsense like
+    # cv_detractors=-7, which inverts the sign of the CV formula and
+    # inflates scores by +14 instead of deducting 14.
+    cv_promoters = max(0, int(data.get("cv_promoters", 0) or 0))
+    cv_detractors = max(0, int(data.get("cv_detractors", 0) or 0))
+    cv_passives = max(0, int(data.get("cv_passives", 0) or 0))
     
     # Calculate NPS % from the provided values
     total_responses = cv_promoters + cv_passives + cv_detractors
