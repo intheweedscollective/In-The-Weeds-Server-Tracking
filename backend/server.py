@@ -3868,27 +3868,42 @@ register_snapshots_legacy_routes(api_router, db)
 # Include the router in the main app
 app.include_router(api_router)
 
-# CORS — must allow credentials so the cross-origin session_token cookie
-# is sent on /api requests. allow_credentials=True is incompatible with
-# allow_origins=["*"], so we expand the env var into an explicit allowlist.
-# The default list covers BOTH the preview URL and the production domain.
-_default_origins = (
-    "https://staff-score-engine.preview.emergentagent.com,"
-    "https://eatery-reports.emergent.host,"
-    "http://localhost:3000"
-)
-_origins_raw = os.environ.get("CORS_ORIGINS") or _default_origins
-_origins = [o.strip() for o in _origins_raw.split(",") if o.strip() and o.strip() != "*"]
-if not _origins:
-    _origins = _default_origins.split(",")
+# CORS configuration
+# - When CORS_ORIGINS="*" (the default in preview), allow all origins. The
+#   browser spec forbids `credentials=true` together with `origin=*`, so in
+#   that mode we don't send the auth cookie cross-origin. That's fine for
+#   preview because the frontend and backend share the same origin.
+# - When CORS_ORIGINS is an explicit comma-separated allowlist, enable
+#   credentials so the auth cookie travels. The default allowlist includes
+#   the preview, the original Emergent-hosted production domain, the user's
+#   custom production domain, and localhost.
+_origins_raw = (os.environ.get("CORS_ORIGINS") or "*").strip()
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=_origins,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+if _origins_raw == "*":
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    _origins = [o.strip() for o in _origins_raw.split(",") if o.strip()]
+    if not _origins:
+        _origins = [
+            "https://staff-score-engine.preview.emergentagent.com",
+            "https://eatery-reports.emergent.host",
+            "https://intheweedscollective.com",
+            "https://www.intheweedscollective.com",
+            "http://localhost:3000",
+        ]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # Add no-cache headers middleware for API responses
 from starlette.middleware.base import BaseHTTPMiddleware
