@@ -45,30 +45,22 @@ export default function Login() {
       <div className="relative w-full max-w-xl">
         <div className="rounded-3xl border border-slate-700/60 bg-slate-900/80 backdrop-blur-xl shadow-2xl p-10 md:p-12">
           {/* Logos */}
-          <div className="flex items-center justify-center gap-8 md:gap-12 mb-10" data-testid="login-logos">
-            <div className="flex flex-col items-center">
+          <div className="flex items-center justify-center gap-6 md:gap-8 mb-10" data-testid="login-logos">
+            <div className="rounded-2xl bg-[#f5efe4] px-4 py-3 shadow-md ring-1 ring-black/5">
               <img
                 src="/images/in-the-weeds-collective-logo.png"
                 alt="In the Weeds Collective"
                 className="h-20 md:h-24 w-auto object-contain"
-                onError={(e) => {
-                  // Graceful fallback while the user hasn't uploaded their
-                  // logo yet — show a styled text mark.
-                  e.currentTarget.style.display = "none";
-                  e.currentTarget.nextElementSibling.style.display = "block";
-                }}
               />
-              <div className="hidden text-center" aria-hidden>
-                <div className="text-sm font-bold tracking-[0.2em] text-amber-400">IN THE WEEDS</div>
-                <div className="text-[10px] font-semibold tracking-[0.3em] text-amber-300/70">COLLECTIVE</div>
-              </div>
             </div>
 
-            <div className="h-16 w-px bg-slate-700" />
+            <div className="text-slate-600 font-light text-2xl select-none" aria-hidden>
+              ×
+            </div>
 
-            <div className="flex flex-col items-center">
+            <div className="rounded-2xl bg-white px-3 py-2 shadow-md ring-1 ring-black/5">
               <img
-                src="/images/shrimp-logo.png"
+                src="/images/bubba-gump-pin.png"
                 alt="Bubba Gump Shrimp Co."
                 className="h-20 md:h-24 w-auto object-contain"
               />
