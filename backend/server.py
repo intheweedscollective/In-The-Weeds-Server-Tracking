@@ -2977,6 +2977,29 @@ async def delete_employee(employee_id: str):
     )
     pulled_from_snapshots = snap_result.modified_count
 
+    # ALSO pull by NAME — snapshot.employees may carry a different id than
+    # employees_v2 for the same person (merge_snapshot_data generates fresh
+    # UUIDs when it can't find an existing match). Without this fallback
+    # "deleted from Employees tab" can leave a ghost on the snapshot that
+    # slide / rankings keep displaying.
+    if name_for_message:
+        import re as _re2
+        name_pat = f"^{_re2.escape(name_for_message)}$"
+        scope = {}
+        if block_year and block_quarter:
+            scope = {"year": block_year, "quarter": block_quarter}
+        snap_name_result = await db.snapshot_workflow.update_many(
+            scope,
+            {"$pull": {"employees": {
+                "$or": [
+                    {"name": {"$regex": name_pat, "$options": "i"}},
+                    {"display_name": {"$regex": name_pat, "$options": "i"}},
+                    {"report_name": {"$regex": name_pat, "$options": "i"}},
+                ]
+            }}}
+        )
+        pulled_from_snapshots += snap_name_result.modified_count
+
     # 3) Nothing matched by id — treat employee_id as a name and delete one
     # matching row from each source (case-insensitive exact match). This
     # preserves legitimate other employees who happen to share the name.

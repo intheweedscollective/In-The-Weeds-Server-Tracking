@@ -207,7 +207,81 @@ async def create_employee(data: EmployeeCreate):
     emp_dict = employee.model_dump()
     emp_dict['tier_label'] = tier_label
     emp_dict['created_at'] = datetime.now(timezone.utc).isoformat()
+    # Belt-and-suspenders for the response/snapshot — clean any Mongo `_id`
+    # the model_dump might have picked up (defensive).
+    emp_dict.pop("_id", None)
     await db.employees_v2.insert_one(emp_dict)
+    # insert_one mutates emp_dict by adding the BSON _id — strip it again so
+    # the dict we embed in the snapshot below stays JSON-safe.
+    emp_dict.pop("_id", None)
+
+    # ALSO inject the new row into the CURRENT snapshot's embedded
+    # `employees` array. Without this, the Employees tab page (which reads
+    # `/v2/snapshot-workflow/current-rankings` → snapshot.employees) and the
+    # snapshot detail/slide views won't show the new person — the user
+    # reported "profiles that were added for the two new employees are not
+    # showing up". Also pull the name off the snapshot's deleted_names
+    # blocklist in case the user is re-adding someone they previously
+    # terminated.
+    snap_q = data.quarter.upper()
+    snap_y = data.year
+    target_snapshot = await db.snapshot_workflow.find_one(
+        {"is_current": True, "quarter": snap_q, "year": snap_y}
+    )
+    if not target_snapshot:
+        target_snapshot = await db.snapshot_workflow.find_one(
+            {"status": "completed", "quarter": snap_q, "year": snap_y},
+            sort=[("completed_at", -1)],
+        )
+    if target_snapshot:
+        # Make sure derived display fields are present so the snapshot UI
+        # can show them without bouncing back through merge_snapshot_data.
+        emp_dict.setdefault("display_name", emp_dict.get("name"))
+        emp_dict.setdefault("report_name", emp_dict.get("name"))
+
+        existing_names = {
+            (e.get("id"), (e.get("name") or "").lower())
+            for e in target_snapshot.get("employees", []) or []
+        }
+        already_in = any(
+            (e.get("id") == emp_dict["id"])
+            or ((e.get("name") or "").lower() == emp_dict["name"].lower())
+            for e in target_snapshot.get("employees", []) or []
+        )
+        if not already_in:
+            await db.snapshot_workflow.update_one(
+                {"_id": target_snapshot["_id"]},
+                {
+                    "$push": {"employees": emp_dict},
+                    "$pull": {
+                        "deleted_names": {
+                            "$regex": f"^{re.escape(employee.name)}$",
+                            "$options": "i",
+                        }
+                    },
+                    "$set": {"updated_at": datetime.now(timezone.utc).isoformat()},
+                },
+            )
+            # Recompute employee_count
+            await db.snapshot_workflow.update_one(
+                {"_id": target_snapshot["_id"]},
+                [{"$set": {"employee_count": {"$size": {"$ifNull": ["$employees", []]}}}}],
+            )
+            logger.info(
+                f"create_employee: added '{employee.name}' to current snapshot "
+                f"{target_snapshot.get('id')}"
+            )
+        else:
+            # Already in snapshot — at least make sure they're off the blocklist.
+            await db.snapshot_workflow.update_one(
+                {"_id": target_snapshot["_id"]},
+                {"$pull": {
+                    "deleted_names": {
+                        "$regex": f"^{re.escape(employee.name)}$",
+                        "$options": "i",
+                    }
+                }},
+            )
     
     # Recalculate peer rankings for all employees in this quarter
     all_employees = await db.employees_v2.find(
@@ -249,11 +323,29 @@ async def delete_employee(employee_id: str):
     quarter = employee.get("quarter")
     name_to_block = (employee.get("name") or "").strip()
     if year and quarter:
+        # Match by id first.
         await db.snapshot_workflow.update_many(
             {"year": year, "quarter": quarter},
             {"$pull": {"employees": {"id": employee_id}}}
         )
+        # ALSO match by name (case-insensitive) because the same employee
+        # often has a different id in snapshot.employees vs employees_v2 —
+        # the snapshot is rebuilt by merge_snapshot_data which generates
+        # fresh UUIDs when it can't find an existing matching row. Without
+        # this, "deleted from Employees tab" leaves a ghost row on the
+        # snapshot that the slide / rankings keep showing.
         if name_to_block:
+            name_pat = f"^{re.escape(name_to_block)}$"
+            await db.snapshot_workflow.update_many(
+                {"year": year, "quarter": quarter},
+                {"$pull": {"employees": {
+                    "$or": [
+                        {"name": {"$regex": name_pat, "$options": "i"}},
+                        {"display_name": {"$regex": name_pat, "$options": "i"}},
+                        {"report_name": {"$regex": name_pat, "$options": "i"}},
+                    ]
+                }}}
+            )
             await db.snapshot_workflow.update_many(
                 {"year": year, "quarter": quarter},
                 {"$addToSet": {"deleted_names": name_to_block}}
