@@ -850,7 +850,42 @@ async def delete_snapshot_employee(employee_id: str, quarter: str = "Q2", year: 
         {"$set": {"employees": employees, "deleted_names": deleted_names}}
     )
 
-    return {"success": True, "message": f"Deleted {removed_name} from snapshot", "remaining": len(employees)}
+    # Also remove the same employee from the master `employees_v2` collection
+    # so downstream readers (slide PNG/PDF generators, employee list, full
+    # rankings exports) don't keep showing the deleted person. The user
+    # reported: "I am also seeing deleted employees still on the snapshot
+    # slide" because the slide generators read employees_v2 (not the
+    # snapshot's embedded employees array).
+    v2_removed = 0
+    snap_quarter = (snapshot.get("quarter") or quarter or "Q2").upper()
+    snap_year = snapshot.get("year") or year or 2026
+    # Try by id first if it looks like a UUID.
+    if employee_id and len(employee_id) >= 32:
+        r = await db.employees_v2.delete_one({"id": employee_id})
+        v2_removed += r.deleted_count
+    if name_to_block:
+        r = await db.employees_v2.delete_many({
+            "year": snap_year,
+            "quarter": snap_quarter,
+            "$or": [
+                {"name": {"$regex": f"^{re.escape(name_to_block)}$", "$options": "i"}},
+                {"display_name": {"$regex": f"^{re.escape(name_to_block)}$", "$options": "i"}},
+                {"report_name": {"$regex": f"^{re.escape(name_to_block)}$", "$options": "i"}},
+            ],
+        })
+        v2_removed += r.deleted_count
+    if v2_removed:
+        logger.info(
+            f"delete_snapshot_employee: also removed {v2_removed} matching row(s) "
+            f"from employees_v2 for '{name_to_block}'"
+        )
+
+    return {
+        "success": True,
+        "message": f"Deleted {removed_name} from snapshot",
+        "remaining": len(employees),
+        "removed_from_employees_v2": v2_removed,
+    }
 
 
 @snapshot_router.get("/snapshots/{snapshot_id}/deleted-names")
@@ -931,11 +966,32 @@ async def mark_employees_deleted(snapshot_id: str, payload: Dict[str, Any]):
             "$addToSet": {"deleted_names": {"$each": cleaned}},
         }
     )
+
+    # Also purge matching rows from employees_v2 so slides / employee list
+    # / rankings exports immediately stop showing them.
+    snap_quarter = (snapshot.get("quarter") or "").upper() or None
+    snap_year = snapshot.get("year")
+    v2_removed = 0
+    if snap_quarter and snap_year:
+        for name in cleaned:
+            r = await db.employees_v2.delete_many({
+                "year": snap_year,
+                "quarter": snap_quarter,
+                "$or": [
+                    {"name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}},
+                    {"display_name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}},
+                    {"report_name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}},
+                ],
+            })
+            v2_removed += r.deleted_count
+        if v2_removed:
+            logger.info(f"mark-deleted: also removed {v2_removed} employees_v2 rows")
     return {
         "success": True,
         "blocked": cleaned,
         "remaining": len(kept),
         "removed": len(employees) - len(kept),
+        "removed_from_employees_v2": v2_removed,
     }
 
 
