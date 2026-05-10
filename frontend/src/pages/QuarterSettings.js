@@ -200,6 +200,27 @@ export default function QuarterSettings() {
     }
   };
 
+  // Unlock a previously-locked quarter so benchmarks/weights can be edited.
+  // After unlocking + saving new values, the user should re-run scoring (Fix
+  // All Rankings or the Snapshot Workflow rescore button) to push the new
+  // benchmark through every employee's score.
+  const handleUnlock = async () => {
+    if (!window.confirm(
+      `Unlock ${selectedQuarter} ${selectedYear} settings?\n\n` +
+      `You'll be able to edit benchmarks and weights. After saving, run "Fix All Rankings" ` +
+      `to recalculate every employee's score against the new values.`
+    )) {
+      return;
+    }
+    try {
+      await api.post(`/v2/quarter-settings/${selectedYear}/${selectedQuarter}/unlock`);
+      toast.success(`${selectedQuarter} ${selectedYear} unlocked. Edit and save your changes.`);
+      refetchSettings();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to unlock settings");
+    }
+  };
+
   const applySuggestion = (metric, value) => {
     setFormData(prev => ({
       ...prev,
@@ -284,10 +305,21 @@ export default function QuarterSettings() {
                   No settings yet - create new
                 </span>
               ) : settings?.is_locked ? (
-                <span className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-semibold flex items-center gap-2">
-                  <Lock className="w-4 h-4" />
-                  Locked (scores generated)
-                </span>
+                <>
+                  <span className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-semibold flex items-center gap-2">
+                    <Lock className="w-4 h-4" />
+                    Locked (scores generated)
+                  </span>
+                  <button
+                    onClick={handleUnlock}
+                    data-testid="unlock-quarter-settings-btn"
+                    className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-full text-sm font-semibold flex items-center gap-2 transition-colors"
+                    title="Unlock to edit benchmarks/weights for this quarter"
+                  >
+                    <Unlock className="w-4 h-4" />
+                    Unlock to Edit
+                  </button>
+                </>
               ) : (
                 <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-semibold flex items-center gap-2">
                   <Unlock className="w-4 h-4" />

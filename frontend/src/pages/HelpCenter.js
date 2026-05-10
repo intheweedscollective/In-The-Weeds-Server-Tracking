@@ -542,9 +542,9 @@ export default function HelpCenter() {
         {/* Contact Support */}
         <div className="mt-6 text-center">
           <p className="text-slate-400 text-sm">
-            Still need help? Contact your regional manager or email{" "}
-            <a href="mailto:support@bubbagump.com" className="text-primary font-medium hover:underline">
-              support@bubbagump.com
+            Still need help? Contact your regional manager or reach out to{" "}
+            <a href="mailto:support@intheweedscollective.com" className="text-primary font-medium hover:underline">
+              In the Weeds Collective
             </a>
           </p>
         </div>

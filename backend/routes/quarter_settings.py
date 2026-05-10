@@ -247,6 +247,34 @@ async def lock_quarter_settings(year: int, quarter: str):
     return {"success": True, "message": f"Settings locked for {quarter} {year}"}
 
 
+@quarter_settings_router.post("/{year}/{quarter}/unlock")
+async def unlock_quarter_settings(year: int, quarter: str):
+    """
+    Unlock a previously-locked quarter so admins can edit its benchmarks/weights.
+
+    NOTE: scores already calculated for this quarter remain. After editing the
+    benchmarks the user should run a force-rescore from the Snapshot Workflow
+    page so existing employees pick up the new values.
+    """
+    db = get_db()
+    result = await db.quarter_settings.update_one(
+        {"year": year, "quarter": quarter.upper()},
+        {"$set": {
+            "is_locked": False,
+            "locked_at": None,
+            "unlocked_at": datetime.now(timezone.utc).isoformat(),
+        }}
+    )
+
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail=f"Settings not found for {quarter} {year}")
+
+    return {
+        "success": True,
+        "message": f"Settings unlocked for {quarter} {year}. Edit benchmarks then re-run scoring to apply.",
+    }
+
+
 @quarter_settings_router.get("/{year}/{quarter}/benchmark-suggestions")
 async def get_benchmark_suggestions(year: int, quarter: str):
     """
