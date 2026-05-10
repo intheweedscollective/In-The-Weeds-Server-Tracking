@@ -12,7 +12,29 @@ Build a comprehensive performance review application for restaurant employees.
 
 ## Current State (2026-05-10)
 
-### Latest Changes (2026-05-10 Session) — Three bug fixes from production user
+### Latest Changes (2026-05-10 Session) — Multiple production bug fixes from user
+
+- **P0: CV / RT showing all zeros on snapshot slides — FIXED 2026-05-10**
+  - Root cause: `merge_snapshot_data` writes the canonical CV/RT/NPS data into `snapshot.employees` (embedded array). However, the slide generators (`png_full_rankings.py`, `pdf_full_rankings.py`, `yodeck_slides.py`) and the Employee List page read from the master `employees_v2` collection. The `process_snapshot` and `confirm_pos_review` flows **never propagated CV/RT data back into employees_v2**, so anyone who hadn't manually re-saved each employee was stuck looking at zeros for CV / RT / Metric Bonus on every signage / printable export. Production verified: `snapshot.employees` had cv_score=11.0 / rt_mentions=20 for Keisha; `employees_v2` had cv_score=0 / rt_mentions=0 for the same row.
+  - Fix: new `_propagate_snapshot_to_employees_v2` helper in snapshot_routes.py that upserts every CV/RT/NPS/score field from `snapshot.employees` into `employees_v2` (matching by id, falling back to name+quarter+year). Called at the end of both `process_snapshot` and `confirm_pos_review`. `reprocess_snapshot` inherits the fix because it delegates to `process_snapshot`.
+
+- **P0: More delete paths missing the deleted_names blocklist — FIXED 2026-05-10**
+  - `DELETE /v2/employees/{id}` (the trash icon on individual employee cards in EmployeeList) and `POST /v2/employees/cleanup/delete` (bulk delete) were both deleting from `employees_v2` and pulling from snapshots without writing to the snapshot's `deleted_names` blocklist. So even with the merge_snapshot_data fix from earlier in the session, the next save re-spawned them. Both endpoints now write to `deleted_names` (with $addToSet) plus auto-recompute the snapshot's employee_count.
+  - Also added `POST /snapshots/{id}/mark-deleted` for bulk-blocking employees on snapshots that were created BEFORE the fix shipped.
+
+### Earlier Today (2026-05-10)
+- "support@bubbagump.com" → `support@intheweedscollective.com` in HelpCenter.js
+- New backend `POST /v2/quarter-settings/{year}/{quarter}/unlock` + Unlock-to-Edit button.
+- AuthCallback now refreshes AuthContext so sidebar reflects signed-in admin state immediately.
+- Build-blocker fix in GlobalOverview.jsx (hooks-order violation).
+- Trailing-slash defensive normalize for `REACT_APP_BACKEND_URL` across api.js + 22 other files.
+- OnboardingGuide gated to admins only (was blocking public viewers).
+- routes/cv.py: `cv_score` formula now includes NPS%/10 component.
+- SidebarLayout shows real email + Admin/Viewer label.
+- `merge_snapshot_data` respects `snapshot.deleted_names` so terminated employees don't respawn from POS parsed_data.
+- `parse_cv_file` reads true Promoter/Passive/Detractor columns from NPS Toolkit XLSX (with synonyms); estimation only as fallback. Header scan widened to 10 rows; manager filter narrowed so short names like "TK" pass through.
+
+## Current State (2026-05-03)
 
 - **P1: Terminated employees reappear after saving snapshot — FIXED 2026-05-10**
   - Root cause: `merge_snapshot_data` rebuilds the employees dict from the POS upload's `parsed_data` on every save. Deleted employees were being silently re-created because the source upload still contained them, with no record of intent to remove.

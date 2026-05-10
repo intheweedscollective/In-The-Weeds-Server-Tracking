@@ -4,6 +4,7 @@ Implements snapshot-first workflow endpoints.
 """
 
 import logging
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional
@@ -1469,11 +1470,118 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
         {"id": snapshot_id},
         {"$set": update_data}
     )
-    
+
+    # Mirror the merged employees back into employees_v2 so downstream
+    # consumers (slide PNG/PDF generators, employee list page, full-rankings
+    # exports) all see the latest CV / RT / score values.
+    if existing_employees:
+        await _propagate_snapshot_to_employees_v2(db, existing_employees, snapshot)
+
     return {
         "success": True,
         "message": f"POS data reviewed and confirmed ({len(employees_data)} employees)"
     }
+
+
+# ---------------------------------------------------------------------------
+# Helper: keep employees_v2 in sync with the snapshot's merged employees
+# ---------------------------------------------------------------------------
+#
+# Why this exists: `merge_snapshot_data` writes the canonical CV/RT/NPS data
+# into `snapshot.employees`. The slide generators (png_full_rankings.py /
+# pdf_full_rankings.py / yodeck_slides.py) however read from `employees_v2`.
+# Without an explicit propagation step, a freshly-processed snapshot would
+# show CV / RT / Metric Bonus = 0 in every printable / signage output even
+# though the underlying snapshot is correct. The user reported this as
+# "CV and RT are showing all zeros on the deployed app snapshot".
+
+_SYNCABLE_FIELDS = (
+    # POS metrics
+    "guest_count", "guests", "net_sales", "ppa",
+    "lbw", "lbw_per_guest",
+    "glassware_sales", "bar_glassware_sales", "glassware_per_guest",
+    "lsc_count", "loyalty_sales", "guests_per_lsc",
+    "food_sales", "liquor_sales", "beer_sales", "wine_sales",
+    # CV / NPS
+    "cv_promoters", "cv_passives", "cv_detractors",
+    "cv_score", "cv_responses", "cv_avg_rating", "cv_raw_points",
+    "nps_score", "nps_score_pts", "nps_contribution",
+    # Review Tracker
+    "rt_mentions", "review_mentions", "review_tracker_bonus",
+    # Calculated scores / tier
+    "score_ppa", "score_lbw", "score_glass", "score_lsc",
+    "bonus_ppa", "bonus_lbw", "bonus_glass", "bonus_lsc",
+    "total_metric_bonus", "metric_bonus",
+    "weighted_score", "pre_dar_score", "total_score",
+    "performance_tier", "peer_rank",
+    "display_name", "report_name", "job_title",
+)
+
+
+async def _propagate_snapshot_to_employees_v2(
+    db, employees: List[Dict[str, Any]], snapshot: Dict[str, Any]
+) -> int:
+    """
+    Upsert each merged snapshot employee into `employees_v2` so slide
+    generators and other employees_v2 readers stay in sync.
+
+    Match strategy: prefer employee `id`; fall back to (name, quarter, year)
+    if id is missing or doesn't yet exist in employees_v2.
+    """
+    quarter = (snapshot.get("quarter") or "Q1").upper()
+    year = snapshot.get("year") or 2026
+    synced = 0
+
+    for emp in employees or []:
+        if not emp or not (emp.get("name") or emp.get("display_name")):
+            continue
+
+        # Build the $set payload — only fields we know how to sync, only
+        # when present (avoid overwriting employees_v2 values with None).
+        update = {}
+        for field in _SYNCABLE_FIELDS:
+            if field in emp and emp[field] is not None:
+                update[field] = emp[field]
+        update["quarter"] = quarter
+        update["year"] = year
+        update["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+        emp_id = emp.get("id")
+        match = None
+        if emp_id:
+            match = {"id": emp_id}
+
+        if match:
+            res = await db.employees_v2.update_one(
+                match,
+                {"$set": update, "$setOnInsert": {"id": emp_id}},
+                upsert=True,
+            )
+            if res.matched_count or res.upserted_id:
+                synced += 1
+                continue
+
+        # Fallback: match by name + quarter + year
+        name = (emp.get("name") or emp.get("display_name") or "").strip()
+        if not name:
+            continue
+        await db.employees_v2.update_one(
+            {
+                "name": {"$regex": f"^{re.escape(name)}$", "$options": "i"},
+                "quarter": quarter,
+                "year": year,
+            },
+            {
+                "$set": update,
+                "$setOnInsert": {"id": emp_id or str(uuid.uuid4()), "name": name},
+            },
+            upsert=True,
+        )
+        synced += 1
+
+    if synced:
+        logger.info(f"Propagated {synced} employees from snapshot to employees_v2")
+    return synced
 
 
 @snapshot_router.post("/snapshots/{snapshot_id}/import-cv-adjustment/{session_id}")
@@ -1702,6 +1810,15 @@ async def process_snapshot(snapshot_id: str):
                 }
             }
         )
+
+        # Propagate the merged CV/RT/NPS/score fields back into the master
+        # `employees_v2` collection. Without this, downstream consumers that
+        # read employees_v2 (slide PNG/PDF generators, full-rankings exports,
+        # employee-list page) keep showing zeros for CV / RT / Metric Bonus
+        # even though `snapshot.employees` has the correct data — which the
+        # user reported as "CV and RT showing all zeros on the deployed app
+        # snapshot" with the slide screenshot.
+        await _propagate_snapshot_to_employees_v2(db, employees, snapshot)
         
         # Update current snapshot flag
         await update_current_snapshot(db, snapshot_id, snapshot["quarter"], snapshot["year"])
