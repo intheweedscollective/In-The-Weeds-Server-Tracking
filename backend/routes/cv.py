@@ -377,6 +377,13 @@ async def _recalculate_server_cv_stats(server_name: str, quarter: str, year: int
     
     nps = round(((promoters - detractors) / total) * 100, 2) if total > 0 else 0
     
+    # CV score formula must mirror scoring_engine.calculate_customer_voice_score:
+    #   cv_score = NPS%/10 + (Promoters × 1) + (Detractors × −2)
+    # Skipping the NPS%/10 component here (as the previous code did) caused
+    # the snapshot view to look like NPS wasn't being counted in CV.
+    nps_clamped = max(0.0, min(100.0, nps))
+    cv_score = round((nps_clamped / 10.0) + (promoters * 1) + (detractors * -2), 2)
+
     # Update employee record
     await db.employees_v2.update_one(
         {
@@ -389,7 +396,7 @@ async def _recalculate_server_cv_stats(server_name: str, quarter: str, year: int
             "cv_passives": passives,
             "cv_detractors": detractors,
             "nps_score": nps,
-            "cv_score": (promoters * 1) + (detractors * -2)
+            "cv_score": cv_score
         }}
     )
     
@@ -599,12 +606,16 @@ async def upload_cv_server_performance(
                         })
                 
                 if emp_match:
+                    # cv_score formula must mirror scoring_engine.calculate_customer_voice_score:
+                    #   cv_score = NPS%/10 + (Promoters × 1) + (Detractors × −2)
+                    nps_clamped = max(0.0, min(100.0, nps))
+                    cv_score = round((nps_clamped / 10.0) + (promoters * 1) + (detractors * -2), 2)
                     cv_update = {
                         "cv_promoters": promoters,
                         "cv_passives": passives,
                         "cv_detractors": detractors,
                         "nps_score": nps,
-                        "cv_score": (promoters * 1) + (detractors * -2),
+                        "cv_score": cv_score,
                         "cv_source": "manual_upload",
                         "cv_updated_at": datetime.now(timezone.utc).isoformat(),
                     }

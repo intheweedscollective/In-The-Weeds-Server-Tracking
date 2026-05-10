@@ -12,15 +12,20 @@ Build a comprehensive performance review application for restaurant employees.
 
 ## Current State (2026-05-10)
 
-### Latest Changes (2026-05-10 Session) — Public-View Onboarding Block
+### Latest Changes (2026-05-10 Session) — Public-View Onboarding Block + CV Score Bug
 
 - **P0: "Blank QR Dashboard / zeros on Main Dashboard" for unauthenticated viewers — FIXED 2026-05-10**
-  - Root cause: backend public GET endpoints (`/api/qr/stats`, `/api/qr/employees`, `/api/v2/snapshot-workflow/current-rankings`) were always returning correct data. The pages only *looked* blank because the `OnboardingGuide` modal opened by default for every visitor on first load (no localStorage flag yet), covering the entire dashboard with a dark scrim. Public viewers don't know to click X.
+  - Root cause: backend public GET endpoints were always returning correct data. The pages only *looked* blank because the `OnboardingGuide` modal opened by default for every visitor on first load (no localStorage flag yet), covering the entire dashboard with a dark scrim. Public viewers don't know to click X.
   - Fix in `/app/frontend/src/components/OnboardingGuide.js`:
     1. Imported `useAuth` and gated the modal on `user.is_admin`.
-    2. `useEffect` now waits for `authLoading` to finish, then short-circuits for non-admins (modal stays closed, hasSeenOnboarding stays false so it can still surface if they later sign in).
-    3. The floating launcher button (rocket FAB at bottom-left) is also hidden for non-admins — there's nothing for them to onboard into.
-  - Verified: anonymous visit to `/` and `/qr` now shows the full dashboards with no modal blocking; admin sign-in still gets the tour the first time.
+    2. `useEffect` waits for `authLoading` to finish, then short-circuits for non-admins.
+    3. The floating launcher (rocket FAB) is also hidden for non-admins.
+  - Verified anon visit to `/` and `/qr` shows full dashboards with no blocking modal.
+
+- **P1: routes/cv.py — `cv_score` missing NPS%/10 component — FIXED 2026-05-10**
+  - Root cause: `_recalculate_server_cv_stats` (line 392) and the manual CV upload endpoint (line 607) both wrote `cv_score = (promoters * 1) + (detractors * -2)` directly to `employees_v2`, omitting the `NPS%/10` component that the canonical `scoring_engine.calculate_customer_voice_score` adds. Anyone uploading CV via the standalone Data Uploads page (rather than the snapshot wizard, which goes through `merge_snapshot_data` and computes the right value at line 2886 of snapshot_routes.py) ended up with a stale, too-low CV score until something else triggered a full rescore.
+  - Fix: both call sites now compute `cv_score = (clamp(nps,0,100)/10) + (promoters*1) + (detractors*-2)` to mirror the scoring engine.
+  - Regression tests: `/app/backend/tests/test_cv_score_includes_nps.py` (7 cases, all passing).
 
 ## Current State (2026-05-03)
 
