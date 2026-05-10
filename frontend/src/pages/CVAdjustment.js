@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { getCurrentQuarter } from '../lib/quarterUtils';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL;
+const API_URL = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
 
 // Safe fetch helper that handles JSON parsing errors
 async function safeFetch(url, options = {}) {

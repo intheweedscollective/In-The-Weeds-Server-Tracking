@@ -9,7 +9,7 @@ import NicknameManager from "../components/NicknameManager";
 
 // NOTE: SLIDE_THEMES and SEASONAL_THEMES removed - functionality deprecated
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
 
 export default function QuarterSettings() {
   const [loading, setLoading] = useState(true);

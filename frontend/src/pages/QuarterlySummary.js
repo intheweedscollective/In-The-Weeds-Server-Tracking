@@ -7,7 +7,7 @@ import { getCurrentQuarter } from "../lib/quarterUtils";
 import { formatNumber, formatCurrency } from "../utils/formatters";
 import { getDisplayFirstName } from "../utils/displayName";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
 
 /**
  * Print-friendly Quarterly Summary Report

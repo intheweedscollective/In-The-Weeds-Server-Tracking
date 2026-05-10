@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Activity, TrendingUp, TrendingDown, Minus, Target, Award, Zap } from "lucide-react";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL;
+const API_URL = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
 
 export default function StoreHealthScore({ quarter = "Q1", year = 2026 }) {
   const [data, setData] = useState(null);

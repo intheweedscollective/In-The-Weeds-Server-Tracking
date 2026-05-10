@@ -9,7 +9,7 @@ import JSZip from "jszip";
 import { saveAs } from "file-saver";
 import { getDisplayFirstName } from "../utils/displayName";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
 
 export default function QREmployees() {
   const [employees, setEmployees] = useState([]);

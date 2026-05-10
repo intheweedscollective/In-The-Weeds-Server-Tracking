@@ -11,7 +11,7 @@ import { formatNumber, formatCurrency } from "../utils/formatters";
 import { TrendIndicator } from "../components/TrendIndicator";
 import { getDisplayFirstName } from "../utils/displayName";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
 
 // Tier badge colors (professional, no gimmicks)
 const TIER_STYLES = {

@@ -7,7 +7,7 @@ import { formatCurrency, formatNumber } from "../utils/formatters";
 import { toast } from "sonner";
 import { getDisplayFirstName } from "../utils/displayName";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
 
 // V2 Metric Definitions with benchmarks
 const V2_METRICS = {

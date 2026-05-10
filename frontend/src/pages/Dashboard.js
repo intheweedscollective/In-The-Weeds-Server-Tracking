@@ -13,7 +13,7 @@ import { formatNumber } from "../utils/formatters";
 import { TrendIndicator } from "../components/TrendIndicator";
 import { getDisplayFirstName } from "../utils/displayName";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
 
 export default function Dashboard() {
   const [employees, setEmployees] = useState([]);

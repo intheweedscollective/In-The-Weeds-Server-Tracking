@@ -7,7 +7,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { getDisplayFirstName } from "../utils/displayName";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
 
 export default function GlobalOverview() {
   const { stores, regions, isGlobalView } = useStore();
@@ -44,6 +44,19 @@ export default function GlobalOverview() {
     }
   };
 
+  // Hooks (useMemo) must run on every render — keep them BEFORE any
+  // conditional `return` to satisfy react-hooks/rules-of-hooks. Otherwise
+  // CRA's production build (CI=true treats hook order as an error) fails.
+  const storeData = overview?.stores || [];
+  const activeStores = useMemo(
+    () => storeData.filter(s => s.employee_count > 0),
+    [storeData]
+  );
+  const inactiveStores = useMemo(
+    () => storeData.filter(s => s.employee_count === 0),
+    [storeData]
+  );
+
   if (loading) {
     return (
       <div className="p-8 flex items-center justify-center">
@@ -53,17 +66,6 @@ export default function GlobalOverview() {
   }
 
   const summary = overview?.summary || {};
-  const storeData = overview?.stores || [];
-
-  // Memoize filtered store data
-  const activeStores = useMemo(() => {
-    return storeData.filter(s => s.employee_count > 0);
-  }, [storeData]);
-
-  // Memoize inactive stores
-  const inactiveStores = useMemo(() => {
-    return storeData.filter(s => s.employee_count === 0);
-  }, [storeData]);
 
   return (
     <div className="p-6 space-y-6" data-testid="global-overview">

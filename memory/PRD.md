@@ -12,20 +12,24 @@ Build a comprehensive performance review application for restaurant employees.
 
 ## Current State (2026-05-10)
 
-### Latest Changes (2026-05-10 Session) — Public-View Onboarding Block + CV Score Bug
+### Latest Changes (2026-05-10 Session) — Public-View Onboarding Block + CV Score Bug + Production Build Blocker
+
+- **P0: PRODUCTION BUILD BLOCKED — "compiled with problems" eslint error in `GlobalOverview.jsx` — FIXED 2026-05-10**
+  - Root cause: `useMemo` calls (lines 59, 64) ran AFTER an early conditional `return` for the loading state. CRA's `react-scripts build` (CI=true on production) treats `react-hooks/rules-of-hooks` violations as build errors. The deployed `intheweedscollective.com` was running the LAST successfully-compiled bundle from a much earlier commit, so every subsequent code change silently failed to ship.
+  - Fix: hoisted both `useMemo` blocks above the `if (loading) return …` so hooks always run in stable order.
+  - Also applied to `/app/frontend/src/lib/api.js` and 22 other files: defensive `(REACT_APP_BACKEND_URL || "").replace(/\/+$/, "")` so a trailing slash on the production env var no longer produces `//api/…` URLs that get mis-routed to the SPA index by Cloudflare/ingress (which is exactly what the user was seeing as "blank/zeros" on every screen of production).
 
 - **P0: "Blank QR Dashboard / zeros on Main Dashboard" for unauthenticated viewers — FIXED 2026-05-10**
-  - Root cause: backend public GET endpoints were always returning correct data. The pages only *looked* blank because the `OnboardingGuide` modal opened by default for every visitor on first load (no localStorage flag yet), covering the entire dashboard with a dark scrim. Public viewers don't know to click X.
-  - Fix in `/app/frontend/src/components/OnboardingGuide.js`:
-    1. Imported `useAuth` and gated the modal on `user.is_admin`.
-    2. `useEffect` waits for `authLoading` to finish, then short-circuits for non-admins.
-    3. The floating launcher (rocket FAB) is also hidden for non-admins.
-  - Verified anon visit to `/` and `/qr` shows full dashboards with no blocking modal.
+  - Root cause: backend public GET endpoints were always returning correct data. The pages only *looked* blank because the `OnboardingGuide` modal opened by default for every visitor on first load, covering the entire dashboard with a dark scrim.
+  - Fix: `OnboardingGuide.js` now reads `useAuth()` and only renders for whitelisted admins; the floating launcher is hidden for anonymous viewers too.
 
 - **P1: routes/cv.py — `cv_score` missing NPS%/10 component — FIXED 2026-05-10**
-  - Root cause: `_recalculate_server_cv_stats` (line 392) and the manual CV upload endpoint (line 607) both wrote `cv_score = (promoters * 1) + (detractors * -2)` directly to `employees_v2`, omitting the `NPS%/10` component that the canonical `scoring_engine.calculate_customer_voice_score` adds. Anyone uploading CV via the standalone Data Uploads page (rather than the snapshot wizard, which goes through `merge_snapshot_data` and computes the right value at line 2886 of snapshot_routes.py) ended up with a stale, too-low CV score until something else triggered a full rescore.
-  - Fix: both call sites now compute `cv_score = (clamp(nps,0,100)/10) + (promoters*1) + (detractors*-2)` to mirror the scoring engine.
+  - Root cause: `_recalculate_server_cv_stats` (line 392) and the manual CV upload endpoint (line 607) both wrote `cv_score = (promoters * 1) + (detractors * -2)` directly to `employees_v2`, omitting the `NPS%/10` component the canonical scoring engine adds.
+  - Fix: both call sites now compute `cv_score = (clamp(nps,0,100)/10) + (promoters*1) + (detractors*-2)`.
   - Regression tests: `/app/backend/tests/test_cv_score_includes_nps.py` (7 cases, all passing).
+
+- **UX: SidebarLayout shows real email + Admin/Viewer label — 2026-05-10**
+  - The sidebar previously displayed only "Viewer · Sign Out", giving the user no visibility into what email Google actually returned. Now shows the email above an "Admin · Sign Out" (green) or "Viewer · Sign Out" (amber) label, plus a tooltip with the full email.
 
 ## Current State (2026-05-03)
 

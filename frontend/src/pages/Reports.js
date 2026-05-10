@@ -7,7 +7,7 @@ import api from "../lib/api";
 import { getCurrentQuarter } from "../lib/quarterUtils";
 import { getDisplayFirstName } from "../utils/displayName";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
 
 export default function Reports() {
   const currentQ = getCurrentQuarter();

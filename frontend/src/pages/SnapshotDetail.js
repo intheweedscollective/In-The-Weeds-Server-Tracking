@@ -164,7 +164,7 @@ export default function SnapshotDetail() {
         
         // Step 1: Upload and get job ID using the new persistent job system
         const uploadResponse = await fetch(
-          `${process.env.REACT_APP_BACKEND_URL}/api/v2/upload-jobs/direct`,
+          `${(process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "")}/api/v2/upload-jobs/direct`,
           { method: 'POST', body: formData }
         );
         
@@ -189,7 +189,7 @@ export default function SnapshotDetail() {
           
           try {
             const statusResponse = await fetch(
-              `${process.env.REACT_APP_BACKEND_URL}/api/v2/upload-jobs/${jobId}`
+              `${(process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "")}/api/v2/upload-jobs/${jobId}`
             );
             const statusData = await statusResponse.json();
             

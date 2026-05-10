@@ -1,7 +1,12 @@
 import axios from "axios";
 import { toast } from "sonner";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+// Strip any trailing slash from REACT_APP_BACKEND_URL — production env vars
+// occasionally drift to "https://app.example.com/" (with slash) which would
+// otherwise make every API URL "//api/..." (double slash). Cloudflare/ingress
+// treat "//api/..." as a frontend route and serve index.html, so the browser
+// blows up with "Unexpected token '<'" on every fetch. Defensive normalize.
+const BACKEND_URL = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
 
 // Create axios instance with cache-busting headers and credentials so the
 // httpOnly session_token cookie set by /api/auth/session is sent on every

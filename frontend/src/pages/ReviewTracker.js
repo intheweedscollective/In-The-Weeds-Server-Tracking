@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { getCurrentQuarter } from "../lib/quarterUtils";
 import { getDisplayFirstName } from "../utils/displayName";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL;
+const API_URL = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
 
 export default function ReviewTracker() {
   const [cvFeedback, setCvFeedback] = useState([]);
