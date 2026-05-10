@@ -8,6 +8,19 @@ Build a comprehensive performance review application for restaurant employees.
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
 - **AI**: OpenAI GPT-4o (via Emergent LLM Key)
+- **Auth**: Emergent-managed Google Auth (whitelist via `ALLOWED_ADMIN_EMAILS`)
+
+## Current State (2026-05-10)
+
+### Latest Changes (2026-05-10 Session) — Public-View Onboarding Block
+
+- **P0: "Blank QR Dashboard / zeros on Main Dashboard" for unauthenticated viewers — FIXED 2026-05-10**
+  - Root cause: backend public GET endpoints (`/api/qr/stats`, `/api/qr/employees`, `/api/v2/snapshot-workflow/current-rankings`) were always returning correct data. The pages only *looked* blank because the `OnboardingGuide` modal opened by default for every visitor on first load (no localStorage flag yet), covering the entire dashboard with a dark scrim. Public viewers don't know to click X.
+  - Fix in `/app/frontend/src/components/OnboardingGuide.js`:
+    1. Imported `useAuth` and gated the modal on `user.is_admin`.
+    2. `useEffect` now waits for `authLoading` to finish, then short-circuits for non-admins (modal stays closed, hasSeenOnboarding stays false so it can still surface if they later sign in).
+    3. The floating launcher button (rocket FAB at bottom-left) is also hidden for non-admins — there's nothing for them to onboard into.
+  - Verified: anonymous visit to `/` and `/qr` now shows the full dashboards with no modal blocking; admin sign-in still gets the tour the first time.
 
 ## Current State (2026-05-03)
 
