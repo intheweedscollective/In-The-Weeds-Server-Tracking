@@ -885,6 +885,59 @@ async def restore_deleted_employee(snapshot_id: str, name: str):
     )
     return {"success": True, "removed": True, "message": f"'{name}' restored. Re-process the snapshot to bring them back."}
 
+
+@snapshot_router.post("/snapshots/{snapshot_id}/mark-deleted")
+async def mark_employees_deleted(snapshot_id: str, payload: Dict[str, Any]):
+    """
+    Bulk-add a list of employee names to the snapshot's deleted_names
+    blocklist AND remove them from the embedded employees array. Useful for
+    cleaning up a snapshot that was created BEFORE the deletion-blocklist
+    fix landed (those employees keep getting re-merged from POS data).
+
+    Body: { "names": ["TK", "Bob Smith", ...] }
+    """
+    names: List[str] = payload.get("names") or []
+    if not isinstance(names, list) or not names:
+        raise HTTPException(status_code=400, detail="`names` must be a non-empty list")
+
+    db = get_db()
+    snapshot = await db.snapshot_workflow.find_one({"id": snapshot_id})
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+
+    cleaned = [str(n).strip() for n in names if n and str(n).strip()]
+    if not cleaned:
+        raise HTTPException(status_code=400, detail="No valid names supplied")
+
+    # Pull matching rows from the embedded array (case-insensitive name match).
+    lc_set = {n.lower() for n in cleaned}
+    employees = snapshot.get("employees", []) or []
+    kept = []
+    for emp in employees:
+        keys = [
+            (emp.get("name") or "").strip().lower(),
+            (emp.get("display_name") or "").strip().lower(),
+            (emp.get("report_name") or "").strip().lower(),
+        ]
+        if any(k in lc_set for k in keys if k):
+            continue
+        kept.append(emp)
+
+    await db.snapshot_workflow.update_one(
+        {"id": snapshot_id},
+        {
+            "$set": {"employees": kept},
+            "$addToSet": {"deleted_names": {"$each": cleaned}},
+        }
+    )
+    return {
+        "success": True,
+        "blocked": cleaned,
+        "remaining": len(kept),
+        "removed": len(employees) - len(kept),
+    }
+
+
 @snapshot_router.post("/rebuild-from-pos")
 async def rebuild_snapshot_from_pos():
     """

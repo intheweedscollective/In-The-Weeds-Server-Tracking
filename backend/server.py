@@ -2933,21 +2933,44 @@ async def delete_employee(employee_id: str):
     `employees_v2`, inside `snapshot_workflow.employees`, or both — we try
     each in turn. Only if the id isn't found anywhere do we fall back to a
     name-based delete so callers passing a bare name still work.
+
+    ALSO records the deleted employee's name on each affected snapshot's
+    `deleted_names` blocklist. Without this the next save / Confirm POS
+    Review re-merges the still-present POS parsed_data and silently brings
+    the terminated employee back (the user-reported recurrence bug).
     """
     import re as _re
 
     deleted_v2 = 0
     pulled_from_snapshots = 0
     name_for_message = None
+    block_year = None
+    block_quarter = None
 
     # 1) Delete from employees_v2 by exact id (keeps same-named duplicates)
     v2_doc = await db.employees_v2.find_one({"id": employee_id}, {"_id": 0})
     if v2_doc:
         name_for_message = v2_doc.get("display_name") or v2_doc.get("name")
+        block_year = v2_doc.get("year")
+        block_quarter = (v2_doc.get("quarter") or "").upper() or None
         result = await db.employees_v2.delete_one({"id": employee_id})
         deleted_v2 = result.deleted_count
 
-    # 2) Pull the matching embedded employee from every snapshot (again, by id)
+    # 2) Pull the matching embedded employee from every snapshot (again, by id).
+    # While we're at it, harvest a name + (year,quarter) tuple from the
+    # snapshot in case employees_v2 didn't have the row.
+    if not name_for_message or not block_year or not block_quarter:
+        snap_doc = await db.snapshot_workflow.find_one(
+            {"employees.id": employee_id},
+            {"employees": {"$elemMatch": {"id": employee_id}}, "year": 1, "quarter": 1, "_id": 0}
+        )
+        if snap_doc:
+            block_year = block_year or snap_doc.get("year")
+            block_quarter = block_quarter or (snap_doc.get("quarter") or "").upper() or None
+            embedded = (snap_doc.get("employees") or [None])[0]
+            if embedded and not name_for_message:
+                name_for_message = embedded.get("display_name") or embedded.get("name")
+
     snap_result = await db.snapshot_workflow.update_many(
         {"employees.id": employee_id},
         {"$pull": {"employees": {"id": employee_id}}}
@@ -2965,9 +2988,11 @@ async def delete_employee(employee_id: str):
                 {"display_name": {"$regex": name_pat, "$options": "i"}},
                 {"report_name": {"$regex": name_pat, "$options": "i"}},
             ]
-        }, {"_id": 0, "id": 1, "name": 1, "display_name": 1})
+        }, {"_id": 0, "id": 1, "name": 1, "display_name": 1, "year": 1, "quarter": 1})
         if v2_by_name:
             name_for_message = v2_by_name.get("display_name") or v2_by_name.get("name")
+            block_year = block_year or v2_by_name.get("year")
+            block_quarter = block_quarter or (v2_by_name.get("quarter") or "").upper() or None
             dr = await db.employees_v2.delete_one({"id": v2_by_name.get("id")})
             deleted_v2 = dr.deleted_count
             sr = await db.snapshot_workflow.update_many(
@@ -2978,6 +3003,23 @@ async def delete_employee(employee_id: str):
 
         if deleted_v2 == 0 and pulled_from_snapshots == 0:
             raise HTTPException(status_code=404, detail="Employee not found")
+
+    # 4) Persist on the snapshot's deleted_names blocklist so future merges
+    # don't silently re-create them from the source POS upload.
+    name_to_block = (name_for_message or employee_id or "").strip()
+    if name_to_block:
+        if block_year and block_quarter:
+            await db.snapshot_workflow.update_many(
+                {"year": block_year, "quarter": block_quarter},
+                {"$addToSet": {"deleted_names": name_to_block}}
+            )
+        else:
+            # Couldn't determine quarter — fall back to writing on every
+            # snapshot that already had this employee (rare, defensive).
+            await db.snapshot_workflow.update_many(
+                {"employees.id": employee_id},
+                {"$addToSet": {"deleted_names": name_to_block}}
+            )
 
     return {
         "success": True,
@@ -3129,23 +3171,61 @@ async def delete_employees_bulk(request: EmployeeCleanupRequest):
     """
     Delete multiple employees by ID.
     Use this after reviewing the analyze endpoint results.
+
+    Also pulls each deleted employee out of every active snapshot and adds
+    their name to the snapshot's `deleted_names` blocklist so a later
+    Confirm POS Review / save / re-merge does not silently re-create them
+    from POS parsed_data.
     """
     if not request.employee_ids:
         raise HTTPException(status_code=400, detail="No employee IDs provided")
     
     deleted_count = 0
     errors = []
-    
+    # Track each deleted employee's identifying info so we can update the
+    # matching snapshots in one batch per (year, quarter).
+    deleted_by_quarter: Dict[tuple, List[Dict[str, Any]]] = {}
+
     for emp_id in request.employee_ids:
         try:
+            # Look up the employee BEFORE deleting so we know their
+            # name + quarter/year for the snapshot blocklist update.
+            emp = await db.employees_v2.find_one({"id": emp_id}, {"_id": 0})
             result = await db.employees_v2.delete_one({"id": emp_id})
             if result.deleted_count > 0:
                 deleted_count += 1
+                if emp:
+                    key = (emp.get("year"), (emp.get("quarter") or "").upper())
+                    deleted_by_quarter.setdefault(key, []).append(
+                        {"id": emp_id, "name": (emp.get("name") or "").strip()}
+                    )
             else:
                 errors.append(f"Employee {emp_id} not found")
         except Exception as e:
             errors.append(f"Error deleting {emp_id}: {str(e)}")
-    
+
+    # Propagate to snapshots: pull employee rows + record blocklist names.
+    for (year, quarter), entries in deleted_by_quarter.items():
+        if not year or not quarter:
+            continue
+        ids = [e["id"] for e in entries]
+        names = [e["name"] for e in entries if e["name"]]
+        if ids:
+            await db.snapshot_workflow.update_many(
+                {"year": year, "quarter": quarter},
+                {"$pull": {"employees": {"id": {"$in": ids}}}}
+            )
+        if names:
+            await db.snapshot_workflow.update_many(
+                {"year": year, "quarter": quarter},
+                {"$addToSet": {"deleted_names": {"$each": names}}}
+            )
+        # Recompute employee_count
+        await db.snapshot_workflow.update_many(
+            {"year": year, "quarter": quarter},
+            [{"$set": {"employee_count": {"$size": {"$ifNull": ["$employees", []]}}}}]
+        )
+
     return {
         "success": True,
         "deleted_count": deleted_count,
