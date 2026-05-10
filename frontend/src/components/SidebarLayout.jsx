@@ -226,6 +226,7 @@ export const SidebarLayout = ({ children }) => {
           <button
             onClick={signOut}
             data-testid="signout-btn"
+            title={user.email || ""}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium
               text-muted-foreground hover:bg-[hsl(var(--sidebar-hover,220_26%_18%))] hover:text-foreground transition-all duration-200"
           >
@@ -233,15 +234,20 @@ export const SidebarLayout = ({ children }) => {
               <img
                 src={user.picture}
                 alt={user.name || user.email}
-                className="w-5 h-5 rounded-full object-cover"
+                className="w-5 h-5 rounded-full object-cover flex-shrink-0"
                 referrerPolicy="no-referrer"
               />
             ) : (
-              <LogOut className="w-5 h-5 text-amber-400" />
+              <LogOut className="w-5 h-5 text-amber-400 flex-shrink-0" />
             )}
             {!isCollapsed && (
-              <span className="flex-1 text-left truncate">
-                {user.is_admin ? "Sign Out" : `Viewer · Sign Out`}
+              <span className="flex-1 text-left min-w-0">
+                <span className="block truncate text-xs text-foreground" data-testid="signed-in-email">
+                  {user.email || user.name || "Signed in"}
+                </span>
+                <span className={`block text-[10px] uppercase tracking-wider ${user.is_admin ? "text-emerald-400" : "text-amber-400"}`}>
+                  {user.is_admin ? "Admin · Sign Out" : "Viewer · Sign Out"}
+                </span>
               </span>
             )}
           </button>
