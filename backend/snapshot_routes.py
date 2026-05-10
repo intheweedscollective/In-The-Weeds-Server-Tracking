@@ -1379,10 +1379,13 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
         logger.info(f"confirm_pos_review: POS upload now has {len(existing_pos_employees)} employees")
     
     # ALSO update the snapshot employees directly (always, not just when completed)
-    # This ensures edits take effect immediately without needing to reprocess
-    existing_employees = snapshot.get("employees", [])
+    # This ensures edits take effect immediately without needing to reprocess.
+    # We run this even when `existing_employees` is empty so a first-save with
+    # purely-manual entries actually persists them (the user reported new
+    # rows being dropped on confirmed save).
+    existing_employees = snapshot.get("employees", []) or []
     logger.info(f"confirm_pos_review: Found {len(existing_employees)} existing employees in snapshot")
-    if existing_employees:
+    if True:
         # Build lookup by name for matching
         emp_lookup = {}
         for emp in existing_employees:
@@ -1454,6 +1457,100 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
                 old_score = existing.get("total_score")
                 calculate_employee_scores(existing, benchmarks)
                 logger.info(f"confirm_pos_review: Recalculated '{name}' score from {old_score} to {existing.get('total_score')}")
+            else:
+                # NEW manually-added employee — wasn't in the snapshot before.
+                # Build a fresh row with sensible defaults so they show up in
+                # the rankings on the very next render. Without this branch
+                # the row is silently dropped (the user reported "I manually
+                # added two employees and they are not appearing after a
+                # confirmed save").
+                display = (new_emp.get("display_name") or new_emp.get("name") or "").strip()
+                report = (new_emp.get("report_name") or new_emp.get("name") or display).strip()
+                fresh: Dict[str, Any] = {
+                    "id": new_emp.get("id") or str(uuid.uuid4()),
+                    "name": display or report,
+                    "display_name": display or report,
+                    "report_name": report,
+                    "quarter": snapshot.get("quarter"),
+                    "year": snapshot.get("year"),
+                    "job_title": new_emp.get("job_title") or "Server",
+                    "aliases": new_emp.get("aliases") or [],
+                    # Default CV / RT to zero — they have no reviews / mentions yet.
+                    "cv_promoters": 0,
+                    "cv_passives": 0,
+                    "cv_detractors": 0,
+                    "cv_score": 0,
+                    "nps_score": 0,
+                    "rt_mentions": 0,
+                    "review_tracker_bonus": 0,
+                    "dar_penalty": 0,
+                    "total_metric_bonus": 0,
+                    "nps_manual_override": False,
+                }
+                # Copy whatever POS fields the user provided.
+                for field in [
+                    "guest_count", "guests", "net_sales", "ppa",
+                    "liquor_sales", "beer_sales", "wine_sales", "lbw_total",
+                    "lbw_per_guest", "glassware_sales", "bar_glassware_sales",
+                    "glassware_per_guest", "loyalty_sales", "lsc_count",
+                    "guests_per_lsc", "food_sales", "lbw",
+                ]:
+                    if field in new_emp and new_emp[field] is not None:
+                        fresh[field] = new_emp[field]
+
+                if "glassware_sales" in new_emp:
+                    fresh["bar_glassware_sales"] = new_emp["glassware_sales"]
+                if "guests" in new_emp and "guest_count" not in new_emp:
+                    fresh["guest_count"] = new_emp["guests"]
+
+                # Recalculate derived metrics where possible.
+                guest_count = fresh.get("guest_count") or fresh.get("guests") or 0
+                if guest_count > 0:
+                    lbw = fresh.get("lbw") or (
+                        (fresh.get("liquor_sales") or 0)
+                        + (fresh.get("beer_sales") or 0)
+                        + (fresh.get("wine_sales") or 0)
+                    )
+                    fresh["lbw"] = lbw
+                    fresh["lbw_per_guest"] = round(lbw / guest_count, 2)
+
+                    glassware = (
+                        fresh.get("bar_glassware_sales") or fresh.get("glassware_sales") or 0
+                    )
+                    fresh["glassware_per_guest"] = round(glassware / guest_count, 2)
+
+                lsc_count = fresh.get("lsc_count") or 0
+                if lsc_count > 0 and guest_count > 0:
+                    fresh["guests_per_lsc"] = round(guest_count / lsc_count, 2)
+
+                # Initial score pass.
+                try:
+                    calculate_employee_scores(fresh, benchmarks)
+                except Exception as score_err:
+                    logger.warning(
+                        f"confirm_pos_review: score calc for new '{name}' failed: {score_err}"
+                    )
+
+                existing_employees.append(fresh)
+                # Also seed our lookup so a second mention of the same name
+                # in the same payload updates this row instead of duplicating.
+                emp_lookup[name] = fresh
+                logger.info(
+                    f"confirm_pos_review: Added NEW manually-entered employee '{fresh['name']}' "
+                    f"(guests={guest_count}, ppa={fresh.get('ppa')}, score={fresh.get('total_score')})"
+                )
+                # Manual re-add: if this employee is on the snapshot's
+                # deleted_names blocklist (because they were deleted earlier
+                # and the user changed their mind), drop them off the list
+                # so they don't get filtered out next time merge runs.
+                snapshot_blocklist = snapshot.get("deleted_names") or []
+                snap_disp = (fresh.get("display_name") or fresh.get("name") or "").strip().lower()
+                snap_full = (fresh.get("report_name") or fresh.get("name") or "").strip().lower()
+                if any((n or "").strip().lower() in {snap_disp, snap_full} for n in snapshot_blocklist):
+                    snapshot["deleted_names"] = [
+                        n for n in snapshot_blocklist
+                        if (n or "").strip().lower() not in {snap_disp, snap_full}
+                    ]
         
         # Re-assign tiers
         existing_employees = assign_performance_tiers(existing_employees)
@@ -1465,7 +1562,10 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
     }
     if existing_employees:
         update_data["employees"] = existing_employees
-    
+    # Persist the (possibly trimmed) deleted_names blocklist — manual re-add
+    # of a previously-deleted employee removes them from this list above.
+    update_data["deleted_names"] = snapshot.get("deleted_names") or []
+
     await db.snapshot_workflow.update_one(
         {"id": snapshot_id},
         {"$set": update_data}
