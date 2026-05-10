@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { toast } from "sonner";
+import { useAuth } from "../context/AuthContext";
 
 /**
  * Handles the redirect from auth.emergentagent.com.
@@ -15,6 +16,7 @@ import { toast } from "sonner";
  */
 export default function AuthCallback() {
   const navigate = useNavigate();
+  const { refresh } = useAuth();
   // useRef (not useState) so React StrictMode's double-mount doesn't double-call
   // the one-shot session exchange.
   const processed = useRef(false);
@@ -48,6 +50,12 @@ export default function AuthCallback() {
         } else {
           toast.success(`Welcome back, ${r.data?.name || r.data?.email}`);
         }
+        // Pull the freshly-set cookie into AuthContext.user — without this,
+        // the sidebar / protected pages still see `user = null` even though
+        // the session cookie is set, because AuthProvider only ran /auth/me
+        // once on initial mount and we explicitly skipped it during the
+        // OAuth-callback hash phase.
+        await refresh();
         // Strip the #session_id from history and continue.
         navigate(next, { replace: true });
       } catch (err) {
@@ -55,7 +63,7 @@ export default function AuthCallback() {
         navigate("/login", { replace: true });
       }
     })();
-  }, [navigate]);
+  }, [navigate, refresh]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-950">
