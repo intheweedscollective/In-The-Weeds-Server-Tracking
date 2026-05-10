@@ -826,15 +826,64 @@ async def delete_snapshot_employee(employee_id: str, quarter: str = "Q2", year: 
         removed_name = matching[0][1].get("name", "unknown")
         employees = [e for e in employees if e.get("id") != employee_id and (e.get("name") or "").lower() != employee_id.lower()]
     
-    # Update snapshot using MongoDB _id
+    # Update snapshot using MongoDB _id. Also persist the employee name(s) on
+    # the snapshot's `deleted_names` blocklist so future merges of the source
+    # POS upload don't re-create the employee (the bug was: terminated
+    # employees kept reappearing after every snapshot save).
+    deleted_names = snapshot.get("deleted_names") or []
+    if isinstance(deleted_names, list):
+        deleted_names = [n for n in deleted_names if n]
+    else:
+        deleted_names = []
+
+    name_to_block = (removed_name or "").strip()
+    # Also record the original `employee_id` argument — it can be a name when
+    # the front-end calls /delete with a stringified name rather than a UUID.
+    extra = (employee_id or "").strip()
+    for n in (name_to_block, extra):
+        if n and n.lower() not in {x.lower() for x in deleted_names}:
+            deleted_names.append(n)
+
     await db.snapshot_workflow.update_one(
         {"_id": mongo_id},
-        {"$set": {"employees": employees}}
+        {"$set": {"employees": employees, "deleted_names": deleted_names}}
     )
-    
-    return {"success": True, "message": f"Deleted {removed_name} from snapshot", "remaining": len(employees)}
-    
 
+    return {"success": True, "message": f"Deleted {removed_name} from snapshot", "remaining": len(employees)}
+
+
+@snapshot_router.get("/snapshots/{snapshot_id}/deleted-names")
+async def list_deleted_names(snapshot_id: str):
+    """List employee names in this snapshot's terminated/deleted blocklist."""
+    db = get_db()
+    snapshot = await db.snapshot_workflow.find_one({"id": snapshot_id}, {"deleted_names": 1, "_id": 0})
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    return {"deleted_names": snapshot.get("deleted_names") or []}
+
+
+@snapshot_router.post("/snapshots/{snapshot_id}/restore-deleted/{name}")
+async def restore_deleted_employee(snapshot_id: str, name: str):
+    """
+    Remove an employee name from the snapshot's deleted_names blocklist so
+    the next merge re-creates them from POS parsed_data. Use when a user
+    deleted someone by mistake and wants them back without re-uploading.
+    """
+    db = get_db()
+    snapshot = await db.snapshot_workflow.find_one({"id": snapshot_id})
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+
+    blocked = snapshot.get("deleted_names") or []
+    target = (name or "").strip().lower()
+    new_list = [n for n in blocked if (n or "").strip().lower() != target]
+    if len(new_list) == len(blocked):
+        return {"success": True, "removed": False, "message": f"'{name}' was not in the deleted list"}
+
+    await db.snapshot_workflow.update_one(
+        {"id": snapshot_id}, {"$set": {"deleted_names": new_list}}
+    )
+    return {"success": True, "removed": True, "message": f"'{name}' restored. Re-process the snapshot to bring them back."}
 
 @snapshot_router.post("/rebuild-from-pos")
 async def rebuild_snapshot_from_pos():
@@ -962,14 +1011,6 @@ async def rebuild_snapshot_from_pos():
         "employee_count": len(final_employees),
         "employees": [{"name": e["name"], "report_name": e["report_name"]} for e in final_employees]
     }
-
-
-    return {
-        "success": True,
-        "message": "Deleted employee from snapshot",
-        "remaining_count": len(employees)
-    }
-
 
 
 @snapshot_router.post("/sync-job-titles")
@@ -2620,7 +2661,38 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
         return None
 
     employees = {}
-    
+
+    # ------------------------------------------------------------------
+    # Terminated / deleted employees blocklist.
+    # When the user removes an employee from the snapshot UI (Employees tab,
+    # snapshot_routes.delete_snapshot_employee, or routes/employees.delete_employee)
+    # we record their name(s) on `snapshot.deleted_names`. Without this, the
+    # POS parsed_data still contains them and `merge_snapshot_data` would
+    # silently re-create the employee on every save — which the user reported
+    # as "terminated employees keep coming back".
+    # ------------------------------------------------------------------
+    deleted_names_raw = snapshot.get("deleted_names") or []
+    deleted_names_set: set[str] = set()
+    for raw in deleted_names_raw:
+        if not raw:
+            continue
+        n = str(raw).strip().lower()
+        deleted_names_set.add(n)
+        # Also store first-name only so a "Trey Quick" delete catches a
+        # subsequent POS row that only carries "Trey" (single-name format).
+        first = n.split()[0] if n else ""
+        if first:
+            deleted_names_set.add(first)
+
+    def _is_deleted(name: str) -> bool:
+        if not name:
+            return False
+        n = name.strip().lower()
+        if n in deleted_names_set:
+            return True
+        first = n.split()[0] if n else ""
+        return first in deleted_names_set
+
     # Build lookup of existing employee data to preserve edits
     # Use multiple keys for flexible matching (full name, first name, report_name)
     existing_employees = {}
@@ -2658,6 +2730,12 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
             for emp_data in parsed_data.get("employees", []):
                 name = emp_data.get("name", "").strip()
                 if not name:
+                    continue
+                # Skip employees the user has explicitly deleted from this
+                # snapshot. See `deleted_names_set` block at the top of
+                # merge_snapshot_data for the matching logic.
+                if _is_deleted(name):
+                    logger.info(f"Skipping deleted employee from POS merge: {name}")
                     continue
                 
                 # Find existing employee using multiple matching strategies
@@ -2973,9 +3051,9 @@ async def parse_cv_file(filename: str, contents: bytes) -> Dict[str, Any]:
     """
     import csv
     from io import StringIO, BytesIO
-    
+
     employees = []
-    
+
     # Check file type
     if filename.lower().endswith(('.xlsx', '.xls')):
         # Parse NPS Toolkit XLSX format
@@ -2983,110 +3061,178 @@ async def parse_cv_file(filename: str, contents: bytes) -> Dict[str, Any]:
             import openpyxl
             wb = openpyxl.load_workbook(BytesIO(contents), data_only=True)
             ws = wb.active
-            
-            # Find header row and column indices
-            headers = {}
-            header_row = None
-            for row_idx, row in enumerate(ws.iter_rows(max_row=5, values_only=True), 1):
+
+            # Find header row and column indices.
+            # NPS Toolkit headers vary by export type — we accept several
+            # synonyms so we don't have to keep updating this every quarter.
+            COLUMN_SYNONYMS = {
+                "name": ("name", "server", "server name", "employee", "employee name"),
+                "nps": ("nps", "nps score", "nps %", "nps%", "net promoter", "net promoter score"),
+                "received": ("received", "responses", "total", "total responses", "total responses received", "responses received"),
+                "avg_rating": ("avg rating", "average rating", "avg score", "average score", "rating"),
+                "promoters": ("promoters", "promoter", "promoter count", "# promoters", "promoters count", "# promoter"),
+                "passives": ("passives", "passive", "passive count", "# passives", "neutrals"),
+                "detractors": ("detractors", "detractor", "detractor count", "# detractors", "# detractor"),
+            }
+
+            def _match_col(cell_val: str) -> Optional[str]:
+                cv = (cell_val or "").strip().lower()
+                if not cv:
+                    return None
+                for canon, synonyms in COLUMN_SYNONYMS.items():
+                    if cv in synonyms:
+                        return canon
+                # Also accept partial matches like "promoter %" (treat as promoters)
+                if "promoter" in cv and "%" not in cv:
+                    return "promoters"
+                if "detractor" in cv and "%" not in cv:
+                    return "detractors"
+                if "passive" in cv:
+                    return "passives"
+                return None
+
+            headers: Dict[str, int] = {}
+            header_row: Optional[int] = None
+            # Some NPS Toolkit exports put title rows ABOVE the headers; scan
+            # the first 10 rows (was 5) to be safe.
+            for row_idx, row in enumerate(ws.iter_rows(max_row=10, values_only=True), 1):
                 row_lower = [str(c).lower() if c else '' for c in row]
-                if 'name' in row_lower and ('nps' in row_lower or 'received' in row_lower):
+                # Header row is one that has "name" AND something NPS-related
+                if any('name' in v or v == 'server' or v == 'employee' for v in row_lower) and \
+                   any('nps' in v or 'received' in v or 'responses' in v or 'promoter' in v for v in row_lower):
                     header_row = row_idx
                     for col_idx, cell in enumerate(row):
-                        if cell:
-                            headers[str(cell).lower()] = col_idx
+                        canon = _match_col(str(cell)) if cell else None
+                        if canon and canon not in headers:
+                            headers[canon] = col_idx
                     break
-            
+
             if not header_row:
                 raise ValueError("Could not find header row with Name and NPS columns")
-            
-            # Parse data rows
+
             name_col = headers.get('name', 0)
-            nps_col = headers.get('nps', headers.get('nps score', 6))
-            received_col = headers.get('received', headers.get('responses', 3))
-            avg_rating_col = headers.get('avg rating', headers.get('average rating', 5))
-            
+            nps_col = headers.get('nps')
+            received_col = headers.get('received')
+            avg_rating_col = headers.get('avg_rating')
+            promoters_col = headers.get('promoters')
+            passives_col = headers.get('passives')
+            detractors_col = headers.get('detractors')
+
+            def _safe_float(row, idx):
+                if idx is None or idx >= len(row):
+                    return None
+                v = row[idx]
+                if v is None or v == "":
+                    return None
+                try:
+                    return float(v)
+                except (ValueError, TypeError):
+                    return None
+
+            def _safe_int(row, idx):
+                v = _safe_float(row, idx)
+                return int(v) if v is not None else None
+
             for row in ws.iter_rows(min_row=header_row + 1, values_only=True):
-                name = row[name_col] if name_col < len(row) else None
-                if not name or name == 'None' or 'manager' in str(name).lower():
+                # Bail out cleanly on a fully blank row (XLSX often has trailing blanks).
+                if not row or all(c is None or c == "" for c in row):
                     continue
-                
-                # Get NPS score (already calculated in the report)
-                try:
-                    nps = float(row[nps_col]) if nps_col < len(row) and row[nps_col] else 0
-                except (ValueError, TypeError):
-                    nps = 0
-                
-                # Get number of responses
-                try:
-                    received = int(float(row[received_col])) if received_col < len(row) and row[received_col] else 0
-                except (ValueError, TypeError):
-                    received = 0
-                
-                # Get avg rating
-                try:
-                    avg_rating = float(row[avg_rating_col]) if avg_rating_col < len(row) and row[avg_rating_col] else 0
-                except (ValueError, TypeError):
-                    avg_rating = 0
-                
-                # Estimate promoters/passives/detractors from NPS and received count
-                # NPS = (promoters - detractors) / total * 100
-                # We'll estimate based on NPS score
-                if received > 0:
-                    # Estimate breakdown based on NPS
-                    if nps >= 75:
-                        promoters = received
+
+                name = row[name_col] if name_col < len(row) else None
+                if not name:
+                    continue
+                name_str = str(name).strip()
+                # Don't filter out short / unusual names like 'TK'. Only skip
+                # rows that are clearly NOT employee rows: section headers,
+                # "Total" rollups, blank "None" cells, or explicit manager
+                # title rows. Be conservative — better to include a wrong row
+                # than silently drop a real employee.
+                lname = name_str.lower()
+                if lname in {"none", "total", "totals", "grand total", "subtotal"}:
+                    continue
+                if lname.startswith("manager") or lname.endswith(" manager") or lname == "manager":
+                    continue
+
+                nps = _safe_float(row, nps_col) or 0.0
+                received_int = _safe_int(row, received_col) or 0
+                avg_rating = _safe_float(row, avg_rating_col) or 0.0
+
+                # Read true promoter/passive/detractor counts if columns exist.
+                # This is the fix for the user's "people with NPS percentages
+                # but no promoters or detractors" report — previously we ALWAYS
+                # estimated, even when the file had real counts.
+                actual_promoters = _safe_int(row, promoters_col)
+                actual_passives = _safe_int(row, passives_col)
+                actual_detractors = _safe_int(row, detractors_col)
+
+                if (actual_promoters is not None or actual_detractors is not None
+                        or actual_passives is not None):
+                    promoters = actual_promoters or 0
+                    passives = actual_passives or 0
+                    detractors = actual_detractors or 0
+                    # If `received` wasn't given, infer it from the parts.
+                    if received_int <= 0:
+                        received_int = promoters + passives + detractors
+                    # If NPS wasn't given, calculate from the parts.
+                    if nps == 0 and received_int > 0:
+                        nps = round(((promoters - detractors) / received_int) * 100, 2)
+                else:
+                    # No P/P/D columns — fall back to the legacy estimation.
+                    if received_int > 0:
+                        if nps >= 75:
+                            promoters = received_int
+                            passives = 0
+                            detractors = 0
+                        elif nps >= 50:
+                            promoters = int(received_int * 0.8)
+                            passives = int(received_int * 0.15)
+                            detractors = received_int - promoters - passives
+                        elif nps >= 0:
+                            promoters = max(0, int((nps / 100 + 1) * received_int / 2))
+                            detractors = max(0, int((1 - nps / 100) * received_int / 2))
+                            passives = max(0, received_int - promoters - detractors)
+                        else:
+                            detractors = max(1, int(abs(nps) / 100 * received_int))
+                            promoters = max(0, received_int - detractors)
+                            passives = 0
+                    else:
+                        promoters = 0
                         passives = 0
                         detractors = 0
-                    elif nps >= 50:
-                        promoters = int(received * 0.8)
-                        passives = int(received * 0.15)
-                        detractors = received - promoters - passives
-                    elif nps >= 0:
-                        # NPS = (P - D) / Total * 100, P + Pa + D = Total
-                        # Estimate: P = (NPS/100 + 1) * Total / 2
-                        promoters = max(0, int((nps/100 + 1) * received / 2))
-                        detractors = max(0, int((1 - nps/100) * received / 2))
-                        passives = received - promoters - detractors
-                    else:
-                        # Negative NPS
-                        detractors = max(1, int(abs(nps) / 100 * received))
-                        promoters = max(0, received - detractors)
-                        passives = 0
-                else:
-                    promoters = 0
-                    passives = 0
-                    detractors = 0
-                
+
                 employees.append({
-                    "name": str(name).strip(),
+                    "name": name_str,
                     "nps_score": nps,
-                    "responses": received,
+                    "responses": received_int,
                     "avg_rating": avg_rating,
                     "promoters": promoters,
                     "passives": passives,
                     "detractors": detractors,
                 })
-            
-            logger.info(f"Parsed NPS Toolkit XLSX: {len(employees)} employees")
-            
+
+            logger.info(
+                f"Parsed NPS Toolkit XLSX: {len(employees)} employees "
+                f"(promoter columns {'PRESENT' if promoters_col is not None else 'MISSING — using NPS estimation'})"
+            )
+
         except Exception as e:
             logger.error(f"Error parsing NPS Toolkit XLSX: {e}")
             raise ValueError(f"Failed to parse NPS Toolkit file: {str(e)}")
-    
+
     else:
         # Parse CSV format (legacy)
         try:
             text = contents.decode('utf-8')
         except UnicodeDecodeError:
             text = contents.decode('latin-1')
-        
+
         reader = csv.DictReader(StringIO(text))
-        
+
         for row in reader:
             name = row.get("Employee", row.get("employee", row.get("Name", row.get("name", ""))))
             if not name:
                 continue
-            
+
             employees.append({
                 "name": name,
                 "promoters": int(row.get("Promoters", row.get("promoters", 0)) or 0),
@@ -3094,7 +3240,7 @@ async def parse_cv_file(filename: str, contents: bytes) -> Dict[str, Any]:
                 "detractors": int(row.get("Detractors", row.get("detractors", 0)) or 0),
                 "nps_score": float(row.get("NPS", row.get("nps", row.get("nps_score", 0))) or 0),
             })
-    
+
     return {"employees": employees, "record_count": len(employees)}
 
 

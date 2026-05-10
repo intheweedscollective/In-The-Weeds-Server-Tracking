@@ -12,7 +12,31 @@ Build a comprehensive performance review application for restaurant employees.
 
 ## Current State (2026-05-10)
 
-### Latest Changes (2026-05-10 Session) — Public-View Onboarding Block + CV Score Bug + Production Build Blocker
+### Latest Changes (2026-05-10 Session) — Three bug fixes from production user
+
+- **P1: Terminated employees reappear after saving snapshot — FIXED 2026-05-10**
+  - Root cause: `merge_snapshot_data` rebuilds the employees dict from the POS upload's `parsed_data` on every save. Deleted employees were being silently re-created because the source upload still contained them, with no record of intent to remove.
+  - Fix: snapshots now persist a `deleted_names` blocklist. `merge_snapshot_data` skips matching rows (full-name + first-name match, case-insensitive). Both `/v2/employees/{id}` (employees.py) and `/v2/snapshot-workflow/employees/{id}` (snapshot_routes.py) DELETE endpoints write to the blocklist. New `restore-deleted/{name}` endpoint allows admins to undo if the deletion was a mistake.
+  - Regression test: `tests/test_snapshot_deletion_and_cv_parser.py::test_merge_skips_deleted_names`.
+
+- **P1: NPS Toolkit XLSX showing employees with NPS but no promoters/detractors; "TK" missing — FIXED 2026-05-10**
+  - Root cause: `parse_cv_file` (snapshot_routes.py) ignored Promoter/Passive/Detractor columns and ALWAYS estimated from NPS — when NPS=0 the estimate produced 0/0/0. Also, the manager-filter `'manager' in str(name).lower()` was too aggressive and the header detection only checked the first 5 rows.
+  - Fix: parser now detects `Promoters/Passives/Detractors` columns (with multiple synonyms — "Promoter", "Promoter Count", "# Promoters", etc.) and uses them directly when present; falls back to estimation only when absent. Header scan widened to first 10 rows. Manager filter narrowed to literal "manager" or "X manager" (i.e. just job-title rows), so short names like "TK" pass through.
+  - Regression tests: `test_parse_cv_uses_real_promoter_columns_when_present`, `test_parse_cv_falls_back_to_estimation_when_no_pcd_columns`.
+
+- **Clarification — Scoring audit "deducting points":** the `cv_bonus = (Promoters × 1) + (Detractors × −2)` formula is the canonical scoring policy from `scoring_engine.calculate_customer_voice_score`. Audit displays it correctly. Editable in `quarter_settings` if the user wants to change per-detractor weight.
+
+### Earlier Today (2026-05-10) — see CHANGELOG below
+- "support@bubbagump.com" → `support@intheweedscollective.com` in HelpCenter.js
+- New backend `POST /v2/quarter-settings/{year}/{quarter}/unlock` + Unlock-to-Edit button so admins can edit locked benchmarks.
+- AuthCallback now refreshes AuthContext so sidebar reflects signed-in admin state immediately.
+- Build-blocker fix in GlobalOverview.jsx (hooks-order violation).
+- Trailing-slash defensive normalize for `REACT_APP_BACKEND_URL` across api.js + 22 other files.
+- OnboardingGuide gated to admins only (was blocking public viewers).
+- routes/cv.py: `cv_score` formula now includes NPS%/10 component.
+- SidebarLayout shows real email + Admin/Viewer label.
+
+## Current State (2026-05-03)
 
 - **P0: PRODUCTION BUILD BLOCKED — "compiled with problems" eslint error in `GlobalOverview.jsx` — FIXED 2026-05-10**
   - Root cause: `useMemo` calls (lines 59, 64) ran AFTER an early conditional `return` for the loading state. CRA's `react-scripts build` (CI=true on production) treats `react-hooks/rules-of-hooks` violations as build errors. The deployed `intheweedscollective.com` was running the LAST successfully-compiled bundle from a much earlier commit, so every subsequent code change silently failed to ship.

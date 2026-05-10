@@ -240,21 +240,30 @@ async def delete_employee(employee_id: str):
     
     # Delete from employees_v2
     result = await db.employees_v2.delete_one({"_id": employee["_id"]})
-    
-    # Also remove from any snapshots that contain this employee
+
+    # Also remove from any snapshots that contain this employee, AND record
+    # the employee on each snapshot's deleted_names blocklist so a future
+    # `merge_snapshot_data` (Confirm POS Review, save, etc.) does not
+    # silently re-create them from the still-present POS parsed_data.
     year = employee.get("year")
     quarter = employee.get("quarter")
+    name_to_block = (employee.get("name") or "").strip()
     if year and quarter:
         await db.snapshot_workflow.update_many(
             {"year": year, "quarter": quarter},
             {"$pull": {"employees": {"id": employee_id}}}
         )
+        if name_to_block:
+            await db.snapshot_workflow.update_many(
+                {"year": year, "quarter": quarter},
+                {"$addToSet": {"deleted_names": name_to_block}}
+            )
         # Also update employee count
         await db.snapshot_workflow.update_many(
             {"year": year, "quarter": quarter},
             [{"$set": {"employee_count": {"$size": {"$ifNull": ["$employees", []]}}}}]
         )
-    
+
     return {"success": True, "message": f"Employee {employee.get('name', 'Unknown')} deleted"}
 
 
