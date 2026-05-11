@@ -2197,7 +2197,21 @@ async def get_current_rankings(quarter: Optional[str] = None, year: Optional[int
         return (tier_rank, -score)  # Sort by tier first, then by score descending
     
     sorted_employees = sorted(employees, key=sort_key)
-    
+
+    # Recompute review_tracker_bonus on every row from current rt_mentions
+    # so stored stale values can't drift the "RT Bonus" leaderboard.
+    qs_doc = await db.quarter_settings.find_one(
+        {"year": snapshot.get("year"), "quarter": snapshot.get("quarter")},
+        {"_id": 0, "rt_points_per_mention": 1, "rt_max_points": 1},
+    ) or {}
+    _rt_coef = qs_doc.get("rt_points_per_mention", 0.3) or 0.3
+    _rt_cap  = qs_doc.get("rt_max_points", 20.0) or 20.0
+    for _emp in sorted_employees:
+        _m = _emp.get("rt_mentions") or _emp.get("review_mentions") or 0
+        _emp["review_tracker_bonus"] = round(min(_m * _rt_coef, _rt_cap), 2)
+        # Keep both mention fields in sync for downstream consumers.
+        _emp["review_mentions"] = _m
+
     # Workflow status info
     status = snapshot.get("status", "in_progress")
     is_finalized = status == "finalized"

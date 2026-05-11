@@ -1618,7 +1618,15 @@ export default function FullRankings() {
                           <span className="text-green-400 font-medium">{employee.rt_positive || 0}</span>
                         </td>
                         <td className="py-3 px-2 text-center">
-                          <span className="text-amber-400 font-medium">+{formatNumber(employee.review_tracker_bonus || 0)}</span>
+                          {(() => {
+                            const m = employee.rt_mentions || employee.review_mentions || 0;
+                            const coef = quarterSettings?.rt_points_per_mention ?? 0.3;
+                            const cap  = quarterSettings?.rt_max_points ?? 20;
+                            const bonus = Math.min(m * coef, cap);
+                            return (
+                              <span className="text-amber-400 font-medium">+{formatNumber(bonus)}</span>
+                            );
+                          })()}
                         </td>
                       </tr>
                     ))}

@@ -274,12 +274,21 @@ async def get_review_stats_endpoint(quarter: str = "Q1", year: int = 2026):
     stats = get_review_stats(reviews, employee_names)
     
     # If customer_reviews is empty but employees have rt_mentions (from manual upload),
-    # populate the stats from employee records
+    # populate the stats from employee records.
+    # Per-quarter coefficients so historical quarters keep their original
+    # bonus rule. ALWAYS recompute from current mentions — never trust a
+    # stored review_tracker_bonus (it drifts when new RT data lands).
+    qs_doc = await db.quarter_settings.find_one(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0, "rt_points_per_mention": 1, "rt_max_points": 1},
+    ) or {}
+    _rt_coef = qs_doc.get("rt_points_per_mention", 0.3) or 0.3
+    _rt_cap  = qs_doc.get("rt_max_points", 20.0) or 20.0
     if len(reviews) == 0:
         total_mentions = 0
         for emp in employees:
             mentions = emp.get("rt_mentions") or emp.get("review_mentions") or 0
-            points = emp.get("review_tracker_bonus") or min(mentions * 0.3, 20)
+            points = round(min(mentions * _rt_coef, _rt_cap), 2)
             if mentions > 0:
                 stats["by_employee"][emp["name"]] = {
                     "mentions": mentions,
