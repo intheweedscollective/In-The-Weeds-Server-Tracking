@@ -4,9 +4,9 @@ Tracks employee QR code scans for Yelp and Google reviews
 """
 
 import os
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 import uuid
 import logging
@@ -284,7 +284,8 @@ async def track_scan(employee_id: str, platform: str):
             field = f"{platform}_clicks"
             await _db.qr_employees.update_one(
                 {"id": employee_id},
-                {"$inc": {field: 1}}
+                {"$inc": {field: 1, "total_clicks": 1},
+                 "$set": {"last_scan_at": datetime.now(timezone.utc).isoformat()}}
             )
             
             scan = {
@@ -334,7 +335,8 @@ async def tripadvisor_scan_redirect(employee_id: str):
         if employee:
             await _db.qr_employees.update_one(
                 {"id": employee_id},
-                {"$inc": {"tripadvisor_clicks": 1}}
+                {"$inc": {"tripadvisor_clicks": 1, "total_clicks": 1},
+                 "$set": {"last_scan_at": datetime.now(timezone.utc).isoformat()}}
             )
             await _db.qr_scans.insert_one({
                 "id": str(uuid.uuid4()),
@@ -373,7 +375,8 @@ async def quick_scan_redirect(employee_id: str):
         if employee:
             await _db.qr_employees.update_one(
                 {"id": employee_id},
-                {"$inc": {"google_clicks": 1}}
+                {"$inc": {"google_clicks": 1, "total_clicks": 1},
+                 "$set": {"last_scan_at": datetime.now(timezone.utc).isoformat()}}
             )
             await _db.qr_scans.insert_one({
                 "id": str(uuid.uuid4()),
@@ -406,17 +409,33 @@ async def ultra_simple_redirect(employee_id: str):
     Shortest possible URL path for QR codes.
     """
     from fastapi.responses import RedirectResponse
-    
-    # Track asynchronously without waiting
+
+    # Track + ALSO increment the per-employee counter. The previous version
+    # only inserted into qr_scans, leaving qr_employees.google_clicks frozen
+    # at whatever value it had — which is why /api/qr/stats and the leader-
+    # board kept showing stale numbers while the raw event log accumulated
+    # new entries. Look up the employee so we can carry their name on the
+    # raw scan record too (used by the Recent Activity feed).
     try:
+        employee = await _db.qr_employees.find_one({"id": employee_id})
+        if employee:
+            await _db.qr_employees.update_one(
+                {"id": employee_id},
+                {"$inc": {"google_clicks": 1, "total_clicks": 1},
+                 "$set": {"last_scan_at": datetime.now(timezone.utc).isoformat()}}
+            )
+            employee_name = employee.get("name", "Unknown")
+        else:
+            employee_name = "Unknown"
         await _db.qr_scans.insert_one({
             "id": str(uuid.uuid4()),
             "employee_id": employee_id,
+            "employee_name": employee_name,
             "platform": "google",
             "scanned_at": datetime.now(timezone.utc).isoformat()
         })
-    except:
-        pass
+    except Exception as e:
+        logging.error(f"/qr/r tracking error: {e}")
     
     return RedirectResponse(url=GOOGLE_REVIEW_URL, status_code=302)
 
@@ -429,24 +448,197 @@ async def get_recent_scans(limit: int = 50):
 @qr_router.delete("/scans/reset-all")
 async def reset_all_qr_scans():
     """
-    Reset ALL QR scan data:
-    - Deletes all scan records from qr_scans collection
-    - Resets all employee click counts to 0
+    Reset ALL QR scan data.
+
+    - Archives every existing `qr_scans` event into `qr_scans_archive` before
+      deletion so the data is recoverable. Each archived doc gets an
+      `archived_at` timestamp and the same `archive_batch_id` so you can
+      restore a specific reset.
+    - Then deletes the live scan records and zeros every employee's
+      `google_clicks` / `yelp_clicks` / `tripadvisor_clicks` / `total_clicks`.
+
+    Why archive? The user reported losing accumulated engagement data after
+    a reset. Production data should never be destroyed without a recovery
+    path.
     """
-    # Delete all scan records
+    from datetime import datetime, timezone
+    batch_id = str(uuid.uuid4())
+    archived_at = datetime.now(timezone.utc).isoformat()
+
+    # Copy every live scan into the archive (no-op if collection is empty).
+    archived = 0
+    cursor = _db.qr_scans.find({}, {"_id": 0})
+    batch: List[Dict[str, Any]] = []
+    async for scan in cursor:
+        scan["archive_batch_id"] = batch_id
+        scan["archived_at"] = archived_at
+        batch.append(scan)
+        if len(batch) >= 500:
+            await _db.qr_scans_archive.insert_many(batch)
+            archived += len(batch)
+            batch.clear()
+    if batch:
+        await _db.qr_scans_archive.insert_many(batch)
+        archived += len(batch)
+
+    # Delete all live scan records.
     scans_result = await _db.qr_scans.delete_many({})
-    
-    # Reset all employee click counts
+
+    # Reset all employee click counts (including total_clicks for completeness).
     employees_result = await _db.qr_employees.update_many(
         {},
-        {"$set": {"google_clicks": 0, "yelp_clicks": 0, "tripadvisor_clicks": 0}}
+        {"$set": {
+            "google_clicks": 0,
+            "yelp_clicks": 0,
+            "tripadvisor_clicks": 0,
+            "total_clicks": 0,
+        }}
     )
-    
+
     return {
         "success": True,
+        "archive_batch_id": batch_id,
+        "scans_archived": archived,
         "scans_deleted": scans_result.deleted_count,
-        "employees_reset": employees_result.modified_count
+        "employees_reset": employees_result.modified_count,
+        "note": "Use POST /api/qr/scans/restore-archive with archive_batch_id to recover.",
     }
+
+
+@qr_router.post("/scans/restore-archive")
+async def restore_qr_archive(payload: Dict[str, Any]):
+    """
+    Restore a previously-archived batch of QR scans back into `qr_scans`
+    and recompute every employee's click counters from the live data.
+
+    Body: { "archive_batch_id": "<uuid from reset response>" }
+          OR { "all": true } to restore EVERY archive batch.
+    """
+    batch_id = payload.get("archive_batch_id")
+    if not batch_id and not payload.get("all"):
+        raise HTTPException(
+            status_code=400,
+            detail="Provide `archive_batch_id` or `all: true`.",
+        )
+
+    query = {} if payload.get("all") else {"archive_batch_id": batch_id}
+    restored = 0
+    batch: List[Dict[str, Any]] = []
+    async for scan in _db.qr_scans_archive.find(query, {"_id": 0}):
+        scan.pop("archive_batch_id", None)
+        scan.pop("archived_at", None)
+        batch.append(scan)
+        if len(batch) >= 500:
+            await _db.qr_scans.insert_many(batch)
+            restored += len(batch)
+            batch.clear()
+    if batch:
+        await _db.qr_scans.insert_many(batch)
+        restored += len(batch)
+
+    # Drop the archive copy of what we just restored, since it lives back in
+    # `qr_scans` now.
+    await _db.qr_scans_archive.delete_many(query)
+
+    # Rebuild counters from the now-restored live scans (delegates to the
+    # same logic as the recompute-counters endpoint).
+    counters_synced = await _rebuild_qr_counters_from_scans()
+
+    return {
+        "success": True,
+        "scans_restored": restored,
+        "counters_synced": counters_synced,
+    }
+
+
+@qr_router.post("/scans/recompute-counters")
+async def recompute_qr_counters_endpoint():
+    """
+    Rebuild every `qr_employees` click counter from the raw `qr_scans`
+    event log. Use this when the counters drift from reality — e.g. after
+    a deploy that exposed a tracking-path bug, or before a board meeting.
+    Idempotent and safe to re-run.
+    """
+    synced = await _rebuild_qr_counters_from_scans()
+    return {"success": True, "employees_synced": synced}
+
+
+@qr_router.get("/scans/archive-batches")
+async def list_qr_scan_archives():
+    """List archive batches available for restore."""
+    pipeline = [
+        {"$group": {
+            "_id": "$archive_batch_id",
+            "scan_count": {"$sum": 1},
+            "archived_at": {"$max": "$archived_at"},
+            "earliest_scan": {"$min": "$scanned_at"},
+            "latest_scan": {"$max": "$scanned_at"},
+        }},
+        {"$sort": {"archived_at": -1}},
+    ]
+    out = []
+    async for row in _db.qr_scans_archive.aggregate(pipeline):
+        out.append({
+            "archive_batch_id": row["_id"],
+            "scan_count": row["scan_count"],
+            "archived_at": row.get("archived_at"),
+            "earliest_scan": row.get("earliest_scan"),
+            "latest_scan": row.get("latest_scan"),
+        })
+    return {"batches": out}
+
+
+async def _rebuild_qr_counters_from_scans() -> int:
+    """
+    Recompute google/yelp/tripadvisor/total_clicks on `qr_employees` from
+    the raw `qr_scans` event log. Returns the number of employees synced.
+    Internal helper, used by /scans/recompute-counters and the archive
+    restore endpoint.
+    """
+    pipeline = [
+        {"$group": {
+            "_id": {"emp": "$employee_id", "platform": "$platform"},
+            "count": {"$sum": 1},
+            "last": {"$max": "$scanned_at"},
+        }},
+    ]
+    by_emp: Dict[str, Dict[str, Any]] = {}
+    async for row in _db.qr_scans.aggregate(pipeline):
+        emp_id = row["_id"]["emp"]
+        platform = (row["_id"]["platform"] or "google").lower()
+        if not emp_id:
+            continue
+        entry = by_emp.setdefault(emp_id, {})
+        if platform in {"google", "yelp", "tripadvisor"}:
+            entry[f"{platform}_clicks"] = row["count"]
+        last = row["last"]
+        if last and last > entry.get("last_scan_at", ""):
+            entry["last_scan_at"] = last
+
+    # Zero everyone, then write the rebuilt counts. Without the zero pass
+    # an employee whose last scan was deleted would keep their old number.
+    await _db.qr_employees.update_many(
+        {},
+        {"$set": {"google_clicks": 0, "yelp_clicks": 0, "tripadvisor_clicks": 0, "total_clicks": 0}},
+    )
+
+    synced = 0
+    for emp_id, entry in by_emp.items():
+        google = entry.get("google_clicks", 0)
+        yelp = entry.get("yelp_clicks", 0)
+        ta = entry.get("tripadvisor_clicks", 0)
+        update = {
+            "google_clicks": google,
+            "yelp_clicks": yelp,
+            "tripadvisor_clicks": ta,
+            "total_clicks": google + yelp + ta,
+        }
+        if entry.get("last_scan_at"):
+            update["last_scan_at"] = entry["last_scan_at"]
+        r = await _db.qr_employees.update_one({"id": emp_id}, {"$set": update})
+        if r.matched_count:
+            synced += 1
+    return synced
 
 
 # ==================== SETTINGS ====================
