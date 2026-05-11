@@ -117,11 +117,14 @@ async def sync_qr_names_from_main(quarter: str = "Q1", year: int = 2026):
     Matches by first name and updates to full name.
     Preserves all click counts.
     """
-    # Get main employees
+    # Get main employees (filtered through canonical service so terminated
+    # employees don't get re-added to QR)
+    from services.employee_service import EmployeeService
     main_employees = await _db.employees_v2.find(
         {"quarter": quarter.upper(), "year": year},
-        {"name": 1}
+        {"_id": 0, "id": 1, "name": 1, "display_name": 1}
     ).to_list(100)
+    main_employees = await EmployeeService(_db).filter_active_only(main_employees)
     
     # Build first name -> full name mapping
     first_to_full = {}
@@ -733,10 +736,14 @@ async def get_top_10_scans():
 @qr_router.post("/sync-from-employees")
 async def sync_qr_from_main_employees(quarter: str = "Q1", year: int = 2026):
     """Sync QR employees from main employee list"""
+    # Phase 2B: route through canonical EmployeeService — terminated /
+    # merged employees never get propagated into QR.
+    from services.employee_service import EmployeeService
     main_employees = await _db.employees_v2.find(
         {"quarter": quarter.upper(), "year": year},
-        {"name": 1}
+        {"_id": 0, "id": 1, "name": 1, "display_name": 1}
     ).to_list(100)
+    main_employees = await EmployeeService(_db).filter_active_only(main_employees)
     
     created = 0
     for emp in main_employees:
@@ -884,12 +891,15 @@ async def download_qr_leaderboard_slide(
     # Merge ReviewTracker mentions from employees_v2 (which is where RT
     # mentions are persisted by the snapshot pipeline). We index by
     # lowercased name for forgiving cross-collection matching.
+    # Phase 2B: filter v2 readers through canonical service.
+    from services.employee_service import EmployeeService
     v2_emps = await _db.employees_v2.find(
         {"quarter": (quarter or "").upper(), "year": year},
         {"_id": 0, "name": 1, "display_name": 1, "report_name": 1,
          "rt_mentions": 1, "review_tracker_mentions": 1,
          "rt_yelp_mentions": 1, "rt_google_mentions": 1, "rt_tripadvisor_mentions": 1},
     ).to_list(500)
+    v2_emps = await EmployeeService(_db).filter_active_only(v2_emps)
 
     def keys_for(rec):
         out = set()
@@ -979,12 +989,14 @@ async def get_leaderboard_with_mentions(
     desc so the same row order shows up in the UI and the PNG.
     """
     qr_emps = await _db.qr_employees.find({}, {"_id": 0}).to_list(500)
+    from services.employee_service import EmployeeService
     v2_emps = await _db.employees_v2.find(
         {"quarter": (quarter or "").upper(), "year": year},
         {"_id": 0, "id": 1, "name": 1, "display_name": 1, "report_name": 1,
          "rt_mentions": 1, "review_tracker_mentions": 1,
          "rt_yelp_mentions": 1, "rt_google_mentions": 1, "rt_tripadvisor_mentions": 1},
     ).to_list(500)
+    v2_emps = await EmployeeService(_db).filter_active_only(v2_emps)
 
     def keys_for(rec):
         out = set()

@@ -10,7 +10,54 @@ Build a comprehensive performance review application for restaurant employees.
 - **AI**: OpenAI GPT-4o (via Emergent LLM Key)
 - **Auth**: Emergent-managed Google Auth (whitelist via `ALLOWED_ADMIN_EMAILS`)
 
-## Current State (2026-05-10)
+## Current State (2026-05-11)
+
+### Phase 2B (Continued) — Slide Generators & QR Wired Through Canonical Service — SHIPPED 2026-05-11
+
+**Problem**: Even after Phase 2A wired `/v2/employees` and `current-rankings`
+to `EmployeeService`, the downloadable slide endpoints (PNG/PDF snapshot,
+all 8 Yodeck slides, Quarterly Summary report) and QR sync still queried
+`employees_v2` directly. Terminated/merged employees and stale ghosts
+kept leaking onto signage and printables.
+
+**Delivered**:
+
+1. **New `EmployeeService.filter_active_only(rows, snapshot_deleted_names=...)`**
+   - Single helper every legacy reader now calls before rendering.
+   - Drops `status="terminated"` and `status="merged"` rows.
+   - Drops anything in the snapshot's `deleted_names` blocklist.
+   - Stamps `canonical_id` on each survivor + overlays canonical display_name.
+   - Resolves by id, legacy_id, name, display_name, and every alias.
+
+2. **Wired endpoints (10 total)**:
+   - `server.py` → `/v2/full-rankings/{y}/{q}/snapshot-png` + `/snapshot-pdf`
+   - `routes/yodeck_slides.py` → top10, complete-rankings, printable-rankings,
+     leaderboard-slide, tier/{name}, most-improved, promotion-watchlist,
+     at-risk, quarterly-summary (10 of 11 read sites now go through
+     the new `_fetch_active_employees(db, year, quarter)` helper)
+   - `qr_tracking.py` → sync-with-employees-list, sync-from-employees,
+     leaderboard-slide PNG, leaderboard-data JSON (all 4 sites)
+
+3. **Regression tests** — `tests/test_phase2b_slide_filter.py`
+   - `test_filter_active_only_drops_terminated_and_overlays_display_name`
+   - `test_filter_active_only_keeps_rows_without_canonical_match`
+   - All 40 architecture-tier tests still passing.
+
+4. **Live verification** on production data (Q2 2026):
+   - `/v2/admin/integrity` → 0/0/0 P0/P1/P2 issues, deploy gate PASS
+   - 8 Yodeck slide endpoints + 2 full-rankings endpoints all HTTP 200
+   - current-rankings returns 30 employees (canonical-filtered)
+
+**What's NOT done yet (still Phase 2B + Phase 3)**:
+- routes/audit.py (~19 direct `employees_v2.find` calls — admin debug
+  utilities, lower priority but should still be wired for consistency)
+- routes/cv.py (3 sites)
+- snapshot_routes.py (~14 sites, several are write paths — distinct from
+  read paths, scoped to Phase 3 alongside the snapshot schema migration)
+- Phase 3: drop `employees_v2`, migrate `snapshot.employees[]` → thin
+  `rows[]` with `employee_id` FKs.
+
+
 
 ### Phase 1 — Architecture Correction (Employee Data Layer) — SHIPPED 2026-05-10
 

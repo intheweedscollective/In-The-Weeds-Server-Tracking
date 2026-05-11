@@ -2169,6 +2169,7 @@ async def download_full_rankings_snapshot_png(year: int, quarter: str):
     PDFs natively).
     """
     from png_full_rankings import build_full_rankings_png
+    from services.employee_service import EmployeeService
 
     employees_v2 = await db.employees_v2.find(
         {"year": year, "quarter": quarter.upper()},
@@ -2177,6 +2178,18 @@ async def download_full_rankings_snapshot_png(year: int, quarter: str):
 
     if not employees_v2:
         raise HTTPException(status_code=404, detail=f"No employees found for {quarter} {year}")
+
+    # Phase 2B: route through canonical EmployeeService so terminated /
+    # merged employees never appear on downloadable slides. Also pulls
+    # the snapshot's deleted_names blocklist for legacy-row safety.
+    snap_doc = await db.snapshot_workflow.find_one(
+        {"is_current": True, "year": year, "quarter": quarter.upper()},
+        {"_id": 0, "deleted_names": 1}
+    ) or {}
+    employees_v2 = await EmployeeService(db).filter_active_only(
+        employees_v2,
+        snapshot_deleted_names=snap_doc.get("deleted_names") or [],
+    )
 
     settings_doc = await db.quarter_settings.find_one(
         {"year": year, "quarter": quarter.upper()}, {"_id": 0}
@@ -2249,6 +2262,18 @@ async def download_full_rankings_snapshot_pdf(year: int, quarter: str):
 
     if not employees_v2:
         raise HTTPException(status_code=404, detail=f"No employees found for {quarter} {year}")
+
+    # Phase 2B: filter terminated/merged employees out through the
+    # canonical EmployeeService before they ever hit the PDF renderer.
+    from services.employee_service import EmployeeService
+    snap_doc = await db.snapshot_workflow.find_one(
+        {"is_current": True, "year": year, "quarter": quarter.upper()},
+        {"_id": 0, "deleted_names": 1}
+    ) or {}
+    employees_v2 = await EmployeeService(db).filter_active_only(
+        employees_v2,
+        snapshot_deleted_names=snap_doc.get("deleted_names") or [],
+    )
 
     settings_doc = await db.quarter_settings.find_one(
         {"year": year, "quarter": quarter.upper()}, {"_id": 0}

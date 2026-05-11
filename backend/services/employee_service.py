@@ -179,6 +179,114 @@ class EmployeeService:
             out.append(merged)
         return out
 
+    async def filter_active_only(
+        self,
+        rows: Iterable[Dict[str, Any]],
+        *,
+        snapshot_deleted_names: Optional[Iterable[str]] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Phase 2B helper for slide generators and downstream consumers.
+
+        Takes a list of legacy-shaped employee dicts (e.g. from
+        `employees_v2` or `snapshot.employees[]`) and returns ONLY the
+        rows whose canonical status is "active". Terminated and merged
+        employees are filtered out so they never appear on downloadable
+        slides, leaderboards, audit views, or QR pages.
+
+        Side effects on each surviving row:
+          - `canonical_id` is stamped (when resolvable)
+          - `display_name` / `name` are overlaid from the canonical
+            record if it has a preferred display name
+
+        `snapshot_deleted_names` is an optional case-insensitive
+        blocklist (typically `snapshot["deleted_names"]`) that also
+        causes a row to be dropped — this protects against legacy
+        snapshots that still have embedded rows for people who were
+        deleted before the canonical migration completed.
+        """
+        # Index the canonical collection once.
+        status_by_key: Dict[str, str] = {}
+        display_by_key: Dict[str, str] = {}
+        id_by_key: Dict[str, str] = {}
+
+        async for ce in self.col.find(
+            {},
+            {"_id": 0, "id": 1, "name": 1, "display_name": 1,
+             "status": 1, "aliases": 1, "legacy_ids": 1},
+        ):
+            cid = ce.get("id")
+            cstatus = ce.get("status", "active")
+            cdisplay = ce.get("display_name") or ce.get("name")
+
+            if cid:
+                status_by_key[cid] = cstatus
+                if cdisplay:
+                    display_by_key[cid] = cdisplay
+                id_by_key[cid] = cid
+
+            for lid in ce.get("legacy_ids") or []:
+                status_by_key[lid] = cstatus
+                if cdisplay:
+                    display_by_key[lid] = cdisplay
+                id_by_key[lid] = cid
+
+            names = [ce.get("name"), ce.get("display_name"),
+                     *(ce.get("aliases") or [])]
+            for n in names:
+                if not n:
+                    continue
+                key = n.lower().strip()
+                # First writer wins so the canonical record's own name
+                # outranks an alias from a different record.
+                status_by_key.setdefault(key, cstatus)
+                if cdisplay:
+                    display_by_key.setdefault(key, cdisplay)
+                id_by_key.setdefault(key, cid)
+
+        deleted_lc = {
+            (n or "").lower().strip()
+            for n in (snapshot_deleted_names or [])
+            if n
+        }
+
+        out: List[Dict[str, Any]] = []
+        for emp in rows:
+            keys = [
+                emp.get("id"),
+                (emp.get("name") or "").lower().strip(),
+                (emp.get("display_name") or "").lower().strip(),
+            ]
+            keys = [k for k in keys if k]
+
+            st = next(
+                (status_by_key[k] for k in keys if k in status_by_key),
+                None,
+            )
+            if st in ("terminated", "merged"):
+                continue
+
+            # Snapshot-level blocklist (legacy safety net).
+            primary_lc = (emp.get("name") or emp.get("display_name") or "").lower().strip()
+            if primary_lc and primary_lc in deleted_lc:
+                continue
+
+            cid = next((id_by_key[k] for k in keys if k in id_by_key), None)
+            if cid:
+                emp["canonical_id"] = cid
+
+            preferred = next(
+                (display_by_key[k] for k in keys if k in display_by_key),
+                None,
+            )
+            if preferred:
+                emp["name"] = preferred
+                emp["display_name"] = preferred
+
+            out.append(emp)
+
+        return out
+
     # ------------------------------------------------------------------
     # WRITE — IDENTITY
     # ------------------------------------------------------------------
