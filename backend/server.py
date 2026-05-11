@@ -2160,36 +2160,20 @@ async def get_full_hierarchy_rankings(year: int, quarter: str, tier_filter: Opti
     }
 
 
-@api_router.get("/v2/full-rankings/{year}/{quarter}/snapshot-png")
-async def download_full_rankings_snapshot_png(year: int, quarter: str):
+async def _load_snapshot_first_rankings(
+    year: int,
+    quarter: str,
+) -> tuple[List[dict], "QuarterSettings"]:
     """
-    Download the detailed Server Performance Snapshot as a 1920×1080 PNG —
-    same layout as the snapshot-pdf endpoint but rendered as an image so
-    it can be displayed on Yodeck digital signage (which doesn't render
-    PDFs natively).
+    Resolve the row set that the snapshot-PNG/PDF generators should
+    render. Reads from the active snapshot's embedded `employees[]`
+    first (the architectural source of truth post Phase-2B) and falls
+    back to `employees_v2` only when no current snapshot exists.
+
+    Returns (rankings, settings).
+    Raises HTTPException(404) if no data exists for the quarter.
     """
-    from png_full_rankings import build_full_rankings_png
     from services.employee_service import EmployeeService
-
-    employees_v2 = await db.employees_v2.find(
-        {"year": year, "quarter": quarter.upper()},
-        {"_id": 0}
-    ).to_list(500)
-
-    if not employees_v2:
-        raise HTTPException(status_code=404, detail=f"No employees found for {quarter} {year}")
-
-    # Phase 2B: route through canonical EmployeeService so terminated /
-    # merged employees never appear on downloadable slides. Also pulls
-    # the snapshot's deleted_names blocklist for legacy-row safety.
-    snap_doc = await db.snapshot_workflow.find_one(
-        {"is_current": True, "year": year, "quarter": quarter.upper()},
-        {"_id": 0, "deleted_names": 1}
-    ) or {}
-    employees_v2 = await EmployeeService(db).filter_active_only(
-        employees_v2,
-        snapshot_deleted_names=snap_doc.get("deleted_names") or [],
-    )
 
     settings_doc = await db.quarter_settings.find_one(
         {"year": year, "quarter": quarter.upper()}, {"_id": 0}
@@ -2210,22 +2194,119 @@ async def download_full_rankings_snapshot_png(year: int, quarter: str):
         bonus_cap=settings_doc.get("bonus_cap", 5.0),
         a_server_min_score=settings_doc.get("a_server_min_score", 85.0),
         b_server_min_score=settings_doc.get("b_server_min_score", 70.0),
+        rt_points_per_mention=settings_doc.get("rt_points_per_mention", 0.3),
+        rt_max_points=settings_doc.get("rt_max_points", 20.0),
     )
 
+    # Snapshot-first: active snapshot is the source of truth.
+    snapshot = await db.snapshot_workflow.find_one(
+        {"is_current": True, "year": year, "quarter": quarter.upper()},
+        {"_id": 0},
+    )
+    if not snapshot:
+        snapshot = await db.snapshot_workflow.find_one(
+            {"status": "completed", "year": year, "quarter": quarter.upper()},
+            {"_id": 0},
+            sort=[("effective_date", -1), ("completed_at", -1)],
+        )
+
+    if snapshot and snapshot.get("employees"):
+        raw_rows = snapshot.get("employees") or []
+        deleted_names = snapshot.get("deleted_names") or []
+    else:
+        # Defense in depth — fall back to the legacy mirror.
+        raw_rows = await db.employees_v2.find(
+            {"year": year, "quarter": quarter.upper()},
+            {"_id": 0},
+        ).to_list(500)
+        deleted_names = []
+
+    if not raw_rows:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No employees found for {quarter} {year}",
+        )
+
+    # Phase 2B: filter terminated/merged employees out through canonical.
+    raw_rows = await EmployeeService(db).filter_active_only(
+        raw_rows, snapshot_deleted_names=deleted_names,
+    )
+
+    # Recompute the three drift-prone derived fields on every row from
+    # their current inputs so manual overrides on the snapshot always win
+    # over stale stored scores (matches `/current-rankings` behavior).
+    _rt_coef = settings.rt_points_per_mention or 0.3
+    _rt_cap = settings.rt_max_points or 20.0
+    for r in raw_rows:
+        # RT bonus
+        _m = r.get("rt_mentions") or r.get("review_mentions") or 0
+        r["review_tracker_bonus"] = round(min(_m * _rt_coef, _rt_cap), 2)
+        r["review_mentions"] = _m
+        r["rt_mentions"] = _m
+        # CV score — skip if manual override pinned this row.
+        if not r.get("nps_manual_override"):
+            try:
+                _nps_c = max(0.0, min(float(r.get("nps_score") or 0), 100.0))
+            except (TypeError, ValueError):
+                _nps_c = 0.0
+            _p = r.get("cv_promoters") or 0
+            _d = r.get("cv_detractors") or 0
+            r["nps_contribution"] = round(_nps_c / 10.0, 2)
+            r["cv_raw_points"] = round(_p - 2 * _d, 2)
+            r["cv_score"] = round(r["nps_contribution"] + r["cv_raw_points"], 2)
+        # Metric bonus aggregate
+        r["total_metric_bonus"] = round(
+            (r.get("bonus_ppa") or 0)
+            + (r.get("bonus_lbw") or 0)
+            + (r.get("bonus_glass") or 0)
+            + (r.get("bonus_lsc") or 0),
+            2,
+        )
+
+    # Convert to EmployeeV2 (parser uses alt names — normalize first).
     employees: List[EmployeeV2] = []
-    for emp_data in employees_v2:
-        # Normalize alt field names (model only has review_mentions/
-        # glassware_sales; parser writes rt_mentions/bar_glassware_sales).
-        if not emp_data.get("review_mentions") and emp_data.get("rt_mentions"):
-            emp_data["review_mentions"] = emp_data["rt_mentions"]
+    for emp_data in raw_rows:
         if not emp_data.get("glassware_sales") and emp_data.get("bar_glassware_sales"):
             emp_data["glassware_sales"] = emp_data["bar_glassware_sales"]
+        if "guest_count" in emp_data and "guests" not in emp_data:
+            emp_data["guests"] = emp_data["guest_count"]
         try:
             employees.append(EmployeeV2(**emp_data))
         except Exception:
             continue
 
     rankings = generate_hierarchy_rankings(employees, settings)
+
+    # generate_hierarchy_rankings recalculates cv_score / metric_bonus
+    # internally from raw inputs — re-overlay the snapshot's authoritative
+    # values (incl. manual overrides) on top so the slide reflects the
+    # exact numbers the dashboard / current-rankings page shows.
+    raw_by_name = {(r.get("name") or "").lower(): r for r in raw_rows}
+    for rank in rankings:
+        src = raw_by_name.get((rank.get("name") or "").lower()) or {}
+        if src.get("nps_manual_override"):
+            rank["cv_score"] = src.get("cv_score", rank.get("cv_score"))
+            rank["nps_score"] = src.get("nps_score", rank.get("nps_score"))
+        # RT bonus and metric bonus are derived from clean inputs in both
+        # paths — but copy the override flag through for slide consumers.
+        if src.get("nps_manual_override"):
+            rank["nps_manual_override"] = True
+
+    return rankings, settings
+
+
+@api_router.get("/v2/full-rankings/{year}/{quarter}/snapshot-png")
+async def download_full_rankings_snapshot_png(year: int, quarter: str):
+    """
+    Download the detailed Server Performance Snapshot as a 1920×1080 PNG.
+
+    Reads snapshot-first (matches `/current-rankings`) so manual overrides
+    on the active snapshot always render correctly, with `employees_v2`
+    only used as a defense-in-depth fallback when no snapshot exists.
+    """
+    from png_full_rankings import build_full_rankings_png
+
+    rankings, settings = await _load_snapshot_first_rankings(year, quarter)
 
     png_bytes = build_full_rankings_png(
         rankings=rankings,
@@ -2252,66 +2333,11 @@ async def download_full_rankings_snapshot_pdf(year: int, quarter: str):
     document with the Bubba Gump sidebar, color-coded legend, and the
     full Rank/Name/Trend/PPA/LBW/GLASS/LSC/CV/RT/Bonus/Score table.
 
-    This is the printable PDF managers post for staff. The PNG-only
-    `/pdf` endpoint above produces the tier-card slide instead.
+    Reads snapshot-first (matches `/current-rankings`) so manual overrides
+    on the active snapshot always render correctly. `employees_v2` is
+    only used as a fallback when no snapshot exists.
     """
-    employees_v2 = await db.employees_v2.find(
-        {"year": year, "quarter": quarter.upper()},
-        {"_id": 0}
-    ).to_list(500)
-
-    if not employees_v2:
-        raise HTTPException(status_code=404, detail=f"No employees found for {quarter} {year}")
-
-    # Phase 2B: filter terminated/merged employees out through the
-    # canonical EmployeeService before they ever hit the PDF renderer.
-    from services.employee_service import EmployeeService
-    snap_doc = await db.snapshot_workflow.find_one(
-        {"is_current": True, "year": year, "quarter": quarter.upper()},
-        {"_id": 0, "deleted_names": 1}
-    ) or {}
-    employees_v2 = await EmployeeService(db).filter_active_only(
-        employees_v2,
-        snapshot_deleted_names=snap_doc.get("deleted_names") or [],
-    )
-
-    settings_doc = await db.quarter_settings.find_one(
-        {"year": year, "quarter": quarter.upper()}, {"_id": 0}
-    ) or {}
-
-    settings = QuarterSettings(
-        year=year,
-        quarter=quarter.upper(),
-        benchmark_ppa=settings_doc.get("benchmark_ppa", 55.0),
-        benchmark_lbw=settings_doc.get("benchmark_lbw", 8.0),
-        benchmark_glass=settings_doc.get("benchmark_glass", 1.0),
-        benchmark_lsc=settings_doc.get("benchmark_lsc", 100.0),
-        benchmark_cv=settings_doc.get("benchmark_cv", 5.0),
-        weight_ppa=settings_doc.get("weight_ppa", 0.25),
-        weight_lbw=settings_doc.get("weight_lbw", 0.20),
-        weight_glass=settings_doc.get("weight_glass", 0.15),
-        weight_lsc=settings_doc.get("weight_lsc", 0.25),
-        weight_cv=settings_doc.get("weight_cv", 0.15),
-        bonus_rate=settings_doc.get("bonus_rate", 0.2),
-        bonus_cap=settings_doc.get("bonus_cap", 5.0),
-        a_server_min_score=settings_doc.get("a_server_min_score", 85.0),
-        b_server_min_score=settings_doc.get("b_server_min_score", 70.0),
-    )
-
-    employees: List[EmployeeV2] = []
-    for emp_data in employees_v2:
-        # Normalize alt field names (model only has review_mentions/
-        # glassware_sales; parser writes rt_mentions/bar_glassware_sales).
-        if not emp_data.get("review_mentions") and emp_data.get("rt_mentions"):
-            emp_data["review_mentions"] = emp_data["rt_mentions"]
-        if not emp_data.get("glassware_sales") and emp_data.get("bar_glassware_sales"):
-            emp_data["glassware_sales"] = emp_data["bar_glassware_sales"]
-        try:
-            employees.append(EmployeeV2(**emp_data))
-        except Exception:
-            continue
-
-    rankings = generate_hierarchy_rankings(employees, settings)
+    rankings, settings = await _load_snapshot_first_rankings(year, quarter)
 
     pdf_bytes = build_full_rankings_pdf(
         rankings=rankings,
