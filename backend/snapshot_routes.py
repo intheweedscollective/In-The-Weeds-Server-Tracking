@@ -2105,21 +2105,76 @@ async def get_current_rankings(quarter: Optional[str] = None, year: Optional[int
     
     # Sort employees by tier before returning
     employees = snapshot.get("employees", [])
-    
-    # Overlay display_names from employees_v2 (source of truth for preferred names)
-    emp_v2_lookup = {}
-    async for emp in db.employees_v2.find(
-        {"quarter": snapshot.get("quarter", "").upper(), "year": snapshot.get("year", 2026)},
-        {"_id": 0, "name": 1, "display_name": 1, "report_name": 1}
+
+    # Phase 2B: filter through the canonical EmployeeService so that any
+    # employee with status="terminated" or status="merged" on the canonical
+    # `employees` collection is hidden from the live rankings/slide view.
+    # Historical snapshots (status=finalized) are NOT filtered — they must
+    # render exactly as they did when the snapshot was frozen.
+    from services.employee_service import EmployeeService
+    svc = EmployeeService(db)
+    canonical_status: Dict[str, str] = {}
+    canonical_display: Dict[str, str] = {}
+    canonical_id_by_name: Dict[str, str] = {}
+    async for ce in svc.col.find(
+        {},
+        {"_id": 0, "id": 1, "name": 1, "display_name": 1, "status": 1,
+         "aliases": 1, "legacy_ids": 1},
     ):
-        for field in ["name", "report_name", "display_name"]:
-            key = (emp.get(field) or "").lower().strip()
-            if key and emp.get("display_name"):
-                emp_v2_lookup[key] = emp.get("display_name")
-    
+        if ce.get("id"):
+            canonical_status[ce["id"]] = ce.get("status", "active")
+            if ce.get("display_name"):
+                canonical_display[ce["id"]] = ce["display_name"]
+        # Index every legacy id pointing at this canonical row.
+        for lid in ce.get("legacy_ids") or []:
+            canonical_status[lid] = ce.get("status", "active")
+            if ce.get("display_name"):
+                canonical_display[lid] = ce["display_name"]
+        # Index by lowercased name + every alias.
+        names_to_key = [ce.get("name"), ce.get("display_name"),
+                        *(ce.get("aliases") or [])]
+        for n in names_to_key:
+            if n:
+                key = n.lower().strip()
+                canonical_status.setdefault(key, ce.get("status", "active"))
+                if ce.get("display_name"):
+                    canonical_display.setdefault(key, ce["display_name"])
+                canonical_id_by_name.setdefault(key, ce.get("id"))
+
+    snapshot_finalized = snapshot.get("status") == "finalized"
+    filtered_employees: List[Dict[str, Any]] = []
     for emp in employees:
-        emp_name = (emp.get("name") or "").lower().strip()
-        preferred = emp_v2_lookup.get(emp_name)
+        # Resolve via id, legacy_id, then name.
+        st = (
+            canonical_status.get(emp.get("id"))
+            or canonical_status.get((emp.get("name") or "").lower().strip())
+            or canonical_status.get((emp.get("display_name") or "").lower().strip())
+        )
+        if not snapshot_finalized and st in ("terminated", "merged"):
+            # Hide from CURRENT view — but leave the snapshot doc alone.
+            continue
+        # Stamp the canonical id on the snapshot row so downstream
+        # consumers (slide, audit) can resolve identity reliably.
+        cid = (
+            (canonical_status.get(emp.get("id")) and emp.get("id"))
+            or canonical_id_by_name.get((emp.get("name") or "").lower().strip())
+            or canonical_id_by_name.get((emp.get("display_name") or "").lower().strip())
+        )
+        if cid:
+            emp["canonical_id"] = cid
+        filtered_employees.append(emp)
+    employees = filtered_employees
+
+    # Overlay display_names from the canonical source (preferred over the
+    # legacy employees_v2 lookup that this code used to do — canonical is
+    # the new source of truth for the display-name policy).
+    for emp in employees:
+        candidates = [
+            canonical_display.get(emp.get("canonical_id") or ""),
+            canonical_display.get(emp.get("id") or ""),
+            canonical_display.get((emp.get("name") or "").lower().strip()),
+        ]
+        preferred = next((c for c in candidates if c), None)
         if preferred:
             emp["name"] = preferred
             emp["display_name"] = preferred
@@ -3063,12 +3118,52 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                 if _is_deleted(name):
                     logger.info(f"Skipping deleted employee from POS merge: {name}")
                     continue
+
+                # Phase 2B: route every incoming POS name through the
+                # canonical EmployeeService BEFORE we decide whether this
+                # row is new or existing. This single change is what makes
+                # `Glennice` and `Lennie Nguyen` collapse to the same
+                # canonical id instead of producing two snapshot rows.
+                # We also short-circuit when the canonical employee is
+                # terminated (treat as deleted).
+                try:
+                    from services.employee_service import EmployeeService
+                    _svc = EmployeeService(db)
+                    canonical_emp = await _svc.find_by_name_or_alias(name, include_inactive=False)
+                except Exception as _svc_err:
+                    logger.warning(f"merge_snapshot_data: canonical lookup failed for '{name}': {_svc_err}")
+                    canonical_emp = None
+
+                if canonical_emp is None:
+                    # Also check if a TERMINATED/MERGED canonical exists —
+                    # if so, this is effectively a deleted employee and we
+                    # must NOT recreate them silently. Honors the soft-
+                    # delete policy across re-uploads.
+                    try:
+                        terminated = await _svc.find_by_name_or_alias(name, include_inactive=True)
+                    except Exception:
+                        terminated = None
+                    if terminated and terminated.get("status") in ("terminated", "merged"):
+                        logger.info(
+                            f"Skipping POS merge for '{name}' — canonical status={terminated.get('status')}"
+                        )
+                        continue
                 
-                # Find existing employee using multiple matching strategies
+                # Find existing employee using multiple matching strategies.
+                # Prefer the canonical id when we resolved one so we always
+                # land on the SAME embedded row across re-merges.
                 name_lower = name.lower()
                 first_name_lower = name_lower.split()[0] if name_lower else ""
-                existing_emp = (existing_employees.get(name_lower) or 
-                               existing_employees.get(first_name_lower))
+                existing_emp = None
+                if canonical_emp and canonical_emp.get("id"):
+                    cid = canonical_emp["id"]
+                    for v in existing_employees.values():
+                        if v.get("id") == cid:
+                            existing_emp = v
+                            break
+                if existing_emp is None:
+                    existing_emp = (existing_employees.get(name_lower) or
+                                    existing_employees.get(first_name_lower))
 
                 # USER-EDIT PROTECTION
                 # If a row already exists in the snapshot (i.e. the user has
@@ -3143,8 +3238,20 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                 # Store the full POS name as report_name for matching
                 report_name = name
                 
+                # Determine the canonical id for this row. Priority:
+                #   1. existing snapshot row's id (preserves edits in place)
+                #   2. canonical_emp.id (the EmployeeService match)
+                #   3. fresh UUID (truly new employee — Phase 2B will
+                #      then mint a canonical record below)
+                if existing_emp and existing_emp.get("id"):
+                    _resolved_id = existing_emp["id"]
+                elif canonical_emp and canonical_emp.get("id"):
+                    _resolved_id = canonical_emp["id"]
+                else:
+                    _resolved_id = str(uuid.uuid4())
+
                 employees[name.lower()] = {
-                    "id": existing_emp.get("id") if existing_emp else str(uuid.uuid4()),
+                    "id": _resolved_id,
                     "name": display_name,  # Show display name
                     "display_name": display_name,
                     "report_name": report_name,  # Full POS name for matching

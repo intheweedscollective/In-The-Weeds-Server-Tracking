@@ -3172,6 +3172,32 @@ async def analyze_employees_for_cleanup():
     }
 
 
+@api_router.get("/v2/admin/integrity")
+async def employee_data_integrity():
+    """
+    Run the 9-check EmployeeValidator suite (Phase 1) and return the
+    full report as JSON. Surface this on an admin page to spot drift
+    before it becomes a slide-generation bug.
+
+    Response shape mirrors `scripts/run_validation_suite.py` output:
+        {
+          "duplicate_canonical_ids": [...],
+          "orphaned_snapshot_refs":  [...],
+          "employees_missing_id":    [...],
+          "blocklist_violations":    [...],
+          "duplicate_active_names":  [...],
+          "inactive_in_current_snap":[...],
+          "metric_drift":            [...],
+          "legacy_only_employees":   [...],
+          "snapshot_only_employees": [...],
+          "summary": {p0_issues, p1_issues, p2_issues, deploy_gate: "PASS|FAIL"}
+        }
+    """
+    from services.validation_service import EmployeeValidator
+    report = await EmployeeValidator(db).run_all()
+    return report
+
+
 @api_router.post("/v2/employees/cleanup/delete")
 async def delete_employees_bulk(request: EmployeeCleanupRequest):
     """
