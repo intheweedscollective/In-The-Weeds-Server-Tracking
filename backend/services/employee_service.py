@@ -332,8 +332,109 @@ class EmployeeService:
         return {"survivor_id": survivor_id, "duplicate_id": duplicate_id}
 
     # ------------------------------------------------------------------
-    # WRITE — METRICS (current-quarter denormalized cache)
+    # LEGACY MIRROR — keep employees_v2 in sync during Phase 2
     # ------------------------------------------------------------------
+    #
+    # Until Phase 3 retires `employees_v2`, many code paths (scoring engine,
+    # audit, snapshot processing, slide generators) still read it directly.
+    # Every write through this service mirrors into employees_v2 so the
+    # canonical collection is the source of truth WITHOUT silently
+    # breaking the legacy readers. Phase 3 deletes this collection +
+    # removes mirror_to_legacy calls.
+
+    async def mirror_to_legacy_v2(self, employee: Dict[str, Any]) -> None:
+        """
+        Upsert the given canonical employee into `employees_v2` so legacy
+        readers stay in sync. Idempotent. Matches by id when present, by
+        name+quarter+year otherwise.
+        """
+        if not employee or not employee.get("id"):
+            return
+        cm = employee.get("current_metrics") or {}
+        # Project canonical fields + current_metrics into the v2 shape.
+        v2_doc: Dict[str, Any] = {
+            "id": employee["id"],
+            "name": employee.get("name"),
+            "display_name": employee.get("display_name"),
+            "report_name": employee.get("report_name"),
+            "aliases": employee.get("aliases") or [],
+            "job_title": employee.get("job_title") or "Server",
+            "quarter": cm.get("quarter"),
+            "year": cm.get("year"),
+            "updated_at": employee.get("updated_at") or _now_iso(),
+        }
+        # Pour current_metrics fields directly into top level.
+        for k, v in cm.items():
+            if k in ("quarter", "year"):
+                continue
+            v2_doc[k] = v
+        # Soft-deleted employees should disappear from legacy too.
+        if employee.get("status") in ("terminated", "merged"):
+            await self.db.employees_v2.delete_many({"id": employee["id"]})
+            return
+        await self.db.employees_v2.update_one(
+            {"id": employee["id"]},
+            {"$set": v2_doc, "$setOnInsert": {"created_at": _now_iso()}},
+            upsert=True,
+        )
+
+    async def delete_completely(self, employee_id: str) -> Dict[str, Any]:
+        """
+        End-to-end soft-delete that respects all the bug-class fixes
+        from earlier today:
+          1. Soft-deletes the canonical employee (status="terminated").
+          2. Removes them from employees_v2 (so legacy slides + audit
+             stop showing them).
+          3. Pulls them from every snapshot's embedded `employees[]`.
+          4. Adds their name to every active snapshot's `deleted_names`
+             blocklist so a future merge_snapshot_data re-merge can't
+             silently re-add them.
+        """
+        emp = await self.get_by_id(employee_id)
+        if not emp:
+            return {"success": False, "reason": "not_found"}
+
+        await self.terminate(employee_id)
+        # employees_v2 mirror — terminated rows are deleted, not soft-deleted.
+        v2_removed = (await self.db.employees_v2.delete_many({"id": employee_id})).deleted_count
+
+        names_to_pull = [n for n in [
+            emp.get("name"), emp.get("display_name"), emp.get("report_name"),
+            *(emp.get("aliases") or []),
+            *(emp.get("legacy_ids") or []),  # legacy ids work as ids for $pull
+        ] if n]
+        pulled_total = 0
+        for n in set(names_to_pull):
+            r = await self.snap_col.update_many(
+                {},
+                {"$pull": {"employees": {"$or": [
+                    {"id": n},
+                    {"name": {"$regex": f"^{re.escape(n)}$", "$options": "i"}},
+                    {"display_name": {"$regex": f"^{re.escape(n)}$", "$options": "i"}},
+                ]}}},
+            )
+            pulled_total += r.modified_count
+        # Blocklist primary names (terminated should never come back via re-merge).
+        primary_names = {emp.get("name"), emp.get("display_name"), emp.get("report_name")}
+        primary_names.discard(None)
+        if primary_names:
+            await self.snap_col.update_many(
+                {"status": {"$ne": "deleted"}},
+                {"$addToSet": {"deleted_names": {"$each": list(primary_names)}}},
+            )
+        # Recompute employee_count on every touched snapshot.
+        await self.snap_col.update_many(
+            {},
+            [{"$set": {"employee_count": {"$size": {"$ifNull": ["$employees", []]}}}}],
+        )
+
+        return {
+            "success": True,
+            "employee_id": employee_id,
+            "name": emp.get("name"),
+            "snapshots_modified": pulled_total,
+            "employees_v2_removed": v2_removed,
+        }
 
     async def upsert_current_metrics(
         self,

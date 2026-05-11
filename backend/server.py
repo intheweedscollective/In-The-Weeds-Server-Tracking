@@ -1725,59 +1725,115 @@ async def upload_employees_v2(
 
 @api_router.get("/v2/employees")
 async def get_employees_v2(year: Optional[int] = None, quarter: Optional[str] = None):
-    """Get employees (V2 scoring engine)"""
-    query = {}
-    if year:
-        query["year"] = year
-    if quarter:
-        query["quarter"] = quarter.upper()
-    
-    employees = await db.employees_v2.find(query, {"_id": 0}).to_list(5000)
-    
-    # Sort by score for tier calculation
-    employees_sorted = sorted(employees, key=lambda x: x.get('pre_dar_score') or x.get('total_score') or 0, reverse=True)
+    """
+    List employees. Phase-2 wired through `EmployeeService` — reads from
+    the canonical `employees` collection. Falls back to legacy
+    `employees_v2` when canonical has no rows for the requested quarter
+    (safety net while Phase-1 migration soaks in).
+
+    Response shape is unchanged (flat list, legacy-compatible) so the
+    Employees tab, slide generators, and audit page keep working.
+    """
+    from services.employee_service import EmployeeService
+    svc = EmployeeService(db)
+
+    actives = await svc.list_active(quarter=quarter, year=year)
+    used_canonical = bool(actives)
+
+    if not used_canonical:
+        # Canonical empty for this quarter — fall back to legacy.
+        legacy_query: Dict[str, Any] = {}
+        if year:
+            legacy_query["year"] = year
+        if quarter:
+            legacy_query["quarter"] = quarter.upper()
+        actives = await db.employees_v2.find(legacy_query, {"_id": 0}).to_list(5000)
+        if used_canonical is False:
+            logging.warning(
+                "GET /v2/employees: canonical empty for %s %s — fallback to legacy_v2 (%d rows)",
+                quarter, year, len(actives),
+            )
+
+    # Flatten canonical shape to the legacy projection the frontend expects.
+    flat: List[Dict[str, Any]] = []
+    for emp in actives:
+        cm = emp.get("current_metrics") or {}
+        merged = {k: v for k, v in emp.items() if k != "current_metrics"}
+        merged.update(cm)
+        flat.append(merged)
+
+    employees_sorted = sorted(
+        flat,
+        key=lambda x: x.get("pre_dar_score") or x.get("total_score") or 0,
+        reverse=True,
+    )
     total = len(employees_sorted)
-    
+
     for i, emp in enumerate(employees_sorted):
-        if isinstance(emp.get('created_at'), str):
-            emp['created_at'] = datetime.fromisoformat(emp['created_at'])
-        
-        # Always return display_name as name if set (preferred name takes priority)
-        if emp.get('display_name') and emp.get('display_name') != emp.get('name'):
-            emp['name'] = emp['display_name']
-        
-        # Calculate performance tier if missing
-        if not emp.get('performance_tier'):
+        if isinstance(emp.get("created_at"), str):
+            try:
+                emp["created_at"] = datetime.fromisoformat(emp["created_at"])
+            except ValueError:
+                pass
+
+        # Always surface display_name as name (First-Name-Only policy).
+        if emp.get("display_name") and emp.get("display_name") != emp.get("name"):
+            emp["name"] = emp["display_name"]
+
+        # Backfill performance_tier if missing (legacy parity).
+        if not emp.get("performance_tier"):
             rank = i + 1
             percentile = ((total - rank) / total) * 100 if total > 0 else 0
-            
             if percentile >= 75:
-                emp['performance_tier'] = "Top Performer"
+                emp["performance_tier"] = "Top Performer"
             elif percentile >= 50:
-                emp['performance_tier'] = "Above Average"
+                emp["performance_tier"] = "Above Average"
             elif percentile >= 25:
-                emp['performance_tier'] = "Below Average"
+                emp["performance_tier"] = "Below Average"
             else:
-                emp['performance_tier'] = "Needs Immediate Improvement"
-    
+                emp["performance_tier"] = "Needs Immediate Improvement"
+
     return employees_sorted
 
 
 @api_router.get("/v2/employees/{employee_id}")
 async def get_employee_v2(employee_id: str):
-    """Get single employee (V2)"""
-    employee = await db.employees_v2.find_one({"id": employee_id}, {"_id": 0})
-    if not employee:
-        raise HTTPException(status_code=404, detail="Employee not found")
-    
-    if isinstance(employee.get('created_at'), str):
-        employee['created_at'] = datetime.fromisoformat(employee['created_at'])
-    
-    # Always return display_name as name if set
-    if employee.get('display_name') and employee.get('display_name') != employee.get('name'):
-        employee['name'] = employee['display_name']
-    
-    return employee
+    """
+    Get a single employee by id. Phase-2 wired through EmployeeService.
+    Accepts both the canonical id and legacy_ids (so old frontend links
+    keep resolving after migration).
+    """
+    from services.employee_service import EmployeeService
+    svc = EmployeeService(db)
+
+    emp = await svc.get_by_id(employee_id)
+    if not emp:
+        emp = await svc.col.find_one({"legacy_ids": employee_id}, {"_id": 0})
+    if not emp:
+        # Last-resort legacy fallback.
+        legacy = await db.employees_v2.find_one({"id": employee_id}, {"_id": 0})
+        if not legacy:
+            raise HTTPException(status_code=404, detail="Employee not found")
+        if isinstance(legacy.get("created_at"), str):
+            try:
+                legacy["created_at"] = datetime.fromisoformat(legacy["created_at"])
+            except ValueError:
+                pass
+        if legacy.get("display_name") and legacy["display_name"] != legacy.get("name"):
+            legacy["name"] = legacy["display_name"]
+        return legacy
+
+    cm = emp.get("current_metrics") or {}
+    flat = {k: v for k, v in emp.items() if k != "current_metrics"}
+    flat.update(cm)
+    if isinstance(flat.get("created_at"), str):
+        try:
+            flat["created_at"] = datetime.fromisoformat(flat["created_at"])
+        except ValueError:
+            pass
+    if flat.get("display_name") and flat["display_name"] != flat.get("name"):
+        flat["name"] = flat["display_name"]
+    return flat
 
 
 @api_router.post("/v2/employees/{employee_id}/generate-review")
@@ -2926,129 +2982,56 @@ async def update_employee_manual_score(employee_id: str, data: dict):
 @api_router.delete("/v2/employees/{employee_id}")
 async def delete_employee(employee_id: str):
     """
-    Delete a single employee.
+    Soft-delete a single employee. Phase-2 wired through
+    EmployeeService.delete_completely which handles canonical
+    soft-delete + employees_v2 mirror removal + snapshot pull (by id,
+    legacy_ids, AND name) + `deleted_names` blocklist write +
+    employee_count recompute in one atomic flow.
 
-    Target the SPECIFIC row the user clicked on (by id) so deleting one of
-    several duplicates leaves the others intact. The employee may live in
-    `employees_v2`, inside `snapshot_workflow.employees`, or both — we try
-    each in turn. Only if the id isn't found anywhere do we fall back to a
-    name-based delete so callers passing a bare name still work.
-
-    ALSO records the deleted employee's name on each affected snapshot's
-    `deleted_names` blocklist. Without this the next save / Confirm POS
-    Review re-merges the still-present POS parsed_data and silently brings
-    the terminated employee back (the user-reported recurrence bug).
+    Accepts canonical id, legacy_id, OR a bare name (the name fallback
+    preserves backwards-compat for any frontend code still POSTing
+    `/v2/employees/<name>` directly).
     """
     import re as _re
+    from services.employee_service import EmployeeService
+    svc = EmployeeService(db)
 
-    deleted_v2 = 0
-    pulled_from_snapshots = 0
-    name_for_message = None
-    block_year = None
-    block_quarter = None
+    canonical = await svc.get_by_id(employee_id)
+    if not canonical:
+        canonical = await svc.col.find_one({"legacy_ids": employee_id}, {"_id": 0})
 
-    # 1) Delete from employees_v2 by exact id (keeps same-named duplicates)
-    v2_doc = await db.employees_v2.find_one({"id": employee_id}, {"_id": 0})
-    if v2_doc:
-        name_for_message = v2_doc.get("display_name") or v2_doc.get("name")
-        block_year = v2_doc.get("year")
-        block_quarter = (v2_doc.get("quarter") or "").upper() or None
-        result = await db.employees_v2.delete_one({"id": employee_id})
-        deleted_v2 = result.deleted_count
+    if not canonical:
+        # Treat employee_id as a bare name (case-insensitive) — find the
+        # canonical row by name/alias and route through delete_completely.
+        canonical = await svc.find_by_name_or_alias(employee_id, include_inactive=True)
 
-    # 2) Pull the matching embedded employee from every snapshot (again, by id).
-    # While we're at it, harvest a name + (year,quarter) tuple from the
-    # snapshot in case employees_v2 didn't have the row.
-    if not name_for_message or not block_year or not block_quarter:
-        snap_doc = await db.snapshot_workflow.find_one(
-            {"employees.id": employee_id},
-            {"employees": {"$elemMatch": {"id": employee_id}}, "year": 1, "quarter": 1, "_id": 0}
+    if not canonical:
+        # Last-resort: only present in legacy employees_v2 (canonical
+        # migration hadn't run for them yet). Mint a canonical row first
+        # so all the bookkeeping below works.
+        legacy = await db.employees_v2.find_one(
+            {"$or": [
+                {"id": employee_id},
+                {"name": {"$regex": f"^{_re.escape(employee_id)}$", "$options": "i"}},
+                {"display_name": {"$regex": f"^{_re.escape(employee_id)}$", "$options": "i"}},
+            ]},
+            {"_id": 0},
         )
-        if snap_doc:
-            block_year = block_year or snap_doc.get("year")
-            block_quarter = block_quarter or (snap_doc.get("quarter") or "").upper() or None
-            embedded = (snap_doc.get("employees") or [None])[0]
-            if embedded and not name_for_message:
-                name_for_message = embedded.get("display_name") or embedded.get("name")
-
-    snap_result = await db.snapshot_workflow.update_many(
-        {"employees.id": employee_id},
-        {"$pull": {"employees": {"id": employee_id}}}
-    )
-    pulled_from_snapshots = snap_result.modified_count
-
-    # ALSO pull by NAME — snapshot.employees may carry a different id than
-    # employees_v2 for the same person (merge_snapshot_data generates fresh
-    # UUIDs when it can't find an existing match). Without this fallback
-    # "deleted from Employees tab" can leave a ghost on the snapshot that
-    # slide / rankings keep displaying.
-    if name_for_message:
-        import re as _re2
-        name_pat = f"^{_re2.escape(name_for_message)}$"
-        scope = {}
-        if block_year and block_quarter:
-            scope = {"year": block_year, "quarter": block_quarter}
-        snap_name_result = await db.snapshot_workflow.update_many(
-            scope,
-            {"$pull": {"employees": {
-                "$or": [
-                    {"name": {"$regex": name_pat, "$options": "i"}},
-                    {"display_name": {"$regex": name_pat, "$options": "i"}},
-                    {"report_name": {"$regex": name_pat, "$options": "i"}},
-                ]
-            }}}
-        )
-        pulled_from_snapshots += snap_name_result.modified_count
-
-    # 3) Nothing matched by id — treat employee_id as a name and delete one
-    # matching row from each source (case-insensitive exact match). This
-    # preserves legitimate other employees who happen to share the name.
-    if deleted_v2 == 0 and pulled_from_snapshots == 0:
-        name_pat = f"^{_re.escape(employee_id)}$"
-        v2_by_name = await db.employees_v2.find_one({
-            "$or": [
-                {"name": {"$regex": name_pat, "$options": "i"}},
-                {"display_name": {"$regex": name_pat, "$options": "i"}},
-                {"report_name": {"$regex": name_pat, "$options": "i"}},
-            ]
-        }, {"_id": 0, "id": 1, "name": 1, "display_name": 1, "year": 1, "quarter": 1})
-        if v2_by_name:
-            name_for_message = v2_by_name.get("display_name") or v2_by_name.get("name")
-            block_year = block_year or v2_by_name.get("year")
-            block_quarter = block_quarter or (v2_by_name.get("quarter") or "").upper() or None
-            dr = await db.employees_v2.delete_one({"id": v2_by_name.get("id")})
-            deleted_v2 = dr.deleted_count
-            sr = await db.snapshot_workflow.update_many(
-                {"employees.id": v2_by_name.get("id")},
-                {"$pull": {"employees": {"id": v2_by_name.get("id")}}}
-            )
-            pulled_from_snapshots = sr.modified_count
-
-        if deleted_v2 == 0 and pulled_from_snapshots == 0:
+        if not legacy:
             raise HTTPException(status_code=404, detail="Employee not found")
+        canonical = await svc.create_employee({
+            "id": legacy.get("id"),
+            "name": legacy.get("name"),
+            "display_name": legacy.get("display_name") or (legacy.get("name") or "").split()[0],
+            "report_name": legacy.get("report_name") or legacy.get("name"),
+            "job_title": legacy.get("job_title") or "Server",
+        })
 
-    # 4) Persist on the snapshot's deleted_names blocklist so future merges
-    # don't silently re-create them from the source POS upload.
-    name_to_block = (name_for_message or employee_id or "").strip()
-    if name_to_block:
-        if block_year and block_quarter:
-            await db.snapshot_workflow.update_many(
-                {"year": block_year, "quarter": block_quarter},
-                {"$addToSet": {"deleted_names": name_to_block}}
-            )
-        else:
-            # Couldn't determine quarter — fall back to writing on every
-            # snapshot that already had this employee (rare, defensive).
-            await db.snapshot_workflow.update_many(
-                {"employees.id": employee_id},
-                {"$addToSet": {"deleted_names": name_to_block}}
-            )
-
+    result = await svc.delete_completely(canonical["id"])
     return {
         "success": True,
-        "message": f"Deleted {name_for_message or 'employee'}",
-        "deleted_from_employees_v2": deleted_v2,
-        "snapshots_updated": pulled_from_snapshots,
+        "message": f"Deleted {canonical.get('name') or 'employee'}",
+        **result,
     }
 
 
@@ -3193,61 +3176,48 @@ async def analyze_employees_for_cleanup():
 async def delete_employees_bulk(request: EmployeeCleanupRequest):
     """
     Delete multiple employees by ID.
-    Use this after reviewing the analyze endpoint results.
-
-    Also pulls each deleted employee out of every active snapshot and adds
-    their name to the snapshot's `deleted_names` blocklist so a later
-    Confirm POS Review / save / re-merge does not silently re-create them
-    from POS parsed_data.
+    Routes each id through EmployeeService.delete_completely so every
+    deletion does the full canonical soft-delete + snapshot pull +
+    blocklist add. Phase-2 wiring of the bulk path.
     """
     if not request.employee_ids:
         raise HTTPException(status_code=400, detail="No employee IDs provided")
-    
+
+    from services.employee_service import EmployeeService
+    svc = EmployeeService(db)
+
     deleted_count = 0
     errors = []
-    # Track each deleted employee's identifying info so we can update the
-    # matching snapshots in one batch per (year, quarter).
-    deleted_by_quarter: Dict[tuple, List[Dict[str, Any]]] = {}
 
     for emp_id in request.employee_ids:
         try:
-            # Look up the employee BEFORE deleting so we know their
-            # name + quarter/year for the snapshot blocklist update.
-            emp = await db.employees_v2.find_one({"id": emp_id}, {"_id": 0})
-            result = await db.employees_v2.delete_one({"id": emp_id})
-            if result.deleted_count > 0:
+            # Resolve via canonical first, fall back to legacy_ids index.
+            canonical = await svc.get_by_id(emp_id)
+            if not canonical:
+                canonical = await svc.col.find_one({"legacy_ids": emp_id}, {"_id": 0})
+
+            if not canonical:
+                # No canonical row — mint one from the legacy v2 doc so
+                # future deletes (re-runs of this script, undo) work.
+                legacy = await db.employees_v2.find_one({"id": emp_id}, {"_id": 0})
+                if not legacy:
+                    errors.append(f"Employee {emp_id} not found")
+                    continue
+                canonical = await svc.create_employee({
+                    "id": legacy.get("id"),
+                    "name": legacy.get("name"),
+                    "display_name": legacy.get("display_name") or (legacy.get("name") or "").split()[0],
+                    "report_name": legacy.get("report_name") or legacy.get("name"),
+                    "job_title": legacy.get("job_title") or "Server",
+                })
+
+            res = await svc.delete_completely(canonical["id"])
+            if res.get("success"):
                 deleted_count += 1
-                if emp:
-                    key = (emp.get("year"), (emp.get("quarter") or "").upper())
-                    deleted_by_quarter.setdefault(key, []).append(
-                        {"id": emp_id, "name": (emp.get("name") or "").strip()}
-                    )
             else:
-                errors.append(f"Employee {emp_id} not found")
+                errors.append(f"Could not delete {emp_id}: {res.get('reason')}")
         except Exception as e:
             errors.append(f"Error deleting {emp_id}: {str(e)}")
-
-    # Propagate to snapshots: pull employee rows + record blocklist names.
-    for (year, quarter), entries in deleted_by_quarter.items():
-        if not year or not quarter:
-            continue
-        ids = [e["id"] for e in entries]
-        names = [e["name"] for e in entries if e["name"]]
-        if ids:
-            await db.snapshot_workflow.update_many(
-                {"year": year, "quarter": quarter},
-                {"$pull": {"employees": {"id": {"$in": ids}}}}
-            )
-        if names:
-            await db.snapshot_workflow.update_many(
-                {"year": year, "quarter": quarter},
-                {"$addToSet": {"deleted_names": {"$each": names}}}
-            )
-        # Recompute employee_count
-        await db.snapshot_workflow.update_many(
-            {"year": year, "quarter": quarter},
-            [{"$set": {"employee_count": {"$size": {"$ifNull": ["$employees", []]}}}}]
-        )
 
     return {
         "success": True,
