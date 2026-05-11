@@ -439,20 +439,134 @@ async def clear_employees_v2(year: Optional[int] = None, quarter: Optional[str] 
         query["year"] = year
     if quarter:
         query["quarter"] = quarter.upper()
-    
+
     result = await db.employees_v2.delete_many(query)
-    
+
     # If clearing a specific quarter, unlock the settings
     if year and quarter:
         await db.quarter_settings.update_one(
             {"year": year, "quarter": quarter.upper()},
             {"$set": {"is_locked": False, "locked_at": None}}
         )
-    
+
     return {
         "success": True,
         "deleted_count": result.deleted_count,
         "message": f"Cleared {result.deleted_count} employees"
+    }
+
+
+# ============================================================================
+# MERGE ENDPOINTS — combine duplicate canonical employees
+# ============================================================================
+
+class MergeRequest(BaseModel):
+    survivor_id: str
+    duplicate_id: str
+
+
+@employee_router.get("/merge/candidates")
+async def find_merge_candidates(limit: int = 50):
+    """
+    Surface pairs of active canonical employees that look like the same
+    person. Heuristics: identical normalized names, substring containment,
+    same first-name+last-initial, Levenshtein <= 2 on the normalized full
+    name. Returns `{candidates: [{a, b, reason}]}`.
+    """
+    from services.employee_service import EmployeeService
+    db = get_db()
+    svc = EmployeeService(db)
+    actives = await svc.list_active()
+
+    def _norm(s):
+        return re.sub(r"[^a-z]", "", (s or "").lower())
+
+    def _lev(a, b):
+        if a == b:
+            return 0
+        if not a or not b:
+            return len(a or b)
+        prev = list(range(len(b) + 1))
+        for i, ca in enumerate(a, start=1):
+            curr = [i]
+            for j, cb in enumerate(b, start=1):
+                cost = 0 if ca == cb else 1
+                curr.append(min(curr[-1] + 1, prev[j] + 1, prev[j - 1] + cost))
+            prev = curr
+        return prev[-1]
+
+    out: List[dict] = []
+    pairs_seen: set = set()
+    for i, a in enumerate(actives):
+        a_name = (a.get("name") or "").strip()
+        a_first = a_name.split()[0] if a_name else ""
+        a_li = a_name.split()[-1][:1] if len(a_name.split()) > 1 else ""
+        a_norm = _norm(a_name)
+        for b in actives[i + 1:]:
+            key = tuple(sorted([a["id"], b["id"]]))
+            if key in pairs_seen:
+                continue
+            b_name = (b.get("name") or "").strip()
+            b_first = b_name.split()[0] if b_name else ""
+            b_li = b_name.split()[-1][:1] if len(b_name.split()) > 1 else ""
+            b_norm = _norm(b_name)
+
+            reason = None
+            if a_norm and a_norm == b_norm:
+                reason = "Identical normalized name"
+            elif a_norm and b_norm and (a_norm in b_norm or b_norm in a_norm) and abs(len(a_norm) - len(b_norm)) >= 2:
+                reason = "One name contains the other"
+            elif a_first and a_first.lower() == b_first.lower() and a_li and a_li.lower() == b_li.lower():
+                reason = f"Same first name + last initial ({a_first} {a_li}.)"
+            elif a_norm and b_norm and min(len(a_norm), len(b_norm)) >= 4 and _lev(a_norm, b_norm) <= 2:
+                reason = "Names differ by ≤2 characters (possible typo)"
+
+            if reason:
+                pairs_seen.add(key)
+                out.append({
+                    "a": {k: a.get(k) for k in ("id", "name", "display_name", "job_title", "store_id")},
+                    "b": {k: b.get(k) for k in ("id", "name", "display_name", "job_title", "store_id")},
+                    "reason": reason,
+                })
+                if len(out) >= limit:
+                    return {"candidates": out, "truncated": True}
+    return {"candidates": out, "truncated": False}
+
+
+@employee_router.post("/merge")
+async def merge_employees_endpoint(req: MergeRequest):
+    """
+    Combine two canonical employee records into one. Survivor keeps its
+    id + history; duplicate is flipped to status="merged" with its name
+    + aliases appended to the survivor so future uploads resolve here.
+
+    Body: `{ "survivor_id": "...", "duplicate_id": "..." }`
+    """
+    from services.employee_service import EmployeeService
+    db = get_db()
+    svc = EmployeeService(db)
+    try:
+        result = await svc.merge_employees(
+            survivor_id=req.survivor_id,
+            duplicate_id=req.duplicate_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Sync legacy mirror: remove the duplicate row from employees_v2 so
+    # legacy readers (audit, snapshot save) stop seeing it. Snapshot
+    # embedded employees[] is left alone — historical accuracy.
+    await db.employees_v2.delete_many({"id": req.duplicate_id})
+
+    survivor = await svc.get_by_id(req.survivor_id)
+    return {
+        "success": True,
+        "merge": result,
+        "survivor": survivor,
+        "message": (
+            f"Merged into '{(survivor or {}).get('name')}'. The duplicate's "
+            "name is now an alias so future uploads land on this record."
+        ),
     }
 
 

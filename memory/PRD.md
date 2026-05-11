@@ -12,7 +12,45 @@ Build a comprehensive performance review application for restaurant employees.
 
 ## Current State (2026-05-11)
 
-### Drift-Prone Derived Fields Recomputed On Read — SHIPPED 2026-05-11
+### P2: Merge Duplicate Employees — SHIPPED 2026-05-11
+
+User-requested feature from the previous fork. Backed by the canonical
+`EmployeeService.merge_employees` we built in Phase 1.
+
+**Delivered**:
+
+1. **Backend** — `routes/employees.py`
+   - `GET /api/v2/employees/merge/candidates` — surfaces probable
+     duplicate pairs across the canonical active list with four
+     heuristics: identical normalized name, substring containment, same
+     first-name + last-initial, Levenshtein ≤2 typo distance. Each
+     candidate carries `{a, b, reason}`.
+   - `POST /api/v2/employees/merge` — body `{survivor_id, duplicate_id}`.
+     Survivor inherits the duplicate's aliases, duplicate is flipped to
+     `status="merged"` with `merged_into` FK, and the duplicate's
+     `employees_v2` mirror row is removed so legacy readers stop
+     seeing them. Snapshot embedded `employees[]` is left alone for
+     historical accuracy.
+
+2. **Frontend** — `components/NicknameManager.jsx` gets a new
+   "Possible Duplicate Employees" indigo panel above the built-in
+   defaults. Each pair shows a radio-picker for the survivor + a
+   one-click "Merge" button with `window.confirm` safety dialog. The
+   panel only renders when the backend surfaces ≥1 candidate.
+
+3. **Regression tests** — `tests/test_employee_merge.py` (2 tests):
+   verifies the merge endpoint flips status / aliases / merged_into
+   and that `find_by_name_or_alias` resolves the duplicate's old name
+   back to the survivor after merge. Heuristic test confirms typos /
+   substring pairs are flagged and clearly-distinct names are not.
+
+**Live finding**: Q2 2026 surfaces 2 candidates today —
+"Lennie Nguyen ⇄ Glennice Nguyen" (typo distance 2) and
+"Julian ⇄ Julian Taveras" (substring). These are the same duplicate
+pairs the Phase-1 migration auto-aliased — the heuristic correctly
+re-surfaces them so an admin can confirm.
+
+
 
 User reported that the "RT Bonus" leaderboard showed lower bonuses for
 employees with more mentions (e.g. Jamie 43 mentions → +10.80; Ikey 28

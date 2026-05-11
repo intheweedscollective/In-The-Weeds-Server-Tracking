@@ -7,10 +7,9 @@ three drift-prone derived fields on every row before returning them.
     (unless `nps_manual_override` is set on the row)
   - total_metric_bonus = bonus_ppa + bonus_lbw + bonus_glass + bonus_lsc
 
-The historical bug: each of these fields was stored on
-`snapshot.employees[]` and never recomputed when inputs (mentions,
-promoters, sub-bonuses) changed via uploads. Result was visible drift
-between the leaderboard columns and their inputs.
+⚠️ Uses an isolated test DB. Preview shares the MongoDB cluster with
+production, so we override `database.db` for the route under test and
+restore it afterwards.
 """
 
 import asyncio
@@ -22,11 +21,12 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 
 load_dotenv()
+TEST_DB = "_current_rankings_recompute_test_db"
 
 
 def _client():
     c = AsyncIOMotorClient(os.environ["MONGO_URL"])
-    return c, c[os.environ["DB_NAME"]]
+    return c, c[TEST_DB]
 
 
 def _run(coro):
@@ -37,16 +37,15 @@ def test_current_rankings_recomputes_rt_cv_metric_bonus_from_inputs():
     """Seed a snapshot with deliberately-stale derived fields and
     confirm `current-rankings` returns the correct freshly-computed
     values."""
+    import database as db_module
+    import snapshot_routes as snap_module
     from fastapi.testclient import TestClient
     from server import app
 
     async def setup():
         c, db = _client()
-        # Park whatever's currently flagged is_current so our fake doc wins.
-        await db.snapshot_workflow.update_many(
-            {"is_current": True},
-            {"$set": {"is_current": False, "_test_was_current": True}},
-        )
+        await db.snapshot_workflow.drop()
+        await db.quarter_settings.drop()
 
         snap_id = f"_test_drift_{uuid.uuid4()}"
         await db.snapshot_workflow.insert_one({
@@ -61,23 +60,18 @@ def test_current_rankings_recomputes_rt_cv_metric_bonus_from_inputs():
                     "name": "Stale Stan",
                     "tier_label": "A-Server",
                     "total_score": 90,
-                    # RT inputs/output diverge (should refresh to 35×0.3=10.5)
                     "rt_mentions": 35,
                     "review_mentions": 35,
                     "review_tracker_bonus": 4.2,   # stale
-                    # CV inputs/output diverge
-                    #   nps=80, promoters=3, detractors=1
-                    #   expected = 80/10 + 3 - 2*1 = 9.0
                     "nps_score": 80,
                     "cv_promoters": 3,
                     "cv_detractors": 1,
-                    "cv_score": 1.0,               # stale
-                    # Metric bonus subtotals don't match aggregate
+                    "cv_score": 1.0,               # stale (expected 9.0)
                     "bonus_ppa": 2.0,
                     "bonus_lbw": 1.5,
                     "bonus_glass": 1.0,
                     "bonus_lsc": 0.5,
-                    "total_metric_bonus": 0.0,     # stale (real sum = 5.0)
+                    "total_metric_bonus": 0.0,     # stale (expected 5.0)
                 },
                 {
                     "id": str(uuid.uuid4()),
@@ -86,7 +80,6 @@ def test_current_rankings_recomputes_rt_cv_metric_bonus_from_inputs():
                     "total_score": 88,
                     "rt_mentions": 10,
                     "review_tracker_bonus": 999,   # stale
-                    # Manual override: CV must be left alone
                     "nps_manual_override": True,
                     "nps_score": 80,
                     "cv_promoters": 3,
@@ -116,16 +109,18 @@ def test_current_rankings_recomputes_rt_cv_metric_bonus_from_inputs():
 
     async def teardown(snap_id):
         c, db = _client()
-        await db.snapshot_workflow.delete_one({"id": snap_id})
-        await db.quarter_settings.delete_one({"year": 2099, "quarter": "Q9"})
-        # Restore the snapshots we paused.
-        await db.snapshot_workflow.update_many(
-            {"_test_was_current": True},
-            {"$set": {"is_current": True}, "$unset": {"_test_was_current": ""}},
-        )
+        await db.snapshot_workflow.drop()
+        await db.quarter_settings.drop()
         c.close()
 
     snap_id = _run(setup())
+
+    # Swap the process-wide `db` handles so the route reads our test DB.
+    _, test_db = _client()
+    original_db_module = db_module.db
+    original_snap_get_db = snap_module.get_db
+    db_module.db = test_db
+    snap_module.get_db = lambda: test_db
     try:
         client = TestClient(app)
         r = client.get("/api/v2/snapshot-workflow/current-rankings",
@@ -134,17 +129,16 @@ def test_current_rankings_recomputes_rt_cv_metric_bonus_from_inputs():
         body = r.json()
         emps = {e["name"]: e for e in body["employees"]}
         stan = emps["Stale Stan"]
-        # RT: 35 × 0.3 = 10.5
         assert stan["review_tracker_bonus"] == 10.5, stan
-        # CV: 80/10 + 3 - 2*1 = 9.0
         assert stan["cv_score"] == 9.0, stan
-        # Metric bonus sum: 2.0 + 1.5 + 1.0 + 0.5 = 5.0
         assert stan["total_metric_bonus"] == 5.0, stan
 
-        # Pinned row: RT/metric still recomputed, but CV is respected.
         pam = emps["Pinned Pam"]
-        assert pam["review_tracker_bonus"] == 3.0  # 10 × 0.3
+        assert pam["review_tracker_bonus"] == 3.0
         assert pam["total_metric_bonus"] == 0.0
-        assert pam["cv_score"] == 42.0  # override preserved
+        assert pam["cv_score"] == 42.0
     finally:
+        db_module.db = original_db_module
+        snap_module.get_db = original_snap_get_db
         _run(teardown(snap_id))
+
