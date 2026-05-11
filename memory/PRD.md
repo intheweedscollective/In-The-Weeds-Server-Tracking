@@ -12,7 +12,67 @@ Build a comprehensive performance review application for restaurant employees.
 
 ## Current State (2026-05-10)
 
-### Latest Changes (2026-05-10 Session) — Multiple production bug fixes from user
+### Phase 1 — Architecture Correction (Employee Data Layer) — SHIPPED 2026-05-10
+
+User flagged that multiple employee truth sources (`employees_v2` +
+embedded `snapshot.employees`) were the root cause of months of bugs:
+ghost employees on slides, CV/RT showing zeros, manual-add invisibility,
+delete-respawn, cross-page mismatches. Requested a permanent
+architectural fix, not another patch.
+
+**Delivered (additive only, no existing data modified):**
+
+1. **Canonical `Employee` Pydantic model** — `/app/backend/models/employee.py`
+   - Immutable UUID `id` that never changes through renames/merges
+   - `status: active | terminated | merged` for soft-delete
+   - `aliases[]` and `legacy_ids[]` to absorb historical naming variants
+   - `current_metrics` denormalized for fast reads
+   - Companion `SnapshotEmployeeRow` for the new thin snapshot schema
+
+2. **Centralized `EmployeeService`** — `/app/backend/services/employee_service.py`
+   - The only sanctioned read/write path for employees
+   - 11 methods: get_by_id, find_by_name_or_alias, list_active, count_active,
+     get_snapshot_rankings (joined), create_employee, rename, terminate,
+     reactivate, merge_employees, upsert_current_metrics, write_snapshot_rows
+
+3. **9-check Integrity Suite** — `/app/backend/services/validation_service.py`
+   - P0: duplicate_canonical_ids, orphaned_snapshot_refs, employees_missing_id, blocklist_violations
+   - P1: duplicate_active_names, inactive_in_current_snap, metric_drift
+   - P2: legacy_only_employees, snapshot_only_employees
+   - Deploy gate exit-code: 0 on clean, 1 on any P0
+
+4. **Idempotent Migration Script** — `/app/backend/scripts/migrate_employees_to_canonical.py`
+   - Backfilled 59 v2 rows + 262 snapshot embedded rows → 37 canonical employees
+   - Auto-detected typos / nicknames (`Glennice Nguyen` → alias of `Lennie Nguyen`)
+   - Preserved every legacy UUID in `legacy_ids[]` for Phase 3 FK rewires
+
+5. **Production state after migration:**
+   - `employees` collection live with 37 active people + 6 unique indexes
+   - All P0/P1/P2 validation checks: **0 issues**, deploy gate PASS
+   - Legacy paths untouched; nothing has been broken or rewired yet
+
+6. **8 unit tests** in `tests/test_employee_service.py` — all passing
+   (idempotent create, immutable id rename, soft-delete + reactivation,
+   merge with alias preservation, snapshot rankings join with frozen-name
+   precedence, legacy embedded fallback, frozen metric leak prevention).
+
+7. **Architecture doc** at `/app/backend/docs/employee_architecture.md` —
+   migration summary, files changed, integrity check results, technical
+   debt for Phase 2/3, rollback plan.
+
+**What's NOT done yet (Phase 2 + 3):**
+- Phase 2: refactor every route + slide generator + audit + scoring to
+  read through `EmployeeService` (no direct collection queries). This
+  unblocks "deletes are real" and "slides never show terminated" everywhere.
+- Phase 3: migrate every snapshot's `employees[]` → thin `rows[]` with
+  `employee_id` FKs. Drop `employees_v2` after final integrity check.
+
+### Earlier Today (2026-05-10) — see CHANGELOG below
+- 9+ tactical bug fixes (modal-block, build-blocker, CV-NPS formula,
+  sidebar email, unlock benchmarks, snapshot propagation, delete-name
+  blocklist, manual-add visibility, slide ghosts, QR drift hardening).
+
+## Current State (2026-05-03)
 
 - **P0: CV / RT showing all zeros on snapshot slides — FIXED 2026-05-10**
   - Root cause: `merge_snapshot_data` writes the canonical CV/RT/NPS data into `snapshot.employees` (embedded array). However, the slide generators (`png_full_rankings.py`, `pdf_full_rankings.py`, `yodeck_slides.py`) and the Employee List page read from the master `employees_v2` collection. The `process_snapshot` and `confirm_pos_review` flows **never propagated CV/RT data back into employees_v2**, so anyone who hadn't manually re-saved each employee was stuck looking at zeros for CV / RT / Metric Bonus on every signage / printable export. Production verified: `snapshot.employees` had cv_score=11.0 / rt_mentions=20 for Keisha; `employees_v2` had cv_score=0 / rt_mentions=0 for the same row.
