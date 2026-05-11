@@ -2198,8 +2198,8 @@ async def get_current_rankings(quarter: Optional[str] = None, year: Optional[int
     
     sorted_employees = sorted(employees, key=sort_key)
 
-    # Recompute review_tracker_bonus on every row from current rt_mentions
-    # so stored stale values can't drift the "RT Bonus" leaderboard.
+    # Recompute drift-prone derived fields on every row so the display
+    # always matches the underlying inputs.
     qs_doc = await db.quarter_settings.find_one(
         {"year": snapshot.get("year"), "quarter": snapshot.get("quarter")},
         {"_id": 0, "rt_points_per_mention": 1, "rt_max_points": 1},
@@ -2207,10 +2207,33 @@ async def get_current_rankings(quarter: Optional[str] = None, year: Optional[int
     _rt_coef = qs_doc.get("rt_points_per_mention", 0.3) or 0.3
     _rt_cap  = qs_doc.get("rt_max_points", 20.0) or 20.0
     for _emp in sorted_employees:
+        # --- RT bonus = mentions × coef, capped ---
         _m = _emp.get("rt_mentions") or _emp.get("review_mentions") or 0
         _emp["review_tracker_bonus"] = round(min(_m * _rt_coef, _rt_cap), 2)
-        # Keep both mention fields in sync for downstream consumers.
         _emp["review_mentions"] = _m
+
+        # --- CV score = NPS%/10 + Promoters − 2×Detractors ---
+        # Skip recompute if admin pinned a manual override on this row.
+        if not _emp.get("nps_manual_override"):
+            _nps = _emp.get("nps_score") or 0
+            try:
+                _nps_clamped = max(0.0, min(float(_nps), 100.0))
+            except (TypeError, ValueError):
+                _nps_clamped = 0.0
+            _prom = _emp.get("cv_promoters") or 0
+            _det  = _emp.get("cv_detractors") or 0
+            _emp["nps_contribution"] = round(_nps_clamped / 10.0, 2)
+            _emp["cv_raw_points"] = round(_prom - 2 * _det, 2)
+            _emp["cv_score"] = round(_emp["nps_contribution"] + _emp["cv_raw_points"], 2)
+
+        # --- Metric bonus = sum of per-category bonuses (PPA/LBW/Glass/LSC) ---
+        _emp["total_metric_bonus"] = round(
+            (_emp.get("bonus_ppa")   or 0)
+            + (_emp.get("bonus_lbw") or 0)
+            + (_emp.get("bonus_glass") or 0)
+            + (_emp.get("bonus_lsc") or 0),
+            2,
+        )
 
     # Workflow status info
     status = snapshot.get("status", "in_progress")

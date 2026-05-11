@@ -12,7 +12,50 @@ Build a comprehensive performance review application for restaurant employees.
 
 ## Current State (2026-05-11)
 
-### Phase 2B (Continued) — Slide Generators & QR Wired Through Canonical Service — SHIPPED 2026-05-11
+### Drift-Prone Derived Fields Recomputed On Read — SHIPPED 2026-05-11
+
+User reported that the "RT Bonus" leaderboard showed lower bonuses for
+employees with more mentions (e.g. Jamie 43 mentions → +10.80; Ikey 28
+mentions → +9.30). Root cause: `review_tracker_bonus` was stored on
+`snapshot.employees[]` at upload time and never recomputed when later
+RT uploads bumped `rt_mentions`.
+
+**Delivered**:
+
+1. **One-time recompute** (`scripts/recompute_rt_bonus.py`) — fixed 18
+   `employees_v2` rows, 63 snapshot rows, 17 canonical `current_metrics`.
+
+2. **Permanent compute-on-read in `/v2/snapshot-workflow/current-rankings`** —
+   every row now has the following three fields refreshed before return,
+   using the quarter's coefficients:
+     - `review_tracker_bonus` = min(`rt_mentions` × `rt_points_per_mention`,
+       `rt_max_points`)
+     - `cv_score` = clamp(`nps_score`, 0, 100)/10 + `cv_promoters`
+       − 2 × `cv_detractors` *(skipped when `nps_manual_override=true`)*
+     - `total_metric_bonus` = sum of `bonus_ppa` + `bonus_lbw`
+       + `bonus_glass` + `bonus_lsc`
+
+3. **Frontend compute-on-render** in `FullRankings.js` RT Bonus column
+   as a belt-and-suspenders second line of defence.
+
+4. **`/v2/reviews/stats`** also recomputes RT bonus instead of trusting
+   the stored field.
+
+5. **Regression test** in `tests/test_current_rankings_recompute.py` —
+   seeds a snapshot with deliberately stale RT/CV/MetricBonus values
+   and asserts they get refreshed on read; pinned-row override
+   behaviour is also locked in.
+
+### Phase 2B Continued — CV upload identity resolution → canonical service
+
+`routes/cv.py` CV NPS upload (`/v2/cv/upload`) now resolves the server
+name through `EmployeeService.find_by_name_or_alias()` first. The
+canonical match is then used to locate the `employees_v2` row to
+update, which means CV uploads can no longer spawn duplicates because
+of a nickname mismatch. Legacy regex-based name match is preserved
+as a fallback for rows the canonical collection hasn't seen yet.
+
+
 
 **Problem**: Even after Phase 2A wired `/v2/employees` and `current-rankings`
 to `EmployeeService`, the downloadable slide endpoints (PNG/PDF snapshot,

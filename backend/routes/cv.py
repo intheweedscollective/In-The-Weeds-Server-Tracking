@@ -581,29 +581,57 @@ async def upload_cv_server_performance(
                     await db.cv_nps.insert_one(record)
                     imported += 1
                 
-                # Also update employee record if exists - try multiple name match strategies
-                emp_match = await db.employees_v2.find_one({
-                    "$or": [
-                        {"name": {"$regex": f"^{server_name}$", "$options": "i"}},
-                        {"display_name": {"$regex": f"^{server_name}$", "$options": "i"}},
-                        {"report_name": {"$regex": f"^{server_name}$", "$options": "i"}},
-                    ],
-                    "quarter": quarter.upper(),
-                    "year": year
-                })
-                
-                # Try first-name match if no exact match
-                if not emp_match:
-                    first_name = server_name.split()[0] if server_name else ""
-                    if first_name and len(first_name) > 2:
-                        emp_match = await db.employees_v2.find_one({
-                            "$or": [
-                                {"name": {"$regex": f"^{first_name}\\b", "$options": "i"}},
-                                {"display_name": {"$regex": f"^{first_name}\\b", "$options": "i"}},
-                            ],
-                            "quarter": quarter.upper(),
-                            "year": year
-                        })
+                # Phase 2B: resolve the server name through the canonical
+                # EmployeeService (name + display_name + report_name +
+                # every alias is checked, terminated rows are skipped) so
+                # CV uploads never spawn a duplicate v2 row.
+                from services.employee_service import EmployeeService
+                canonical = await EmployeeService(db).find_by_name_or_alias(server_name)
+
+                emp_match = None
+                if canonical:
+                    # Locate the v2 row for this quarter/year by canonical
+                    # id first, then by any of the canonical's names.
+                    name_candidates = [n for n in {
+                        canonical.get("name"),
+                        canonical.get("display_name"),
+                        canonical.get("report_name"),
+                        *(canonical.get("aliases") or []),
+                    } if n]
+                    or_clauses = [{"id": canonical["id"]}]
+                    for n in name_candidates:
+                        or_clauses.append({"name": {"$regex": f"^{n}$", "$options": "i"}})
+                        or_clauses.append({"display_name": {"$regex": f"^{n}$", "$options": "i"}})
+                    emp_match = await db.employees_v2.find_one({
+                        "$or": or_clauses,
+                        "quarter": quarter.upper(),
+                        "year": year,
+                    })
+                else:
+                    # Fallback: legacy lookup for rows the canonical
+                    # collection doesn't know about yet.
+                    emp_match = await db.employees_v2.find_one({
+                        "$or": [
+                            {"name": {"$regex": f"^{server_name}$", "$options": "i"}},
+                            {"display_name": {"$regex": f"^{server_name}$", "$options": "i"}},
+                            {"report_name": {"$regex": f"^{server_name}$", "$options": "i"}},
+                        ],
+                        "quarter": quarter.upper(),
+                        "year": year
+                    })
+
+                    # Try first-name match if no exact match
+                    if not emp_match:
+                        first_name = server_name.split()[0] if server_name else ""
+                        if first_name and len(first_name) > 2:
+                            emp_match = await db.employees_v2.find_one({
+                                "$or": [
+                                    {"name": {"$regex": f"^{first_name}\\b", "$options": "i"}},
+                                    {"display_name": {"$regex": f"^{first_name}\\b", "$options": "i"}},
+                                ],
+                                "quarter": quarter.upper(),
+                                "year": year
+                            })
                 
                 if emp_match:
                     # cv_score formula must mirror scoring_engine.calculate_customer_voice_score:
