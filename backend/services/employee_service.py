@@ -614,6 +614,166 @@ class EmployeeService:
         )
         return len(rows)
 
+    async def materialize_rows_from_employees(
+        self,
+        snapshot: Dict[str, Any],
+    ) -> int:
+        """
+        Phase 3 — build the thin `rows[]` array from the snapshot's
+        legacy `employees[]` array. Resolves each embedded row to its
+        canonical employee via id / legacy_id / name / alias and writes
+        the FK plus frozen scoring fields back onto the snapshot.
+
+        Returns the count of rows materialized. Idempotent: re-running
+        produces the same `rows[]` for the same input `employees[]`.
+        """
+        snap_id = snapshot.get("id")
+        if not snap_id:
+            return 0
+
+        embedded = snapshot.get("employees") or []
+        if not embedded:
+            await self.snap_col.update_one(
+                {"id": snap_id},
+                {"$set": {"rows": [], "row_count": 0,
+                          "updated_at": _now_iso()}},
+            )
+            return 0
+
+        # Resolve each row to canonical.
+        by_id: Dict[str, Dict[str, Any]] = {}
+        by_name: Dict[str, Dict[str, Any]] = {}
+        async for c in self.col.find({}, {"_id": 0}):
+            cid = c.get("id")
+            if cid:
+                by_id[cid] = c
+            for lid in c.get("legacy_ids") or []:
+                by_id[lid] = c
+            for n in [c.get("name"), c.get("display_name"),
+                      c.get("report_name"), *(c.get("aliases") or [])]:
+                k = (n or "").strip().lower()
+                if k:
+                    by_name.setdefault(k, c)
+
+        rows: List[Dict[str, Any]] = []
+        for idx, emp in enumerate(embedded, start=1):
+            canon = (
+                by_id.get(emp.get("id"))
+                or by_name.get((emp.get("name") or "").strip().lower())
+                or by_name.get((emp.get("display_name") or "").strip().lower())
+            )
+            if not canon:
+                # No canonical match — skip (would otherwise create
+                # an orphan FK; auto-create is handled by the migration
+                # script, not the hot-path).
+                continue
+
+            display = (
+                emp.get("display_name")
+                or canon.get("display_name")
+                or emp.get("name")
+                or canon.get("name")
+                or ""
+            )
+
+            row = SnapshotEmployeeRow(
+                employee_id=canon["id"],
+                frozen_display_name=display,
+                frozen_report_name=emp.get("report_name") or canon.get("report_name"),
+                frozen_metrics={
+                    k: v for k, v in emp.items()
+                    if k not in {"id", "name", "display_name", "report_name",
+                                 "aliases", "status", "store_id", "merged_into",
+                                 "created_at", "updated_at"}
+                },
+                frozen_score=float(emp.get("total_score") or 0.0),
+                frozen_tier=emp.get("performance_tier") or emp.get("tier_label"),
+                frozen_rank=emp.get("peer_rank") or emp.get("rank") or idx,
+            )
+            rows.append(row.model_dump(mode="json"))
+
+        await self.snap_col.update_one(
+            {"id": snap_id},
+            {"$set": {"rows": rows, "row_count": len(rows),
+                      "updated_at": _now_iso()}},
+        )
+        return len(rows)
+
+    async def get_snapshot_with_join(
+        self,
+        snapshot_id: Optional[str] = None,
+        *,
+        is_current: bool = False,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Read a snapshot's thin `rows[]` and join each row's
+        `employee_id` against the canonical `employees` collection,
+        returning a flattened legacy-shaped employee dict per row.
+        Falls back to `snapshot.employees[]` when `rows[]` is empty so
+        callers can switch over incrementally.
+
+        Returns `{snapshot, employees}` where `employees` is the joined
+        list with terminated/merged employees filtered out and the
+        canonical display name overlaid.
+        """
+        if snapshot_id:
+            snap = await self.snap_col.find_one({"id": snapshot_id}, {"_id": 0})
+        elif is_current:
+            snap = await self.snap_col.find_one({"is_current": True}, {"_id": 0})
+        else:
+            return None
+        if not snap:
+            return None
+
+        # Build canonical index for join.
+        canon_by_id: Dict[str, Dict[str, Any]] = {}
+        async for c in self.col.find({}, {"_id": 0}):
+            canon_by_id[c["id"]] = c
+            for lid in c.get("legacy_ids") or []:
+                canon_by_id[lid] = c
+
+        deleted = {(n or "").strip().lower()
+                   for n in (snap.get("deleted_names") or [])}
+
+        thin_rows = snap.get("rows") or []
+        flat_rows: List[Dict[str, Any]] = []
+
+        if thin_rows:
+            for r in thin_rows:
+                canon = canon_by_id.get(r.get("employee_id"))
+                if not canon:
+                    continue
+                if canon.get("status") in ("terminated", "merged"):
+                    continue
+                display = (
+                    r.get("frozen_display_name")
+                    or canon.get("display_name")
+                    or canon.get("name")
+                )
+                if (display or "").strip().lower() in deleted:
+                    continue
+                merged = {
+                    **(r.get("frozen_metrics") or {}),
+                    "id": canon["id"],
+                    "canonical_id": canon["id"],
+                    "name": display,
+                    "display_name": display,
+                    "report_name": r.get("frozen_report_name")
+                                   or canon.get("report_name"),
+                    "total_score": r.get("frozen_score"),
+                    "performance_tier": r.get("frozen_tier"),
+                    "peer_rank": r.get("frozen_rank"),
+                }
+                flat_rows.append(merged)
+        else:
+            # Legacy fallback — same shape as filter_active_only.
+            flat_rows = await self.filter_active_only(
+                snap.get("employees") or [],
+                snapshot_deleted_names=snap.get("deleted_names") or [],
+            )
+
+        return {"snapshot": snap, "employees": flat_rows}
+
     # ------------------------------------------------------------------
     # SYNC — keep canonical `current_metrics` in step with the snapshot
     # ------------------------------------------------------------------

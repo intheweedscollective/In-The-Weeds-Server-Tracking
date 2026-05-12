@@ -1639,11 +1639,16 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
     try:
         from services.employee_service import EmployeeService
         fresh_snap = await db.snapshot_workflow.find_one({"id": snapshot_id}, {"_id": 0})
-        sync = await EmployeeService(db).sync_current_metrics_from_snapshot(fresh_snap)
+        svc = EmployeeService(db)
+        sync = await svc.sync_current_metrics_from_snapshot(fresh_snap)
         logger.info(
             "confirm_pos_review: synced canonical current_metrics "
             f"(updated={sync['updated']}, unmatched={sync['unmatched']}, total={sync['total']})"
         )
+        # Phase 3 — materialize the thin rows[] alongside employees[] so
+        # FK-aware readers stay in step.
+        row_count = await svc.materialize_rows_from_employees(fresh_snap)
+        logger.info(f"confirm_pos_review: materialized {row_count} rows[]")
     except Exception as sync_err:
         logger.warning(f"confirm_pos_review: canonical sync failed: {sync_err}")
 
@@ -4453,11 +4458,15 @@ async def finalize_snapshot(snapshot_id: str, request: FinalizeRequest):
     try:
         from services.employee_service import EmployeeService
         fresh_snap = await db.snapshot_workflow.find_one({"id": snapshot_id}, {"_id": 0})
-        sync = await EmployeeService(db).sync_current_metrics_from_snapshot(fresh_snap)
+        svc = EmployeeService(db)
+        sync = await svc.sync_current_metrics_from_snapshot(fresh_snap)
         logger.info(
             "finalize_snapshot: synced canonical current_metrics "
             f"(updated={sync['updated']}, unmatched={sync['unmatched']}, total={sync['total']})"
         )
+        # Phase 3 — materialize the thin rows[] alongside employees[].
+        row_count = await svc.materialize_rows_from_employees(fresh_snap)
+        logger.info(f"finalize_snapshot: materialized {row_count} rows[]")
     except Exception as sync_err:
         logger.warning(f"finalize_snapshot: canonical sync failed: {sync_err}")
 
