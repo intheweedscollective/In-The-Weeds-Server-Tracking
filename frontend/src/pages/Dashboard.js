@@ -733,69 +733,68 @@ export default function Dashboard() {
               </div>
               
               {(() => {
-                const avgPPA = employees.reduce((sum, e) => sum + (e.ppa || 0), 0) / employees.length;
                 const totalGuests = employees.reduce((sum, e) => sum + (e.guests || 0), 0);
-                const totalLSC = employees.reduce((sum, e) => sum + (e.lsc_count || 0), 0);
-                const ppaBenchmark = quarterSettings?.benchmark_ppa || 55;
-                const lscBenchmark = quarterSettings?.benchmark_lsc || 10; // Target guests per LSC
-                
-                // Calculate current LSC rate (guests per sign-up)
-                const currentGuestsPerLSC = totalLSC > 0 ? totalGuests / totalLSC : 999;
-                const lscGap = Math.max(0, currentGuestsPerLSC - lscBenchmark);
-                
-                // Revenue calculations
-                const ppaGap = Math.max(0, ppaBenchmark - avgPPA);
+
+                // LBW (Liquor / Beer / Wine per guest) — higher is better
+                const avgLBW = employees.reduce(
+                  (sum, e) => sum + (e.lbw_per_guest || 0), 0
+                ) / Math.max(employees.length, 1);
+                const lbwBenchmark = quarterSettings?.benchmark_lbw || 8;
+                const lbwGap = Math.max(0, lbwBenchmark - avgLBW);
+
+                // Glassware sales per guest — higher is better
+                const avgGlass = employees.reduce(
+                  (sum, e) => sum + (e.glassware_per_guest || 0), 0
+                ) / Math.max(employees.length, 1);
+                const glassBenchmark = quarterSettings?.benchmark_glass || 1.0;
+                const glassGap = Math.max(0, glassBenchmark - avgGlass);
+
+                // Revenue projection — gap × annual guests
                 const annualGuests = totalGuests * 26;
-                const ppaRevenue = ppaGap * annualGuests;
-                
-                // LSC Value: Each loyalty member worth ~$25 in lifetime value
-                const lscValuePerSignup = quarterSettings?.lsc_value || 25;
-                const potentialExtraLSC = lscGap > 0 ? Math.round((totalGuests / lscBenchmark) - totalLSC) : 0;
-                const annualExtraLSC = potentialExtraLSC * 26;
-                const lscRevenue = annualExtraLSC * lscValuePerSignup;
-                
-                const totalPotential = ppaRevenue + lscRevenue;
-                
+                const lbwRevenue = lbwGap * annualGuests;
+                const glassRevenue = glassGap * annualGuests;
+                const totalPotential = lbwRevenue + glassRevenue;
+
                 return (
                   <div className="space-y-3">
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="p-3 bg-slate-700/50 rounded-lg">
-                        <p className="text-xs text-slate-400 uppercase">Avg PPA</p>
-                        <p className="text-lg font-bold text-white">${avgPPA.toFixed(2)}</p>
-                        <p className="text-xs text-slate-500">Target: ${ppaBenchmark}</p>
+                      <div className="p-3 bg-slate-700/50 rounded-lg" data-testid="revenue-impact-avg-lbw">
+                        <p className="text-xs text-slate-400 uppercase">Avg LBW / Guest</p>
+                        <p className="text-lg font-bold text-white">${avgLBW.toFixed(2)}</p>
+                        <p className="text-xs text-slate-500">Target: ${lbwBenchmark}</p>
                       </div>
-                      <div className="p-3 bg-slate-700/50 rounded-lg">
-                        <p className="text-xs text-slate-400 uppercase">Guests/LSC</p>
-                        <p className="text-lg font-bold text-white">{currentGuestsPerLSC.toFixed(1)}</p>
-                        <p className="text-xs text-slate-500">Target: {lscBenchmark} (1 in {lscBenchmark})</p>
+                      <div className="p-3 bg-slate-700/50 rounded-lg" data-testid="revenue-impact-avg-glass">
+                        <p className="text-xs text-slate-400 uppercase">Avg Glass / Guest</p>
+                        <p className="text-lg font-bold text-white">${avgGlass.toFixed(2)}</p>
+                        <p className="text-xs text-slate-500">Target: ${glassBenchmark.toFixed(2)}</p>
                       </div>
                     </div>
-                    
+
                     {totalPotential > 0 ? (
                       <div className="space-y-2">
-                        {ppaRevenue > 0 && (
-                          <div className="p-3 bg-emerald-900/30 border border-emerald-700/50 rounded-lg">
+                        {lbwRevenue > 0 && (
+                          <div className="p-3 bg-emerald-900/30 border border-emerald-700/50 rounded-lg" data-testid="revenue-impact-lbw-opportunity">
                             <div className="flex justify-between items-center">
                               <div>
-                                <p className="text-sm font-medium text-emerald-400">PPA Opportunity</p>
-                                <p className="text-xs text-emerald-500">+${ppaGap.toFixed(2)}/guest to hit ${ppaBenchmark}</p>
+                                <p className="text-sm font-medium text-emerald-400">LBW Opportunity</p>
+                                <p className="text-xs text-emerald-500">+${lbwGap.toFixed(2)}/guest to hit ${lbwBenchmark}</p>
                               </div>
-                              <p className="text-xl font-bold text-emerald-300">${Math.round(ppaRevenue).toLocaleString()}</p>
+                              <p className="text-xl font-bold text-emerald-300">${Math.round(lbwRevenue).toLocaleString()}</p>
                             </div>
                           </div>
                         )}
-                        {lscRevenue > 0 && (
-                          <div className="p-3 bg-amber-900/30 border border-amber-700/50 rounded-lg">
+                        {glassRevenue > 0 && (
+                          <div className="p-3 bg-amber-900/30 border border-amber-700/50 rounded-lg" data-testid="revenue-impact-glass-opportunity">
                             <div className="flex justify-between items-center">
                               <div>
-                                <p className="text-sm font-medium text-amber-400">LSC Opportunity</p>
-                                <p className="text-xs text-amber-500">+{annualExtraLSC.toLocaleString()} sign-ups @ ${lscValuePerSignup} each</p>
+                                <p className="text-sm font-medium text-amber-400">Glassware Opportunity</p>
+                                <p className="text-xs text-amber-500">+${glassGap.toFixed(2)}/guest to hit ${glassBenchmark.toFixed(2)}</p>
                               </div>
-                              <p className="text-xl font-bold text-amber-300">${Math.round(lscRevenue).toLocaleString()}</p>
+                              <p className="text-xl font-bold text-amber-300">${Math.round(glassRevenue).toLocaleString()}</p>
                             </div>
                           </div>
                         )}
-                        <div className="p-3 bg-blue-900/30 border border-blue-700/50 rounded-lg">
+                        <div className="p-3 bg-blue-900/30 border border-blue-700/50 rounded-lg" data-testid="revenue-impact-total">
                           <div className="flex justify-between items-center">
                             <p className="text-sm font-medium text-blue-400">Total Annual Potential</p>
                             <p className="text-2xl font-bold text-blue-300">${Math.round(totalPotential).toLocaleString()}</p>
