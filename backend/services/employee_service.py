@@ -643,6 +643,10 @@ class EmployeeService:
         employee's `current_metrics`. Resolves snapshot rows to canonical
         via id / legacy_id / name / display_name / alias.
 
+        Also pulls QR click totals from `qr_employees` and stamps them
+        on `current_metrics` as `qr_yelp_clicks`, `qr_google_clicks`,
+        `qr_tripadvisor_clicks`, `qr_total_clicks`.
+
         If `snapshot` is None, picks the active (`is_current=True`)
         snapshot. Returns `{updated, unmatched, total}`.
         """
@@ -671,6 +675,17 @@ class EmployeeService:
                 if k:
                     by_name.setdefault(k, c)
 
+        # QR click index — keyed by lowercased name, falling back to
+        # alias matching against the canonical record.
+        qr_by_name: Dict[str, Dict[str, Any]] = {}
+        try:
+            async for q in self.db.qr_employees.find({}, {"_id": 0}):
+                qkey = (q.get("name") or "").strip().lower()
+                if qkey:
+                    qr_by_name[qkey] = q
+        except Exception:
+            qr_by_name = {}
+
         updated = 0
         unmatched = 0
         for emp in snapshot.get("employees") or []:
@@ -686,6 +701,22 @@ class EmployeeService:
                 k: emp.get(k) for k in self._METRIC_KEYS
                 if k in emp and emp.get(k) is not None
             }
+            # Roll the canonical's known names through the QR index to
+            # find a matching click row.
+            qr_row = None
+            for n in [canon.get("name"), canon.get("display_name"),
+                      canon.get("report_name"), *(canon.get("aliases") or [])]:
+                qr_row = qr_by_name.get((n or "").strip().lower())
+                if qr_row:
+                    break
+            if qr_row:
+                yc = int(qr_row.get("yelp_clicks") or 0)
+                gc = int(qr_row.get("google_clicks") or 0)
+                tc = int(qr_row.get("tripadvisor_clicks") or 0)
+                cm["qr_yelp_clicks"] = yc
+                cm["qr_google_clicks"] = gc
+                cm["qr_tripadvisor_clicks"] = tc
+                cm["qr_total_clicks"] = yc + gc + tc
             if not cm:
                 continue
             cm["quarter"] = quarter

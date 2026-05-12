@@ -1647,6 +1647,19 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
     except Exception as sync_err:
         logger.warning(f"confirm_pos_review: canonical sync failed: {sync_err}")
 
+    # Auto-sync the QR employees list: add new hires, archive
+    # terminated/merged employees, roll duplicate clicks onto survivors.
+    try:
+        from qr_tracking import auto_sync_qr_with_canonical
+        qr_sync = await auto_sync_qr_with_canonical(db)
+        logger.info(
+            "confirm_pos_review: auto-synced QR list "
+            f"(added={qr_sync['added']}, archived={qr_sync['archived']}, "
+            f"merged_clicks={qr_sync['merged_clicks']})"
+        )
+    except Exception as qr_err:
+        logger.warning(f"confirm_pos_review: QR auto-sync failed: {qr_err}")
+
     return {
         "success": True,
         "message": f"POS data reviewed and confirmed ({len(employees_data)} employees)"
@@ -4447,6 +4460,19 @@ async def finalize_snapshot(snapshot_id: str, request: FinalizeRequest):
         )
     except Exception as sync_err:
         logger.warning(f"finalize_snapshot: canonical sync failed: {sync_err}")
+
+    # Auto-sync the QR list at finalize too — quarter is locked, so the
+    # employee roster reflected here is the final one.
+    try:
+        from qr_tracking import auto_sync_qr_with_canonical
+        qr_sync = await auto_sync_qr_with_canonical(db)
+        logger.info(
+            "finalize_snapshot: auto-synced QR list "
+            f"(added={qr_sync['added']}, archived={qr_sync['archived']}, "
+            f"merged_clicks={qr_sync['merged_clicks']})"
+        )
+    except Exception as qr_err:
+        logger.warning(f"finalize_snapshot: QR auto-sync failed: {qr_err}")
     
     return {
         "success": True,

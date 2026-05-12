@@ -376,6 +376,14 @@ async def create_employee(data: EmployeeCreate):
             {"$set": {"peer_rank": rank}}
         )
     
+    # Auto-sync the QR list so the new employee gets a fresh QR row
+    # immediately (no click counts to preserve since they're brand new).
+    try:
+        from qr_tracking import auto_sync_qr_with_canonical
+        await auto_sync_qr_with_canonical(db)
+    except Exception:
+        pass
+
     return {"success": True, "employee_id": employee.id, "message": f"Created {employee.name} with score {employee.total_score}"}
 
 
@@ -406,6 +414,12 @@ async def delete_employee(employee_id: str):
 
     if canonical:
         result = await svc.delete_completely(canonical["id"])
+        # Auto-sync QR list — archives the deleted employee's QR row.
+        try:
+            from qr_tracking import auto_sync_qr_with_canonical
+            await auto_sync_qr_with_canonical(db)
+        except Exception:
+            pass
         return {"success": True, "message": f"Employee {canonical.get('name', 'Unknown')} deleted", **result}
 
     # Legacy fallback: id only exists in employees_v2. Resolve the name,
@@ -427,6 +441,11 @@ async def delete_employee(employee_id: str):
         "job_title": legacy.get("job_title") or "Server",
     })
     result = await svc.delete_completely(canonical["id"])
+    try:
+        from qr_tracking import auto_sync_qr_with_canonical
+        await auto_sync_qr_with_canonical(db)
+    except Exception:
+        pass
     return {"success": True, "message": f"Employee {legacy.get('name', 'Unknown')} deleted", **result}
 
 
@@ -558,11 +577,22 @@ async def merge_employees_endpoint(req: MergeRequest):
     # embedded employees[] is left alone — historical accuracy.
     await db.employees_v2.delete_many({"id": req.duplicate_id})
 
+    # Auto-sync the QR list: the duplicate's QR clicks (if any) get
+    # rolled onto the survivor, and the duplicate row is archived.
+    qr_summary = {"added": 0, "archived": 0, "merged_clicks": 0}
+    try:
+        from qr_tracking import auto_sync_qr_with_canonical
+        qr_summary = await auto_sync_qr_with_canonical(db)
+    except Exception as qr_err:
+        import logging
+        logging.getLogger(__name__).warning(f"merge QR auto-sync failed: {qr_err}")
+
     survivor = await svc.get_by_id(req.survivor_id)
     return {
         "success": True,
         "merge": result,
         "survivor": survivor,
+        "qr": qr_summary,
         "message": (
             f"Merged into '{(survivor or {}).get('name')}'. The duplicate's "
             "name is now an alias so future uploads land on this record."

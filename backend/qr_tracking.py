@@ -49,6 +49,121 @@ def set_qr_db(db):
     global _db
     _db = db
 
+
+# ---------------------------------------------------------------------------
+# Auto-sync helper — keeps the qr_employees collection in step with the
+# canonical employee list. Hooked into snapshot save / finalize / employee
+# CRUD / merge so admins never need to click "Sync".
+# ---------------------------------------------------------------------------
+#
+# Behaviour:
+#   ADD     — every active canonical employee that isn't already in
+#             qr_employees gets a fresh row with 0 clicks.
+#   REMOVE  — qr_employees rows whose name doesn't resolve to an active
+#             canonical record are archived (moved to qr_employees_archive
+#             with an archived_at timestamp) so the click history is never
+#             lost. Useful when someone gets terminated or merged.
+#   MERGE   — if a duplicate qr row exists for someone who got merged via
+#             `EmployeeService.merge_employees`, its clicks roll up onto
+#             the survivor's qr row before the duplicate is archived.
+#   NEVER   — touches click counters on rows that survive the sync.
+
+async def auto_sync_qr_with_canonical(db=None) -> Dict[str, Any]:
+    """Idempotent. Returns {added, archived, merged_clicks}."""
+    target = db if db is not None else _db
+    if target is None:
+        return {"added": 0, "archived": 0, "merged_clicks": 0}
+
+    from services.employee_service import EmployeeService
+    svc = EmployeeService(target)
+
+    # 1) Build canonical name index.
+    canon_actives = await svc.list_active()
+    canon_by_name: Dict[str, Dict[str, Any]] = {}
+    for c in canon_actives:
+        for n in [c.get("name"), c.get("display_name"),
+                  c.get("report_name"), *(c.get("aliases") or [])]:
+            key = (n or "").strip().lower()
+            if key:
+                canon_by_name.setdefault(key, c)
+
+    # 2) Walk qr_employees: archive orphans, roll up duplicates.
+    qr_rows = await target.qr_employees.find({}, {"_id": 0}).to_list(2000)
+    keep_by_canonical_name: Dict[str, Dict[str, Any]] = {}
+    archived = 0
+    merged_clicks = 0
+
+    for q in qr_rows:
+        qname = (q.get("name") or "").strip()
+        canon = canon_by_name.get(qname.lower())
+        if not canon:
+            # Orphan — archive.
+            await target.qr_employees_archive.insert_one({
+                **q,
+                "archived_at": datetime.now(timezone.utc).isoformat(),
+                "archived_reason": "no_canonical_match",
+            })
+            await target.qr_employees.delete_one({"id": q["id"]})
+            archived += 1
+            continue
+
+        canonical_name_key = (canon.get("name") or "").lower()
+        survivor = keep_by_canonical_name.get(canonical_name_key)
+        if survivor is None:
+            # First qr row for this canonical employee → make it survivor
+            # and ensure its display name matches the canonical record.
+            if qname != canon.get("name"):
+                await target.qr_employees.update_one(
+                    {"id": q["id"]},
+                    {"$set": {"name": canon.get("name")}},
+                )
+                q["name"] = canon.get("name")
+            keep_by_canonical_name[canonical_name_key] = q
+        else:
+            # Roll duplicate's clicks onto the survivor, then archive.
+            survivor_id = survivor["id"]
+            inc = {
+                "yelp_clicks":       int(q.get("yelp_clicks") or 0),
+                "google_clicks":     int(q.get("google_clicks") or 0),
+                "tripadvisor_clicks":int(q.get("tripadvisor_clicks") or 0),
+            }
+            if any(inc.values()):
+                await target.qr_employees.update_one(
+                    {"id": survivor_id}, {"$inc": inc}
+                )
+                merged_clicks += sum(inc.values())
+                survivor["yelp_clicks"] = (survivor.get("yelp_clicks") or 0) + inc["yelp_clicks"]
+                survivor["google_clicks"] = (survivor.get("google_clicks") or 0) + inc["google_clicks"]
+                survivor["tripadvisor_clicks"] = (survivor.get("tripadvisor_clicks") or 0) + inc["tripadvisor_clicks"]
+            await target.qr_employees_archive.insert_one({
+                **q,
+                "archived_at": datetime.now(timezone.utc).isoformat(),
+                "archived_reason": "duplicate_of_" + survivor_id,
+            })
+            await target.qr_employees.delete_one({"id": q["id"]})
+            archived += 1
+
+    # 3) Add missing canonical employees.
+    added = 0
+    for canon in canon_actives:
+        key = (canon.get("name") or "").lower()
+        if key in keep_by_canonical_name:
+            continue
+        new_row = {
+            "id": str(uuid.uuid4()),
+            "name": canon.get("name"),
+            "yelp_clicks": 0,
+            "google_clicks": 0,
+            "tripadvisor_clicks": 0,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await target.qr_employees.insert_one(new_row)
+        keep_by_canonical_name[key] = new_row
+        added += 1
+
+    return {"added": added, "archived": archived, "merged_clicks": merged_clicks}
+
+
 # Create QR router
 qr_router = APIRouter(prefix="/qr", tags=["QR Tracking"])
 
