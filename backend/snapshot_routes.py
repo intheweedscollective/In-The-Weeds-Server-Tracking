@@ -1633,6 +1633,20 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
     if existing_employees:
         await _propagate_snapshot_to_employees_v2(db, existing_employees, snapshot)
 
+    # And mirror them onto the canonical employees.current_metrics so the
+    # integrity gate, "most improved" widget, and any future canonical
+    # reader stays in step. Idempotent.
+    try:
+        from services.employee_service import EmployeeService
+        fresh_snap = await db.snapshot_workflow.find_one({"id": snapshot_id}, {"_id": 0})
+        sync = await EmployeeService(db).sync_current_metrics_from_snapshot(fresh_snap)
+        logger.info(
+            "confirm_pos_review: synced canonical current_metrics "
+            f"(updated={sync['updated']}, unmatched={sync['unmatched']}, total={sync['total']})"
+        )
+    except Exception as sync_err:
+        logger.warning(f"confirm_pos_review: canonical sync failed: {sync_err}")
+
     return {
         "success": True,
         "message": f"POS data reviewed and confirmed ({len(employees_data)} employees)"
@@ -4419,6 +4433,20 @@ async def finalize_snapshot(snapshot_id: str, request: FinalizeRequest):
         },
         upsert=True
     )
+
+    # Sync canonical employees.current_metrics from the now-final
+    # snapshot so the integrity gate, "most improved" widget, and any
+    # other canonical consumer reflect the locked-in scores.
+    try:
+        from services.employee_service import EmployeeService
+        fresh_snap = await db.snapshot_workflow.find_one({"id": snapshot_id}, {"_id": 0})
+        sync = await EmployeeService(db).sync_current_metrics_from_snapshot(fresh_snap)
+        logger.info(
+            "finalize_snapshot: synced canonical current_metrics "
+            f"(updated={sync['updated']}, unmatched={sync['unmatched']}, total={sync['total']})"
+        )
+    except Exception as sync_err:
+        logger.warning(f"finalize_snapshot: canonical sync failed: {sync_err}")
     
     return {
         "success": True,

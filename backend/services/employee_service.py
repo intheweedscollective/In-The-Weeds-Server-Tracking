@@ -614,5 +614,91 @@ class EmployeeService:
         )
         return len(rows)
 
+    # ------------------------------------------------------------------
+    # SYNC — keep canonical `current_metrics` in step with the snapshot
+    # ------------------------------------------------------------------
+    #
+    # Hooked into every place that mutates the active snapshot
+    # (confirm-pos-review, finalize, manual employee add/edit/delete).
+    # Eliminates drift between the snapshot's authoritative scores and
+    # the canonical employee record. Idempotent.
+
+    _METRIC_KEYS = (
+        "cv_score", "nps_score", "cv_promoters", "cv_passives", "cv_detractors",
+        "rt_mentions", "review_mentions", "review_tracker_bonus",
+        "ppa", "lbw_percentage", "glassware_sales", "lsc_percentage",
+        "total_score", "total_metric_bonus",
+        "bonus_ppa", "bonus_lbw", "bonus_glass", "bonus_lsc",
+        "tier_label", "rank", "guests", "guest_count", "net_sales",
+        "pre_dar_score", "final_score", "final_rank",
+        "dar_written_warnings", "dar_suspensions", "dar_deduction",
+    )
+
+    async def sync_current_metrics_from_snapshot(
+        self,
+        snapshot: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, int]:
+        """
+        Mirror the snapshot's authoritative metrics onto each canonical
+        employee's `current_metrics`. Resolves snapshot rows to canonical
+        via id / legacy_id / name / display_name / alias.
+
+        If `snapshot` is None, picks the active (`is_current=True`)
+        snapshot. Returns `{updated, unmatched, total}`.
+        """
+        if snapshot is None:
+            snapshot = await self.snap_col.find_one(
+                {"is_current": True}, {"_id": 0}
+            )
+        if not snapshot or not snapshot.get("employees"):
+            return {"updated": 0, "unmatched": 0, "total": 0}
+
+        quarter = snapshot.get("quarter")
+        year = snapshot.get("year")
+
+        # Build canonical index.
+        by_id: Dict[str, Dict[str, Any]] = {}
+        by_name: Dict[str, Dict[str, Any]] = {}
+        async for c in self.col.find({}, {"_id": 0}):
+            cid = c.get("id")
+            if cid:
+                by_id[cid] = c
+            for lid in c.get("legacy_ids") or []:
+                by_id[lid] = c
+            for n in [c.get("name"), c.get("display_name"),
+                      c.get("report_name"), *(c.get("aliases") or [])]:
+                k = (n or "").strip().lower()
+                if k:
+                    by_name.setdefault(k, c)
+
+        updated = 0
+        unmatched = 0
+        for emp in snapshot.get("employees") or []:
+            canon = (
+                by_id.get(emp.get("id"))
+                or by_name.get((emp.get("name") or "").strip().lower())
+                or by_name.get((emp.get("display_name") or "").strip().lower())
+            )
+            if not canon:
+                unmatched += 1
+                continue
+            cm = {
+                k: emp.get(k) for k in self._METRIC_KEYS
+                if k in emp and emp.get(k) is not None
+            }
+            if not cm:
+                continue
+            cm["quarter"] = quarter
+            cm["year"] = year
+            await self.col.update_one(
+                {"id": canon["id"]},
+                {"$set": {"current_metrics": cm,
+                          "updated_at": _now_iso()}},
+            )
+            updated += 1
+
+        return {"updated": updated, "unmatched": unmatched,
+                "total": len(snapshot.get("employees") or [])}
+
 
 __all__ = ["EmployeeService", "CANONICAL_COLLECTION", "LEGACY_V2_COLLECTION", "SNAPSHOT_COLLECTION"]
