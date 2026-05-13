@@ -2136,7 +2136,21 @@ async def get_current_rankings(quarter: Optional[str] = None, year: Optional[int
         }
     
     # Sort employees by tier before returning
-    employees = snapshot.get("employees", [])
+    # Phase 3 Stage B: prefer the FK-join read path. Skip the join for
+    # finalized snapshots — those must render exactly as frozen (no
+    # canonical-status filtering, no rename overlays).
+    snapshot_finalized = snapshot.get("status") == "finalized"
+    if not snapshot_finalized:
+        from services.employee_service import EmployeeService
+        joined = await EmployeeService(db).get_snapshot_with_join(
+            snapshot_id=snapshot.get("id"),
+        )
+        if joined and joined.get("employees"):
+            employees = joined["employees"]
+        else:
+            employees = snapshot.get("employees", [])
+    else:
+        employees = snapshot.get("employees", [])
 
     # Phase 2B: filter through the canonical EmployeeService so that any
     # employee with status="terminated" or status="merged" on the canonical
@@ -2173,7 +2187,6 @@ async def get_current_rankings(quarter: Optional[str] = None, year: Optional[int
                     canonical_display.setdefault(key, ce["display_name"])
                 canonical_id_by_name.setdefault(key, ce.get("id"))
 
-    snapshot_finalized = snapshot.get("status") == "finalized"
     filtered_employees: List[Dict[str, Any]] = []
     for emp in employees:
         # Resolve via id, legacy_id, then name.

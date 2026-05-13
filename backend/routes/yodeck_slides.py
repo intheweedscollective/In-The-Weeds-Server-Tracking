@@ -28,33 +28,44 @@ async def _fetch_active_employees(
     limit: int = 5000,
 ) -> List[Dict[str, Any]]:
     """
-    Phase 2B helper: fetch quarter's employees from `employees_v2` and run
-    them through the canonical `EmployeeService` so terminated / merged
-    people never appear on Yodeck slides. Also honours the active
-    snapshot's `deleted_names` blocklist as a legacy safety net.
+    Phase 3 Stage B helper: Read employees for the quarter through the
+    canonical FK-join. Prefers `snapshot_workflow.rows[]` (thin FK array
+    populated by `materialize_rows_from_employees`), falls back to the
+    snapshot's legacy `employees[]`, and finally to `employees_v2`
+    when no snapshot exists. Terminated / merged / blocklisted
+    employees are filtered automatically.
 
     Every slide generator route MUST go through this helper instead of
     querying `employees_v2` directly.
     """
     from services.employee_service import EmployeeService
+    svc = EmployeeService(db)
 
+    # 1) Prefer the active snapshot for this quarter via FK-join.
+    snap = await db.snapshot_workflow.find_one(
+        {"is_current": True, "year": year, "quarter": quarter.upper()},
+        {"_id": 0, "id": 1},
+    )
+    if not snap:
+        snap = await db.snapshot_workflow.find_one(
+            {"status": "completed", "year": year, "quarter": quarter.upper()},
+            {"_id": 0, "id": 1},
+            sort=[("effective_date", -1), ("completed_at", -1)],
+        )
+    if snap:
+        joined = await svc.get_snapshot_with_join(snapshot_id=snap["id"])
+        rows = (joined or {}).get("employees") or []
+        if rows:
+            return rows[:limit]
+
+    # 2) No snapshot — last-resort fallback to legacy mirror.
     docs = await db.employees_v2.find(
         {"year": year, "quarter": quarter.upper()},
         {"_id": 0},
     ).to_list(limit)
-
     if not docs:
         return []
-
-    snap_doc = await db.snapshot_workflow.find_one(
-        {"is_current": True, "year": year, "quarter": quarter.upper()},
-        {"_id": 0, "deleted_names": 1},
-    ) or {}
-
-    return await EmployeeService(db).filter_active_only(
-        docs,
-        snapshot_deleted_names=snap_doc.get("deleted_names") or [],
-    )
+    return await svc.filter_active_only(docs)
 
 
 def get_first_name(full_name: str) -> str:

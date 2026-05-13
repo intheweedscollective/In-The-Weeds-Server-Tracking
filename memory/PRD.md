@@ -84,6 +84,43 @@ RT uploads bumped `rt_mentions`.
    and asserts they get refreshed on read; pinned-row override
    behaviour is also locked in.
 
+## Current State (2026-05-13)
+
+### Phase 3 Stage B Complete — Read endpoints switched to FK-join — SHIPPED 2026-05-13
+
+All live read paths now consume the canonical FK-join via
+`EmployeeService.get_snapshot_with_join`:
+- `/v2/full-rankings/{y}/{q}/snapshot-png` + `/snapshot-pdf`
+- All 9 Yodeck slide endpoints (`routes/yodeck_slides.py`)
+- `/v2/snapshot-workflow/current-rankings` (live snapshots; finalized
+  snapshots still render frozen)
+
+**Fallback ladder** in `get_snapshot_with_join`:
+1. `snapshot.rows[]` (preferred, FK-aware)
+2. `snapshot.employees[]` (legacy embedded array)
+3. `employees_v2` (last-resort, only when no snapshot exists)
+
+Verified live: Diane shows CV +14.0 / Score 100.9 across snapshot PNG,
+snapshot PDF, and current-rankings. 13/13 critical endpoints green.
+31/31 architecture-tier tests passing.
+
+### Phase 3 Stage C — `employees_v2` archived, ready to drop — SHIPPED 2026-05-13
+
+All 59 `employees_v2` rows archived into `employees_v2_archive` with a
+unique `archive_run_id` per run + `archived_at` timestamp. The live
+collection is **still present** — Stage C-final (the actual drop)
+intentionally requires one production deploy cycle of green before
+running `python scripts/archive_employees_v2.py --apply --drop`.
+
+### QR Health Dashboard Badge — SHIPPED 2026-05-13
+
+New `components/QRHealthBadge.jsx` in the dashboard header. Polls
+`/api/qr/admin/health` and shows green/amber status + tooltip with
+last silent gap. Will surface any future tracking outage within a
+page-load instead of weeks later.
+
+## Previous State
+
 ### Phase 2B Continued — CV upload identity resolution → canonical service
 
 `routes/cv.py` CV NPS upload (`/v2/cv/upload`) now resolves the server
