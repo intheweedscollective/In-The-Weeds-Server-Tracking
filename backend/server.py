@@ -2198,39 +2198,38 @@ async def _load_snapshot_first_rankings(
         rt_max_points=settings_doc.get("rt_max_points", 20.0),
     )
 
-    # Snapshot-first: active snapshot is the source of truth.
-    snapshot = await db.snapshot_workflow.find_one(
-        {"is_current": True, "year": year, "quarter": quarter.upper()},
-        {"_id": 0},
-    )
+    # Phase 3 Stage B — snapshot-first via canonical FK-join.
+    # `get_snapshot_with_join` reads from `rows[]` (FK array) when
+    # populated, otherwise falls back transparently to the legacy
+    # `employees[]` array. Terminated/merged employees and snapshot
+    # blocklist names are filtered automatically.
+    svc = EmployeeService(db)
+    join_query: Dict[str, Any] = {"is_current": True, "year": year,
+                                  "quarter": quarter.upper()}
+    snapshot = await db.snapshot_workflow.find_one(join_query, {"_id": 0, "id": 1})
     if not snapshot:
         snapshot = await db.snapshot_workflow.find_one(
             {"status": "completed", "year": year, "quarter": quarter.upper()},
-            {"_id": 0},
+            {"_id": 0, "id": 1},
             sort=[("effective_date", -1), ("completed_at", -1)],
         )
 
-    if snapshot and snapshot.get("employees"):
-        raw_rows = snapshot.get("employees") or []
-        deleted_names = snapshot.get("deleted_names") or []
+    if snapshot:
+        joined = await svc.get_snapshot_with_join(snapshot_id=snapshot["id"])
+        raw_rows = (joined or {}).get("employees") or []
     else:
-        # Defense in depth — fall back to the legacy mirror.
+        # Truly no snapshot — last-resort fallback to legacy mirror.
         raw_rows = await db.employees_v2.find(
             {"year": year, "quarter": quarter.upper()},
             {"_id": 0},
         ).to_list(500)
-        deleted_names = []
+        raw_rows = await svc.filter_active_only(raw_rows)
 
     if not raw_rows:
         raise HTTPException(
             status_code=404,
             detail=f"No employees found for {quarter} {year}",
         )
-
-    # Phase 2B: filter terminated/merged employees out through canonical.
-    raw_rows = await EmployeeService(db).filter_active_only(
-        raw_rows, snapshot_deleted_names=deleted_names,
-    )
 
     # Recompute the three drift-prone derived fields on every row from
     # their current inputs so manual overrides on the snapshot always win
