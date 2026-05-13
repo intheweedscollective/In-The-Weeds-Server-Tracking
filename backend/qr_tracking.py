@@ -402,39 +402,75 @@ TRIPADVISOR_REVIEW_URL = os.environ.get("TRIPADVISOR_REVIEW_URL", "https://www.t
 # If a future deploy or admin action wipes #1 and #2, #3 still has the
 # complete history and we can rebuild from it.
 
+async def _resolve_canonical_id(printed_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Map a `printed_id` (the UUID baked into a physical QR card) to a
+    currently-active record in `qr_employees`. Tries:
+
+      1. Direct match — `qr_employees.id == printed_id`. Fast path.
+      2. Alias lookup — `qr_employee_id_aliases.printed_id`. Healed cards.
+
+    Returns the resolved `qr_employees` doc (or None if the printed_id is
+    still a "ghost"). Adding mappings to `qr_employee_id_aliases` is how
+    we re-attribute scans from cards that were printed before a wipe.
+    """
+    if not printed_id:
+        return None
+    emp = await _db.qr_employees.find_one(
+        {"id": printed_id}, {"_id": 0, "id": 1, "name": 1},
+    )
+    if emp:
+        return emp
+    alias = await _db.qr_employee_id_aliases.find_one(
+        {"printed_id": printed_id}, {"_id": 0, "canonical_id": 1},
+    )
+    if not alias:
+        return None
+    return await _db.qr_employees.find_one(
+        {"id": alias["canonical_id"]}, {"_id": 0, "id": 1, "name": 1},
+    )
+
+
 async def _record_scan(employee_id: str, platform: str) -> None:
     """Persist a scan across all three trackers. Non-blocking on failures."""
     now = datetime.now(timezone.utc).isoformat()
     platform = platform if platform in ("yelp", "google", "tripadvisor") else "google"
 
-    # Resolve employee_id → display name once so it's stamped on the
-    # event even if the employee is later archived/renamed.
+    # Resolve employee_id → canonical record (handles cards printed with
+    # an older UUID that's been wiped and re-issued — see
+    # `_resolve_canonical_id` for the lookup chain).
     employee_name = "Unknown"
+    resolved_id: Optional[str] = None
     try:
-        emp = await _db.qr_employees.find_one(
-            {"id": employee_id}, {"_id": 0, "name": 1},
-        )
+        emp = await _resolve_canonical_id(employee_id)
         if emp:
+            resolved_id = emp.get("id")
             employee_name = emp.get("name") or "Unknown"
             field = f"{platform}_clicks"
             await _db.qr_employees.update_one(
-                {"id": employee_id},
+                {"id": resolved_id},
                 {
                     "$inc": {field: 1, "total_clicks": 1},
                     "$set": {"last_scan_at": now},
                 },
             )
         else:
-            logging.warning(f"QR scan: employee_id {employee_id} not in qr_employees")
+            logging.warning(
+                f"QR scan: printed employee_id {employee_id} is unresolved "
+                f"(ghost). Event recorded but counter NOT incremented. "
+                f"Use /api/qr/admin/heal-ghost-ids to map it."
+            )
     except Exception as e:
         logging.error(f"QR scan: counter update failed: {e}")
 
     scan_doc = {
         "id": str(uuid.uuid4()),
         "employee_id": employee_id,
+        "resolved_employee_id": resolved_id,
         "employee_name": employee_name,
         "platform": platform,
         "scanned_at": now,
+        "counter_applied": resolved_id is not None,
     }
 
     # Resettable event log.
@@ -1036,7 +1072,30 @@ async def qr_health_check():
                 "days_silent": gap,
             })
     out["long_gaps_in_immutable_log"] = long_gaps
-    out["status"] = "alert" if long_gaps else "ok"
+
+    # Surface ghost-ID count so the dashboard badge can prompt the admin
+    # to run the heal endpoint without scrolling through admin routes.
+    current_ids = {
+        d["id"] async for d in _db.qr_employees.find({}, {"_id": 0, "id": 1})
+    }
+    aliased_ids = {
+        d["printed_id"]
+        async for d in _db.qr_employee_id_aliases.find({}, {"_id": 0, "printed_id": 1})
+    }
+    pipeline = [
+        {"$match": {"employee_id": {"$nin": list(current_ids | aliased_ids)}}},
+        {"$group": {"_id": "$employee_id", "scans": {"$sum": 1}}},
+    ]
+    ghosts = []
+    async for g in _db.qr_click_log_immutable.aggregate(pipeline):
+        if g["_id"]:
+            ghosts.append({"printed_id": g["_id"], "scan_count": g["scans"]})
+    out["ghost_ids"] = {
+        "count": len(ghosts),
+        "orphan_scans": sum(g["scan_count"] for g in ghosts),
+    }
+
+    out["status"] = "alert" if (long_gaps or ghosts) else "ok"
     return out
 
 
@@ -1140,6 +1199,360 @@ async def rebuild_counters_from_immutable_log(
             synced += 1
     return {"success": True, "employees_synced": synced,
             "total_immutable_events": await _db.qr_click_log_immutable.count_documents({})}
+
+
+# ==================== GHOST-ID HEALING ====================
+#
+# Background: physical QR cards print a per-employee UUID into the QR
+# image (e.g. `/api/qr/go/<uuid>`). If the `qr_employees` collection is
+# later wiped + re-seeded (which happened in March/April), the UUIDs on
+# the laminated cards no longer exist. Scans still land in the immutable
+# log but the per-employee counter is never incremented, so the
+# dashboard shows zero clicks while the audit log shows many.
+#
+# These endpoints let an admin:
+#   - GET  /admin/ghost-ids                  → list unresolved card UUIDs
+#                                              and their scan counts.
+#   - GET  /admin/suggest-ghost-mappings     → best-effort auto-map
+#                                              ghosts → current employees
+#                                              using daily snapshots /
+#                                              archived scans / legacy_ids.
+#   - POST /admin/heal-ghost-ids             → write mappings into the
+#                                              `qr_employee_id_aliases`
+#                                              collection AND retroactively
+#                                              increment counters from
+#                                              every prior immutable event
+#                                              that matched the ghost ID.
+#                                              Idempotent: events flagged
+#                                              with `counter_applied=true`
+#                                              are skipped.
+
+@qr_router.get("/admin/ghost-ids")
+async def list_ghost_ids():
+    """
+    Return every `employee_id` recorded in `qr_click_log_immutable` (or
+    the live `qr_scans` log) that is NOT a current `qr_employees.id` AND
+    NOT already aliased in `qr_employee_id_aliases`.
+
+    For each ghost, return scan count, earliest/latest scan date, and
+    the platform breakdown so the admin can decide who it belonged to.
+    """
+    current_ids = {
+        doc["id"]
+        async for doc in _db.qr_employees.find({}, {"_id": 0, "id": 1})
+    }
+    aliased_ids = {
+        doc["printed_id"]
+        async for doc in _db.qr_employee_id_aliases.find({}, {"_id": 0, "printed_id": 1})
+    }
+
+    pipeline = [
+        {"$group": {
+            "_id": "$employee_id",
+            "scan_count": {"$sum": 1},
+            "earliest": {"$min": "$scanned_at"},
+            "latest": {"$max": "$scanned_at"},
+            "google": {"$sum": {"$cond": [{"$eq": ["$platform", "google"]}, 1, 0]}},
+            "yelp": {"$sum": {"$cond": [{"$eq": ["$platform", "yelp"]}, 1, 0]}},
+            "tripadvisor": {"$sum": {"$cond": [{"$eq": ["$platform", "tripadvisor"]}, 1, 0]}},
+            "names": {"$addToSet": "$employee_name"},
+        }},
+        {"$sort": {"scan_count": -1}},
+    ]
+
+    ghosts: List[Dict[str, Any]] = []
+    async for row in _db.qr_click_log_immutable.aggregate(pipeline):
+        eid = row["_id"]
+        if not eid or eid in current_ids or eid in aliased_ids:
+            continue
+        # Strip "Unknown" so the admin sees only meaningful historical names.
+        names = [n for n in (row.get("names") or []) if n and n != "Unknown"]
+        ghosts.append({
+            "printed_id": eid,
+            "scan_count": row.get("scan_count", 0),
+            "earliest_scan": row.get("earliest"),
+            "latest_scan": row.get("latest"),
+            "platform_breakdown": {
+                "google": row.get("google", 0),
+                "yelp": row.get("yelp", 0),
+                "tripadvisor": row.get("tripadvisor", 0),
+            },
+            "historical_names": names,
+        })
+    return {"ghost_count": len(ghosts), "ghosts": ghosts}
+
+
+@qr_router.get("/admin/suggest-ghost-mappings")
+async def suggest_ghost_mappings():
+    """
+    Best-effort auto-suggestion for the ghost-IDs UI. For each ghost,
+    surface candidate canonical employees with a confidence score so
+    the admin can confirm with one click instead of typing UUIDs.
+
+    Sources, in priority order:
+      1. `qr_daily_snapshots.rows[]` — historical daily backups capture
+         (id, name) pairs. If the ghost id appears in a snapshot, we
+         already know its server name and can fuzzy-match it against
+         current `qr_employees` by name.
+      2. `qr_scans_archive` — older archived scans preserve the
+         employee_name for the ghost id.
+      3. `employees.legacy_ids` / `employees.aliases` — canonical
+         employees may have the ghost id listed as a legacy id from a
+         prior migration.
+    """
+    # Reuse list_ghost_ids to compute the unresolved list.
+    ghosts_resp = await list_ghost_ids()
+    ghosts = ghosts_resp.get("ghosts", [])
+    if not ghosts:
+        return {"suggestions": [], "ghost_count": 0}
+
+    ghost_ids = {g["printed_id"] for g in ghosts}
+
+    # Index 1: daily snapshots — id → name (most recent name wins).
+    name_from_snapshot: Dict[str, str] = {}
+    async for snap in _db.qr_daily_snapshots.find(
+        {"rows.employee_id": {"$in": list(ghost_ids)}},
+        {"_id": 0, "date": 1, "rows": 1},
+    ).sort("date", -1):
+        for r in snap.get("rows") or []:
+            eid = r.get("employee_id")
+            if eid in ghost_ids and eid not in name_from_snapshot:
+                nm = (r.get("name") or "").strip()
+                if nm:
+                    name_from_snapshot[eid] = nm
+
+    # Index 2: archive scans — id → most recent employee_name seen.
+    name_from_archive: Dict[str, str] = {}
+    pipeline = [
+        {"$match": {"employee_id": {"$in": list(ghost_ids)},
+                    "employee_name": {"$ne": "Unknown"}}},
+        {"$group": {"_id": "$employee_id",
+                    "name": {"$last": "$employee_name"},
+                    "latest": {"$max": "$scanned_at"}}},
+    ]
+    async for row in _db.qr_scans_archive.aggregate(pipeline):
+        if row.get("name"):
+            name_from_archive[row["_id"]] = row["name"]
+
+    # Index 3: canonical employees.legacy_ids — direct UUID match.
+    direct_legacy: Dict[str, Dict[str, str]] = {}
+    async for ce in _db.employees.find(
+        {"legacy_ids": {"$in": list(ghost_ids)}},
+        {"_id": 0, "id": 1, "name": 1, "legacy_ids": 1},
+    ):
+        for lid in ce.get("legacy_ids") or []:
+            if lid in ghost_ids:
+                # Map canonical employee back to its qr_employees record by name.
+                direct_legacy[lid] = {"name": ce.get("name") or "", "canonical_employee_id": ce.get("id")}
+
+    # Build a name → qr_employees.id lookup for fuzzy matching.
+    qr_emps: List[Dict[str, Any]] = []
+    async for q in _db.qr_employees.find({}, {"_id": 0, "id": 1, "name": 1}):
+        qr_emps.append(q)
+
+    def _norm(s: str) -> str:
+        return "".join(c for c in (s or "").lower() if c.isalnum())
+
+    def _match_by_name(name: str) -> Optional[Dict[str, Any]]:
+        if not name:
+            return None
+        n = _norm(name)
+        # Exact normalized match first.
+        for q in qr_emps:
+            if _norm(q.get("name", "")) == n:
+                return {"suggested_canonical_id": q["id"],
+                        "suggested_name": q["name"], "confidence": "high"}
+        # Token overlap fallback (first name match).
+        first = name.split()[0].lower() if name.split() else ""
+        if first:
+            cands = [q for q in qr_emps
+                     if (q.get("name") or "").lower().split()[:1] == [first]]
+            if len(cands) == 1:
+                return {"suggested_canonical_id": cands[0]["id"],
+                        "suggested_name": cands[0]["name"], "confidence": "medium"}
+        return None
+
+    suggestions: List[Dict[str, Any]] = []
+    for g in ghosts:
+        pid = g["printed_id"]
+        candidate: Optional[Dict[str, Any]] = None
+        source = None
+
+        # 1. Snapshot-derived name
+        nm = name_from_snapshot.get(pid)
+        if nm:
+            candidate = _match_by_name(nm)
+            source = "qr_daily_snapshot"
+        # 2. Archive-derived name
+        if not candidate:
+            nm = name_from_archive.get(pid)
+            if nm:
+                candidate = _match_by_name(nm)
+                source = "qr_scans_archive"
+        # 3. legacy_ids → canonical name → qr_employees
+        if not candidate:
+            legacy = direct_legacy.get(pid)
+            if legacy and legacy.get("name"):
+                candidate = _match_by_name(legacy["name"])
+                source = "employees.legacy_ids"
+        # 4. Historical names already on the immutable log
+        if not candidate:
+            for nm in g.get("historical_names") or []:
+                candidate = _match_by_name(nm)
+                if candidate:
+                    source = "immutable_log_history"
+                    break
+
+        suggestions.append({
+            "printed_id": pid,
+            "scan_count": g["scan_count"],
+            "earliest_scan": g["earliest_scan"],
+            "latest_scan": g["latest_scan"],
+            "historical_names": g["historical_names"],
+            "suggested_canonical_id": candidate["suggested_canonical_id"] if candidate else None,
+            "suggested_name": candidate["suggested_name"] if candidate else None,
+            "confidence": candidate["confidence"] if candidate else "none",
+            "source": source,
+        })
+
+    return {"ghost_count": len(ghosts), "suggestions": suggestions}
+
+
+@qr_router.post("/admin/heal-ghost-ids")
+async def heal_ghost_ids(payload: Dict[str, Any]):
+    """
+    Write printed_id → canonical_id mappings into
+    `qr_employee_id_aliases` and retroactively replay every immutable
+    scan event for those printed_ids so the dashboard counters reflect
+    real scan history.
+
+    Body:
+      {
+        "mappings": [
+          { "printed_id": "<old uuid>", "canonical_id": "<current qr_employees.id>" },
+          ...
+        ],
+        "dry_run": false   # optional, defaults to false
+      }
+
+    Idempotent: events on the immutable log that have already been
+    counted (counter_applied=true) are skipped on re-run. Safe to call
+    repeatedly.
+    """
+    mappings = payload.get("mappings") or []
+    if not isinstance(mappings, list) or not mappings:
+        raise HTTPException(status_code=400, detail="Provide non-empty `mappings` list.")
+    dry_run = bool(payload.get("dry_run"))
+
+    # Validate every canonical_id exists.
+    canonical_ids = {m.get("canonical_id") for m in mappings if m.get("canonical_id")}
+    existing = {
+        doc["id"]
+        async for doc in _db.qr_employees.find(
+            {"id": {"$in": list(canonical_ids)}}, {"_id": 0, "id": 1}
+        )
+    }
+    missing = canonical_ids - existing
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"canonical_id(s) not found in qr_employees: {sorted(missing)}",
+        )
+
+    now = datetime.now(timezone.utc).isoformat()
+    aliases_written = 0
+    events_reattributed = 0
+    increments: Dict[str, Dict[str, int]] = {}
+
+    for m in mappings:
+        printed_id = (m.get("printed_id") or "").strip()
+        canonical_id = (m.get("canonical_id") or "").strip()
+        if not printed_id or not canonical_id:
+            continue
+
+        # 1. Persist alias (upsert).
+        if not dry_run:
+            await _db.qr_employee_id_aliases.update_one(
+                {"printed_id": printed_id},
+                {"$set": {
+                    "printed_id": printed_id,
+                    "canonical_id": canonical_id,
+                    "created_at": now,
+                    "source": "admin_heal",
+                }},
+                upsert=True,
+            )
+            aliases_written += 1
+
+        # 2. Tally outstanding scans for the printed_id (immutable log,
+        #    skipping any event already counted).
+        cursor = _db.qr_click_log_immutable.find(
+            {"employee_id": printed_id, "counter_applied": {"$ne": True}},
+            {"_id": 0, "id": 1, "platform": 1},
+        )
+        event_ids: List[str] = []
+        async for ev in cursor:
+            event_ids.append(ev.get("id"))
+            platform = (ev.get("platform") or "google").lower()
+            if platform not in ("google", "yelp", "tripadvisor"):
+                platform = "google"
+            bucket = increments.setdefault(canonical_id, {
+                "google": 0, "yelp": 0, "tripadvisor": 0
+            })
+            bucket[platform] += 1
+            events_reattributed += 1
+
+        # 3. Mark those events as counter_applied and stamp the
+        #    resolved employee details so future audits show the right
+        #    name on history.
+        if event_ids and not dry_run:
+            emp = await _db.qr_employees.find_one(
+                {"id": canonical_id}, {"_id": 0, "name": 1},
+            )
+            ename = (emp or {}).get("name") or "Unknown"
+            await _db.qr_click_log_immutable.update_many(
+                {"id": {"$in": event_ids}},
+                {"$set": {
+                    "counter_applied": True,
+                    "resolved_employee_id": canonical_id,
+                    "employee_name": ename,
+                    "healed_at": now,
+                }},
+            )
+            # Mirror onto the live scan log when those events still live there.
+            await _db.qr_scans.update_many(
+                {"id": {"$in": event_ids}},
+                {"$set": {
+                    "resolved_employee_id": canonical_id,
+                    "employee_name": ename,
+                }},
+            )
+
+    # 4. Apply aggregated increments to qr_employees counters.
+    employees_updated = 0
+    if not dry_run:
+        for canonical_id, counts in increments.items():
+            inc_doc = {
+                "google_clicks": counts["google"],
+                "yelp_clicks": counts["yelp"],
+                "tripadvisor_clicks": counts["tripadvisor"],
+                "total_clicks": counts["google"] + counts["yelp"] + counts["tripadvisor"],
+            }
+            r = await _db.qr_employees.update_one(
+                {"id": canonical_id},
+                {"$inc": inc_doc, "$set": {"last_scan_at": now}},
+            )
+            if r.matched_count:
+                employees_updated += 1
+
+    return {
+        "success": True,
+        "dry_run": dry_run,
+        "aliases_written": aliases_written,
+        "events_reattributed": events_reattributed,
+        "employees_updated": employees_updated,
+        "preview_increments": increments,
+    }
 
 
 # ============================================================================

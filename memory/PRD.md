@@ -10,7 +10,62 @@ Build a comprehensive performance review application for restaurant employees.
 - **AI**: OpenAI GPT-4o (via Emergent LLM Key)
 - **Auth**: Emergent-managed Google Auth (whitelist via `ALLOWED_ADMIN_EMAILS`)
 
-## Current State (2026-05-11)
+## Current State (2026-05-13)
+
+### P0: Ghost QR Card Healing — SHIPPED 2026-05-13
+
+Root-cause for the "QR clicks aren't tracking" symptom. Two physical
+laminated cards (Polly, Tarek) were submitted and decoded — both point
+at the correct production tracking URL (`/api/qr/go/<uuid>`). The
+real problem: the UUIDs baked into the cards no longer exist in
+`qr_employees` (a prior wipe + re-seed broke the link). When a scan
+hits the backend the redirect to Google still works (so the customer
+flow is fine) BUT the per-employee counter increment silently
+skips, leaving the immutable log with `employee_name="Unknown"` and
+the dashboard showing zero. On prod: immutable log had 60 events in
+30 days, dashboard `total_scans` showed 17.
+
+**Delivered (no card reprint required)**:
+
+1. **`qr_employee_id_aliases` collection** — maps printed UUID →
+   current `qr_employees.id`. Populated by admin via the heal flow.
+
+2. **`_record_scan()` rewired** — new helper `_resolve_canonical_id()`
+   tries direct lookup first, then alias table. Every scan event now
+   stores `resolved_employee_id` and `counter_applied` so we can tell
+   which events were attributed live vs back-filled.
+
+3. **Admin endpoints (auth-protected)**:
+   - `GET  /api/qr/admin/ghost-ids` — lists unresolved UUIDs in the
+     immutable log with scan counts, date range, platform breakdown.
+   - `GET  /api/qr/admin/suggest-ghost-mappings` — best-effort
+     auto-mapping using `qr_daily_snapshots.rows[]` → archived
+     scan names → `employees.legacy_ids`.
+   - `POST /api/qr/admin/heal-ghost-ids` — writes aliases + replays
+     past immutable events into the canonical counter. Idempotent
+     (events flagged `counter_applied=true` skipped on re-run).
+
+4. **`/admin/health` extended** — surfaces `ghost_ids.count` and
+   `ghost_ids.orphan_scans` so the dashboard badge can prompt
+   the admin to heal.
+
+5. **Frontend `QRGhostHeal` page** at `/qr/ghost-heal` —
+   shows ghosts, pre-fills suggested mappings with confidence
+   ratings, dry-run + heal buttons. Linked to the dashboard
+   `QRHealthBadge` (it becomes clickable + amber when ghosts exist).
+
+6. **Regression test** — `tests/test_qr_ghost_heal.py` covers:
+   ghost scan logs but skips counter, heal back-fills correctly,
+   alias persists, idempotent re-run, live alias-resolved scan
+   increments canonical counter. All 4 scenarios passing.
+
+**Production validation steps for the user**:
+1. Sign in as admin on prod.
+2. Navigate to `/qr/ghost-heal` (or click the amber Ghost ID badge).
+3. Review the auto-suggested mappings (Polly = b05709be…, Tarek =
+   aee86c9e…, etc.).
+4. Click "Heal N Ghost IDs". Dashboard QR Scans count should jump
+   from 17 → ~60+ instantly.
 
 ### P2: Merge Duplicate Employees — SHIPPED 2026-05-11
 

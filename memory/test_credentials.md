@@ -26,3 +26,10 @@ Just hit any public URL without signing in. The sidebar will show
 - `POST /api/v2/employees/cleanup/delete`
 - `POST /api/v2/quarter-settings/{year}/{quarter}/unlock`
 - `POST /api/v2/snapshots/...`
+- `POST /api/qr/admin/heal-ghost-ids` (re-attributes ghost-UUID scans)
+
+## How to seed a test admin session (for backend smoke tests)
+See `/app/backend/tests/test_qr_ghost_heal.py` for the canonical pattern:
+insert one row into `users` (with `user_id`), one into `user_sessions`
+(with `session_token` + matching `user_id`), and send the token as
+`Authorization: Bearer <token>`.

@@ -25,6 +25,7 @@ import QRDashboard from "./pages/QRDashboard";
 import QRLeaderboard from "./pages/QRLeaderboard";
 import QREmployees from "./pages/QREmployees";
 import QRSettings from "./pages/QRSettings";
+import QRGhostHeal from "./pages/QRGhostHeal";
 import StoreManagement from "./pages/StoreManagement";
 import StoreLeaderboard from "./pages/StoreLeaderboard";
 import StoreDetails from "./pages/StoreDetails";
@@ -80,6 +81,7 @@ function App() {
                         <Route path="/qr/leaderboard" element={<QRLeaderboard />} />
                         <Route path="/qr/codes" element={<QREmployees />} />
                         <Route path="/qr/settings" element={<QRSettings />} />
+                        <Route path="/qr/ghost-heal" element={<QRGhostHeal />} />
                         {/* Multi-Store Management */}
                         <Route path="/global" element={<GlobalOverview />} />
                         <Route path="/stores" element={<StoreManagement />} />

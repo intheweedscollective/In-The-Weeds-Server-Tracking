@@ -37,6 +37,8 @@ export default function QRHealthBadge() {
 
   const last7d = health?.last_7d?.qr_click_log_immutable ?? 0;
   const gaps = health?.long_gaps_in_immutable_log || [];
+  const ghostCount = health?.ghost_ids?.count ?? 0;
+  const orphanScans = health?.ghost_ids?.orphan_scans ?? 0;
   const isAlert = health?.status === "alert";
   const isUnknown = health?.status === "unknown";
 
@@ -51,20 +53,35 @@ export default function QRHealthBadge() {
   const lastGap = gaps.length > 0 ? gaps[gaps.length - 1] : null;
   const tooltip = isUnknown
     ? "QR health endpoint unreachable"
+    : isAlert && ghostCount > 0
+    ? `${ghostCount} ghost QR card ID(s) detected — ${orphanScans} scan(s) unattributed. Click to heal.`
     : isAlert && lastGap
     ? `Last silent gap: ${lastGap.from} → ${lastGap.to} (${lastGap.days_silent} days). ${last7d} scans in last 7 days.`
     : `${last7d} scans in last 7 days • no tracking gaps detected`;
 
+  const showGhostBadge = ghostCount > 0;
+  const label = isUnknown
+    ? "—"
+    : showGhostBadge
+    ? `${ghostCount} Ghost ID${ghostCount > 1 ? "s" : ""}`
+    : isAlert
+    ? "Gap Detected"
+    : "Healthy";
+
+  const onClick = showGhostBadge
+    ? () => { window.location.assign("/qr/ghost-heal"); }
+    : undefined;
+
   return (
     <div
-      className={`flex items-center gap-1.5 px-2.5 py-1 border rounded-md text-xs ${palette}`}
+      className={`flex items-center gap-1.5 px-2.5 py-1 border rounded-md text-xs ${palette} ${onClick ? "cursor-pointer hover:brightness-125" : ""}`}
       data-testid="qr-health-badge"
       title={tooltip}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
     >
       <Icon className="w-3.5 h-3.5" />
-      <span className="font-medium">
-        QR Tracking: {isUnknown ? "—" : isAlert ? "Gap Detected" : "Healthy"}
-      </span>
+      <span className="font-medium">QR Tracking: {label}</span>
       <span className="opacity-70 hidden sm:inline">· {last7d}/7d</span>
     </div>
   );
