@@ -386,38 +386,83 @@ async def reset_qr_employee_clicks(employee_id: str):
 GOOGLE_REVIEW_URL = os.environ.get("GOOGLE_REVIEW_URL", "https://search.google.com/local/writereview?placeid=ChIJB6hQQjHEyIARLUX1F3jayRo")
 TRIPADVISOR_REVIEW_URL = os.environ.get("TRIPADVISOR_REVIEW_URL", "https://www.tripadvisor.com/UserReview")
 
+
+# ---------------------------------------------------------------------------
+# DURABLE SCAN TRACKER
+# ---------------------------------------------------------------------------
+#
+# Every QR redirect funnels through `_record_scan` so we have ONE place
+# that writes the scan and a single source of behavior. We write to:
+#
+#   1. qr_employees                — current counters (admin-resettable)
+#   2. qr_scans                    — current event log (admin-resettable)
+#   3. qr_click_log_immutable      — append-only audit trail (no admin
+#                                    endpoint may ever touch this).
+#
+# If a future deploy or admin action wipes #1 and #2, #3 still has the
+# complete history and we can rebuild from it.
+
+async def _record_scan(employee_id: str, platform: str) -> None:
+    """Persist a scan across all three trackers. Non-blocking on failures."""
+    now = datetime.now(timezone.utc).isoformat()
+    platform = platform if platform in ("yelp", "google", "tripadvisor") else "google"
+
+    # Resolve employee_id → display name once so it's stamped on the
+    # event even if the employee is later archived/renamed.
+    employee_name = "Unknown"
+    try:
+        emp = await _db.qr_employees.find_one(
+            {"id": employee_id}, {"_id": 0, "name": 1},
+        )
+        if emp:
+            employee_name = emp.get("name") or "Unknown"
+            field = f"{platform}_clicks"
+            await _db.qr_employees.update_one(
+                {"id": employee_id},
+                {
+                    "$inc": {field: 1, "total_clicks": 1},
+                    "$set": {"last_scan_at": now},
+                },
+            )
+        else:
+            logging.warning(f"QR scan: employee_id {employee_id} not in qr_employees")
+    except Exception as e:
+        logging.error(f"QR scan: counter update failed: {e}")
+
+    scan_doc = {
+        "id": str(uuid.uuid4()),
+        "employee_id": employee_id,
+        "employee_name": employee_name,
+        "platform": platform,
+        "scanned_at": now,
+    }
+
+    # Resettable event log.
+    try:
+        await _db.qr_scans.insert_one(dict(scan_doc))
+    except Exception as e:
+        logging.error(f"QR scan: qr_scans insert failed: {e}")
+
+    # Immutable audit trail — NEVER reset, no admin endpoint touches it.
+    # Keeps a copy of the event in case `qr_scans` is wiped by a deploy or
+    # by an admin "Reset Stats" action.
+    try:
+        await _db.qr_click_log_immutable.insert_one(dict(scan_doc))
+    except Exception as e:
+        logging.error(f"QR scan: immutable log insert failed: {e}")
+
+
 @qr_router.get("/scan/{employee_id}/{platform}")
 async def track_scan(employee_id: str, platform: str):
     """Track a QR code scan and redirect to review page"""
     from fastapi.responses import RedirectResponse
-    
+
     # Default to Google if platform is invalid
     if platform not in ['yelp', 'google', 'tripadvisor']:
         platform = 'google'
-    
-    # Try to track the scan (but don't fail if employee not found)
-    try:
-        employee = await _db.qr_employees.find_one({"id": employee_id})
-        if employee:
-            field = f"{platform}_clicks"
-            await _db.qr_employees.update_one(
-                {"id": employee_id},
-                {"$inc": {field: 1, "total_clicks": 1},
-                 "$set": {"last_scan_at": datetime.now(timezone.utc).isoformat()}}
-            )
-            
-            scan = {
-                "id": str(uuid.uuid4()),
-                "employee_id": employee_id,
-                "employee_name": employee.get("name", "Unknown"),
-                "platform": platform,
-                "scanned_at": datetime.now(timezone.utc).isoformat()
-            }
-            await _db.qr_scans.insert_one(scan)
-    except Exception as e:
-        # Log but don't fail - redirect is more important
-        logging.error(f"Failed to track scan: {e}")
-    
+
+    await _record_scan(employee_id, platform)
+
     # Get redirect URL - use settings if available, otherwise env/hardcoded fallback
     # Platform-specific default ensures tripadvisor doesn't fall through to Google.
     platform_defaults = {
@@ -447,35 +492,16 @@ async def tripadvisor_scan_redirect(employee_id: str):
     Mirrors /go/{id} behaviour for maximum compatibility.
     """
     from fastapi.responses import RedirectResponse
-    
-    try:
-        employee = await _db.qr_employees.find_one({"id": employee_id})
-        if employee:
-            await _db.qr_employees.update_one(
-                {"id": employee_id},
-                {"$inc": {"tripadvisor_clicks": 1, "total_clicks": 1},
-                 "$set": {"last_scan_at": datetime.now(timezone.utc).isoformat()}}
-            )
-            await _db.qr_scans.insert_one({
-                "id": str(uuid.uuid4()),
-                "employee_id": employee_id,
-                "employee_name": employee.get("name", "Unknown"),
-                "platform": "tripadvisor",
-                "scanned_at": datetime.now(timezone.utc).isoformat()
-            })
-            logging.info(f"QR scan tracked: {employee.get('name')} (tripadvisor)")
-        else:
-            logging.warning(f"QR scan: Employee not found: {employee_id}")
-    except Exception as e:
-        logging.error(f"QR scan tracking error: {e}")
-    
+
+    await _record_scan(employee_id, "tripadvisor")
+
     try:
         settings = await _db.qr_settings.find_one({"id": "global_settings"})
         if settings and settings.get("tripadvisor_url"):
             return RedirectResponse(url=settings["tripadvisor_url"], status_code=302)
     except Exception:
         pass
-    
+
     return RedirectResponse(url=TRIPADVISOR_REVIEW_URL, status_code=302)
 
 
@@ -486,37 +512,17 @@ async def quick_scan_redirect(employee_id: str):
     Use this for maximum compatibility on all devices.
     """
     from fastapi.responses import RedirectResponse
-    
-    # Try to track (non-blocking)
-    try:
-        employee = await _db.qr_employees.find_one({"id": employee_id})
-        if employee:
-            await _db.qr_employees.update_one(
-                {"id": employee_id},
-                {"$inc": {"google_clicks": 1, "total_clicks": 1},
-                 "$set": {"last_scan_at": datetime.now(timezone.utc).isoformat()}}
-            )
-            await _db.qr_scans.insert_one({
-                "id": str(uuid.uuid4()),
-                "employee_id": employee_id,
-                "employee_name": employee.get("name", "Unknown"),
-                "platform": "google",
-                "scanned_at": datetime.now(timezone.utc).isoformat()
-            })
-            logging.info(f"QR scan tracked: {employee.get('name')} (google)")
-        else:
-            logging.warning(f"QR scan: Employee not found: {employee_id}")
-    except Exception as e:
-        logging.error(f"QR scan tracking error: {e}")
-    
+
+    await _record_scan(employee_id, "google")
+
     # Get URL from settings or use hardcoded fallback
     try:
         settings = await _db.qr_settings.find_one({"id": "global_settings"})
         if settings and settings.get("google_url"):
             return RedirectResponse(url=settings["google_url"], status_code=302)
-    except:
+    except Exception:
         pass
-    
+
     return RedirectResponse(url=GOOGLE_REVIEW_URL, status_code=302)
 
 
@@ -528,33 +534,8 @@ async def ultra_simple_redirect(employee_id: str):
     """
     from fastapi.responses import RedirectResponse
 
-    # Track + ALSO increment the per-employee counter. The previous version
-    # only inserted into qr_scans, leaving qr_employees.google_clicks frozen
-    # at whatever value it had — which is why /api/qr/stats and the leader-
-    # board kept showing stale numbers while the raw event log accumulated
-    # new entries. Look up the employee so we can carry their name on the
-    # raw scan record too (used by the Recent Activity feed).
-    try:
-        employee = await _db.qr_employees.find_one({"id": employee_id})
-        if employee:
-            await _db.qr_employees.update_one(
-                {"id": employee_id},
-                {"$inc": {"google_clicks": 1, "total_clicks": 1},
-                 "$set": {"last_scan_at": datetime.now(timezone.utc).isoformat()}}
-            )
-            employee_name = employee.get("name", "Unknown")
-        else:
-            employee_name = "Unknown"
-        await _db.qr_scans.insert_one({
-            "id": str(uuid.uuid4()),
-            "employee_id": employee_id,
-            "employee_name": employee_name,
-            "platform": "google",
-            "scanned_at": datetime.now(timezone.utc).isoformat()
-        })
-    except Exception as e:
-        logging.error(f"/qr/r tracking error: {e}")
-    
+    await _record_scan(employee_id, "google")
+
     return RedirectResponse(url=GOOGLE_REVIEW_URL, status_code=302)
 
 @qr_router.get("/scans")
@@ -564,22 +545,41 @@ async def get_recent_scans(limit: int = 50):
     return scans
 
 @qr_router.delete("/scans/reset-all")
-async def reset_all_qr_scans():
+async def reset_all_qr_scans(confirm_phrase: str = ""):
     """
     Reset ALL QR scan data.
 
-    - Archives every existing `qr_scans` event into `qr_scans_archive` before
-      deletion so the data is recoverable. Each archived doc gets an
-      `archived_at` timestamp and the same `archive_batch_id` so you can
-      restore a specific reset.
+    SAFETY: caller MUST pass `?confirm_phrase=RESET YYYY-MM-DD` matching
+    today's UTC date. We added this guard after a previous reset
+    accidentally lost ~5 weeks of clicks. The phrase is intentionally
+    annoying to type so it can't be triggered by a stray fetch / link
+    click / accidental admin button press.
+
+    The immutable `qr_click_log_immutable` collection is NEVER touched
+    by this endpoint — even if the live scan log is reset, the full
+    history is preserved there and can be rebuilt from.
+
+    - Archives every existing `qr_scans` event into `qr_scans_archive`
+      before deletion so the data is recoverable. Each archived doc gets
+      an `archived_at` timestamp and the same `archive_batch_id` so you
+      can restore a specific reset.
     - Then deletes the live scan records and zeros every employee's
       `google_clicks` / `yelp_clicks` / `tripadvisor_clicks` / `total_clicks`.
-
-    Why archive? The user reported losing accumulated engagement data after
-    a reset. Production data should never be destroyed without a recovery
-    path.
     """
     from datetime import datetime, timezone
+    today = datetime.now(timezone.utc).date().isoformat()
+    expected = f"RESET {today}"
+    if confirm_phrase.strip() != expected:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Confirmation required. Re-call this endpoint with "
+                f"?confirm_phrase={expected!r} to proceed. The immutable "
+                f"audit log (qr_click_log_immutable) is never touched by "
+                f"this endpoint regardless."
+            ),
+        )
+
     batch_id = str(uuid.uuid4())
     archived_at = datetime.now(timezone.utc).isoformat()
 
@@ -989,6 +989,160 @@ def register_qr_routes(app_router, db):
     """Set up the QR tracking module"""
     set_qr_db(db)
     app_router.include_router(qr_router)
+
+
+# ============================================================================
+# DURABILITY & HEALTH — qr_click_log_immutable + daily snapshots + alerts
+# ============================================================================
+
+@qr_router.get("/admin/health")
+async def qr_health_check():
+    """
+    Detect tracking outages early. Returns scan rate over the last 7 /
+    14 / 30 days and flags any gap > 14 days where zero scans were
+    recorded between two adjacent active days.
+
+    Hook this into a daily monitor (cron + alert) so the next time
+    tracking silently breaks (like the Apr 7 → May 8 blackout) we know
+    within 24 hours instead of 31 days.
+    """
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone.utc)
+    out = {"now": now.isoformat()}
+
+    for window in (7, 14, 30):
+        cutoff = (now - timedelta(days=window)).isoformat()
+        live = await _db.qr_scans.count_documents({"scanned_at": {"$gte": cutoff}})
+        imm = await _db.qr_click_log_immutable.count_documents({"scanned_at": {"$gte": cutoff}})
+        out[f"last_{window}d"] = {"qr_scans": live, "qr_click_log_immutable": imm}
+
+    # Detect long silences in the immutable log.
+    dates = []
+    async for s in _db.qr_click_log_immutable.find(
+        {}, {"_id": 0, "scanned_at": 1}
+    ).sort("scanned_at", 1):
+        if s.get("scanned_at"):
+            try:
+                dates.append(datetime.fromisoformat(s["scanned_at"].replace("Z", "")).date())
+            except (TypeError, ValueError):
+                continue
+    long_gaps = []
+    for i in range(1, len(dates)):
+        gap = (dates[i] - dates[i - 1]).days
+        if gap > 14:
+            long_gaps.append({
+                "from": dates[i - 1].isoformat(),
+                "to": dates[i].isoformat(),
+                "days_silent": gap,
+            })
+    out["long_gaps_in_immutable_log"] = long_gaps
+    out["status"] = "alert" if long_gaps else "ok"
+    return out
+
+
+@qr_router.post("/admin/daily-snapshot")
+async def qr_daily_snapshot():
+    """
+    Persist a daily snapshot of `qr_employees` counter state to
+    `qr_daily_snapshots`. Idempotent per UTC day — re-runs on the same
+    day overwrite that day's row, so it's safe to schedule every hour.
+
+    Each snapshot doc captures every employee's click counters. Lets us
+    answer "what did Diane's clicks look like on May 1?" by reading
+    one document. Also gives us a 90-day undo window for any future
+    accidental wipe.
+    """
+    from datetime import datetime, timezone
+    today = datetime.now(timezone.utc).date().isoformat()
+    rows = []
+    async for q in _db.qr_employees.find({}, {"_id": 0}):
+        rows.append({
+            "employee_id": q.get("id"),
+            "name": q.get("name"),
+            "yelp_clicks": q.get("yelp_clicks") or 0,
+            "google_clicks": q.get("google_clicks") or 0,
+            "tripadvisor_clicks": q.get("tripadvisor_clicks") or 0,
+        })
+    total = sum(r["yelp_clicks"] + r["google_clicks"] + r["tripadvisor_clicks"]
+                for r in rows)
+
+    await _db.qr_daily_snapshots.update_one(
+        {"date": today},
+        {"$set": {
+            "date": today,
+            "captured_at": datetime.now(timezone.utc).isoformat(),
+            "employee_count": len(rows),
+            "total_clicks": total,
+            "rows": rows,
+        }},
+        upsert=True,
+    )
+    return {"date": today, "employee_count": len(rows), "total_clicks": total}
+
+
+@qr_router.post("/admin/rebuild-counters-from-immutable")
+async def rebuild_counters_from_immutable_log(
+    confirm_phrase: str = "",
+):
+    """
+    Rebuild every `qr_employees` click counter from the
+    `qr_click_log_immutable` audit trail. Use this if `qr_scans` was
+    wiped and the live counters drifted from reality.
+
+    SAFETY: pass `?confirm_phrase=REBUILD YYYY-MM-DD` matching today.
+    This endpoint resets every counter to zero before writing, so a
+    bad invocation would zero working counters — hence the typed
+    confirmation.
+    """
+    from datetime import datetime, timezone
+    today = datetime.now(timezone.utc).date().isoformat()
+    expected = f"REBUILD {today}"
+    if confirm_phrase.strip() != expected:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Confirmation required: ?confirm_phrase={expected!r}",
+        )
+
+    pipeline = [
+        {"$group": {
+            "_id": {"emp": "$employee_id", "platform": "$platform"},
+            "count": {"$sum": 1},
+            "last": {"$max": "$scanned_at"},
+        }},
+    ]
+    by_emp: Dict[str, Dict[str, Any]] = {}
+    async for row in _db.qr_click_log_immutable.aggregate(pipeline):
+        eid = row["_id"]["emp"]
+        platform = (row["_id"]["platform"] or "google").lower()
+        if not eid or platform not in {"google", "yelp", "tripadvisor"}:
+            continue
+        entry = by_emp.setdefault(eid, {})
+        entry[f"{platform}_clicks"] = row["count"]
+        last = row["last"]
+        if last and last > entry.get("last_scan_at", ""):
+            entry["last_scan_at"] = last
+
+    await _db.qr_employees.update_many(
+        {},
+        {"$set": {"google_clicks": 0, "yelp_clicks": 0,
+                  "tripadvisor_clicks": 0, "total_clicks": 0}},
+    )
+
+    synced = 0
+    for eid, entry in by_emp.items():
+        g, y, t = entry.get("google_clicks", 0), entry.get("yelp_clicks", 0), entry.get("tripadvisor_clicks", 0)
+        update = {"google_clicks": g, "yelp_clicks": y, "tripadvisor_clicks": t,
+                  "total_clicks": g + y + t}
+        if entry.get("last_scan_at"):
+            update["last_scan_at"] = entry["last_scan_at"]
+        r = await _db.qr_employees.update_one({"id": eid}, {"$set": update})
+        if r.matched_count:
+            synced += 1
+    return {"success": True, "employees_synced": synced,
+            "total_immutable_events": await _db.qr_click_log_immutable.count_documents({})}
+
+
+# ============================================================================
 
 
 @qr_router.get("/leaderboard/slide")
