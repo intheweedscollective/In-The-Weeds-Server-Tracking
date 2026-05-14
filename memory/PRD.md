@@ -12,6 +12,41 @@ Build a comprehensive performance review application for restaurant employees.
 
 ## Current State (2026-05-13)
 
+### P1: Single-Source Scoring Formula — SHIPPED 2026-05-13
+
+The codebase had **4 parallel implementations** of the total-score
+formula, each with hardcoded `0.25/0.25/0.15/0.10` weights instead
+of the per-quarter `settings.weight_*` columns. Any future admin
+weight tweak would have skipped these sites and caused score drift.
+
+**Sites consolidated**:
+1. `routes/admin.py:clear_cv_data` — recomputes after CV wipe.
+2. `routes/admin.py:clear_rt_data` — recomputes after RT wipe.
+3. `routes/snapshots_legacy.py:_sync_snapshot_to_employees_v2`
+   (manual snapshot → employee push-back).
+4. `routes/snapshots_legacy.py` raw-POS rebuild paths (×2 identical
+   blocks at the SSD engine and the v2 SSD engine).
+
+**Delivered**:
+- New `scoring_engine.compute_total_score_dict(emp_dict, settings)`
+  facade. Reconstructs an `EmployeeV2`, delegates to the canonical
+  `calculate_total_score`, returns dict with `weighted_score`,
+  `pre_dar_score`, `total_score`. Preserves all other input dict
+  keys (id, name, store_id, etc.).
+- Each of the 4 inline formulas replaced with one call to the
+  facade. Per-quarter weights, RT/CV rules, DAR penalty all flow
+  through one place now.
+- Regression test `tests/test_scoring_engine_unified.py` with 6
+  cases: byte-equality with canonical, weight propagation, 100-cap,
+  partial-dict defaults, dict-key preservation, AND a **hard-code
+  guard** that fails if the inline formula reappears in `admin.py`
+  or `snapshots_legacy.py`.
+
+**Test status**: 6/6 new tests + 22/22 prior architecture regression
+tests pass (28 total). 96 pre-existing failures in
+`test_v2_scoring_engine.py` / yodeck tests are auth-gated (401
+unauthorized) and unrelated to this refactor.
+
 ### P0: Ghost QR Card Healing — SHIPPED 2026-05-13
 
 Root-cause for the "QR clicks aren't tracking" symptom. Two physical

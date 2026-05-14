@@ -632,14 +632,16 @@ async def clear_cv_data(quarter: str = "Q1", year: int = 2026):
     """
     Clear all Customer Voice data and reset employee CV scores.
     """
+    from scoring_engine import compute_total_score_dict, QuarterSettings
+
     db = get_db()
     try:
         # Clear cv_feedback collection
         cv_result = await db.cv_feedback.delete_many({})
-        
+
         # Clear cv_nps collection
         nps_result = await db.cv_nps.delete_many({})
-        
+
         # Reset CV fields on all employees for this quarter/year
         emp_result = await db.employees_v2.update_many(
             {"quarter": quarter, "year": year},
@@ -651,25 +653,31 @@ async def clear_cv_data(quarter: str = "Q1", year: int = 2026):
                 "nps_score_pts": 0
             }}
         )
-        
-        # Recalculate total scores
+
+        # Recalculate total scores via the canonical scoring engine so
+        # that any per-quarter weight or formula tweak applies here too.
+        settings_doc = await db.quarter_settings.find_one(
+            {"year": year, "quarter": quarter.upper()}, {"_id": 0}
+        )
+        settings = QuarterSettings(**settings_doc) if settings_doc else QuarterSettings(
+            year=year, quarter=quarter.upper()
+        )
         employees = await db.employees_v2.find({
             "quarter": quarter,
             "year": year
         }).to_list(200)
-        
+
         for emp in employees:
-            weighted_score = emp.get("weighted_score", 0) or 0
-            total_metric_bonus = emp.get("total_metric_bonus", 0) or 0
-            rt_bonus = emp.get("review_tracker_bonus", 0) or 0
-            # CV is now 0
-            total_score = weighted_score + total_metric_bonus + rt_bonus
-            
+            scored = compute_total_score_dict({**emp, "cv_score": 0}, settings)
             await db.employees_v2.update_one(
                 {"_id": emp["_id"]},
-                {"$set": {"total_score": round(total_score, 2)}}
+                {"$set": {
+                    "weighted_score": scored["weighted_score"],
+                    "pre_dar_score": scored["pre_dar_score"],
+                    "total_score": scored["total_score"],
+                }},
             )
-        
+
         return {
             "success": True,
             "cv_feedback_deleted": cv_result.deleted_count,
@@ -686,11 +694,13 @@ async def clear_rt_data(quarter: str = "Q1", year: int = 2026):
     """
     Clear all Review Tracker data and reset employee RT mention counts.
     """
+    from scoring_engine import compute_total_score_dict, QuarterSettings
+
     db = get_db()
     try:
         # Clear customer_reviews collection
         reviews_result = await db.customer_reviews.delete_many({})
-        
+
         # Reset RT fields on all employees for this quarter/year
         emp_result = await db.employees_v2.update_many(
             {"quarter": quarter, "year": year},
@@ -700,25 +710,30 @@ async def clear_rt_data(quarter: str = "Q1", year: int = 2026):
                 "review_tracker_bonus": 0
             }}
         )
-        
-        # Recalculate total scores
+
+        # Recalculate total scores through the canonical engine.
+        settings_doc = await db.quarter_settings.find_one(
+            {"year": year, "quarter": quarter.upper()}, {"_id": 0}
+        )
+        settings = QuarterSettings(**settings_doc) if settings_doc else QuarterSettings(
+            year=year, quarter=quarter.upper()
+        )
         employees = await db.employees_v2.find({
             "quarter": quarter,
             "year": year
         }).to_list(200)
-        
+
         for emp in employees:
-            weighted_score = emp.get("weighted_score", 0) or 0
-            cv_score = emp.get("cv_score", 0) or 0
-            total_metric_bonus = emp.get("total_metric_bonus", 0) or 0
-            # RT is now 0
-            total_score = weighted_score + cv_score + total_metric_bonus
-            
+            scored = compute_total_score_dict({**emp, "review_tracker_bonus": 0}, settings)
             await db.employees_v2.update_one(
                 {"_id": emp["_id"]},
-                {"$set": {"total_score": round(total_score, 2)}}
+                {"$set": {
+                    "weighted_score": scored["weighted_score"],
+                    "pre_dar_score": scored["pre_dar_score"],
+                    "total_score": scored["total_score"],
+                }},
             )
-        
+
         return {
             "success": True,
             "reviews_deleted": reviews_result.deleted_count,

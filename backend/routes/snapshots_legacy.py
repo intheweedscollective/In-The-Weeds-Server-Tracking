@@ -25,7 +25,7 @@ from scoring_engine import (
     EmployeeV2, QuarterSettings,
     validate_upload_columns,
     calculate_lbw_total, calculate_derived_metrics, calculate_normalized_scores,
-    calculate_bonus_points, calculate_total_score,
+    calculate_bonus_points, calculate_total_score, compute_total_score_dict,
     calculate_customer_voice_score, calculate_review_tracker_bonus, calculate_combined_cv_rt
 )
 from snapshot_slides import get_available_backgrounds
@@ -117,34 +117,30 @@ def register_snapshots_legacy_routes(router: APIRouter, db):
                     "score_lsc": get_val("score_lsc"),
                     "updated_at": datetime.now(timezone.utc)
                 }
-                
-                # Recalculate weighted_score (POS portion only)
-                capped_ppa = min(update_fields.get("score_ppa", 0) or 0, 100)
-                capped_lbw = min(update_fields.get("score_lbw", 0) or 0, 100)
-                capped_glass = min(update_fields.get("score_glass", 0) or 0, 100)
-                capped_lsc = min(update_fields.get("score_lsc", 0) or 0, 100)
-                
-                # RT contribution
-                rt_mentions = existing.get("rt_mentions", 0) or 0
-                rt_contribution = min(rt_mentions * 0.3, 20)
-                
-                weighted_score = (
-                    capped_ppa * 0.25 +
-                    capped_lsc * 0.25 +
-                    capped_lbw * 0.15 +
-                    capped_glass * 0.10 +
-                    rt_contribution
+
+                # Recompute weighted/pre_dar/total through the canonical
+                # scoring engine — picks up per-quarter weights, RT/CV
+                # rules, DAR penalty config automatically.
+                settings_doc = await db.quarter_settings.find_one(
+                    {"year": year, "quarter": quarter.upper()}, {"_id": 0}
                 )
-                update_fields["weighted_score"] = round(weighted_score, 2)
-                
-                # Recalculate total score
-                cv_score = existing.get("cv_score", 0) or 0
-                total_metric_bonus = existing.get("total_metric_bonus", 0) or 0
-                
-                total_score = weighted_score + cv_score + total_metric_bonus
-                update_fields["total_score"] = round(total_score, 2)
-                update_fields["pre_dar_score"] = round(total_score, 2)
-                
+                settings = QuarterSettings(**settings_doc) if settings_doc else QuarterSettings(
+                    year=year, quarter=quarter.upper()
+                )
+                scored = compute_total_score_dict({
+                    "score_ppa": update_fields.get("score_ppa") or 0,
+                    "score_lbw": update_fields.get("score_lbw") or 0,
+                    "score_glass": update_fields.get("score_glass") or 0,
+                    "score_lsc": update_fields.get("score_lsc") or 0,
+                    "cv_score": existing.get("cv_score") or 0,
+                    "review_tracker_bonus": existing.get("review_tracker_bonus") or 0,
+                    "total_metric_bonus": existing.get("total_metric_bonus") or 0,
+                    "dar_penalty": existing.get("dar_penalty") or 0,
+                }, settings)
+                update_fields["weighted_score"] = scored["weighted_score"]
+                update_fields["pre_dar_score"] = scored["pre_dar_score"]
+                update_fields["total_score"] = scored["total_score"]
+
                 await db.employees_v2.update_one(
                     {"_id": existing["_id"]},
                     {"$set": update_fields}
@@ -470,20 +466,13 @@ def register_snapshots_legacy_routes(router: APIRouter, db):
                         score_glass = (glassware_per_guest / benchmark_glass) * 100 if benchmark_glass > 0 else 0
                         score_lsc = (benchmark_lsc / guests_per_lsc) * 100 if guests_per_lsc and guests_per_lsc > 0 else 0
                         
-                        # Calculate weighted base score (capped at 100 each)
-                        capped_ppa = min(score_ppa, 100)
-                        capped_lbw = min(score_lbw, 100)
-                        capped_glass = min(score_glass, 100)
-                        capped_lsc = min(score_lsc, 100)
-                        
-                        base_score = (
-                            capped_ppa * 0.25 +
-                            capped_lsc * 0.25 +
-                            capped_lbw * 0.15 +
-                            capped_glass * 0.10
-                        )
-                        
-                        total_score = round(base_score, 2)
+                        # Compute base/total score through the canonical
+                        # scoring engine so per-quarter weights stay in sync.
+                        scored = compute_total_score_dict({
+                            "score_ppa": score_ppa, "score_lbw": score_lbw,
+                            "score_glass": score_glass, "score_lsc": score_lsc,
+                        }, settings)
+                        total_score = scored["total_score"]
                         
                         emp = {
                             "name": name,
@@ -710,19 +699,13 @@ def register_snapshots_legacy_routes(router: APIRouter, db):
                     score_glass = (glassware_per_guest / benchmark_glass) * 100 if benchmark_glass > 0 else 0
                     score_lsc = (benchmark_lsc / guests_per_lsc) * 100 if guests_per_lsc and guests_per_lsc > 0 else 0
                     
-                    capped_ppa = min(score_ppa, 100)
-                    capped_lbw = min(score_lbw, 100)
-                    capped_glass = min(score_glass, 100)
-                    capped_lsc = min(score_lsc, 100)
-                    
-                    base_score = (
-                        capped_ppa * 0.25 +
-                        capped_lsc * 0.25 +
-                        capped_lbw * 0.15 +
-                        capped_glass * 0.10
-                    )
-                    
-                    total_score = round(base_score, 2)
+                    # Compute base/total score through the canonical
+                    # scoring engine so per-quarter weights stay in sync.
+                    scored = compute_total_score_dict({
+                        "score_ppa": score_ppa, "score_lbw": score_lbw,
+                        "score_glass": score_glass, "score_lsc": score_lsc,
+                    }, settings)
+                    total_score = scored["total_score"]
                     
                     emp = {
                         "name": name,

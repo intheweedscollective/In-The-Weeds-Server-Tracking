@@ -679,6 +679,50 @@ def calculate_total_score(employee: EmployeeV2, settings: QuarterSettings) -> Em
     return employee
 
 
+# ---------------------------------------------------------------------------
+# Dict-friendly facade for callers that don't have a fully-populated
+# EmployeeV2 (e.g. legacy snapshot rebuilders, admin clear-data utilities).
+#
+# Use this instead of re-implementing the formula inline. If the formula
+# changes (new weight column, new bonus, etc.) you only need to touch
+# `calculate_total_score` above — every caller routed through this
+# helper picks up the change automatically.
+# ---------------------------------------------------------------------------
+
+def compute_total_score_dict(emp: Dict[str, Any], settings: QuarterSettings) -> Dict[str, Any]:
+    """
+    Given a partial employee dict (must contain at least the four
+    `score_*` POS metric scores) and the quarter settings, return a
+    NEW dict with `weighted_score`, `pre_dar_score`, and `total_score`
+    populated using the canonical scoring math.
+
+    Optional fields read from the input dict (default 0 when absent):
+      - cv_score
+      - review_tracker_bonus
+      - total_metric_bonus
+      - dar_penalty
+
+    All other keys on the input dict are left untouched in the output.
+    """
+    out = dict(emp)
+    proxy = EmployeeV2(
+        name=out.get("name") or "scoring-proxy",
+        score_ppa=out.get("score_ppa") or 0,
+        score_lbw=out.get("score_lbw") or 0,
+        score_glass=out.get("score_glass") or 0,
+        score_lsc=out.get("score_lsc") or 0,
+        cv_score=out.get("cv_score") or 0,
+        review_tracker_bonus=out.get("review_tracker_bonus") or 0,
+        total_metric_bonus=out.get("total_metric_bonus") or 0,
+        dar_penalty=out.get("dar_penalty") or 0,
+    )
+    calculate_total_score(proxy, settings)
+    out["weighted_score"] = proxy.weighted_score
+    out["pre_dar_score"] = proxy.pre_dar_score
+    out["total_score"] = proxy.total_score
+    return out
+
+
 def calculate_rankings(employees: List[EmployeeV2]) -> List[EmployeeV2]:
     """
     Rank employees by pre_dar_score (descending).
