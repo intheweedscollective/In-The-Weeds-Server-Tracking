@@ -2198,25 +2198,26 @@ async def _load_snapshot_first_rankings(
         rt_max_points=settings_doc.get("rt_max_points", 20.0),
     )
 
-    # Phase 3 Stage B — snapshot-first via canonical FK-join.
-    # `get_snapshot_with_join` reads from `rows[]` (FK array) when
-    # populated, otherwise falls back transparently to the legacy
-    # `employees[]` array. Terminated/merged employees and snapshot
-    # blocklist names are filtered automatically.
-    svc = EmployeeService(db)
+    # Phase 3 Stage B — snapshot-first via canonical FK-join + v2 overlay.
+    # Use the shared hydration helper that backs `/current-rankings` so
+    # both the page and the snapshot PNG/PDF land on identical numbers.
+    # Helper does FK-join, canonical overlay, v2 fallback for CV/RT,
+    # status filter, and on-the-fly recompute in one place.
+    from snapshot_routes import _hydrate_snapshot_employees
+
     join_query: Dict[str, Any] = {"is_current": True, "year": year,
                                   "quarter": quarter.upper()}
-    snapshot = await db.snapshot_workflow.find_one(join_query, {"_id": 0, "id": 1})
+    snapshot = await db.snapshot_workflow.find_one(join_query, {"_id": 0})
     if not snapshot:
         snapshot = await db.snapshot_workflow.find_one(
             {"status": "completed", "year": year, "quarter": quarter.upper()},
-            {"_id": 0, "id": 1},
+            {"_id": 0},
             sort=[("effective_date", -1), ("completed_at", -1)],
         )
 
+    svc = EmployeeService(db)
     if snapshot:
-        joined = await svc.get_snapshot_with_join(snapshot_id=snapshot["id"])
-        raw_rows = (joined or {}).get("employees") or []
+        raw_rows = await _hydrate_snapshot_employees(db, snapshot)
     else:
         # Truly no snapshot — last-resort fallback to legacy mirror.
         raw_rows = await db.employees_v2.find(
@@ -2229,37 +2230,6 @@ async def _load_snapshot_first_rankings(
         raise HTTPException(
             status_code=404,
             detail=f"No employees found for {quarter} {year}",
-        )
-
-    # Recompute the three drift-prone derived fields on every row from
-    # their current inputs so manual overrides on the snapshot always win
-    # over stale stored scores (matches `/current-rankings` behavior).
-    _rt_coef = settings.rt_points_per_mention or 0.3
-    _rt_cap = settings.rt_max_points or 20.0
-    for r in raw_rows:
-        # RT bonus
-        _m = r.get("rt_mentions") or r.get("review_mentions") or 0
-        r["review_tracker_bonus"] = round(min(_m * _rt_coef, _rt_cap), 2)
-        r["review_mentions"] = _m
-        r["rt_mentions"] = _m
-        # CV score — skip if manual override pinned this row.
-        if not r.get("nps_manual_override"):
-            try:
-                _nps_c = max(0.0, min(float(r.get("nps_score") or 0), 100.0))
-            except (TypeError, ValueError):
-                _nps_c = 0.0
-            _p = r.get("cv_promoters") or 0
-            _d = r.get("cv_detractors") or 0
-            r["nps_contribution"] = round(_nps_c / 10.0, 2)
-            r["cv_raw_points"] = round(_p - 2 * _d, 2)
-            r["cv_score"] = round(r["nps_contribution"] + r["cv_raw_points"], 2)
-        # Metric bonus aggregate
-        r["total_metric_bonus"] = round(
-            (r.get("bonus_ppa") or 0)
-            + (r.get("bonus_lbw") or 0)
-            + (r.get("bonus_glass") or 0)
-            + (r.get("bonus_lsc") or 0),
-            2,
         )
 
     # Convert to EmployeeV2 (parser uses alt names — normalize first).

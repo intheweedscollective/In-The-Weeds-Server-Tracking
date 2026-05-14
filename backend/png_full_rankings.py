@@ -147,48 +147,63 @@ def _draw_sidebar(img: Image.Image, draw: ImageDraw.ImageDraw, quarter: str) -> 
                    _load_font(48, True), REF_COLORS["text_white"], anchor="mm")
 
     # ---- Title (LARGE — fills sidebar like the reference) ----
-    title_y = 340
+    title_y = 320
     _draw_text(draw, (cx, title_y), f"{quarter} SERVER",
-               _load_font(54, True), REF_COLORS["text_white"], anchor="mm")
-    _draw_text(draw, (cx, title_y + 75), "PERFORMANCE",
-               _load_font(70, True), REF_COLORS["red"], anchor="mm")
-    _draw_text(draw, (cx, title_y + 150), "SNAPSHOT",
-               _load_font(54, True), REF_COLORS["text_white"], anchor="mm")
-    _draw_text(draw, (cx, title_y + 210),
+               _load_font(58, True), REF_COLORS["text_white"], anchor="mm")
+    _draw_text(draw, (cx, title_y + 72), "PERFORMANCE",
+               _load_font(64, True), REF_COLORS["red"], anchor="mm")
+    _draw_text(draw, (cx, title_y + 144), "SNAPSHOT",
+               _load_font(58, True), REF_COLORS["text_white"], anchor="mm")
+    _draw_text(draw, (cx, title_y + 206),
                datetime.now().strftime("%B %d, %Y"),
-               _load_font(28, True), REF_COLORS["red"], anchor="mm")
+               _load_font(30, True), REF_COLORS["red"], anchor="mm")
 
-    # ---- Legend ----
-    legend_y = title_y + 250
+    # ---- Legend (centered as a block within the sidebar) ----
+    legend_y = title_y + 270
     items = [
         ("EXCEEDING ALL",   "EXPECTATIONS", REF_COLORS["blue"]),
         ("MEETING",         "EXPECTATIONS", REF_COLORS["green"]),
         ("WORK IN",         "PROGRESS",     REF_COLORS["yellow"]),
         ("NEEDS IMMEDIATE", "IMPROVEMENT",  REF_COLORS["red"]),
     ]
-    label_font = _load_font(22, True)
-    swatch_x = 50
-    swatch_w = 42
+    label_font = _load_font(24, True)
+    swatch_w = 46
     swatch_h = 60
-    text_x = swatch_x + swatch_w + 18
+    gap = 18
+    # Compute widest text line to center the block as a unit.
+    max_text_w = 0
+    for l1, l2, _ in items:
+        for line in (l1, l2):
+            tw = draw.textlength(line, font=label_font)
+            if tw > max_text_w:
+                max_text_w = int(tw)
+    block_w = swatch_w + gap + max_text_w
+    swatch_x = cx - block_w // 2
+    text_x = swatch_x + swatch_w + gap
+    row_pitch = 70
     for i, (l1, l2, color) in enumerate(items):
-        y = legend_y + i * 72
+        y = legend_y + i * row_pitch
         draw.rectangle((swatch_x, y, swatch_x + swatch_w, y + swatch_h), fill=color)
         _draw_text(draw, (text_x, y + 8),  l1, label_font, color, anchor="lt")
         _draw_text(draw, (text_x, y + 34), l2, label_font, color, anchor="lt")
 
     # ---- Footer ----
-    foot_font = _load_font(20, True)
-    footer_y = SLIDE_HEIGHT - 140
-    for j, line in enumerate([
+    foot_font = _load_font(22, True)
+    # Anchor footer to the bottom so it never overlaps the legend even if
+    # we add a 5th classification or grow the title.
+    footer_lines = [
         "DON'T WAIT TO IMPACT",
         "THIS NUMBER.",
         "",
         "IF YOU HAVE QUESTIONS",
         "PLEASE SEE MANAGEMENT.",
-    ]):
+    ]
+    line_pitch = 28
+    footer_h = len(footer_lines) * line_pitch
+    footer_y = SLIDE_HEIGHT - footer_h - 24
+    for j, line in enumerate(footer_lines):
         if line:
-            _draw_text(draw, (cx, footer_y + j * 26), line, foot_font,
+            _draw_text(draw, (cx, footer_y + j * line_pitch), line, foot_font,
                        REF_COLORS["text_white"], anchor="mm")
 
 

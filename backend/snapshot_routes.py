@@ -2090,6 +2090,250 @@ async def reprocess_snapshot(snapshot_id: str):
 # CURRENT RANKINGS
 # ============================================================================
 
+async def _hydrate_snapshot_employees(db, snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Shared helper that loads a snapshot's employee rows the same way the
+    `/current-rankings` endpoint does. Centralises four things that used
+    to be inlined in only one read path:
+
+      1. FK-join — when `snapshot.rows[]` exists, hydrate each row by
+         joining against the canonical `employees` collection so the
+         display_name + status + identity come from one source of truth.
+      2. Canonical overlay — overlay CV/RT/metric_bonus inputs from
+         each canonical employee's `current_metrics` blob when the
+         snapshot's frozen copy is missing them. This is what was
+         causing the snapshot PNG to show all-zero CV/RT columns while
+         `/rankings` looked correct: the slide endpoint never overlaid
+         from canonical.
+      3. Status filter — terminated/merged canonical employees are
+         hidden for non-finalized snapshots (finalized snapshots must
+         render exactly as frozen).
+      4. On-the-fly recompute — RT bonus = mentions × coef, capped;
+         CV score = NPS%/10 + Promoters − 2×Detractors; metric bonus
+         sum. Drift-resistant so the display always matches inputs.
+
+    Finalized snapshots are intentionally returned raw (without canonical
+    overlay or status filter) so historical PDFs match the moment-in-time
+    when they were frozen.
+    """
+    from services.employee_service import EmployeeService
+
+    snapshot_finalized = snapshot.get("status") == "finalized"
+
+    # 1. FK-join (or legacy fallback)
+    if not snapshot_finalized:
+        joined = await EmployeeService(db).get_snapshot_with_join(
+            snapshot_id=snapshot.get("id"),
+        )
+        employees = (joined or {}).get("employees") or snapshot.get("employees", [])
+    else:
+        employees = snapshot.get("employees", [])
+
+    # 2. Build canonical index (status + display_name + current_metrics overlay)
+    canonical_status: Dict[str, str] = {}
+    canonical_display: Dict[str, str] = {}
+    canonical_id_by_name: Dict[str, str] = {}
+    canonical_overlay_by_id: Dict[str, Dict[str, Any]] = {}
+    canonical_overlay_by_name: Dict[str, Dict[str, Any]] = {}
+
+    svc = EmployeeService(db)
+    overlay_fields = (
+        "cv_score", "nps_score", "cv_promoters", "cv_passives", "cv_detractors",
+        "rt_mentions", "review_mentions", "review_tracker_bonus",
+        "total_metric_bonus",
+        "bonus_ppa", "bonus_lbw", "bonus_glass", "bonus_lsc",
+        # POS metrics often missing from snapshot rows[] when the snapshot
+        # was created before all data sources ingested. Pulling them from
+        # v2 fixes LSC = 0% on the snapshot PNG for Trainers/Bartenders.
+        "lsc_count", "score_lsc", "guests_per_lsc",
+        "guests", "guest_count",
+    )
+    async for ce in svc.col.find(
+        {},
+        {"_id": 0, "id": 1, "name": 1, "display_name": 1, "status": 1,
+         "aliases": 1, "legacy_ids": 1, "current_metrics": 1},
+    ):
+        cm = ce.get("current_metrics") or {}
+        # Skip zeros/Nones — they're not useful as an overlay and would
+        # incorrectly block the v2 fallback for fields that haven't been
+        # synced into current_metrics yet.
+        overlay = {k: cm.get(k) for k in overlay_fields
+                   if cm.get(k) not in (None, 0, 0.0)}
+        if ce.get("id"):
+            canonical_status[ce["id"]] = ce.get("status", "active")
+            if ce.get("display_name"):
+                canonical_display[ce["id"]] = ce["display_name"]
+            if overlay:
+                canonical_overlay_by_id[ce["id"]] = overlay
+        for lid in ce.get("legacy_ids") or []:
+            canonical_status[lid] = ce.get("status", "active")
+            if ce.get("display_name"):
+                canonical_display[lid] = ce["display_name"]
+            if overlay:
+                canonical_overlay_by_id[lid] = overlay
+        for n in [ce.get("name"), ce.get("display_name"),
+                  *(ce.get("aliases") or [])]:
+            if n:
+                key = n.lower().strip()
+                canonical_status.setdefault(key, ce.get("status", "active"))
+                if ce.get("display_name"):
+                    canonical_display.setdefault(key, ce["display_name"])
+                canonical_id_by_name.setdefault(key, ce.get("id"))
+
+    # 2b. Build employees_v2 overlay for the snapshot's quarter/year. The
+    # legacy v2 collection still holds CV/RT data when current_metrics
+    # hasn't been synced yet — falling back to it ensures the slide
+    # never lies about CV/RT just because the canonical mirror is stale.
+    if not snapshot_finalized:
+        v2_quarter = (snapshot.get("quarter") or "").upper()
+        v2_year = snapshot.get("year")
+        if v2_quarter and v2_year:
+            async for v2 in db.employees_v2.find(
+                {"quarter": v2_quarter, "year": v2_year},
+                {"_id": 0, "id": 1, "name": 1, "display_name": 1,
+                 "job_title": 1,
+                 "cv_score": 1, "nps_score": 1, "cv_promoters": 1,
+                 "cv_passives": 1, "cv_detractors": 1, "rt_mentions": 1,
+                 "review_mentions": 1, "review_tracker_bonus": 1,
+                 "total_metric_bonus": 1, "bonus_ppa": 1, "bonus_lbw": 1,
+                 "bonus_glass": 1, "bonus_lsc": 1,
+                 "lsc_count": 1, "score_lsc": 1, "guests_per_lsc": 1,
+                 "guests": 1, "guest_count": 1},
+            ):
+                overlay = {k: v2.get(k) for k in overlay_fields
+                           if v2.get(k) not in (None, 0, 0.0)}
+                # Special rule: a v2 job_title of "trainer"/"bartender"
+                # always wins over the snapshot's frozen "Server" default
+                # because those roles drive tier classification on the
+                # slide. Otherwise leave job_title to its normal overlay
+                # behaviour (don't clobber a real value).
+                jt = (v2.get("job_title") or "").lower().strip()
+                if jt in ("trainer", "bartender"):
+                    overlay["job_title"] = jt
+                if not overlay:
+                    continue
+                if v2.get("id"):
+                    # Merge into existing canonical overlay rather than
+                    # skip — canonical values win when present, but v2
+                    # fills in fields canonical hasn't synced yet (e.g.
+                    # CV/RT loaded into v2 but not into current_metrics).
+                    existing = canonical_overlay_by_id.get(v2["id"]) or {}
+                    merged = {**overlay, **existing}
+                    canonical_overlay_by_id[v2["id"]] = merged
+                for n in [v2.get("name"), v2.get("display_name")]:
+                    if n:
+                        canonical_overlay_by_name.setdefault(
+                            n.lower().strip(), overlay
+                        )
+
+    # 3. Filter terminated/merged + stamp canonical_id
+    deleted_names = {(n or "").strip().lower()
+                     for n in (snapshot.get("deleted_names") or [])}
+    filtered: List[Dict[str, Any]] = []
+    for emp in employees:
+        st = (
+            canonical_status.get(emp.get("id"))
+            or canonical_status.get((emp.get("name") or "").lower().strip())
+            or canonical_status.get((emp.get("display_name") or "").lower().strip())
+        )
+        if not snapshot_finalized and st in ("terminated", "merged"):
+            continue
+        nm_key = (emp.get("name") or "").lower().strip()
+        if nm_key in deleted_names:
+            continue
+        cid = (
+            (canonical_status.get(emp.get("id")) and emp.get("id"))
+            or canonical_id_by_name.get(nm_key)
+            or canonical_id_by_name.get((emp.get("display_name") or "").lower().strip())
+        )
+        if cid:
+            emp["canonical_id"] = cid
+        filtered.append(emp)
+
+    # 4. Overlay display_names + canonical CV/RT inputs (only for non-finalized)
+    for emp in filtered:
+        # display_name overlay
+        candidates = [
+            canonical_display.get(emp.get("canonical_id") or ""),
+            canonical_display.get(emp.get("id") or ""),
+            canonical_display.get((emp.get("name") or "").lower().strip()),
+        ]
+        preferred = next((c for c in candidates if c), None)
+        if preferred:
+            emp["name"] = preferred
+            emp["display_name"] = preferred
+
+        if snapshot_finalized:
+            continue
+        # CV/RT overlay — only fill values the snapshot is missing.
+        # If frozen_metrics had a real value we keep it; if zero/None we
+        # pull the live canonical/v2 value so a POS-only upload doesn't
+        # blank out CV/RT on the slide. Try id → canonical_id → name.
+        overlay = (
+            canonical_overlay_by_id.get(emp.get("canonical_id") or "")
+            or canonical_overlay_by_id.get(emp.get("id") or "")
+            or canonical_overlay_by_name.get((emp.get("name") or "").lower().strip())
+            or canonical_overlay_by_name.get((emp.get("display_name") or "").lower().strip())
+        )
+        if not overlay:
+            continue
+        for k, v in overlay.items():
+            # job_title overlay is unconditional for trainer/bartender
+            # because the snapshot frequently freezes a default "Server"
+            # value that would otherwise block the more specific role.
+            if k == "job_title" and v in ("trainer", "bartender"):
+                emp[k] = v
+                continue
+            current = emp.get(k)
+            if current in (None, 0, 0.0):
+                emp[k] = v
+
+    # 5. Sort by tier then score (same as /current-rankings)
+    TIER_ORDER = {
+        'Trainer': 1, 'Bartender': 2, 'A-Server': 3,
+        'B-Server': 4, 'C-Server': 5, 'Server': 6,
+    }
+    def _sort_key(e):
+        tier = e.get('tier_label', 'Server')
+        score = e.get('final_score') or e.get('total_score', 0) or 0
+        return (TIER_ORDER.get(tier, 99), -score)
+    sorted_employees = sorted(filtered, key=_sort_key)
+
+    # 6. On-the-fly recompute (RT bonus, CV score, metric bonus)
+    qs_doc = await db.quarter_settings.find_one(
+        {"year": snapshot.get("year"), "quarter": snapshot.get("quarter")},
+        {"_id": 0, "rt_points_per_mention": 1, "rt_max_points": 1},
+    ) or {}
+    rt_coef = qs_doc.get("rt_points_per_mention", 0.3) or 0.3
+    rt_cap  = qs_doc.get("rt_max_points", 20.0) or 20.0
+    for emp in sorted_employees:
+        m = emp.get("rt_mentions") or emp.get("review_mentions") or 0
+        emp["review_tracker_bonus"] = round(min(m * rt_coef, rt_cap), 2)
+        emp["review_mentions"] = m
+
+        if not emp.get("nps_manual_override"):
+            nps = emp.get("nps_score") or 0
+            try:
+                nps_c = max(0.0, min(float(nps), 100.0))
+            except (TypeError, ValueError):
+                nps_c = 0.0
+            prom = emp.get("cv_promoters") or 0
+            det = emp.get("cv_detractors") or 0
+            emp["nps_contribution"] = round(nps_c / 10.0, 2)
+            emp["cv_raw_points"] = round(prom - 2 * det, 2)
+            emp["cv_score"] = round(emp["nps_contribution"] + emp["cv_raw_points"], 2)
+
+        emp["total_metric_bonus"] = round(
+            (emp.get("bonus_ppa")   or 0)
+            + (emp.get("bonus_lbw") or 0)
+            + (emp.get("bonus_glass") or 0)
+            + (emp.get("bonus_lsc") or 0),
+            2,
+        )
+
+    return sorted_employees
+
+
 @snapshot_router.get("/current-rankings")
 async def get_current_rankings(quarter: Optional[str] = None, year: Optional[int] = None):
     """
@@ -2135,155 +2379,12 @@ async def get_current_rankings(quarter: Optional[str] = None, year: Optional[int
             "snapshot": None
         }
     
-    # Sort employees by tier before returning
-    # Phase 3 Stage B: prefer the FK-join read path. Skip the join for
-    # finalized snapshots — those must render exactly as frozen (no
-    # canonical-status filtering, no rename overlays).
-    snapshot_finalized = snapshot.get("status") == "finalized"
-    if not snapshot_finalized:
-        from services.employee_service import EmployeeService
-        joined = await EmployeeService(db).get_snapshot_with_join(
-            snapshot_id=snapshot.get("id"),
-        )
-        if joined and joined.get("employees"):
-            employees = joined["employees"]
-        else:
-            employees = snapshot.get("employees", [])
-    else:
-        employees = snapshot.get("employees", [])
-
-    # Phase 2B: filter through the canonical EmployeeService so that any
-    # employee with status="terminated" or status="merged" on the canonical
-    # `employees` collection is hidden from the live rankings/slide view.
-    # Historical snapshots (status=finalized) are NOT filtered — they must
-    # render exactly as they did when the snapshot was frozen.
-    from services.employee_service import EmployeeService
-    svc = EmployeeService(db)
-    canonical_status: Dict[str, str] = {}
-    canonical_display: Dict[str, str] = {}
-    canonical_id_by_name: Dict[str, str] = {}
-    async for ce in svc.col.find(
-        {},
-        {"_id": 0, "id": 1, "name": 1, "display_name": 1, "status": 1,
-         "aliases": 1, "legacy_ids": 1},
-    ):
-        if ce.get("id"):
-            canonical_status[ce["id"]] = ce.get("status", "active")
-            if ce.get("display_name"):
-                canonical_display[ce["id"]] = ce["display_name"]
-        # Index every legacy id pointing at this canonical row.
-        for lid in ce.get("legacy_ids") or []:
-            canonical_status[lid] = ce.get("status", "active")
-            if ce.get("display_name"):
-                canonical_display[lid] = ce["display_name"]
-        # Index by lowercased name + every alias.
-        names_to_key = [ce.get("name"), ce.get("display_name"),
-                        *(ce.get("aliases") or [])]
-        for n in names_to_key:
-            if n:
-                key = n.lower().strip()
-                canonical_status.setdefault(key, ce.get("status", "active"))
-                if ce.get("display_name"):
-                    canonical_display.setdefault(key, ce["display_name"])
-                canonical_id_by_name.setdefault(key, ce.get("id"))
-
-    filtered_employees: List[Dict[str, Any]] = []
-    for emp in employees:
-        # Resolve via id, legacy_id, then name.
-        st = (
-            canonical_status.get(emp.get("id"))
-            or canonical_status.get((emp.get("name") or "").lower().strip())
-            or canonical_status.get((emp.get("display_name") or "").lower().strip())
-        )
-        if not snapshot_finalized and st in ("terminated", "merged"):
-            # Hide from CURRENT view — but leave the snapshot doc alone.
-            continue
-        # Stamp the canonical id on the snapshot row so downstream
-        # consumers (slide, audit) can resolve identity reliably.
-        cid = (
-            (canonical_status.get(emp.get("id")) and emp.get("id"))
-            or canonical_id_by_name.get((emp.get("name") or "").lower().strip())
-            or canonical_id_by_name.get((emp.get("display_name") or "").lower().strip())
-        )
-        if cid:
-            emp["canonical_id"] = cid
-        filtered_employees.append(emp)
-    employees = filtered_employees
-
-    # Overlay display_names from the canonical source (preferred over the
-    # legacy employees_v2 lookup that this code used to do — canonical is
-    # the new source of truth for the display-name policy).
-    for emp in employees:
-        candidates = [
-            canonical_display.get(emp.get("canonical_id") or ""),
-            canonical_display.get(emp.get("id") or ""),
-            canonical_display.get((emp.get("name") or "").lower().strip()),
-        ]
-        preferred = next((c for c in candidates if c), None)
-        if preferred:
-            emp["name"] = preferred
-            emp["display_name"] = preferred
-    
-    # Define tier order
-    TIER_ORDER = {
-        'Trainer': 1,
-        'Bartender': 2,
-        'A-Server': 3,
-        'B-Server': 4,
-        'C-Server': 5,
-        'Server': 6
-    }
-    
-    def sort_key(emp):
-        tier = emp.get('tier_label', 'Server')
-        tier_rank = TIER_ORDER.get(tier, 99)
-        # Use final_score if finalized, otherwise total_score
-        score = emp.get('final_score') or emp.get('total_score', 0) or 0
-        return (tier_rank, -score)  # Sort by tier first, then by score descending
-    
-    sorted_employees = sorted(employees, key=sort_key)
-
-    # Recompute drift-prone derived fields on every row so the display
-    # always matches the underlying inputs.
-    qs_doc = await db.quarter_settings.find_one(
-        {"year": snapshot.get("year"), "quarter": snapshot.get("quarter")},
-        {"_id": 0, "rt_points_per_mention": 1, "rt_max_points": 1},
-    ) or {}
-    _rt_coef = qs_doc.get("rt_points_per_mention", 0.3) or 0.3
-    _rt_cap  = qs_doc.get("rt_max_points", 20.0) or 20.0
-    for _emp in sorted_employees:
-        # --- RT bonus = mentions × coef, capped ---
-        _m = _emp.get("rt_mentions") or _emp.get("review_mentions") or 0
-        _emp["review_tracker_bonus"] = round(min(_m * _rt_coef, _rt_cap), 2)
-        _emp["review_mentions"] = _m
-
-        # --- CV score = NPS%/10 + Promoters − 2×Detractors ---
-        # Skip recompute if admin pinned a manual override on this row.
-        if not _emp.get("nps_manual_override"):
-            _nps = _emp.get("nps_score") or 0
-            try:
-                _nps_clamped = max(0.0, min(float(_nps), 100.0))
-            except (TypeError, ValueError):
-                _nps_clamped = 0.0
-            _prom = _emp.get("cv_promoters") or 0
-            _det  = _emp.get("cv_detractors") or 0
-            _emp["nps_contribution"] = round(_nps_clamped / 10.0, 2)
-            _emp["cv_raw_points"] = round(_prom - 2 * _det, 2)
-            _emp["cv_score"] = round(_emp["nps_contribution"] + _emp["cv_raw_points"], 2)
-
-        # --- Metric bonus = sum of per-category bonuses (PPA/LBW/Glass/LSC) ---
-        _emp["total_metric_bonus"] = round(
-            (_emp.get("bonus_ppa")   or 0)
-            + (_emp.get("bonus_lbw") or 0)
-            + (_emp.get("bonus_glass") or 0)
-            + (_emp.get("bonus_lsc") or 0),
-            2,
-        )
+    sorted_employees = await _hydrate_snapshot_employees(db, snapshot)
 
     # Workflow status info
     status = snapshot.get("status", "in_progress")
     is_finalized = status == "finalized"
-    
+
     return {
         "success": True,
         "has_data": True,
@@ -2335,12 +2436,15 @@ async def generate_snapshot_workflow_slide(
     if not snapshot:
         raise HTTPException(status_code=404, detail="Snapshot not found")
     
-    employees = snapshot.get("employees", [])
-    if not employees:
+    # Hydrate via the shared read path so the slide reflects the same
+    # data shown on /rankings (FK-join → canonical CV/RT overlay →
+    # on-the-fly RT bonus / CV score / metric bonus recompute).
+    # Previously this endpoint read the raw snapshot.employees blob and
+    # produced PNGs with all-zero CV/RT columns when the snapshot was
+    # created from a POS-only upload.
+    sorted_employees = await _hydrate_snapshot_employees(db, snapshot)
+    if not sorted_employees:
         raise HTTPException(status_code=400, detail="Snapshot has no employee data")
-    
-    # Sort employees by total_score
-    sorted_employees = sorted(employees, key=lambda x: x.get("total_score", 0) or 0, reverse=True)
     
     # Format employees for slide generation (must have exact fields)
     slide_employees = []
