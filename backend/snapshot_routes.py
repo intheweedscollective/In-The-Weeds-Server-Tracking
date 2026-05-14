@@ -2184,6 +2184,14 @@ async def _hydrate_snapshot_employees(db, snapshot: Dict[str, Any]) -> List[Dict
     # legacy v2 collection still holds CV/RT data when current_metrics
     # hasn't been synced yet — falling back to it ensures the slide
     # never lies about CV/RT just because the canonical mirror is stale.
+    # We index v2 rows by both their own name AND every canonical alias
+    # that maps to them, so duplicate v2 records uploaded under an
+    # alias (e.g. "Treyanna Quick" while canonical is "Trey Quick")
+    # still flow their CV/RT into the rendered row.
+    name_to_canonical_aliases: Dict[str, List[str]] = {}
+    for n_key, cid in canonical_id_by_name.items():
+        # For each canonical id, gather every name key that maps to it.
+        name_to_canonical_aliases.setdefault(cid, []).append(n_key)
     if not snapshot_finalized:
         v2_quarter = (snapshot.get("quarter") or "").upper()
         v2_year = snapshot.get("year")
@@ -2202,29 +2210,41 @@ async def _hydrate_snapshot_employees(db, snapshot: Dict[str, Any]) -> List[Dict
             ):
                 overlay = {k: v2.get(k) for k in overlay_fields
                            if v2.get(k) not in (None, 0, 0.0)}
-                # Special rule: a v2 job_title of "trainer"/"bartender"
-                # always wins over the snapshot's frozen "Server" default
-                # because those roles drive tier classification on the
-                # slide. Otherwise leave job_title to its normal overlay
-                # behaviour (don't clobber a real value).
                 jt = (v2.get("job_title") or "").lower().strip()
                 if jt in ("trainer", "bartender"):
                     overlay["job_title"] = jt
                 if not overlay:
                     continue
                 if v2.get("id"):
-                    # Merge into existing canonical overlay rather than
-                    # skip — canonical values win when present, but v2
-                    # fills in fields canonical hasn't synced yet (e.g.
-                    # CV/RT loaded into v2 but not into current_metrics).
                     existing = canonical_overlay_by_id.get(v2["id"]) or {}
                     merged = {**overlay, **existing}
                     canonical_overlay_by_id[v2["id"]] = merged
-                for n in [v2.get("name"), v2.get("display_name")]:
+                # Index by the v2 row's own name + display_name AND by
+                # every canonical-known alias that resolves to the same
+                # employee — so a v2 record uploaded under an alias
+                # (e.g. "Treyanna Quick") still attaches to the snapshot
+                # row that carries the primary name ("Trey Quick").
+                v2_names = {(n or "").lower().strip()
+                            for n in (v2.get("name"), v2.get("display_name"))
+                            if n}
+                # Resolve to canonical id via any v2 name.
+                v2_canonical_id = next(
+                    (canonical_id_by_name[n] for n in v2_names
+                     if n in canonical_id_by_name),
+                    None,
+                )
+                if v2_canonical_id:
+                    # Also register by the canonical id directly.
+                    existing = canonical_overlay_by_id.get(v2_canonical_id) or {}
+                    canonical_overlay_by_id[v2_canonical_id] = {**overlay, **existing}
+                    # And spread the overlay across every alias name
+                    # known for that canonical employee.
+                    for alias_key in name_to_canonical_aliases.get(v2_canonical_id, []):
+                        v2_names.add(alias_key)
+                for n in v2_names:
                     if n:
-                        canonical_overlay_by_name.setdefault(
-                            n.lower().strip(), overlay
-                        )
+                        existing = canonical_overlay_by_name.get(n) or {}
+                        canonical_overlay_by_name[n] = {**overlay, **existing}
 
     # 3. Filter terminated/merged + stamp canonical_id
     deleted_names = {(n or "").strip().lower()
