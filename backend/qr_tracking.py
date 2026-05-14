@@ -1555,9 +1555,92 @@ async def heal_ghost_ids(payload: Dict[str, Any]):
     }
 
 
+@qr_router.post("/admin/apply-printed-inventory")
+async def apply_printed_inventory(payload: Optional[Dict[str, Any]] = None):
+    """
+    Bulk-resolve the known printed-card inventory shipped at
+    `backend/data/issued_qr_cards.json` (33 rows of `{name, printed_id}`
+    decoded from the laminated cards in circulation). For each row we
+    look up `qr_employees` by exact normalized name match, and when
+    found we register a `qr_employee_id_aliases` entry + immediately
+    back-fill the canonical counter from the immutable log.
+
+    Idempotent — re-running is safe; events already marked
+    `counter_applied=true` are skipped.
+
+    Optional body:
+      { "cards": [{ "name": ..., "printed_id": ... }, ...] }
+    Pass `cards` to override the bundled file (e.g. when the admin uploads
+    a fresher inventory). Empty body uses the bundled file.
+
+    Returns matched / unmatched / healed counts so the admin sees
+    exactly which servers were attached and which still need manual
+    mapping (e.g. renamed since the cards were printed).
+    """
+    import os, json
+    from pathlib import Path
+
+    payload = payload or {}
+    cards = payload.get("cards")
+    if not cards:
+        inv_path = Path(__file__).parent / "data" / "issued_qr_cards.json"
+        if not inv_path.exists():
+            raise HTTPException(status_code=404, detail=f"No bundled inventory at {inv_path}")
+        with open(inv_path) as f:
+            cards = json.load(f)
+
+    if not isinstance(cards, list) or not cards:
+        raise HTTPException(status_code=400, detail="`cards` must be a non-empty list.")
+
+    # Build a name → qr_employees lookup (exact normalized + first-name fallback).
+    qr_emps: List[Dict[str, Any]] = []
+    async for q in _db.qr_employees.find({}, {"_id": 0, "id": 1, "name": 1}):
+        qr_emps.append(q)
+
+    def _norm(s: str) -> str:
+        return "".join(c for c in (s or "").lower() if c.isalnum())
+
+    exact = {_norm(q["name"]): q for q in qr_emps if q.get("name")}
+
+    matched: List[Dict[str, Any]] = []
+    unmatched: List[Dict[str, Any]] = []
+    for c in cards:
+        nm = (c.get("name") or "").strip()
+        pid = (c.get("printed_id") or "").strip()
+        if not nm or not pid:
+            continue
+        q = exact.get(_norm(nm))
+        if q:
+            matched.append({"name": nm, "printed_id": pid, "canonical_id": q["id"], "canonical_name": q["name"]})
+        else:
+            # First-name fallback: unique match on first token only.
+            first = nm.split()[0].lower() if nm.split() else ""
+            cands = [qe for qe in qr_emps if (qe.get("name") or "").lower().split()[:1] == [first]]
+            if len(cands) == 1:
+                matched.append({"name": nm, "printed_id": pid, "canonical_id": cands[0]["id"], "canonical_name": cands[0]["name"], "match_type": "first-name"})
+            else:
+                unmatched.append({"name": nm, "printed_id": pid,
+                                  "candidates": [{"id": qe["id"], "name": qe["name"]} for qe in cands]})
+
+    # Call the heal flow directly with the matched mappings so the alias
+    # collection and counter back-fill happen in one shot.
+    heal_result = None
+    if matched:
+        heal_result = await heal_ghost_ids({
+            "mappings": [{"printed_id": m["printed_id"], "canonical_id": m["canonical_id"]} for m in matched]
+        })
+
+    return {
+        "inventory_size": len(cards),
+        "matched_count": len(matched),
+        "unmatched_count": len(unmatched),
+        "matched": matched,
+        "unmatched": unmatched,
+        "heal": heal_result,
+    }
+
+
 # ============================================================================
-
-
 @qr_router.get("/leaderboard/slide")
 async def download_qr_leaderboard_slide(
     quarter: str = "Q2",

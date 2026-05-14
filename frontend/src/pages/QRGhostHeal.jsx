@@ -21,6 +21,7 @@ export default function QRGhostHeal() {
   const [qrEmployees, setQrEmployees] = useState([]);
   const [selections, setSelections] = useState({});
   const [healing, setHealing] = useState(false);
+  const [applyingInventory, setApplyingInventory] = useState(false);
   const [result, setResult] = useState(null);
 
   const load = async () => {
@@ -58,6 +59,24 @@ export default function QRGhostHeal() {
   const mappedScans = suggestions
     .filter((s) => selections[s.printed_id])
     .reduce((acc, s) => acc + (s.scan_count || 0), 0);
+
+  const onApplyInventory = async () => {
+    setApplyingInventory(true);
+    try {
+      const res = await api.post("/qr/admin/apply-printed-inventory", {});
+      setResult(res.data);
+      const matched = res.data?.matched_count ?? 0;
+      const reattributed = res.data?.heal?.events_reattributed ?? 0;
+      toast.success(
+        `Inventory applied: ${matched} servers mapped, ${reattributed} scans re-attributed`
+      );
+      await load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Inventory apply failed");
+    } finally {
+      setApplyingInventory(false);
+    }
+  };
 
   const onHeal = async (dryRun = false) => {
     const mappings = Object.entries(selections)
@@ -100,6 +119,11 @@ export default function QRGhostHeal() {
             increment any dashboard counter. Map each ghost UUID to its current
             employee and we'll back-fill every prior scan.
           </p>
+          <div className="mt-3 p-3 bg-emerald-900/20 border border-emerald-700/40 rounded text-xs text-emerald-200 max-w-3xl">
+            <b>Fastest path:</b> click <b>Apply Known Inventory</b> below — it loads the
+            33-card inventory decoded from the uploaded ZIP, auto-matches names against
+            your current roster, and back-fills counters in one shot.
+          </div>
         </div>
         <div className="text-right text-xs text-slate-300">
           <div><span className="text-slate-500">Ghost IDs:</span> <b>{suggestions.length}</b></div>
@@ -117,6 +141,20 @@ export default function QRGhostHeal() {
           <p className="text-emerald-300/70 text-sm mt-1">
             Every scanned UUID resolves to an active employee or an existing alias.
           </p>
+          <button
+            className="mt-4 px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded text-xs"
+            data-testid="apply-inventory-no-ghosts"
+            onClick={onApplyInventory}
+            disabled={applyingInventory}
+          >
+            {applyingInventory ? <Loader2 className="w-3 h-3 inline-block animate-spin mr-1" /> : null}
+            Re-apply Known Inventory (safe, idempotent)
+          </button>
+          {result && (
+            <pre className="mt-4 p-3 bg-slate-900 border border-slate-700 rounded text-xs text-slate-200 overflow-auto text-left" data-testid="heal-result-empty">
+{JSON.stringify(result, null, 2)}
+            </pre>
+          )}
         </div>
       ) : (
         <>
@@ -178,14 +216,23 @@ export default function QRGhostHeal() {
             </div>
           </div>
 
-          <div className="flex gap-2 mt-4">
+          <div className="flex gap-2 mt-4 flex-wrap">
+            <button
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-sm font-medium disabled:opacity-50"
+              data-testid="apply-inventory-button"
+              disabled={applyingInventory || healing}
+              onClick={onApplyInventory}
+            >
+              {applyingInventory ? <Loader2 className="w-4 h-4 inline-block animate-spin mr-1" /> : null}
+              Apply Known Inventory (33 cards)
+            </button>
             <button
               className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded text-sm disabled:opacity-50"
               data-testid="dry-run-button"
               disabled={healing || mapped === 0}
               onClick={() => onHeal(true)}
             >
-              Preview (dry-run)
+              Preview manual mapping (dry-run)
             </button>
             <button
               className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded text-sm font-medium disabled:opacity-50"
@@ -194,7 +241,7 @@ export default function QRGhostHeal() {
               onClick={() => onHeal(false)}
             >
               {healing ? <Loader2 className="w-4 h-4 inline-block animate-spin mr-1" /> : null}
-              Heal {mapped} Ghost ID{mapped === 1 ? "" : "s"}
+              Heal {mapped} manual mapping{mapped === 1 ? "" : "s"}
             </button>
           </div>
 
