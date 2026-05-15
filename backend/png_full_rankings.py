@@ -127,11 +127,13 @@ def _draw_sidebar(img: Image.Image, draw: ImageDraw.ImageDraw, quarter: str) -> 
     cx = SIDEBAR_WIDTH // 2
 
     # ---- Logo ----
-    # Pushed up to create a comfortable gap between the bottom of the
-    # logo and the first title line. Without this, large logos overlap
-    # the "Q2 SERVER" heading.
-    logo_y = 135
-    logo_w_target = 320
+    # Pillow draws from top-left (0,0). The logo is square (1:1), so a
+    # logo_w_target of N means height is N and the top edge sits at
+    # (logo_y - N/2). Keep that value >= ~25px so the logo isn't
+    # clipped at the canvas edge, while leaving a comfortable gap
+    # between the bottom of the logo and the "Q2 SERVER" title.
+    logo_y = 165
+    logo_w_target = 260
     logo_drawn = False
     if os.path.exists(LOGO_PATH):
         try:
