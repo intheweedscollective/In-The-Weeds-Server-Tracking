@@ -10,6 +10,20 @@ Build a comprehensive performance review application for restaurant employees.
 - **AI**: OpenAI GPT-4o (via Emergent LLM Key)
 - **Auth**: Emergent-managed Google Auth (whitelist via `ALLOWED_ADMIN_EMAILS`)
 
+## Current State (2026-05-14)
+
+### P0: Snapshot PNG Logo Clipping Fix — SHIPPED 2026-05-14
+
+- `png_full_rankings.py::_draw_sidebar` had `logo_y=135` with
+  `logo_w_target=320` on a 1:1 logo, putting the logo top edge at
+  y=-25 (clipped off the top of the canvas).
+- Adjusted to `logo_y=165`, `logo_w_target=260` → logo top at y=35,
+  bottom at y=295. "Q2 SERVER" title at center y=335 (top ≈306) has
+  clear ~11px gap below the logo, no overlap.
+- Verified by generating a test PNG and inspecting pixel rows 0-34
+  (zero non-background pixels above the logo) plus AI visual check.
+
+
 ## Current State (2026-05-13)
 
 ### P1: Single-Source Scoring Formula — SHIPPED 2026-05-13

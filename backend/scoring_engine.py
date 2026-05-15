@@ -1198,20 +1198,33 @@ def generate_hierarchy_rankings(employees: List[EmployeeV2], settings: QuarterSe
             "total_score": round(item["score"], 2),
             "bonus_points": round(metric_bonus + review_bonus, 2),
             "review_bonus": round(review_bonus, 2),
+            "review_tracker_bonus": round(review_bonus, 2),  # alias for frontend metric breakdown
             "metric_bonus": round(metric_bonus, 2),
+            "total_metric_bonus": round(metric_bonus, 2),    # alias for frontend metric breakdown
             "combined_review_bonus": round(review_bonus + nps_points, 2),  # RT + NPS combined
             # Raw metric values
             "ppa": emp.ppa or 0,
             "lbw_per_guest": emp.lbw_per_guest or 0,
             "glassware_per_guest": emp.glassware_per_guest or 0,
+            "glassware_sales": emp.glassware_sales or 0,
+            "lbw": emp.lbw or 0,
+            "lsc_count": emp.lsc_count or 0,                 # raw count for frontend
             "guests_per_lsc": emp.guests_per_lsc or 0,
+            "guests": emp.guests or 0,
             "guest_count": emp.guests or 0,
             "net_sales": emp.net_sales or 0,
-            # Percentage scores (0-100)
+            # Percentage scores (0-100) — exposed under BOTH the legacy
+            # `*_percentage` keys and the canonical `score_*` keys so the
+            # frontend's expanded-row breakdown reads the same field
+            # names that the slide PNG and admin tools use.
             "ppa_percentage": emp.score_ppa or 0,
             "lbw_percentage": emp.score_lbw or 0,
             "glassware_percentage": emp.score_glass or 0,
             "lsc_percentage": emp.score_lsc or 0,
+            "score_ppa": emp.score_ppa or 0,
+            "score_lbw": emp.score_lbw or 0,
+            "score_glass": emp.score_glass or 0,
+            "score_lsc": emp.score_lsc or 0,
             # NPS data
             "nps_score": nps_score,
             "nps_points": round(nps_points, 2),
@@ -1221,6 +1234,7 @@ def generate_hierarchy_rankings(employees: List[EmployeeV2], settings: QuarterSe
             "cv_score": emp.cv_score or 0,  # Promoters × 0.5 - Detractors × 1
             # Review data
             "review_mentions": review_mentions,
+            "rt_mentions": review_mentions,                  # alias for frontend
             "ppa_points": {
                 "earned": round(min((emp.score_ppa or 0), 100) * 0.25 + (emp.bonus_ppa or 0), 2),
                 "possible": 30

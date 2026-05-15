@@ -60,8 +60,8 @@ export default function Login() {
 
             <div className="rounded-2xl bg-white px-3 py-2 shadow-md ring-1 ring-black/5">
               <img
-                src="/images/bubba-gump-pin.png"
-                alt="Bubba Gump Shrimp Co."
+                src="/images/itw-collective-badge.png"
+                alt="In the Weeds Collective badge"
                 className="h-20 md:h-24 w-auto object-contain"
               />
             </div>
