@@ -2919,12 +2919,14 @@ async def update_employee(employee_id: str, data: dict):
         # be a snapshot UUID). When the snapshot row was orphaned, the only
         # way to update it is by the original request ID — using actual_id
         # alone would miss it.
+        # NOTE: same caveat as the rows[] block below — DO NOT filter by
+        # quarter/year (v2's stored quarter can be stale).
         updated_any = False
-        for eid in {actual_id, employee_id}:
-            if not eid:
+        for eid_try in {actual_id, employee_id}:
+            if not eid_try:
                 continue
             result = await db.snapshot_workflow.update_many(
-                {"quarter": quarter, "year": year, "employees.id": eid},
+                {"employees.id": eid_try},
                 {"$set": snap_update}
             )
             if result.modified_count > 0:
@@ -2941,13 +2943,71 @@ async def update_employee(employee_id: str, data: dict):
                 af_snap_update = {f"employees.$[e].{k.split('.')[-1]}": v
                                   for k, v in snap_update.items()}
                 await db.snapshot_workflow.update_many(
-                    {"quarter": quarter, "year": year},
+                    {"employees.name": {"$regex": name_pat, "$options": "i"}},
                     {"$set": af_snap_update},
                     array_filters=[{
                         "$or": [
                             {"e.name": {"$regex": name_pat, "$options": "i"}},
                             {"e.report_name": {"$regex": name_pat, "$options": "i"}},
                             {"e.display_name": {"$regex": name_pat, "$options": "i"}},
+                        ]
+                    }],
+                )
+
+        # Phase 3 sync: ALSO update `snapshot.rows[].frozen_metrics` for
+        # any matching row. This is what the post-Phase-3 read path
+        # (_hydrate_snapshot_employees -> get_snapshot_with_join) reads
+        # from. Without this, the user sees the success toast but the
+        # refetch reads the stale frozen_metrics and the change appears
+        # to revert.
+        #
+        # NOTE: We DO NOT filter by `quarter`/`year` here on purpose —
+        # the v2 record's stored `quarter` field can be stale (e.g. a
+        # legacy Q1 row whose employee was reused in a Q2 snapshot).
+        # Filtering on the v2 quarter would silently miss the snapshot
+        # that actually contains the row. Match by `rows.employee_id`
+        # / name only, so the update lands in whichever snapshot owns
+        # this employee.
+        rows_update = {
+            f"rows.$[r].frozen_metrics.{k.split('.')[-1]}": v
+            for k, v in snap_update.items()
+        }
+        # Also stamp top-level frozen_display_name when name changed.
+        if display:
+            rows_update["rows.$[r].frozen_display_name"] = display
+        # And bubble the new total to the row's frozen_score for slide ranking.
+        if "total_score" in update_fields:
+            rows_update["rows.$[r].frozen_score"] = update_fields["total_score"]
+
+        # Try IDs first (employee_id is canonical FK in rows[]).
+        rows_updated_any = False
+        for eid_try in {actual_id, employee_id, emp_doc.get("canonical_id")}:
+            if not eid_try:
+                continue
+            r = await db.snapshot_workflow.update_many(
+                {"rows.employee_id": eid_try},
+                {"$set": rows_update},
+                array_filters=[{"r.employee_id": eid_try}],
+            )
+            if r.modified_count > 0:
+                rows_updated_any = True
+
+        # Fallback: match by frozen_display_name / frozen_report_name.
+        if not rows_updated_any:
+            match_name = emp_doc.get('report_name') or emp_doc.get('name') or display
+            if match_name:
+                import re as _re
+                name_pat = f"^{_re.escape(match_name)}$"
+                await db.snapshot_workflow.update_many(
+                    {"$or": [
+                        {"rows.frozen_display_name": {"$regex": name_pat, "$options": "i"}},
+                        {"rows.frozen_report_name":  {"$regex": name_pat, "$options": "i"}},
+                    ]},
+                    {"$set": rows_update},
+                    array_filters=[{
+                        "$or": [
+                            {"r.frozen_display_name": {"$regex": name_pat, "$options": "i"}},
+                            {"r.frozen_report_name":  {"$regex": name_pat, "$options": "i"}},
                         ]
                     }],
                 )
