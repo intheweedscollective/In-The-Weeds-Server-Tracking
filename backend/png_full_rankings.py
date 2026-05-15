@@ -127,8 +127,11 @@ def _draw_sidebar(img: Image.Image, draw: ImageDraw.ImageDraw, quarter: str) -> 
     cx = SIDEBAR_WIDTH // 2
 
     # ---- Logo ----
-    logo_y = 175
-    logo_w_target = 340
+    # Pushed up to create a comfortable gap between the bottom of the
+    # logo and the first title line. Without this, large logos overlap
+    # the "Q2 SERVER" heading.
+    logo_y = 135
+    logo_w_target = 320
     logo_drawn = False
     if os.path.exists(LOGO_PATH):
         try:
@@ -141,13 +144,13 @@ def _draw_sidebar(img: Image.Image, draw: ImageDraw.ImageDraw, quarter: str) -> 
         except Exception:
             logo_drawn = False
     if not logo_drawn:
-        r = 140
+        r = 130
         draw.ellipse((cx - r, logo_y - r, cx + r, logo_y + r), fill="#1a3050")
         _draw_text(draw, (cx, logo_y), "BUBBA GUMP",
                    _load_font(48, True), REF_COLORS["text_white"], anchor="mm")
 
     # ---- Title (LARGE — fills sidebar like the reference) ----
-    title_y = 320
+    title_y = 335
     _draw_text(draw, (cx, title_y), f"{quarter} SERVER",
                _load_font(58, True), REF_COLORS["text_white"], anchor="mm")
     _draw_text(draw, (cx, title_y + 72), "PERFORMANCE",
@@ -159,7 +162,7 @@ def _draw_sidebar(img: Image.Image, draw: ImageDraw.ImageDraw, quarter: str) -> 
                _load_font(30, True), REF_COLORS["red"], anchor="mm")
 
     # ---- Legend (centered as a block within the sidebar) ----
-    legend_y = title_y + 270
+    legend_y = title_y + 280
     items = [
         ("EXCEEDING ALL",   "EXPECTATIONS", REF_COLORS["blue"]),
         ("MEETING",         "EXPECTATIONS", REF_COLORS["green"]),
@@ -170,7 +173,6 @@ def _draw_sidebar(img: Image.Image, draw: ImageDraw.ImageDraw, quarter: str) -> 
     swatch_w = 46
     swatch_h = 60
     gap = 18
-    # Compute widest text line to center the block as a unit.
     max_text_w = 0
     for l1, l2, _ in items:
         for line in (l1, l2):
@@ -188,22 +190,43 @@ def _draw_sidebar(img: Image.Image, draw: ImageDraw.ImageDraw, quarter: str) -> 
         _draw_text(draw, (text_x, y + 34), l2, label_font, color, anchor="lt")
 
     # ---- Footer ----
-    foot_font = _load_font(22, True)
-    # Anchor footer to the bottom so it never overlaps the legend even if
-    # we add a 5th classification or grow the title.
+    # Two single-line messages, auto-shrunk to fit the sidebar width so
+    # they never wrap. Sidebar width minus a 32px lateral margin.
+    sidebar_max_w = SIDEBAR_WIDTH - 32
     footer_lines = [
-        "DON'T WAIT TO IMPACT",
-        "THIS NUMBER.",
+        "DON'T WAIT TO IMPACT THIS NUMBER.",
         "",
-        "IF YOU HAVE QUESTIONS",
-        "PLEASE SEE MANAGEMENT.",
+        "IF YOU HAVE QUESTIONS, PLEASE SEE MANAGEMENT.",
     ]
-    line_pitch = 28
+
+    def _fit_font(text: str, start_size: int, min_size: int) -> ImageFont.ImageFont:
+        """Return the largest bold font ≤ start_size whose text fits."""
+        for sz in range(start_size, min_size - 1, -1):
+            f = _load_font(sz, True)
+            if draw.textlength(text, font=f) <= sidebar_max_w:
+                return f
+        return _load_font(min_size, True)
+
+    # Pick a single font size that fits the LONGER of the two real
+    # lines so both render at identical scale.
+    target_size = 26
+    fitted_font = None
+    for sz in range(target_size, 15, -1):
+        f = _load_font(sz, True)
+        ok = all(draw.textlength(line, font=f) <= sidebar_max_w
+                 for line in footer_lines if line)
+        if ok:
+            fitted_font = f
+            break
+    if fitted_font is None:
+        fitted_font = _load_font(16, True)
+
+    line_pitch = 36
     footer_h = len(footer_lines) * line_pitch
-    footer_y = SLIDE_HEIGHT - footer_h - 24
+    footer_y = SLIDE_HEIGHT - footer_h - 40
     for j, line in enumerate(footer_lines):
         if line:
-            _draw_text(draw, (cx, footer_y + j * line_pitch), line, foot_font,
+            _draw_text(draw, (cx, footer_y + j * line_pitch), line, fitted_font,
                        REF_COLORS["text_white"], anchor="mm")
 
 
