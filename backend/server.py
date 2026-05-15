@@ -2097,9 +2097,16 @@ async def get_full_hierarchy_rankings(year: int, quarter: str, tier_filter: Opti
             sort=[("effective_date", -1), ("completed_at", -1)]
         )
     
-    if snapshot and snapshot.get("employees"):
-        # Use snapshot employees (source of truth)
-        employees_docs = snapshot.get("employees", [])
+    # Snapshot-first hydration. Use the shared `_hydrate_snapshot_employees`
+    # helper so this endpoint, the snapshot PNG, and `/current-rankings`
+    # all read identical data: FK-join → canonical CV/RT/LSC/job_title
+    # overlay (alias-aware) → on-the-fly RT bonus / CV / metric bonus
+    # recompute. Previously this endpoint read `snapshot.employees` raw
+    # and missed CV/RT, raw POS metrics, and job_title overrides.
+    from snapshot_routes import _hydrate_snapshot_employees
+
+    if snapshot:
+        employees_docs = await _hydrate_snapshot_employees(db, snapshot)
     else:
         # Fallback to legacy employees_v2
         employees_docs = await db.employees_v2.find(
