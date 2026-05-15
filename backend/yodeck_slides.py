@@ -1178,7 +1178,7 @@ def generate_complete_rankings_slide(
             "score_lsc": r.get("score_lsc") or (r.get("lsc_points", {}).get("percentage") if isinstance(r.get("lsc_points"), dict) else 0) or 0,
             "cv_score": r.get("cv_score") or 0,
             "rt_mentions": r.get("review_mentions") or r.get("rt_mentions") or 0,
-            "rt_bonus": r.get("rt_bonus") or min((r.get("review_mentions") or r.get("rt_mentions") or 0) * 0.5, 15),
+            "rt_bonus": r.get("rt_bonus") or min((r.get("review_mentions") or r.get("rt_mentions") or 0) * 0.3, 20),
         }
         employees.append(emp)
     
@@ -1429,8 +1429,9 @@ def generate_most_improved_slide(
         draw.ellipse([badge_x - 25, badge_y - 25, badge_x + 25, badge_y + 25], fill=badge_color)
         draw.text((badge_x, badge_y), f"#{idx + 1}", font=get_font(int(14 * scale), bold=True), fill="#FFFFFF", anchor="mm")
         
-        # Name - First name only
-        first_name = emp["name"].split()[0][:18] if emp.get("name") else "Unknown"
+        # Name — Display first name only (per naming policy)
+        _display = emp.get("display_name") or emp.get("name") or ""
+        first_name = (_display.strip().split()[0][:18] if _display.strip() else "Unknown")
         draw.text((int(180 * scale), badge_y), first_name, font=font_name, fill="#222222", anchor="lm")
         
         # Change with arrow
@@ -1523,7 +1524,9 @@ def generate_promotion_watchlist_slide(
         draw.rectangle([int(50 * scale), y, width - int(50 * scale), y + row_height - 5], fill=row_color)
         
         draw.text((int(140 * scale), y + int(35 * scale)), emp["position_label"], font=font_rank, fill=TIER_CONFIG["B-Server"]["color"])
-        draw.text((int(280 * scale), y + int(38 * scale)), emp["name"][:18], font=font_name, fill="#222222")
+        _display_nm = (emp.get("display_name") or emp.get("name") or "").strip()
+        _first = _display_nm.split()[0][:18] if _display_nm else "Unknown"
+        draw.text((int(280 * scale), y + int(38 * scale)), _first, font=font_name, fill="#222222")
         
         # Gap indicator with progress bar
         gap_pct = 1 - (emp["gap"] / 10)
@@ -1619,7 +1622,9 @@ def generate_at_risk_slide(
         draw.rectangle([int(50 * scale), y, width - int(50 * scale), y + row_height - 5], fill=row_color)
         
         draw.text((int(140 * scale), y + int(35 * scale)), emp.get("position_label", "C"), font=font_rank, fill="#DC2626")
-        draw.text((int(250 * scale), y + int(38 * scale)), emp["name"][:18], font=font_name, fill="#222222")
+        _display_nm = (emp.get("display_name") or emp.get("name") or "").strip()
+        _first = _display_nm.split()[0][:18] if _display_nm else "Unknown"
+        draw.text((int(250 * scale), y + int(38 * scale)), _first, font=font_name, fill="#222222")
         draw.text((int(700 * scale), y + int(40 * scale)), f"{emp['gap']:.1f} pts needed", font=font_gap, fill="#F59E0B")
         draw.text((width - int(150 * scale), y + int(38 * scale)), f"{emp['score']:.1f}", font=font_score, fill="#666666", anchor="rt")
     

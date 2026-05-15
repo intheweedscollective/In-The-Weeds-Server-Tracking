@@ -13,6 +13,7 @@ import { Input } from "../components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../components/ui/dialog";
 import { useToast } from "../hooks/use-toast";
 import api from "../lib/api";
+import { getDisplayFirstName } from "../utils/displayName";
 
 const STATUS_CONFIG = {
   draft: { label: "Draft", color: "bg-slate-500", textColor: "text-slate-300" },
@@ -163,7 +164,7 @@ export default function SnapshotDetail() {
         
         // Step 1: Upload and get job ID using the new persistent job system
         const uploadResponse = await fetch(
-          `${process.env.REACT_APP_BACKEND_URL}/api/v2/upload-jobs/direct`,
+          `${(process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "")}/api/v2/upload-jobs/direct`,
           { method: 'POST', body: formData }
         );
         
@@ -188,7 +189,7 @@ export default function SnapshotDetail() {
           
           try {
             const statusResponse = await fetch(
-              `${process.env.REACT_APP_BACKEND_URL}/api/v2/upload-jobs/${jobId}`
+              `${(process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "")}/api/v2/upload-jobs/${jobId}`
             );
             const statusData = await statusResponse.json();
             
@@ -302,7 +303,7 @@ export default function SnapshotDetail() {
       liquor_sales: emp.liquor_sales || emp._raw?.liquor_sales || 0,
       beer_sales: emp.beer_sales || emp._raw?.beer_sales || 0,
       wine_sales: emp.wine_sales || emp._raw?.wine_sales || 0,
-      glassware_sales: emp.glassware_sales || emp._raw?.bar_glassware_sales || 0,
+      glassware_sales: emp.glassware_sales || emp.bar_glassware_sales || emp._raw?.bar_glassware_sales || 0,
       lsc_count: lscCount,
       guest_count: emp.guest_count || 0,
     });
@@ -882,7 +883,7 @@ export default function SnapshotDetail() {
                         {idx + 1}
                       </span>
                       <div>
-                        <p className="text-white font-medium">{emp.name}</p>
+                        <p className="text-white font-medium">{getDisplayFirstName(emp)}</p>
                         <p className={`text-xs ${
                           emp.tier_label?.includes('Trainer') ? 'text-purple-400' :
                           emp.tier_label?.includes('Bartender') ? 'text-blue-400' :
@@ -1028,8 +1029,8 @@ export default function SnapshotDetail() {
                         <td className={`px-2 py-2 text-center text-sm ${isValueFlagged('wine_sales', emp.wine_sales || emp._raw?.wine_sales, historicalAvg.wine_sales) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
                           ${(emp.wine_sales || emp._raw?.wine_sales || 0).toFixed(0)}
                         </td>
-                        <td className={`px-2 py-2 text-center text-sm ${isValueFlagged('glassware_sales', emp.glassware_sales || emp._raw?.bar_glassware_sales, historicalAvg.glassware_sales) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
-                          ${(emp.glassware_sales || emp._raw?.bar_glassware_sales || 0).toFixed(0)}
+                        <td className={`px-2 py-2 text-center text-sm ${isValueFlagged('glassware_sales', emp.glassware_sales || emp.bar_glassware_sales || emp._raw?.bar_glassware_sales, historicalAvg.glassware_sales) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
+                          ${(emp.glassware_sales || emp.bar_glassware_sales || emp._raw?.bar_glassware_sales || 0).toFixed(0)}
                         </td>
                         <td className={`px-2 py-2 text-center text-sm ${isValueFlagged('lsc_count', emp.lsc_count || Math.round((emp.loyalty_sales || 0) / 25), historicalAvg.lsc_count) ? 'text-red-400 font-bold' : 'text-slate-300'}`}>
                           {emp.lsc_count || Math.round((emp.loyalty_sales || 0) / 25) || 0}
@@ -1059,7 +1060,7 @@ export default function SnapshotDetail() {
                       isValueFlagged('liquor_sales', e.liquor_sales || e._raw?.liquor_sales, historicalAvg.liquor_sales) ||
                       isValueFlagged('beer_sales', e.beer_sales || e._raw?.beer_sales, historicalAvg.beer_sales) ||
                       isValueFlagged('wine_sales', e.wine_sales || e._raw?.wine_sales, historicalAvg.wine_sales) ||
-                      isValueFlagged('glassware_sales', e.glassware_sales || e._raw?.bar_glassware_sales, historicalAvg.glassware_sales) ||
+                      isValueFlagged('glassware_sales', e.glassware_sales || e.bar_glassware_sales || e._raw?.bar_glassware_sales, historicalAvg.glassware_sales) ||
                       isValueFlagged('lsc_count', e.lsc_count, historicalAvg.lsc_count)
                     ).length} items need attention
                   </span>

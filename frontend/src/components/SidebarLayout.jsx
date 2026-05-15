@@ -28,6 +28,9 @@ import {
   Globe
 } from "lucide-react";
 import { useTheme } from "../context/ThemeContext";
+import { useAuth } from "../context/AuthContext";
+import { Link as RouterLink } from "react-router-dom";
+import { LogIn, LogOut } from "lucide-react";
 
 // Navigation structure with grouping
 const navGroups = [
@@ -114,6 +117,7 @@ export const SidebarLayout = ({ children }) => {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState(["performance", "feedback", "exports", "team", "qr", "stores"]);
   const { theme, toggleTheme } = useTheme();
+  const { user, signOut } = useAuth();
   const navRef = useRef(null);
 
   const toggleGroup = useCallback((groupId) => {
@@ -216,7 +220,49 @@ export const SidebarLayout = ({ children }) => {
         {bottomNav.map((item) => (
           <NavLink key={item.path} item={item} showLabel={!isCollapsed} />
         ))}
-        
+
+        {/* Auth status — Sign in / Sign out */}
+        {user ? (
+          <button
+            onClick={signOut}
+            data-testid="signout-btn"
+            title={user.email || ""}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium
+              text-muted-foreground hover:bg-[hsl(var(--sidebar-hover,220_26%_18%))] hover:text-foreground transition-all duration-200"
+          >
+            {user.picture ? (
+              <img
+                src={user.picture}
+                alt={user.name || user.email}
+                className="w-5 h-5 rounded-full object-cover flex-shrink-0"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <LogOut className="w-5 h-5 text-amber-400 flex-shrink-0" />
+            )}
+            {!isCollapsed && (
+              <span className="flex-1 text-left min-w-0">
+                <span className="block truncate text-xs text-foreground" data-testid="signed-in-email">
+                  {user.email || user.name || "Signed in"}
+                </span>
+                <span className={`block text-[10px] uppercase tracking-wider ${user.is_admin ? "text-emerald-400" : "text-amber-400"}`}>
+                  {user.is_admin ? "Admin · Sign Out" : "Viewer · Sign Out"}
+                </span>
+              </span>
+            )}
+          </button>
+        ) : (
+          <RouterLink
+            to="/login"
+            data-testid="signin-btn"
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium
+              text-muted-foreground hover:bg-[hsl(var(--sidebar-hover,220_26%_18%))] hover:text-foreground transition-all duration-200"
+          >
+            <LogIn className="w-5 h-5 text-amber-400" />
+            {!isCollapsed && <span>Sign In</span>}
+          </RouterLink>
+        )}
+
         {/* Theme Toggle */}
         <button
           onClick={toggleTheme}

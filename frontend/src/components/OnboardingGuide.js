@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { X, ChevronRight, ChevronLeft, Rocket, Upload, Settings, BarChart3, FileText, Trophy, Tv, CheckCircle2 } from "lucide-react";
 import { Button } from "./ui/button";
+import { useAuth } from "../context/AuthContext";
 
 const ONBOARDING_STEPS = [
   {
@@ -102,11 +103,25 @@ const ONBOARDING_VERSION = "v2";
 const LS_KEY = `hasSeenOnboarding_${ONBOARDING_VERSION}`;
 
 export default function OnboardingGuide({ onComplete }) {
+  const { user, loading: authLoading } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState(false);
 
+  // Only admins ever see the onboarding. Public/anonymous viewers should
+  // never have a modal blocking the read-only dashboards (they were seeing
+  // it as "the QR page is blank"). Wait for auth resolution so we don't
+  // flash the modal during the initial /auth/me request.
+  const isAdmin = !!(user && user.is_admin);
+
   useEffect(() => {
+    if (authLoading) return;
+    if (!isAdmin) {
+      // Make sure any stale "open" state is closed for non-admins.
+      setIsOpen(false);
+      setHasSeenOnboarding(false);
+      return;
+    }
     const seen = localStorage.getItem(LS_KEY);
     if (!seen) {
       setIsOpen(true);
@@ -119,7 +134,7 @@ export default function OnboardingGuide({ onComplete }) {
     } catch {
       /* localStorage might be disabled in private mode — non-fatal */
     }
-  }, []);
+  }, [authLoading, isAdmin]);
 
   // Handle Escape key to close modal
   useEffect(() => {
@@ -168,6 +183,9 @@ export default function OnboardingGuide({ onComplete }) {
   const Icon = step?.icon;
 
   if (!isOpen) {
+    // Hide the floating launcher entirely for public/anonymous viewers —
+    // there's nothing for them to onboard into.
+    if (!isAdmin) return null;
     return (
       <button
         onClick={handleReopen}

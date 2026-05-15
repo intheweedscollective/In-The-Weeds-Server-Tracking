@@ -9,7 +9,7 @@ import NicknameManager from "../components/NicknameManager";
 
 // NOTE: SLIDE_THEMES and SEASONAL_THEMES removed - functionality deprecated
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
 
 export default function QuarterSettings() {
   const [loading, setLoading] = useState(true);
@@ -147,14 +147,16 @@ export default function QuarterSettings() {
   };
 
   const handleSave = async () => {
-    // Validate POS weights sum to 0.75 (PPA 25% + LSC 25% + LBW 15% + Glass 10%)
-    // Note: CV/RT are bonus systems, not weighted percentages
+    // Validate POS weights are within a reasonable range. Default Q2+ model
+    // sums to 0.85 (PPA 25% + LSC 25% + LBW 20% + Glass 15%); legacy Q1
+    // model summed to 0.75. CV/RT/Metric Bonuses are added on top — they
+    // are NOT weighted percentages.
     const posWeightSum = formData.weight_ppa + formData.weight_lbw + formData.weight_glass + formData.weight_lsc;
     
-    // Allow flexibility - weights can sum to anywhere between 0.70 and 1.0
+    // Allow flexibility - weights can sum to anywhere between 0.50 and 1.05
     // The scoring formula uses these as multipliers, so any reasonable sum works
     if (posWeightSum < 0.50 || posWeightSum > 1.05) {
-      toast.error(`POS weights should sum to between 0.50 and 1.0 (currently ${posWeightSum.toFixed(2)})`);
+      toast.error(`POS weights should sum to between 0.50 and 1.05 (currently ${posWeightSum.toFixed(2)})`);
       return;
     }
 
@@ -195,6 +197,27 @@ export default function QuarterSettings() {
       toast.error(error.response?.data?.detail || "Error fixing rankings");
     } finally {
       setFixingRankings(false);
+    }
+  };
+
+  // Unlock a previously-locked quarter so benchmarks/weights can be edited.
+  // After unlocking + saving new values, the user should re-run scoring (Fix
+  // All Rankings or the Snapshot Workflow rescore button) to push the new
+  // benchmark through every employee's score.
+  const handleUnlock = async () => {
+    if (!window.confirm(
+      `Unlock ${selectedQuarter} ${selectedYear} settings?\n\n` +
+      `You'll be able to edit benchmarks and weights. After saving, run "Fix All Rankings" ` +
+      `to recalculate every employee's score against the new values.`
+    )) {
+      return;
+    }
+    try {
+      await api.post(`/v2/quarter-settings/${selectedYear}/${selectedQuarter}/unlock`);
+      toast.success(`${selectedQuarter} ${selectedYear} unlocked. Edit and save your changes.`);
+      refetchSettings();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Failed to unlock settings");
     }
   };
 
@@ -282,10 +305,21 @@ export default function QuarterSettings() {
                   No settings yet - create new
                 </span>
               ) : settings?.is_locked ? (
-                <span className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-semibold flex items-center gap-2">
-                  <Lock className="w-4 h-4" />
-                  Locked (scores generated)
-                </span>
+                <>
+                  <span className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-semibold flex items-center gap-2">
+                    <Lock className="w-4 h-4" />
+                    Locked (scores generated)
+                  </span>
+                  <button
+                    onClick={handleUnlock}
+                    data-testid="unlock-quarter-settings-btn"
+                    className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-full text-sm font-semibold flex items-center gap-2 transition-colors"
+                    title="Unlock to edit benchmarks/weights for this quarter"
+                  >
+                    <Unlock className="w-4 h-4" />
+                    Unlock to Edit
+                  </button>
+                </>
               ) : (
                 <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-semibold flex items-center gap-2">
                   <Unlock className="w-4 h-4" />
@@ -444,7 +478,7 @@ export default function QuarterSettings() {
             
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">PPA (25%)</label>
+                <label className="text-sm font-medium">PPA ({Math.round((formData.weight_ppa || 0) * 100)}%)</label>
                 <Input
                   type="number"
                   step="0.05"
@@ -457,7 +491,7 @@ export default function QuarterSettings() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">LBW (20%)</label>
+                <label className="text-sm font-medium">LBW ({Math.round((formData.weight_lbw || 0) * 100)}%)</label>
                 <Input
                   type="number"
                   step="0.05"
@@ -470,7 +504,7 @@ export default function QuarterSettings() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Glass (15%)</label>
+                <label className="text-sm font-medium">Glass ({Math.round((formData.weight_glass || 0) * 100)}%)</label>
                 <Input
                   type="number"
                   step="0.05"
@@ -483,7 +517,7 @@ export default function QuarterSettings() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">LSC (25%)</label>
+                <label className="text-sm font-medium">LSC ({Math.round((formData.weight_lsc || 0) * 100)}%)</label>
                 <Input
                   type="number"
                   step="0.05"
@@ -501,7 +535,10 @@ export default function QuarterSettings() {
             <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-sm text-blue-800">
                 <strong>Note:</strong> Customer Voice (CV) points are added directly to the total score as raw points, not as a weighted percentage.
-                Formula: (Promoters × 1) + (Mentions × 0.5) - (Detractors × 2)
+                Formula: NPS%/10 + (Promoters × {formData.cv_promoter_points ?? 1}) − (Detractors × {formData.cv_detractor_points ?? 2})
+              </p>
+              <p className="text-xs text-blue-700 mt-1">
+                The Review Tracker bonus ({formData.rt_points_per_mention ?? 0.3} pts/mention, max {Math.round(formData.rt_max_points ?? 20)}) is a SEPARATE bonus added on top of CV.
               </p>
             </div>
           </div>

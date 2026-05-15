@@ -45,6 +45,7 @@ from routes.insights import insights_router
 from routes.pos_upload import pos_upload_router, pdf_jobs
 from routes.scheduler import scheduler_router
 from routes.snapshots_legacy import register_snapshots_legacy_routes
+from routes.auth import auth_router
 
 # pdf_jobs is now imported from pos_upload module
 from yodeck_slides import (
@@ -473,7 +474,7 @@ async def fix_all_employee_scores(quarter: str = "Q1", year: int = 2026):
             if settings_doc:
                 bm_ppa = settings_doc.get('benchmark_ppa', 55) or 55
                 bm_lbw = settings_doc.get('benchmark_lbw', 8) or 8
-                bm_glass = settings_doc.get('benchmark_glass', 1.25) or 1.25
+                bm_glass = settings_doc.get('benchmark_glass', 1.35) or 1.35
                 bm_lsc = settings_doc.get('benchmark_lsc', 100) or 100
                 ppa_val = new_ppa if 'ppa' in derived_updates else (emp.get('ppa', 0) or 0)
                 lbw_val = new_lbw_pg if 'lbw_per_guest' in derived_updates else (emp.get('lbw_per_guest', 0) or 0)
@@ -528,7 +529,7 @@ async def fix_all_employee_scores(quarter: str = "Q1", year: int = 2026):
         
         # Calculate RT bonus from rt_mentions (0.5 pts per mention, capped at 15)
         rt_mentions = emp.get('rt_mentions', 0) or emp.get('review_mentions', 0) or 0
-        rt_bonus = min(rt_mentions * 0.5, 15)
+        rt_bonus = min(rt_mentions * 0.3, 20)
         
         # Get CV score
         cv_score = emp.get('cv_score', 0) or 0
@@ -1130,7 +1131,7 @@ async def unified_pos_upload(
             # Calculate scores using benchmarks
             benchmark_ppa = settings.benchmark_ppa or 55
             benchmark_lbw = settings.benchmark_lbw or 8
-            benchmark_glass = settings.benchmark_glass or 1.25
+            benchmark_glass = settings.benchmark_glass or 1.35
             benchmark_lsc = settings.benchmark_lsc or 100
             
             score_ppa = (ppa / benchmark_ppa) * 100 if benchmark_ppa > 0 else 0
@@ -1171,7 +1172,7 @@ async def unified_pos_upload(
                 # Preserve existing CV/RT data AND display_name when updating POS data
                 cv_score = match.get("cv_score", 0) or 0
                 rt_mentions = match.get("rt_mentions", 0) or 0
-                rt_contribution = min(rt_mentions * 0.5, 15)
+                rt_contribution = min(rt_mentions * 0.3, 20)
                 total_metric_bonus = match.get("total_metric_bonus", 0) or 0
                 
                 # Recalculate weighted with RT
@@ -1724,59 +1725,115 @@ async def upload_employees_v2(
 
 @api_router.get("/v2/employees")
 async def get_employees_v2(year: Optional[int] = None, quarter: Optional[str] = None):
-    """Get employees (V2 scoring engine)"""
-    query = {}
-    if year:
-        query["year"] = year
-    if quarter:
-        query["quarter"] = quarter.upper()
-    
-    employees = await db.employees_v2.find(query, {"_id": 0}).to_list(5000)
-    
-    # Sort by score for tier calculation
-    employees_sorted = sorted(employees, key=lambda x: x.get('pre_dar_score') or x.get('total_score') or 0, reverse=True)
+    """
+    List employees. Phase-2 wired through `EmployeeService` — reads from
+    the canonical `employees` collection. Falls back to legacy
+    `employees_v2` when canonical has no rows for the requested quarter
+    (safety net while Phase-1 migration soaks in).
+
+    Response shape is unchanged (flat list, legacy-compatible) so the
+    Employees tab, slide generators, and audit page keep working.
+    """
+    from services.employee_service import EmployeeService
+    svc = EmployeeService(db)
+
+    actives = await svc.list_active(quarter=quarter, year=year)
+    used_canonical = bool(actives)
+
+    if not used_canonical:
+        # Canonical empty for this quarter — fall back to legacy.
+        legacy_query: Dict[str, Any] = {}
+        if year:
+            legacy_query["year"] = year
+        if quarter:
+            legacy_query["quarter"] = quarter.upper()
+        actives = await db.employees_v2.find(legacy_query, {"_id": 0}).to_list(5000)
+        if used_canonical is False:
+            logging.warning(
+                "GET /v2/employees: canonical empty for %s %s — fallback to legacy_v2 (%d rows)",
+                quarter, year, len(actives),
+            )
+
+    # Flatten canonical shape to the legacy projection the frontend expects.
+    flat: List[Dict[str, Any]] = []
+    for emp in actives:
+        cm = emp.get("current_metrics") or {}
+        merged = {k: v for k, v in emp.items() if k != "current_metrics"}
+        merged.update(cm)
+        flat.append(merged)
+
+    employees_sorted = sorted(
+        flat,
+        key=lambda x: x.get("pre_dar_score") or x.get("total_score") or 0,
+        reverse=True,
+    )
     total = len(employees_sorted)
-    
+
     for i, emp in enumerate(employees_sorted):
-        if isinstance(emp.get('created_at'), str):
-            emp['created_at'] = datetime.fromisoformat(emp['created_at'])
-        
-        # Always return display_name as name if set (preferred name takes priority)
-        if emp.get('display_name') and emp.get('display_name') != emp.get('name'):
-            emp['name'] = emp['display_name']
-        
-        # Calculate performance tier if missing
-        if not emp.get('performance_tier'):
+        if isinstance(emp.get("created_at"), str):
+            try:
+                emp["created_at"] = datetime.fromisoformat(emp["created_at"])
+            except ValueError:
+                pass
+
+        # Always surface display_name as name (First-Name-Only policy).
+        if emp.get("display_name") and emp.get("display_name") != emp.get("name"):
+            emp["name"] = emp["display_name"]
+
+        # Backfill performance_tier if missing (legacy parity).
+        if not emp.get("performance_tier"):
             rank = i + 1
             percentile = ((total - rank) / total) * 100 if total > 0 else 0
-            
             if percentile >= 75:
-                emp['performance_tier'] = "Top Performer"
+                emp["performance_tier"] = "Top Performer"
             elif percentile >= 50:
-                emp['performance_tier'] = "Above Average"
+                emp["performance_tier"] = "Above Average"
             elif percentile >= 25:
-                emp['performance_tier'] = "Below Average"
+                emp["performance_tier"] = "Below Average"
             else:
-                emp['performance_tier'] = "Needs Immediate Improvement"
-    
+                emp["performance_tier"] = "Needs Immediate Improvement"
+
     return employees_sorted
 
 
 @api_router.get("/v2/employees/{employee_id}")
 async def get_employee_v2(employee_id: str):
-    """Get single employee (V2)"""
-    employee = await db.employees_v2.find_one({"id": employee_id}, {"_id": 0})
-    if not employee:
-        raise HTTPException(status_code=404, detail="Employee not found")
-    
-    if isinstance(employee.get('created_at'), str):
-        employee['created_at'] = datetime.fromisoformat(employee['created_at'])
-    
-    # Always return display_name as name if set
-    if employee.get('display_name') and employee.get('display_name') != employee.get('name'):
-        employee['name'] = employee['display_name']
-    
-    return employee
+    """
+    Get a single employee by id. Phase-2 wired through EmployeeService.
+    Accepts both the canonical id and legacy_ids (so old frontend links
+    keep resolving after migration).
+    """
+    from services.employee_service import EmployeeService
+    svc = EmployeeService(db)
+
+    emp = await svc.get_by_id(employee_id)
+    if not emp:
+        emp = await svc.col.find_one({"legacy_ids": employee_id}, {"_id": 0})
+    if not emp:
+        # Last-resort legacy fallback.
+        legacy = await db.employees_v2.find_one({"id": employee_id}, {"_id": 0})
+        if not legacy:
+            raise HTTPException(status_code=404, detail="Employee not found")
+        if isinstance(legacy.get("created_at"), str):
+            try:
+                legacy["created_at"] = datetime.fromisoformat(legacy["created_at"])
+            except ValueError:
+                pass
+        if legacy.get("display_name") and legacy["display_name"] != legacy.get("name"):
+            legacy["name"] = legacy["display_name"]
+        return legacy
+
+    cm = emp.get("current_metrics") or {}
+    flat = {k: v for k, v in emp.items() if k != "current_metrics"}
+    flat.update(cm)
+    if isinstance(flat.get("created_at"), str):
+        try:
+            flat["created_at"] = datetime.fromisoformat(flat["created_at"])
+        except ValueError:
+            pass
+    if flat.get("display_name") and flat["display_name"] != flat.get("name"):
+        flat["name"] = flat["display_name"]
+    return flat
 
 
 @api_router.post("/v2/employees/{employee_id}/generate-review")
@@ -2103,23 +2160,20 @@ async def get_full_hierarchy_rankings(year: int, quarter: str, tier_filter: Opti
     }
 
 
-@api_router.get("/v2/full-rankings/{year}/{quarter}/snapshot-png")
-async def download_full_rankings_snapshot_png(year: int, quarter: str):
+async def _load_snapshot_first_rankings(
+    year: int,
+    quarter: str,
+) -> tuple[List[dict], "QuarterSettings"]:
     """
-    Download the detailed Server Performance Snapshot as a 1920×1080 PNG —
-    same layout as the snapshot-pdf endpoint but rendered as an image so
-    it can be displayed on Yodeck digital signage (which doesn't render
-    PDFs natively).
+    Resolve the row set that the snapshot-PNG/PDF generators should
+    render. Reads from the active snapshot's embedded `employees[]`
+    first (the architectural source of truth post Phase-2B) and falls
+    back to `employees_v2` only when no current snapshot exists.
+
+    Returns (rankings, settings).
+    Raises HTTPException(404) if no data exists for the quarter.
     """
-    from png_full_rankings import build_full_rankings_png
-
-    employees_v2 = await db.employees_v2.find(
-        {"year": year, "quarter": quarter.upper()},
-        {"_id": 0}
-    ).to_list(500)
-
-    if not employees_v2:
-        raise HTTPException(status_code=404, detail=f"No employees found for {quarter} {year}")
+    from services.employee_service import EmployeeService
 
     settings_doc = await db.quarter_settings.find_one(
         {"year": year, "quarter": quarter.upper()}, {"_id": 0}
@@ -2140,22 +2194,88 @@ async def download_full_rankings_snapshot_png(year: int, quarter: str):
         bonus_cap=settings_doc.get("bonus_cap", 5.0),
         a_server_min_score=settings_doc.get("a_server_min_score", 85.0),
         b_server_min_score=settings_doc.get("b_server_min_score", 70.0),
+        rt_points_per_mention=settings_doc.get("rt_points_per_mention", 0.3),
+        rt_max_points=settings_doc.get("rt_max_points", 20.0),
     )
 
+    # Phase 3 Stage B — snapshot-first via canonical FK-join + v2 overlay.
+    # Use the shared hydration helper that backs `/current-rankings` so
+    # both the page and the snapshot PNG/PDF land on identical numbers.
+    # Helper does FK-join, canonical overlay, v2 fallback for CV/RT,
+    # status filter, and on-the-fly recompute in one place.
+    from snapshot_routes import _hydrate_snapshot_employees
+
+    join_query: Dict[str, Any] = {"is_current": True, "year": year,
+                                  "quarter": quarter.upper()}
+    snapshot = await db.snapshot_workflow.find_one(join_query, {"_id": 0})
+    if not snapshot:
+        snapshot = await db.snapshot_workflow.find_one(
+            {"status": "completed", "year": year, "quarter": quarter.upper()},
+            {"_id": 0},
+            sort=[("effective_date", -1), ("completed_at", -1)],
+        )
+
+    svc = EmployeeService(db)
+    if snapshot:
+        raw_rows = await _hydrate_snapshot_employees(db, snapshot)
+    else:
+        # Truly no snapshot — last-resort fallback to legacy mirror.
+        raw_rows = await db.employees_v2.find(
+            {"year": year, "quarter": quarter.upper()},
+            {"_id": 0},
+        ).to_list(500)
+        raw_rows = await svc.filter_active_only(raw_rows)
+
+    if not raw_rows:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No employees found for {quarter} {year}",
+        )
+
+    # Convert to EmployeeV2 (parser uses alt names — normalize first).
     employees: List[EmployeeV2] = []
-    for emp_data in employees_v2:
-        # Normalize alt field names (model only has review_mentions/
-        # glassware_sales; parser writes rt_mentions/bar_glassware_sales).
-        if not emp_data.get("review_mentions") and emp_data.get("rt_mentions"):
-            emp_data["review_mentions"] = emp_data["rt_mentions"]
+    for emp_data in raw_rows:
         if not emp_data.get("glassware_sales") and emp_data.get("bar_glassware_sales"):
             emp_data["glassware_sales"] = emp_data["bar_glassware_sales"]
+        if "guest_count" in emp_data and "guests" not in emp_data:
+            emp_data["guests"] = emp_data["guest_count"]
         try:
             employees.append(EmployeeV2(**emp_data))
         except Exception:
             continue
 
     rankings = generate_hierarchy_rankings(employees, settings)
+
+    # generate_hierarchy_rankings recalculates cv_score / metric_bonus
+    # internally from raw inputs — re-overlay the snapshot's authoritative
+    # values (incl. manual overrides) on top so the slide reflects the
+    # exact numbers the dashboard / current-rankings page shows.
+    raw_by_name = {(r.get("name") or "").lower(): r for r in raw_rows}
+    for rank in rankings:
+        src = raw_by_name.get((rank.get("name") or "").lower()) or {}
+        if src.get("nps_manual_override"):
+            rank["cv_score"] = src.get("cv_score", rank.get("cv_score"))
+            rank["nps_score"] = src.get("nps_score", rank.get("nps_score"))
+        # RT bonus and metric bonus are derived from clean inputs in both
+        # paths — but copy the override flag through for slide consumers.
+        if src.get("nps_manual_override"):
+            rank["nps_manual_override"] = True
+
+    return rankings, settings
+
+
+@api_router.get("/v2/full-rankings/{year}/{quarter}/snapshot-png")
+async def download_full_rankings_snapshot_png(year: int, quarter: str):
+    """
+    Download the detailed Server Performance Snapshot as a 1920×1080 PNG.
+
+    Reads snapshot-first (matches `/current-rankings`) so manual overrides
+    on the active snapshot always render correctly, with `employees_v2`
+    only used as a defense-in-depth fallback when no snapshot exists.
+    """
+    from png_full_rankings import build_full_rankings_png
+
+    rankings, settings = await _load_snapshot_first_rankings(year, quarter)
 
     png_bytes = build_full_rankings_png(
         rankings=rankings,
@@ -2182,54 +2302,11 @@ async def download_full_rankings_snapshot_pdf(year: int, quarter: str):
     document with the Bubba Gump sidebar, color-coded legend, and the
     full Rank/Name/Trend/PPA/LBW/GLASS/LSC/CV/RT/Bonus/Score table.
 
-    This is the printable PDF managers post for staff. The PNG-only
-    `/pdf` endpoint above produces the tier-card slide instead.
+    Reads snapshot-first (matches `/current-rankings`) so manual overrides
+    on the active snapshot always render correctly. `employees_v2` is
+    only used as a fallback when no snapshot exists.
     """
-    employees_v2 = await db.employees_v2.find(
-        {"year": year, "quarter": quarter.upper()},
-        {"_id": 0}
-    ).to_list(500)
-
-    if not employees_v2:
-        raise HTTPException(status_code=404, detail=f"No employees found for {quarter} {year}")
-
-    settings_doc = await db.quarter_settings.find_one(
-        {"year": year, "quarter": quarter.upper()}, {"_id": 0}
-    ) or {}
-
-    settings = QuarterSettings(
-        year=year,
-        quarter=quarter.upper(),
-        benchmark_ppa=settings_doc.get("benchmark_ppa", 55.0),
-        benchmark_lbw=settings_doc.get("benchmark_lbw", 8.0),
-        benchmark_glass=settings_doc.get("benchmark_glass", 1.0),
-        benchmark_lsc=settings_doc.get("benchmark_lsc", 100.0),
-        benchmark_cv=settings_doc.get("benchmark_cv", 5.0),
-        weight_ppa=settings_doc.get("weight_ppa", 0.25),
-        weight_lbw=settings_doc.get("weight_lbw", 0.20),
-        weight_glass=settings_doc.get("weight_glass", 0.15),
-        weight_lsc=settings_doc.get("weight_lsc", 0.25),
-        weight_cv=settings_doc.get("weight_cv", 0.15),
-        bonus_rate=settings_doc.get("bonus_rate", 0.2),
-        bonus_cap=settings_doc.get("bonus_cap", 5.0),
-        a_server_min_score=settings_doc.get("a_server_min_score", 85.0),
-        b_server_min_score=settings_doc.get("b_server_min_score", 70.0),
-    )
-
-    employees: List[EmployeeV2] = []
-    for emp_data in employees_v2:
-        # Normalize alt field names (model only has review_mentions/
-        # glassware_sales; parser writes rt_mentions/bar_glassware_sales).
-        if not emp_data.get("review_mentions") and emp_data.get("rt_mentions"):
-            emp_data["review_mentions"] = emp_data["rt_mentions"]
-        if not emp_data.get("glassware_sales") and emp_data.get("bar_glassware_sales"):
-            emp_data["glassware_sales"] = emp_data["bar_glassware_sales"]
-        try:
-            employees.append(EmployeeV2(**emp_data))
-        except Exception:
-            continue
-
-    rankings = generate_hierarchy_rankings(employees, settings)
+    rankings, settings = await _load_snapshot_first_rankings(year, quarter)
 
     pdf_bytes = build_full_rankings_pdf(
         rankings=rankings,
@@ -2294,7 +2371,7 @@ async def download_full_rankings_pdf(year: int, quarter: str):
             "score_lsc": emp.get("score_lsc", 0) or 0,
             "cv_score": emp.get("cv_score", 0) or 0,
             "rt_mentions": emp.get("rt_mentions", 0) or emp.get("review_mentions", 0) or 0,
-            "rt_bonus": emp.get("review_tracker_bonus", 0) or min((emp.get("rt_mentions", 0) or 0) * 0.5, 15),
+            "rt_bonus": emp.get("review_tracker_bonus", 0) or min((emp.get("rt_mentions", 0) or 0) * 0.3, 20),
             "total_metric_bonus": emp.get("total_metric_bonus", 0) or 0,
         }
         slide_employees.append(slide_emp)
@@ -2659,7 +2736,7 @@ async def update_employee(employee_id: str, data: dict):
         if settings_doc:
             bm_ppa = settings_doc.get('benchmark_ppa', 55) or 55
             bm_lbw = settings_doc.get('benchmark_lbw', 8) or 8
-            bm_glass = settings_doc.get('benchmark_glass', 1.25) or 1.25
+            bm_glass = settings_doc.get('benchmark_glass', 1.35) or 1.35
             bm_lsc = settings_doc.get('benchmark_lsc', 100) or 100
             
             ppa_val = update_fields.get('ppa', merged.get('ppa', 0) or 0)
@@ -2740,19 +2817,24 @@ async def update_employee(employee_id: str, data: dict):
                 update_fields['tier_label'] = 'C-Server'
 
         # Legacy full-rebuild path — only when POS-data fields actually
-        # changed. Uses raw percentages × weights (snapshot pipeline caps
-        # them differently, but for POS edits we accept the divergence
-        # since we'd otherwise need to recreate the whole scoring engine).
+        # changed. Caps each score at 100% (consistent with the snapshot
+        # pipeline) so a server with extreme metrics like LSC=330% can't
+        # inflate weighted_score beyond the documented max of
+        # sum(weights) × 100.
         if full_rebuild:
-            w_ppa = settings_doc.get('weight_ppa', 0.30)
-            w_lbw = settings_doc.get('weight_lbw', 0.25)
-            w_glass = settings_doc.get('weight_glass', 0.20)
+            # Default to current Q2+ active model when settings are missing
+            # any field. Q1 legacy used 0.25/0.15/0.10/0.25 — but those are
+            # already in the QuarterSettings doc, so the .get() fallbacks
+            # below should rarely be hit in practice.
+            w_ppa = settings_doc.get('weight_ppa', 0.25)
+            w_lbw = settings_doc.get('weight_lbw', 0.20)
+            w_glass = settings_doc.get('weight_glass', 0.15)
             w_lsc = settings_doc.get('weight_lsc', 0.25)
 
-            s_ppa = merged.get('score_ppa', 0) or 0
-            s_lbw = merged.get('score_lbw', 0) or 0
-            s_glass = merged.get('score_glass', 0) or 0
-            s_lsc = merged.get('score_lsc', 0) or 0
+            s_ppa = min(merged.get('score_ppa', 0) or 0, 100)
+            s_lbw = min(merged.get('score_lbw', 0) or 0, 100)
+            s_glass = min(merged.get('score_glass', 0) or 0, 100)
+            s_lsc = min(merged.get('score_lsc', 0) or 0, 100)
             cv = merged.get('cv_score', 0) or 0
             rt = merged.get('review_tracker_bonus', 0) or 0
             bonus = merged.get('total_metric_bonus', 0) or 0
@@ -2920,64 +3002,56 @@ async def update_employee_manual_score(employee_id: str, data: dict):
 @api_router.delete("/v2/employees/{employee_id}")
 async def delete_employee(employee_id: str):
     """
-    Delete a single employee.
+    Soft-delete a single employee. Phase-2 wired through
+    EmployeeService.delete_completely which handles canonical
+    soft-delete + employees_v2 mirror removal + snapshot pull (by id,
+    legacy_ids, AND name) + `deleted_names` blocklist write +
+    employee_count recompute in one atomic flow.
 
-    Target the SPECIFIC row the user clicked on (by id) so deleting one of
-    several duplicates leaves the others intact. The employee may live in
-    `employees_v2`, inside `snapshot_workflow.employees`, or both — we try
-    each in turn. Only if the id isn't found anywhere do we fall back to a
-    name-based delete so callers passing a bare name still work.
+    Accepts canonical id, legacy_id, OR a bare name (the name fallback
+    preserves backwards-compat for any frontend code still POSTing
+    `/v2/employees/<name>` directly).
     """
     import re as _re
+    from services.employee_service import EmployeeService
+    svc = EmployeeService(db)
 
-    deleted_v2 = 0
-    pulled_from_snapshots = 0
-    name_for_message = None
+    canonical = await svc.get_by_id(employee_id)
+    if not canonical:
+        canonical = await svc.col.find_one({"legacy_ids": employee_id}, {"_id": 0})
 
-    # 1) Delete from employees_v2 by exact id (keeps same-named duplicates)
-    v2_doc = await db.employees_v2.find_one({"id": employee_id}, {"_id": 0})
-    if v2_doc:
-        name_for_message = v2_doc.get("display_name") or v2_doc.get("name")
-        result = await db.employees_v2.delete_one({"id": employee_id})
-        deleted_v2 = result.deleted_count
+    if not canonical:
+        # Treat employee_id as a bare name (case-insensitive) — find the
+        # canonical row by name/alias and route through delete_completely.
+        canonical = await svc.find_by_name_or_alias(employee_id, include_inactive=True)
 
-    # 2) Pull the matching embedded employee from every snapshot (again, by id)
-    snap_result = await db.snapshot_workflow.update_many(
-        {"employees.id": employee_id},
-        {"$pull": {"employees": {"id": employee_id}}}
-    )
-    pulled_from_snapshots = snap_result.modified_count
-
-    # 3) Nothing matched by id — treat employee_id as a name and delete one
-    # matching row from each source (case-insensitive exact match). This
-    # preserves legitimate other employees who happen to share the name.
-    if deleted_v2 == 0 and pulled_from_snapshots == 0:
-        name_pat = f"^{_re.escape(employee_id)}$"
-        v2_by_name = await db.employees_v2.find_one({
-            "$or": [
-                {"name": {"$regex": name_pat, "$options": "i"}},
-                {"display_name": {"$regex": name_pat, "$options": "i"}},
-                {"report_name": {"$regex": name_pat, "$options": "i"}},
-            ]
-        }, {"_id": 0, "id": 1, "name": 1, "display_name": 1})
-        if v2_by_name:
-            name_for_message = v2_by_name.get("display_name") or v2_by_name.get("name")
-            dr = await db.employees_v2.delete_one({"id": v2_by_name.get("id")})
-            deleted_v2 = dr.deleted_count
-            sr = await db.snapshot_workflow.update_many(
-                {"employees.id": v2_by_name.get("id")},
-                {"$pull": {"employees": {"id": v2_by_name.get("id")}}}
-            )
-            pulled_from_snapshots = sr.modified_count
-
-        if deleted_v2 == 0 and pulled_from_snapshots == 0:
+    if not canonical:
+        # Last-resort: only present in legacy employees_v2 (canonical
+        # migration hadn't run for them yet). Mint a canonical row first
+        # so all the bookkeeping below works.
+        legacy = await db.employees_v2.find_one(
+            {"$or": [
+                {"id": employee_id},
+                {"name": {"$regex": f"^{_re.escape(employee_id)}$", "$options": "i"}},
+                {"display_name": {"$regex": f"^{_re.escape(employee_id)}$", "$options": "i"}},
+            ]},
+            {"_id": 0},
+        )
+        if not legacy:
             raise HTTPException(status_code=404, detail="Employee not found")
+        canonical = await svc.create_employee({
+            "id": legacy.get("id"),
+            "name": legacy.get("name"),
+            "display_name": legacy.get("display_name") or (legacy.get("name") or "").split()[0],
+            "report_name": legacy.get("report_name") or legacy.get("name"),
+            "job_title": legacy.get("job_title") or "Server",
+        })
 
+    result = await svc.delete_completely(canonical["id"])
     return {
         "success": True,
-        "message": f"Deleted {name_for_message or 'employee'}",
-        "deleted_from_employees_v2": deleted_v2,
-        "snapshots_updated": pulled_from_snapshots,
+        "message": f"Deleted {canonical.get('name') or 'employee'}",
+        **result,
     }
 
 
@@ -3118,28 +3192,79 @@ async def analyze_employees_for_cleanup():
     }
 
 
+@api_router.get("/v2/admin/integrity")
+async def employee_data_integrity():
+    """
+    Run the 9-check EmployeeValidator suite (Phase 1) and return the
+    full report as JSON. Surface this on an admin page to spot drift
+    before it becomes a slide-generation bug.
+
+    Response shape mirrors `scripts/run_validation_suite.py` output:
+        {
+          "duplicate_canonical_ids": [...],
+          "orphaned_snapshot_refs":  [...],
+          "employees_missing_id":    [...],
+          "blocklist_violations":    [...],
+          "duplicate_active_names":  [...],
+          "inactive_in_current_snap":[...],
+          "metric_drift":            [...],
+          "legacy_only_employees":   [...],
+          "snapshot_only_employees": [...],
+          "summary": {p0_issues, p1_issues, p2_issues, deploy_gate: "PASS|FAIL"}
+        }
+    """
+    from services.validation_service import EmployeeValidator
+    report = await EmployeeValidator(db).run_all()
+    return report
+
+
 @api_router.post("/v2/employees/cleanup/delete")
 async def delete_employees_bulk(request: EmployeeCleanupRequest):
     """
     Delete multiple employees by ID.
-    Use this after reviewing the analyze endpoint results.
+    Routes each id through EmployeeService.delete_completely so every
+    deletion does the full canonical soft-delete + snapshot pull +
+    blocklist add. Phase-2 wiring of the bulk path.
     """
     if not request.employee_ids:
         raise HTTPException(status_code=400, detail="No employee IDs provided")
-    
+
+    from services.employee_service import EmployeeService
+    svc = EmployeeService(db)
+
     deleted_count = 0
     errors = []
-    
+
     for emp_id in request.employee_ids:
         try:
-            result = await db.employees_v2.delete_one({"id": emp_id})
-            if result.deleted_count > 0:
+            # Resolve via canonical first, fall back to legacy_ids index.
+            canonical = await svc.get_by_id(emp_id)
+            if not canonical:
+                canonical = await svc.col.find_one({"legacy_ids": emp_id}, {"_id": 0})
+
+            if not canonical:
+                # No canonical row — mint one from the legacy v2 doc so
+                # future deletes (re-runs of this script, undo) work.
+                legacy = await db.employees_v2.find_one({"id": emp_id}, {"_id": 0})
+                if not legacy:
+                    errors.append(f"Employee {emp_id} not found")
+                    continue
+                canonical = await svc.create_employee({
+                    "id": legacy.get("id"),
+                    "name": legacy.get("name"),
+                    "display_name": legacy.get("display_name") or (legacy.get("name") or "").split()[0],
+                    "report_name": legacy.get("report_name") or legacy.get("name"),
+                    "job_title": legacy.get("job_title") or "Server",
+                })
+
+            res = await svc.delete_completely(canonical["id"])
+            if res.get("success"):
                 deleted_count += 1
             else:
-                errors.append(f"Employee {emp_id} not found")
+                errors.append(f"Could not delete {emp_id}: {res.get('reason')}")
         except Exception as e:
             errors.append(f"Error deleting {emp_id}: {str(e)}")
-    
+
     return {
         "success": True,
         "deleted_count": deleted_count,
@@ -3336,9 +3461,9 @@ async def update_employee_cv_stats(employee_id: str, data: dict):
     """
     quarter = data.get("quarter", "Q1")
     year = data.get("year", 2026)
-    cv_promoters = int(data.get("cv_promoters", 0))
-    cv_detractors = int(data.get("cv_detractors", 0))
-    cv_passives = int(data.get("cv_passives", 0))
+    cv_promoters = max(0, int(data.get("cv_promoters", 0) or 0))
+    cv_detractors = max(0, int(data.get("cv_detractors", 0) or 0))
+    cv_passives = max(0, int(data.get("cv_passives", 0) or 0))
     
     # Find employee
     employee = await db.employees_v2.find_one({
@@ -3851,6 +3976,7 @@ api_router.include_router(reviews_router)
 api_router.include_router(insights_router)
 api_router.include_router(pos_upload_router)
 api_router.include_router(scheduler_router)
+api_router.include_router(auth_router)
 
 # Register legacy snapshots routes (uses db.snapshots collection)
 register_snapshots_legacy_routes(api_router, db)
@@ -3861,13 +3987,42 @@ register_snapshots_legacy_routes(api_router, db)
 # Include the router in the main app
 app.include_router(api_router)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=False,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS configuration
+# - When CORS_ORIGINS="*" (the default in preview), allow all origins. The
+#   browser spec forbids `credentials=true` together with `origin=*`, so in
+#   that mode we don't send the auth cookie cross-origin. That's fine for
+#   preview because the frontend and backend share the same origin.
+# - When CORS_ORIGINS is an explicit comma-separated allowlist, enable
+#   credentials so the auth cookie travels. The default allowlist includes
+#   the preview, the original Emergent-hosted production domain, the user's
+#   custom production domain, and localhost.
+_origins_raw = (os.environ.get("CORS_ORIGINS") or "*").strip()
+
+if _origins_raw == "*":
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    _origins = [o.strip() for o in _origins_raw.split(",") if o.strip()]
+    if not _origins:
+        _origins = [
+            "https://staff-score-engine.preview.emergentagent.com",
+            "https://eatery-reports.emergent.host",
+            "https://intheweedscollective.com",
+            "https://www.intheweedscollective.com",
+            "http://localhost:3000",
+        ]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # Add no-cache headers middleware for API responses
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -3882,6 +4037,68 @@ class NoCacheMiddleware(BaseHTTPMiddleware):
         return response
 
 app.add_middleware(NoCacheMiddleware)
+
+
+# ---------------------------------------------------------------------------
+# AUTH GATE — protect every state-changing /api/v2/* endpoint.
+#
+# Read-only GETs stay public so the rankings/snapshots can be shared as a
+# public link. Anything that creates, edits, or deletes data requires the
+# session_token cookie set by /api/auth/session AND the user's email must
+# be in the ALLOWED_ADMIN_EMAILS whitelist (see routes/auth.py).
+#
+# Routes explicitly EXEMPTED from the gate (in addition to all GETs):
+#   • /api/auth/*          — auth flow itself
+#   • /api/health, /api/   — health checks
+# ---------------------------------------------------------------------------
+from routes.auth import _get_session_user as _auth_get_session_user, ALLOWED_EMAILS
+
+_AUTH_PROTECTED_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+_AUTH_PUBLIC_PREFIXES = (
+    "/api/auth/",
+    "/api/health",
+)
+
+class AdminAuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        path = request.url.path
+        method = request.method.upper()
+
+        # Public reads + auth flow + non-API requests pass through unchanged.
+        if (
+            method not in _AUTH_PROTECTED_METHODS
+            or not path.startswith("/api/")
+            or any(path.startswith(p) for p in _AUTH_PUBLIC_PREFIXES)
+        ):
+            return await call_next(request)
+
+        # Protected: require valid session whose email is on the whitelist.
+        try:
+            user = await _auth_get_session_user(
+                db,
+                request.cookies.get("session_token"),
+                request.headers.get("authorization"),
+            )
+        except Exception:
+            user = None
+
+        if not user:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Sign in required to make changes."},
+            )
+        if not user.is_admin:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(
+                status_code=403,
+                content={"detail": f"{user.email} is not authorized to edit this app. Contact the owner to be added."},
+            )
+
+        return await call_next(request)
+
+
+app.add_middleware(AdminAuthMiddleware)
 
 # Configure logging
 logging.basicConfig(

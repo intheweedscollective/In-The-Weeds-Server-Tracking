@@ -131,8 +131,132 @@ def is_valid_employee_name(name: str) -> bool:
     # Name should be reasonable length (2-50 chars)
     if len(name) > 50:
         return False
-    
+
     return True
+
+
+# ---------------------------------------------------------------------------
+# NATIVE-FIRST PDF EXTRACTION (shared)
+# ---------------------------------------------------------------------------
+#
+# Every PDF-handling POS upload route MUST go through `extract_pos_pdf_native_first`
+# so all three routes share the same precedence rule: try the deterministic
+# native parser first, fall back to AI OCR only if the PDF is image-only or
+# native extraction yields no usable rows. This mirrors how upload_jobs.py
+# already works and prevents regression on digitally-generated POS reports.
+
+# How loosely "food + liquor + beer + wine ≈ net_sales" is enforced. POS
+# reports almost always include comps / discounts / dessert / NA bev /
+# misc adjustments in the net_sales line that aren't accounted for in
+# the four category columns, so we have to tolerate non-trivial drift.
+# The fail threshold is set high enough that only obviously broken
+# extractions (missing column, swapped columns, decimal lost) trip it.
+SALES_RECONCILIATION_TOLERANCE_PCT = 0.15  # 15%
+SALES_RECONCILIATION_MIN_NET = 50.0        # Skip the check below this — rounding noise dominates.
+
+
+def _validate_sales_reconciliation(emp: Dict[str, Any]) -> Optional[str]:
+    """
+    Return a reject-reason string if this employee's category sales
+    don't approximately sum to net_sales. Returns `None` if the row
+    passes (or if there's not enough signal to judge).
+    """
+    net = safe_float(emp.get("net_sales") or 0)
+    food = safe_float(emp.get("food_sales") or 0)
+    liquor = safe_float(emp.get("liquor_sales") or 0)
+    beer = safe_float(emp.get("beer_sales") or 0)
+    wine = safe_float(emp.get("wine_sales") or 0)
+
+    if net < SALES_RECONCILIATION_MIN_NET:
+        return None
+    cat_sum = food + liquor + beer + wine
+    if cat_sum <= 0:
+        # No category breakdown extracted — can't judge. POS report
+        # might just be a summary; let it through.
+        return None
+    diff_pct = abs(cat_sum - net) / net
+    if diff_pct <= SALES_RECONCILIATION_TOLERANCE_PCT:
+        return None
+    return (
+        f"Category sales (${cat_sum:,.2f}) drift {diff_pct*100:.1f}% "
+        f"vs net sales (${net:,.2f}). Likely an extraction error — "
+        f"check for swapped columns, missed column, or lost decimal."
+    )
+
+
+def _filter_reconcilable_employees(
+    employees: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """
+    Split a list of extracted employees into kept + rejected based on
+    cross-field validation. Returns a dict with both lists so the
+    caller can decide whether to fail loudly or just surface warnings.
+    """
+    kept: List[Dict[str, Any]] = []
+    rejected: List[Dict[str, Any]] = []
+    for emp in employees:
+        reason = _validate_sales_reconciliation(emp)
+        if reason:
+            rejected.append({
+                "name": emp.get("name") or "Unknown",
+                "net_sales": safe_float(emp.get("net_sales") or 0),
+                "reason": reason,
+            })
+        else:
+            kept.append(emp)
+    return {"kept": kept, "rejected": rejected}
+
+
+async def extract_pos_pdf_native_first(file_bytes: bytes) -> Dict[str, Any]:
+    """
+    Native PDF parser first, AI OCR fallback. Returns the same
+    legacy-shaped dict the validator expects:
+      { "employees": [ {... per-employee fields ...} ],
+        "extraction_notes": "...",
+        "extraction_method": "native_pdf" | "ai_ocr",
+        "error": str? }
+    Falls through to AI OCR if the native parser fails / returns 0 rows.
+    """
+    from pos_ocr import extract_pos_data_from_pdf  # AI OCR fallback
+
+    # 1) Try the deterministic native parser.
+    try:
+        from native_pos_parser import (
+            extract_pos_data_from_pdf_bytes_native,
+            is_pdf_native_extractable,
+        )
+        if is_pdf_native_extractable(file_bytes):
+            native = extract_pos_data_from_pdf_bytes_native(file_bytes)
+            if native.get("success") and native.get("employees"):
+                logging.info(
+                    f"Native PDF parser extracted {len(native['employees'])} employees"
+                )
+                return {
+                    "employees": [
+                        {
+                            "name": e["name"],
+                            "guest_count": e["guest_count"],
+                            "net_sales": e["net_sales"],
+                            "ppa": e["ppa"],
+                            "food_sales": e["food_sales"],
+                            "liquor_sales": e["liquor_sales"],
+                            "beer_sales": e["beer_sales"],
+                            "wine_sales": e["wine_sales"],
+                            "bar_glassware_sales": e["bar_glassware_sales"],
+                            "loyalty_sales": e["loyalty_sales"],
+                        }
+                        for e in native["employees"]
+                    ],
+                    "extraction_notes": native.get("extraction_notes", ""),
+                    "extraction_method": "native_pdf",
+                }
+    except Exception as e:
+        logging.warning(f"Native parser failed, falling back to AI OCR: {e}")
+
+    # 2) Fall back to AI OCR.
+    raw = await extract_pos_data_from_pdf(file_bytes)
+    raw["extraction_method"] = "ai_ocr"
+    return raw
 
 
 # ============================================================================
@@ -278,8 +402,8 @@ async def upload_pos_report_file(file: UploadFile = File(...)):
             }
             
         elif is_pdf:
-            # Process PDF file
-            raw_data = await extract_pos_data_from_pdf(contents)
+            # Native PDF parser first, AI OCR fallback. Mirrors upload_jobs.py.
+            raw_data = await extract_pos_pdf_native_first(contents)
         elif is_heic:
             # Convert HEIC to JPEG first
             from PIL import Image
@@ -299,23 +423,54 @@ async def upload_pos_report_file(file: UploadFile = File(...)):
         
         # Validate and clean extracted data (for OCR sources)
         validated_data = validate_extracted_data(raw_data)
-        
+
         if "error" in validated_data and not validated_data.get("employees"):
             return {
                 "success": False,
                 "error": validated_data.get("error"),
                 "extraction_notes": validated_data.get("extraction_notes")
             }
-        
+
+        # Cross-field validation: category sales should ≈ net sales.
+        # Rows that fail get rejected so they never reach the snapshot.
+        # Native parser rows almost always pass; OCR rows fail here when
+        # the AI swapped a column or missed a decimal point.
+        if is_pdf or not is_xlsx:
+            reconciled = _filter_reconcilable_employees(
+                validated_data.get("employees", [])
+            )
+            if reconciled["rejected"]:
+                logging.warning(
+                    f"POS upload: rejected {len(reconciled['rejected'])} row(s) "
+                    f"that failed sales reconciliation: "
+                    f"{[r['name'] for r in reconciled['rejected']]}"
+                )
+            validated_data["employees"] = reconciled["kept"]
+            validated_data["rejected_rows"] = reconciled["rejected"]
+            if not reconciled["kept"] and reconciled["rejected"]:
+                return {
+                    "success": False,
+                    "error": (
+                        f"All {len(reconciled['rejected'])} extracted row(s) "
+                        f"failed cross-field validation (category sales did "
+                        f"not reconcile with net sales). The extraction is "
+                        f"unreliable — please re-upload or contact support."
+                    ),
+                    "rejected_rows": reconciled["rejected"],
+                    "extraction_notes": validated_data.get("extraction_notes"),
+                }
+
         return {
             "success": True,
             "filename": file.filename,
             "file_type": "pdf" if is_pdf else "image",
             "pages_processed": raw_data.get("pages_processed", 1),
+            "extraction_method": raw_data.get("extraction_method", "ai_ocr"),
             "report_date": validated_data.get("report_date"),
             "report_type": validated_data.get("report_type"),
             "employees": validated_data.get("employees", []),
             "employee_count": validated_data.get("employee_count", 0),
+            "rejected_rows": validated_data.get("rejected_rows", []),
             "extraction_notes": validated_data.get("extraction_notes")
         }
         
@@ -401,17 +556,17 @@ async def process_pdf_in_background(job_id: str, contents: bytes, filename: str)
             "message": "Starting PDF processing..."
         }
         
-        # Use the AI/OCR-based extraction - pass job_id for progress updates
+        # Native PDF parser first, AI OCR fallback (mirrors upload_jobs.py).
         # No overall timeout - let it run as long as needed
-        raw_data = await extract_pos_data_from_pdf(contents, job_id=job_id)
-        
+        raw_data = await extract_pos_pdf_native_first(contents)
+
         # Update progress
         pdf_jobs[job_id] = {
             **pdf_jobs[job_id],
             "progress": 90,
             "message": "Validating extracted data..."
         }
-        
+
         if "error" in raw_data and not raw_data.get("employees"):
             pdf_jobs[job_id] = {
                 **pdf_jobs[job_id],
@@ -425,10 +580,10 @@ async def process_pdf_in_background(job_id: str, contents: bytes, filename: str)
                 }
             }
             return
-        
+
         # Validate and clean extracted data
         validated_data = validate_extracted_data(raw_data)
-        
+
         if not validated_data.get("employees"):
             pdf_jobs[job_id] = {
                 **pdf_jobs[job_id],
@@ -440,6 +595,37 @@ async def process_pdf_in_background(job_id: str, contents: bytes, filename: str)
                     "employees": [],
                     "extraction_notes": validated_data.get("extraction_notes", "")
                 }
+            }
+            return
+
+        # Cross-field validation — reject rows whose category sales
+        # don't reconcile with net sales (extraction error indicator).
+        reconciled = _filter_reconcilable_employees(
+            validated_data.get("employees", [])
+        )
+        validated_data["employees"] = reconciled["kept"]
+        rejected_rows = reconciled["rejected"]
+        if rejected_rows:
+            logging.warning(
+                f"PDF job {job_id}: rejected {len(rejected_rows)} row(s) "
+                f"failing sales reconciliation: "
+                f"{[r['name'] for r in rejected_rows]}"
+            )
+        if not validated_data["employees"] and rejected_rows:
+            pdf_jobs[job_id] = {
+                **pdf_jobs[job_id],
+                "status": "completed",
+                "progress": 100,
+                "result": {
+                    "success": False,
+                    "error": (
+                        f"All {len(rejected_rows)} extracted row(s) failed "
+                        "cross-field validation. The extraction is unreliable."
+                    ),
+                    "employees": [],
+                    "rejected_rows": rejected_rows,
+                    "extraction_notes": validated_data.get("extraction_notes", ""),
+                },
             }
             return
         
@@ -485,11 +671,19 @@ async def process_pdf_in_background(job_id: str, contents: bytes, filename: str)
                 "filename": filename,
                 "employee_count": len(formatted_employees),
                 "total_pages": safe_int(raw_data.get("pages_processed", raw_data.get("total_pages", 1)), 1),
+                "extraction_method": raw_data.get("extraction_method", "ai_ocr"),
+                "rejected_rows": rejected_rows,
                 "employees": formatted_employees,
-                "extraction_notes": f"AI/OCR extracted {len(formatted_employees)} employees. {validated_data.get('extraction_notes', '')}"
+                "extraction_notes": (
+                    f"{raw_data.get('extraction_method', 'ai_ocr')} extracted "
+                    f"{len(formatted_employees)} employees"
+                    + (f", rejected {len(rejected_rows)} for failing cross-field validation"
+                       if rejected_rows else "")
+                    + f". {validated_data.get('extraction_notes', '')}"
+                )
             }
         }
-        logging.info(f"Background PDF processing completed for job {job_id}: {len(formatted_employees)} employees")
+        logging.info(f"Background PDF processing completed for job {job_id}: {len(formatted_employees)} employees ({raw_data.get('extraction_method', 'ai_ocr')})")
         
     except Exception as e:
         logging.error(f"Background PDF processing error for job {job_id}: {str(e)}")
@@ -668,15 +862,20 @@ async def import_pos_pdf_data(
 ):
     """
     Parse and import scanned POS PDF data into the employee database.
-    Uses AI/OCR extraction which is production-stable for large PDFs.
-    
+    Uses the native PDF parser as the primary extraction method, with
+    AI OCR as a fallback only if native parsing fails or the PDF is
+    image-only (mirrors upload_jobs.py).
+
     This endpoint:
-    1. Parses the PDF using AI-powered OCR extraction
-    2. Matches employees using fuzzy name matching
-    3. Updates existing employees or creates new ones
-    4. Recalculates all scores
+    1. Parses the PDF (native first, AI OCR fallback)
+    2. Validates that each row's category sales (food + liquor + beer
+       + wine) approximately sum to its net sales — rejects rows that
+       fail this check
+    3. Matches employees using fuzzy name matching
+    4. Updates existing employees or creates new ones
+    5. Recalculates all scores
     """
-    from pos_ocr import extract_pos_data_from_pdf, validate_extracted_data
+    from pos_ocr import validate_extracted_data
     from rapidfuzz import fuzz, process
     from server import fix_all_employee_scores
     
@@ -703,19 +902,44 @@ async def import_pos_pdf_data(
     contents = await file.read()
     
     try:
-        logging.info(f"Processing PDF import with AI/OCR: {file.filename}, size: {len(contents)} bytes")
-        
-        # Use AI/OCR-based extraction which is production-stable
-        raw_data = await extract_pos_data_from_pdf(contents)
-        
+        logging.info(f"Processing PDF import: {file.filename}, size: {len(contents)} bytes")
+
+        # Native PDF parser first, AI OCR fallback (mirrors upload_jobs.py).
+        raw_data = await extract_pos_pdf_native_first(contents)
+
         if "error" in raw_data and not raw_data.get("employees"):
             raise HTTPException(status_code=400, detail=raw_data.get("error", "No employee data found in PDF"))
-        
+
         # Validate and clean extracted data
         validated_data = validate_extracted_data(raw_data)
-        
+
         if not validated_data.get("employees"):
             raise HTTPException(status_code=400, detail="No employee data could be extracted from PDF")
+
+        # Cross-field validation — reject rows where category sales don't
+        # reconcile with net sales. This stops bad imports cold instead of
+        # silently flushing garbage into the snapshot.
+        reconciled = _filter_reconcilable_employees(
+            validated_data.get("employees", [])
+        )
+        rejected_rows = reconciled["rejected"]
+        if rejected_rows:
+            logging.warning(
+                f"PDF import: rejected {len(rejected_rows)} row(s) failing "
+                f"sales reconciliation: {[r['name'] for r in rejected_rows]}"
+            )
+        validated_data["employees"] = reconciled["kept"]
+        if not validated_data["employees"]:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"All {len(rejected_rows)} extracted row(s) failed "
+                    f"cross-field validation (category sales did not "
+                    f"reconcile with net sales). Aborted to avoid "
+                    f"importing unreliable data. Rejected: "
+                    f"{[r['name'] for r in rejected_rows[:5]]}"
+                ),
+            )
         
         # Transform OCR data to standard format
         employees_data = []
@@ -881,8 +1105,15 @@ async def import_pos_pdf_data(
             "matched": len(results["matched"]),
             "created": len(results["created"]),
             "errors": len(results["errors"]),
+            "rejected_rows": rejected_rows,
+            "extraction_method": raw_data.get("extraction_method", "ai_ocr"),
             "details": results,
-            "extraction_notes": f"AI/OCR processed {raw_data.get('pages_processed', 'N/A')} pages"
+            "extraction_notes": (
+                f"{raw_data.get('extraction_method', 'ai_ocr')} processed "
+                f"{raw_data.get('pages_processed', 'N/A')} pages"
+                + (f", rejected {len(rejected_rows)} row(s) for failing "
+                   "cross-field validation" if rejected_rows else "")
+            ),
         }
             
     except HTTPException:

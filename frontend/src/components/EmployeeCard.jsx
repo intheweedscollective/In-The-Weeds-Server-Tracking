@@ -2,6 +2,7 @@ import { CheckSquare, Pencil, Eye, Trash2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { formatCurrency, formatNumber } from "../utils/formatters";
 import { TrendIndicator } from "./TrendIndicator";
+import { getDisplayFirstName } from "../utils/displayName";
 
 /**
  * EmployeeCard - Individual employee card component
@@ -61,7 +62,7 @@ export const EmployeeCard = ({
         <div className="flex items-start justify-between mb-4">
           <div>
             <h3 className="text-lg font-serif font-bold text-foreground" data-testid={`employee-name-${employee.id}`}>
-              {employee.name}
+              {getDisplayFirstName(employee)}
             </h3>
             <p className="text-sm text-slate-400 capitalize" data-testid={`employee-job-title-${employee.id}`}>
               {employee.job_title || 'Server'}

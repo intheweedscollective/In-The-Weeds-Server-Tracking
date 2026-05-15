@@ -281,19 +281,23 @@ const CustomerVoiceSection = ({ formData, onChange }) => (
         <label className="block text-sm font-medium text-green-400 mb-1">Promoters (9-10)</label>
         <Input
           type="number"
+          min="0"
+          step="1"
           value={formData.cv_promoters}
-          onChange={(e) => onChange('cv_promoters', parseInt(e.target.value) || 0)}
+          onChange={(e) => onChange('cv_promoters', Math.max(0, parseInt(e.target.value) || 0))}
           placeholder="0"
           className="border-green-200"
         />
-        <p className="text-xs text-green-600 mt-1">+0.5 pts each</p>
+        <p className="text-xs text-green-600 mt-1">+1 pt each</p>
       </div>
       <div>
         <label className="block text-sm font-medium text-slate-300 mb-1">Passives (7-8)</label>
         <Input
           type="number"
+          min="0"
+          step="1"
           value={formData.cv_passives}
-          onChange={(e) => onChange('cv_passives', parseInt(e.target.value) || 0)}
+          onChange={(e) => onChange('cv_passives', Math.max(0, parseInt(e.target.value) || 0))}
           placeholder="0"
         />
         <p className="text-xs text-slate-500 mt-1">No pts</p>
@@ -302,23 +306,27 @@ const CustomerVoiceSection = ({ formData, onChange }) => (
         <label className="block text-sm font-medium text-red-400 mb-1">Detractors (1-6)</label>
         <Input
           type="number"
+          min="0"
+          step="1"
           value={formData.cv_detractors}
-          onChange={(e) => onChange('cv_detractors', parseInt(e.target.value) || 0)}
+          onChange={(e) => onChange('cv_detractors', Math.max(0, parseInt(e.target.value) || 0))}
           placeholder="0"
           className="border-red-200"
         />
-        <p className="text-xs text-red-600 mt-1">-1 pt each</p>
+        <p className="text-xs text-red-600 mt-1">−2 pts each</p>
       </div>
       <div>
         <label className="block text-sm font-medium text-purple-400 mb-1">RT Mentions</label>
         <Input
           type="number"
+          min="0"
+          step="1"
           value={formData.review_mentions}
-          onChange={(e) => onChange('review_mentions', parseInt(e.target.value) || 0)}
+          onChange={(e) => onChange('review_mentions', Math.max(0, parseInt(e.target.value) || 0))}
           placeholder="0"
           className="border-purple-200"
         />
-        <p className="text-xs text-purple-600 mt-1">+0.5 pts (max 15)</p>
+        <p className="text-xs text-purple-600 mt-1">{(0.3).toFixed(1)} pts per mention (max 20)</p>
       </div>
     </div>
   </div>

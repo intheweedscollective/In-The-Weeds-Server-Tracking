@@ -5,7 +5,7 @@ Extracted from server.py for better maintainability.
 """
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 import logging
@@ -17,10 +17,46 @@ logger = logging.getLogger(__name__)
 
 admin_router = APIRouter(prefix="/v2/admin", tags=["Admin"])
 
+
 def get_db():
     """Get database instance from shared module"""
     from database import get_database
     return get_database()
+
+
+@admin_router.post("/snapshots/{snapshot_id}/backfill-lsc")
+async def backfill_snapshot_lsc(snapshot_id: str, apply: bool = False):
+    """
+    Backfill missing POS / CV / RT fields on a non-finalized snapshot
+    from the live `employees_v2` collection (alias-aware) and recompute
+    `total_score` / `pre_dar_score` / `weighted_score` through the
+    canonical scoring engine.
+
+    Default mode is dry-run. Pass `?apply=true` to persist.
+
+    Refuses to run on finalized snapshots — finalized snapshots are
+    intentionally immutable history.
+    """
+    import sys, importlib
+    sys.path.insert(0, "/app/backend")
+    # Reuse the script's `backfill` function directly so the HTTP endpoint
+    # and the CLI share one implementation. No copy-paste, no drift.
+    mod = importlib.import_module("scripts.backfill_snapshot_lsc")
+
+    db = get_db()
+    snap = await db.snapshot_workflow.find_one(
+        {"id": snapshot_id}, {"_id": 0, "name": 1, "status": 1},
+    )
+    if not snap:
+        raise HTTPException(status_code=404, detail="Snapshot not found.")
+    if snap.get("status") == "finalized":
+        raise HTTPException(
+            status_code=400,
+            detail="Refusing to backfill a finalized snapshot. "
+                   "Finalized snapshots are immutable history.",
+        )
+    summary = await mod.backfill(db, snap["name"], apply=apply)
+    return summary
 
 
 # ============================================================
@@ -45,11 +81,11 @@ class OfficialRTStats(BaseModel):
 
 class OfficialCVStats(BaseModel):
     """Official Customer Voice (Loyalty Voice) stats as shown in their UI."""
-    nps_score: float = 0.0
-    promoters: int = 0
-    passives: int = 0
-    detractors: int = 0
-    total_responses: int = 0
+    nps_score: float = Field(default=0.0, ge=-100.0, le=100.0)
+    promoters: int = Field(default=0, ge=0)
+    passives: int = Field(default=0, ge=0)
+    detractors: int = Field(default=0, ge=0)
+    total_responses: int = Field(default=0, ge=0)
     quarter: str = "Q1"
     year: int = 2026
 
@@ -531,11 +567,41 @@ async def fix_all_rankings(quarter: str = "Q1", year: int = 2026):
 
     # 7. Sync fresh scores into every snapshot for this quarter (not just
     #    the most recent — historical snapshots had stale weighted_score
-    #    values from the old formula).
+    #    values from the old formula). Also overlay the freshly computed
+    #    tier_label / position_label so the leaderboard endpoint (which
+    #    reads `tier_label` directly from the snapshot) matches the
+    #    snapshot view (which recomputes tiers live).
     fresh_employees = await db.employees_v2.find(
         {"year": year, "quarter": quarter.upper()},
         {"_id": 0}
     ).to_list(500)
+
+    # Build the hierarchy rankings (same logic the snapshot view uses) so
+    # we can stamp tier_label / position_label onto each fresh employee.
+    from scoring_engine import generate_hierarchy_rankings
+    fresh_emp_objs = []
+    for d in fresh_employees:
+        d2 = dict(d)
+        if not d2.get("review_mentions") and d2.get("rt_mentions"):
+            d2["review_mentions"] = d2["rt_mentions"]
+        if not d2.get("glassware_sales") and d2.get("bar_glassware_sales"):
+            d2["glassware_sales"] = d2["bar_glassware_sales"]
+        try:
+            fresh_emp_objs.append(EmployeeV2(**d2))
+        except Exception:
+            continue
+    rankings = generate_hierarchy_rankings(fresh_emp_objs, settings)
+    rank_by_id = {r.get("employee_id"): r for r in rankings if r.get("employee_id")}
+
+    # Overlay tier_label, position_label, peer_rank onto fresh_employees.
+    for emp in fresh_employees:
+        ranked = rank_by_id.get(emp.get("id"))
+        if not ranked:
+            continue
+        emp["tier_label"] = ranked.get("tier_label")
+        emp["position_label"] = ranked.get("position_label")
+        emp["peer_rank"] = ranked.get("peer_rank")
+        emp["performance_tier"] = ranked.get("performance_tier")
 
     snaps = await db.snapshot_workflow.find(
         {"year": year, "quarter": quarter.upper()},
@@ -567,6 +633,19 @@ async def fix_all_rankings(quarter: str = "Q1", year: int = 2026):
 
     logger.info(f"Synced {snapshots_synced} snapshots")
 
+    # Persist tier_label updates back to employees_v2 too, so any other
+    # endpoint reading from the v2 collection sees consistent tiers.
+    for emp in fresh_employees:
+        await db.employees_v2.update_one(
+            {"id": emp.get("id")},
+            {"$set": {
+                "tier_label": emp.get("tier_label"),
+                "position_label": emp.get("position_label"),
+                "peer_rank": emp.get("peer_rank"),
+                "performance_tier": emp.get("performance_tier"),
+            }}
+        )
+
     return {
         "success": True,
         "ppa_fixed": ppa_fixed,
@@ -589,14 +668,16 @@ async def clear_cv_data(quarter: str = "Q1", year: int = 2026):
     """
     Clear all Customer Voice data and reset employee CV scores.
     """
+    from scoring_engine import compute_total_score_dict, QuarterSettings
+
     db = get_db()
     try:
         # Clear cv_feedback collection
         cv_result = await db.cv_feedback.delete_many({})
-        
+
         # Clear cv_nps collection
         nps_result = await db.cv_nps.delete_many({})
-        
+
         # Reset CV fields on all employees for this quarter/year
         emp_result = await db.employees_v2.update_many(
             {"quarter": quarter, "year": year},
@@ -608,25 +689,31 @@ async def clear_cv_data(quarter: str = "Q1", year: int = 2026):
                 "nps_score_pts": 0
             }}
         )
-        
-        # Recalculate total scores
+
+        # Recalculate total scores via the canonical scoring engine so
+        # that any per-quarter weight or formula tweak applies here too.
+        settings_doc = await db.quarter_settings.find_one(
+            {"year": year, "quarter": quarter.upper()}, {"_id": 0}
+        )
+        settings = QuarterSettings(**settings_doc) if settings_doc else QuarterSettings(
+            year=year, quarter=quarter.upper()
+        )
         employees = await db.employees_v2.find({
             "quarter": quarter,
             "year": year
         }).to_list(200)
-        
+
         for emp in employees:
-            weighted_score = emp.get("weighted_score", 0) or 0
-            total_metric_bonus = emp.get("total_metric_bonus", 0) or 0
-            rt_bonus = emp.get("review_tracker_bonus", 0) or 0
-            # CV is now 0
-            total_score = weighted_score + total_metric_bonus + rt_bonus
-            
+            scored = compute_total_score_dict({**emp, "cv_score": 0}, settings)
             await db.employees_v2.update_one(
                 {"_id": emp["_id"]},
-                {"$set": {"total_score": round(total_score, 2)}}
+                {"$set": {
+                    "weighted_score": scored["weighted_score"],
+                    "pre_dar_score": scored["pre_dar_score"],
+                    "total_score": scored["total_score"],
+                }},
             )
-        
+
         return {
             "success": True,
             "cv_feedback_deleted": cv_result.deleted_count,
@@ -643,11 +730,13 @@ async def clear_rt_data(quarter: str = "Q1", year: int = 2026):
     """
     Clear all Review Tracker data and reset employee RT mention counts.
     """
+    from scoring_engine import compute_total_score_dict, QuarterSettings
+
     db = get_db()
     try:
         # Clear customer_reviews collection
         reviews_result = await db.customer_reviews.delete_many({})
-        
+
         # Reset RT fields on all employees for this quarter/year
         emp_result = await db.employees_v2.update_many(
             {"quarter": quarter, "year": year},
@@ -657,25 +746,30 @@ async def clear_rt_data(quarter: str = "Q1", year: int = 2026):
                 "review_tracker_bonus": 0
             }}
         )
-        
-        # Recalculate total scores
+
+        # Recalculate total scores through the canonical engine.
+        settings_doc = await db.quarter_settings.find_one(
+            {"year": year, "quarter": quarter.upper()}, {"_id": 0}
+        )
+        settings = QuarterSettings(**settings_doc) if settings_doc else QuarterSettings(
+            year=year, quarter=quarter.upper()
+        )
         employees = await db.employees_v2.find({
             "quarter": quarter,
             "year": year
         }).to_list(200)
-        
+
         for emp in employees:
-            weighted_score = emp.get("weighted_score", 0) or 0
-            cv_score = emp.get("cv_score", 0) or 0
-            total_metric_bonus = emp.get("total_metric_bonus", 0) or 0
-            # RT is now 0
-            total_score = weighted_score + cv_score + total_metric_bonus
-            
+            scored = compute_total_score_dict({**emp, "review_tracker_bonus": 0}, settings)
             await db.employees_v2.update_one(
                 {"_id": emp["_id"]},
-                {"$set": {"total_score": round(total_score, 2)}}
+                {"$set": {
+                    "weighted_score": scored["weighted_score"],
+                    "pre_dar_score": scored["pre_dar_score"],
+                    "total_score": scored["total_score"],
+                }},
             )
-        
+
         return {
             "success": True,
             "reviews_deleted": reviews_result.deleted_count,

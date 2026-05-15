@@ -5,7 +5,7 @@ import { Input } from "./ui/input";
 import { toast } from "sonner";
 import axios from "axios";
 
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
 
 export default function FinalizeQuarterModal({ isOpen, onClose, quarter, year, employees, snapshotId, onFinalized }) {
   const [darEntries, setDarEntries] = useState({});

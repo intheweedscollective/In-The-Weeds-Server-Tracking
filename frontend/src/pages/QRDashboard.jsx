@@ -3,6 +3,7 @@ import { QrCode, Star, TrendingUp, Users, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { Button } from "../components/ui/button";
+import { getDisplayFirstName } from "../utils/displayName";
 
 export default function QRDashboard() {
   const [stats, setStats] = useState(null);
@@ -113,7 +114,7 @@ export default function QRDashboard() {
               <div key={emp.id} className="flex items-center justify-between p-4 hover:bg-white/5 transition-colors">
                 <div className="flex items-center gap-4">
                   <span className="text-2xl font-bold text-slate-500 w-12">#{idx + 1}</span>
-                  <span className="text-white font-medium">{emp.name}</span>
+                  <span className="text-white font-medium">{getDisplayFirstName(emp)}</span>
                 </div>
                 <div className="flex items-center gap-6">
                   <div className="text-center">

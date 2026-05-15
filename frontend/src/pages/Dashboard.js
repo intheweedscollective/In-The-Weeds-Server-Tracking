@@ -6,13 +6,15 @@ import api from "../lib/api";
 import { getCurrentQuarter } from "../lib/quarterUtils";
 import FinalizeQuarterModal from "../components/FinalizeQuarterModal";
 import QRTopClicksCard from "../components/QRTopClicksCard";
+import QRHealthBadge from "../components/QRHealthBadge";
 import StoreHealthScore from "../components/StoreHealthScore";
 import CoachingRadar from "../components/CoachingRadar";
 import ReviewImpactTracker from "../components/ReviewImpactTracker";
 import { formatNumber } from "../utils/formatters";
 import { TrendIndicator } from "../components/TrendIndicator";
+import { getDisplayFirstName } from "../utils/displayName";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
 
 export default function Dashboard() {
   const [employees, setEmployees] = useState([]);
@@ -211,6 +213,7 @@ export default function Dashboard() {
             
             {/* Quarter Selector */}
             <div className="flex items-center gap-2">
+              <QRHealthBadge />
               <select
                 className="px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-primary/50"
                 value={selectedYear}
@@ -585,7 +588,7 @@ export default function Dashboard() {
                           {idx + 1}
                         </div>
                         <div>
-                          <h3 className="font-semibold text-white">{employee.name}</h3>
+                          <h3 className="font-semibold text-white">{getDisplayFirstName(employee)}</h3>
                           <p className="text-xs text-slate-400 capitalize">{employee.job_title || 'Server'}</p>
                         </div>
                       </div>
@@ -732,69 +735,68 @@ export default function Dashboard() {
               </div>
               
               {(() => {
-                const avgPPA = employees.reduce((sum, e) => sum + (e.ppa || 0), 0) / employees.length;
                 const totalGuests = employees.reduce((sum, e) => sum + (e.guests || 0), 0);
-                const totalLSC = employees.reduce((sum, e) => sum + (e.lsc_count || 0), 0);
-                const ppaBenchmark = quarterSettings?.benchmark_ppa || 55;
-                const lscBenchmark = quarterSettings?.benchmark_lsc || 10; // Target guests per LSC
-                
-                // Calculate current LSC rate (guests per sign-up)
-                const currentGuestsPerLSC = totalLSC > 0 ? totalGuests / totalLSC : 999;
-                const lscGap = Math.max(0, currentGuestsPerLSC - lscBenchmark);
-                
-                // Revenue calculations
-                const ppaGap = Math.max(0, ppaBenchmark - avgPPA);
+
+                // LBW (Liquor / Beer / Wine per guest) — higher is better
+                const avgLBW = employees.reduce(
+                  (sum, e) => sum + (e.lbw_per_guest || 0), 0
+                ) / Math.max(employees.length, 1);
+                const lbwBenchmark = quarterSettings?.benchmark_lbw || 8;
+                const lbwGap = Math.max(0, lbwBenchmark - avgLBW);
+
+                // Glassware sales per guest — higher is better
+                const avgGlass = employees.reduce(
+                  (sum, e) => sum + (e.glassware_per_guest || 0), 0
+                ) / Math.max(employees.length, 1);
+                const glassBenchmark = quarterSettings?.benchmark_glass || 1.0;
+                const glassGap = Math.max(0, glassBenchmark - avgGlass);
+
+                // Revenue projection — gap × annual guests
                 const annualGuests = totalGuests * 26;
-                const ppaRevenue = ppaGap * annualGuests;
-                
-                // LSC Value: Each loyalty member worth ~$25 in lifetime value
-                const lscValuePerSignup = quarterSettings?.lsc_value || 25;
-                const potentialExtraLSC = lscGap > 0 ? Math.round((totalGuests / lscBenchmark) - totalLSC) : 0;
-                const annualExtraLSC = potentialExtraLSC * 26;
-                const lscRevenue = annualExtraLSC * lscValuePerSignup;
-                
-                const totalPotential = ppaRevenue + lscRevenue;
-                
+                const lbwRevenue = lbwGap * annualGuests;
+                const glassRevenue = glassGap * annualGuests;
+                const totalPotential = lbwRevenue + glassRevenue;
+
                 return (
                   <div className="space-y-3">
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="p-3 bg-slate-700/50 rounded-lg">
-                        <p className="text-xs text-slate-400 uppercase">Avg PPA</p>
-                        <p className="text-lg font-bold text-white">${avgPPA.toFixed(2)}</p>
-                        <p className="text-xs text-slate-500">Target: ${ppaBenchmark}</p>
+                      <div className="p-3 bg-slate-700/50 rounded-lg" data-testid="revenue-impact-avg-lbw">
+                        <p className="text-xs text-slate-400 uppercase">Avg LBW / Guest</p>
+                        <p className="text-lg font-bold text-white">${avgLBW.toFixed(2)}</p>
+                        <p className="text-xs text-slate-500">Target: ${lbwBenchmark}</p>
                       </div>
-                      <div className="p-3 bg-slate-700/50 rounded-lg">
-                        <p className="text-xs text-slate-400 uppercase">Guests/LSC</p>
-                        <p className="text-lg font-bold text-white">{currentGuestsPerLSC.toFixed(1)}</p>
-                        <p className="text-xs text-slate-500">Target: {lscBenchmark} (1 in {lscBenchmark})</p>
+                      <div className="p-3 bg-slate-700/50 rounded-lg" data-testid="revenue-impact-avg-glass">
+                        <p className="text-xs text-slate-400 uppercase">Avg Glass / Guest</p>
+                        <p className="text-lg font-bold text-white">${avgGlass.toFixed(2)}</p>
+                        <p className="text-xs text-slate-500">Target: ${glassBenchmark.toFixed(2)}</p>
                       </div>
                     </div>
-                    
+
                     {totalPotential > 0 ? (
                       <div className="space-y-2">
-                        {ppaRevenue > 0 && (
-                          <div className="p-3 bg-emerald-900/30 border border-emerald-700/50 rounded-lg">
+                        {lbwRevenue > 0 && (
+                          <div className="p-3 bg-emerald-900/30 border border-emerald-700/50 rounded-lg" data-testid="revenue-impact-lbw-opportunity">
                             <div className="flex justify-between items-center">
                               <div>
-                                <p className="text-sm font-medium text-emerald-400">PPA Opportunity</p>
-                                <p className="text-xs text-emerald-500">+${ppaGap.toFixed(2)}/guest to hit ${ppaBenchmark}</p>
+                                <p className="text-sm font-medium text-emerald-400">LBW Opportunity</p>
+                                <p className="text-xs text-emerald-500">+${lbwGap.toFixed(2)}/guest to hit ${lbwBenchmark}</p>
                               </div>
-                              <p className="text-xl font-bold text-emerald-300">${Math.round(ppaRevenue).toLocaleString()}</p>
+                              <p className="text-xl font-bold text-emerald-300">${Math.round(lbwRevenue).toLocaleString()}</p>
                             </div>
                           </div>
                         )}
-                        {lscRevenue > 0 && (
-                          <div className="p-3 bg-amber-900/30 border border-amber-700/50 rounded-lg">
+                        {glassRevenue > 0 && (
+                          <div className="p-3 bg-amber-900/30 border border-amber-700/50 rounded-lg" data-testid="revenue-impact-glass-opportunity">
                             <div className="flex justify-between items-center">
                               <div>
-                                <p className="text-sm font-medium text-amber-400">LSC Opportunity</p>
-                                <p className="text-xs text-amber-500">+{annualExtraLSC.toLocaleString()} sign-ups @ ${lscValuePerSignup} each</p>
+                                <p className="text-sm font-medium text-amber-400">Glassware Opportunity</p>
+                                <p className="text-xs text-amber-500">+${glassGap.toFixed(2)}/guest to hit ${glassBenchmark.toFixed(2)}</p>
                               </div>
-                              <p className="text-xl font-bold text-amber-300">${Math.round(lscRevenue).toLocaleString()}</p>
+                              <p className="text-xl font-bold text-amber-300">${Math.round(glassRevenue).toLocaleString()}</p>
                             </div>
                           </div>
                         )}
-                        <div className="p-3 bg-blue-900/30 border border-blue-700/50 rounded-lg">
+                        <div className="p-3 bg-blue-900/30 border border-blue-700/50 rounded-lg" data-testid="revenue-impact-total">
                           <div className="flex justify-between items-center">
                             <p className="text-sm font-medium text-blue-400">Total Annual Potential</p>
                             <p className="text-2xl font-bold text-blue-300">${Math.round(totalPotential).toLocaleString()}</p>
@@ -951,11 +953,11 @@ export default function Dashboard() {
                   // Generate justification based on top 2 driving metrics
                   let justification = '';
                   if (top2Metrics.length >= 2) {
-                    justification = `${emp.name}'s success is driven by ${top2Metrics[0].name} (${top2Metrics[0].display}, ${top2Metrics[0].vsAvg.toFixed(0)}% above avg) and ${top2Metrics[1].name} (${top2Metrics[1].display}, ${top2Metrics[1].vsAvg.toFixed(0)}% above avg).`;
+                    justification = `${getDisplayFirstName(emp)}'s success is driven by ${top2Metrics[0].name} (${top2Metrics[0].display}, ${top2Metrics[0].vsAvg.toFixed(0)}% above avg) and ${top2Metrics[1].name} (${top2Metrics[1].display}, ${top2Metrics[1].vsAvg.toFixed(0)}% above avg).`;
                   } else if (top2Metrics.length === 1) {
-                    justification = `${emp.name}'s success is driven by ${top2Metrics[0].name} (${top2Metrics[0].display}, ${top2Metrics[0].vsAvg.toFixed(0)}% above avg).`;
+                    justification = `${getDisplayFirstName(emp)}'s success is driven by ${top2Metrics[0].name} (${top2Metrics[0].display}, ${top2Metrics[0].vsAvg.toFixed(0)}% above avg).`;
                   } else {
-                    justification = `${emp.name} shows balanced performance across all metrics, scoring ${((score - avgScore) / avgScore * 100).toFixed(0)}% above the restaurant average.`;
+                    justification = `${getDisplayFirstName(emp)} shows balanced performance across all metrics, scoring ${((score - avgScore) / avgScore * 100).toFixed(0)}% above the restaurant average.`;
                   }
                   
                   // Get momentum for this employee
@@ -971,7 +973,7 @@ export default function Dashboard() {
                       <div className="flex-1">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <h3 className="font-serif font-bold text-lg text-gray-900">{emp.name}</h3>
+                            <h3 className="font-serif font-bold text-lg text-gray-900">{getDisplayFirstName(emp)}</h3>
                             <span className="px-2 py-0.5 bg-green-100 text-green-800 text-xs font-bold rounded-full">
                               +{((score - avgScore) / avgScore * 100).toFixed(0)}% vs avg
                             </span>
@@ -1042,7 +1044,7 @@ export default function Dashboard() {
                   if ((emp.glassware_per_guest || 0) < 1) weakAreas.push('Glassware');
                   if ((emp.cv_score || 0) < 0) weakAreas.push('Customer Voice');
                   
-                  let justification = `${emp.name} scored ${score.toFixed(1)}, which is ${(bMin - score).toFixed(1)} points below the B-Server threshold. `;
+                  let justification = `${getDisplayFirstName(emp)} scored ${score.toFixed(1)}, which is ${(bMin - score).toFixed(1)} points below the B-Server threshold. `;
                   if (weakAreas.length > 0) {
                     justification += `Key areas for improvement: ${weakAreas.join(', ')}. `;
                   }
@@ -1056,7 +1058,7 @@ export default function Dashboard() {
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center justify-between mb-2">
-                            <h3 className="font-serif font-bold text-lg text-gray-900">{emp.name}</h3>
+                            <h3 className="font-serif font-bold text-lg text-gray-900">{getDisplayFirstName(emp)}</h3>
                             <span className="text-xl font-bold text-red-600">{score.toFixed(1)}</span>
                           </div>
                           

@@ -9,8 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../components/ui/tooltip";
 import { formatNumber, formatCurrency } from "../utils/formatters";
 import { TrendIndicator } from "../components/TrendIndicator";
+import { getDisplayFirstName } from "../utils/displayName";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
 
 // Tier badge colors (professional, no gimmicks)
 const TIER_STYLES = {
@@ -782,9 +783,10 @@ export default function FullRankings() {
                           <TooltipContent className="bg-slate-800 text-white p-3 max-w-xs">
                             <div className="text-xs space-y-1">
                               <div className="font-bold mb-1">Customer Voice (Combined Total):</div>
-                              <div className="font-semibold text-primary">Promoter/Detractor Points:</div>
-                              <div>• Each Promoter (9-10) = +0.5 pt</div>
-                              <div>• Each Detractor (≤6) = -1 pt</div>
+                              <div className="font-semibold text-primary">NPS + Promoter/Detractor Points:</div>
+                              <div>• NPS contribution = NPS% / 10 (≈ 0–10 pts)</div>
+                              <div>• Each Promoter (9-10) = +{quarterSettings?.cv_promoter_points ?? 1} pt</div>
+                              <div>• Each Detractor (≤6) = -{quarterSettings?.cv_detractor_points ?? 2} pt{(quarterSettings?.cv_detractor_points ?? 2) !== 1 ? 's' : ''}</div>
                               <div className="mt-2 text-green-400 font-semibold">No cap on CV points!</div>
                             </div>
                           </TooltipContent>
@@ -800,8 +802,8 @@ export default function FullRankings() {
                           <TooltipContent className="bg-slate-800 text-white p-3 max-w-xs">
                             <div className="text-xs space-y-1">
                               <div className="font-bold mb-1">Review Tracker Bonus:</div>
-                              <div>• Each mention = +0.5 pts</div>
-                              <div>• Capped at 15 pts max</div>
+                              <div>• Each mention = +{quarterSettings?.rt_points_per_mention ?? 0.3} pts</div>
+                              <div>• Capped at {Math.round(quarterSettings?.rt_max_points ?? 20)} pts max</div>
                               <div className="mt-1 text-slate-400">From ReviewTrackers.com</div>
                             </div>
                           </TooltipContent>
@@ -827,10 +829,10 @@ export default function FullRankings() {
                         </Tooltip>
                       </TooltipProvider>
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell text-white">PPA (25%)</th>
-                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell text-white">LBW (20%)</th>
-                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell text-white">LSC (25%)</th>
-                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell text-white">Glass (15%)</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell text-white">PPA ({Math.round((quarterSettings?.weight_ppa ?? 0.25) * 100)}%)</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell text-white">LBW ({Math.round((quarterSettings?.weight_lbw ?? 0.20) * 100)}%)</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell text-white">LSC ({Math.round((quarterSettings?.weight_lsc ?? 0.25) * 100)}%)</th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider hidden xl:table-cell text-white">Glass ({Math.round((quarterSettings?.weight_glass ?? 0.15) * 100)}%)</th>
                     <th className="px-2 py-3 text-center text-xs font-bold uppercase tracking-wider text-white"></th>
                   </tr>
                 </thead>
@@ -865,7 +867,7 @@ export default function FullRankings() {
                             <div>
                               <div className="flex items-center gap-2">
                                 <span className="font-semibold text-foreground" data-testid={`employee-name-${employee.position}`}>
-                                  {employee.name}
+                                  {getDisplayFirstName(employee)}
                                 </span>
                                 {(() => {
                                   const percentile = Math.round((1 - (employee.position - 1) / totalEmployees) * 100);
@@ -915,17 +917,23 @@ export default function FullRankings() {
                                     </TooltipTrigger>
                                     <TooltipContent className="bg-slate-800 text-white p-3 max-w-xs border border-slate-600">
                                       <div className="text-xs space-y-1">
-                                        <div className="font-bold text-primary mb-2">{employee.name}'s Customer Voice</div>
+                                        <div className="font-bold text-primary mb-2">{getDisplayFirstName(employee)}'s Customer Voice</div>
+                                        {(employee.nps_score || 0) > 0 && (
+                                          <div className="flex justify-between">
+                                            <span>NPS ({Number(employee.nps_score).toFixed(0)}% / 10):</span>
+                                            <span className="text-blue-400">+{((employee.nps_score || 0) / 10).toFixed(1)} pts</span>
+                                          </div>
+                                        )}
                                         {promoters > 0 && (
                                           <div className="flex justify-between">
-                                            <span>Promoters ({promoters} × +0.5):</span>
-                                            <span className="text-green-400">+{(promoters * 0.5).toFixed(1)} pts</span>
+                                            <span>Promoters ({promoters} × +1):</span>
+                                            <span className="text-green-400">+{promoters} pts</span>
                                           </div>
                                         )}
                                         {detractors > 0 && (
                                           <div className="flex justify-between">
-                                            <span>Detractors ({detractors} × -1):</span>
-                                            <span className="text-red-400">-{detractors} pts</span>
+                                            <span>Detractors ({detractors} × -2):</span>
+                                            <span className="text-red-400">-{detractors * 2} pts</span>
                                           </div>
                                         )}
                                         <div className="border-t border-slate-600 pt-1 mt-1 flex justify-between font-bold">
@@ -957,7 +965,7 @@ export default function FullRankings() {
                                 <TooltipContent className="bg-slate-800 text-white p-3 max-w-xs border border-slate-600">
                                   <div className="text-xs">
                                     <div className="font-bold text-primary mb-1">Review Tracker</div>
-                                    <div>{employee.review_mentions || 0} mentions × 0.5 pts = +{formatNumber(employee.review_bonus || 0)} pts (max 15)</div>
+                                    <div>{employee.review_mentions || 0} mentions × {quarterSettings?.rt_points_per_mention ?? 0.3} pts = +{formatNumber(employee.review_bonus || 0)} pts (max {Math.round(quarterSettings?.rt_max_points ?? 20)})</div>
                                   </div>
                                 </TooltipContent>
                               </Tooltip>
@@ -1099,7 +1107,7 @@ export default function FullRankings() {
                                   <div className="space-y-4">
                                     <div className="flex items-center gap-2 mb-3">
                                       <span className="text-lg font-serif font-bold text-slate-200">Metric Breakdown</span>
-                                      <span className="text-sm text-slate-400">• {employee.name}</span>
+                                      <span className="text-sm text-slate-400">• {getDisplayFirstName(employee)}</span>
                                     </div>
                                     
                                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -1229,12 +1237,24 @@ export default function FullRankings() {
                                     </div>
                                     
                                     {/* Improvement Plan Section */}
-                                    <div className="mt-6 bg-slate-800 rounded-xl p-5 border border-slate-600 shadow-sm">
-                                      <div className="flex items-center gap-2 mb-4">
+                                    <div className="mt-6 bg-slate-800 rounded-xl p-5 border border-slate-600 shadow-sm" data-testid={`improvement-plan-${employee.position}`}>
+                                      <div className="flex items-center gap-2 mb-2">
                                         <Target className="w-5 h-5 text-blue-400" />
                                         <span className="text-lg font-serif font-bold text-white">Improvement Plan</span>
                                       </div>
-                                      
+
+                                      {/* Context blurb — answers the FAQ */}
+                                      <div className="mb-4 text-xs sm:text-sm text-slate-300 bg-slate-900/60 border border-slate-700 rounded-lg p-3 leading-relaxed">
+                                        <p className="mb-1.5">
+                                          <span className="font-semibold text-blue-400">Goal:</span> {getDisplayFirstName(employee)} doesn&apos;t need to hit every benchmark — focus on the <span className="font-semibold text-amber-300">red cards</span> below first.
+                                          Closing one or two of those usually adds enough points to {(employee.peer_rank || 0) > 1 ? 'pass the next person' : 'extend their lead'}.
+                                        </p>
+                                        <p className="text-slate-400 text-[11px] sm:text-xs">
+                                          <span className="font-semibold text-slate-300">Metric units:</span>
+                                          {' '}PPA = $ per guest · LBW = liquor/beer/wine $ per guest · Glass = glassware $ per guest · LSC = guests per loyalty sign-up (lower is better).
+                                        </p>
+                                      </div>
+
                                       {/* Gap Analysis vs Benchmarks */}
                                       <div className="mb-5">
                                         <h4 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
@@ -1244,40 +1264,45 @@ export default function FullRankings() {
                                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                                           {(() => {
                                             const gaps = [
-                                              { 
-                                                label: 'PPA', 
-                                                current: emp.ppa || 0, 
+                                              {
+                                                label: 'PPA',
+                                                hint: '$ / guest',
+                                                current: emp.ppa || 0,
                                                 target: benchmarks.benchmark_ppa || 55,
-                                                format: v => `$${v.toFixed(2)}`
+                                                format: v => `$${v.toFixed(2)}`,
                                               },
-                                              { 
-                                                label: 'LBW', 
-                                                current: emp.lbw_per_guest || 0, 
+                                              {
+                                                label: 'LBW',
+                                                hint: '$ / guest',
+                                                current: emp.lbw_per_guest || 0,
                                                 target: benchmarks.benchmark_lbw || 8,
-                                                format: v => `$${v.toFixed(2)}`
+                                                format: v => `$${v.toFixed(2)}`,
                                               },
-                                              { 
-                                                label: 'Glass', 
-                                                current: emp.glassware_per_guest || 0, 
-                                                target: benchmarks.benchmark_glass || 1.25,
-                                                format: v => `$${v.toFixed(2)}`
+                                              {
+                                                label: 'Glass',
+                                                hint: '$ / guest',
+                                                current: emp.glassware_per_guest || 0,
+                                                target: benchmarks.benchmark_glass || 1.35,
+                                                format: v => `$${v.toFixed(2)}`,
                                               },
-                                              { 
-                                                label: 'LSC', 
-                                                current: emp.guests_per_lsc || 999, 
+                                              {
+                                                label: 'LSC',
+                                                hint: 'guests per sign-up · lower is better',
+                                                current: emp.guests_per_lsc || 999,
                                                 target: benchmarks.benchmark_lsc || 100,
                                                 format: v => v.toFixed(0),
-                                                inverse: true // Lower is better
-                                              }
+                                                inverse: true,
+                                              },
                                             ];
                                             return gaps.map((g) => {
-                                              const diff = g.inverse 
-                                                ? g.target - g.current 
+                                              const diff = g.inverse
+                                                ? g.target - g.current
                                                 : g.current - g.target;
                                               const isGood = diff >= 0;
                                               return (
-                                                <div key={g.label} className={`p-3 rounded-lg ${isGood ? 'bg-green-900/40 border border-green-500/50' : 'bg-red-900/40 border border-red-500/50'}`}>
-                                                  <div className="text-xs text-slate-300 mb-1">{g.label}</div>
+                                                <div key={g.label} className={`p-3 rounded-lg ${isGood ? 'bg-green-900/40 border border-green-500/50' : 'bg-red-900/40 border border-red-500/50'}`} data-testid={`gap-${g.label.toLowerCase()}-${employee.position}`}>
+                                                  <div className="text-xs text-slate-300 mb-0.5 font-semibold">{g.label}</div>
+                                                  <div className="text-[10px] text-slate-500 mb-1">{g.hint}</div>
                                                   <div className={`text-lg font-bold ${isGood ? 'text-green-400' : 'text-red-400'}`}>
                                                     {isGood ? '+' : '-'}{g.format(Math.abs(diff))}
                                                   </div>
@@ -1290,49 +1315,128 @@ export default function FullRankings() {
                                           })()}
                                         </div>
                                       </div>
-                                      
-                                      {/* To Pass Next Employee */}
-                                      {employeeAbove && (employee.peer_rank || 0) > 1 && (
-                                        <div className="border-t border-slate-600 pt-4">
-                                          <h4 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
-                                            <ArrowUp className="w-4 h-4 text-blue-400" />
-                                            <span className="truncate">To Pass #{(employee.peer_rank || 0) - 1} ({employeeAbove.name})</span>
-                                          </h4>
-                                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
-                                            <div className="bg-blue-900/40 rounded-lg p-2 sm:p-3 border border-blue-500/50">
-                                              <div className="text-xs text-slate-300">Gap</div>
-                                              <div className="text-base sm:text-lg font-bold text-blue-400">
-                                                +{((employeeAbove.total_score || 0) - (employee.total_score || 0)).toFixed(1)}
-                                              </div>
-                                              <div className="text-xs text-slate-400 hidden sm:block">pts needed</div>
+
+                                      {/* Two-pronged path forward */}
+                                      <div className="grid sm:grid-cols-2 gap-4">
+                                        {/* To Pass Next Employee */}
+                                        {employeeAbove && (employee.peer_rank || 0) > 1 && (
+                                          <div className="border border-slate-600 rounded-lg p-3 bg-slate-900/40" data-testid={`pass-next-${employee.position}`}>
+                                            <h4 className="text-sm font-semibold text-slate-200 mb-2 flex items-center gap-2">
+                                              <ArrowUp className="w-4 h-4 text-blue-400" />
+                                              <span className="truncate">Pass #{(employee.peer_rank || 0) - 1} ({getDisplayFirstName(employeeAbove)})</span>
+                                            </h4>
+                                            <div className="text-3xl font-bold text-blue-400 leading-none mb-1">
+                                              +{((employeeAbove.total_score || 0) - (employee.total_score || 0)).toFixed(1)}
                                             </div>
-                                            <div className="bg-slate-700/50 rounded-lg p-2 sm:p-3">
-                                              <div className="text-xs text-slate-400">PPA</div>
-                                              <div className="text-sm font-semibold text-white">
-                                                ${(employeeAbove.ppa || getEmployeeDetails(employeeAbove.employee_id)?.ppa || 0).toFixed(0)}
-                                              </div>
-                                            </div>
-                                            <div className="bg-slate-700/50 rounded-lg p-2 sm:p-3">
-                                              <div className="text-xs text-slate-400">LBW</div>
-                                              <div className="text-sm font-semibold text-white">
-                                                ${(employeeAbove.lbw_per_guest || getEmployeeDetails(employeeAbove.employee_id)?.lbw_per_guest || 0).toFixed(2)}
-                                              </div>
-                                            </div>
-                                            <div className="bg-slate-700/50 rounded-lg p-2 sm:p-3">
-                                              <div className="text-xs text-slate-400">Glass</div>
-                                              <div className="text-sm font-semibold text-white">
-                                                ${(employeeAbove.glassware_per_guest || getEmployeeDetails(employeeAbove.employee_id)?.glassware_per_guest || 0).toFixed(2)}
-                                              </div>
-                                            </div>
-                                            <div className="bg-slate-700/50 rounded-lg p-2 sm:p-3">
-                                              <div className="text-xs text-slate-400">LSC</div>
-                                              <div className="text-sm font-semibold text-white">
-                                                {(employeeAbove.guests_per_lsc || getEmployeeDetails(employeeAbove.employee_id)?.guests_per_lsc || 0).toFixed(0)}
-                                              </div>
-                                            </div>
+                                            <p className="text-[11px] text-slate-400">
+                                              total points needed to leapfrog them in the rankings.
+                                            </p>
                                           </div>
-                                        </div>
-                                      )}
+                                        )}
+
+                                        {/* To Reach Next Tier */}
+                                        {(() => {
+                                          const score = employee.total_score || 0;
+                                          const aMin = benchmarks.a_server_min_score || 85;
+                                          const bMin = benchmarks.b_server_min_score || 70;
+                                          let nextTier = null;
+                                          let nextThreshold = 0;
+                                          if (score < bMin) {
+                                            nextTier = 'B-Server';
+                                            nextThreshold = bMin;
+                                          } else if (score < aMin) {
+                                            nextTier = 'A-Server';
+                                            nextThreshold = aMin;
+                                          } else {
+                                            return null; // Already at top tier
+                                          }
+                                          const gap = nextThreshold - score;
+
+                                          // Compute gain available from each lever.
+                                          // Score weights: PPA 25%, LSC 25%, LBW 20%, Glass 15%.
+                                          // Each "%-point" of metric_score adds (weight) to total_score, capped at 100.
+                                          const metricCap = 100;
+                                          const ppaPct   = (emp.ppa || 0) / (benchmarks.benchmark_ppa || 55) * 100;
+                                          const lbwPct   = (emp.lbw_per_guest || 0) / (benchmarks.benchmark_lbw || 8) * 100;
+                                          const glassPct = (emp.glassware_per_guest || 0) / (benchmarks.benchmark_glass || 1.35) * 100;
+                                          const lscPct   = (emp.guests_per_lsc && emp.guests_per_lsc > 0)
+                                            ? (benchmarks.benchmark_lsc || 100) / emp.guests_per_lsc * 100
+                                            : 0;
+
+                                          const rtCoef = benchmarks.rt_points_per_mention || 0.3;
+                                          const rtCap  = benchmarks.rt_max_points || 20;
+                                          const currentRt = Math.min((emp.review_mentions || emp.rt_mentions || 0) * rtCoef, rtCap);
+
+                                          const levers = [
+                                            {
+                                              label: 'Hit PPA benchmark',
+                                              detail: `$${(emp.ppa || 0).toFixed(2)} → $${(benchmarks.benchmark_ppa || 55).toFixed(2)}`,
+                                              gain: Math.max(0, (Math.min(metricCap, 100) - Math.min(metricCap, ppaPct)) * 0.25),
+                                              show: ppaPct < metricCap,
+                                            },
+                                            {
+                                              label: 'Hit LSC benchmark',
+                                              detail: `${(emp.guests_per_lsc || 0).toFixed(0)} → ${(benchmarks.benchmark_lsc || 100).toFixed(0)} guests/sign-up`,
+                                              gain: Math.max(0, (Math.min(metricCap, 100) - Math.min(metricCap, lscPct)) * 0.25),
+                                              show: lscPct < metricCap,
+                                            },
+                                            {
+                                              label: 'Hit LBW benchmark',
+                                              detail: `$${(emp.lbw_per_guest || 0).toFixed(2)} → $${(benchmarks.benchmark_lbw || 8).toFixed(2)}`,
+                                              gain: Math.max(0, (Math.min(metricCap, 100) - Math.min(metricCap, lbwPct)) * 0.20),
+                                              show: lbwPct < metricCap,
+                                            },
+                                            {
+                                              label: 'Hit Glass benchmark',
+                                              detail: `$${(emp.glassware_per_guest || 0).toFixed(2)} → $${(benchmarks.benchmark_glass || 1.35).toFixed(2)}`,
+                                              gain: Math.max(0, (Math.min(metricCap, 100) - Math.min(metricCap, glassPct)) * 0.15),
+                                              show: glassPct < metricCap,
+                                            },
+                                            {
+                                              label: `Earn ${Math.ceil(gap / rtCoef)} more review mentions`,
+                                              detail: `${rtCoef}pt each, cap at ${rtCap}pt total`,
+                                              gain: Math.min(rtCap - currentRt, gap),
+                                              show: currentRt < rtCap,
+                                            },
+                                          ]
+                                            .filter(l => l.show && l.gain > 0.05)
+                                            .sort((a, b) => b.gain - a.gain)
+                                            .slice(0, 4);
+
+                                          return (
+                                            <div className="border border-slate-600 rounded-lg p-3 bg-slate-900/40" data-testid={`next-tier-${employee.position}`}>
+                                              <h4 className="text-sm font-semibold text-slate-200 mb-2 flex items-center gap-2">
+                                                <Award className="w-4 h-4 text-amber-400" />
+                                                <span>Reach {nextTier} (≥{nextThreshold})</span>
+                                              </h4>
+                                              <div className="text-3xl font-bold text-amber-400 leading-none mb-1">
+                                                +{gap.toFixed(1)}
+                                              </div>
+                                              <p className="text-[11px] text-slate-400 mb-3">
+                                                points to graduate. Top opportunities:
+                                              </p>
+                                              <ul className="space-y-1.5">
+                                                {levers.length === 0 && (
+                                                  <li className="text-[11px] text-slate-500 italic">
+                                                    All metrics at cap — focus on Customer Voice (promoters/NPS) or sustained mentions.
+                                                  </li>
+                                                )}
+                                                {levers.map((l, idx) => (
+                                                  <li key={idx} className="flex items-start justify-between gap-2 text-[11px]">
+                                                    <div className="min-w-0 flex-1">
+                                                      <div className="text-slate-200 font-medium truncate">{l.label}</div>
+                                                      <div className="text-slate-500 truncate">{l.detail}</div>
+                                                    </div>
+                                                    <div className="shrink-0 px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300 font-bold">
+                                                      +{l.gain.toFixed(1)}
+                                                    </div>
+                                                  </li>
+                                                ))}
+                                              </ul>
+                                            </div>
+                                          );
+                                        })()}
+                                      </div>
                                     </div>
                                   </div>
                                 );
@@ -1389,7 +1493,7 @@ export default function FullRankings() {
                         {getMetricIcon(index + 1)}
                       </div>
                       <div>
-                        <h4 className="font-semibold text-foreground">{employee.name}</h4>
+                        <h4 className="font-semibold text-foreground">{getDisplayFirstName(employee)}</h4>
                         <p className="text-sm text-slate-400 capitalize">{employee.tier_label || employee.job_title || 'Server'}</p>
                       </div>
                     </div>
@@ -1443,7 +1547,7 @@ export default function FullRankings() {
                             </div>
                             
                             <div>
-                              <h4 className="font-semibold text-foreground text-sm">{employee.name}</h4>
+                              <h4 className="font-semibold text-foreground text-sm">{getDisplayFirstName(employee)}</h4>
                               <p className="text-xs text-slate-400 capitalize">{employee.tier_label || employee.job_title || 'Server'}</p>
                             </div>
                           </div>
@@ -1504,7 +1608,7 @@ export default function FullRankings() {
                           </div>
                         </td>
                         <td className="py-3 px-2">
-                          <div className="font-semibold text-foreground">{employee.name}</div>
+                          <div className="font-semibold text-foreground">{getDisplayFirstName(employee)}</div>
                           <div className="text-xs text-slate-400 capitalize">{employee.tier_label || employee.job_title || 'Server'}</div>
                         </td>
                         <td className="py-3 px-2 text-center">
@@ -1514,7 +1618,15 @@ export default function FullRankings() {
                           <span className="text-green-400 font-medium">{employee.rt_positive || 0}</span>
                         </td>
                         <td className="py-3 px-2 text-center">
-                          <span className="text-amber-400 font-medium">+{formatNumber(employee.review_tracker_bonus || 0)}</span>
+                          {(() => {
+                            const m = employee.rt_mentions || employee.review_mentions || 0;
+                            const coef = quarterSettings?.rt_points_per_mention ?? 0.3;
+                            const cap  = quarterSettings?.rt_max_points ?? 20;
+                            const bonus = Math.min(m * coef, cap);
+                            return (
+                              <span className="text-amber-400 font-medium">+{formatNumber(bonus)}</span>
+                            );
+                          })()}
                         </td>
                       </tr>
                     ))}

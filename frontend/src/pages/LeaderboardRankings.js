@@ -7,8 +7,9 @@ import { getCurrentQuarter } from "../lib/quarterUtils";
 import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../components/ui/tooltip";
+import { getDisplayFirstName } from "../utils/displayName";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
 
 // Design System Colors
 const COLORS = {
@@ -595,7 +596,7 @@ export default function LeaderboardRankings() {
                         <div className="col-span-3">
                           <div className="flex items-center gap-3">
                             <div>
-                              <div className="font-bold text-white text-lg">{employee.name}</div>
+                              <div className="font-bold text-white text-lg">{getDisplayFirstName(employee)}</div>
                               <div className="flex items-center gap-2 mt-1">
                                 <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${
                                   employee.tier_label?.includes("Trainer") ? "bg-purple-600/30 text-purple-300 border-purple-500/50" :
@@ -666,7 +667,7 @@ export default function LeaderboardRankings() {
                         
                         {/* Employee Name */}
                         <div className="col-span-2">
-                          <div className="font-bold text-white text-sm truncate">{employee.name}</div>
+                          <div className="font-bold text-white text-sm truncate">{getDisplayFirstName(employee)}</div>
                           <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
                             employee.tier_label?.includes("Trainer") ? "bg-purple-600/30 text-purple-300" :
                             employee.tier_label?.includes("Bartender") ? "bg-blue-600/30 text-blue-300" :

@@ -6,8 +6,9 @@ import { getCurrentQuarter } from "../lib/quarterUtils";
 import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { formatNumber } from "../utils/formatters";
+import { getDisplayFirstName } from "../utils/displayName";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
 
 export default function ReviewGeneration() {
   const [employees, setEmployees] = useState([]);
@@ -284,7 +285,7 @@ export default function ReviewGeneration() {
                         <div>
                           <div className="flex items-center gap-2">
                             <h3 className="text-lg font-serif font-bold text-foreground" data-testid={`employee-name-${employee.id}`}>
-                              {employee.name}
+                              {getDisplayFirstName(employee)}
                             </h3>
                             <span className={`px-2 py-0.5 rounded text-xs font-bold ${tier.color}`}>
                               {tier.label}
@@ -368,7 +369,7 @@ export default function ReviewGeneration() {
                             </h4>
                             <img 
                               src={`${BACKEND_URL}/api/v2/trends/${selectedYear}/${selectedQuarter}/employee/${employee.id}?chart_type=comparison`}
-                              alt={`${employee.name} trend chart`}
+                              alt={`${getDisplayFirstName(employee)} trend chart`}
                               className="w-full rounded-lg"
                               data-testid={`trend-chart-${employee.id}`}
                             />

@@ -4,6 +4,7 @@ Implements snapshot-first workflow endpoints.
 """
 
 import logging
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional
@@ -702,7 +703,7 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
     if "rt_mentions" in updates or "review_mentions" in updates:
         rt_mentions = emp.get("rt_mentions", 0) or 0
         # RT Bonus = mentions × 0.5, capped at 15 pts
-        emp["review_tracker_bonus"] = min(rt_mentions * 0.5, 15.0)
+        emp["review_tracker_bonus"] = min(rt_mentions * 0.3, 20)
         logger.info(f"Recalculated RT bonus for {emp.get('name')}: mentions={rt_mentions}, bonus={emp['review_tracker_bonus']}")
     
     # Recalculate scores using the scoring formula
@@ -712,7 +713,7 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
     benchmarks = {
         "ppa": 55.0,
         "lbw": 8.0,
-        "glass": 1.25,
+        "glass": 1.35,
         "lsc": 100.0
     }
     
@@ -826,14 +827,172 @@ async def delete_snapshot_employee(employee_id: str, quarter: str = "Q2", year: 
         removed_name = matching[0][1].get("name", "unknown")
         employees = [e for e in employees if e.get("id") != employee_id and (e.get("name") or "").lower() != employee_id.lower()]
     
-    # Update snapshot using MongoDB _id
+    # Update snapshot using MongoDB _id. Also persist the employee name(s) on
+    # the snapshot's `deleted_names` blocklist so future merges of the source
+    # POS upload don't re-create the employee (the bug was: terminated
+    # employees kept reappearing after every snapshot save).
+    deleted_names = snapshot.get("deleted_names") or []
+    if isinstance(deleted_names, list):
+        deleted_names = [n for n in deleted_names if n]
+    else:
+        deleted_names = []
+
+    name_to_block = (removed_name or "").strip()
+    # Also record the original `employee_id` argument — it can be a name when
+    # the front-end calls /delete with a stringified name rather than a UUID.
+    extra = (employee_id or "").strip()
+    for n in (name_to_block, extra):
+        if n and n.lower() not in {x.lower() for x in deleted_names}:
+            deleted_names.append(n)
+
     await db.snapshot_workflow.update_one(
         {"_id": mongo_id},
-        {"$set": {"employees": employees}}
+        {"$set": {"employees": employees, "deleted_names": deleted_names}}
     )
-    
-    return {"success": True, "message": f"Deleted {removed_name} from snapshot", "remaining": len(employees)}
-    
+
+    # Also remove the same employee from the master `employees_v2` collection
+    # so downstream readers (slide PNG/PDF generators, employee list, full
+    # rankings exports) don't keep showing the deleted person. The user
+    # reported: "I am also seeing deleted employees still on the snapshot
+    # slide" because the slide generators read employees_v2 (not the
+    # snapshot's embedded employees array).
+    v2_removed = 0
+    snap_quarter = (snapshot.get("quarter") or quarter or "Q2").upper()
+    snap_year = snapshot.get("year") or year or 2026
+    # Try by id first if it looks like a UUID.
+    if employee_id and len(employee_id) >= 32:
+        r = await db.employees_v2.delete_one({"id": employee_id})
+        v2_removed += r.deleted_count
+    if name_to_block:
+        r = await db.employees_v2.delete_many({
+            "year": snap_year,
+            "quarter": snap_quarter,
+            "$or": [
+                {"name": {"$regex": f"^{re.escape(name_to_block)}$", "$options": "i"}},
+                {"display_name": {"$regex": f"^{re.escape(name_to_block)}$", "$options": "i"}},
+                {"report_name": {"$regex": f"^{re.escape(name_to_block)}$", "$options": "i"}},
+            ],
+        })
+        v2_removed += r.deleted_count
+    if v2_removed:
+        logger.info(
+            f"delete_snapshot_employee: also removed {v2_removed} matching row(s) "
+            f"from employees_v2 for '{name_to_block}'"
+        )
+
+    return {
+        "success": True,
+        "message": f"Deleted {removed_name} from snapshot",
+        "remaining": len(employees),
+        "removed_from_employees_v2": v2_removed,
+    }
+
+
+@snapshot_router.get("/snapshots/{snapshot_id}/deleted-names")
+async def list_deleted_names(snapshot_id: str):
+    """List employee names in this snapshot's terminated/deleted blocklist."""
+    db = get_db()
+    snapshot = await db.snapshot_workflow.find_one({"id": snapshot_id}, {"deleted_names": 1, "_id": 0})
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    return {"deleted_names": snapshot.get("deleted_names") or []}
+
+
+@snapshot_router.post("/snapshots/{snapshot_id}/restore-deleted/{name}")
+async def restore_deleted_employee(snapshot_id: str, name: str):
+    """
+    Remove an employee name from the snapshot's deleted_names blocklist so
+    the next merge re-creates them from POS parsed_data. Use when a user
+    deleted someone by mistake and wants them back without re-uploading.
+    """
+    db = get_db()
+    snapshot = await db.snapshot_workflow.find_one({"id": snapshot_id})
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+
+    blocked = snapshot.get("deleted_names") or []
+    target = (name or "").strip().lower()
+    new_list = [n for n in blocked if (n or "").strip().lower() != target]
+    if len(new_list) == len(blocked):
+        return {"success": True, "removed": False, "message": f"'{name}' was not in the deleted list"}
+
+    await db.snapshot_workflow.update_one(
+        {"id": snapshot_id}, {"$set": {"deleted_names": new_list}}
+    )
+    return {"success": True, "removed": True, "message": f"'{name}' restored. Re-process the snapshot to bring them back."}
+
+
+@snapshot_router.post("/snapshots/{snapshot_id}/mark-deleted")
+async def mark_employees_deleted(snapshot_id: str, payload: Dict[str, Any]):
+    """
+    Bulk-add a list of employee names to the snapshot's deleted_names
+    blocklist AND remove them from the embedded employees array. Useful for
+    cleaning up a snapshot that was created BEFORE the deletion-blocklist
+    fix landed (those employees keep getting re-merged from POS data).
+
+    Body: { "names": ["TK", "Bob Smith", ...] }
+    """
+    names: List[str] = payload.get("names") or []
+    if not isinstance(names, list) or not names:
+        raise HTTPException(status_code=400, detail="`names` must be a non-empty list")
+
+    db = get_db()
+    snapshot = await db.snapshot_workflow.find_one({"id": snapshot_id})
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+
+    cleaned = [str(n).strip() for n in names if n and str(n).strip()]
+    if not cleaned:
+        raise HTTPException(status_code=400, detail="No valid names supplied")
+
+    # Pull matching rows from the embedded array (case-insensitive name match).
+    lc_set = {n.lower() for n in cleaned}
+    employees = snapshot.get("employees", []) or []
+    kept = []
+    for emp in employees:
+        keys = [
+            (emp.get("name") or "").strip().lower(),
+            (emp.get("display_name") or "").strip().lower(),
+            (emp.get("report_name") or "").strip().lower(),
+        ]
+        if any(k in lc_set for k in keys if k):
+            continue
+        kept.append(emp)
+
+    await db.snapshot_workflow.update_one(
+        {"id": snapshot_id},
+        {
+            "$set": {"employees": kept},
+            "$addToSet": {"deleted_names": {"$each": cleaned}},
+        }
+    )
+
+    # Also purge matching rows from employees_v2 so slides / employee list
+    # / rankings exports immediately stop showing them.
+    snap_quarter = (snapshot.get("quarter") or "").upper() or None
+    snap_year = snapshot.get("year")
+    v2_removed = 0
+    if snap_quarter and snap_year:
+        for name in cleaned:
+            r = await db.employees_v2.delete_many({
+                "year": snap_year,
+                "quarter": snap_quarter,
+                "$or": [
+                    {"name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}},
+                    {"display_name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}},
+                    {"report_name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}},
+                ],
+            })
+            v2_removed += r.deleted_count
+        if v2_removed:
+            logger.info(f"mark-deleted: also removed {v2_removed} employees_v2 rows")
+    return {
+        "success": True,
+        "blocked": cleaned,
+        "remaining": len(kept),
+        "removed": len(employees) - len(kept),
+        "removed_from_employees_v2": v2_removed,
+    }
 
 
 @snapshot_router.post("/rebuild-from-pos")
@@ -936,7 +1095,7 @@ async def rebuild_snapshot_from_pos():
     
     # Calculate scores
     from snapshot_manager import calculate_employee_scores, assign_performance_tiers
-    benchmarks = {"ppa": 55.0, "lbw": 8.0, "glass": 1.25, "lsc": 100.0}
+    benchmarks = {"ppa": 55.0, "lbw": 8.0, "glass": 1.35, "lsc": 100.0}
     
     scored_employees = []
     for emp in new_employees:
@@ -962,14 +1121,6 @@ async def rebuild_snapshot_from_pos():
         "employee_count": len(final_employees),
         "employees": [{"name": e["name"], "report_name": e["report_name"]} for e in final_employees]
     }
-
-
-    return {
-        "success": True,
-        "message": "Deleted employee from snapshot",
-        "remaining_count": len(employees)
-    }
-
 
 
 @snapshot_router.post("/sync-job-titles")
@@ -1284,10 +1435,13 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
         logger.info(f"confirm_pos_review: POS upload now has {len(existing_pos_employees)} employees")
     
     # ALSO update the snapshot employees directly (always, not just when completed)
-    # This ensures edits take effect immediately without needing to reprocess
-    existing_employees = snapshot.get("employees", [])
+    # This ensures edits take effect immediately without needing to reprocess.
+    # We run this even when `existing_employees` is empty so a first-save with
+    # purely-manual entries actually persists them (the user reported new
+    # rows being dropped on confirmed save).
+    existing_employees = snapshot.get("employees", []) or []
     logger.info(f"confirm_pos_review: Found {len(existing_employees)} existing employees in snapshot")
-    if existing_employees:
+    if True:
         # Build lookup by name for matching
         emp_lookup = {}
         for emp in existing_employees:
@@ -1309,7 +1463,7 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
         benchmarks = {
             "ppa": settings.get("benchmark_ppa", 55.0) if settings else 55.0,
             "lbw": settings.get("benchmark_lbw", 8.0) if settings else 8.0,
-            "glass": settings.get("benchmark_glass", 1.25) if settings else 1.25,
+            "glass": settings.get("benchmark_glass", 1.35) if settings else 1.35,
             "lsc": settings.get("benchmark_lsc", 100.0) if settings else 100.0,
         }
         
@@ -1359,6 +1513,100 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
                 old_score = existing.get("total_score")
                 calculate_employee_scores(existing, benchmarks)
                 logger.info(f"confirm_pos_review: Recalculated '{name}' score from {old_score} to {existing.get('total_score')}")
+            else:
+                # NEW manually-added employee — wasn't in the snapshot before.
+                # Build a fresh row with sensible defaults so they show up in
+                # the rankings on the very next render. Without this branch
+                # the row is silently dropped (the user reported "I manually
+                # added two employees and they are not appearing after a
+                # confirmed save").
+                display = (new_emp.get("display_name") or new_emp.get("name") or "").strip()
+                report = (new_emp.get("report_name") or new_emp.get("name") or display).strip()
+                fresh: Dict[str, Any] = {
+                    "id": new_emp.get("id") or str(uuid.uuid4()),
+                    "name": display or report,
+                    "display_name": display or report,
+                    "report_name": report,
+                    "quarter": snapshot.get("quarter"),
+                    "year": snapshot.get("year"),
+                    "job_title": new_emp.get("job_title") or "Server",
+                    "aliases": new_emp.get("aliases") or [],
+                    # Default CV / RT to zero — they have no reviews / mentions yet.
+                    "cv_promoters": 0,
+                    "cv_passives": 0,
+                    "cv_detractors": 0,
+                    "cv_score": 0,
+                    "nps_score": 0,
+                    "rt_mentions": 0,
+                    "review_tracker_bonus": 0,
+                    "dar_penalty": 0,
+                    "total_metric_bonus": 0,
+                    "nps_manual_override": False,
+                }
+                # Copy whatever POS fields the user provided.
+                for field in [
+                    "guest_count", "guests", "net_sales", "ppa",
+                    "liquor_sales", "beer_sales", "wine_sales", "lbw_total",
+                    "lbw_per_guest", "glassware_sales", "bar_glassware_sales",
+                    "glassware_per_guest", "loyalty_sales", "lsc_count",
+                    "guests_per_lsc", "food_sales", "lbw",
+                ]:
+                    if field in new_emp and new_emp[field] is not None:
+                        fresh[field] = new_emp[field]
+
+                if "glassware_sales" in new_emp:
+                    fresh["bar_glassware_sales"] = new_emp["glassware_sales"]
+                if "guests" in new_emp and "guest_count" not in new_emp:
+                    fresh["guest_count"] = new_emp["guests"]
+
+                # Recalculate derived metrics where possible.
+                guest_count = fresh.get("guest_count") or fresh.get("guests") or 0
+                if guest_count > 0:
+                    lbw = fresh.get("lbw") or (
+                        (fresh.get("liquor_sales") or 0)
+                        + (fresh.get("beer_sales") or 0)
+                        + (fresh.get("wine_sales") or 0)
+                    )
+                    fresh["lbw"] = lbw
+                    fresh["lbw_per_guest"] = round(lbw / guest_count, 2)
+
+                    glassware = (
+                        fresh.get("bar_glassware_sales") or fresh.get("glassware_sales") or 0
+                    )
+                    fresh["glassware_per_guest"] = round(glassware / guest_count, 2)
+
+                lsc_count = fresh.get("lsc_count") or 0
+                if lsc_count > 0 and guest_count > 0:
+                    fresh["guests_per_lsc"] = round(guest_count / lsc_count, 2)
+
+                # Initial score pass.
+                try:
+                    calculate_employee_scores(fresh, benchmarks)
+                except Exception as score_err:
+                    logger.warning(
+                        f"confirm_pos_review: score calc for new '{name}' failed: {score_err}"
+                    )
+
+                existing_employees.append(fresh)
+                # Also seed our lookup so a second mention of the same name
+                # in the same payload updates this row instead of duplicating.
+                emp_lookup[name] = fresh
+                logger.info(
+                    f"confirm_pos_review: Added NEW manually-entered employee '{fresh['name']}' "
+                    f"(guests={guest_count}, ppa={fresh.get('ppa')}, score={fresh.get('total_score')})"
+                )
+                # Manual re-add: if this employee is on the snapshot's
+                # deleted_names blocklist (because they were deleted earlier
+                # and the user changed their mind), drop them off the list
+                # so they don't get filtered out next time merge runs.
+                snapshot_blocklist = snapshot.get("deleted_names") or []
+                snap_disp = (fresh.get("display_name") or fresh.get("name") or "").strip().lower()
+                snap_full = (fresh.get("report_name") or fresh.get("name") or "").strip().lower()
+                if any((n or "").strip().lower() in {snap_disp, snap_full} for n in snapshot_blocklist):
+                    snapshot["deleted_names"] = [
+                        n for n in snapshot_blocklist
+                        if (n or "").strip().lower() not in {snap_disp, snap_full}
+                    ]
         
         # Re-assign tiers
         existing_employees = assign_performance_tiers(existing_employees)
@@ -1370,16 +1618,158 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
     }
     if existing_employees:
         update_data["employees"] = existing_employees
-    
+    # Persist the (possibly trimmed) deleted_names blocklist — manual re-add
+    # of a previously-deleted employee removes them from this list above.
+    update_data["deleted_names"] = snapshot.get("deleted_names") or []
+
     await db.snapshot_workflow.update_one(
         {"id": snapshot_id},
         {"$set": update_data}
     )
-    
+
+    # Mirror the merged employees back into employees_v2 so downstream
+    # consumers (slide PNG/PDF generators, employee list page, full-rankings
+    # exports) all see the latest CV / RT / score values.
+    if existing_employees:
+        await _propagate_snapshot_to_employees_v2(db, existing_employees, snapshot)
+
+    # And mirror them onto the canonical employees.current_metrics so the
+    # integrity gate, "most improved" widget, and any future canonical
+    # reader stays in step. Idempotent.
+    try:
+        from services.employee_service import EmployeeService
+        fresh_snap = await db.snapshot_workflow.find_one({"id": snapshot_id}, {"_id": 0})
+        svc = EmployeeService(db)
+        sync = await svc.sync_current_metrics_from_snapshot(fresh_snap)
+        logger.info(
+            "confirm_pos_review: synced canonical current_metrics "
+            f"(updated={sync['updated']}, unmatched={sync['unmatched']}, total={sync['total']})"
+        )
+        # Phase 3 — materialize the thin rows[] alongside employees[] so
+        # FK-aware readers stay in step.
+        row_count = await svc.materialize_rows_from_employees(fresh_snap)
+        logger.info(f"confirm_pos_review: materialized {row_count} rows[]")
+    except Exception as sync_err:
+        logger.warning(f"confirm_pos_review: canonical sync failed: {sync_err}")
+
+    # Auto-sync the QR employees list: add new hires, archive
+    # terminated/merged employees, roll duplicate clicks onto survivors.
+    try:
+        from qr_tracking import auto_sync_qr_with_canonical
+        qr_sync = await auto_sync_qr_with_canonical(db)
+        logger.info(
+            "confirm_pos_review: auto-synced QR list "
+            f"(added={qr_sync['added']}, archived={qr_sync['archived']}, "
+            f"merged_clicks={qr_sync['merged_clicks']})"
+        )
+    except Exception as qr_err:
+        logger.warning(f"confirm_pos_review: QR auto-sync failed: {qr_err}")
+
     return {
         "success": True,
         "message": f"POS data reviewed and confirmed ({len(employees_data)} employees)"
     }
+
+
+# ---------------------------------------------------------------------------
+# Helper: keep employees_v2 in sync with the snapshot's merged employees
+# ---------------------------------------------------------------------------
+#
+# Why this exists: `merge_snapshot_data` writes the canonical CV/RT/NPS data
+# into `snapshot.employees`. The slide generators (png_full_rankings.py /
+# pdf_full_rankings.py / yodeck_slides.py) however read from `employees_v2`.
+# Without an explicit propagation step, a freshly-processed snapshot would
+# show CV / RT / Metric Bonus = 0 in every printable / signage output even
+# though the underlying snapshot is correct. The user reported this as
+# "CV and RT are showing all zeros on the deployed app snapshot".
+
+_SYNCABLE_FIELDS = (
+    # POS metrics
+    "guest_count", "guests", "net_sales", "ppa",
+    "lbw", "lbw_per_guest",
+    "glassware_sales", "bar_glassware_sales", "glassware_per_guest",
+    "lsc_count", "loyalty_sales", "guests_per_lsc",
+    "food_sales", "liquor_sales", "beer_sales", "wine_sales",
+    # CV / NPS
+    "cv_promoters", "cv_passives", "cv_detractors",
+    "cv_score", "cv_responses", "cv_avg_rating", "cv_raw_points",
+    "nps_score", "nps_score_pts", "nps_contribution",
+    # Review Tracker
+    "rt_mentions", "review_mentions", "review_tracker_bonus",
+    # Calculated scores / tier
+    "score_ppa", "score_lbw", "score_glass", "score_lsc",
+    "bonus_ppa", "bonus_lbw", "bonus_glass", "bonus_lsc",
+    "total_metric_bonus", "metric_bonus",
+    "weighted_score", "pre_dar_score", "total_score",
+    "performance_tier", "peer_rank",
+    "display_name", "report_name", "job_title",
+)
+
+
+async def _propagate_snapshot_to_employees_v2(
+    db, employees: List[Dict[str, Any]], snapshot: Dict[str, Any]
+) -> int:
+    """
+    Upsert each merged snapshot employee into `employees_v2` so slide
+    generators and other employees_v2 readers stay in sync.
+
+    Match strategy: prefer employee `id`; fall back to (name, quarter, year)
+    if id is missing or doesn't yet exist in employees_v2.
+    """
+    quarter = (snapshot.get("quarter") or "Q1").upper()
+    year = snapshot.get("year") or 2026
+    synced = 0
+
+    for emp in employees or []:
+        if not emp or not (emp.get("name") or emp.get("display_name")):
+            continue
+
+        # Build the $set payload — only fields we know how to sync, only
+        # when present (avoid overwriting employees_v2 values with None).
+        update = {}
+        for field in _SYNCABLE_FIELDS:
+            if field in emp and emp[field] is not None:
+                update[field] = emp[field]
+        update["quarter"] = quarter
+        update["year"] = year
+        update["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+        emp_id = emp.get("id")
+        match = None
+        if emp_id:
+            match = {"id": emp_id}
+
+        if match:
+            res = await db.employees_v2.update_one(
+                match,
+                {"$set": update, "$setOnInsert": {"id": emp_id}},
+                upsert=True,
+            )
+            if res.matched_count or res.upserted_id:
+                synced += 1
+                continue
+
+        # Fallback: match by name + quarter + year
+        name = (emp.get("name") or emp.get("display_name") or "").strip()
+        if not name:
+            continue
+        await db.employees_v2.update_one(
+            {
+                "name": {"$regex": f"^{re.escape(name)}$", "$options": "i"},
+                "quarter": quarter,
+                "year": year,
+            },
+            {
+                "$set": update,
+                "$setOnInsert": {"id": emp_id or str(uuid.uuid4()), "name": name},
+            },
+            upsert=True,
+        )
+        synced += 1
+
+    if synced:
+        logger.info(f"Propagated {synced} employees from snapshot to employees_v2")
+    return synced
 
 
 @snapshot_router.post("/snapshots/{snapshot_id}/import-cv-adjustment/{session_id}")
@@ -1520,10 +1910,25 @@ async def import_cv_adjustment_to_snapshot(snapshot_id: str, session_id: str):
 # ============================================================================
 
 @snapshot_router.post("/snapshots/{snapshot_id}/process")
-async def process_snapshot(snapshot_id: str):
+async def process_snapshot(snapshot_id: str, force: bool = False):
     """
     Process a snapshot: validate uploads, calculate scores, finalize.
     This transitions the snapshot from In Progress -> Processing -> Completed/Failed.
+
+    Snapshot Integrity Gate (Phase: data quality)
+    ---------------------------------------------
+    Before freezing, run pre-flight checks against the merged employee
+    set and refuse to freeze if any of the following are true:
+
+      • > 30% of rows have `lsc_count` missing or zero
+        (suggests POS file was missing the LSC column)
+      • > 30% of rows have all four POS scores at zero
+        (suggests parser failure or wrong file)
+      • row count < 80% of the most recent completed snapshot for
+        the same quarter (suggests partial upload)
+
+    Pass `?force=true` to override the gate. The override is logged to
+    `audit_log` so it's auditable later.
     """
     db = get_db()
     
@@ -1572,13 +1977,85 @@ async def process_snapshot(snapshot_id: str):
         benchmarks = {
             "ppa": settings.get("benchmark_ppa", 55.0) if settings else 55.0,
             "lbw": settings.get("benchmark_lbw", 8.0) if settings else 8.0,
-            "glass": settings.get("benchmark_glass", 1.25) if settings else 1.25,
+            "glass": settings.get("benchmark_glass", 1.35) if settings else 1.35,
             "lsc": settings.get("benchmark_lsc", 100.0) if settings else 100.0,
         }
         
         # Merge data from all uploads
         employees = await merge_snapshot_data(snapshot)
-        
+
+        # ---- Snapshot Integrity Gate ----
+        # Refuse to freeze a snapshot with obviously broken inputs. The
+        # whole point of this gate is to prevent the W2/W2.5 scenario:
+        # a POS file missing LSC silently freezes a snapshot where 17
+        # servers' ranks are wrong by 25-50 points each.
+        gate_failures: List[str] = []
+        n = len(employees)
+        if n > 0:
+            zero_lsc = sum(
+                1 for e in employees
+                if not (e.get("lsc_count") or 0)
+            )
+            if (zero_lsc / n) > 0.30:
+                gate_failures.append(
+                    f"{zero_lsc}/{n} employees have no LSC count "
+                    f"({zero_lsc/n*100:.0f}%). Likely the POS file is "
+                    f"missing the LSC column. Re-upload the corrected POS file."
+                )
+            zero_pos = sum(
+                1 for e in employees
+                if not any((e.get(k) or 0) for k in
+                           ("score_ppa", "score_lbw", "score_glass", "score_lsc"))
+            )
+            if (zero_pos / n) > 0.30:
+                gate_failures.append(
+                    f"{zero_pos}/{n} employees have ALL POS scores at zero. "
+                    f"Likely parser failure or wrong file format."
+                )
+            # Compare row count to the previous completed snapshot.
+            prev = await db.snapshot_workflow.find_one(
+                {"quarter": snapshot["quarter"], "year": snapshot["year"],
+                 "status": SnapshotStatus.COMPLETED.value,
+                 "id": {"$ne": snapshot_id}},
+                {"_id": 0, "name": 1, "rows": 1, "employees": 1},
+                sort=[("completed_at", -1)],
+            )
+            if prev:
+                prev_n = len(prev.get("rows") or prev.get("employees") or [])
+                if prev_n > 0 and n < prev_n * 0.80:
+                    gate_failures.append(
+                        f"This snapshot has {n} employees vs "
+                        f"{prev_n} in the previous snapshot ('{prev['name']}'). "
+                        f"That's a {(prev_n - n) / prev_n * 100:.0f}% drop — "
+                        f"suggests an incomplete upload."
+                    )
+
+        if gate_failures and not force:
+            # Roll status back so the snapshot isn't stuck in 'processing'.
+            await db.snapshot_workflow.update_one(
+                {"id": snapshot_id},
+                {"$set": {"status": SnapshotStatus.IN_PROGRESS.value,
+                          "updated_at": datetime.now(timezone.utc).isoformat()}},
+            )
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "snapshot_integrity_gate_failed",
+                    "message": "Refusing to freeze snapshot — input data looks broken.",
+                    "failures": gate_failures,
+                    "override": "POST again with ?force=true to bypass. "
+                                "Override is logged to audit_log.",
+                },
+            )
+        if gate_failures and force:
+            await db.audit_log.insert_one({
+                "action": "snapshot_integrity_gate_overridden",
+                "snapshot_id": snapshot_id,
+                "snapshot_name": snapshot.get("name"),
+                "failures": gate_failures,
+                "ran_at": datetime.now(timezone.utc).isoformat(),
+            })
+
         # Calculate scores for each employee
         for emp in employees:
             calculate_employee_scores(emp, benchmarks)
@@ -1608,6 +2085,15 @@ async def process_snapshot(snapshot_id: str):
                 }
             }
         )
+
+        # Propagate the merged CV/RT/NPS/score fields back into the master
+        # `employees_v2` collection. Without this, downstream consumers that
+        # read employees_v2 (slide PNG/PDF generators, full-rankings exports,
+        # employee-list page) keep showing zeros for CV / RT / Metric Bonus
+        # even though `snapshot.employees` has the correct data — which the
+        # user reported as "CV and RT showing all zeros on the deployed app
+        # snapshot" with the slide screenshot.
+        await _propagate_snapshot_to_employees_v2(db, employees, snapshot)
         
         # Update current snapshot flag
         await update_current_snapshot(db, snapshot_id, snapshot["quarter"], snapshot["year"])
@@ -1691,6 +2177,270 @@ async def reprocess_snapshot(snapshot_id: str):
 # CURRENT RANKINGS
 # ============================================================================
 
+async def _hydrate_snapshot_employees(db, snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Shared helper that loads a snapshot's employee rows the same way the
+    `/current-rankings` endpoint does. Centralises four things that used
+    to be inlined in only one read path:
+
+      1. FK-join — when `snapshot.rows[]` exists, hydrate each row by
+         joining against the canonical `employees` collection so the
+         display_name + status + identity come from one source of truth.
+      2. Canonical overlay — overlay CV/RT/metric_bonus inputs from
+         each canonical employee's `current_metrics` blob when the
+         snapshot's frozen copy is missing them. This is what was
+         causing the snapshot PNG to show all-zero CV/RT columns while
+         `/rankings` looked correct: the slide endpoint never overlaid
+         from canonical.
+      3. Status filter — terminated/merged canonical employees are
+         hidden for non-finalized snapshots (finalized snapshots must
+         render exactly as frozen).
+      4. On-the-fly recompute — RT bonus = mentions × coef, capped;
+         CV score = NPS%/10 + Promoters − 2×Detractors; metric bonus
+         sum. Drift-resistant so the display always matches inputs.
+
+    Finalized snapshots are intentionally returned raw (without canonical
+    overlay or status filter) so historical PDFs match the moment-in-time
+    when they were frozen.
+    """
+    from services.employee_service import EmployeeService
+
+    snapshot_finalized = snapshot.get("status") == "finalized"
+
+    # 1. FK-join (or legacy fallback)
+    if not snapshot_finalized:
+        joined = await EmployeeService(db).get_snapshot_with_join(
+            snapshot_id=snapshot.get("id"),
+        )
+        employees = (joined or {}).get("employees") or snapshot.get("employees", [])
+    else:
+        employees = snapshot.get("employees", [])
+
+    # 2. Build canonical index (status + display_name + current_metrics overlay)
+    canonical_status: Dict[str, str] = {}
+    canonical_display: Dict[str, str] = {}
+    canonical_id_by_name: Dict[str, str] = {}
+    canonical_overlay_by_id: Dict[str, Dict[str, Any]] = {}
+    canonical_overlay_by_name: Dict[str, Dict[str, Any]] = {}
+
+    svc = EmployeeService(db)
+    overlay_fields = (
+        "cv_score", "nps_score", "cv_promoters", "cv_passives", "cv_detractors",
+        "rt_mentions", "review_mentions", "review_tracker_bonus",
+        "total_metric_bonus",
+        "bonus_ppa", "bonus_lbw", "bonus_glass", "bonus_lsc",
+        # POS metrics often missing from snapshot rows[] when the snapshot
+        # was created before all data sources ingested. Pulling them from
+        # v2 fixes LSC = 0% on the snapshot PNG for Trainers/Bartenders.
+        "lsc_count", "score_lsc", "guests_per_lsc",
+        "guests", "guest_count",
+    )
+    async for ce in svc.col.find(
+        {},
+        {"_id": 0, "id": 1, "name": 1, "display_name": 1, "status": 1,
+         "aliases": 1, "legacy_ids": 1, "current_metrics": 1},
+    ):
+        cm = ce.get("current_metrics") or {}
+        # Skip zeros/Nones — they're not useful as an overlay and would
+        # incorrectly block the v2 fallback for fields that haven't been
+        # synced into current_metrics yet.
+        overlay = {k: cm.get(k) for k in overlay_fields
+                   if cm.get(k) not in (None, 0, 0.0)}
+        if ce.get("id"):
+            canonical_status[ce["id"]] = ce.get("status", "active")
+            if ce.get("display_name"):
+                canonical_display[ce["id"]] = ce["display_name"]
+            if overlay:
+                canonical_overlay_by_id[ce["id"]] = overlay
+        for lid in ce.get("legacy_ids") or []:
+            canonical_status[lid] = ce.get("status", "active")
+            if ce.get("display_name"):
+                canonical_display[lid] = ce["display_name"]
+            if overlay:
+                canonical_overlay_by_id[lid] = overlay
+        for n in [ce.get("name"), ce.get("display_name"),
+                  *(ce.get("aliases") or [])]:
+            if n:
+                key = n.lower().strip()
+                canonical_status.setdefault(key, ce.get("status", "active"))
+                if ce.get("display_name"):
+                    canonical_display.setdefault(key, ce["display_name"])
+                canonical_id_by_name.setdefault(key, ce.get("id"))
+
+    # 2b. Build employees_v2 overlay for the snapshot's quarter/year. The
+    # legacy v2 collection still holds CV/RT data when current_metrics
+    # hasn't been synced yet — falling back to it ensures the slide
+    # never lies about CV/RT just because the canonical mirror is stale.
+    # We index v2 rows by both their own name AND every canonical alias
+    # that maps to them, so duplicate v2 records uploaded under an
+    # alias (e.g. "Treyanna Quick" while canonical is "Trey Quick")
+    # still flow their CV/RT into the rendered row.
+    name_to_canonical_aliases: Dict[str, List[str]] = {}
+    for n_key, cid in canonical_id_by_name.items():
+        # For each canonical id, gather every name key that maps to it.
+        name_to_canonical_aliases.setdefault(cid, []).append(n_key)
+    if not snapshot_finalized:
+        v2_quarter = (snapshot.get("quarter") or "").upper()
+        v2_year = snapshot.get("year")
+        if v2_quarter and v2_year:
+            async for v2 in db.employees_v2.find(
+                {"quarter": v2_quarter, "year": v2_year},
+                {"_id": 0, "id": 1, "name": 1, "display_name": 1,
+                 "job_title": 1,
+                 "cv_score": 1, "nps_score": 1, "cv_promoters": 1,
+                 "cv_passives": 1, "cv_detractors": 1, "rt_mentions": 1,
+                 "review_mentions": 1, "review_tracker_bonus": 1,
+                 "total_metric_bonus": 1, "bonus_ppa": 1, "bonus_lbw": 1,
+                 "bonus_glass": 1, "bonus_lsc": 1,
+                 "lsc_count": 1, "score_lsc": 1, "guests_per_lsc": 1,
+                 "guests": 1, "guest_count": 1},
+            ):
+                overlay = {k: v2.get(k) for k in overlay_fields
+                           if v2.get(k) not in (None, 0, 0.0)}
+                jt = (v2.get("job_title") or "").lower().strip()
+                if jt in ("trainer", "bartender"):
+                    overlay["job_title"] = jt
+                if not overlay:
+                    continue
+                if v2.get("id"):
+                    existing = canonical_overlay_by_id.get(v2["id"]) or {}
+                    merged = {**overlay, **existing}
+                    canonical_overlay_by_id[v2["id"]] = merged
+                # Index by the v2 row's own name + display_name AND by
+                # every canonical-known alias that resolves to the same
+                # employee — so a v2 record uploaded under an alias
+                # (e.g. "Treyanna Quick") still attaches to the snapshot
+                # row that carries the primary name ("Trey Quick").
+                v2_names = {(n or "").lower().strip()
+                            for n in (v2.get("name"), v2.get("display_name"))
+                            if n}
+                # Resolve to canonical id via any v2 name.
+                v2_canonical_id = next(
+                    (canonical_id_by_name[n] for n in v2_names
+                     if n in canonical_id_by_name),
+                    None,
+                )
+                if v2_canonical_id:
+                    # Also register by the canonical id directly.
+                    existing = canonical_overlay_by_id.get(v2_canonical_id) or {}
+                    canonical_overlay_by_id[v2_canonical_id] = {**overlay, **existing}
+                    # And spread the overlay across every alias name
+                    # known for that canonical employee.
+                    for alias_key in name_to_canonical_aliases.get(v2_canonical_id, []):
+                        v2_names.add(alias_key)
+                for n in v2_names:
+                    if n:
+                        existing = canonical_overlay_by_name.get(n) or {}
+                        canonical_overlay_by_name[n] = {**overlay, **existing}
+
+    # 3. Filter terminated/merged + stamp canonical_id
+    deleted_names = {(n or "").strip().lower()
+                     for n in (snapshot.get("deleted_names") or [])}
+    filtered: List[Dict[str, Any]] = []
+    for emp in employees:
+        st = (
+            canonical_status.get(emp.get("id"))
+            or canonical_status.get((emp.get("name") or "").lower().strip())
+            or canonical_status.get((emp.get("display_name") or "").lower().strip())
+        )
+        if not snapshot_finalized and st in ("terminated", "merged"):
+            continue
+        nm_key = (emp.get("name") or "").lower().strip()
+        if nm_key in deleted_names:
+            continue
+        cid = (
+            (canonical_status.get(emp.get("id")) and emp.get("id"))
+            or canonical_id_by_name.get(nm_key)
+            or canonical_id_by_name.get((emp.get("display_name") or "").lower().strip())
+        )
+        if cid:
+            emp["canonical_id"] = cid
+        filtered.append(emp)
+
+    # 4. Overlay display_names + canonical CV/RT inputs (only for non-finalized)
+    for emp in filtered:
+        # display_name overlay
+        candidates = [
+            canonical_display.get(emp.get("canonical_id") or ""),
+            canonical_display.get(emp.get("id") or ""),
+            canonical_display.get((emp.get("name") or "").lower().strip()),
+        ]
+        preferred = next((c for c in candidates if c), None)
+        if preferred:
+            emp["name"] = preferred
+            emp["display_name"] = preferred
+
+        if snapshot_finalized:
+            continue
+        # CV/RT overlay — only fill values the snapshot is missing.
+        # If frozen_metrics had a real value we keep it; if zero/None we
+        # pull the live canonical/v2 value so a POS-only upload doesn't
+        # blank out CV/RT on the slide. Try id → canonical_id → name.
+        overlay = (
+            canonical_overlay_by_id.get(emp.get("canonical_id") or "")
+            or canonical_overlay_by_id.get(emp.get("id") or "")
+            or canonical_overlay_by_name.get((emp.get("name") or "").lower().strip())
+            or canonical_overlay_by_name.get((emp.get("display_name") or "").lower().strip())
+        )
+        if not overlay:
+            continue
+        for k, v in overlay.items():
+            # job_title overlay is unconditional for trainer/bartender
+            # because the snapshot frequently freezes a default "Server"
+            # value that would otherwise block the more specific role.
+            if k == "job_title" and v in ("trainer", "bartender"):
+                emp[k] = v
+                continue
+            current = emp.get(k)
+            if current in (None, 0, 0.0):
+                emp[k] = v
+
+    # 5. Sort by tier then score (same as /current-rankings)
+    TIER_ORDER = {
+        'Trainer': 1, 'Bartender': 2, 'A-Server': 3,
+        'B-Server': 4, 'C-Server': 5, 'Server': 6,
+    }
+    def _sort_key(e):
+        tier = e.get('tier_label', 'Server')
+        score = e.get('final_score') or e.get('total_score', 0) or 0
+        return (TIER_ORDER.get(tier, 99), -score)
+    sorted_employees = sorted(filtered, key=_sort_key)
+
+    # 6. On-the-fly recompute (RT bonus, CV score, metric bonus)
+    qs_doc = await db.quarter_settings.find_one(
+        {"year": snapshot.get("year"), "quarter": snapshot.get("quarter")},
+        {"_id": 0, "rt_points_per_mention": 1, "rt_max_points": 1},
+    ) or {}
+    rt_coef = qs_doc.get("rt_points_per_mention", 0.3) or 0.3
+    rt_cap  = qs_doc.get("rt_max_points", 20.0) or 20.0
+    for emp in sorted_employees:
+        m = emp.get("rt_mentions") or emp.get("review_mentions") or 0
+        emp["review_tracker_bonus"] = round(min(m * rt_coef, rt_cap), 2)
+        emp["review_mentions"] = m
+
+        if not emp.get("nps_manual_override"):
+            nps = emp.get("nps_score") or 0
+            try:
+                nps_c = max(0.0, min(float(nps), 100.0))
+            except (TypeError, ValueError):
+                nps_c = 0.0
+            prom = emp.get("cv_promoters") or 0
+            det = emp.get("cv_detractors") or 0
+            emp["nps_contribution"] = round(nps_c / 10.0, 2)
+            emp["cv_raw_points"] = round(prom - 2 * det, 2)
+            emp["cv_score"] = round(emp["nps_contribution"] + emp["cv_raw_points"], 2)
+
+        emp["total_metric_bonus"] = round(
+            (emp.get("bonus_ppa")   or 0)
+            + (emp.get("bonus_lbw") or 0)
+            + (emp.get("bonus_glass") or 0)
+            + (emp.get("bonus_lsc") or 0),
+            2,
+        )
+
+    return sorted_employees
+
+
 @snapshot_router.get("/current-rankings")
 async def get_current_rankings(quarter: Optional[str] = None, year: Optional[int] = None):
     """
@@ -1736,50 +2486,12 @@ async def get_current_rankings(quarter: Optional[str] = None, year: Optional[int
             "snapshot": None
         }
     
-    # Sort employees by tier before returning
-    employees = snapshot.get("employees", [])
-    
-    # Overlay display_names from employees_v2 (source of truth for preferred names)
-    emp_v2_lookup = {}
-    async for emp in db.employees_v2.find(
-        {"quarter": snapshot.get("quarter", "").upper(), "year": snapshot.get("year", 2026)},
-        {"_id": 0, "name": 1, "display_name": 1, "report_name": 1}
-    ):
-        for field in ["name", "report_name", "display_name"]:
-            key = (emp.get(field) or "").lower().strip()
-            if key and emp.get("display_name"):
-                emp_v2_lookup[key] = emp.get("display_name")
-    
-    for emp in employees:
-        emp_name = (emp.get("name") or "").lower().strip()
-        preferred = emp_v2_lookup.get(emp_name)
-        if preferred:
-            emp["name"] = preferred
-            emp["display_name"] = preferred
-    
-    # Define tier order
-    TIER_ORDER = {
-        'Trainer': 1,
-        'Bartender': 2,
-        'A-Server': 3,
-        'B-Server': 4,
-        'C-Server': 5,
-        'Server': 6
-    }
-    
-    def sort_key(emp):
-        tier = emp.get('tier_label', 'Server')
-        tier_rank = TIER_ORDER.get(tier, 99)
-        # Use final_score if finalized, otherwise total_score
-        score = emp.get('final_score') or emp.get('total_score', 0) or 0
-        return (tier_rank, -score)  # Sort by tier first, then by score descending
-    
-    sorted_employees = sorted(employees, key=sort_key)
-    
+    sorted_employees = await _hydrate_snapshot_employees(db, snapshot)
+
     # Workflow status info
     status = snapshot.get("status", "in_progress")
     is_finalized = status == "finalized"
-    
+
     return {
         "success": True,
         "has_data": True,
@@ -1831,12 +2543,15 @@ async def generate_snapshot_workflow_slide(
     if not snapshot:
         raise HTTPException(status_code=404, detail="Snapshot not found")
     
-    employees = snapshot.get("employees", [])
-    if not employees:
+    # Hydrate via the shared read path so the slide reflects the same
+    # data shown on /rankings (FK-join → canonical CV/RT overlay →
+    # on-the-fly RT bonus / CV score / metric bonus recompute).
+    # Previously this endpoint read the raw snapshot.employees blob and
+    # produced PNGs with all-zero CV/RT columns when the snapshot was
+    # created from a POS-only upload.
+    sorted_employees = await _hydrate_snapshot_employees(db, snapshot)
+    if not sorted_employees:
         raise HTTPException(status_code=400, detail="Snapshot has no employee data")
-    
-    # Sort employees by total_score
-    sorted_employees = sorted(employees, key=lambda x: x.get("total_score", 0) or 0, reverse=True)
     
     # Format employees for slide generation (must have exact fields)
     slide_employees = []
@@ -2277,7 +2992,7 @@ async def fix_snapshot_employee_ids(snapshot_id: str):
     ) if "snapshot_benchmarks" in await db.list_collection_names() else None
     if not benchmarks:
         # Use the same defaults as snapshot_manager
-        benchmarks = {"ppa": 55.0, "lbw": 8.0, "glass": 1.25, "lsc": 100.0}
+        benchmarks = {"ppa": 55.0, "lbw": 8.0, "glass": 1.35, "lsc": 100.0}
 
     rescored = []
     for emp in employees_v2:
@@ -2620,7 +3335,38 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
         return None
 
     employees = {}
-    
+
+    # ------------------------------------------------------------------
+    # Terminated / deleted employees blocklist.
+    # When the user removes an employee from the snapshot UI (Employees tab,
+    # snapshot_routes.delete_snapshot_employee, or routes/employees.delete_employee)
+    # we record their name(s) on `snapshot.deleted_names`. Without this, the
+    # POS parsed_data still contains them and `merge_snapshot_data` would
+    # silently re-create the employee on every save — which the user reported
+    # as "terminated employees keep coming back".
+    # ------------------------------------------------------------------
+    deleted_names_raw = snapshot.get("deleted_names") or []
+    deleted_names_set: set[str] = set()
+    for raw in deleted_names_raw:
+        if not raw:
+            continue
+        n = str(raw).strip().lower()
+        deleted_names_set.add(n)
+        # Also store first-name only so a "Trey Quick" delete catches a
+        # subsequent POS row that only carries "Trey" (single-name format).
+        first = n.split()[0] if n else ""
+        if first:
+            deleted_names_set.add(first)
+
+    def _is_deleted(name: str) -> bool:
+        if not name:
+            return False
+        n = name.strip().lower()
+        if n in deleted_names_set:
+            return True
+        first = n.split()[0] if n else ""
+        return first in deleted_names_set
+
     # Build lookup of existing employee data to preserve edits
     # Use multiple keys for flexible matching (full name, first name, report_name)
     existing_employees = {}
@@ -2659,12 +3405,58 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                 name = emp_data.get("name", "").strip()
                 if not name:
                     continue
+                # Skip employees the user has explicitly deleted from this
+                # snapshot. See `deleted_names_set` block at the top of
+                # merge_snapshot_data for the matching logic.
+                if _is_deleted(name):
+                    logger.info(f"Skipping deleted employee from POS merge: {name}")
+                    continue
+
+                # Phase 2B: route every incoming POS name through the
+                # canonical EmployeeService BEFORE we decide whether this
+                # row is new or existing. This single change is what makes
+                # `Glennice` and `Lennie Nguyen` collapse to the same
+                # canonical id instead of producing two snapshot rows.
+                # We also short-circuit when the canonical employee is
+                # terminated (treat as deleted).
+                try:
+                    from services.employee_service import EmployeeService
+                    _svc = EmployeeService(db)
+                    canonical_emp = await _svc.find_by_name_or_alias(name, include_inactive=False)
+                except Exception as _svc_err:
+                    logger.warning(f"merge_snapshot_data: canonical lookup failed for '{name}': {_svc_err}")
+                    canonical_emp = None
+
+                if canonical_emp is None:
+                    # Also check if a TERMINATED/MERGED canonical exists —
+                    # if so, this is effectively a deleted employee and we
+                    # must NOT recreate them silently. Honors the soft-
+                    # delete policy across re-uploads.
+                    try:
+                        terminated = await _svc.find_by_name_or_alias(name, include_inactive=True)
+                    except Exception:
+                        terminated = None
+                    if terminated and terminated.get("status") in ("terminated", "merged"):
+                        logger.info(
+                            f"Skipping POS merge for '{name}' — canonical status={terminated.get('status')}"
+                        )
+                        continue
                 
-                # Find existing employee using multiple matching strategies
+                # Find existing employee using multiple matching strategies.
+                # Prefer the canonical id when we resolved one so we always
+                # land on the SAME embedded row across re-merges.
                 name_lower = name.lower()
                 first_name_lower = name_lower.split()[0] if name_lower else ""
-                existing_emp = (existing_employees.get(name_lower) or 
-                               existing_employees.get(first_name_lower))
+                existing_emp = None
+                if canonical_emp and canonical_emp.get("id"):
+                    cid = canonical_emp["id"]
+                    for v in existing_employees.values():
+                        if v.get("id") == cid:
+                            existing_emp = v
+                            break
+                if existing_emp is None:
+                    existing_emp = (existing_employees.get(name_lower) or
+                                    existing_employees.get(first_name_lower))
 
                 # USER-EDIT PROTECTION
                 # If a row already exists in the snapshot (i.e. the user has
@@ -2739,8 +3531,20 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                 # Store the full POS name as report_name for matching
                 report_name = name
                 
+                # Determine the canonical id for this row. Priority:
+                #   1. existing snapshot row's id (preserves edits in place)
+                #   2. canonical_emp.id (the EmployeeService match)
+                #   3. fresh UUID (truly new employee — Phase 2B will
+                #      then mint a canonical record below)
+                if existing_emp and existing_emp.get("id"):
+                    _resolved_id = existing_emp["id"]
+                elif canonical_emp and canonical_emp.get("id"):
+                    _resolved_id = canonical_emp["id"]
+                else:
+                    _resolved_id = str(uuid.uuid4())
+
                 employees[name.lower()] = {
-                    "id": existing_emp.get("id") if existing_emp else str(uuid.uuid4()),
+                    "id": _resolved_id,
                     "name": display_name,  # Show display name
                     "display_name": display_name,
                     "report_name": report_name,  # Full POS name for matching
@@ -2898,7 +3702,7 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                 if matched_name:
                     mentions = rt_data.get("mentions", 0)
                     employees[matched_name]["rt_mentions"] = mentions
-                    employees[matched_name]["review_tracker_bonus"] = round(min(mentions * 0.5, 15), 1)  # Cap at 15
+                    employees[matched_name]["review_tracker_bonus"] = round(min(mentions * 0.3, 20), 1)  # Cap at 15
     
     # Defensive dedupe: guarantee unique employees by display_name so the
     # Employees tab never shows duplicates even if upstream data drifted.
@@ -2973,9 +3777,9 @@ async def parse_cv_file(filename: str, contents: bytes) -> Dict[str, Any]:
     """
     import csv
     from io import StringIO, BytesIO
-    
+
     employees = []
-    
+
     # Check file type
     if filename.lower().endswith(('.xlsx', '.xls')):
         # Parse NPS Toolkit XLSX format
@@ -2983,110 +3787,178 @@ async def parse_cv_file(filename: str, contents: bytes) -> Dict[str, Any]:
             import openpyxl
             wb = openpyxl.load_workbook(BytesIO(contents), data_only=True)
             ws = wb.active
-            
-            # Find header row and column indices
-            headers = {}
-            header_row = None
-            for row_idx, row in enumerate(ws.iter_rows(max_row=5, values_only=True), 1):
+
+            # Find header row and column indices.
+            # NPS Toolkit headers vary by export type — we accept several
+            # synonyms so we don't have to keep updating this every quarter.
+            COLUMN_SYNONYMS = {
+                "name": ("name", "server", "server name", "employee", "employee name"),
+                "nps": ("nps", "nps score", "nps %", "nps%", "net promoter", "net promoter score"),
+                "received": ("received", "responses", "total", "total responses", "total responses received", "responses received"),
+                "avg_rating": ("avg rating", "average rating", "avg score", "average score", "rating"),
+                "promoters": ("promoters", "promoter", "promoter count", "# promoters", "promoters count", "# promoter"),
+                "passives": ("passives", "passive", "passive count", "# passives", "neutrals"),
+                "detractors": ("detractors", "detractor", "detractor count", "# detractors", "# detractor"),
+            }
+
+            def _match_col(cell_val: str) -> Optional[str]:
+                cv = (cell_val or "").strip().lower()
+                if not cv:
+                    return None
+                for canon, synonyms in COLUMN_SYNONYMS.items():
+                    if cv in synonyms:
+                        return canon
+                # Also accept partial matches like "promoter %" (treat as promoters)
+                if "promoter" in cv and "%" not in cv:
+                    return "promoters"
+                if "detractor" in cv and "%" not in cv:
+                    return "detractors"
+                if "passive" in cv:
+                    return "passives"
+                return None
+
+            headers: Dict[str, int] = {}
+            header_row: Optional[int] = None
+            # Some NPS Toolkit exports put title rows ABOVE the headers; scan
+            # the first 10 rows (was 5) to be safe.
+            for row_idx, row in enumerate(ws.iter_rows(max_row=10, values_only=True), 1):
                 row_lower = [str(c).lower() if c else '' for c in row]
-                if 'name' in row_lower and ('nps' in row_lower or 'received' in row_lower):
+                # Header row is one that has "name" AND something NPS-related
+                if any('name' in v or v == 'server' or v == 'employee' for v in row_lower) and \
+                   any('nps' in v or 'received' in v or 'responses' in v or 'promoter' in v for v in row_lower):
                     header_row = row_idx
                     for col_idx, cell in enumerate(row):
-                        if cell:
-                            headers[str(cell).lower()] = col_idx
+                        canon = _match_col(str(cell)) if cell else None
+                        if canon and canon not in headers:
+                            headers[canon] = col_idx
                     break
-            
+
             if not header_row:
                 raise ValueError("Could not find header row with Name and NPS columns")
-            
-            # Parse data rows
+
             name_col = headers.get('name', 0)
-            nps_col = headers.get('nps', headers.get('nps score', 6))
-            received_col = headers.get('received', headers.get('responses', 3))
-            avg_rating_col = headers.get('avg rating', headers.get('average rating', 5))
-            
+            nps_col = headers.get('nps')
+            received_col = headers.get('received')
+            avg_rating_col = headers.get('avg_rating')
+            promoters_col = headers.get('promoters')
+            passives_col = headers.get('passives')
+            detractors_col = headers.get('detractors')
+
+            def _safe_float(row, idx):
+                if idx is None or idx >= len(row):
+                    return None
+                v = row[idx]
+                if v is None or v == "":
+                    return None
+                try:
+                    return float(v)
+                except (ValueError, TypeError):
+                    return None
+
+            def _safe_int(row, idx):
+                v = _safe_float(row, idx)
+                return int(v) if v is not None else None
+
             for row in ws.iter_rows(min_row=header_row + 1, values_only=True):
-                name = row[name_col] if name_col < len(row) else None
-                if not name or name == 'None' or 'manager' in str(name).lower():
+                # Bail out cleanly on a fully blank row (XLSX often has trailing blanks).
+                if not row or all(c is None or c == "" for c in row):
                     continue
-                
-                # Get NPS score (already calculated in the report)
-                try:
-                    nps = float(row[nps_col]) if nps_col < len(row) and row[nps_col] else 0
-                except (ValueError, TypeError):
-                    nps = 0
-                
-                # Get number of responses
-                try:
-                    received = int(float(row[received_col])) if received_col < len(row) and row[received_col] else 0
-                except (ValueError, TypeError):
-                    received = 0
-                
-                # Get avg rating
-                try:
-                    avg_rating = float(row[avg_rating_col]) if avg_rating_col < len(row) and row[avg_rating_col] else 0
-                except (ValueError, TypeError):
-                    avg_rating = 0
-                
-                # Estimate promoters/passives/detractors from NPS and received count
-                # NPS = (promoters - detractors) / total * 100
-                # We'll estimate based on NPS score
-                if received > 0:
-                    # Estimate breakdown based on NPS
-                    if nps >= 75:
-                        promoters = received
+
+                name = row[name_col] if name_col < len(row) else None
+                if not name:
+                    continue
+                name_str = str(name).strip()
+                # Don't filter out short / unusual names like 'TK'. Only skip
+                # rows that are clearly NOT employee rows: section headers,
+                # "Total" rollups, blank "None" cells, or explicit manager
+                # title rows. Be conservative — better to include a wrong row
+                # than silently drop a real employee.
+                lname = name_str.lower()
+                if lname in {"none", "total", "totals", "grand total", "subtotal"}:
+                    continue
+                if lname.startswith("manager") or lname.endswith(" manager") or lname == "manager":
+                    continue
+
+                nps = _safe_float(row, nps_col) or 0.0
+                received_int = _safe_int(row, received_col) or 0
+                avg_rating = _safe_float(row, avg_rating_col) or 0.0
+
+                # Read true promoter/passive/detractor counts if columns exist.
+                # This is the fix for the user's "people with NPS percentages
+                # but no promoters or detractors" report — previously we ALWAYS
+                # estimated, even when the file had real counts.
+                actual_promoters = _safe_int(row, promoters_col)
+                actual_passives = _safe_int(row, passives_col)
+                actual_detractors = _safe_int(row, detractors_col)
+
+                if (actual_promoters is not None or actual_detractors is not None
+                        or actual_passives is not None):
+                    promoters = actual_promoters or 0
+                    passives = actual_passives or 0
+                    detractors = actual_detractors or 0
+                    # If `received` wasn't given, infer it from the parts.
+                    if received_int <= 0:
+                        received_int = promoters + passives + detractors
+                    # If NPS wasn't given, calculate from the parts.
+                    if nps == 0 and received_int > 0:
+                        nps = round(((promoters - detractors) / received_int) * 100, 2)
+                else:
+                    # No P/P/D columns — fall back to the legacy estimation.
+                    if received_int > 0:
+                        if nps >= 75:
+                            promoters = received_int
+                            passives = 0
+                            detractors = 0
+                        elif nps >= 50:
+                            promoters = int(received_int * 0.8)
+                            passives = int(received_int * 0.15)
+                            detractors = received_int - promoters - passives
+                        elif nps >= 0:
+                            promoters = max(0, int((nps / 100 + 1) * received_int / 2))
+                            detractors = max(0, int((1 - nps / 100) * received_int / 2))
+                            passives = max(0, received_int - promoters - detractors)
+                        else:
+                            detractors = max(1, int(abs(nps) / 100 * received_int))
+                            promoters = max(0, received_int - detractors)
+                            passives = 0
+                    else:
+                        promoters = 0
                         passives = 0
                         detractors = 0
-                    elif nps >= 50:
-                        promoters = int(received * 0.8)
-                        passives = int(received * 0.15)
-                        detractors = received - promoters - passives
-                    elif nps >= 0:
-                        # NPS = (P - D) / Total * 100, P + Pa + D = Total
-                        # Estimate: P = (NPS/100 + 1) * Total / 2
-                        promoters = max(0, int((nps/100 + 1) * received / 2))
-                        detractors = max(0, int((1 - nps/100) * received / 2))
-                        passives = received - promoters - detractors
-                    else:
-                        # Negative NPS
-                        detractors = max(1, int(abs(nps) / 100 * received))
-                        promoters = max(0, received - detractors)
-                        passives = 0
-                else:
-                    promoters = 0
-                    passives = 0
-                    detractors = 0
-                
+
                 employees.append({
-                    "name": str(name).strip(),
+                    "name": name_str,
                     "nps_score": nps,
-                    "responses": received,
+                    "responses": received_int,
                     "avg_rating": avg_rating,
                     "promoters": promoters,
                     "passives": passives,
                     "detractors": detractors,
                 })
-            
-            logger.info(f"Parsed NPS Toolkit XLSX: {len(employees)} employees")
-            
+
+            logger.info(
+                f"Parsed NPS Toolkit XLSX: {len(employees)} employees "
+                f"(promoter columns {'PRESENT' if promoters_col is not None else 'MISSING — using NPS estimation'})"
+            )
+
         except Exception as e:
             logger.error(f"Error parsing NPS Toolkit XLSX: {e}")
             raise ValueError(f"Failed to parse NPS Toolkit file: {str(e)}")
-    
+
     else:
         # Parse CSV format (legacy)
         try:
             text = contents.decode('utf-8')
         except UnicodeDecodeError:
             text = contents.decode('latin-1')
-        
+
         reader = csv.DictReader(StringIO(text))
-        
+
         for row in reader:
             name = row.get("Employee", row.get("employee", row.get("Name", row.get("name", ""))))
             if not name:
                 continue
-            
+
             employees.append({
                 "name": name,
                 "promoters": int(row.get("Promoters", row.get("promoters", 0)) or 0),
@@ -3094,7 +3966,7 @@ async def parse_cv_file(filename: str, contents: bytes) -> Dict[str, Any]:
                 "detractors": int(row.get("Detractors", row.get("detractors", 0)) or 0),
                 "nps_score": float(row.get("NPS", row.get("nps", row.get("nps_score", 0))) or 0),
             })
-    
+
     return {"employees": employees, "record_count": len(employees)}
 
 
@@ -3345,7 +4217,7 @@ async def rescore_all_employees(year: int = 2026, quarter: str = "Q1"):
             {"quarter": q, "year": year}
         )
     if not benchmarks:
-        benchmarks = {"ppa": 55.0, "lbw": 8.0, "glass": 1.25, "lsc": 100.0}
+        benchmarks = {"ppa": 55.0, "lbw": 8.0, "glass": 1.35, "lsc": 100.0}
 
     rescored = 0
     over_100_before = 0
@@ -3803,6 +4675,37 @@ async def finalize_snapshot(snapshot_id: str, request: FinalizeRequest):
         },
         upsert=True
     )
+
+    # Sync canonical employees.current_metrics from the now-final
+    # snapshot so the integrity gate, "most improved" widget, and any
+    # other canonical consumer reflect the locked-in scores.
+    try:
+        from services.employee_service import EmployeeService
+        fresh_snap = await db.snapshot_workflow.find_one({"id": snapshot_id}, {"_id": 0})
+        svc = EmployeeService(db)
+        sync = await svc.sync_current_metrics_from_snapshot(fresh_snap)
+        logger.info(
+            "finalize_snapshot: synced canonical current_metrics "
+            f"(updated={sync['updated']}, unmatched={sync['unmatched']}, total={sync['total']})"
+        )
+        # Phase 3 — materialize the thin rows[] alongside employees[].
+        row_count = await svc.materialize_rows_from_employees(fresh_snap)
+        logger.info(f"finalize_snapshot: materialized {row_count} rows[]")
+    except Exception as sync_err:
+        logger.warning(f"finalize_snapshot: canonical sync failed: {sync_err}")
+
+    # Auto-sync the QR list at finalize too — quarter is locked, so the
+    # employee roster reflected here is the final one.
+    try:
+        from qr_tracking import auto_sync_qr_with_canonical
+        qr_sync = await auto_sync_qr_with_canonical(db)
+        logger.info(
+            "finalize_snapshot: auto-synced QR list "
+            f"(added={qr_sync['added']}, archived={qr_sync['archived']}, "
+            f"merged_clicks={qr_sync['merged_clicks']})"
+        )
+    except Exception as qr_err:
+        logger.warning(f"finalize_snapshot: QR auto-sync failed: {qr_err}")
     
     return {
         "success": True,

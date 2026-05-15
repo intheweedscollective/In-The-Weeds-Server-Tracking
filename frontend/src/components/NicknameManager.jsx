@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { UserPlus, Trash2, RefreshCw, Lightbulb, Search, Plus, X } from "lucide-react";
+import { UserPlus, Trash2, RefreshCw, Lightbulb, Search, Plus, X, GitMerge } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { Button } from "./ui/button";
@@ -27,20 +27,26 @@ export default function NicknameManager() {
   const [dismissedNames, setDismissedNames] = useState([]);
   const [resolvingName, setResolvingName] = useState(null); // unmatched name being mapped
   const [resolveTarget, setResolveTarget] = useState(""); // employee first-name selected
+  // Merge Duplicates panel state
+  const [mergeCandidates, setMergeCandidates] = useState([]);
+  const [mergeSurvivors, setMergeSurvivors] = useState({}); // { pairKey: "a" | "b" }
+  const [mergingPair, setMergingPair] = useState(null);
   const { quarter, year } = getCurrentQuarter();
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [aliasesRes, sugRes] = await Promise.all([
+      const [aliasesRes, sugRes, mergeRes] = await Promise.all([
         api.get("/v2/snapshot-workflow/nicknames"),
         api.get(`/v2/snapshot-workflow/nicknames/unmatched-suggestions?quarter=${quarter}&year=${year}`),
+        api.get("/v2/employees/merge/candidates").catch(() => ({ data: { candidates: [] } })),
       ]);
       setDefaults(aliasesRes.data?.defaults || []);
       setUserAliases(aliasesRes.data?.user || []);
       setSuggestions(sugRes.data?.unmatched || []);
       setSnapshotEmployees(sugRes.data?.employees || []);
       setDismissedNames(sugRes.data?.dismissed || []);
+      setMergeCandidates(mergeRes.data?.candidates || []);
     } catch (e) {
       toast.error("Could not load nicknames");
     } finally {
@@ -132,6 +138,34 @@ export default function NicknameManager() {
       fetchAll();
     } catch (e) {
       toast.error("Restore failed");
+    }
+  };
+
+  const handleMerge = async (pair) => {
+    const key = `${pair.a.id}__${pair.b.id}`;
+    const survivorPick = mergeSurvivors[key] || "a";
+    const survivor = pair[survivorPick];
+    const duplicate = pair[survivorPick === "a" ? "b" : "a"];
+    if (!window.confirm(
+      `Merge "${duplicate.name}" into "${survivor.name}"?\n\n` +
+      `"${duplicate.name}" will be hidden and its name will become an alias of ` +
+      `"${survivor.name}" so future uploads land on the surviving record. ` +
+      `This cannot be undone via the UI.`
+    )) {
+      return;
+    }
+    setMergingPair(key);
+    try {
+      const res = await api.post("/v2/employees/merge", {
+        survivor_id: survivor.id,
+        duplicate_id: duplicate.id,
+      });
+      toast.success(res.data?.message || `Merged into ${survivor.name}`);
+      fetchAll();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Merge failed");
+    } finally {
+      setMergingPair(null);
     }
   };
 
@@ -342,6 +376,71 @@ export default function NicknameManager() {
                 </button>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Merge Duplicate Employees */}
+      {mergeCandidates.length > 0 && (
+        <div className="bg-indigo-50 border border-indigo-300 rounded-lg p-4 mb-5" data-testid="merge-candidates-panel">
+          <p className="text-xs text-indigo-900 font-semibold uppercase tracking-wide mb-2 flex items-center gap-1.5">
+            <GitMerge className="w-3.5 h-3.5" />
+            Possible Duplicate Employees ({mergeCandidates.length})
+          </p>
+          <p className="text-xs text-indigo-800 mb-3">
+            Pairs that look like the same person split across two canonical records.
+            Pick the survivor — the duplicate's name becomes an alias of the survivor
+            and future uploads will route there automatically.
+          </p>
+          <div className="space-y-2">
+            {mergeCandidates.map((pair) => {
+              const key = `${pair.a.id}__${pair.b.id}`;
+              const survivorPick = mergeSurvivors[key] || "a";
+              return (
+                <div
+                  key={key}
+                  className="flex flex-wrap items-center gap-2 bg-white border border-indigo-200 rounded-md px-3 py-2"
+                  data-testid={`merge-pair-${key}`}
+                >
+                  <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                    <input
+                      type="radio"
+                      name={`survivor-${key}`}
+                      checked={survivorPick === "a"}
+                      onChange={() => setMergeSurvivors((s) => ({ ...s, [key]: "a" }))}
+                      data-testid={`merge-survivor-a-${key}`}
+                    />
+                    <span className={survivorPick === "a" ? "font-semibold text-gray-900" : "text-gray-600"}>
+                      {pair.a.name}
+                    </span>
+                  </label>
+                  <span className="text-gray-400">vs</span>
+                  <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                    <input
+                      type="radio"
+                      name={`survivor-${key}`}
+                      checked={survivorPick === "b"}
+                      onChange={() => setMergeSurvivors((s) => ({ ...s, [key]: "b" }))}
+                      data-testid={`merge-survivor-b-${key}`}
+                    />
+                    <span className={survivorPick === "b" ? "font-semibold text-gray-900" : "text-gray-600"}>
+                      {pair.b.name}
+                    </span>
+                  </label>
+                  <span className="text-xs text-indigo-700 italic ml-auto">{pair.reason}</span>
+                  <Button
+                    size="sm"
+                    onClick={() => handleMerge(pair)}
+                    disabled={mergingPair === key}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                    data-testid={`merge-btn-${key}`}
+                  >
+                    <GitMerge className="w-3.5 h-3.5 mr-1" />
+                    {mergingPair === key ? "Merging…" : "Merge"}
+                  </Button>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

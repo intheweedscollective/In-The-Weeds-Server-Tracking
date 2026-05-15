@@ -188,7 +188,7 @@ async def audit_employee_score(employee_name: str, quarter: str = "Q1", year: in
     # Get benchmark values
     benchmark_ppa = settings.get("benchmark_ppa", 55)
     benchmark_lbw = settings.get("benchmark_lbw", 8)
-    benchmark_glass = settings.get("benchmark_glass", 1.25)
+    benchmark_glass = settings.get("benchmark_glass", 1.35)
     benchmark_lsc = settings.get("benchmark_lsc", 100)
     
     # Calculate expected scores (uncapped for bonus calculation)
@@ -224,7 +224,7 @@ async def audit_employee_score(employee_name: str, quarter: str = "Q1", year: in
     weighted_base = weighted_pos + nps_contribution
     
     # RT bonus calculation (0.5 pts per mention, capped at 15)
-    rt_bonus = min(stored_rt_mentions * 0.5, 15)
+    rt_bonus = min(stored_rt_mentions * 0.3, 20)
     
     # METRIC BONUSES: Linear from 100%-120% = 0-5 pts (0.25 pts per 1%)
     def calc_metric_bonus(score_raw):
@@ -848,7 +848,7 @@ async def sync_employee_review_mentions(quarter: str = "Q1", year: int = 2026):
         
         if actual_mentions != stored_mentions:
             # Calculate new RT bonus
-            new_rt_bonus = round(min(actual_mentions * 0.5, 15), 2)
+            new_rt_bonus = round(min(actual_mentions * 0.3, 20), 2)
             old_rt_bonus = emp.get("review_tracker_bonus", 0) or 0
             
             # Recalculate score components
@@ -1147,10 +1147,12 @@ async def sync_dashboard_to_snapshot(year: int, quarter: str, employee_name: Opt
         "guest_count", "net_sales", "loyalty_sales", "lsc_count",
         "liquor_sales", "beer_sales", "wine_sales", "bar_glassware_sales",
         "score_ppa", "score_lbw", "score_glass", "score_lsc",
+        "weighted_score",  # ← critical: was missing, causing snapshot to retain stale uncapped values
         "cv_score", "cv_nps", "cv_responses", "cv_promoters", "cv_detractors",
+        "nps_score", "nps_contribution", "cv_raw_points",
         "rt_mentions", "review_mentions", "review_tracker_bonus",
         "total_score", "pre_dar_score", "total_metric_bonus",
-        "tier_label", "performance_tier", "rank",
+        "tier_label", "performance_tier", "rank", "job_title",
     ]
 
     updated = []

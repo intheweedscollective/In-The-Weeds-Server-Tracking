@@ -5,8 +5,9 @@ import api from "../lib/api";
 import { getCurrentQuarter } from "../lib/quarterUtils";
 import { Button } from "../components/ui/button";
 import { Checkbox } from "../components/ui/checkbox";
+import { getDisplayFirstName } from "../utils/displayName";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
 
 export default function DataIntegrity() {
   const [stats, setStats] = useState(null);
@@ -356,7 +357,7 @@ export default function DataIntegrity() {
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-slate-400">Customer Voice Total:</span>
                   <span className="font-bold text-purple-400">
-                    {((stats?.cv?.promoters || 0) * 0.5) - (stats?.cv?.detractors || 0)} pts
+                    {((stats?.cv?.promoters || 0) * 1) - ((stats?.cv?.detractors || 0) * 2)} pts
                   </span>
                 </div>
               </div>
@@ -501,7 +502,7 @@ export default function DataIntegrity() {
                             className="h-4 w-4"
                           />
                           <div className="flex-1 min-w-0">
-                            <div className="text-sm text-white truncate">{emp.name}</div>
+                            <div className="text-sm text-white truncate">{getDisplayFirstName(emp)}</div>
                             <div className="text-xs text-red-400">{emp.reason}</div>
                           </div>
                           <span className="text-xs text-slate-500 shrink-0">Score: {emp.score?.toFixed(1) || 0}</span>
@@ -522,7 +523,7 @@ export default function DataIntegrity() {
                             className="h-4 w-4"
                           />
                           <div className="flex-1 min-w-0">
-                            <div className="text-sm text-white truncate">{emp.name}</div>
+                            <div className="text-sm text-white truncate">{getDisplayFirstName(emp)}</div>
                             <div className="text-xs text-yellow-400">{emp.reason}</div>
                           </div>
                           <span className="text-xs text-slate-500 shrink-0">Score: {emp.score?.toFixed(1) || 0}</span>

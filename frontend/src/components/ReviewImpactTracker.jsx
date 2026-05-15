@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Star, DollarSign, MessageSquare, ThumbsUp, TrendingUp, Sparkles } from "lucide-react";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL;
+const API_URL = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
 
 export default function ReviewImpactTracker({ quarter = "Q1", year = 2026 }) {
   const [data, setData] = useState(null);

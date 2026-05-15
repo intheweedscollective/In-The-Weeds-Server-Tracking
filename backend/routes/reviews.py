@@ -274,12 +274,21 @@ async def get_review_stats_endpoint(quarter: str = "Q1", year: int = 2026):
     stats = get_review_stats(reviews, employee_names)
     
     # If customer_reviews is empty but employees have rt_mentions (from manual upload),
-    # populate the stats from employee records
+    # populate the stats from employee records.
+    # Per-quarter coefficients so historical quarters keep their original
+    # bonus rule. ALWAYS recompute from current mentions — never trust a
+    # stored review_tracker_bonus (it drifts when new RT data lands).
+    qs_doc = await db.quarter_settings.find_one(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0, "rt_points_per_mention": 1, "rt_max_points": 1},
+    ) or {}
+    _rt_coef = qs_doc.get("rt_points_per_mention", 0.3) or 0.3
+    _rt_cap  = qs_doc.get("rt_max_points", 20.0) or 20.0
     if len(reviews) == 0:
         total_mentions = 0
         for emp in employees:
             mentions = emp.get("rt_mentions") or emp.get("review_mentions") or 0
-            points = emp.get("review_tracker_bonus") or min(mentions * 0.5, 15)
+            points = round(min(mentions * _rt_coef, _rt_cap), 2)
             if mentions > 0:
                 stats["by_employee"][emp["name"]] = {
                     "mentions": mentions,
@@ -388,7 +397,7 @@ async def create_review(review: CustomerReviewCreate):
             })
             if emp:
                 current_mentions = (emp.get("rt_mentions") or 0) + 1
-                rt_bonus = min(current_mentions * 0.5, 15)
+                rt_bonus = min(current_mentions * 0.3, 20)
                 await db.employees_v2.update_one(
                     {"_id": emp["_id"]},
                     {"$set": {
@@ -600,13 +609,13 @@ async def download_rt_template():
         "Instructions:",
         "1. Fill in the 'Mentions' column with each employee's mention count",
         "2. Employee names are pre-filled from the most recent snapshot",
-        "3. Each mention = +0.5 points (capped at 15 pts)",
+        "3. Each mention = +0.3 points (capped at 20 pts) — Q2+ rule",
         "",
         "Scoring Color Thresholds:",
         "  0 mentions = 0 pts (Red)",
-        "  1-5 mentions = 0.5-2.5 pts (Yellow)",
-        "  6-10 mentions = 3.0-5.0 pts (Green)",
-        "  11+ mentions = 5.5-15 pts (Blue, capped at 15)",
+        "  1-9 mentions = 0.3-2.7 pts (Yellow)",
+        "  10-19 mentions = 3.0-5.7 pts (Green)",
+        "  20+ mentions = 6.0-20 pts (Blue, capped at 20)",
     ]
     for idx, line in enumerate(instructions, 1):
         ws_inst.cell(row=idx, column=1, value=line)
@@ -789,7 +798,7 @@ async def upload_review_tracker_feedback(
         # Update employee records with mention counts
         employees_updated = 0
         for emp_id, mentions in mention_counts.items():
-            rt_bonus = min(mentions * 0.5, 15)
+            rt_bonus = min(mentions * 0.3, 20)
             result = await db.employees_v2.update_one(
                 {"id": emp_id, "quarter": quarter, "year": year},
                 {"$set": {

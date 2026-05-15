@@ -7,8 +7,9 @@ import { Input } from "../components/ui/input";
 import StyledQRCode, { generateStyledQRDataUrl } from "../components/StyledQRCode";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
+import { getDisplayFirstName } from "../utils/displayName";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
 
 export default function QREmployees() {
   const [employees, setEmployees] = useState([]);
@@ -252,7 +253,7 @@ export default function QREmployees() {
               {/* Employee Header */}
               <div className="flex items-center justify-between p-3 md:p-4 border-b border-white/10">
                 <div className="flex items-center gap-2 md:gap-4 min-w-0">
-                  <span className="text-base md:text-xl font-semibold text-white truncate">{emp.name}</span>
+                  <span className="text-base md:text-xl font-semibold text-white truncate">{getDisplayFirstName(emp)}</span>
                   <span className="text-xs md:text-sm text-slate-400 shrink-0">
                     Scans: <span className="text-blue-400 font-bold">{(emp.yelp_clicks || 0) + (emp.google_clicks || 0) + (emp.tripadvisor_clicks || 0)}</span>
                   </span>

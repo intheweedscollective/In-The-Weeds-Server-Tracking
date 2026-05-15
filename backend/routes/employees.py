@@ -108,38 +108,91 @@ class DARUpdate(BaseModel):
 
 @employee_router.get("")
 async def get_employees_v2(year: int = 2026, quarter: str = "Q1", limit: int = 100, skip: int = 0):
-    """Get all V2 employees for a quarter"""
+    """
+    Get employees for a quarter. Reads from the canonical `employees`
+    collection via EmployeeService (Phase 2A). Returns the same shape
+    the frontend used to receive from `employees_v2` so the Employees
+    tab page works without UI changes.
+
+    Behaviour:
+      - Only active employees (`status="active"`).
+      - `display_name` overrides `name` in the response.
+      - Falls back to legacy `employees_v2` if the canonical collection
+        is empty for this quarter (defense in depth — should not happen
+        after Phase 1 migration ran).
+    """
+    from services.employee_service import EmployeeService
     db = get_db()
-    employees = await db.employees_v2.find(
-        {"year": year, "quarter": quarter.upper()},
-        {"_id": 0}
-    ).skip(skip).limit(limit).to_list(limit)
-    
-    # Always return display_name as name if set (preferred name takes priority)
-    for emp in employees:
-        if emp.get('display_name') and emp.get('display_name') != emp.get('name'):
-            emp['name'] = emp['display_name']
-    
-    total = await db.employees_v2.count_documents({"year": year, "quarter": quarter.upper()})
-    
-    return {
-        "employees": employees,
-        "total": total,
-        "limit": limit,
-        "skip": skip
-    }
+    svc = EmployeeService(db)
+
+    actives = await svc.list_active(quarter=quarter, year=year)
+    if not actives:
+        # Phase-1 safety net: if the canonical collection has no rows for
+        # this quarter yet, fall back to the legacy collection. Logged so
+        # we can tell from production logs when it triggers.
+        logger.warning(
+            "employees: canonical empty for %s %s, falling back to employees_v2",
+            quarter, year,
+        )
+        legacy = await db.employees_v2.find(
+            {"year": year, "quarter": quarter.upper()},
+            {"_id": 0},
+        ).skip(skip).limit(limit).to_list(limit)
+        for emp in legacy:
+            if emp.get("display_name") and emp.get("display_name") != emp.get("name"):
+                emp["name"] = emp["display_name"]
+        total = await db.employees_v2.count_documents(
+            {"year": year, "quarter": quarter.upper()},
+        )
+        return {"employees": legacy, "total": total, "limit": limit, "skip": skip,
+                "source": "legacy_fallback"}
+
+    # Project canonical -> legacy-compatible shape so the frontend's
+    # current expectations keep working.
+    out: List[dict] = []
+    for emp in actives:
+        cm = emp.get("current_metrics") or {}
+        flat = {k: v for k, v in emp.items() if k != "current_metrics"}
+        flat.update(cm)
+        # display_name preference (matches legacy behaviour above).
+        if flat.get("display_name") and flat["display_name"] != flat.get("name"):
+            flat["name"] = flat["display_name"]
+        out.append(flat)
+
+    total = len(out)
+    page = out[skip: skip + limit] if limit else out
+    return {"employees": page, "total": total, "limit": limit, "skip": skip,
+            "source": "canonical"}
 
 
 @employee_router.get("/{employee_id}")
 async def get_employee_v2(employee_id: str):
-    """Get a single V2 employee by ID"""
+    """Get a single employee by canonical id (with legacy_id alias support)."""
+    from services.employee_service import EmployeeService
     db = get_db()
-    employee = await db.employees_v2.find_one({"id": employee_id}, {"_id": 0})
-    if not employee:
-        raise HTTPException(status_code=404, detail="Employee not found")
-    if employee.get('display_name') and employee.get('display_name') != employee.get('name'):
-        employee['name'] = employee['display_name']
-    return employee
+    svc = EmployeeService(db)
+
+    emp = await svc.get_by_id(employee_id)
+    if not emp:
+        # Maybe the caller passed an old legacy UUID — try matching against
+        # legacy_ids before giving up.
+        emp = await svc.col.find_one({"legacy_ids": employee_id}, {"_id": 0})
+    if not emp:
+        # Final fallback: legacy collection (Phase-1 safety net).
+        legacy = await db.employees_v2.find_one({"id": employee_id}, {"_id": 0})
+        if not legacy:
+            raise HTTPException(status_code=404, detail="Employee not found")
+        if legacy.get("display_name") and legacy["display_name"] != legacy.get("name"):
+            legacy["name"] = legacy["display_name"]
+        return legacy
+
+    # Project canonical -> legacy-compatible shape.
+    cm = emp.get("current_metrics") or {}
+    flat = {k: v for k, v in emp.items() if k != "current_metrics"}
+    flat.update(cm)
+    if flat.get("display_name") and flat["display_name"] != flat.get("name"):
+        flat["name"] = flat["display_name"]
+    return flat
 
 
 @employee_router.post("")
@@ -207,7 +260,107 @@ async def create_employee(data: EmployeeCreate):
     emp_dict = employee.model_dump()
     emp_dict['tier_label'] = tier_label
     emp_dict['created_at'] = datetime.now(timezone.utc).isoformat()
-    await db.employees_v2.insert_one(emp_dict)
+    emp_dict.pop("_id", None)
+
+    # Route through the canonical EmployeeService so this person gets a
+    # stable, immutable identity in the new `employees` collection AND
+    # the legacy `employees_v2` row is mirrored automatically. The service
+    # is idempotent on canonical name, so a re-add of a previously-
+    # terminated employee reactivates the same id (no duplicate).
+    from services.employee_service import EmployeeService
+    svc = EmployeeService(db)
+    canonical = await svc.create_employee({
+        "id": emp_dict["id"],
+        "name": data.name,
+        "display_name": emp_dict.get("display_name") or data.name.split()[0],
+        "report_name": emp_dict.get("report_name") or data.name,
+        "job_title": data.job_title,
+        "current_metrics": {
+            **{k: v for k, v in emp_dict.items()
+               if k not in ("id", "name", "display_name", "report_name",
+                            "job_title", "aliases", "created_at",
+                            "updated_at", "year", "quarter")},
+            "quarter": data.quarter.upper(),
+            "year": data.year,
+        },
+    })
+    # The id returned by the service is the authoritative one — use it
+    # everywhere downstream so the snapshot embed picks up the canonical id.
+    emp_dict["id"] = canonical["id"]
+    emp_dict["display_name"] = canonical.get("display_name") or emp_dict.get("display_name")
+
+    # Mirror the v2 row (preserves legacy fields like tier_label that the
+    # canonical model doesn't carry yet). create_employee above wrote a
+    # bare v2 row; this update adds the legacy-only fields back on top.
+    await db.employees_v2.update_one(
+        {"id": canonical["id"]},
+        {"$set": emp_dict},
+        upsert=True,
+    )
+
+    # ALSO inject the new row into the CURRENT snapshot's embedded
+    # `employees` array. Without this, the Employees tab page (which reads
+    # `/v2/snapshot-workflow/current-rankings` → snapshot.employees) and the
+    # snapshot detail/slide views won't show the new person — the user
+    # reported "profiles that were added for the two new employees are not
+    # showing up". Also pull the name off the snapshot's deleted_names
+    # blocklist in case the user is re-adding someone they previously
+    # terminated.
+    snap_q = data.quarter.upper()
+    snap_y = data.year
+    target_snapshot = await db.snapshot_workflow.find_one(
+        {"is_current": True, "quarter": snap_q, "year": snap_y}
+    )
+    if not target_snapshot:
+        target_snapshot = await db.snapshot_workflow.find_one(
+            {"status": "completed", "quarter": snap_q, "year": snap_y},
+            sort=[("completed_at", -1)],
+        )
+    if target_snapshot:
+        # Make sure derived display fields are present so the snapshot UI
+        # can show them without bouncing back through merge_snapshot_data.
+        emp_dict.setdefault("display_name", emp_dict.get("name"))
+        emp_dict.setdefault("report_name", emp_dict.get("name"))
+
+        already_in = any(
+            (e.get("id") == emp_dict["id"])
+            or ((e.get("name") or "").lower() == emp_dict["name"].lower())
+            for e in target_snapshot.get("employees", []) or []
+        )
+        if not already_in:
+            await db.snapshot_workflow.update_one(
+                {"_id": target_snapshot["_id"]},
+                {
+                    "$push": {"employees": emp_dict},
+                    "$pull": {
+                        "deleted_names": {
+                            "$regex": f"^{re.escape(employee.name)}$",
+                            "$options": "i",
+                        }
+                    },
+                    "$set": {"updated_at": datetime.now(timezone.utc).isoformat()},
+                },
+            )
+            # Recompute employee_count
+            await db.snapshot_workflow.update_one(
+                {"_id": target_snapshot["_id"]},
+                [{"$set": {"employee_count": {"$size": {"$ifNull": ["$employees", []]}}}}],
+            )
+            logger.info(
+                f"create_employee: added '{employee.name}' to current snapshot "
+                f"{target_snapshot.get('id')}"
+            )
+        else:
+            # Already in snapshot — at least make sure they're off the blocklist.
+            await db.snapshot_workflow.update_one(
+                {"_id": target_snapshot["_id"]},
+                {"$pull": {
+                    "deleted_names": {
+                        "$regex": f"^{re.escape(employee.name)}$",
+                        "$options": "i",
+                    }
+                }},
+            )
     
     # Recalculate peer rankings for all employees in this quarter
     all_employees = await db.employees_v2.find(
@@ -223,6 +376,14 @@ async def create_employee(data: EmployeeCreate):
             {"$set": {"peer_rank": rank}}
         )
     
+    # Auto-sync the QR list so the new employee gets a fresh QR row
+    # immediately (no click counts to preserve since they're brand new).
+    try:
+        from qr_tracking import auto_sync_qr_with_canonical
+        await auto_sync_qr_with_canonical(db)
+    except Exception:
+        pass
+
     return {"success": True, "employee_id": employee.id, "message": f"Created {employee.name} with score {employee.total_score}"}
 
 
@@ -232,30 +393,60 @@ async def create_employee(data: EmployeeCreate):
 
 @employee_router.delete("/{employee_id}")
 async def delete_employee(employee_id: str):
-    """Delete a single employee from both employees_v2 and active snapshots"""
+    """
+    Delete a single employee. Routes through `EmployeeService.delete_completely`
+    which performs the full canonical soft-delete:
+      - `employees.status = "terminated"` (kept for history)
+      - Removed from `employees_v2`
+      - Pulled from every snapshot's `employees[]` (by id, legacy_ids, and name)
+      - Added to every active snapshot's `deleted_names` blocklist
+      - Recomputes `employee_count` on every snapshot
+    Idempotent.
+    """
+    from services.employee_service import EmployeeService
     db = get_db()
-    
-    # First get the employee to know which quarter/year to update
-    employee = await find_employee(db, employee_id)
-    
-    # Delete from employees_v2
-    result = await db.employees_v2.delete_one({"_id": employee["_id"]})
-    
-    # Also remove from any snapshots that contain this employee
-    year = employee.get("year")
-    quarter = employee.get("quarter")
-    if year and quarter:
-        await db.snapshot_workflow.update_many(
-            {"year": year, "quarter": quarter},
-            {"$pull": {"employees": {"id": employee_id}}}
-        )
-        # Also update employee count
-        await db.snapshot_workflow.update_many(
-            {"year": year, "quarter": quarter},
-            [{"$set": {"employee_count": {"$size": {"$ifNull": ["$employees", []]}}}}]
-        )
-    
-    return {"success": True, "message": f"Employee {employee.get('name', 'Unknown')} deleted"}
+    svc = EmployeeService(db)
+
+    # Resolve via canonical first (covers legacy id lookups via legacy_ids).
+    canonical = await svc.get_by_id(employee_id)
+    if not canonical:
+        canonical = await svc.col.find_one({"legacy_ids": employee_id}, {"_id": 0})
+
+    if canonical:
+        result = await svc.delete_completely(canonical["id"])
+        # Auto-sync QR list — archives the deleted employee's QR row.
+        try:
+            from qr_tracking import auto_sync_qr_with_canonical
+            await auto_sync_qr_with_canonical(db)
+        except Exception:
+            pass
+        return {"success": True, "message": f"Employee {canonical.get('name', 'Unknown')} deleted", **result}
+
+    # Legacy fallback: id only exists in employees_v2. Resolve the name,
+    # mint a canonical entry for it (so future deletes go through the
+    # service path), then run the full delete_completely path.
+    legacy = await db.employees_v2.find_one({"id": employee_id}, {"_id": 0})
+    if not legacy:
+        # Last resort: route through find_employee (snapshot id lookup).
+        legacy = await find_employee(db, employee_id)
+        legacy.pop("_id", None)
+    if not legacy:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    canonical = await svc.create_employee({
+        "id": legacy.get("id"),
+        "name": legacy.get("name"),
+        "display_name": legacy.get("display_name") or legacy.get("name", "").split()[0],
+        "report_name": legacy.get("report_name") or legacy.get("name"),
+        "job_title": legacy.get("job_title") or "Server",
+    })
+    result = await svc.delete_completely(canonical["id"])
+    try:
+        from qr_tracking import auto_sync_qr_with_canonical
+        await auto_sync_qr_with_canonical(db)
+    except Exception:
+        pass
+    return {"success": True, "message": f"Employee {legacy.get('name', 'Unknown')} deleted", **result}
 
 
 @employee_router.delete("")
@@ -267,20 +458,145 @@ async def clear_employees_v2(year: Optional[int] = None, quarter: Optional[str] 
         query["year"] = year
     if quarter:
         query["quarter"] = quarter.upper()
-    
+
     result = await db.employees_v2.delete_many(query)
-    
+
     # If clearing a specific quarter, unlock the settings
     if year and quarter:
         await db.quarter_settings.update_one(
             {"year": year, "quarter": quarter.upper()},
             {"$set": {"is_locked": False, "locked_at": None}}
         )
-    
+
     return {
         "success": True,
         "deleted_count": result.deleted_count,
         "message": f"Cleared {result.deleted_count} employees"
+    }
+
+
+# ============================================================================
+# MERGE ENDPOINTS — combine duplicate canonical employees
+# ============================================================================
+
+class MergeRequest(BaseModel):
+    survivor_id: str
+    duplicate_id: str
+
+
+@employee_router.get("/merge/candidates")
+async def find_merge_candidates(limit: int = 50):
+    """
+    Surface pairs of active canonical employees that look like the same
+    person. Heuristics: identical normalized names, substring containment,
+    same first-name+last-initial, Levenshtein <= 2 on the normalized full
+    name. Returns `{candidates: [{a, b, reason}]}`.
+    """
+    from services.employee_service import EmployeeService
+    db = get_db()
+    svc = EmployeeService(db)
+    actives = await svc.list_active()
+
+    def _norm(s):
+        return re.sub(r"[^a-z]", "", (s or "").lower())
+
+    def _lev(a, b):
+        if a == b:
+            return 0
+        if not a or not b:
+            return len(a or b)
+        prev = list(range(len(b) + 1))
+        for i, ca in enumerate(a, start=1):
+            curr = [i]
+            for j, cb in enumerate(b, start=1):
+                cost = 0 if ca == cb else 1
+                curr.append(min(curr[-1] + 1, prev[j] + 1, prev[j - 1] + cost))
+            prev = curr
+        return prev[-1]
+
+    out: List[dict] = []
+    pairs_seen: set = set()
+    for i, a in enumerate(actives):
+        a_name = (a.get("name") or "").strip()
+        a_first = a_name.split()[0] if a_name else ""
+        a_li = a_name.split()[-1][:1] if len(a_name.split()) > 1 else ""
+        a_norm = _norm(a_name)
+        for b in actives[i + 1:]:
+            key = tuple(sorted([a["id"], b["id"]]))
+            if key in pairs_seen:
+                continue
+            b_name = (b.get("name") or "").strip()
+            b_first = b_name.split()[0] if b_name else ""
+            b_li = b_name.split()[-1][:1] if len(b_name.split()) > 1 else ""
+            b_norm = _norm(b_name)
+
+            reason = None
+            if a_norm and a_norm == b_norm:
+                reason = "Identical normalized name"
+            elif a_norm and b_norm and (a_norm in b_norm or b_norm in a_norm) and abs(len(a_norm) - len(b_norm)) >= 2:
+                reason = "One name contains the other"
+            elif a_first and a_first.lower() == b_first.lower() and a_li and a_li.lower() == b_li.lower():
+                reason = f"Same first name + last initial ({a_first} {a_li}.)"
+            elif a_norm and b_norm and min(len(a_norm), len(b_norm)) >= 4 and _lev(a_norm, b_norm) <= 2:
+                reason = "Names differ by ≤2 characters (possible typo)"
+
+            if reason:
+                pairs_seen.add(key)
+                out.append({
+                    "a": {k: a.get(k) for k in ("id", "name", "display_name", "job_title", "store_id")},
+                    "b": {k: b.get(k) for k in ("id", "name", "display_name", "job_title", "store_id")},
+                    "reason": reason,
+                })
+                if len(out) >= limit:
+                    return {"candidates": out, "truncated": True}
+    return {"candidates": out, "truncated": False}
+
+
+@employee_router.post("/merge")
+async def merge_employees_endpoint(req: MergeRequest):
+    """
+    Combine two canonical employee records into one. Survivor keeps its
+    id + history; duplicate is flipped to status="merged" with its name
+    + aliases appended to the survivor so future uploads resolve here.
+
+    Body: `{ "survivor_id": "...", "duplicate_id": "..." }`
+    """
+    from services.employee_service import EmployeeService
+    db = get_db()
+    svc = EmployeeService(db)
+    try:
+        result = await svc.merge_employees(
+            survivor_id=req.survivor_id,
+            duplicate_id=req.duplicate_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Sync legacy mirror: remove the duplicate row from employees_v2 so
+    # legacy readers (audit, snapshot save) stop seeing it. Snapshot
+    # embedded employees[] is left alone — historical accuracy.
+    await db.employees_v2.delete_many({"id": req.duplicate_id})
+
+    # Auto-sync the QR list: the duplicate's QR clicks (if any) get
+    # rolled onto the survivor, and the duplicate row is archived.
+    qr_summary = {"added": 0, "archived": 0, "merged_clicks": 0}
+    try:
+        from qr_tracking import auto_sync_qr_with_canonical
+        qr_summary = await auto_sync_qr_with_canonical(db)
+    except Exception as qr_err:
+        import logging
+        logging.getLogger(__name__).warning(f"merge QR auto-sync failed: {qr_err}")
+
+    survivor = await svc.get_by_id(req.survivor_id)
+    return {
+        "success": True,
+        "merge": result,
+        "survivor": survivor,
+        "qr": qr_summary,
+        "message": (
+            f"Merged into '{(survivor or {}).get('name')}'. The duplicate's "
+            "name is now an alias so future uploads land on this record."
+        ),
     }
 
 
@@ -346,9 +662,13 @@ async def update_employee_cv_stats(employee_id: str, data: dict):
     from server import sync_employees_to_most_recent_snapshot
     
     db = get_db()
-    cv_promoters = int(data.get("cv_promoters", 0))
-    cv_detractors = int(data.get("cv_detractors", 0))
-    cv_passives = int(data.get("cv_passives", 0))
+    # Clamp at zero — survey counts can't be negative. Without this, a
+    # decrement spinner on the edit form could produce nonsense like
+    # cv_detractors=-7, which inverts the sign of the CV formula and
+    # inflates scores by +14 instead of deducting 14.
+    cv_promoters = max(0, int(data.get("cv_promoters", 0) or 0))
+    cv_detractors = max(0, int(data.get("cv_detractors", 0) or 0))
+    cv_passives = max(0, int(data.get("cv_passives", 0) or 0))
     
     # Calculate NPS % from the provided values
     total_responses = cv_promoters + cv_passives + cv_detractors

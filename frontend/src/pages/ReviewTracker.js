@@ -4,8 +4,9 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { toast } from "sonner";
 import { getCurrentQuarter } from "../lib/quarterUtils";
+import { getDisplayFirstName } from "../utils/displayName";
 
-const API_URL = process.env.REACT_APP_BACKEND_URL;
+const API_URL = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
 
 export default function ReviewTracker() {
   const [cvFeedback, setCvFeedback] = useState([]);
@@ -27,6 +28,20 @@ export default function ReviewTracker() {
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [editPromoters, setEditPromoters] = useState(0);
   const [editDetractors, setEditDetractors] = useState(0);
+
+  // Per-quarter scoring constants (loaded from quarter_settings to keep
+  // formulas consistent with whatever the active quarter is using).
+  const [qSettings, setQSettings] = useState(null);
+  useEffect(() => {
+    fetch(`${API_URL}/api/v2/quarter-settings/${selectedYear}/${selectedQuarter}`)
+      .then((r) => r.json())
+      .then((d) => setQSettings(d))
+      .catch(() => setQSettings(null));
+  }, [selectedYear, selectedQuarter]);
+  const RT_PTS = qSettings?.rt_points_per_mention ?? 0.3;
+  const RT_CAP = qSettings?.rt_max_points ?? 20;
+  const CV_PROM = qSettings?.cv_promoter_points ?? 1;
+  const CV_DET = qSettings?.cv_detractor_points ?? 2;
 
   // Fetch data
   const fetchData = useCallback(async () => {
@@ -219,12 +234,17 @@ export default function ReviewTracker() {
   // Save employee CV stats
   const saveEmployeeCvStats = async (employeeId) => {
     try {
+      // Survey counts can never be negative — clamp to 0 even if a stale
+      // value somehow made it into state (e.g., user pressed ↓ past zero
+      // on the number input, which most browsers don't enforce against).
+      const promoters = Math.max(0, parseInt(editPromoters) || 0);
+      const detractors = Math.max(0, parseInt(editDetractors) || 0);
       const res = await fetch(`${API_URL}/api/v2/employees/${employeeId}/cv-stats`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          cv_promoters: parseInt(editPromoters) || 0,
-          cv_detractors: parseInt(editDetractors) || 0,
+          cv_promoters: promoters,
+          cv_detractors: detractors,
           quarter: selectedQuarter,
           year: selectedYear
         })
@@ -476,7 +496,7 @@ export default function ReviewTracker() {
               Employee Mention Counts
             </h2>
             <p className="text-xs md:text-sm text-slate-400 mt-1">
-              Each mention = +0.5 pts (capped at 15)
+              Each mention = +{RT_PTS} pts (capped at {Math.round(RT_CAP)})
             </p>
           </div>
           
@@ -499,9 +519,9 @@ export default function ReviewTracker() {
                 </thead>
                 <tbody className="divide-y divide-slate-700">
                   {filteredMentions.map((emp, idx) => {
-                    const rtPoints = Math.min((emp.mentions || 0) * 0.5, 15);
+                    const rtPoints = Math.min((emp.mentions || 0) * RT_PTS, RT_CAP);
                     return (
-                      <tr key={emp.name} className="hover:bg-slate-700/30 transition-colors">
+                      <tr key={getDisplayFirstName(emp)} className="hover:bg-slate-700/30 transition-colors">
                         <td className="px-3 md:px-4 py-2 md:py-3">
                           <div className={`w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center text-white font-bold text-xs md:text-sm ${
                             idx === 0 ? "bg-yellow-500" : idx === 1 ? "bg-gray-400" : idx === 2 ? "bg-amber-600" : "bg-slate-600"
@@ -510,7 +530,7 @@ export default function ReviewTracker() {
                           </div>
                         </td>
                         <td className="px-3 md:px-4 py-2 md:py-3">
-                          <span className="font-medium text-white text-sm">{emp.name}</span>
+                          <span className="font-medium text-white text-sm">{getDisplayFirstName(emp)}</span>
                         </td>
                         <td className="px-3 md:px-4 py-2 md:py-3 text-center">
                           <span className="text-lg md:text-xl font-bold text-blue-400">{emp.mentions || 0}</span>
@@ -572,20 +592,26 @@ export default function ReviewTracker() {
                     const isEditing = editingEmployee === emp.id;
                     const currentPromoters = isEditing ? editPromoters : emp.cv_promoters;
                     const currentDetractors = isEditing ? editDetractors : emp.cv_detractors;
-                    const calculatedScore = (currentPromoters * 0.5) - (currentDetractors * 1);
+                    const calculatedScore = (currentPromoters * CV_PROM) - (currentDetractors * CV_DET);
                     
                     return (
                       <tr key={emp.id} className={`transition-colors ${isEditing ? "bg-purple-900/20" : "hover:bg-slate-700/30"}`}>
                         <td className="px-3 md:px-4 py-2 md:py-3">
-                          <span className="font-medium text-white text-sm">{emp.name}</span>
+                          <span className="font-medium text-white text-sm">{getDisplayFirstName(emp)}</span>
                         </td>
                         <td className="px-3 md:px-4 py-2 md:py-3 text-center">
                           {isEditing ? (
                             <Input
                               type="number"
                               min="0"
+                              step="1"
                               value={editPromoters}
-                              onChange={(e) => setEditPromoters(e.target.value)}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                if (v === "") { setEditPromoters(""); return; }
+                                const n = parseInt(v, 10);
+                                setEditPromoters(Number.isFinite(n) && n >= 0 ? n : 0);
+                              }}
                               className="w-16 md:w-20 text-center bg-slate-700 border-green-500 text-green-400 font-bold text-sm"
                             />
                           ) : (
@@ -597,8 +623,14 @@ export default function ReviewTracker() {
                             <Input
                               type="number"
                               min="0"
+                              step="1"
                               value={editDetractors}
-                              onChange={(e) => setEditDetractors(e.target.value)}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                if (v === "") { setEditDetractors(""); return; }
+                                const n = parseInt(v, 10);
+                                setEditDetractors(Number.isFinite(n) && n >= 0 ? n : 0);
+                              }}
                               className="w-16 md:w-20 text-center bg-slate-700 border-red-500 text-red-400 font-bold text-sm"
                             />
                           ) : (

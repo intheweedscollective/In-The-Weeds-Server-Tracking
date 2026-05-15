@@ -65,7 +65,7 @@ const faqs = [
       },
       {
         q: "How does Customer Voice scoring work?",
-        a: "Customer Voice = (Promoters × 0.5) - (Detractors × 1). This is UNCAPPED, meaning exceptional service with many promoters can significantly boost scores. Passives (7-8 ratings) = 0 points."
+        a: "Customer Voice = NPS%/10 + (Promoters × 1) − (Detractors × 2). The NPS% portion contributes up to ~10 pts (e.g. NPS 77% = 7.7 pts). Promoters (9-10) add +1 pt each, Detractors (1-6) subtract 2 pts each, Passives (7-8) = 0 points. UNCAPPED — exceptional service can significantly boost scores."
       },
       {
         q: "What is the Metric Bonus?",
@@ -73,7 +73,7 @@ const faqs = [
       },
       {
         q: "How does Review Tracker bonus work?",
-        a: "Each positive mention on external review platforms (Google, Yelp, TripAdvisor, etc.) = +0.5 points. Maximum 15 points (30 mentions). Upload RT data via the Data Uploads page."
+        a: "Each positive mention on external review platforms (Google, Yelp, TripAdvisor, etc.) earns RT bonus points. Q2+ rule: +0.3 pts per mention, capped at 20 points (~67 mentions). Q1 2026 used the legacy +0.5 pts/mention with a 15 pt cap. Upload RT data via the Data Uploads page."
       },
       {
         q: "What are the Server Tier thresholds?",
@@ -92,7 +92,7 @@ const faqs = [
       },
       {
         q: "What counts as a Promoter vs Detractor?",
-        a: "Promoter: Rating 9-10 (+0.5 pts each). Passive: Rating 7-8 (0 pts). Detractor: Rating 1-6 (-1 pt each). The Customer Voice score displayed is the combined total of these points."
+        a: "Promoter: Rating 9-10 (+1 pt each). Passive: Rating 7-8 (0 pts). Detractor: Rating 1-6 (−2 pts each). The Customer Voice score also adds NPS%/10. Q1 2026 used the legacy weights (Promoter +0.5, Detractor −1) and is preserved for historical accuracy."
       },
       {
         q: "Why is Customer Voice uncapped?",
@@ -170,7 +170,7 @@ const troubleshooting = [
     symptoms: ["Total score seems wrong", "Customer Voice points are off", "Metric bonus not showing"],
     solutions: [
       "Go to Scoring Audit page to verify all calculations step-by-step",
-      "Check that you're using the correct formula: CV = (Promoters × 0.5) - (Detractors × 1)",
+      "Check that you're using the correct formula: CV = NPS%/10 + (Promoters × 1) − (Detractors × 2)",
       "Verify benchmark settings in Quarter Settings match your expectations",
       "Use 'Fix All' button on Scoring Audit to recalculate all scores"
     ],
@@ -515,7 +515,7 @@ export default function HelpCenter() {
             <div className="bg-slate-800/50 rounded-lg p-4">
               <p className="text-slate-400 mb-2">Customer Voice =</p>
               <p className="text-white font-mono">
-                (Promoters × 0.5) - (Detractors × 1) <span className="text-green-400">[uncapped]</span>
+                NPS%/10 + (Promoters × 1) − (Detractors × 2) <span className="text-green-400">[uncapped]</span>
               </p>
             </div>
             <div className="bg-slate-800/50 rounded-lg p-4">
@@ -542,9 +542,9 @@ export default function HelpCenter() {
         {/* Contact Support */}
         <div className="mt-6 text-center">
           <p className="text-slate-400 text-sm">
-            Still need help? Contact your regional manager or email{" "}
-            <a href="mailto:support@bubbagump.com" className="text-primary font-medium hover:underline">
-              support@bubbagump.com
+            Still need help? Contact your regional manager or reach out to{" "}
+            <a href="mailto:support@intheweedscollective.com" className="text-primary font-medium hover:underline">
+              In the Weeds Collective
             </a>
           </p>
         </div>

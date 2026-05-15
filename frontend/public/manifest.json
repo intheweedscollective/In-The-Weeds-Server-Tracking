@@ -1,6 +1,6 @@
 {
-  "short_name": "Performance",
-  "name": "Bubba Gump Performance Review",
+  "short_name": "ITW Collective",
+  "name": "In the Weeds Collective",
   "icons": [
     {
       "src": "favicon.ico",
@@ -20,6 +20,6 @@
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#D12E2E",
+  "theme_color": "#0f172a",
   "background_color": "#0A1628"
 }

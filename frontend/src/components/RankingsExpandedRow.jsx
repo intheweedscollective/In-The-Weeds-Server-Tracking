@@ -2,6 +2,7 @@ import { MessageCircle, TrendingUp, TrendingDown, Target, ArrowUp, Edit3, Check,
 import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { formatNumber, formatCurrency } from "../utils/formatters";
+import { getDisplayFirstName } from "../utils/displayName";
 
 // Tier badge colors
 const TIER_STYLES = {
@@ -87,7 +88,7 @@ export const RankingsExpandedRow = ({
           <div className="space-y-4">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-lg font-serif font-bold text-slate-200">Metric Breakdown</span>
-              <span className="text-sm text-slate-400">• {employee.name}</span>
+              <span className="text-sm text-slate-400">• {getDisplayFirstName(employee)}</span>
             </div>
             
             {/* Metrics Grid */}

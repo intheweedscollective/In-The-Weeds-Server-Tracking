@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from datetime import datetime
 import logging
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,54 @@ def get_db():
     """Get database instance from shared module to avoid circular imports"""
     from database import get_database
     return get_database()
+
+
+async def _fetch_active_employees(
+    db,
+    year: int,
+    quarter: str,
+    *,
+    limit: int = 5000,
+) -> List[Dict[str, Any]]:
+    """
+    Phase 3 Stage B helper: Read employees for the quarter through the
+    canonical FK-join. Prefers `snapshot_workflow.rows[]` (thin FK array
+    populated by `materialize_rows_from_employees`), falls back to the
+    snapshot's legacy `employees[]`, and finally to `employees_v2`
+    when no snapshot exists. Terminated / merged / blocklisted
+    employees are filtered automatically.
+
+    Every slide generator route MUST go through this helper instead of
+    querying `employees_v2` directly.
+    """
+    from services.employee_service import EmployeeService
+    svc = EmployeeService(db)
+
+    # 1) Prefer the active snapshot for this quarter via FK-join.
+    snap = await db.snapshot_workflow.find_one(
+        {"is_current": True, "year": year, "quarter": quarter.upper()},
+        {"_id": 0, "id": 1},
+    )
+    if not snap:
+        snap = await db.snapshot_workflow.find_one(
+            {"status": "completed", "year": year, "quarter": quarter.upper()},
+            {"_id": 0, "id": 1},
+            sort=[("effective_date", -1), ("completed_at", -1)],
+        )
+    if snap:
+        joined = await svc.get_snapshot_with_join(snapshot_id=snap["id"])
+        rows = (joined or {}).get("employees") or []
+        if rows:
+            return rows[:limit]
+
+    # 2) No snapshot — last-resort fallback to legacy mirror.
+    docs = await db.employees_v2.find(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0},
+    ).to_list(limit)
+    if not docs:
+        return []
+    return await svc.filter_active_only(docs)
 
 
 def get_first_name(full_name: str) -> str:
@@ -63,13 +112,15 @@ async def get_yodeck_top10_slide(year: int, quarter: str, format: str = "16:9", 
         )
     
     if not snapshot or not snapshot.get("employees"):
-        # Fallback to employees_v2 if no snapshot
-        employees_docs = await db.employees_v2.find(
-            {"year": year, "quarter": quarter.upper()},
-            {"_id": 0}
-        ).to_list(5000)
+        # Fallback to canonical-filtered employees_v2 if no snapshot
+        employees_docs = await _fetch_active_employees(db, year, quarter)
     else:
-        employees_docs = snapshot.get("employees", [])
+        # Filter snapshot embedded employees through canonical service too.
+        from services.employee_service import EmployeeService
+        employees_docs = await EmployeeService(db).filter_active_only(
+            snapshot.get("employees", []),
+            snapshot_deleted_names=snapshot.get("deleted_names") or [],
+        )
     
     if not employees_docs:
         raise HTTPException(status_code=404, detail=f"No employee data for {quarter} {year}")
@@ -123,11 +174,9 @@ async def get_yodeck_complete_rankings_slide(year: int, quarter: str, format: st
     except Exception as e:
         logger.warning(f"Auto-corrections failed (non-blocking): {e}")
     
-    # Read directly from employees_v2 — the dashboard is the authoritative source
-    employees = await db.employees_v2.find(
-        {"quarter": quarter.upper(), "year": year},
-        {"_id": 0}
-    ).to_list(200)
+    # Phase 2B: route through canonical EmployeeService so terminated /
+    # merged employees never appear on the complete-rankings slide.
+    employees = await _fetch_active_employees(db, year, quarter, limit=200)
     
     if not employees:
         raise HTTPException(status_code=404, detail=f"No employee data found for {quarter} {year}")
@@ -174,7 +223,7 @@ async def get_yodeck_complete_rankings_slide(year: int, quarter: str, format: st
             "score_lsc": emp.get("score_lsc", 0) or 0,
             "cv_score": emp.get("cv_score", 0) or 0,
             "rt_mentions": emp.get("rt_mentions", 0) or emp.get("review_mentions", 0) or 0,
-            "rt_bonus": emp.get("review_tracker_bonus", 0) or min((emp.get("rt_mentions", 0) or 0) * 0.5, 15),
+            "rt_bonus": emp.get("review_tracker_bonus", 0) or min((emp.get("rt_mentions", 0) or 0) * 0.3, 20),
             "total_metric_bonus": emp.get("total_metric_bonus", 0) or 0,
         }
         slide_employees.append(slide_emp)
@@ -210,8 +259,8 @@ async def get_yodeck_printable_rankings_slide(year: int, quarter: str, format: s
     
     db = get_db()
     
-    # Get all employees for the quarter
-    employees = await db.employees_v2.find({"quarter": quarter, "year": year}).to_list(1000)
+    # Get all employees for the quarter (filtered through canonical service).
+    employees = await _fetch_active_employees(db, year, quarter, limit=1000)
     
     if not employees:
         raise HTTPException(status_code=404, detail=f"No employees found for {quarter} {year}")
@@ -266,11 +315,8 @@ async def get_leaderboard_slide(year: int, quarter: str, format: str = "16:9"):
     
     db = get_db()
     
-    # Get all employees for the quarter
-    employees = await db.employees_v2.find(
-        {"year": year, "quarter": quarter.upper()},
-        {"_id": 0}
-    ).to_list(5000)
+    # Get all employees for the quarter (filtered through canonical service)
+    employees = await _fetch_active_employees(db, year, quarter)
     
     if not employees:
         raise HTTPException(status_code=404, detail=f"No data for {quarter} {year}")
@@ -389,15 +435,17 @@ async def get_yodeck_tier_slide(year: int, quarter: str, tier_name: str, page: i
     
     settings = QuarterSettings(**settings_doc)
     
-    employees_docs = await db.employees_v2.find(
-        {"year": year, "quarter": quarter.upper()},
-        {"_id": 0}
-    ).to_list(5000)
+    employees_docs = await _fetch_active_employees(db, year, quarter)
     
     if not employees_docs:
         raise HTTPException(status_code=404, detail=f"No employee data for {quarter} {year}")
     
-    employees = [EmployeeV2(**doc) for doc in employees_docs]
+    employees = []
+    for doc in employees_docs:
+        try:
+            employees.append(EmployeeV2(**doc))
+        except Exception:
+            continue
     rankings = generate_hierarchy_rankings(employees, settings)
     
     # Filter by tier
@@ -475,15 +523,17 @@ async def get_all_yodeck_slides(year: int, quarter: str):
     
     settings = QuarterSettings(**settings_doc)
     
-    employees_docs = await db.employees_v2.find(
-        {"year": year, "quarter": quarter.upper()},
-        {"_id": 0}
-    ).to_list(5000)
+    employees_docs = await _fetch_active_employees(db, year, quarter)
     
     if not employees_docs:
         raise HTTPException(status_code=404, detail=f"No employee data for {quarter} {year}")
     
-    employees = [EmployeeV2(**doc) for doc in employees_docs]
+    employees = []
+    for doc in employees_docs:
+        try:
+            employees.append(EmployeeV2(**doc))
+        except Exception:
+            continue
     rankings = generate_hierarchy_rankings(employees, settings)
     
     # Count employees per tier
@@ -586,16 +636,18 @@ async def get_yodeck_most_improved_slide(year: int, quarter: str, format: str = 
     
     settings = QuarterSettings(**settings_doc)
     
-    # Get current quarter rankings
-    employees_docs = await db.employees_v2.find(
-        {"year": year, "quarter": quarter.upper()},
-        {"_id": 0}
-    ).to_list(5000)
+    # Get current quarter rankings (filtered through canonical service)
+    employees_docs = await _fetch_active_employees(db, year, quarter)
     
     if not employees_docs:
         raise HTTPException(status_code=404, detail=f"No employee data for {quarter} {year}")
     
-    employees = [EmployeeV2(**doc) for doc in employees_docs]
+    employees = []
+    for doc in employees_docs:
+        try:
+            employees.append(EmployeeV2(**doc))
+        except Exception:
+            continue
     current_rankings = generate_hierarchy_rankings(employees, settings)
     
     # Try to get previous quarter rankings
@@ -603,10 +655,7 @@ async def get_yodeck_most_improved_slide(year: int, quarter: str, format: str = 
     prev_quarter = prev_quarter_map.get(quarter.upper(), "Q4")
     prev_year = year - 1 if quarter.upper() == "Q1" else year
     
-    prev_employees_docs = await db.employees_v2.find(
-        {"year": prev_year, "quarter": prev_quarter},
-        {"_id": 0}
-    ).to_list(5000)
+    prev_employees_docs = await _fetch_active_employees(db, prev_year, prev_quarter)
     
     prev_rankings = []
     if prev_employees_docs:
@@ -616,7 +665,12 @@ async def get_yodeck_most_improved_slide(year: int, quarter: str, format: str = 
         )
         if prev_settings_doc:
             prev_settings = QuarterSettings(**prev_settings_doc)
-            prev_employees = [EmployeeV2(**doc) for doc in prev_employees_docs]
+            prev_employees = []
+            for doc in prev_employees_docs:
+                try:
+                    prev_employees.append(EmployeeV2(**doc))
+                except Exception:
+                    continue
             prev_rankings = generate_hierarchy_rankings(prev_employees, prev_settings)
     
     # Get theme settings
@@ -669,15 +723,17 @@ async def get_yodeck_promotion_watchlist_slide(year: int, quarter: str, format: 
     
     settings = QuarterSettings(**settings_doc)
     
-    employees_docs = await db.employees_v2.find(
-        {"year": year, "quarter": quarter.upper()},
-        {"_id": 0}
-    ).to_list(5000)
+    employees_docs = await _fetch_active_employees(db, year, quarter)
     
     if not employees_docs:
         raise HTTPException(status_code=404, detail=f"No employee data for {quarter} {year}")
     
-    employees = [EmployeeV2(**doc) for doc in employees_docs]
+    employees = []
+    for doc in employees_docs:
+        try:
+            employees.append(EmployeeV2(**doc))
+        except Exception:
+            continue
     rankings = generate_hierarchy_rankings(employees, settings)
     
     theme = settings.slide_theme or "dark_navy"
@@ -729,15 +785,17 @@ async def get_yodeck_at_risk_slide(year: int, quarter: str, format: str = "16:9"
     
     settings = QuarterSettings(**settings_doc)
     
-    employees_docs = await db.employees_v2.find(
-        {"year": year, "quarter": quarter.upper()},
-        {"_id": 0}
-    ).to_list(5000)
+    employees_docs = await _fetch_active_employees(db, year, quarter)
     
     if not employees_docs:
         raise HTTPException(status_code=404, detail=f"No employee data for {quarter} {year}")
     
-    employees = [EmployeeV2(**doc) for doc in employees_docs]
+    employees = []
+    for doc in employees_docs:
+        try:
+            employees.append(EmployeeV2(**doc))
+        except Exception:
+            continue
     rankings = generate_hierarchy_rankings(employees, settings)
     
     theme = settings.slide_theme or "dark_navy"
@@ -802,11 +860,8 @@ async def get_quarterly_summary_report(year: int, quarter: str):
     """
     db = get_db()
     
-    # Get all employees for the quarter
-    employees = await db.employees_v2.find(
-        {"year": year, "quarter": quarter.upper()},
-        {"_id": 0}
-    ).to_list(5000)
+    # Get all employees for the quarter (filtered through canonical service)
+    employees = await _fetch_active_employees(db, year, quarter)
     
     if not employees:
         raise HTTPException(status_code=404, detail=f"No employees found for {quarter} {year}")

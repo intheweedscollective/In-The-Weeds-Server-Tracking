@@ -2,6 +2,7 @@ import { X, Target } from "lucide-react";
 import { Button } from "./ui/button";
 import { formatCurrency, formatNumber } from "../utils/formatters";
 import { HelpTooltip } from "./HelpTooltip";
+import { getDisplayFirstName } from "../utils/displayName";
 
 /**
  * EmployeeDetailsModal - Displays detailed employee scoring breakdown
@@ -21,7 +22,7 @@ export const EmployeeDetailsModal = ({
         <div className="p-6 border-b border-gray-200 sticky top-0 bg-slate-800 z-10">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-serif font-black text-primary">{employee.name}</h2>
+              <h2 className="text-2xl font-serif font-black text-primary">{getDisplayFirstName(employee)}</h2>
               <p className="text-slate-400">
                 Rank #{employee.peer_rank || '-'} of {totalEmployees} • {employee.performance_tier || 'Not Assessed'}
               </p>
@@ -179,23 +180,31 @@ const ScoringBreakdown = ({ employee }) => {
         <CustomerVoiceCategory employee={employee} />
 
         {/* Review Tracker Bonus */}
-        {(employee.review_tracker_bonus || 0) > 0 && (
-          <div className="p-4 bg-slate-700/50 rounded-lg border border-green-500/30">
-            <div className="flex items-center justify-between mb-2">
-              <div>
-                <span className="font-semibold text-white">Review Tracker Bonus</span>
-                <span className="ml-2 text-xs bg-green-600 text-white px-2 py-0.5 rounded-full">+0.2 per mention</span>
+        {(employee.review_tracker_bonus || 0) > 0 && (() => {
+          const mentions = employee.review_mentions || employee.rt_mentions || 0;
+          const bonus = employee.review_tracker_bonus || 0;
+          // Derive the per-mention rate from this employee's actual data so
+          // the modal stays accurate regardless of which quarter they were
+          // scored under (Q1=0.5/cap15, Q2+=0.3/cap20, future=anything).
+          const ratePerMention = mentions > 0 ? +(bonus / mentions).toFixed(2) : 0.3;
+          return (
+            <div className="p-4 bg-slate-700/50 rounded-lg border border-green-500/30">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <span className="font-semibold text-white">Review Tracker Bonus</span>
+                  <span className="ml-2 text-xs bg-green-600 text-white px-2 py-0.5 rounded-full">+{ratePerMention} per mention</span>
+                </div>
+                <div className="text-right">
+                  <span className="font-bold text-green-400 text-lg">+{formatNumber(bonus)}</span>
+                  <span className="text-slate-400 text-sm"> pts</span>
+                </div>
               </div>
-              <div className="text-right">
-                <span className="font-bold text-green-400 text-lg">+{formatNumber(employee.review_tracker_bonus || 0)}</span>
-                <span className="text-slate-400 text-sm"> pts</span>
+              <div className="text-sm text-slate-300">
+                {mentions} mention{mentions === 1 ? '' : 's'} × {ratePerMention} pts each
               </div>
             </div>
-            <div className="text-sm text-slate-300">
-              {employee.review_mentions || employee.rt_mentions || 0} mentions × 0.5 pts each (max 15 pts)
-            </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );
@@ -223,12 +232,14 @@ const CustomerVoiceCategory = ({ employee }) => {
         </div>
       </div>
       <div className="flex items-center gap-4 text-sm flex-wrap">
-        <span className="text-green-400">{employee.cv_promoters || 0} promoters (+{((employee.cv_promoters || 0) * 0.5).toFixed(1)} pts)</span>
+        <span className="text-green-400">{employee.cv_promoters || 0} promoters (+{(employee.cv_promoters || 0) * 1} pts)</span>
         <span className="text-slate-500">|</span>
-        <span className="text-red-400">{employee.cv_detractors || 0} detractors ({(employee.cv_detractors || 0) * -1} pts)</span>
+        <span className="text-red-400">{employee.cv_detractors || 0} detractors ({(employee.cv_detractors || 0) * -2} pts)</span>
+        <span className="text-slate-500">|</span>
+        <span className="text-blue-400">NPS {employee.nps_score != null ? `${Number(employee.nps_score).toFixed(1)}%` : '—'} (+{((employee.nps_score || 0) / 10).toFixed(1)} pts)</span>
       </div>
       <div className="mt-2 text-xs text-slate-400">
-        Formula: Promoters×0.5 + Detractors×-1 (uncapped)
+        Formula: NPS%/10 + Promoters×1 − Detractors×2 (uncapped)
       </div>
     </div>
   );
@@ -308,7 +319,7 @@ const CustomerVoiceBreakdown = ({ employee }) => {
         <div className="text-center p-3 bg-green-900/30 rounded-lg border border-green-500/30">
           <div className="text-xl font-bold text-green-400">{employee.cv_promoters || 0}</div>
           <div className="text-xs text-slate-300">Promoters</div>
-          <div className="text-xs text-green-400 font-medium">+{((employee.cv_promoters || 0) * 0.5).toFixed(1)} pts</div>
+          <div className="text-xs text-green-400 font-medium">+{(employee.cv_promoters || 0) * 1} pts</div>
         </div>
         <div className="text-center p-3 bg-slate-700/50 rounded-lg border border-slate-600">
           <div className="text-xl font-bold text-slate-300">{employee.cv_passives || 0}</div>
@@ -318,7 +329,7 @@ const CustomerVoiceBreakdown = ({ employee }) => {
         <div className="text-center p-3 bg-red-900/30 rounded-lg border border-red-500/30">
           <div className="text-xl font-bold text-red-400">{employee.cv_detractors || 0}</div>
           <div className="text-xs text-slate-300">Detractors</div>
-          <div className="text-xs text-red-400 font-medium">{(employee.cv_detractors || 0) * -1} pts</div>
+          <div className="text-xs text-red-400 font-medium">−{(employee.cv_detractors || 0) * 2} pts</div>
         </div>
       </div>
     </div>
