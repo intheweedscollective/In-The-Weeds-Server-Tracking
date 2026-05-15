@@ -1910,10 +1910,25 @@ async def import_cv_adjustment_to_snapshot(snapshot_id: str, session_id: str):
 # ============================================================================
 
 @snapshot_router.post("/snapshots/{snapshot_id}/process")
-async def process_snapshot(snapshot_id: str):
+async def process_snapshot(snapshot_id: str, force: bool = False):
     """
     Process a snapshot: validate uploads, calculate scores, finalize.
     This transitions the snapshot from In Progress -> Processing -> Completed/Failed.
+
+    Snapshot Integrity Gate (Phase: data quality)
+    ---------------------------------------------
+    Before freezing, run pre-flight checks against the merged employee
+    set and refuse to freeze if any of the following are true:
+
+      • > 30% of rows have `lsc_count` missing or zero
+        (suggests POS file was missing the LSC column)
+      • > 30% of rows have all four POS scores at zero
+        (suggests parser failure or wrong file)
+      • row count < 80% of the most recent completed snapshot for
+        the same quarter (suggests partial upload)
+
+    Pass `?force=true` to override the gate. The override is logged to
+    `audit_log` so it's auditable later.
     """
     db = get_db()
     
@@ -1968,7 +1983,79 @@ async def process_snapshot(snapshot_id: str):
         
         # Merge data from all uploads
         employees = await merge_snapshot_data(snapshot)
-        
+
+        # ---- Snapshot Integrity Gate ----
+        # Refuse to freeze a snapshot with obviously broken inputs. The
+        # whole point of this gate is to prevent the W2/W2.5 scenario:
+        # a POS file missing LSC silently freezes a snapshot where 17
+        # servers' ranks are wrong by 25-50 points each.
+        gate_failures: List[str] = []
+        n = len(employees)
+        if n > 0:
+            zero_lsc = sum(
+                1 for e in employees
+                if not (e.get("lsc_count") or 0)
+            )
+            if (zero_lsc / n) > 0.30:
+                gate_failures.append(
+                    f"{zero_lsc}/{n} employees have no LSC count "
+                    f"({zero_lsc/n*100:.0f}%). Likely the POS file is "
+                    f"missing the LSC column. Re-upload the corrected POS file."
+                )
+            zero_pos = sum(
+                1 for e in employees
+                if not any((e.get(k) or 0) for k in
+                           ("score_ppa", "score_lbw", "score_glass", "score_lsc"))
+            )
+            if (zero_pos / n) > 0.30:
+                gate_failures.append(
+                    f"{zero_pos}/{n} employees have ALL POS scores at zero. "
+                    f"Likely parser failure or wrong file format."
+                )
+            # Compare row count to the previous completed snapshot.
+            prev = await db.snapshot_workflow.find_one(
+                {"quarter": snapshot["quarter"], "year": snapshot["year"],
+                 "status": SnapshotStatus.COMPLETED.value,
+                 "id": {"$ne": snapshot_id}},
+                {"_id": 0, "name": 1, "rows": 1, "employees": 1},
+                sort=[("completed_at", -1)],
+            )
+            if prev:
+                prev_n = len(prev.get("rows") or prev.get("employees") or [])
+                if prev_n > 0 and n < prev_n * 0.80:
+                    gate_failures.append(
+                        f"This snapshot has {n} employees vs "
+                        f"{prev_n} in the previous snapshot ('{prev['name']}'). "
+                        f"That's a {(prev_n - n) / prev_n * 100:.0f}% drop — "
+                        f"suggests an incomplete upload."
+                    )
+
+        if gate_failures and not force:
+            # Roll status back so the snapshot isn't stuck in 'processing'.
+            await db.snapshot_workflow.update_one(
+                {"id": snapshot_id},
+                {"$set": {"status": SnapshotStatus.IN_PROGRESS.value,
+                          "updated_at": datetime.now(timezone.utc).isoformat()}},
+            )
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "snapshot_integrity_gate_failed",
+                    "message": "Refusing to freeze snapshot — input data looks broken.",
+                    "failures": gate_failures,
+                    "override": "POST again with ?force=true to bypass. "
+                                "Override is logged to audit_log.",
+                },
+            )
+        if gate_failures and force:
+            await db.audit_log.insert_one({
+                "action": "snapshot_integrity_gate_overridden",
+                "snapshot_id": snapshot_id,
+                "snapshot_name": snapshot.get("name"),
+                "failures": gate_failures,
+                "ran_at": datetime.now(timezone.utc).isoformat(),
+            })
+
         # Calculate scores for each employee
         for emp in employees:
             calculate_employee_scores(emp, benchmarks)

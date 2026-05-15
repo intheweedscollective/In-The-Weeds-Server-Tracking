@@ -221,12 +221,68 @@ async def update_quarter_settings(year: int, quarter: str, data: QuarterSettings
     
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
     
+    # Audit trail — capture every weight/benchmark/threshold change so
+    # admins can prove what the score formula looked like at any point
+    # in history. Without this, a snapshot's frozen score cannot be
+    # cross-checked against the settings that produced it.
+    history_entry = {
+        "ran_at": update_data["updated_at"],
+        "changes": [],
+    }
+    for key, new_val in update_data.items():
+        if key == "updated_at":
+            continue
+        old_val = settings.get(key)
+        if old_val != new_val:
+            history_entry["changes"].append({
+                "field": key,
+                "before": old_val,
+                "after": new_val,
+            })
+
     await db.quarter_settings.update_one(
         {"year": year, "quarter": quarter.upper()},
-        {"$set": update_data}
+        {"$set": update_data,
+         **({"$push": {"history": history_entry}} if history_entry["changes"] else {})}
     )
-    
-    return {"success": True, "message": f"Updated settings for {quarter} {year}"}
+
+    if history_entry["changes"]:
+        await db.audit_log.insert_one({
+            "action": "quarter_settings_updated",
+            "quarter": quarter.upper(),
+            "year": year,
+            **history_entry,
+        })
+
+    return {"success": True, "message": f"Updated settings for {quarter} {year}",
+            "changes_logged": len(history_entry["changes"])}
+
+
+@quarter_settings_router.get("/{year}/{quarter}/history")
+async def get_quarter_settings_history(year: int, quarter: str):
+    """
+    Return the chronological list of every change made to a quarter's
+    weights / benchmarks / thresholds. This is the audit answer to
+    "did the formula drift between snapshot W2 and W2.5?" — if the
+    history list is empty between two snapshot timestamps, the
+    formula was identical.
+    """
+    db = get_db()
+    settings = await db.quarter_settings.find_one(
+        {"year": year, "quarter": quarter.upper()},
+        {"_id": 0, "history": 1, "created_at": 1, "is_locked": 1, "locked_at": 1},
+    )
+    if not settings:
+        raise HTTPException(status_code=404,
+                            detail=f"Settings not found for {quarter} {year}")
+    return {
+        "year": year,
+        "quarter": quarter.upper(),
+        "is_locked": settings.get("is_locked", False),
+        "locked_at": settings.get("locked_at"),
+        "created_at": settings.get("created_at"),
+        "history": settings.get("history") or [],
+    }
 
 
 @quarter_settings_router.post("/{year}/{quarter}/lock")

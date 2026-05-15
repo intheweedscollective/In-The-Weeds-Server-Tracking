@@ -17,10 +17,46 @@ logger = logging.getLogger(__name__)
 
 admin_router = APIRouter(prefix="/v2/admin", tags=["Admin"])
 
+
 def get_db():
     """Get database instance from shared module"""
     from database import get_database
     return get_database()
+
+
+@admin_router.post("/snapshots/{snapshot_id}/backfill-lsc")
+async def backfill_snapshot_lsc(snapshot_id: str, apply: bool = False):
+    """
+    Backfill missing POS / CV / RT fields on a non-finalized snapshot
+    from the live `employees_v2` collection (alias-aware) and recompute
+    `total_score` / `pre_dar_score` / `weighted_score` through the
+    canonical scoring engine.
+
+    Default mode is dry-run. Pass `?apply=true` to persist.
+
+    Refuses to run on finalized snapshots — finalized snapshots are
+    intentionally immutable history.
+    """
+    import sys, importlib
+    sys.path.insert(0, "/app/backend")
+    # Reuse the script's `backfill` function directly so the HTTP endpoint
+    # and the CLI share one implementation. No copy-paste, no drift.
+    mod = importlib.import_module("scripts.backfill_snapshot_lsc")
+
+    db = get_db()
+    snap = await db.snapshot_workflow.find_one(
+        {"id": snapshot_id}, {"_id": 0, "name": 1, "status": 1},
+    )
+    if not snap:
+        raise HTTPException(status_code=404, detail="Snapshot not found.")
+    if snap.get("status") == "finalized":
+        raise HTTPException(
+            status_code=400,
+            detail="Refusing to backfill a finalized snapshot. "
+                   "Finalized snapshots are immutable history.",
+        )
+    summary = await mod.backfill(db, snap["name"], apply=apply)
+    return summary
 
 
 # ============================================================

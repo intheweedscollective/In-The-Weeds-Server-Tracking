@@ -668,9 +668,15 @@ class EmployeeService:
                 # script, not the hot-path).
                 continue
 
+            # Identity policy: the canonical `display_name` is the
+            # single source of truth. We intentionally ignore any v2 /
+            # snapshot row's display_name to prevent the W2/W2.5
+            # name flip (where the same person appeared as "Trey Quick"
+            # in one snapshot and "Treyanna Quick" in the next because
+            # the upload happened to use the legal name in the column).
             display = (
-                emp.get("display_name")
-                or canon.get("display_name")
+                canon.get("display_name")
+                or emp.get("display_name")
                 or emp.get("name")
                 or canon.get("name")
                 or ""
