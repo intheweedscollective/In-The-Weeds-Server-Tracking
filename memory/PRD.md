@@ -22,11 +22,14 @@ Build a comprehensive performance review application for restaurant employees.
 - Frontend (`FullRankings.js`): new "Preview Slide" button next to
   the PNG/PDF download buttons opens a shadcn `Dialog` showing the
   rendered slide in a 16:9 canvas, with Refresh and Download Full
-  PNG actions. Test IDs: `preview-snapshot-slide-btn`,
-  `slide-preview-dialog`, `slide-preview-image`,
-  `slide-preview-refresh-btn`, `slide-preview-download-btn`.
-- Verified via curl against preview env: HTTP 200, valid 960×540
-  PNG (275 KB) returned for Q1 2026.
+  PNG actions.
+- Per-snapshot preview also added on the **Snapshot Workflow** list
+  page (`SnapshotWorkflow.js`). New backend endpoint
+  `GET /api/v2/snapshot-workflow/snapshots/{id}/slide/preview?w=1280`
+  serves an inline 1280×720 thumbnail per snapshot. Each card on the
+  list now has an Eye-icon Preview button (testid
+  `preview-snapshot-{id}`) that opens a modal with Refresh and
+  Download Full PNG. Verified via curl: HTTP 200, 1280×720 PNG.
 
 ### P0: Snapshot PNG Logo Clipping Fix — SHIPPED 2026-05-14
 

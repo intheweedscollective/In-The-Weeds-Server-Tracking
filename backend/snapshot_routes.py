@@ -2616,6 +2616,102 @@ async def generate_snapshot_workflow_slide(
         raise HTTPException(status_code=500, detail=f"Failed to generate slide: {str(e)}")
 
 
+@snapshot_router.get("/snapshots/{snapshot_id}/slide/preview")
+async def preview_snapshot_workflow_slide(
+    snapshot_id: str,
+    background: str = "dark",
+    w: int = 1280,
+):
+    """
+    Inline thumbnail preview of the per-snapshot PNG slide.
+
+    Same data + render path as `/snapshots/{snapshot_id}/slide`, but:
+      - Returned inline (no attachment) for browser display.
+      - Pillow-downsampled to `w` pixels wide (clamped 320–1920) so
+        the snapshot list UI can show a quick preview without
+        pulling the full-resolution slide.
+    """
+    from io import BytesIO
+    from PIL import Image as PILImage
+    from snapshot_slides import generate_snapshot_slide
+    from fastapi.responses import Response
+
+    db = get_db()
+
+    snapshot = await db.snapshot_workflow.find_one({"id": snapshot_id}, {"_id": 0})
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+
+    sorted_employees = await _hydrate_snapshot_employees(db, snapshot)
+    if not sorted_employees:
+        raise HTTPException(status_code=400, detail="Snapshot has no employee data")
+
+    slide_employees = []
+    for i, emp in enumerate(sorted_employees):
+        slide_employees.append({
+            "rank": i + 1,
+            "name": emp.get("name", "Unknown"),
+            "total_score": emp.get("total_score", 0) or 0,
+            "ppa": emp.get("ppa", 0) or 0,
+            "lbw_per_guest": emp.get("lbw_per_guest", 0) or 0,
+            "guests_per_lsc": emp.get("guests_per_lsc", 0) or 0,
+            "glassware_per_guest": emp.get("glassware_per_guest", 0) or 0,
+            "job_title": emp.get("job_title", "Server"),
+            "tier_label": emp.get("tier_label") or emp.get("performance_tier", "Server"),
+            "score_ppa": emp.get("score_ppa", 0) or 0,
+            "score_lbw": emp.get("score_lbw", 0) or 0,
+            "score_glass": emp.get("score_glass", 0) or 0,
+            "score_lsc": emp.get("score_lsc", 0) or 0,
+            "cv_score": emp.get("cv_score", 0) or 0,
+            "cv_promoters": emp.get("cv_promoters", 0) or 0,
+            "cv_detractors": emp.get("cv_detractors", 0) or 0,
+            "nps_score": emp.get("nps_score", 0) or 0,
+            "rt_mentions": emp.get("rt_mentions", 0) or 0,
+            "review_tracker_bonus": emp.get("review_tracker_bonus", 0) or 0,
+            "total_metric_bonus": emp.get("total_metric_bonus", 0) or 0,
+        })
+
+    benchmarks = snapshot.get("benchmarks", {
+        "ppa": 55.0,
+        "lbw_per_guest": 6.0,
+        "guests_per_lsc": 35.0,
+        "glassware_per_guest": 1.2,
+    })
+    title = f"{snapshot.get('quarter', 'Q1')} {snapshot.get('year', 2026)} Server Performance Snapshot"
+    snapshot_date = snapshot.get("effective_date", "")
+
+    try:
+        slide_bytes = generate_snapshot_slide(
+            employees=slide_employees,
+            benchmarks=benchmarks,
+            snapshot_date=snapshot_date,
+            background=background,
+            title=title,
+        )
+    except Exception as e:
+        logger.error(f"Error generating slide preview: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate slide: {str(e)}")
+
+    # Downsample preserving aspect ratio for inline display.
+    target_w = max(320, min(int(w), 1920))
+    src = PILImage.open(BytesIO(slide_bytes))
+    if target_w < src.width:
+        target_h = int(target_w * src.height / src.width)
+        src = src.resize((target_w, target_h), PILImage.Resampling.LANCZOS)
+        buf = BytesIO()
+        src.save(buf, format="PNG", optimize=True)
+        slide_bytes = buf.getvalue()
+
+    return Response(
+        content=slide_bytes,
+        media_type="image/png",
+        headers={
+            "Content-Disposition": "inline",
+            "Cache-Control": "private, max-age=15",
+        },
+    )
+
+
 @snapshot_router.post("/snapshots/{snapshot_id}/sync-from-employees")
 async def sync_pos_from_employees_v2(snapshot_id: str, force: bool = False):
     """
