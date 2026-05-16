@@ -841,29 +841,78 @@ async def update_qr_settings(settings: QRSettings):
 @qr_router.get("/stats")
 async def get_qr_stats():
     """Get QR tracking statistics"""
-    employees = await _db.qr_employees.find({}, {"_id": 0}).to_list(100)
-    
+    employees = await _db.qr_employees.find({}, {"_id": 0}).to_list(500)
+
     total_yelp = sum(e.get('yelp_clicks', 0) for e in employees)
     total_google = sum(e.get('google_clicks', 0) for e in employees)
     total_tripadvisor = sum(e.get('tripadvisor_clicks', 0) for e in employees)
     total_scans = total_yelp + total_google + total_tripadvisor
-    
-    employees.sort(key=lambda x: (x.get('yelp_clicks', 0) + x.get('google_clicks', 0) + x.get('tripadvisor_clicks', 0)), reverse=True)
+
+    def _total(e):
+        return (e.get('yelp_clicks', 0) or 0) + (e.get('google_clicks', 0) or 0) + (e.get('tripadvisor_clicks', 0) or 0)
+
+    employees.sort(key=_total, reverse=True)
     top_10 = employees[:10]
-    
+
+    # ---- Bottom 10 (engagement warning) ----
+    # Only surface ACTIVE employees here so terminated/inactive staff
+    # don't dominate the "low engagement" callout with permanent zeros.
+    # Match against canonical name + aliases (case-insensitive).
+    active_names: set[str] = set()
+    async for e in _db.employees.find({"status": "active"}, {"_id": 0, "name": 1, "aliases": 1}):
+        n = (e.get("name") or "").strip().lower()
+        if n:
+            active_names.add(n)
+        for a in (e.get("aliases") or []):
+            a = (a or "").strip().lower()
+            if a:
+                active_names.add(a)
+
+    active_qr = [e for e in employees if (e.get("name") or "").strip().lower() in active_names]
+    active_qr.sort(key=_total)  # ascending — lowest first
+    bottom_10_raw = active_qr[:10]
+
+    from datetime import datetime, timezone as _tz
+
+    def _days_since(iso_str):
+        if not iso_str:
+            return None
+        try:
+            dt = datetime.fromisoformat(str(iso_str).replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=_tz.utc)
+            delta = datetime.now(_tz.utc) - dt
+            return max(0, delta.days)
+        except Exception:
+            return None
+
+    bottom_10 = [{
+        "name": e.get("name"),
+        "yelp_clicks": e.get("yelp_clicks", 0) or 0,
+        "google_clicks": e.get("google_clicks", 0) or 0,
+        "tripadvisor_clicks": e.get("tripadvisor_clicks", 0) or 0,
+        "total": _total(e),
+        "days_since_last_scan": _days_since(e.get("last_scan_at")),
+    } for e in bottom_10_raw]
+
     return {
         "total_scans": total_scans,
         "yelp_scans": total_yelp,
         "google_scans": total_google,
         "tripadvisor_scans": total_tripadvisor,
         "total_employees": len(employees),
+        "active_employees": len(active_qr),
+        # Threshold for "engagement warning" badge on the frontend —
+        # anyone with strictly fewer clicks than this gets flagged.
+        "engagement_warning_threshold": 5,
         "top_10": [{
             "name": e.get('name'),
             "yelp_clicks": e.get('yelp_clicks', 0),
             "google_clicks": e.get('google_clicks', 0),
             "tripadvisor_clicks": e.get('tripadvisor_clicks', 0),
-            "total": e.get('yelp_clicks', 0) + e.get('google_clicks', 0) + e.get('tripadvisor_clicks', 0)
-        } for e in top_10]
+            "total": _total(e),
+        } for e in top_10],
+        "bottom_10": bottom_10,
     }
 
 @qr_router.get("/top10")

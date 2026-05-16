@@ -6,6 +6,7 @@ import api from "../lib/api";
 import { getCurrentQuarter } from "../lib/quarterUtils";
 import FinalizeQuarterModal from "../components/FinalizeQuarterModal";
 import QRTopClicksCard from "../components/QRTopClicksCard";
+import QRBottomClicksCard from "../components/QRBottomClicksCard";
 import QRHealthBadge from "../components/QRHealthBadge";
 import StoreHealthScore from "../components/StoreHealthScore";
 import CoachingRadar from "../components/CoachingRadar";
@@ -867,9 +868,10 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* QR Top Clicks Section */}
-        <div className="mt-6">
+        {/* QR Engagement Section */}
+        <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
           <QRTopClicksCard showViewAll={true} limit={5} />
+          <QRBottomClicksCard showViewAll={true} limit={10} />
         </div>
       </div>
 

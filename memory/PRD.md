@@ -12,6 +12,24 @@ Build a comprehensive performance review application for restaurant employees.
 
 ## Current State (2026-05-14)
 
+### P3: Dashboard QR Engagement Warning (Bottom 10) — SHIPPED 2026-05-14
+
+- **Backend** — `/api/qr/stats` extended with `bottom_10`,
+  `active_employees`, and `engagement_warning_threshold` (5). Bottom
+  list filters `qr_employees` against `employees` where
+  `status == 'active'` (matched on canonical name + aliases,
+  case-insensitive), sorts ascending by total clicks, returns first
+  10 with `days_since_last_scan` derived from `last_scan_at`.
+  Verified via curl: 10 active employees flagged.
+- **Frontend** — new `QRBottomClicksCard.jsx` (amber-bordered card,
+  AlertTriangle iconography, coaching-tone copy) rendered side-by-
+  side with `QRTopClicksCard` on the Dashboard in a 2-col grid.
+  Rows under threshold get an amber warning badge; rows show
+  "Last scan Nd ago" or "No scans yet".
+- **Decision**: Earlier plan to add a QR Engagement Bonus column to
+  the leaderboard was abandoned — easy to self-skew, so we surface
+  engagement as a management signal instead of a score input.
+
 ### P3: Slide Preview Endpoint + Modal — SHIPPED 2026-05-14
 
 - Added inline thumbnail endpoint:
