@@ -12,6 +12,22 @@ Build a comprehensive performance review application for restaurant employees.
 
 ## Current State (2026-05-14)
 
+### P3: Slide Preview Endpoint + Modal — SHIPPED 2026-05-14
+
+- Added inline thumbnail endpoint:
+  `GET /api/v2/full-rankings/{year}/{quarter}/snapshot-png/preview?w=1280`
+  Same data + render path as `/snapshot-png` but Pillow-downsampled
+  to the requested width (clamped 320–1920) and returned inline
+  (`Content-Disposition: inline`, short cache).
+- Frontend (`FullRankings.js`): new "Preview Slide" button next to
+  the PNG/PDF download buttons opens a shadcn `Dialog` showing the
+  rendered slide in a 16:9 canvas, with Refresh and Download Full
+  PNG actions. Test IDs: `preview-snapshot-slide-btn`,
+  `slide-preview-dialog`, `slide-preview-image`,
+  `slide-preview-refresh-btn`, `slide-preview-download-btn`.
+- Verified via curl against preview env: HTTP 200, valid 960×540
+  PNG (275 KB) returned for Q1 2026.
+
 ### P0: Snapshot PNG Logo Clipping Fix — SHIPPED 2026-05-14
 
 - `png_full_rankings.py::_draw_sidebar` had `logo_y=135` with

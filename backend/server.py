@@ -2302,6 +2302,60 @@ async def download_full_rankings_snapshot_png(year: int, quarter: str):
     )
 
 
+@api_router.get("/v2/full-rankings/{year}/{quarter}/snapshot-png/preview")
+async def preview_full_rankings_snapshot_png(
+    year: int,
+    quarter: str,
+    w: int = 960,
+):
+    """
+    Inline thumbnail preview of the Server Performance Snapshot slide.
+
+    Same data + render path as `/snapshot-png`, but:
+      - Returned inline (no Content-Disposition: attachment) so the
+        browser displays it directly.
+      - Downsampled to `w` pixels wide (16:9, default 960×540) so the
+        admin UI can iterate on layout tweaks quickly without pulling
+        a full 1920×1080 PNG every time.
+    """
+    from io import BytesIO
+    from PIL import Image as PILImage
+    from png_full_rankings import build_full_rankings_png
+
+    rankings, settings = await _load_snapshot_first_rankings(year, quarter)
+
+    png_bytes = build_full_rankings_png(
+        rankings=rankings,
+        quarter=quarter.upper(),
+        year=year,
+        thresholds={
+            "a_min": settings.a_server_min_score,
+            "b_min": settings.b_server_min_score,
+        },
+    )
+
+    # Clamp preview width to a sane range, then downscale preserving 16:9.
+    target_w = max(320, min(int(w), 1920))
+    if target_w < 1920:
+        src = PILImage.open(BytesIO(png_bytes))
+        target_h = int(target_w * src.height / src.width)
+        src = src.resize((target_w, target_h), PILImage.Resampling.LANCZOS)
+        buf = BytesIO()
+        src.save(buf, format="PNG", optimize=True)
+        png_bytes = buf.getvalue()
+
+    return Response(
+        content=png_bytes,
+        media_type="image/png",
+        headers={
+            # Inline display; short cache so repeated previews are fast
+            # but admins still see edits after a backend reload.
+            "Content-Disposition": "inline",
+            "Cache-Control": "private, max-age=15",
+        },
+    )
+
+
 @api_router.get("/v2/full-rankings/{year}/{quarter}/snapshot-pdf")
 async def download_full_rankings_snapshot_pdf(year: int, quarter: str):
     """
