@@ -1799,8 +1799,10 @@ async def get_leaderboard_with_mentions(
     leaderboard and the downloadable slide. Every employee from
     qr_employees AND employees_v2 (for the given quarter/year) appears
     exactly once, with both click counts and review mention counts
-    populated. Sorted by conversion rate desc -> mentions desc -> clicks
-    desc so the same row order shows up in the UI and the PNG.
+    populated. Sorted by total clicks desc -> mentions desc.
+    Conversion rate intentionally NOT computed — clicks are the raw
+    engagement signal management wants to see; mentions are tracked
+    separately as a quality indicator.
     """
     qr_emps = await _db.qr_employees.find({}, {"_id": 0}).to_list(500)
     from services.employee_service import EmployeeService
@@ -1862,7 +1864,6 @@ async def get_leaderboard_with_mentions(
             "tripadvisor_clicks": ta,
             "total_clicks": clicks,
             "rt_mentions": m,
-            "conversion_rate": round((m / clicks * 100), 1) if clicks else 0.0,
         })
 
     # Pass 2: employees_v2 records absent from qr_employees (clicks=0)
@@ -1880,19 +1881,138 @@ async def get_leaderboard_with_mentions(
             "tripadvisor_clicks": 0,
             "total_clicks": 0,
             "rt_mentions": m,
-            "conversion_rate": 0.0,
         })
 
-    # Sort: conversion rate desc -> mentions desc -> clicks desc.
-    # Employees with 0 clicks pinned to the bottom regardless of mentions.
+    # Sort: total clicks desc -> mentions desc. Zero-click rows fall
+    # naturally to the bottom; among them mentions still rank correctly.
     merged.sort(
-        key=lambda e: (
-            -1 if e["total_clicks"] == 0 else e["conversion_rate"],
-            e["rt_mentions"],
-            e["total_clicks"],
-        ),
+        key=lambda e: (e["total_clicks"], e["rt_mentions"]),
         reverse=True,
     )
     return {"employees": merged, "quarter": quarter.upper(), "year": year, "count": len(merged)}
+
+
+@qr_router.get("/clicks-by-day")
+async def get_clicks_by_day(days: int = 30):
+    """
+    Per-server daily QR click breakdown for the last `days` days.
+
+    Source: `qr_click_log_immutable` (the append-only audit log) so
+    the matrix reflects every recorded scan even if `qr_scans` gets
+    archived or `qr_employees` counters get reset.
+
+    Days are bucketed in UTC by the date portion of `scanned_at`.
+    Names are resolved to the canonical `employees.name` when possible
+    via case-insensitive name/alias match — so historical scans logged
+    under an old/typo name still aggregate under the current canonical
+    record (no duplicate "Trey" vs "Treyanna" rows).
+
+    Response shape:
+      {
+        "days": ["2026-04-15", ...,  "2026-05-14"],   # ASC, length=days
+        "rows": [
+          {
+            "employee_id": "<canonical id or null>",
+            "name": "Trey Quick",
+            "totals": {"yelp": 0, "google": 12, "tripadvisor": 23},
+            "by_day": [0,1,0,2,...],                  # length == days
+            "total":  35,
+          },
+          ...
+        ],
+        "totals_by_day": [3,5,...],
+        "generated_at": "2026-05-14T03:11:41Z",
+        "window_days": 30
+      }
+
+    Designed for client-side polling — call every 15s for "live"
+    updates. Lightweight (single aggregation + a small post-process).
+    """
+    from datetime import datetime, timezone as _tz, timedelta
+
+    n = max(1, min(int(days), 90))
+    today = datetime.now(_tz.utc).date()
+    start = today - timedelta(days=n - 1)
+    start_iso = datetime.combine(start, datetime.min.time()).replace(tzinfo=_tz.utc).isoformat()
+
+    # ---- Build alias → canonical map (cheap; ~37 docs) -------------------
+    alias_to_canonical: dict[str, dict] = {}
+    async for e in _db.employees.find({}, {"_id": 0, "id": 1, "name": 1, "aliases": 1, "status": 1}):
+        canonical = {"id": e.get("id"), "name": e.get("name"), "status": e.get("status")}
+        for raw in [e.get("name")] + (e.get("aliases") or []):
+            key = (raw or "").strip().lower()
+            if key:
+                alias_to_canonical.setdefault(key, canonical)
+
+    # ---- Aggregation in MongoDB ------------------------------------------
+    pipeline = [
+        {"$match": {"scanned_at": {"$gte": start_iso}}},
+        {
+            "$project": {
+                "_id": 0,
+                "employee_name": 1,
+                "platform": 1,
+                "day": {"$substr": ["$scanned_at", 0, 10]},  # YYYY-MM-DD
+            }
+        },
+        {
+            "$group": {
+                "_id": {"name": "$employee_name", "day": "$day", "platform": "$platform"},
+                "count": {"$sum": 1},
+            }
+        },
+    ]
+
+    # day_index for O(1) slot lookup
+    days_list = [(start + timedelta(days=i)).isoformat() for i in range(n)]
+    day_index = {d: i for i, d in enumerate(days_list)}
+
+    # rows keyed by canonical id (fallback: raw name)
+    rows: dict[str, dict] = {}
+    totals_by_day = [0] * n
+
+    async for r in _db.qr_click_log_immutable.aggregate(pipeline):
+        gid = r.get("_id") or {}
+        raw_name = (gid.get("name") or "").strip()
+        day = gid.get("day")
+        platform = (gid.get("platform") or "").lower()
+        count = int(r.get("count") or 0)
+
+        if not raw_name or day not in day_index:
+            continue
+
+        canonical = alias_to_canonical.get(raw_name.lower())
+        key = canonical["id"] if canonical else f"name:{raw_name.lower()}"
+        display_name = canonical["name"] if canonical else raw_name
+
+        bucket = rows.get(key)
+        if bucket is None:
+            bucket = {
+                "employee_id": canonical["id"] if canonical else None,
+                "name": display_name,
+                "totals": {"yelp": 0, "google": 0, "tripadvisor": 0},
+                "by_day": [0] * n,
+                "total": 0,
+                "active": (canonical or {}).get("status") == "active",
+            }
+            rows[key] = bucket
+
+        slot = day_index[day]
+        bucket["by_day"][slot] += count
+        bucket["total"] += count
+        if platform in bucket["totals"]:
+            bucket["totals"][platform] += count
+        totals_by_day[slot] += count
+
+    rows_list = sorted(rows.values(), key=lambda r: r["total"], reverse=True)
+
+    return {
+        "days": days_list,
+        "rows": rows_list,
+        "totals_by_day": totals_by_day,
+        "grand_total": sum(totals_by_day),
+        "window_days": n,
+        "generated_at": datetime.now(_tz.utc).isoformat(),
+    }
 
 

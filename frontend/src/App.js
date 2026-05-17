@@ -23,6 +23,7 @@ import DataUploads from "./pages/DataUploads";
 import Reports from "./pages/Reports";
 import QRDashboard from "./pages/QRDashboard";
 import QRLeaderboard from "./pages/QRLeaderboard";
+import QRDailyClicks from "./pages/QRDailyClicks";
 import QREmployees from "./pages/QREmployees";
 import QRSettings from "./pages/QRSettings";
 import QRGhostHeal from "./pages/QRGhostHeal";
@@ -79,6 +80,7 @@ function App() {
                         {/* QR Track Hub - Isolated Module */}
                         <Route path="/qr" element={<QRDashboard />} />
                         <Route path="/qr/leaderboard" element={<QRLeaderboard />} />
+                        <Route path="/qr/daily" element={<QRDailyClicks />} />
                         <Route path="/qr/codes" element={<QREmployees />} />
                         <Route path="/qr/settings" element={<QRSettings />} />
                         <Route path="/qr/ghost-heal" element={<QRGhostHeal />} />

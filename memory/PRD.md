@@ -12,6 +12,35 @@ Build a comprehensive performance review application for restaurant employees.
 
 ## Current State (2026-05-14)
 
+### P3: Conversion Removed + Clicks-by-Day View — SHIPPED 2026-05-14
+
+**Conversion removal** — Conversion ratio (mentions ÷ clicks) was
+easily skewed by self-scans and added no operational value:
+
+- `qr_tracking.py::/leaderboard-data` no longer emits
+  `conversion_rate`; sorted by `total_clicks desc → rt_mentions desc`.
+- `qr_leaderboard_slide.py` Yodeck/print slide: removed "CONVERSION"
+  left-panel stat block and "Conv %" table column. Clicks + Mentions
+  columns widened to fill the freed space. Visual inspection
+  confirmed clean layout.
+- `QRLeaderboard.jsx` page: subtitle/mobile/desktop pills swapped
+  from "Top Conversion" / "Conv" to clicks-driven labels; per-row
+  desktop column now shows Yelp / Google / TripAd separately.
+
+**Clicks-by-day per server (live)** —
+
+- **Backend** — new `GET /api/qr/clicks-by-day?days=N` (clamped
+  1–90) in `qr_tracking.py`. Aggregates
+  `qr_click_log_immutable` by `employee_name + day + platform`,
+  resolves names to canonical `employees` via alias map, and returns:
+  `{days[], rows[{employee_id, name, totals:{yelp,google,tripadvisor}, by_day[], total, active}], totals_by_day[], grand_total, generated_at, window_days}`.
+- **Frontend** — new page `/qr/daily` (`QRDailyClicks.jsx`) with a
+  servers × days heatmap matrix, daily total row, weekend
+  highlighting, intensity legend, window selector (7/14/30/60 days),
+  and a LIVE pulse indicator. Polls every 15s with delta-pulse
+  animation when new scans arrive. Linked from sidebar
+  ("Clicks by Day") and from the QR Leaderboard page header.
+
 ### P3: Dashboard QR Engagement Warning (Bottom 10) — SHIPPED 2026-05-14
 
 - **Backend** — `/api/qr/stats` extended with `bottom_10`,

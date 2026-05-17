@@ -25,6 +25,7 @@ import {
   BookOpen,
   Calculator,
   Layers,
+  LineChart,
   Globe
 } from "lucide-react";
 import { useTheme } from "../context/ThemeContext";
@@ -89,6 +90,7 @@ const navGroups = [
     items: [
       { path: "/qr", label: "QR Dashboard", icon: QrCode },
       { path: "/qr/leaderboard", label: "QR Leaderboard", icon: Trophy },
+      { path: "/qr/daily", label: "Clicks by Day", icon: LineChart },
       { path: "/qr/codes", label: "QR Codes", icon: QrCode },
       { path: "/qr/settings", label: "QR Settings", icon: Settings }
     ]
