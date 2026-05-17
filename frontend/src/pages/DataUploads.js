@@ -262,8 +262,17 @@ export default function DataUploads() {
       });
       fetchDataStatus();
     } catch (error) {
-      console.error('Snapshot processing error:', error);
-      toast.error(error?.response?.data?.detail || "Snapshot processing failed. Please try again.");
+      // Surface the backend's actual error so we can debug instead of
+      // showing the generic "try again" toast. FastAPI returns the
+      // failure reason on `error.response.data.detail`. Show the
+      // status code too so screenshots are actionable.
+      const detail =
+        error?.response?.data?.detail ||
+        error?.message ||
+        "Snapshot processing failed. Please try again.";
+      const status = error?.response?.status ? ` (HTTP ${error.response.status})` : "";
+      console.error("Snapshot processing error:", error?.response?.data || error);
+      toast.error(`${detail}${status}`, { duration: 12000 });
     }
     setSnapshotProcessing(false);
   };

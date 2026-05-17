@@ -3502,7 +3502,7 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
         if upload_type == UploadType.POS_REPORT.value:
             # POS data creates the base employee records
             for emp_data in parsed_data.get("employees", []):
-                name = emp_data.get("name", "").strip()
+                name = (emp_data.get("name") or "").strip()
                 if not name:
                     continue
                 # Skip employees the user has explicitly deleted from this
@@ -3610,8 +3610,9 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                 
                 # PRESERVE job_title from existing employee - THIS IS CRITICAL
                 # Only use POS job_title if no existing job_title or it's generic "Server"
-                existing_job = existing_emp.get("job_title", "Server").lower() if existing_emp else "server"
-                pos_job = emp_data.get("job_title", "Server")
+                # Use `or "Server"` so a literal None in the doc doesn't crash .lower().
+                existing_job = ((existing_emp.get("job_title") or "Server") if existing_emp else "Server").lower()
+                pos_job = emp_data.get("job_title") or "Server"
                 
                 # If existing job is trainer/bartender, preserve it (don't override with POS data)
                 if existing_job in ["trainer", "bartender"]:
@@ -3691,15 +3692,15 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
             # Use fuzzy matcher so nickname-only names ('Keisha', 'Lennie')
             # still classify as individual data and trigger the per-row merge.
             has_individual_data = any(
-                (emp.get("name", "").strip().lower() != "unknown")
-                and find_employee_match(emp.get("name", ""), employees)
+                ((emp.get("name") or "").strip().lower() != "unknown")
+                and find_employee_match(emp.get("name") or "", employees)
                 for emp in cv_employees
             )
             
             if has_individual_data:
                 # Individual employee CV data - merge directly
                 for cv_data in cv_employees:
-                    raw_name = cv_data.get("name", "").strip()
+                    raw_name = (cv_data.get("name") or "").strip()
                     if not raw_name or raw_name.lower() == "unknown":
                         continue
                     # Fuzzy match against POS-keyed employees (handles
@@ -3744,7 +3745,7 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
             else:
                 # Store-level CV data (all attributed to "Unknown") 
                 # Distribute proportionally based on guest count
-                unknown_data = next((e for e in cv_employees if e.get("name", "").strip().lower() == "unknown"), None)
+                unknown_data = next((e for e in cv_employees if (e.get("name") or "").strip().lower() == "unknown"), None)
                 if unknown_data:
                     total_promoters = unknown_data.get("promoters", 0) or 0
                     total_passives = unknown_data.get("passives", 0) or 0  
@@ -3796,7 +3797,7 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
             # Merge RT data with the shared fuzzy matcher (nickname_map +
             # reverse mapping defined at the top of merge_snapshot_data).
             for rt_data in parsed_data.get("employees", []):
-                rt_name = rt_data.get("name", "").strip()
+                rt_name = (rt_data.get("name") or "").strip()
                 matched_name = find_employee_match(rt_name, employees)
 
                 if matched_name:
