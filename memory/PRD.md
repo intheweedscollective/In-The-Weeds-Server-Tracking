@@ -12,6 +12,28 @@ Build a comprehensive performance review application for restaurant employees.
 
 ## Current State (2026-05-14)
 
+### P0: "Process Snapshot" Silent 500 — FIXED 2026-05-14
+
+- **Symptom (prod)**: clicking "Save & Process Snapshot" on Data
+  Uploads briefly spun then died with `API ERROR 500` + an unhandled
+  promise rejection in the console; nothing visibly changed.
+- **Root cause**: `merge_snapshot_data` in `snapshot_routes.py`
+  called `.lower().strip()` on `emp.get("display_name", "")`.
+  `dict.get(k, default)` only returns the default for *missing*
+  keys — when `display_name`/`report_name` was present with `None`
+  (common in legacy `employees_v2` rows that survived migration),
+  `.lower()` raised `AttributeError`. The outer try/except converted
+  this to a 500 and left the snapshot stuck.
+- **Fix**: coerce with `(emp.get(k) or "")` for `name`,
+  `display_name`, and `report_name` so `None` becomes `""` before
+  any string method is called.
+- **Test**: `tests/test_process_snapshot_none_safety.py` reproduces
+  the crash with a minimal snapshot (`display_name: None`) and locks
+  the regression. Both cases pass.
+- **Verified**: re-ran `merge_snapshot_data` against the actual
+  preview snapshot that crashed before — now merges 25 employees
+  cleanly.
+
 ### P3: Conversion Removed + Clicks-by-Day View — SHIPPED 2026-05-14
 
 **Conversion removal** — Conversion ratio (mentions ÷ clicks) was

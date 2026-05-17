@@ -3467,11 +3467,15 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
     # Use multiple keys for flexible matching (full name, first name, report_name)
     existing_employees = {}
     for emp in snapshot.get("employees", []):
-        name = emp.get("name", "").lower().strip()
-        display_name = emp.get("display_name", "").lower().strip()
-        report_name = emp.get("report_name", "").lower().strip()
+        # `.get(..., "")` only kicks in for missing keys; if the value is
+        # explicitly None (which legacy v2 records sometimes have for
+        # `display_name`/`report_name`), the default isn't used. Coerce
+        # via `or ""` so .lower()/.strip()/.split() never crash on None.
+        name = (emp.get("name") or "").lower().strip()
+        display_name = (emp.get("display_name") or "").lower().strip()
+        report_name = (emp.get("report_name") or "").lower().strip()
         first_name = name.split()[0] if name else ""
-        
+
         # Add to lookup with multiple keys
         if name: existing_employees[name] = emp
         if display_name and display_name != name: existing_employees[display_name] = emp
