@@ -1944,6 +1944,31 @@ async def get_clicks_by_day(days: int = 30):
             if key:
                 alias_to_canonical.setdefault(key, canonical)
 
+    # ---- Build "currently-tracked" set from qr_employees -----------------
+    # The QR Codes tab manipulates qr_employees directly: deleting from
+    # that tab removes the doc entirely, so we use presence there as the
+    # source of truth for "still tracked" alongside `employees.status`.
+    qr_tracked_names: set[str] = set()
+    async for q in _db.qr_employees.find({}, {"_id": 0, "name": 1}):
+        n_ = (q.get("name") or "").strip().lower()
+        if n_:
+            qr_tracked_names.add(n_)
+
+    def _is_test_name(name: str) -> bool:
+        n_ = (name or "").strip().lower()
+        # Filter obvious test/demo placeholders. Matches "test employee",
+        # "test user", "demo *", anything starting/ending with "test".
+        if not n_:
+            return True
+        return (
+            "test" in n_.split()
+            or n_.startswith("test ")
+            or n_.endswith(" test")
+            or n_ == "test"
+            or n_.startswith("demo ")
+            or n_ == "demo"
+        )
+
     # ---- Aggregation in MongoDB ------------------------------------------
     pipeline = [
         {"$match": {"scanned_at": {"$gte": start_iso}}},
@@ -1981,7 +2006,30 @@ async def get_clicks_by_day(days: int = 30):
         if not raw_name or day not in day_index:
             continue
 
+        # Drop test/demo placeholder names entirely.
+        if _is_test_name(raw_name):
+            continue
+
         canonical = alias_to_canonical.get(raw_name.lower())
+
+        # Exclude terminated/inactive employees: if the name resolves to
+        # a canonical record and that record's status is not 'active',
+        # drop the scans. (Status==None / missing also drops — only
+        # explicitly-active employees pass.)
+        if canonical and (canonical.get("status") or "").lower() != "active":
+            continue
+
+        # Exclude employees deleted from the QR Codes tab: if the raw
+        # name AND all known aliases of the canonical record are absent
+        # from `qr_employees`, the user has explicitly removed tracking
+        # for this person and historical scans should disappear.
+        if raw_name.lower() not in qr_tracked_names:
+            canonical_present = False
+            if canonical:
+                canonical_present = (canonical.get("name") or "").strip().lower() in qr_tracked_names
+            if not canonical_present:
+                continue
+
         key = canonical["id"] if canonical else f"name:{raw_name.lower()}"
         display_name = canonical["name"] if canonical else raw_name
 
@@ -1993,7 +2041,7 @@ async def get_clicks_by_day(days: int = 30):
                 "totals": {"yelp": 0, "google": 0, "tripadvisor": 0},
                 "by_day": [0] * n,
                 "total": 0,
-                "active": (canonical or {}).get("status") == "active",
+                "active": True,  # Inactive rows are filtered out above.
             }
             rows[key] = bucket
 

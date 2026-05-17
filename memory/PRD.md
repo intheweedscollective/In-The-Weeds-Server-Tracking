@@ -34,6 +34,14 @@ easily skewed by self-scans and added no operational value:
   `qr_click_log_immutable` by `employee_name + day + platform`,
   resolves names to canonical `employees` via alias map, and returns:
   `{days[], rows[{employee_id, name, totals:{yelp,google,tripadvisor}, by_day[], total, active}], totals_by_day[], grand_total, generated_at, window_days}`.
+  **Filters applied** (added 2026-05-14 evening):
+  - Test/demo placeholder names (`"Test Employee"`, `demo *`, etc.)
+    excluded entirely.
+  - Inactive/terminated employees (`employees.status != 'active'`)
+    excluded — deleting their canonical profile makes them disappear.
+  - Employees deleted from the QR Codes tab (absent from
+    `qr_employees`) excluded too — works for raw scan name and any
+    alias of the canonical record.
 - **Frontend** — new page `/qr/daily` (`QRDailyClicks.jsx`) with a
   servers × days heatmap matrix, daily total row, weekend
   highlighting, intensity legend, window selector (7/14/30/60 days),
