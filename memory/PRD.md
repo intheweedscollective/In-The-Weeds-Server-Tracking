@@ -12,6 +12,41 @@ Build a comprehensive performance review application for restaurant employees.
 
 ## Current State (2026-05-14)
 
+### P0: RT Bonus Auto-Derived From Mentions — SHIPPED 2026-05-14 (late)
+
+**Symptom (prod, Q2P5W2.75)**: Specific employees showed `rt_mentions`
+populated but `review_tracker_bonus` zero (Trey Quick: 34 mentions,
+bonus 0) or off-ratio (Kahi: 3 mentions, bonus 0.3 → implied 0.1
+rate). Other employees showed mention × old-0.3-rate values that
+didn't reflect the new 0.33 spec.
+
+**Root cause**: `snapshot_manager.calculate_employee_scores` read
+`review_tracker_bonus` directly from the employee row instead of
+deriving it from `rt_mentions × rt_points_per_mention`. The bonus
+was only ever set by the RT-upload merge path, so rows that were
+edited, migrated, or processed without an RT upload kept whatever
+stale value was last stored.
+
+**Fix**:
+- `calculate_employee_scores` now ALWAYS recomputes
+  `review_tracker_bonus = round(min(rt_mentions × rate, cap), 2)`
+  using the rate/cap from the benchmarks dict (canonical defaults
+  0.33 / 20). Single source of truth.
+- New `_build_benchmarks_dict(settings)` helper in
+  `snapshot_routes.py` returns a complete benchmarks dict from
+  quarter settings (incl. weights + RT rate/cap). Replaced 3 inline
+  dicts (`/process`, `/confirm-pos-review`, `/recompute`) so every
+  scoring path sees the same config.
+- Regression test `tests/test_rt_bonus_auto_derive.py` covers stale
+  zero, wrong-ratio, cap, no-mentions, legacy field name (5 cases).
+
+**Verified on the actual stuck Q2P5W2.75 snapshot**:
+- Trey Quick: rtb 0 → **11.22** (34 × 0.33)
+- Kahi: rtb 0.3 → **0.99** (3 × 0.33)
+- All 30 employees recompute correctly at 0.33 rate.
+
+19 scoring-related tests pass.
+
 ### P0: Canonical Scoring Audit + Fix — SHIPPED 2026-05-14
 
 User-confirmed canonical spec:

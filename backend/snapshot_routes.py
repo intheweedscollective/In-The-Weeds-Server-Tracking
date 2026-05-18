@@ -710,12 +710,7 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
     from snapshot_manager import calculate_employee_scores, assign_performance_tiers
     
     # Default benchmarks
-    benchmarks = {
-        "ppa": 55.0,
-        "lbw": 8.0,
-        "glass": 1.35,
-        "lsc": 100.0
-    }
+    benchmarks = _build_benchmarks_dict(None)
     
     # Update this employee's scores
     scored_emp = calculate_employee_scores(emp, benchmarks)
@@ -1095,7 +1090,7 @@ async def rebuild_snapshot_from_pos():
     
     # Calculate scores
     from snapshot_manager import calculate_employee_scores, assign_performance_tiers
-    benchmarks = {"ppa": 55.0, "lbw": 8.0, "glass": 1.35, "lsc": 100.0}
+    benchmarks = _build_benchmarks_dict(None)
     
     scored_employees = []
     for emp in new_employees:
@@ -1460,12 +1455,7 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
             {"year": snapshot.get("year", 2026), "quarter": snapshot.get("quarter", "Q1").upper()},
             {"_id": 0}
         )
-        benchmarks = {
-            "ppa": settings.get("benchmark_ppa", 55.0) if settings else 55.0,
-            "lbw": settings.get("benchmark_lbw", 8.0) if settings else 8.0,
-            "glass": settings.get("benchmark_glass", 1.35) if settings else 1.35,
-            "lsc": settings.get("benchmark_lsc", 100.0) if settings else 100.0,
-        }
+        benchmarks = _build_benchmarks_dict(settings)
         
         for new_emp in employees_data:
             name = new_emp.get("name", "").lower().strip()
@@ -1704,6 +1694,31 @@ _SYNCABLE_FIELDS = (
     "performance_tier", "peer_rank",
     "name", "display_name", "report_name", "job_title",
 )
+
+
+def _build_benchmarks_dict(settings: Optional[Dict[str, Any]]) -> Dict[str, float]:
+    """
+    Canonical benchmarks dict used by every call to
+    `calculate_employee_scores`. Single source of truth so adding a new
+    config knob (e.g. RT rate) only needs to happen in one place.
+
+    Falls back to the v3 canonical defaults (PPA 25, LSC 25, LBW 20,
+    GLASS 15 weights, RT 0.33 pts/mention with 20-pt cap) when a quarter
+    has no stored settings yet.
+    """
+    s = settings or {}
+    return {
+        "ppa":   s.get("benchmark_ppa",   55.0),
+        "lbw":   s.get("benchmark_lbw",   8.0),
+        "glass": s.get("benchmark_glass", 1.35),
+        "lsc":   s.get("benchmark_lsc",   100.0),
+        "weight_ppa":   s.get("weight_ppa",   0.25),
+        "weight_lsc":   s.get("weight_lsc",   0.25),
+        "weight_lbw":   s.get("weight_lbw",   0.20),
+        "weight_glass": s.get("weight_glass", 0.15),
+        "rt_points_per_mention": s.get("rt_points_per_mention", 0.33),
+        "rt_max_points":         s.get("rt_max_points",         20.0),
+    }
 
 
 async def _propagate_snapshot_to_employees_v2(
@@ -1974,12 +1989,7 @@ async def process_snapshot(snapshot_id: str, force: bool = False):
             {"_id": 0}
         )
         
-        benchmarks = {
-            "ppa": settings.get("benchmark_ppa", 55.0) if settings else 55.0,
-            "lbw": settings.get("benchmark_lbw", 8.0) if settings else 8.0,
-            "glass": settings.get("benchmark_glass", 1.35) if settings else 1.35,
-            "lsc": settings.get("benchmark_lsc", 100.0) if settings else 100.0,
-        }
+        benchmarks = _build_benchmarks_dict(settings)
         
         # Merge data from all uploads
         employees = await merge_snapshot_data(snapshot)
@@ -3093,7 +3103,7 @@ async def fix_snapshot_employee_ids(snapshot_id: str):
     ) if "snapshot_benchmarks" in await db.list_collection_names() else None
     if not benchmarks:
         # Use the same defaults as snapshot_manager
-        benchmarks = {"ppa": 55.0, "lbw": 8.0, "glass": 1.35, "lsc": 100.0}
+        benchmarks = _build_benchmarks_dict(None)
 
     rescored = []
     for emp in employees_v2:
@@ -4323,7 +4333,7 @@ async def rescore_all_employees(year: int = 2026, quarter: str = "Q1"):
             {"quarter": q, "year": year}
         )
     if not benchmarks:
-        benchmarks = {"ppa": 55.0, "lbw": 8.0, "glass": 1.35, "lsc": 100.0}
+        benchmarks = _build_benchmarks_dict(None)
 
     rescored = 0
     over_100_before = 0
