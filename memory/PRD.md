@@ -12,6 +12,28 @@ Build a comprehensive performance review application for restaurant employees.
 
 ## Current State (2026-05-14)
 
+### P0: Snapshot Integrity Gate Always-Fires — FIXED 2026-05-14
+
+- **Symptom**: "Save & Process Snapshot" 500'd on production with
+  the gate's "30% all-POS-at-zero" failure for **every** snapshot,
+  even ones with perfectly valid POS data.
+- **Root cause** (user-spotted): the gate checked
+  `score_ppa`/`score_lbw`/`score_glass`/`score_lsc`, but those
+  fields are computed by `calculate_employee_scores()` which runs
+  AFTER the gate. At gate-evaluation time every row's
+  `score_*` defaults to 0, so the gate misfired on 100% of rows.
+- **Fix** (`snapshot_routes.py::process_snapshot`): swapped the
+  check to the RAW POS metrics (`ppa`, `lbw_per_guest`,
+  `glassware_per_guest`, `guests_per_lsc`) — these are populated by
+  `merge_snapshot_data` before the gate runs. Genuinely broken
+  uploads still trigger the gate; valid snapshots now pass.
+- **Test**: `tests/test_integrity_gate_pre_score.py` locks the
+  regression (3 cases: old-buggy-flags-everything, fixed-passes-on-
+  valid, fixed-still-flags-truly-blank).
+- **Verified**: re-ran the gate against the actual preview
+  in-progress snapshot — 0% all-zero rows (was effectively 100%
+  before), gate cleanly passes.
+
 ### P0: "Process Snapshot" Silent 500 — FIXED 2026-05-14
 
 - **Symptom (prod)**: clicking "Save & Process Snapshot" on Data

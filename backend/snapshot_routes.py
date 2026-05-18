@@ -2004,12 +2004,17 @@ async def process_snapshot(snapshot_id: str, force: bool = False):
                 )
             zero_pos = sum(
                 1 for e in employees
+                # Check raw POS metrics here — the gate runs BEFORE
+                # `calculate_employee_scores`, so `score_ppa` etc are
+                # not populated yet. Using the score fields made every
+                # row look "all zero" and the gate always fired, which
+                # silently 500'd "Process Snapshot" without ?force=true.
                 if not any((e.get(k) or 0) for k in
-                           ("score_ppa", "score_lbw", "score_glass", "score_lsc"))
+                           ("ppa", "lbw_per_guest", "glassware_per_guest", "guests_per_lsc"))
             )
             if (zero_pos / n) > 0.30:
                 gate_failures.append(
-                    f"{zero_pos}/{n} employees have ALL POS scores at zero. "
+                    f"{zero_pos}/{n} employees have ALL POS metrics at zero. "
                     f"Likely parser failure or wrong file format."
                 )
             # Compare row count to the previous completed snapshot.
