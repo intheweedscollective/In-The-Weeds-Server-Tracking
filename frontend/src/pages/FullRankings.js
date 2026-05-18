@@ -855,7 +855,7 @@ export default function FullRankings() {
                           <TooltipContent className="bg-slate-800 text-white p-3 max-w-xs">
                             <div className="text-xs space-y-1">
                               <div className="font-bold mb-1">Review Tracker Bonus:</div>
-                              <div>• Each mention = +{quarterSettings?.rt_points_per_mention ?? 0.3} pts</div>
+                              <div>• Each mention = +{quarterSettings?.rt_points_per_mention ?? 0.33} pts</div>
                               <div>• Capped at {Math.round(quarterSettings?.rt_max_points ?? 20)} pts max</div>
                               <div className="mt-1 text-slate-400">From ReviewTrackers.com</div>
                             </div>
@@ -1018,7 +1018,7 @@ export default function FullRankings() {
                                 <TooltipContent className="bg-slate-800 text-white p-3 max-w-xs border border-slate-600">
                                   <div className="text-xs">
                                     <div className="font-bold text-primary mb-1">Review Tracker</div>
-                                    <div>{employee.review_mentions || 0} mentions × {quarterSettings?.rt_points_per_mention ?? 0.3} pts = +{formatNumber(employee.review_bonus || 0)} pts (max {Math.round(quarterSettings?.rt_max_points ?? 20)})</div>
+                                    <div>{employee.review_mentions || 0} mentions × {quarterSettings?.rt_points_per_mention ?? 0.33} pts = +{formatNumber(employee.review_bonus || 0)} pts (max {Math.round(quarterSettings?.rt_max_points ?? 20)})</div>
                                   </div>
                                 </TooltipContent>
                               </Tooltip>
@@ -1416,7 +1416,7 @@ export default function FullRankings() {
                                             ? (benchmarks.benchmark_lsc || 100) / emp.guests_per_lsc * 100
                                             : 0;
 
-                                          const rtCoef = benchmarks.rt_points_per_mention || 0.3;
+                                          const rtCoef = benchmarks.rt_points_per_mention || 0.33;
                                           const rtCap  = benchmarks.rt_max_points || 20;
                                           const currentRt = Math.min((emp.review_mentions || emp.rt_mentions || 0) * rtCoef, rtCap);
 
@@ -1673,7 +1673,7 @@ export default function FullRankings() {
                         <td className="py-3 px-2 text-center">
                           {(() => {
                             const m = employee.rt_mentions || employee.review_mentions || 0;
-                            const coef = quarterSettings?.rt_points_per_mention ?? 0.3;
+                            const coef = quarterSettings?.rt_points_per_mention ?? 0.33;
                             const cap  = quarterSettings?.rt_max_points ?? 20;
                             const bonus = Math.min(m * coef, cap);
                             return (

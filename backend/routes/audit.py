@@ -861,7 +861,7 @@ async def sync_employee_review_mentions(quarter: str = "Q1", year: int = 2026):
             nps_normalized = max(0, (nps_score + 100) / 2)
             nps_contribution = min(nps_normalized, 100) * 0.10
             
-            base_weighted = (capped_ppa * 0.25) + (capped_lsc * 0.25) + (capped_lbw * 0.15) + (capped_glass * 0.10) + nps_contribution + new_rt_bonus
+            base_weighted = (capped_ppa * 0.25) + (capped_lsc * 0.25) + (capped_lbw * 0.20) + (capped_glass * 0.15) + nps_contribution + new_rt_bonus
             
             metric_bonus = min(emp.get('total_metric_bonus', 0) or 0, 20)
             cv_bonus = emp.get('cv_score', 0) or emp.get('cv_bonus', 0) or 0

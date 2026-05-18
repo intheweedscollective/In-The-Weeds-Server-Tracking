@@ -20,7 +20,7 @@ export default function ScoringGuide() {
   }, [year, quarter]);
 
   // Dynamic scoring constants (fall back to current Q2 v3 defaults).
-  const RT_PTS = qSettings?.rt_points_per_mention ?? 0.3;
+  const RT_PTS = qSettings?.rt_points_per_mention ?? 0.33;
   const RT_CAP = qSettings?.rt_max_points ?? 20;
   const RT_MAX_MENTIONS = Math.ceil(RT_CAP / RT_PTS);
   const CV_PROMOTER_PTS = qSettings?.cv_promoter_points ?? 1;

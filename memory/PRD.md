@@ -12,6 +12,40 @@ Build a comprehensive performance review application for restaurant employees.
 
 ## Current State (2026-05-14)
 
+### P0: Canonical Scoring Audit + Fix — SHIPPED 2026-05-14
+
+User-confirmed canonical spec:
+  • Weights: **PPA 25%, LSC 25%, LBW 20%, GLASS 15%** (total 85%)
+  • Metric Bonus: **0.25 pts per 1% above benchmark, cap 5 pts/metric**
+  • Review Tracker: **0.33 pts per mention, cap 20 pts**
+
+**Drift discovered & fixed**:
+
+| File | Was | Now |
+|---|---|---|
+| `server.py:516–519` (inline weighted) | `LBW * 0.15 + GLASS * 0.10` | `LBW * 0.20 + GLASS * 0.15` |
+| `server.py:1148–1153` (matching path) | same bug | fixed |
+| `routes/audit.py:864` (audit recalc) | same bug | fixed |
+| `scoring_engine.py:62-63` constants | 0.3 / 20 | **0.33** / 20 |
+| `scoring_engine.py:231` QS default | 0.3 | **0.33** |
+| `server.py:533` inline RT calc | 0.3 | **0.33** |
+| `snapshot_routes.py:706,2419,3811` | 0.3 | **0.33** |
+| `audit_system.py:331,335,338` | 0.3 | **0.33** |
+| `pdf_full_rankings.py` slide | 0.3 | **0.33** |
+| `png_full_rankings.py` slide | 0.3 | **0.33** |
+| 7 frontend `?? 0.3` defaults | 0.3 | **0.33** |
+| Help / docs copy (HelpTooltip, HelpCenter) | 0.3 | **0.33** |
+
+**DB updates (preview only)**:
+  • `quarter_settings` for Q2 2026 and Q3 2026 → `rt_points_per_mention: 0.33`.
+  • Q1 2026 and Q4 2025 left frozen on legacy v2 RT model (0.5/15 cap).
+
+**Lock-down test**: `tests/test_canonical_scoring_constants.py` asserts
+weights, bonus rate/cap, and RT rate/cap match the canonical spec.
+Any future drift fails CI immediately. 14 tests pass.
+
+**⚠️ Production note**: production DB still has `rt_points_per_mention: 0.3` for Q2/Q3 2026. Users **must** open Quarter Settings on production and update those two quarters to `0.33` (or re-save the form). Stored DB values override code defaults.
+
 ### P0: Snapshot Integrity Gate Always-Fires — FIXED 2026-05-14
 
 - **Symptom**: "Save & Process Snapshot" 500'd on production with

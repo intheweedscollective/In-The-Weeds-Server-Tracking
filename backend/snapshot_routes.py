@@ -702,8 +702,8 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
     # Recalculate RT bonus if rt_mentions updated
     if "rt_mentions" in updates or "review_mentions" in updates:
         rt_mentions = emp.get("rt_mentions", 0) or 0
-        # RT Bonus = mentions × 0.5, capped at 15 pts
-        emp["review_tracker_bonus"] = min(rt_mentions * 0.3, 20)
+        # RT Bonus = mentions × 0.33, capped at 20 pts (canonical v3 rule)
+        emp["review_tracker_bonus"] = min(rt_mentions * 0.33, 20)
         logger.info(f"Recalculated RT bonus for {emp.get('name')}: mentions={rt_mentions}, bonus={emp['review_tracker_bonus']}")
     
     # Recalculate scores using the scoring formula
@@ -2416,7 +2416,7 @@ async def _hydrate_snapshot_employees(db, snapshot: Dict[str, Any]) -> List[Dict
         {"year": snapshot.get("year"), "quarter": snapshot.get("quarter")},
         {"_id": 0, "rt_points_per_mention": 1, "rt_max_points": 1},
     ) or {}
-    rt_coef = qs_doc.get("rt_points_per_mention", 0.3) or 0.3
+    rt_coef = qs_doc.get("rt_points_per_mention", 0.33) or 0.33
     rt_cap  = qs_doc.get("rt_max_points", 20.0) or 20.0
     for emp in sorted_employees:
         m = emp.get("rt_mentions") or emp.get("review_mentions") or 0
@@ -3808,7 +3808,7 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                 if matched_name:
                     mentions = rt_data.get("mentions", 0)
                     employees[matched_name]["rt_mentions"] = mentions
-                    employees[matched_name]["review_tracker_bonus"] = round(min(mentions * 0.3, 20), 1)  # Cap at 15
+                    employees[matched_name]["review_tracker_bonus"] = round(min(mentions * 0.33, 20), 1)  # Cap at 20 (canonical v3)
     
     # Defensive dedupe: guarantee unique employees by display_name so the
     # Employees tab never shows duplicates even if upstream data drifted.

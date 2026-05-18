@@ -538,7 +538,7 @@ export default function QuarterSettings() {
                 Formula: NPS%/10 + (Promoters × {formData.cv_promoter_points ?? 1}) − (Detractors × {formData.cv_detractor_points ?? 2})
               </p>
               <p className="text-xs text-blue-700 mt-1">
-                The Review Tracker bonus ({formData.rt_points_per_mention ?? 0.3} pts/mention, max {Math.round(formData.rt_max_points ?? 20)}) is a SEPARATE bonus added on top of CV.
+                The Review Tracker bonus ({formData.rt_points_per_mention ?? 0.33} pts/mention, max {Math.round(formData.rt_max_points ?? 20)}) is a SEPARATE bonus added on top of CV.
               </p>
             </div>
           </div>

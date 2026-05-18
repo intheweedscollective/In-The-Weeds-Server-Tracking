@@ -38,7 +38,7 @@ export default function ReviewTracker() {
       .then((d) => setQSettings(d))
       .catch(() => setQSettings(null));
   }, [selectedYear, selectedQuarter]);
-  const RT_PTS = qSettings?.rt_points_per_mention ?? 0.3;
+  const RT_PTS = qSettings?.rt_points_per_mention ?? 0.33;
   const RT_CAP = qSettings?.rt_max_points ?? 20;
   const CV_PROM = qSettings?.cv_promoter_points ?? 1;
   const CV_DET = qSettings?.cv_detractor_points ?? 2;

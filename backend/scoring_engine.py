@@ -59,8 +59,8 @@ CV_DETRACTOR_POINTS = -2  # -2 per detractor (6 or below)
 NPS_MAX_POINTS = 10
 
 # Review Tracker Bonus — per v3 handout: +0.3 per mention, quarterly cap +20
-RT_POINTS_PER_MENTION = 0.3  # Each mention = 0.3 points
-RT_MAX_POINTS = 20           # Cap at 20 points (~67 mentions)
+RT_POINTS_PER_MENTION = 0.33  # Each mention = 0.33 points (user-confirmed)
+RT_MAX_POINTS = 20            # Cap at 20 points (~61 mentions)
 
 # Metric Bonus Settings (User Confirmed)
 # 5 pts max per metric, linear scale from 100%-120%
@@ -226,9 +226,9 @@ class QuarterSettings(BaseModel):
     bonus_cap: float = 5.0   # Max bonus per metric
 
     # === REVIEW TRACKER (Per-Quarter — historical quarters stay frozen) ===
-    # v2 model (pre-Q2 2026): 0.5 pts/mention, cap 15
-    # v3 model (Q2 2026+):    0.3 pts/mention, cap 20
-    rt_points_per_mention: float = 0.3
+    # v2 model (pre-Q2 2026):  0.5 pts/mention, cap 15
+    # v3 model (Q2 2026+):     0.33 pts/mention, cap 20  (user-confirmed)
+    rt_points_per_mention: float = 0.33
     rt_max_points: float = 20.0
     
     # === SERVER TIER THRESHOLDS (Settings-driven) ===

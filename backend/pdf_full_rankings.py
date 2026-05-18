@@ -32,7 +32,7 @@ LOGO_PATH = "/app/backend/assets/bubba_gump_logo.png"
 
 
 def _rt_value(mentions: float) -> float:
-    return min(0.3 * (mentions or 0), 20.0)
+    return min(0.33 * (mentions or 0), 20.0)
 
 
 def get_cell_color(value: float, metric_type: str = "percentage") -> str:

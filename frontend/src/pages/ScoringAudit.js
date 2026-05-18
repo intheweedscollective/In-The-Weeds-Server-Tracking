@@ -346,7 +346,7 @@ export default function ScoringAudit() {
               const wLsc = Math.round(((quarterSettings?.weight_lsc) ?? 0.25) * 100);
               const wLbw = Math.round(((quarterSettings?.weight_lbw) ?? 0.20) * 100);
               const wGla = Math.round(((quarterSettings?.weight_glass) ?? 0.15) * 100);
-              const rtPts = (quarterSettings?.rt_points_per_mention) ?? 0.3;
+              const rtPts = (quarterSettings?.rt_points_per_mention) ?? 0.33;
               const rtCap = (quarterSettings?.rt_max_points) ?? 20;
               return (
                 <>
