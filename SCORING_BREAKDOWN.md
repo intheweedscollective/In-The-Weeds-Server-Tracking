@@ -6,7 +6,7 @@
 
 | Component | Max Points | Description |
 |-----------|------------|-------------|
-| Weighted POS Metrics | 75 pts | Core performance metrics |
+| Weighted POS Metrics | 85 pts | Core performance metrics |
 | Metric Bonuses | 20 pts | Exceeding benchmarks |
 | Customer Voice (CV) | Uncapped | NPS + Promoter/Detractor points |
 | Review Tracker (RT) | 15 pts | Online review mentions |
@@ -18,7 +18,7 @@
 
 ## DETAILED BREAKDOWN
 
-### 1. WEIGHTED POS METRICS (75 points max)
+### 1. WEIGHTED POS METRICS (85 points max)
 
 These are the core operational metrics from POS data. Each metric is scored as:
 ```
@@ -30,8 +30,8 @@ Then capped at 100 before weighting.
 |--------|--------|------------------|------------------|
 | **PPA** (Per Person Average) | 25% | 25 pts | Average revenue per guest |
 | **LSC** (Loyalty Sales) | 25% | 25 pts | Loyalty program enrollments |
-| **LBW** (Liquor/Beer/Wine) | 15% | 15 pts | Beverage upsells per guest |
-| **Glassware** | 10% | 10 pts | Premium drink sales per guest |
+| **LBW** (Liquor/Beer/Wine) | 20% | 20 pts | Beverage upsells per guest |
+| **Glassware** | 15% | 15 pts | Premium drink sales per guest |
 
 **Example:**
 - Employee PPA = $60, Benchmark = $55
@@ -97,15 +97,15 @@ Individual survey responses add/subtract points:
 
 | Rating | Category | Points |
 |--------|----------|--------|
-| 9-10 | Promoter | **+0.5 pts each** |
+| 9-10 | Promoter | **+1 pts each** |
 | 7-8 | Passive | 0 pts |
-| 1-6 | Detractor | **-1 pt each** |
+| 1-6 | Detractor | **-2 pt each** |
 
 **Example:**
 - Employee has NPS of 80%, 15 promoters, 2 detractors
 - NPS Points = 80 / 10 = 8.0 pts
-- Survey Points = (15 × 0.5) + (2 × -1) = 7.5 - 2 = 5.5 pts
-- **Total CV Score = 8.0 + 5.5 = 13.5 pts**
+- Survey Points = (15 × 1) + (2 × -2) = 15 - 4 = 11 pts
+- **Total CV Score = 8.0 + 11 = 19.00 pts**
 
 ---
 
@@ -115,16 +115,16 @@ Points for being mentioned in online reviews (Yelp, Google, TripAdvisor, etc.)
 
 **Formula:**
 ```
-RT Bonus = Mentions × 0.5 pts (capped at 15 pts)
+RT Bonus = Mentions × 0.33 pts (capped at 20 pts)
 ```
 
 | Mentions | Points |
 |----------|--------|
 | 0 | 0 pts |
-| 10 | 5 pts |
-| 20 | 10 pts |
-| 30+ | 15 pts (max) |
-
+| 10 | 3 pts |
+| 20 | 6 pts |
+| 30 | 10 pts (max) |
+| 60 | 20 pts (max) |
 ---
 
 ### 5. DAR PENALTIES (Admin-Only)
@@ -144,8 +144,8 @@ Disciplinary Action Reports reduce the final score. **Not visible in public rank
 TOTAL SCORE = 
     (PPA_Score × 0.25) +           // Max 25 pts
     (LSC_Score × 0.25) +           // Max 25 pts  
-    (LBW_Score × 0.15) +           // Max 15 pts
-    (Glass_Score × 0.10) +         // Max 10 pts
+    (LBW_Score × 0.20) +           // Max 20 pts
+    (Glass_Score × 0.15) +         // Max 15 pts
     Metric_Bonuses +               // Max 20 pts
     CV_Score +                     // Uncapped
     RT_Bonus -                     // Max 15 pts
@@ -228,14 +228,14 @@ The Store Performance Index aggregates employee scores into 4 categories:
 |--------|-----------|-------------|
 | PPA | $55.00 | Per Person Average |
 | LBW | $8.00/guest | Liquor/Beer/Wine per guest |
-| Glassware | $1.25/guest | Premium drinks per guest |
-| LSC | 1:1 ratio | 1 loyalty signup per 1 guest |
+| Glassware | $1.35/guest | Premium drinks per guest |
+| LSC | 1:100 ratio | 1 loyalty signup per 100 guests |
 
 ---
 
 ## KEY TAKEAWAYS
 
-1. **Base score is 75 points max** from POS metrics
+1. **Base score is 85 points max** from POS metrics
 2. **Bonuses can add 20+ points** for exceeding benchmarks
 3. **Customer Voice is uncapped** - great service = unlimited upside
 4. **RT mentions capped at 15 pts** (30 mentions)
