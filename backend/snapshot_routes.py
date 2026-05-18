@@ -1702,7 +1702,7 @@ _SYNCABLE_FIELDS = (
     "total_metric_bonus", "metric_bonus",
     "weighted_score", "pre_dar_score", "total_score",
     "performance_tier", "peer_rank",
-    "display_name", "report_name", "job_title",
+    "name", "display_name", "report_name", "job_title",
 )
 
 
