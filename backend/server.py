@@ -2202,7 +2202,7 @@ async def _load_snapshot_first_rankings(
         bonus_cap=settings_doc.get("bonus_cap", 5.0),
         a_server_min_score=settings_doc.get("a_server_min_score", 85.0),
         b_server_min_score=settings_doc.get("b_server_min_score", 70.0),
-        rt_points_per_mention=settings_doc.get("rt_points_per_mention", 0.3),
+        rt_points_per_mention=settings_doc.get("rt_points_per_mention", 0.33),
         rt_max_points=settings_doc.get("rt_max_points", 20.0),
     )
 

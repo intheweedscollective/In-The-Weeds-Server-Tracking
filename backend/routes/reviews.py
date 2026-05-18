@@ -282,7 +282,7 @@ async def get_review_stats_endpoint(quarter: str = "Q1", year: int = 2026):
         {"year": year, "quarter": quarter.upper()},
         {"_id": 0, "rt_points_per_mention": 1, "rt_max_points": 1},
     ) or {}
-    _rt_coef = qs_doc.get("rt_points_per_mention", 0.3) or 0.3
+    _rt_coef = qs_doc.get("rt_points_per_mention", 0.33) or 0.33
     _rt_cap  = qs_doc.get("rt_max_points", 20.0) or 20.0
     if len(reviews) == 0:
         total_mentions = 0

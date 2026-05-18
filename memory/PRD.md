@@ -12,6 +12,27 @@ Build a comprehensive performance review application for restaurant employees.
 
 ## Current State (2026-05-14)
 
+### P1: Editable RT Bonus in Quarter Settings — SHIPPED 2026-05-14 (late)
+
+**Issue**: Quarter Settings UI was missing inputs for
+`rt_points_per_mention` and `rt_max_points`. The fields existed in
+the DB and were used everywhere else, but admins couldn't edit them
+through the UI — only the underlying defaults could be changed.
+
+**Root cause**: Pydantic models in
+`routes/quarter_settings.py` (`QuarterSettingsCreate` and
+`QuarterSettingsUpdate`) didn't declare the two RT fields, so even if
+the frontend had sent them, the PUT request would have stripped them.
+
+**Fix**:
+- Added `rt_points_per_mention` and `rt_max_points` to both Pydantic
+  models with canonical defaults (0.33 / 20).
+- Added a dedicated **Review Tracker Bonus** card to
+  `pages/QuarterSettings.js` with both inputs, locked state respected,
+  inline copy showing the formula and canonical values.
+- Threaded the two fields through `formData` init and both `setFormData`
+  paths so existing/new quarters round-trip correctly.
+
 ### P0: RT Bonus Auto-Derived From Mentions — SHIPPED 2026-05-14 (late)
 
 **Symptom (prod, Q2P5W2.75)**: Specific employees showed `rt_mentions`

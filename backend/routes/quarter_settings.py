@@ -38,6 +38,9 @@ class QuarterSettingsCreate(BaseModel):
     weight_cv: float = 0.15         # Q1 2026: 15% (Customer Voice & Review Tracker)
     bonus_rate: float = 0.2
     bonus_cap: float = 5.0
+    # Review Tracker bonus (Q2 2026+ canonical: 0.33 pts/mention, cap 20)
+    rt_points_per_mention: float = 0.33
+    rt_max_points: float = 20.0
     # Server tier thresholds (Settings-driven)
     a_server_min_score: float = 85.0   # A-Server >= 85
     b_server_min_score: float = 70.0   # B-Server >= 70, C-Server < 70
@@ -62,6 +65,9 @@ class QuarterSettingsUpdate(BaseModel):
     weight_cv: Optional[float] = None
     bonus_rate: Optional[float] = None
     bonus_cap: Optional[float] = None
+    # Review Tracker bonus
+    rt_points_per_mention: Optional[float] = None
+    rt_max_points: Optional[float] = None
     # Server tier thresholds
     a_server_min_score: Optional[float] = None
     b_server_min_score: Optional[float] = None
