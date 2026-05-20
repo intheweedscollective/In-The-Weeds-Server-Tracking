@@ -2077,6 +2077,52 @@ async def process_snapshot(snapshot_id: str, force: bool = False):
         
         # Assign tiers and ranks
         employees = assign_performance_tiers(employees)
+
+        # ---- Sync rows[] frozen_metrics from employees[] -----------------
+        # `snapshot.rows[]` is the FK-based store that the Full Rankings
+        # page reads via `_hydrate_snapshot_employees`. Without this sync,
+        # `rows[].frozen_metrics` keeps the score state captured when the
+        # snapshot was first saved (no RT bonus, no CV bonus, stale total
+        # score) while `employees[]` has the freshly-computed values.
+        # That mismatch was visible in prod on Q2P5W2.75: Top Performers
+        # widget (reads employees[]) showed Trey/Diane/Kitti while the
+        # Rankings tab (reads rows[]) showed Keisha/Cory/Jose. Always
+        # mirror the canonical scored state into rows[] here.
+        emp_by_id = {e.get("id"): e for e in employees if e.get("id")}
+        # Also build a name-based fallback for older snapshots whose
+        # rows[] reference IDs that don't match the current employees[]
+        # (e.g. after a canonical merge).
+        emp_by_name = {}
+        for e in employees:
+            for nm in (e.get("name"), e.get("display_name"), e.get("report_name")):
+                k = (nm or "").strip().lower()
+                if k:
+                    emp_by_name.setdefault(k, e)
+
+        synced_rows = []
+        for row in (snapshot.get("rows") or []):
+            eid = row.get("employee_id")
+            scored = emp_by_id.get(eid)
+            if scored is None:
+                fallback = (row.get("frozen_display_name") or row.get("frozen_report_name") or "").strip().lower()
+                scored = emp_by_name.get(fallback) if fallback else None
+            if scored is None:
+                # Keep the row as-is rather than dropping data we can't
+                # match — at least the next merge attempt can pick it up.
+                synced_rows.append(row)
+                continue
+            synced_rows.append({
+                "employee_id": scored.get("id") or eid,
+                "frozen_display_name": scored.get("display_name") or scored.get("name") or row.get("frozen_display_name"),
+                "frozen_report_name":  scored.get("report_name")  or scored.get("name") or row.get("frozen_report_name"),
+                # The whole scored dict makes a faithful frozen snapshot —
+                # `_hydrate_snapshot_employees` reads any subset of these.
+                "frozen_metrics": {k: v for k, v in scored.items() if k not in ("id", "name", "display_name", "report_name", "aliases")},
+                "frozen_score": scored.get("total_score", 0),
+                "frozen_tier":  scored.get("tier_label") or scored.get("performance_tier"),
+                "frozen_rank":  scored.get("tier_rank") or scored.get("peer_rank"),
+                "recorded_at":  row.get("recorded_at") or datetime.now(timezone.utc).isoformat(),
+            })
         
         # Update snapshot as completed
         now = datetime.now(timezone.utc).isoformat()
@@ -2086,6 +2132,7 @@ async def process_snapshot(snapshot_id: str, force: bool = False):
                 "$set": {
                     "status": SnapshotStatus.COMPLETED.value,
                     "employees": employees,
+                    "rows": synced_rows,
                     "employee_count": len(employees),
                     "benchmarks_used": benchmarks,
                     "completed_at": now,

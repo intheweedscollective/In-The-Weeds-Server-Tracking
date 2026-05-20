@@ -12,6 +12,37 @@ Build a comprehensive performance review application for restaurant employees.
 
 ## Current State (2026-05-14)
 
+### P0: Rankings vs Top Performers Mismatch — FIXED 2026-05-14 (late)
+
+**Symptom (prod Q2P5W2.75)**: Top Performers widget on the Snapshot
+detail page showed *Trey / Diane / Kitti / Jose / Keisha* with full
+RT + CV bonuses. The Rankings tab showed *Keisha / Cory / Jose /
+Ethan / Adriana* with rt_b=0 across the board. Two views, same
+snapshot, totally different numbers.
+
+**Root cause**: `/process` updated `snapshot.employees[]` with the
+freshly-scored data but never refreshed `snapshot.rows[]
+.frozen_metrics`. The Top Performers widget reads `employees[]`
+directly; the Rankings tab reads `rows[]` via
+`_hydrate_snapshot_employees`. The two paths diverged the moment any
+bonus changed (RT rate fix earlier today exposed this).
+
+**Fix**: after `assign_performance_tiers`, mirror each scored
+employee back into the matching `rows[]` entry (by employee_id, with
+display_name/report_name fallback for ID drift). `rows[]` is now
+written in the same `$set` as `employees[]` so the two views can't
+diverge again.
+
+**Verified** by simulating the new flow against the actual preview
+snapshot — `rows[]` and `employees[]` now produce identical top-5
+rankings (Trey 112.61, Diane 112.12, Kitti 111.41, Jose 110.28,
+Keisha 105.36).
+
+**Regression test**: `tests/test_rows_sync_after_process.py`
+(4 cases — fresh-bonus-mirror, name-fallback when ID drifts,
+no-match preservation, top-5 order parity). 23 scoring-related
+tests pass.
+
 ### P1: Editable RT Bonus in Quarter Settings — SHIPPED 2026-05-14 (late)
 
 **Issue**: Quarter Settings UI was missing inputs for
