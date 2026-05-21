@@ -12,6 +12,38 @@ Build a comprehensive performance review application for restaurant employees.
 
 ## Current State (2026-05-14)
 
+### P0: Rows[] Grow-To-Match-Employees[] — FIXED 2026-05-14 (final)
+
+**Symptom (prod after first fix)**: Even after the rows-sync fix, the
+Rankings tab still showed inconsistent scores. The first fix only
+**updated** existing rows; it didn't address that `rows[]` and
+`employees[]` had **different employee sets**.
+
+On Q2P5W2.75 (preview, identical structure to prod):
+  - **In employees[] but no row**: Julian Taveras, Kahi,
+    Kahiauani Ramos, Lennie Nguyen (added by POS merge after first
+    save; ranked correctly in Top Performers, absent from Rankings)
+  - **In rows[] but no employee record**: Tad Hashey (deleted from
+    canonical, stuck in Rankings with stale `score=56.76`)
+
+**Fix**: in `/process` after the existing sync pass, also:
+  1. **Drop** rows whose `employee_id`/name match nothing in
+     `employees[]` (prevents stale ghost rows polluting Rankings).
+  2. **Grow** `rows[]` by appending a fresh row for every scored
+     employee not already covered.
+
+Result: `rows[]` length equals `employees[]` length after every
+process run. The two views can no longer disagree on **set** or
+**order**.
+
+**Verified** on the same Q2P5W2.75 snapshot: 27 stale rows → 29
+synced rows (4 grown, 1 ghost dropped), matching the 29 scored
+employees exactly. Lennie/Kahi/Kahiauani/Julian Taveras now all
+appear in rankings.
+
+Regression test `test_rows_grow_to_include_new_employees` covers
+the grow path. 24 scoring-related tests pass.
+
 ### P0: Rankings vs Top Performers Mismatch — FIXED 2026-05-14 (late)
 
 **Symptom (prod Q2P5W2.75)**: Top Performers widget on the Snapshot

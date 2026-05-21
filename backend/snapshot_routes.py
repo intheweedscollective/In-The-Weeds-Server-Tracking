@@ -2100,6 +2100,7 @@ async def process_snapshot(snapshot_id: str, force: bool = False):
                     emp_by_name.setdefault(k, e)
 
         synced_rows = []
+        consumed_emp_ids: set = set()
         for row in (snapshot.get("rows") or []):
             eid = row.get("employee_id")
             scored = emp_by_id.get(eid)
@@ -2107,21 +2108,47 @@ async def process_snapshot(snapshot_id: str, force: bool = False):
                 fallback = (row.get("frozen_display_name") or row.get("frozen_report_name") or "").strip().lower()
                 scored = emp_by_name.get(fallback) if fallback else None
             if scored is None:
-                # Keep the row as-is rather than dropping data we can't
-                # match — at least the next merge attempt can pick it up.
-                synced_rows.append(row)
+                # Drop rows that no longer have a matching employee in
+                # `employees[]`. Prior behaviour kept them and they
+                # silently polluted Rankings with stale scores while
+                # Top Performers correctly omitted them — same
+                # divergence the user reported. If a row's person is
+                # genuinely still active, they'll be added back via the
+                # "grow" pass below from `employees[]`.
                 continue
+            consumed_emp_ids.add(scored.get("id"))
             synced_rows.append({
                 "employee_id": scored.get("id") or eid,
                 "frozen_display_name": scored.get("display_name") or scored.get("name") or row.get("frozen_display_name"),
                 "frozen_report_name":  scored.get("report_name")  or scored.get("name") or row.get("frozen_report_name"),
-                # The whole scored dict makes a faithful frozen snapshot —
-                # `_hydrate_snapshot_employees` reads any subset of these.
                 "frozen_metrics": {k: v for k, v in scored.items() if k not in ("id", "name", "display_name", "report_name", "aliases")},
                 "frozen_score": scored.get("total_score", 0),
                 "frozen_tier":  scored.get("tier_label") or scored.get("performance_tier"),
                 "frozen_rank":  scored.get("tier_rank") or scored.get("peer_rank"),
                 "recorded_at":  row.get("recorded_at") or datetime.now(timezone.utc).isoformat(),
+            })
+
+        # ---- Grow rows[] to cover every scored employee --------------------
+        # Employees added via the POS/CV/RT merge after the snapshot was
+        # first saved (e.g. Lennie/Kahi/Kahiauani/Julian Taveras on the
+        # Q2P5W2.75 incident) had no `rows[]` entry, so the Rankings tab
+        # ignored them while Top Performers (which reads `employees[]`)
+        # showed them. Append a fresh row for every employee not already
+        # covered above.
+        now_iso = datetime.now(timezone.utc).isoformat()
+        for emp in employees:
+            eid = emp.get("id")
+            if not eid or eid in consumed_emp_ids:
+                continue
+            synced_rows.append({
+                "employee_id": eid,
+                "frozen_display_name": emp.get("display_name") or emp.get("name"),
+                "frozen_report_name":  emp.get("report_name")  or emp.get("name"),
+                "frozen_metrics": {k: v for k, v in emp.items() if k not in ("id", "name", "display_name", "report_name", "aliases")},
+                "frozen_score": emp.get("total_score", 0),
+                "frozen_tier":  emp.get("tier_label") or emp.get("performance_tier"),
+                "frozen_rank":  emp.get("tier_rank") or emp.get("peer_rank"),
+                "recorded_at":  now_iso,
             })
         
         # Update snapshot as completed
