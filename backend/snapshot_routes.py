@@ -720,11 +720,63 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
     employees = assign_performance_tiers(employees)
     
     # Update the snapshot using MongoDB _id for reliable update
+    # ALSO mirror the change into rows[].frozen_metrics so the
+    # Rankings/Data-Uploads views (which hydrate from rows[]) reflect
+    # the edit immediately. Without this mirror, the next re-fetch from
+    # `/current-rankings` re-reads stale frozen_metrics and the UI
+    # appears to "revert" the edit — same divergence as the Top
+    # Performers vs Rankings bug, just on the edit path.
+    updated_emp = employees[emp_idx]
+    rows = snapshot.get("rows") or []
+    emp_id = updated_emp.get("id")
+    emp_lower = (emp_id or "").lower().strip()
+    emp_name_lower = (updated_emp.get("name") or "").lower().strip()
+    emp_display_lower = (updated_emp.get("display_name") or "").lower().strip()
+    emp_report_lower = (updated_emp.get("report_name") or "").lower().strip()
+    row_mirror_done = False
+    for i, row in enumerate(rows):
+        row_eid = (row.get("employee_id") or "").lower().strip()
+        row_disp = (row.get("frozen_display_name") or "").lower().strip()
+        row_rep  = (row.get("frozen_report_name") or "").lower().strip()
+        if not (
+            (emp_lower and row_eid == emp_lower)
+            or (emp_name_lower and row_disp == emp_name_lower)
+            or (emp_display_lower and row_disp == emp_display_lower)
+            or (emp_report_lower and row_rep == emp_report_lower)
+        ):
+            continue
+        rows[i] = {
+            "employee_id": emp_id or row.get("employee_id"),
+            "frozen_display_name": updated_emp.get("display_name") or updated_emp.get("name") or row.get("frozen_display_name"),
+            "frozen_report_name":  updated_emp.get("report_name")  or updated_emp.get("name") or row.get("frozen_report_name"),
+            "frozen_metrics": {k: v for k, v in updated_emp.items() if k not in ("id", "name", "display_name", "report_name", "aliases")},
+            "frozen_score":  updated_emp.get("total_score", 0),
+            "frozen_tier":   updated_emp.get("tier_label") or updated_emp.get("performance_tier"),
+            "frozen_rank":   updated_emp.get("tier_rank") or updated_emp.get("peer_rank"),
+            "recorded_at":   row.get("recorded_at") or datetime.now(timezone.utc).isoformat(),
+        }
+        row_mirror_done = True
+        break
+    if not row_mirror_done and emp_id:
+        # No matching row existed (e.g. employee added via POS merge
+        # after snapshot save). Add a fresh row so Rankings sees them.
+        rows.append({
+            "employee_id": emp_id,
+            "frozen_display_name": updated_emp.get("display_name") or updated_emp.get("name"),
+            "frozen_report_name":  updated_emp.get("report_name")  or updated_emp.get("name"),
+            "frozen_metrics": {k: v for k, v in updated_emp.items() if k not in ("id", "name", "display_name", "report_name", "aliases")},
+            "frozen_score":  updated_emp.get("total_score", 0),
+            "frozen_tier":   updated_emp.get("tier_label") or updated_emp.get("performance_tier"),
+            "frozen_rank":   updated_emp.get("tier_rank") or updated_emp.get("peer_rank"),
+            "recorded_at":   datetime.now(timezone.utc).isoformat(),
+        })
+
     await db.snapshot_workflow.update_one(
         {"_id": snapshot_mongo_id},
         {
             "$set": {
                 "employees": employees,
+                "rows": rows,
                 "updated_at": datetime.now(timezone.utc).isoformat()
             }
         }
@@ -3489,15 +3541,31 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
 
     def find_employee_match(external_name: str, employees_dict: dict) -> Optional[str]:
         """Fuzzy-match a name from CV / RT against the POS-keyed employees
-        dict. Tries: (1) direct lower-case key match, (2) nickname
-        expansion of first name + exact last-name match, (3) reverse
-        nickname (POS uses formal name, external file uses nickname),
-        (4) first-name prefix on a unique last name."""
+        dict. Tries: (1) direct lower-case key match, (2) canonical
+        alias resolution (so "Craig Simmons" → Allen Simmons via the
+        `aliases` field), (3) nickname expansion of first name + exact
+        last-name match, (4) reverse nickname (POS uses formal name,
+        external file uses nickname), (5) first-name prefix on a unique
+        last name."""
         if not external_name:
             return None
         ext = external_name.strip().lower()
         if ext in employees_dict:
             return ext
+
+        # Canonical alias resolution comes BEFORE nickname tables because
+        # admins maintain the canonical aliases explicitly. A configured
+        # alias on the canonical record is the strongest possible signal.
+        canonical = _resolve_via_alias(ext)
+        if canonical:
+            canonical_lower = canonical.strip().lower()
+            if canonical_lower in employees_dict:
+                return canonical_lower
+            # Also try first-name-only key
+            first_only = canonical_lower.split()[0] if canonical_lower else ""
+            if first_only and first_only in employees_dict:
+                return first_only
+
         parts = ext.split()
         if len(parts) < 2:
             return None
@@ -3520,6 +3588,42 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
         return None
 
     employees = {}
+
+    # ------------------------------------------------------------------
+    # Canonical-alias resolver. CV / RT files often use a different name
+    # than the POS report (e.g. "Craig Simmons" from CV but POS lists
+    # "Allen Simmons" with "craig simmons" in his aliases). Build a
+    # lowercase alias → canonical-name map up front so we can route
+    # incoming CV/RT rows to the right POS employee even when the
+    # nickname tables don't cover the link. We also de-dupe aliases
+    # that exist as their own separate canonical record: if "Craig
+    # Simmons" lives as both a standalone record AND an alias on
+    # Allen, the alias on Allen wins and the standalone record is
+    # ignored for matching purposes (otherwise CV data flows to the
+    # ghost canonical and Allen's row stays empty). This matches the
+    # user-spotted Q2P5W2.75 prod bug where CV/NPS for Craig went to a
+    # phantom record and Allen showed NPS=0 despite uploaded data.
+    # ------------------------------------------------------------------
+    db = get_db()
+    alias_to_canonical_name: dict[str, str] = {}
+    canonical_names_set: set[str] = set()
+    async for ce in db.employees.find({}, {"_id": 0, "name": 1, "aliases": 1}):
+        cname = (ce.get("name") or "").strip()
+        if not cname:
+            continue
+        canonical_names_set.add(cname.lower())
+        for alias in (ce.get("aliases") or []):
+            a = (alias or "").strip().lower()
+            if a and a != cname.lower():
+                # First write wins — if two canonicals claim the same
+                # alias, the earlier doc keeps it.
+                alias_to_canonical_name.setdefault(a, cname)
+
+    def _resolve_via_alias(external_name: str) -> Optional[str]:
+        """Return the canonical name that lists `external_name` as an alias, if any."""
+        if not external_name:
+            return None
+        return alias_to_canonical_name.get(external_name.strip().lower())
 
     # ------------------------------------------------------------------
     # Terminated / deleted employees blocklist.

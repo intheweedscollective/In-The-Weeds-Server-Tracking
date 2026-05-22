@@ -3314,6 +3314,63 @@ async def analyze_employees_for_cleanup():
     }
 
 
+@api_router.get("/v2/admin/alias-collisions")
+async def admin_alias_collisions():
+    """
+    Surface canonical-employee aliases that are ALSO the canonical name
+    of a separate active record. Each collision is a data-hygiene bug
+    that silently splits CV/NPS/RT data across two buckets:
+
+      e.g. "Allen Simmons" has `"craig simmons"` in aliases AND there's
+      a separate active canonical record named "Craig Simmons". POS /
+      CV / RT uploads for "Craig Simmons" land on the standalone Craig
+      record while Allen's row stays empty — which is exactly what
+      caused Allen's NPS=0 on Q2P5W2.75.
+
+    Returns one row per collision with both record ids so the user can
+    open Nickname Manager and merge them. Only flags collisions where
+    BOTH records are status=active (merged/terminated dupes are
+    expected and harmless).
+    """
+    all_emps = []
+    async for e in db.employees.find(
+        {}, {"_id": 0, "id": 1, "name": 1, "aliases": 1, "status": 1}
+    ):
+        all_emps.append(e)
+
+    name_to_emp = {(e.get("name") or "").lower(): e for e in all_emps}
+    collisions = []
+    for e in all_emps:
+        if (e.get("status") or "").lower() != "active":
+            continue
+        for a in (e.get("aliases") or []):
+            al = (a or "").strip().lower()
+            other = name_to_emp.get(al)
+            if not other or other.get("id") == e.get("id"):
+                continue
+            if (other.get("status") or "").lower() != "active":
+                continue
+            collisions.append({
+                "primary_id":    e.get("id"),
+                "primary_name":  e.get("name"),
+                "alias":         a,
+                "duplicate_id":   other.get("id"),
+                "duplicate_name": other.get("name"),
+                "duplicate_status": other.get("status"),
+                "resolution": (
+                    f"Merge '{other.get('name')}' (id {other.get('id')}) into "
+                    f"'{e.get('name')}' via Nickname Manager. The alias on the "
+                    f"primary already covers any future uploads."
+                ),
+            })
+
+    return {
+        "collisions": collisions,
+        "count": len(collisions),
+        "note": "Each active collision silently splits CV/NPS/RT data across two buckets. Merge via Nickname Manager.",
+    }
+
+
 @api_router.get("/v2/admin/integrity")
 async def employee_data_integrity():
     """

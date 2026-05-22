@@ -12,6 +12,52 @@ Build a comprehensive performance review application for restaurant employees.
 
 ## Current State (2026-05-14)
 
+### P0: Edit-Revert + Alias Collision Detector — SHIPPED 2026-05-14 (final-final)
+
+**Issue #1 — Data Uploads edits silently revert**:
+  - **Root cause**: PUT `/v2/employees/{id}` updated `employees[]`
+    only, never touched `rows[].frozen_metrics`. Re-fetch of
+    `current-rankings` (hydrated from `rows[]`) returned the stale
+    pre-edit value, making the UI appear to "revert" the change. Same
+    `rows[] vs employees[]` divergence as the process-time bug, just
+    on the edit path.
+  - **Fix**: PUT now mirrors the new employee dict into the matching
+    `rows[]` entry (by id, with display_name/report_name fallback) in
+    the same atomic `$set`. If no matching row exists, a fresh one is
+    appended.
+
+**Issue #2 — Allen/Craig NPS missing (and similar)**:
+  - **Root cause**: `employees` collection has 3 active alias/canonical
+    *collisions* — names that appear as the canonical name of one
+    active record AND as an alias on another:
+      - "Craig Simmons" — both a standalone canonical AND an alias on
+        Allen Simmons
+      - "Eric Ostgarden" — alias on Ikey + standalone
+      - "Thomas Kozan" — alias on TK + standalone
+    POS / CV / RT uploads that use the "alias-side" name (Craig) get
+    routed to the standalone canonical, splitting data across two
+    buckets. Allen's NPS stays empty even though Craig's row got the
+    uploaded data.
+  - **Code-side improvements**:
+    - `merge_snapshot_data` now builds an alias→canonical-name map
+      from `employees` up front and consults it inside
+      `find_employee_match` BEFORE the heuristic nickname expansion.
+      So when CV/RT data comes in for "Craig Simmons" it tries to
+      route to "Allen Simmons" first.
+    - New admin endpoint `GET /api/v2/admin/alias-collisions` lists
+      every active collision with a one-click "merge X into Y" hint.
+      Verified on preview: 3 collisions surfaced.
+  - **Action required** (manual, in Nickname Manager):
+    1. Merge Craig Simmons → Allen Simmons
+    2. Merge Eric Ostgarden → Ikey Ostgarden
+    3. Merge Thomas Kozan → TK Kozan
+  - **Note**: code-side alias resolution only helps when the alias-side
+    name appears in `employees_dict` via Allen's POS row. If POS lists
+    BOTH "Allen Simmons" and "Craig Simmons" as separate rows (which
+    Q2P5W2.75 does), they create two POS buckets and the CV data still
+    lands on Craig's POS bucket. The Nickname Manager merge is the
+    only true fix.
+
 ### P0: Rows[] Grow-To-Match-Employees[] — FIXED 2026-05-14 (final)
 
 **Symptom (prod after first fix)**: Even after the rows-sync fix, the
