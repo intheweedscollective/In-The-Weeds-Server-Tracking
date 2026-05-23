@@ -186,13 +186,20 @@ export default function SnapshotWorkflow() {
       // Navigate to the new snapshot detail page
       navigate(`/snapshot-workflow/${res.data.snapshot.id}`);
     } catch (error) {
-      toast({ 
-        title: "Error", 
-        description: error.response?.data?.detail || "Failed to create snapshot",
-        variant: "destructive"
-      });
+      // 401s are handled globally by the axios interceptor (toast + delayed
+      // redirect to /login). Only show our own error toast for non-auth
+      // failures — otherwise the user sees two stacked toasts and the
+      // create dialog stays open with the spinner running.
+      if (error.response?.status !== 401) {
+        toast({ 
+          title: "Error", 
+          description: error.response?.data?.detail || "Failed to create snapshot",
+          variant: "destructive"
+        });
+      }
+    } finally {
+      setCreating(false);
     }
-    setCreating(false);
   };
 
   const getStatusBadge = (status) => {

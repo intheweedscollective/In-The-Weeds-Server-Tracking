@@ -43,11 +43,16 @@ api.interceptors.response.use(
     const method = (error.config?.method || "get").toLowerCase();
     const isMutation = method !== "get";
     if (status === 401 && isMutation) {
-      toast.error("Sign in required to make changes.");
-      // Bounce to /login but only if we're not already there.
+      toast.error("Your session expired — sign in again to save changes.", { duration: 4500 });
+      // Defer the redirect so the toast is actually visible. Without
+      // this, `window.location.href = ...` fires before the toast
+      // renders, and the user sees "nothing happens" when they click
+      // a save/create button. 2.5s gives them time to read it.
       if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
         const next = window.location.pathname + window.location.search;
-        window.location.href = `/login?next=${encodeURIComponent(next)}`;
+        setTimeout(() => {
+          window.location.href = `/login?next=${encodeURIComponent(next)}`;
+        }, 2500);
       }
     } else if (status === 403 && isMutation) {
       toast.error(error.response?.data?.detail || "You're not authorized to make changes.");
