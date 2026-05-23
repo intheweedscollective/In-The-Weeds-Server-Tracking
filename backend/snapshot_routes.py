@@ -782,33 +782,71 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
         }
     )
     
-    # ALSO sync critical fields back to employees_v2 to prevent data drift
-    # This ensures fix-snapshot-names won't overwrite with stale data
+    # ALSO sync critical fields back to employees_v2 to prevent data drift.
+    # `_hydrate_snapshot_employees` overlays metrics from employees_v2 on
+    # top of rows[].frozen_metrics, so an edit that doesn't write through
+    # to v2 silently reverts the next time the page re-fetches. The
+    # complete list below covers every field the overlay can stomp
+    # (CV/RT/POS/bonus) plus the identity fields we already synced.
     updated_emp = employees[emp_idx]
-    sync_fields = ["display_name", "report_name", "job_title", "name"]
-    sync_data = {k: updated_emp.get(k) for k in sync_fields if updated_emp.get(k)}
+    sync_fields = [
+        # Identity (existing behaviour)
+        "name", "display_name", "report_name", "job_title",
+        # Raw POS metrics (what user actually types in Data Uploads)
+        "guest_count", "guests", "net_sales", "ppa",
+        "liquor_sales", "beer_sales", "wine_sales", "lbw", "lbw_total",
+        "bar_glassware_sales", "glassware_sales", "glassware_per_guest",
+        "lbw_per_guest",
+        "loyalty_sales", "lsc_count", "guests_per_lsc",
+        # CV / NPS — overlay path
+        "nps_score", "nps_score_pts", "cv_promoters", "cv_passives",
+        "cv_detractors", "cv_score", "cv_responses", "cv_raw_points",
+        "nps_contribution",
+        # Review Tracker — overlay path
+        "rt_mentions", "review_mentions", "review_tracker_bonus",
+        # Derived scores / bonuses
+        "score_ppa", "score_lbw", "score_glass", "score_lsc",
+        "bonus_ppa", "bonus_lbw", "bonus_glass", "bonus_lsc",
+        "total_metric_bonus", "metric_bonus",
+        "weighted_score", "pre_dar_score", "total_score",
+        "performance_tier", "tier_label", "peer_rank",
+    ]
+    sync_data = {k: updated_emp.get(k) for k in sync_fields
+                 if updated_emp.get(k) is not None}
     
     if sync_data:
         # Try multiple matching strategies to find the employee in employees_v2
         report_name = updated_emp.get("report_name", "").strip()
         display_name = updated_emp.get("display_name", "").strip()
         
-        # Update employees_v2 with the corrected data
+        # Match employees_v2 STRICTLY by canonical id. Production has
+        # legacy dupe v2 rows (e.g. "Lakeisha Martin" alongside Keisha's
+        # canonical) — the old name-regex `$or` was updating whichever
+        # row Mongo picked first, leaving the canonical row stale and
+        # silently reverting the edit. Canonical id is the only safe key.
         update_result = await db.employees_v2.update_one(
             {
-                "$or": [
-                    {"name": {"$regex": f"^{report_name}$", "$options": "i"}},
-                    {"report_name": {"$regex": f"^{report_name}$", "$options": "i"}},
-                    {"display_name": display_name},
-                    {"name": {"$regex": f"^{display_name}", "$options": "i"}}
-                ],
+                "id": employee_id,
                 "year": snapshot.get("year", 2026),
                 "quarter": snapshot.get("quarter", "Q1").upper()
             },
             {"$set": sync_data}
         )
         if update_result.modified_count > 0:
-            logger.info(f"Synced employee {employee_id} data back to employees_v2")
+            logger.info(f"Synced employee {employee_id} data back to employees_v2 ({len(sync_data)} fields)")
+        elif update_result.matched_count == 0:
+            # No v2 row exists for this canonical id in this quarter —
+            # upsert one so future overlays read the correct values.
+            sync_data["id"] = employee_id
+            sync_data["quarter"] = snapshot.get("quarter", "Q1").upper()
+            sync_data["year"] = snapshot.get("year", 2026)
+            sync_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+            await db.employees_v2.update_one(
+                {"id": employee_id, "quarter": sync_data["quarter"], "year": sync_data["year"]},
+                {"$set": sync_data, "$setOnInsert": {"created_at": sync_data["updated_at"]}},
+                upsert=True,
+            )
+            logger.info(f"Upserted employee {employee_id} into employees_v2 (no existing row matched)")
     
     # Get the updated employee data
     updated_emp = next((e for e in employees if e.get("id") == employee_id or e.get("name", "").lower() == employee_id.lower()), scored_emp)

@@ -12,6 +12,60 @@ Build a comprehensive performance review application for restaurant employees.
 
 ## Current State (2026-05-14)
 
+### P0: Edit-Revert Real Root Cause + Dedupe Script — SHIPPED 2026-05-22
+
+**Symptom**: After my earlier rows-mirror fix, edits in Data Uploads
+**still** reverted. The hydration path overlays `employees_v2` data
+on top of `rows[].frozen_metrics`. My PUT only synced display_name/
+report_name/job_title to v2 — never `rt_mentions`, `cv_score`,
+`guest_count`, etc. The overlay then re-applied the old values from
+v2, making the edit appear to revert.
+
+**Even worse**: `employees_v2` had 13 orphan dupe rows (legacy
+Phase-1 migration leftovers). My old fuzzy `$or` name match updated
+whichever row Mongo picked first — sometimes the orphan, leaving the
+canonical-id row stale. Specifically Keisha's canonical row
+(id=29acf3c5…) had `rt_mentions: 20` while the orphan row
+(id=25fc877b…, name="Lakeisha Martin") had `rt_mentions: 0`. The
+hydration overlay read the canonical-id row → reverted to 20.
+
+**Fix (3 parts)**:
+
+1. **Expand the PUT sync_fields list** to cover every field the
+   overlay can stomp: all POS metrics, CV/NPS, RT, derived scores,
+   tier. ~40 fields (was 4).
+
+2. **Match v2 STRICTLY by canonical id** (no more name regex `$or`).
+   Falls back to upsert if no v2 row exists for this canonical id in
+   the quarter — anchors the identity for future overlays.
+
+3. **New script** `scripts/dedupe_employees_v2.py`:
+   - Loads every canonical `employees` doc and builds a name +
+     legacy_ids → canonical id map.
+   - Walks `employees_v2`, rewrites any row whose id is a legacy id
+     (or whose name matches an alias on a canonical) to the
+     canonical id.
+   - Collapses duplicates per (canonical_id, quarter, year), keeping
+     the richest row (highest total_score / most non-zero metrics).
+   - Run with `--apply`; default is dry-run.
+
+**Verified end-to-end on Keisha in preview**:
+  - Before: v2 rt_mentions=20, edit to 99 → reverted to 20.
+  - After: PUT updates v2 to 99 → re-fetch via `_hydrate_snapshot_employees` returns 99 → score 119.8 with RT bonus 20.
+
+**Preview cleanup ran**: 13 v2 rows had wrong canonical ids
+(rewrote → canonical), 14 dupe rows collapsed. As a side effect this
+also fixes the Allen/Craig + Eric/Ikey + Thomas/TK NPS missing
+problem — those alias-collision dupes are now canonical-id-linked,
+so CV/RT data lands on the right bucket automatically.
+
+**Production action required**: After redeploy, run:
+```bash
+cd /app/backend && python3 -m scripts.dedupe_employees_v2 --apply
+```
+(or hit an admin endpoint if you'd like me to wrap it.) This is a
+one-time data cleanup; the new PUT logic prevents new dupes.
+
 ### P0: Edit-Revert + Alias Collision Detector — SHIPPED 2026-05-14 (final-final)
 
 **Issue #1 — Data Uploads edits silently revert**:
