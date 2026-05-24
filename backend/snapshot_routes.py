@@ -116,8 +116,20 @@ async def get_snapshot(snapshot_id: str):
         raise HTTPException(status_code=404, detail="Snapshot not found")
     
     current_id = await get_current_snapshot_id(db)
-    
-    return format_snapshot_response(snapshot, is_current=(snapshot_id == current_id))
+
+    # For completed snapshots, replace `employees[]` in the response with
+    # the hydrated `rows[]` data. Without this, the Snapshot Detail page's
+    # Top Performers card reads from a potentially stale `snapshot.employees`
+    # while the Rankings tab uses the freshly-hydrated rows[] pipeline —
+    # producing different top 5s for the same snapshot (the prod bug user
+    # reported on the "reports tab"). Single source of truth.
+    response = format_snapshot_response(snapshot, is_current=(snapshot_id == current_id))
+    if snapshot.get("status") == SnapshotStatus.COMPLETED.value and snapshot.get("rows"):
+        try:
+            response["employees"] = await _hydrate_snapshot_employees(db, snapshot)
+        except Exception as e:
+            logger.warning(f"Hydrate failed for {snapshot_id}, falling back to embedded employees: {e}")
+    return response
 
 
 @snapshot_router.patch("/snapshots/{snapshot_id}", response_model=Dict[str, Any])
