@@ -12,6 +12,37 @@ Build a comprehensive performance review application for restaurant employees.
 
 ## Current State (2026-05-14)
 
+### P1: Snapshot Slide Trend Indicators "Tofu Box" — FIXED 2026-05-23
+
+**Symptom**: Every row on the Snapshot PNG slide (and PDF) showed a
+small empty rectangle (□) in the Trend column instead of the
+expected ▲/▼/— glyphs.
+
+**Root cause**: The slide renderers used Unicode U+25B2 / U+25BC /
+U+2014 as text glyphs. The PNG path uses `Aptos-Narrow-Bold.ttf`
+which doesn't ship those geometric-shape codepoints; ReportLab's
+default Helvetica on the PDF path is similarly limited. PIL/
+ReportLab both fell back to the standard "missing glyph" tofu box.
+
+**Fix**: Replaced text-glyph rendering with **polygon primitives**
+in both generators. The trend cell now passes a sentinel value
+(`"__TREND__:up|down|flat"`) which the rendering loop intercepts:
+PNG uses `draw.polygon`, PDF uses `c.beginPath` / `c.drawPath`.
+No font dependency for the indicator.
+
+**Verified** by generating both a PNG and a PDF with mixed trends.
+AI inspection confirms green up-triangles, red down-triangles,
+neutral dashes, all centered correctly. No tofu remaining.
+
+### P0: Snapshot Detail Top Performers ↔ Rankings Mismatch — FIXED 2026-05-23
+
+`GET /v2/snapshot-workflow/snapshots/{id}` now hydrates `employees[]`
+from the same `_hydrate_snapshot_employees(rows)` pipeline used by
+the Rankings tab when the snapshot is `completed`. Snapshot Detail's
+Top Performers card and the Reports/Yodeck top performers now match
+the Rankings tab exactly. Falls back to embedded `employees[]` if
+hydration fails (e.g. for partially-completed snapshots).
+
 ### P0: Edit-Revert Real Root Cause + Dedupe Script — SHIPPED 2026-05-22
 
 **Symptom**: After my earlier rows-mirror fix, edits in Data Uploads

@@ -211,16 +211,21 @@ def build_full_rankings_pdf(
 
         trend_dir = (emp.get("trend") or "up").lower()
         if trend_dir in ("up", "improving", "improved"):
-            trend_glyph, trend_col = "\u25B2", COLORS["trend_up"]
+            trend_shape, trend_col = "up", COLORS["trend_up"]
         elif trend_dir in ("down", "declining"):
-            trend_glyph, trend_col = "\u25BC", COLORS["red"]
+            trend_shape, trend_col = "down", COLORS["red"]
         else:
-            trend_glyph, trend_col = "\u2014", COLORS["trend_flat"]
+            trend_shape, trend_col = "flat", COLORS["trend_flat"]
+
+        # NOTE: trend cell renders as a polygon, not text — Helvetica
+        # doesn't ship U+25B2/U+25BC/U+2014, so glyphs came out as
+        # tofu boxes on screenshots. See `png_full_rankings.py` for
+        # the matching fix on the PNG export path.
 
         row_data = [
             (pos_label,            None,                                      "center", COLORS["text_dark"], True),
             (name,                 None,                                      "left",   COLORS["text_dark"], True),
-            (trend_glyph,          None,                                      "center", trend_col,           True),
+            (f"__TREND__:{trend_shape}", None,                                  "center", trend_col,           True),
             (f"{ppa_pct:.0f}%",    get_cell_color(ppa_pct,    "percentage"),  "center", None,                False),
             (f"{lbw_pct:.0f}%",    get_cell_color(lbw_pct,    "percentage"),  "center", None,                False),
             (f"{glass_pct:.0f}%",  get_cell_color(glass_pct,  "percentage"),  "center", None,                False),
@@ -253,7 +258,33 @@ def build_full_rankings_pdf(
             c.setFillColor(colors.HexColor(text_color))
             c.setFont("Helvetica-Bold", 9.5)
             ty = cy + row_h / 2 - 0.05 * inch
-            if align == "center":
+            if isinstance(text, str) and text.startswith("__TREND__:"):
+                # Polygon-drawn trend indicator: doesn't depend on font
+                # glyph availability. Same approach as PNG generator.
+                shape = text.split(":", 1)[1]
+                cx = x_pos + w / 2
+                cy_mid = cy + row_h / 2
+                size = min(row_h, 0.18 * inch)
+                half = size / 2
+                c.setFillColor(colors.HexColor(override_text or COLORS["trend_up"]))
+                if shape == "up":
+                    p = c.beginPath()
+                    p.moveTo(cx, cy_mid + half)
+                    p.lineTo(cx - half, cy_mid - half)
+                    p.lineTo(cx + half, cy_mid - half)
+                    p.close()
+                    c.drawPath(p, stroke=0, fill=1)
+                elif shape == "down":
+                    p = c.beginPath()
+                    p.moveTo(cx, cy_mid - half)
+                    p.lineTo(cx - half, cy_mid + half)
+                    p.lineTo(cx + half, cy_mid + half)
+                    p.close()
+                    c.drawPath(p, stroke=0, fill=1)
+                else:  # flat
+                    bar_h = max(1.5, size / 5)
+                    c.rect(cx - half, cy_mid - bar_h / 2, size, bar_h, fill=1, stroke=0)
+            elif align == "center":
                 c.drawCentredString(x_pos + w / 2, ty, str(text))
             elif align == "left":
                 c.drawString(x_pos + 0.08 * inch, ty, str(text))

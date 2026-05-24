@@ -307,17 +307,21 @@ def _draw_table(
 
         trend_dir = (emp.get("trend") or "up").lower()
         if trend_dir in ("up", "improving", "improved"):
-            trend_glyph, trend_col = "\u25B2", REF_COLORS["trend_up"]
+            trend_shape, trend_col = "up", REF_COLORS["trend_up"]
         elif trend_dir in ("down", "declining"):
-            trend_glyph, trend_col = "\u25BC", REF_COLORS["red"]
+            trend_shape, trend_col = "down", REF_COLORS["red"]
         else:
-            trend_glyph, trend_col = "\u2014", REF_COLORS["trend_flat"]
+            trend_shape, trend_col = "flat", REF_COLORS["trend_flat"]
 
+        # NOTE: trend cell is drawn as a polygon, not text — Aptos-Narrow
+        # doesn't ship the U+25B2/U+25BC/U+2014 glyphs so they previously
+        # rendered as "tofu" (□) on mobile-shared screenshots. Reserve a
+        # sentinel value the rendering loop intercepts.
         # (text, fill_color or None for white-bg, align, font, override_text, is_white_bg)
         cells: List[Tuple[str, str | None, str, ImageFont.FreeTypeFont, str | None, bool]] = [
             (pos_label,            None,                                       "center", rank_font,  REF_COLORS["text_dark"], True),
             (name,                 None,                                       "left",   name_font,  REF_COLORS["text_dark"], True),
-            (trend_glyph,          None,                                       "center", trend_font, trend_col,                True),
+            (f"__TREND__:{trend_shape}", None,                                  "center", trend_font, trend_col,                True),
             (f"{ppa_pct:.0f}%",    _ref_cell_color(ppa_pct,    "percentage"),  "center", cell_font,  None,                     False),
             (f"{lbw_pct:.0f}%",    _ref_cell_color(lbw_pct,    "percentage"),  "center", cell_font,  None,                     False),
             (f"{glass_pct:.0f}%",  _ref_cell_color(glass_pct,  "percentage"),  "center", cell_font,  None,                     False),
@@ -348,7 +352,31 @@ def _draw_table(
                 tcolor = REF_COLORS["text_dark"]
 
             ty = cy + row_h // 2
-            if align == "center":
+            if isinstance(text, str) and text.startswith("__TREND__:"):
+                # Draw the trend indicator as a polygon so we don't
+                # depend on the font shipping U+25B2 / U+25BC / U+2014.
+                shape = text.split(":", 1)[1]
+                cx = x + w // 2
+                size = max(8, min(row_h - 10, 18))
+                half = size // 2
+                trend_color = tcolor  # already set to trend_up/red/flat above
+                if shape == "up":
+                    draw.polygon(
+                        [(cx, ty - half), (cx - half, ty + half), (cx + half, ty + half)],
+                        fill=trend_color,
+                    )
+                elif shape == "down":
+                    draw.polygon(
+                        [(cx - half, ty - half), (cx + half, ty - half), (cx, ty + half)],
+                        fill=trend_color,
+                    )
+                else:  # flat
+                    bar_h = max(2, size // 5)
+                    draw.rectangle(
+                        (cx - half, ty - bar_h // 2, cx + half, ty + bar_h // 2),
+                        fill=trend_color,
+                    )
+            elif align == "center":
                 _draw_text(draw, (x + w // 2, ty), text, font, tcolor, anchor="mm")
             elif align == "left":
                 _draw_text(draw, (x + 12, ty), text, font, tcolor, anchor="lm")
