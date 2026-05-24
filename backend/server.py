@@ -414,14 +414,23 @@ async def recalculate_employee_tiers(quarter: str = "Q1", year: int = 2026):
 @api_router.post("/v2/employees/fix-all-scores")
 async def fix_all_employee_scores(quarter: str = "Q1", year: int = 2026):
     """
-    Recalculate ALL employee scores using the CORRECT formula.
-    
-    CORRECT FORMULA:
-    - weighted_score = PPA×25% + LSC×25% + LBW×15% + Glass×10% (POS only, 75 pts max)
-    - metric_bonus = sum of bonuses for each metric over 100%
-    - total_score = weighted_score + RT_bonus + CV_score + metric_bonus
-    
-    This fixes bugs where RT was double-counted or metric bonuses weren't calculated.
+    Recalculate ALL employee scores using the CANONICAL formula.
+
+    CANONICAL FORMULA (matches `scoring_engine.compute_total_score_dict`):
+      • weighted_score = capped_ppa × 0.25 + capped_lsc × 0.25
+                       + capped_lbw × 0.20 + capped_glass × 0.15
+                       (POS only — 85 pts max with 25/25/20/15 weighting)
+      • metric_bonus   = Σ over PPA/LSC/LBW/Glass of  min(((score-100)/20)*5, 5)
+                         (0 if score ≤ 100; up to 5 pts per metric, 20 pts cap)
+      • rt_bonus       = min(rt_mentions × 0.33, 20)
+      • total_score    = weighted_score + cv_score + metric_bonus + rt_bonus
+
+    History: pre-2026-05 this endpoint was running the legacy
+    LBW 15% / Glass 10% (75-pt max) math, which silently downgraded
+    correct scores and re-ordered the rankings. The May 2026 scoring
+    audit identified this as the main source of score drift. The
+    constants below now agree with `scoring_engine.QuarterSettings`
+    and the locked-in spec on `/app/memory/PRD.md`.
     """
     employees = await db.employees_v2.find(
         {"quarter": quarter.upper(), "year": year}
