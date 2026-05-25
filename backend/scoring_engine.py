@@ -17,7 +17,7 @@ Q2 2026+ DEFAULT MODEL:
    - LBW:       20%
    - Glassware: 15%
 
-2. REVIEW TRACKER: +0.3 pts per mention (capped at 20 pts)
+2. REVIEW TRACKER: +0.33 pts per mention (capped at 20 pts)
    (Q1 2026 legacy: +0.5 pts/mention, capped at 15)
 
 3. CUSTOMER VOICE — UNCAPPED:
@@ -58,7 +58,7 @@ CV_DETRACTOR_POINTS = -2  # -2 per detractor (6 or below)
 # NPS Score: Direct ratio (77% = 7.7 pts, max 10 pts)
 NPS_MAX_POINTS = 10
 
-# Review Tracker Bonus — per v3 handout: +0.3 per mention, quarterly cap +20
+# Review Tracker Bonus — canonical: +0.33 per mention, quarterly cap +20
 RT_POINTS_PER_MENTION = 0.33  # Each mention = 0.33 points (user-confirmed)
 RT_MAX_POINTS = 20            # Cap at 20 points (~61 mentions)
 
@@ -80,7 +80,7 @@ CV_MAX_POINTS = 10
 # MAX SCORE BREAKDOWN (Q2 2026+ active model):
 # Weighted POS: 85 pts (PPA 25 + LSC 25 + LBW 20 + Glass 15)
 # Metric Bonuses: 20 pts (PPA 5 + LSC 5 + LBW 5 + Glass 5)
-# Review Tracker Bonus: Mentions × 0.3 pts (capped at 20 pts) — Q2+ default
+# Review Tracker Bonus: Mentions × 0.33 pts (capped at 20 pts) — canonical
 #   (Q1 2026 used the legacy +0.5 pts/mention, capped at 15)
 # Customer Voice (UNCAPPED):
 #   = NPS%/10 (0–10 pts) + (Promoters × cv_promoter_points) − (Detractors × cv_detractor_points)
@@ -196,7 +196,7 @@ class EmployeeV2(BaseModel):
 class QuarterSettings(BaseModel):
     """
     Quarter-specific settings including benchmarks.
-    Q1 2026 User Confirmed Model: PPA(25%), LSC(25%), LBW(15%), Glass(10%)
+    Q1 2026 User Confirmed Model: PPA(25%), LSC(25%), LBW(20%), Glass(15%)
     CV and Review Tracker are handled as separate bonuses (not weighted)
     """
     model_config = ConfigDict(extra="ignore")
@@ -213,8 +213,7 @@ class QuarterSettings(BaseModel):
     benchmark_cv: float = 5.0     # Expected CV score (baseline for reference)
     
     # === METRIC WEIGHTS (Per-Quarter — historical quarters stay frozen) ===
-    # v3 model (Q1 2026 and earlier): 25/25/20/15
-    # v3-2 model (Q2 2026+):         27.5/27.5/20/15
+    # Canonical model: 25/25/20/15 (PPA / LSC / LBW / Glass)
     weight_ppa: float = 0.25
     weight_lsc: float = 0.25
     weight_lbw: float = 0.20
@@ -482,8 +481,8 @@ def calculate_review_tracker_bonus(
     Calculate Review Tracker bonus from external review mentions.
 
     Per-quarter coefficients (settings.rt_points_per_mention, settings.rt_max_points)
-    — historical quarters keep their original rule (e.g. Q1 2026 = 0.5/cap 15,
-    Q2 2026+ = 0.3/cap 20 per v3 handout). Falls back to module constants if
+    — historical quarters keep their original rule (e.g. legacy v2 = 0.5/cap 15,
+    canonical = 0.33/cap 20). Falls back to module constants if
     settings is not supplied.
     """
     coef = settings.rt_points_per_mention if settings else RT_POINTS_PER_MENTION
@@ -496,16 +495,17 @@ def calculate_review_tracker_bonus(
 
 def calculate_combined_cv_rt(employee: EmployeeV2) -> EmployeeV2:
     """
-    Store combined CV + Review Tracker for reference.
-    
-    CV (NPS-based) is part of base score (15% weight).
-    Review Tracker is a separate bonus.
+    Store combined CV + Review Tracker for reference only.
+
+    CV is uncapped and RT is independently capped at `rt_max_points`
+    (canonical: 20). There is **no combined CV+RT cap** in the canonical
+    scoring model — this helper only computes a reference total for
+    reporting purposes.
     """
-    # Store combined score for reference
     employee.cv_rt_combined = round(
         (employee.cv_score or 0) + (employee.review_tracker_bonus or 0), 2
     )
-    
+
     return employee
 
 
@@ -559,9 +559,8 @@ def calculate_normalized_scores(employee: EmployeeV2, settings: QuarterSettings)
     else:
         employee.score_lsc = 0
     
-    # Customer Voice Score - NPS-based (already calculated as points)
-    # cv_score contains: NPS% × 0.15 (0-15 points)
-    # This is the actual weighted contribution to total score
+    # Customer Voice Score — uncapped: NPS%/10 + (+1/promoter) − (2/detractor)
+    # See calculate_customer_voice_score for canonical formula.
     employee.score_cv = employee.cv_score or 0
     employee.cv_penalty = 0  # No penalty in new model
     
@@ -605,32 +604,28 @@ def calculate_bonus_points(employee: EmployeeV2, settings: QuarterSettings) -> E
 
 def calculate_total_score(employee: EmployeeV2, settings: QuarterSettings) -> EmployeeV2:
     """
-    Calculate weighted score + total score using CORRECT FORMULA.
-    
-    SCORING MODEL:
-    ==============
-    1. WEIGHTED POS METRICS (75% of base):
+    Calculate weighted score + total score using the CANONICAL FORMULA.
+
+    SCORING MODEL (canonical, locked 2026-05-23):
+    =============================================
+    1. WEIGHTED POS METRICS (85 pts max, per-quarter weights):
        - PPA: 25%
-       - LSC: 25%  
-       - LBW: 15%
-       - Glassware: 10%
-    
-    2. NPS SCORE (10% of base):
-       - NPS normalized (0-100) × 10%
-       - e.g., NPS 77% = 7.7 pts
-    
-    3. CV BONUS (NO CAP):
-       - +1 pt per promoter (9-10 rating)
-       - -2 pts per detractor (6 or below)
-    
-    4. REVIEW TRACKER BONUS (capped at 15 pts):
-       - +0.5 pts per mention
-    
-    5. METRIC BONUSES (up to 20 pts total, 5 per metric):
-       - Linear scale from 100%-120% of benchmark
-       - 0.25 pts per 1% above benchmark
-    
-    TOTAL = Weighted POS (75%) + NPS (10%) + CV Bonus + RT Bonus + Metric Bonuses
+       - LSC: 25%
+       - LBW: 20%
+       - Glassware: 15%
+
+    2. CUSTOMER VOICE (uncapped — bundled into cv_score):
+       - NPS%/10 (0–10 pts)
+       - +cv_promoter_points per promoter (canonical: +1)
+       - -cv_detractor_points per detractor (canonical: -2)
+
+    3. REVIEW TRACKER BONUS (capped at rt_max_points, canonical 20):
+       - +rt_points_per_mention (canonical: 0.33) per external mention
+
+    4. METRIC BONUSES (up to 20 pts total, 5 per metric):
+       - Linear from 100%-120% of benchmark; 0.25 pts per 1% above benchmark
+
+    TOTAL = Weighted POS + CV + Review Tracker + Metric Bonuses − DAR
     """
     # Cap each metric score at 100 before applying weight
     capped_ppa = min((employee.score_ppa or 0), 100)
@@ -654,7 +649,7 @@ def calculate_total_score(employee: EmployeeV2, settings: QuarterSettings) -> Em
     # Get CV bonus (now NPS%/10 + promoter/detractor, NO CAP)
     cv_bonus = employee.cv_score or 0
     
-    # Get Review Tracker bonus (0.5 pts per mention, capped at 15)
+    # Get Review Tracker bonus (canonical: 0.33 pts/mention, capped at 20)
     review_bonus = employee.review_tracker_bonus or 0
     
     # Get metric bonuses (up to 20 pts total)
@@ -788,7 +783,7 @@ def run_full_scoring(employees: List[EmployeeV2], settings: QuarterSettings) -> 
     2. Derived metrics (PPA, LBW/G, Glass/G, G/LSC)
     3. Customer Voice score (NPS-style)
     4. Review Tracker bonus
-    5. Apply combined CV + RT cap (max 20 points per quarter)
+    5. Apply combined CV + RT cap (reference only — canonical model has no combined cap)
     6. Normalized scores (benchmark-relative)
     7. Metric bonus points (exceeding benchmarks)
     8. DAR penalties (applied last, hidden from rankings)
@@ -812,7 +807,7 @@ def run_full_scoring(employees: List[EmployeeV2], settings: QuarterSettings) -> 
     for emp in employees:
         calculate_review_tracker_bonus(emp, settings)
     
-    # Step 5: Apply combined CV + RT cap (max 20 per quarter)
+    # Step 5: Combined CV+RT reference value (no cap — canonical model)
     for emp in employees:
         calculate_combined_cv_rt(emp)
     
@@ -1185,9 +1180,9 @@ def generate_hierarchy_rankings(employees: List[EmployeeV2], settings: QuarterSe
         # Metric Bonus: bonuses from exceeding benchmarks in metrics (PPA, LBW, LSC, Glass)
         metric_bonus = emp.total_metric_bonus or 0
         
-        # NPS Score: Already weighted (NPS% × 0.15, max 15 pts) - part of base score
+        # NPS Score: bundled into cv_score (NPS%/10 + promoter/detractor points)
         nps_score = emp.nps_score or 0
-        nps_points = emp.cv_score or 0  # cv_score now contains NPS points
+        nps_points = emp.cv_score or 0  # cv_score includes NPS%/10 component
         
         results.append({
             "position": idx,  # Overall position (1 to N)
@@ -1232,7 +1227,7 @@ def generate_hierarchy_rankings(employees: List[EmployeeV2], settings: QuarterSe
             # Customer Voice data (for separate CV Score column)
             "cv_promoters": emp.cv_promoters or 0,
             "cv_detractors": emp.cv_detractors or 0,
-            "cv_score": emp.cv_score or 0,  # Promoters × 0.5 - Detractors × 1
+            "cv_score": emp.cv_score or 0,  # NPS%/10 + Promoters×1 − Detractors×2 (uncapped)
             # Review data
             "review_mentions": review_mentions,
             "rt_mentions": review_mentions,                  # alias for frontend

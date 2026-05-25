@@ -10,6 +10,68 @@ Build a comprehensive performance review application for restaurant employees.
 - **AI**: OpenAI GPT-4o (via Emergent LLM Key)
 - **Auth**: Emergent-managed Google Auth (whitelist via `ALLOWED_ADMIN_EMAILS`)
 
+## Current State (2026-05-24)
+
+### P0: Scoring Audit Closeout — Quarter Settings Normalizer — SHIPPED 2026-05-24
+
+User requested a full pass on `Performance_Hub_Scoring_Audit.docx`.
+Previous session shipped most of the P0 work (fix-all-scores canonical
+weights, single-source scoring formula, RT auto-derive, integrity gate).
+This session closes out the remaining items:
+
+**P0 — Canonical engine constants across every stored quarter**:
+- New admin endpoint `POST /api/v2/admin/normalize-quarter-settings`
+  (`routes/admin.py`). Default is dry-run; pass `?apply=true` to
+  persist. Query params: `apply`, `include_locked`, `lock_after`,
+  `normalize_benchmarks`.
+- Engine constants normalized by default (weights 25/25/20/15, RT
+  0.33/cap 20, CV +1/-2, bonus rate 0.25/cap 5). Benchmarks left alone
+  unless `?normalize_benchmarks=true` (so admin-customized Q3 2026
+  benchmarks like PPA $62 / LBW $9.5 stay intact).
+- Locked quarters are surfaced in the report but skipped unless
+  `?include_locked=true`.
+
+**Preview DB result** (ran `apply=true`): 4 quarters, 15 field writes.
+Before/after:
+| Year/Q   | rt_rate | rt_cap | cv_promoter | cv_detractor | bonus_rate |
+|----------|---------|--------|-------------|--------------|------------|
+| 2025 Q4  | 0.5→0.33| 15→20  | None→1.0    | None→2.0     | 0.2→0.25   |
+| 2026 Q1  | 0.5→0.33| 15→20  | None→1.0    | None→2.0     | 0.2→0.25   |
+| 2026 Q2  | OK      | OK     | None→1.0    | None→2.0     | OK         |
+| 2026 Q3  | OK      | OK     | None→1.0    | None→2.0     | 0.2→0.25   |
+
+**Production action required**: After redeploy, run
+`POST /api/v2/admin/normalize-quarter-settings?apply=true` as admin
+(dry-run with `apply=false` first to preview).
+
+**P2 — Doc drift fixed**:
+- `SCORING_BREAKDOWN.md` rewritten from scratch to match canonical
+  model (25/25/20/15, RT 0.33/cap 20, CV +1/-2 uncapped, glass
+  benchmark $1.35). Old version had LBW 15%/Glass 10%/$1.25 glass/
+  RT 0.5/cap 15 — all wrong. Also clarified server class vs ranking
+  tier (the audit-flagged P1 tier-system confusion).
+- Stale docstrings in `scoring_engine.py` updated:
+  `calculate_total_score` (LBW 15/Glass 10 → 20/15), the rate=0.3
+  module comment → 0.33, `calculate_combined_cv_rt` clarified to say
+  there is **no combined CV+RT cap** (the audit-flagged P1 question —
+  user confirmed CV uncapped, RT capped at 20 independently),
+  `QuarterSettings` model docstring, and the `cv_score` field comment.
+
+**Regression test**: `tests/test_normalize_quarter_settings.py`
+(5 cases): dry-run safety, engine-constant write-through,
+benchmarks-only-with-flag, locked-skipped-then-forced, lock_after
+side-effect. Uses sentinel year 9099 to avoid DB pollution.
+
+**All scoring regression tests still pass**: 29/29 across
+`test_canonical_scoring_constants`, `test_rt_bonus_auto_derive`,
+`test_rows_sync_after_process`, `test_integrity_gate_pre_score`,
+`test_process_snapshot_none_safety`, `test_normalize_quarter_settings`,
+`test_scoring_engine_unified`.
+
+**Audit items still open** (deferred by user this session):
+- QR Base URL preview banner — disregarded for now
+- Phase 3 Stage C `employees_v2` drop — still waiting prod stability
+
 ## Current State (2026-05-14)
 
 ### P1: Snapshot Slide Trend Indicators "Tofu Box" — FIXED 2026-05-23

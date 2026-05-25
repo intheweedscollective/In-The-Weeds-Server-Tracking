@@ -1288,3 +1288,137 @@ async def reconcile_cv_feedback_with_official(quarter: str = "Q1", year: int = 2
         },
         "message": f"Reconciliation complete. Added {len(added_records)}, removed {len(removed_records)} records."
     }
+
+
+
+# ---------------------------------------------------------------------------
+# Canonical Quarter Settings Normalizer
+# ---------------------------------------------------------------------------
+# Per the May 2026 Scoring Engine Audit, every quarter's stored settings
+# must match ONE canonical model before the company-wide demo. This
+# endpoint walks `quarter_settings` and rewrites:
+#   • weight_ppa / weight_lsc / weight_lbw / weight_glass → 0.25/0.25/0.20/0.15
+#   • benchmark_ppa = 55, benchmark_lbw = 8, benchmark_glass = 1.35, benchmark_lsc = 100
+#   • rt_points_per_mention = 0.33, rt_max_points = 20
+#   • cv_promoter_points = 1, cv_detractor_points = 2
+# Quarters whose `locked == true` are reported but skipped (history is
+# frozen — admin must explicitly unlock via Quarter Settings UI first).
+# ---------------------------------------------------------------------------
+
+CANONICAL_ENGINE_CONSTANTS = {
+    "weight_ppa": 0.25,
+    "weight_lsc": 0.25,
+    "weight_lbw": 0.20,
+    "weight_glass": 0.15,
+    "rt_points_per_mention": 0.33,
+    "rt_max_points": 20.0,
+    "cv_promoter_points": 1.0,
+    "cv_detractor_points": 2.0,
+    "bonus_rate": 0.25,
+    "bonus_cap": 5.0,
+}
+
+CANONICAL_BENCHMARKS = {
+    "benchmark_ppa": 55.0,
+    "benchmark_lbw": 8.0,
+    "benchmark_glass": 1.35,
+    "benchmark_lsc": 100.0,
+}
+
+
+@admin_router.post("/normalize-quarter-settings")
+async def normalize_quarter_settings(
+    apply: bool = False,
+    include_locked: bool = False,
+    lock_after: bool = False,
+    normalize_benchmarks: bool = False,
+):
+    """
+    Audit (and optionally repair) every quarter_settings doc to the
+    canonical scoring model. Default is DRY-RUN — pass `?apply=true` to
+    persist changes.
+
+    Engine constants normalized by default (weights, RT rate/cap, CV
+    promoter/detractor points, bonus rate/cap). Benchmarks (PPA $55,
+    LBW $8, Glass $1.35, LSC 100) are NOT touched unless
+    `?normalize_benchmarks=true` is passed — historical quarters may
+    have intentional benchmark overrides.
+
+    Query params:
+      • apply=true                → actually write the changes (default false = preview)
+      • include_locked=true       → also rewrite quarters where locked=true
+      • lock_after=true           → set locked=true on every quarter touched
+      • normalize_benchmarks=true → also rewrite benchmarks to canonical
+
+    Returns a per-quarter diff so the admin can sanity-check before
+    re-running with apply=true.
+    """
+    db = get_db()
+    docs = await db.quarter_settings.find({}, {"_id": 0}).to_list(500)
+    docs.sort(key=lambda d: (d.get("year", 0), d.get("quarter", "")))
+
+    canonical_spec = dict(CANONICAL_ENGINE_CONSTANTS)
+    if normalize_benchmarks:
+        canonical_spec.update(CANONICAL_BENCHMARKS)
+
+    report = []
+    changes_total = 0
+
+    for doc in docs:
+        year = doc.get("year")
+        quarter = doc.get("quarter")
+        is_locked = bool(doc.get("locked"))
+
+        diff = {}
+        for key, canonical_val in canonical_spec.items():
+            current = doc.get(key)
+            if current is None or abs(float(current) - float(canonical_val)) > 0.0001:
+                diff[key] = {"from": current, "to": canonical_val}
+
+        entry = {
+            "year": year,
+            "quarter": quarter,
+            "locked": is_locked,
+            "needs_change": bool(diff),
+            "diff": diff,
+            "applied": False,
+            "skipped_reason": None,
+        }
+
+        if not diff:
+            report.append(entry)
+            continue
+
+        if is_locked and not include_locked:
+            entry["skipped_reason"] = "locked (pass include_locked=true to override)"
+            report.append(entry)
+            continue
+
+        if apply:
+            update_set = {k: v["to"] for k, v in diff.items()}
+            update_set["normalized_at"] = datetime.now(timezone.utc).isoformat()
+            if lock_after:
+                update_set["locked"] = True
+                update_set["locked_at"] = datetime.now(timezone.utc).isoformat()
+            await db.quarter_settings.update_one(
+                {"year": year, "quarter": quarter},
+                {"$set": update_set},
+            )
+            entry["applied"] = True
+            changes_total += len(diff)
+
+        report.append(entry)
+
+    return {
+        "success": True,
+        "dry_run": not apply,
+        "include_locked": include_locked,
+        "lock_after": lock_after,
+        "normalize_benchmarks": normalize_benchmarks,
+        "canonical_spec": canonical_spec,
+        "quarters_total": len(docs),
+        "quarters_needing_change": sum(1 for r in report if r["needs_change"]),
+        "quarters_applied": sum(1 for r in report if r["applied"]),
+        "field_writes_total": changes_total,
+        "report": report,
+    }
