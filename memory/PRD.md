@@ -12,6 +12,40 @@ Build a comprehensive performance review application for restaurant employees.
 
 ## Current State (2026-05-24)
 
+### P2: Scoring Trust Score (Dashboard widget) — SHIPPED 2026-05-24
+
+User requested a single trust-signal widget on the dashboard so the RD
+can see at a glance that the scoring math is bulletproof before a demo.
+
+**Backend** — `GET /api/v2/admin/scoring-trust` (`routes/admin.py`):
+- Rolls up three signals into one tri-state result:
+  1. **Quarter-settings drift** — any stored quarter that diverges
+     from `CANONICAL_ENGINE_CONSTANTS` (weights, RT, CV points,
+     bonus rate). Splits drift into "unlocked active" (current or
+     future, blocker-level) vs "historical/locked" (advisory).
+  2. **Data integrity** — re-runs `EmployeeValidator.run_all()` and
+     surfaces P0/P1/P2 counts + deploy gate state.
+  3. **Alias collisions** — active canonical records whose aliases
+     collide with another active record's canonical name.
+- Returns `status: green | amber | red` + `issues[]` (blockers),
+  `warnings[]` (advisory), per-signal `details`, `remediation` hints.
+
+**Frontend** — `components/ScoringTrustBadge.jsx`:
+- Compact shield-icon pill in the dashboard header (green ✓ / amber ! /
+  red ✕) next to the existing QRHealthBadge.
+- Click opens a shadcn `Dialog` with the three rolled-up signals,
+  inline remediation tips, and three actions: **Refresh**, **Dry-Run
+  Normalize**, **Apply Normalize** (the latter two POST to
+  `/v2/admin/normalize-quarter-settings`).
+- **Admin-only**: silently hides for anonymous viewers via
+  `useAuth().user.is_admin`.
+
+**Verified on preview**: Badge renders red ("Action Required") because
+preview DB has the existing 40 P0 integrity issues + 3 alias collisions
+(Allen↔Craig, Ikey↔Eric, TK↔Thomas — exactly the ones the user already
+plans to merge via Nickname Manager). Modal opens, all 3 stat cards
+populate, action buttons wired.
+
 ### P0: Scoring Audit Closeout — Quarter Settings Normalizer — SHIPPED 2026-05-24
 
 User requested a full pass on `Performance_Hub_Scoring_Audit.docx`.

@@ -1422,3 +1422,176 @@ async def normalize_quarter_settings(
         "field_writes_total": changes_total,
         "report": report,
     }
+
+
+
+# ---------------------------------------------------------------------------
+# Scoring Trust Score (Dashboard widget)
+# ---------------------------------------------------------------------------
+# Single endpoint that rolls up three audit signals so the RD can see at a
+# glance that the math is bulletproof before a demo:
+#   1. Quarter settings drift  — any stored quarter that diverges from the
+#      canonical engine constants (weights, RT rate/cap, CV +1/-2, bonus).
+#   2. Data integrity           — P0/P1/P2 issue counts from the validation
+#      suite (mirrors GET /api/v2/admin/integrity but condensed).
+#   3. Alias collisions         — active canonical records whose names
+#      collide with another active record's aliases.
+# Returns a tri-state "status": green / amber / red.
+# ---------------------------------------------------------------------------
+
+@admin_router.get("/scoring-trust")
+async def scoring_trust_score():
+    """Aggregate scoring-health signal for the Dashboard trust widget."""
+    db = get_db()
+
+    # --- 1. Quarter settings drift -----------------------------------------
+    qs_docs = await db.quarter_settings.find({}, {"_id": 0}).to_list(500)
+    drift_quarters = []
+    for doc in qs_docs:
+        diff_keys = []
+        for key, canonical_val in CANONICAL_ENGINE_CONSTANTS.items():
+            current = doc.get(key)
+            if current is None or abs(float(current) - float(canonical_val)) > 0.0001:
+                diff_keys.append(key)
+        if diff_keys:
+            drift_quarters.append({
+                "year": doc.get("year"),
+                "quarter": doc.get("quarter"),
+                "locked": bool(doc.get("locked")),
+                "drift_fields": diff_keys,
+            })
+
+    # --- 2. Data integrity -------------------------------------------------
+    from services.validation_service import EmployeeValidator
+    try:
+        integrity = await EmployeeValidator(db).run_all()
+        integrity_summary = integrity.get("summary", {})
+        p0 = int(integrity_summary.get("p0_issues", 0))
+        p1 = int(integrity_summary.get("p1_issues", 0))
+        p2 = int(integrity_summary.get("p2_issues", 0))
+        deploy_gate = integrity_summary.get("deploy_gate", "UNKNOWN")
+    except Exception as e:
+        logger.warning(f"scoring_trust: integrity check failed: {e}")
+        p0 = p1 = p2 = -1
+        deploy_gate = "ERROR"
+
+    # --- 3. Alias collisions ----------------------------------------------
+    collisions = []
+    all_emps = await db.employees.find(
+        {}, {"_id": 0, "id": 1, "name": 1, "aliases": 1, "status": 1}
+    ).to_list(2000)
+    name_to_emp = {(e.get("name") or "").lower(): e for e in all_emps}
+    for e in all_emps:
+        if (e.get("status") or "").lower() != "active":
+            continue
+        for a in (e.get("aliases") or []):
+            al = (a or "").strip().lower()
+            other = name_to_emp.get(al)
+            if not other or other.get("id") == e.get("id"):
+                continue
+            if (other.get("status") or "").lower() != "active":
+                continue
+            collisions.append({
+                "primary_name": e.get("name"),
+                "duplicate_name": other.get("name"),
+            })
+
+    # --- Tri-state rollup --------------------------------------------------
+    # RED   = any P0 issue OR alias collision present OR ≥1 unlocked
+    #         current-or-future-quarter has drift
+    # AMBER = drift on a locked/historical quarter only, P1 issues, OR
+    #         legacy benchmark stragglers
+    # GREEN = no drift, no integrity issues, no collisions
+    now = datetime.now(timezone.utc)
+    current_year = now.year
+    current_quarter_idx = (now.month - 1) // 3 + 1
+    current_quarter = f"Q{current_quarter_idx}"
+
+    def is_current_or_future(q):
+        try:
+            y = int(q.get("year"))
+        except (TypeError, ValueError):
+            return False
+        if y > current_year:
+            return True
+        if y == current_year:
+            qn = q.get("quarter") or ""
+            try:
+                return int(qn.replace("Q", "")) >= current_quarter_idx
+            except ValueError:
+                return False
+        return False
+
+    unlocked_active_drift = [
+        q for q in drift_quarters
+        if (not q["locked"]) and is_current_or_future(q)
+    ]
+    historical_or_locked_drift = [
+        q for q in drift_quarters
+        if q not in unlocked_active_drift
+    ]
+
+    issues = []
+    if p0 > 0:
+        issues.append(f"{p0} P0 integrity issue(s)")
+    if collisions:
+        issues.append(f"{len(collisions)} alias collision(s)")
+    if unlocked_active_drift:
+        issues.append(
+            f"{len(unlocked_active_drift)} current/future quarter(s) "
+            f"with scoring-constant drift"
+        )
+
+    warnings = []
+    if p1 > 0:
+        warnings.append(f"{p1} P1 integrity issue(s)")
+    if historical_or_locked_drift:
+        warnings.append(
+            f"{len(historical_or_locked_drift)} historical quarter(s) "
+            f"with scoring-constant drift"
+        )
+    if p2 > 0:
+        warnings.append(f"{p2} P2 integrity issue(s)")
+
+    if issues:
+        status = "red"
+    elif warnings:
+        status = "amber"
+    else:
+        status = "green"
+
+    return {
+        "status": status,                  # "green" | "amber" | "red"
+        "headline": {
+            "green": "Scoring engine verified canonical.",
+            "amber": "Minor drift — review before demo.",
+            "red":   "Action required before demo.",
+        }[status],
+        "issues": issues,                  # blocker-level
+        "warnings": warnings,              # advisory
+        "checked_at": now.isoformat(),
+        "details": {
+            "quarter_settings": {
+                "total": len(qs_docs),
+                "drift_count": len(drift_quarters),
+                "unlocked_active_drift": unlocked_active_drift,
+                "historical_or_locked_drift": historical_or_locked_drift,
+                "current_quarter": f"{current_year} {current_quarter}",
+            },
+            "integrity": {
+                "p0_issues": p0,
+                "p1_issues": p1,
+                "p2_issues": p2,
+                "deploy_gate": deploy_gate,
+            },
+            "alias_collisions": {
+                "count": len(collisions),
+                "pairs": collisions[:10],   # cap response size
+            },
+        },
+        "remediation": {
+            "scoring_drift": "POST /api/v2/admin/normalize-quarter-settings?apply=true",
+            "alias_collisions": "Open Nickname Manager and merge the collision pairs.",
+            "integrity": "GET /api/v2/admin/integrity for the full validation report.",
+        },
+    }

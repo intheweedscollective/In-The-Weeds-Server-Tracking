@@ -8,6 +8,7 @@ import FinalizeQuarterModal from "../components/FinalizeQuarterModal";
 import QRTopClicksCard from "../components/QRTopClicksCard";
 import QRBottomClicksCard from "../components/QRBottomClicksCard";
 import QRHealthBadge from "../components/QRHealthBadge";
+import ScoringTrustBadge from "../components/ScoringTrustBadge";
 import StoreHealthScore from "../components/StoreHealthScore";
 import CoachingRadar from "../components/CoachingRadar";
 import ReviewImpactTracker from "../components/ReviewImpactTracker";
@@ -214,6 +215,7 @@ export default function Dashboard() {
             
             {/* Quarter Selector */}
             <div className="flex items-center gap-2">
+              <ScoringTrustBadge />
               <QRHealthBadge />
               <select
                 className="px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-primary/50"
