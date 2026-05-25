@@ -1492,7 +1492,9 @@ async def scoring_trust_score():
             if (other.get("status") or "").lower() != "active":
                 continue
             collisions.append({
+                "primary_id": e.get("id"),
                 "primary_name": e.get("name"),
+                "duplicate_id": other.get("id"),
                 "duplicate_name": other.get("name"),
             })
 

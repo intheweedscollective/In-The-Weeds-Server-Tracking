@@ -29,6 +29,7 @@ export default function ScoringTrustBadge() {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [normalizing, setNormalizing] = useState(false);
+  const [mergingId, setMergingId] = useState(null);
 
   useEffect(() => {
     if (!user?.is_admin) return;
@@ -115,6 +116,30 @@ export default function ScoringTrustBadge() {
       alert(`Normalize failed: ${e?.response?.data?.detail || e.message}`);
     } finally {
       setNormalizing(false);
+    }
+  };
+
+  const mergeCollision = async (pair) => {
+    if (!pair?.primary_id || !pair?.duplicate_id) return;
+    const ok = window.confirm(
+      `Merge "${pair.duplicate_name}" INTO "${pair.primary_name}"?\n\n` +
+        `The duplicate's name will become an alias on the primary, and all\n` +
+        `future POS / CV / RT uploads for either name will land on the primary record.\n` +
+        `This action is not undoable from the UI.`,
+    );
+    if (!ok) return;
+    setMergingId(pair.duplicate_id);
+    try {
+      const res = await api.post("/v2/employees/merge", {
+        survivor_id: pair.primary_id,
+        duplicate_id: pair.duplicate_id,
+      });
+      alert(res.data?.message || "Merge complete.");
+      await refresh();
+    } catch (e) {
+      alert(`Merge failed: ${e?.response?.data?.detail || e.message}`);
+    } finally {
+      setMergingId(null);
     }
   };
 
@@ -207,13 +232,48 @@ export default function ScoringTrustBadge() {
                   {details.alias_collisions?.count ?? 0} active
                 </div>
                 {details.alias_collisions?.pairs?.length > 0 && (
-                  <div className="text-slate-500 mt-1 truncate">
-                    e.g. {details.alias_collisions.pairs[0].primary_name} ↔{" "}
-                    {details.alias_collisions.pairs[0].duplicate_name}
+                  <div className="text-slate-500 mt-1 text-[11px]">
+                    one-click merge below ↓
                   </div>
                 )}
               </div>
             </div>
+
+            {details.alias_collisions?.pairs?.length > 0 && (
+              <div className="rounded-md border border-rose-800/60 bg-rose-950/20 p-3">
+                <div className="text-xs font-semibold text-rose-200 mb-2">
+                  Resolve Alias Collisions
+                </div>
+                <div className="space-y-2">
+                  {details.alias_collisions.pairs.map((pair) => (
+                    <div
+                      key={pair.duplicate_id || pair.duplicate_name}
+                      className="flex items-center justify-between gap-3 rounded border border-slate-700 bg-slate-900/60 p-2 text-sm"
+                      data-testid={`collision-pair-${pair.duplicate_id || pair.duplicate_name}`}
+                    >
+                      <div className="text-slate-200 truncate">
+                        <span className="font-semibold">
+                          {pair.duplicate_name}
+                        </span>
+                        <span className="text-slate-500 mx-2">→</span>
+                        <span className="text-emerald-300 font-semibold">
+                          {pair.primary_name}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className="px-2.5 py-1 rounded bg-rose-700 hover:bg-rose-600 text-white text-xs disabled:opacity-50 shrink-0"
+                        onClick={() => mergeCollision(pair)}
+                        disabled={mergingId !== null}
+                        data-testid={`merge-collision-${pair.duplicate_id || pair.duplicate_name}`}
+                      >
+                        {mergingId === pair.duplicate_id ? "Merging…" : "Merge"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="rounded-md border border-slate-700 bg-slate-800/40 p-3 text-xs text-slate-300 space-y-1">
               <div className="font-semibold text-slate-200 mb-1">
@@ -224,8 +284,8 @@ export default function ScoringTrustBadge() {
                 weights, RT 0.33/cap 20, CV +1/-2).
               </div>
               <div>
-                <b>Alias collisions:</b> Open Nickname Manager and merge each
-                pair.
+                <b>Alias collisions:</b> Click the "Merge" button on each pair
+                above (or open Nickname Manager for manual control).
               </div>
               <div>
                 <b>Integrity issues:</b> See full report at{" "}

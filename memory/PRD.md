@@ -12,6 +12,42 @@ Build a comprehensive performance review application for restaurant employees.
 
 ## Current State (2026-05-24)
 
+### P0: Resolved 3 Alias Collisions — SHIPPED 2026-05-24
+
+Per the previous session's audit checklist, executed the 3 outstanding
+canonical-vs-alias merges on preview using the existing
+`/v2/employees/merge` endpoint:
+
+| Survivor          | Duplicate (merged in) | QR clicks rolled |
+|-------------------|-----------------------|------------------|
+| Allen Simmons     | Craig Simmons         | 5 added          |
+| Ikey Ostgarden    | Eric Ostgarden        | 1 added / 2 arch.|
+| TK Kozan          | Thomas Kozan          | 1 archived       |
+
+After the merge: `/v2/admin/alias-collisions` returns 0 active
+collisions (was 3). Each duplicate's name is now an alias on the
+survivor so any future POS / CV / RT upload for either name lands on
+one canonical record.
+
+**Production action required**: Same merges must be applied to
+production. Easiest path: open the **Scoring Trust Score** modal from
+the dashboard header as admin → click **"Merge"** next to each
+collision pair. The badge now surfaces every pair with its own
+one-click merge button (no need to bounce to Nickname Manager).
+
+### P2: Trust Modal — One-click Collision Merge — SHIPPED 2026-05-24
+
+Extended the `ScoringTrustBadge` modal with a per-pair merge action:
+
+- Backend `/v2/admin/scoring-trust` now returns `primary_id` and
+  `duplicate_id` on each collision pair (was just names).
+- Frontend renders a "Resolve Alias Collisions" panel inside the
+  modal when `count > 0`. Each pair shows
+  `duplicate → primary` with a red **Merge** button that POSTs to
+  `/v2/employees/merge` (with a `window.confirm` safety dialog).
+- After merge, the modal auto-refreshes its data and the pair
+  disappears.
+
 ### P2: Scoring Trust Score (Dashboard widget) — SHIPPED 2026-05-24
 
 User requested a single trust-signal widget on the dashboard so the RD
