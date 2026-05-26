@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { ShieldCheck, ShieldAlert, ShieldX, ChevronRight } from "lucide-react";
+import { ShieldCheck, ShieldAlert, ShieldX, ChevronRight, Wand2 } from "lucide-react";
+import { toast } from "sonner";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -95,51 +96,101 @@ export default function ScoringTrustBadge() {
 
   const runNormalize = async (apply) => {
     setNormalizing(true);
+    const toastId = toast.loading(
+      apply ? "Applying canonical scoring constants…" : "Checking scoring drift…",
+    );
     try {
       const url = apply
         ? "/v2/admin/normalize-quarter-settings?apply=true"
         : "/v2/admin/normalize-quarter-settings";
       const res = await api.post(url);
-      const summary = res.data;
+      const s = res.data;
       if (apply) {
-        alert(
-          `Normalized ${summary.quarters_applied} quarter(s) (${summary.field_writes_total} field writes). Re-checking trust…`,
+        toast.success(
+          s.quarters_applied > 0
+            ? `Normalized ${s.quarters_applied} quarter(s) · ${s.field_writes_total} field writes.`
+            : "Already canonical — no changes needed.",
+          { id: toastId },
         );
         await refresh();
       } else {
-        alert(
-          `Dry-run: ${summary.quarters_needing_change} quarter(s) need changes. ` +
-            `Click "Apply Normalize" to commit.`,
+        toast.message(
+          s.quarters_needing_change > 0
+            ? `${s.quarters_needing_change} quarter(s) need changes — click "Apply Normalize".`
+            : "Already canonical — no drift detected.",
+          { id: toastId },
         );
       }
+      return s;
     } catch (e) {
-      alert(`Normalize failed: ${e?.response?.data?.detail || e.message}`);
+      toast.error(`Normalize failed: ${e?.response?.data?.detail || e.message}`, {
+        id: toastId,
+      });
     } finally {
       setNormalizing(false);
     }
   };
 
-  const mergeCollision = async (pair) => {
+  const mergeCollision = async (pair, opts = {}) => {
     if (!pair?.primary_id || !pair?.duplicate_id) return;
-    const ok = window.confirm(
-      `Merge "${pair.duplicate_name}" INTO "${pair.primary_name}"?\n\n` +
-        `The duplicate's name will become an alias on the primary, and all\n` +
-        `future POS / CV / RT uploads for either name will land on the primary record.\n` +
-        `This action is not undoable from the UI.`,
-    );
-    if (!ok) return;
     setMergingId(pair.duplicate_id);
+    const toastId =
+      opts.silent ? null : toast.loading(`Merging ${pair.duplicate_name}…`);
     try {
       const res = await api.post("/v2/employees/merge", {
         survivor_id: pair.primary_id,
         duplicate_id: pair.duplicate_id,
       });
-      alert(res.data?.message || "Merge complete.");
-      await refresh();
+      if (!opts.silent) {
+        toast.success(
+          `${pair.duplicate_name} → ${pair.primary_name}`,
+          { id: toastId, description: res.data?.message },
+        );
+      }
+      if (!opts.skipRefresh) await refresh();
+      return true;
     } catch (e) {
-      alert(`Merge failed: ${e?.response?.data?.detail || e.message}`);
+      if (!opts.silent) {
+        toast.error(
+          `Merge failed: ${e?.response?.data?.detail || e.message}`,
+          { id: toastId },
+        );
+      }
+      return false;
     } finally {
       setMergingId(null);
+    }
+  };
+
+  const autoFix = async () => {
+    setNormalizing(true);
+    const toastId = toast.loading("Auto-fixing scoring engine…");
+    try {
+      // 1. Normalize quarter settings.
+      const normRes = await api.post(
+        "/v2/admin/normalize-quarter-settings?apply=true",
+      );
+      const normCount = normRes.data?.quarters_applied || 0;
+
+      // 2. Merge every alias collision in series.
+      const pairs = details.alias_collisions?.pairs || [];
+      let merged = 0;
+      for (const p of pairs) {
+        const ok = await mergeCollision(p, { silent: true, skipRefresh: true });
+        if (ok) merged += 1;
+      }
+
+      toast.success("Auto-fix complete.", {
+        id: toastId,
+        description: `Normalized ${normCount} quarter(s) · Merged ${merged}/${pairs.length} collision(s).`,
+      });
+      await refresh();
+    } catch (e) {
+      toast.error(`Auto-fix failed: ${e?.response?.data?.detail || e.message}`, {
+        id: toastId,
+      });
+    } finally {
+      setNormalizing(false);
     }
   };
 
@@ -280,24 +331,22 @@ export default function ScoringTrustBadge() {
                 Remediation
               </div>
               <div>
-                <b>Scoring drift:</b> Run "Apply Normalize" below (canonical
-                weights, RT 0.33/cap 20, CV +1/-2).
+                <b>One-click fix:</b> Tap <b>"Auto-Fix All"</b> below — it
+                normalizes every quarter's scoring constants and merges any
+                outstanding alias collisions in one go.
               </div>
               <div>
-                <b>Alias collisions:</b> Click the "Merge" button on each pair
-                above (or open Nickname Manager for manual control).
-              </div>
-              <div>
-                <b>Integrity issues:</b> See full report at{" "}
+                <b>Integrity issues:</b> Orphan snapshot refs and blocklist
+                violations need separate cleanup — see{" "}
                 <code className="text-slate-400">/api/v2/admin/integrity</code>.
               </div>
             </div>
           </div>
 
-          <DialogFooter className="gap-2 mt-2">
+          <DialogFooter className="flex-col sm:flex-row gap-2 mt-2">
             <button
               type="button"
-              className="px-3 py-1.5 rounded border border-slate-600 text-slate-200 hover:bg-slate-800 text-sm"
+              className="px-3 py-2 rounded border border-slate-600 text-slate-200 hover:bg-slate-800 text-sm w-full sm:w-auto"
               onClick={refresh}
               disabled={normalizing}
               data-testid="scoring-trust-refresh"
@@ -306,7 +355,7 @@ export default function ScoringTrustBadge() {
             </button>
             <button
               type="button"
-              className="px-3 py-1.5 rounded border border-slate-600 text-slate-200 hover:bg-slate-800 text-sm"
+              className="px-3 py-2 rounded border border-slate-600 text-slate-200 hover:bg-slate-800 text-sm w-full sm:w-auto"
               onClick={() => runNormalize(false)}
               disabled={normalizing}
               data-testid="scoring-trust-dry-run"
@@ -315,12 +364,22 @@ export default function ScoringTrustBadge() {
             </button>
             <button
               type="button"
-              className="px-3 py-1.5 rounded bg-emerald-700 hover:bg-emerald-600 text-white text-sm disabled:opacity-50"
+              className="px-3 py-2 rounded border border-slate-600 text-slate-200 hover:bg-slate-800 text-sm w-full sm:w-auto"
               onClick={() => runNormalize(true)}
               disabled={normalizing}
               data-testid="scoring-trust-apply-normalize"
             >
               {normalizing ? "Working…" : "Apply Normalize"}
+            </button>
+            <button
+              type="button"
+              className="px-3 py-2 rounded bg-emerald-700 hover:bg-emerald-600 text-white text-sm disabled:opacity-50 flex items-center justify-center gap-1.5 w-full sm:w-auto"
+              onClick={autoFix}
+              disabled={normalizing}
+              data-testid="scoring-trust-auto-fix"
+            >
+              <Wand2 className="w-3.5 h-3.5" />
+              {normalizing ? "Working…" : "Auto-Fix All"}
             </button>
           </DialogFooter>
         </DialogContent>
