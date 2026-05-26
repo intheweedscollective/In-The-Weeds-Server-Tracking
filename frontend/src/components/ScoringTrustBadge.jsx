@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { ShieldCheck, ShieldAlert, ShieldX, ChevronRight, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
@@ -11,6 +11,10 @@ import {
   DialogDescription,
   DialogFooter,
 } from "./ui/dialog";
+
+const AUTO_HEAL_PREF_KEY = "scoring_trust_auto_heal";
+const AUTO_HEAL_COOLDOWN_KEY = "scoring_trust_auto_heal_last_run";
+const AUTO_HEAL_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
 
 /**
  * ScoringTrustBadge
@@ -31,24 +35,102 @@ export default function ScoringTrustBadge() {
   const [open, setOpen] = useState(false);
   const [normalizing, setNormalizing] = useState(false);
   const [mergingId, setMergingId] = useState(null);
+  const [autoHealEnabled, setAutoHealEnabled] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const v = localStorage.getItem(AUTO_HEAL_PREF_KEY);
+    return v === null ? true : v === "true";
+  });
+  const autoHealRanRef = useRef(false);
+
+  const fetchTrust = useCallback(async () => {
+    try {
+      const res = await api.get("/v2/admin/scoring-trust");
+      return res.data;
+    } catch {
+      return { status: "unknown" };
+    }
+  }, []);
+
+  // Silent auto-heal: runs at most once per mount, throttled to 1/hour.
+  // Triggers only when: (a) user is admin, (b) feature enabled,
+  // (c) trust is red/amber AND has fixable signals (drift or collisions).
+  const runAutoHeal = useCallback(async (currentTrust) => {
+    const details = currentTrust?.details || {};
+    const drift = details.quarter_settings?.drift_count || 0;
+    const collisions = details.alias_collisions?.count || 0;
+    if (drift === 0 && collisions === 0) return null;
+
+    const toastId = toast.loading("Auto-healing scoring engine…");
+    try {
+      const normRes = await api.post(
+        "/v2/admin/normalize-quarter-settings?apply=true",
+      );
+      const normCount = normRes.data?.quarters_applied || 0;
+
+      const pairs = details.alias_collisions?.pairs || [];
+      let merged = 0;
+      for (const p of pairs) {
+        if (!p?.primary_id || !p?.duplicate_id) continue;
+        try {
+          await api.post("/v2/employees/merge", {
+            survivor_id: p.primary_id,
+            duplicate_id: p.duplicate_id,
+          });
+          merged += 1;
+        } catch {
+          // Skip; surfaced later by refresh().
+        }
+      }
+
+      if (normCount === 0 && merged === 0) {
+        toast.dismiss(toastId);
+        return null;
+      }
+      toast.success("Scoring engine auto-healed.", {
+        id: toastId,
+        description: `Normalized ${normCount} quarter(s) · Merged ${merged} collision(s).`,
+      });
+      return { normCount, merged };
+    } catch (e) {
+      toast.error(
+        `Auto-heal failed: ${e?.response?.data?.detail || e.message}`,
+        { id: toastId },
+      );
+      return null;
+    }
+  }, []);
 
   useEffect(() => {
     if (!user?.is_admin) return;
     let cancelled = false;
     (async () => {
-      try {
-        const res = await api.get("/v2/admin/scoring-trust");
-        if (!cancelled) setTrust(res.data);
-      } catch {
-        if (!cancelled) setTrust({ status: "unknown" });
-      } finally {
-        if (!cancelled) setLoading(false);
+      const data = await fetchTrust();
+      if (cancelled) return;
+      setTrust(data);
+      setLoading(false);
+
+      // Silent auto-heal — bounded by cooldown + per-mount guard.
+      if (autoHealEnabled && !autoHealRanRef.current) {
+        const last = parseInt(
+          localStorage.getItem(AUTO_HEAL_COOLDOWN_KEY) || "0",
+          10,
+        );
+        const now = Date.now();
+        if (now - last > AUTO_HEAL_COOLDOWN_MS) {
+          autoHealRanRef.current = true;
+          const result = await runAutoHeal(data);
+          if (result) {
+            localStorage.setItem(AUTO_HEAL_COOLDOWN_KEY, String(now));
+            const refreshed = await fetchTrust();
+            if (!cancelled) setTrust(refreshed);
+          }
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [user, fetchTrust, autoHealEnabled, runAutoHeal]);
 
   // Admin-only widget — silently hides for public viewers.
   if (!user?.is_admin) return null;
@@ -84,14 +166,9 @@ export default function ScoringTrustBadge() {
 
   const refresh = async () => {
     setLoading(true);
-    try {
-      const res = await api.get("/v2/admin/scoring-trust");
-      setTrust(res.data);
-    } catch {
-      setTrust({ status: "unknown" });
-    } finally {
-      setLoading(false);
-    }
+    const data = await fetchTrust();
+    setTrust(data);
+    setLoading(false);
   };
 
   const runNormalize = async (apply) => {
@@ -341,6 +418,36 @@ export default function ScoringTrustBadge() {
                 <code className="text-slate-400">/api/v2/admin/integrity</code>.
               </div>
             </div>
+
+            <label
+              className="flex items-start gap-2 rounded-md border border-slate-700 bg-slate-800/30 p-3 text-xs text-slate-300 cursor-pointer"
+              data-testid="scoring-trust-auto-heal-toggle"
+            >
+              <input
+                type="checkbox"
+                className="mt-0.5 accent-emerald-500"
+                checked={autoHealEnabled}
+                onChange={(e) => {
+                  const v = e.target.checked;
+                  setAutoHealEnabled(v);
+                  localStorage.setItem(AUTO_HEAL_PREF_KEY, String(v));
+                  if (v) {
+                    // Re-arm: clear cooldown so the next dashboard load re-runs.
+                    localStorage.removeItem(AUTO_HEAL_COOLDOWN_KEY);
+                    autoHealRanRef.current = false;
+                    toast.success("Self-healing enabled.");
+                  } else {
+                    toast.message("Self-healing disabled.");
+                  }
+                }}
+              />
+              <span>
+                <b className="text-slate-200">Self-healing dashboard</b> — when
+                enabled (default), drift and alias collisions are auto-fixed
+                silently on dashboard load (≤ once/hour). You'll get a toast
+                summary. Disable if you'd rather review changes manually.
+              </span>
+            </label>
           </div>
 
           <DialogFooter className="flex-col sm:flex-row gap-2 mt-2">

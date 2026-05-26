@@ -10,7 +10,47 @@ Build a comprehensive performance review application for restaurant employees.
 - **AI**: OpenAI GPT-4o (via Emergent LLM Key)
 - **Auth**: Emergent-managed Google Auth (whitelist via `ALLOWED_ADMIN_EMAILS`)
 
-## Current State (2026-05-24)
+## Current State (2026-05-26)
+
+### P2: Self-Healing Dashboard — SHIPPED 2026-05-26
+
+User requested true zero-touch operation: the scoring engine should heal
+itself in the background instead of waiting for an admin to open the
+trust modal and click a button. Plus, the native browser
+`window.confirm` / `alert()` dialogs on mobile Safari were clunky.
+
+**Delivered**:
+
+1. **Toasts replace native dialogs** — every `alert()` / `confirm()`
+   in `ScoringTrustBadge` swapped for `sonner` toasts (loading state,
+   success with description, error). No more iOS modal pop-ups.
+
+2. **"Auto-Fix All" button** — single green CTA in the modal footer
+   with wand icon. Runs normalize + every collision merge in series,
+   single success toast at the end. Existing granular buttons
+   (Refresh / Dry-Run / Apply Normalize) preserved for power users.
+
+3. **Silent auto-heal on dashboard load**:
+   - Fires on `ScoringTrustBadge` mount for any admin user whose
+     trust check reports `drift_count > 0` OR `collisions > 0`.
+   - Throttled to **once per hour** via
+     `localStorage["scoring_trust_auto_heal_last_run"]` (so it
+     doesn't hammer the API on rapid page navigation).
+   - Bounded to one run per component mount via a `useRef` guard.
+   - On success, shows a single toast: *"Scoring engine auto-healed.
+     Normalized N quarter(s) · Merged X collision(s)"*.
+   - If both deltas are 0, no toast — fully silent.
+
+4. **Opt-out toggle** — checkbox inside the trust modal labeled
+   "Self-healing dashboard" (on by default). Preference stored in
+   `localStorage["scoring_trust_auto_heal"]`. Toggling on
+   re-arms the cooldown so the next dashboard load triggers a fresh
+   heal pass. Toggling off shows an explanatory toast.
+
+**Verified end-to-end on preview**: seeded 2 fake alias collisions,
+loaded dashboard as admin → toast fired with
+"Normalized 0 · Merged 2 collision(s)" → opening modal confirmed
+"0 active" collisions. No user input required.
 
 ### P0: Resolved 3 Alias Collisions — SHIPPED 2026-05-24
 
