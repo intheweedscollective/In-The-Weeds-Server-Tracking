@@ -322,73 +322,91 @@ async def batch_fix_display_names(data: dict):
 @admin_router.post("/clear-all-detractors")
 async def clear_all_detractors(year: int = 2026, quarter: str = "Q1"):
     """
-    Clear all detractor counts for all employees and recalculate their scores.
-    Detractors should only be added manually via DAR entry or employee edit function.
-    
-    This endpoint:
-    1. Sets cv_detractors to 0 for all employees
-    2. Recalculates cv_score (removing detractor penalty)
-    3. Recalculates total_score
-    4. Syncs changes to the most recent snapshot
+    Zero out cv_detractors for every employee in the target quarter and
+    re-run the canonical scoring engine. The engine — not this endpoint —
+    owns the CV / total-score formula, so there is no chance of drift.
+
+    Steps:
+    1. Set cv_detractors=0 on every active v2 row for the quarter.
+    2. Replay `run_full_scoring` so cv_score, weighted_score, bonuses,
+       and total_score all reconverge through one canonical path.
     """
+    from scoring_engine import EmployeeV2, QuarterSettings, run_full_scoring
+
     db = get_db()
     quarter = quarter.upper()
-    
-    # Find all employees with detractors > 0
+
     employees_with_detractors = await db.employees_v2.find({
         "quarter": quarter,
         "year": year,
-        "cv_detractors": {"$gt": 0}
-    }).to_list(500)
-    
+        "cv_detractors": {"$gt": 0},
+    }).to_list(2000)
+
+    if not employees_with_detractors:
+        return {
+            "success": True,
+            "message": "No employees with detractors found",
+            "employees_updated": [],
+        }
+
+    # Zero detractors in the DB and in our working list so the rescore
+    # operates on the post-clear state.
+    ids = [e["_id"] for e in employees_with_detractors]
+    await db.employees_v2.update_many(
+        {"_id": {"$in": ids}},
+        {"$set": {"cv_detractors": 0,
+                  "updated_at": datetime.now(timezone.utc)}},
+    )
+
+    # Reload through the engine.
+    settings_doc = await db.quarter_settings.find_one(
+        {"quarter": quarter, "year": year}, {"_id": 0}
+    )
+    settings_doc = settings_doc or {}
+    settings_doc.pop("id", None)
+    try:
+        settings = QuarterSettings(**settings_doc)
+    except Exception:
+        settings = QuarterSettings(quarter=quarter, year=year)
+
+    fresh = await db.employees_v2.find(
+        {"_id": {"$in": ids}}, {"_id": 0}
+    ).to_list(2000)
+
+    # Legacy field bridges so the engine sees its expected inputs.
+    for r in fresh:
+        if (not (r.get("review_mentions") or 0)) and (r.get("rt_mentions") or 0):
+            r["review_mentions"] = int(r["rt_mentions"])
+        if (not (r.get("guests") or 0)) and (r.get("guest_count") or 0):
+            r["guests"] = float(r["guest_count"])
+
+    emp_models = []
+    for r in fresh:
+        try:
+            emp_models.append(EmployeeV2(**{
+                k: v for k, v in r.items()
+                if k in EmployeeV2.model_fields
+            }))
+        except Exception as e:
+            logger.warning(f"clear-detractors: rescore skipped {r.get('name')}: {e}")
+
+    scored = run_full_scoring(emp_models, settings)
     updated_employees = []
-    
-    for emp in employees_with_detractors:
-        old_detractors = emp.get("cv_detractors", 0)
-        old_cv_score = emp.get("cv_score", 0)
-        old_total = emp.get("total_score", 0)
-        
-        # Recalculate CV score without detractors
-        nps_score = emp.get("nps_score", 0) or 0
-        nps_pts = round(nps_score / 10, 1) if nps_score > 0 else 0.0
-        nps_pts = min(nps_pts, 10.0)
-        
-        cv_promoters = emp.get("cv_promoters", 0) or 0
-        # Promoter bonus: +0.5 per promoter (CV Formula)
-        promo_bonus = cv_promoters * 0.5
-        new_cv_score = round(promo_bonus, 2)  # No detractors, no NPS component
-        
-        # Recalculate total score
-        weighted_score = emp.get("weighted_score", 0) or 0
-        total_metric_bonus = emp.get("total_metric_bonus", 0) or 0
-        rt_bonus = emp.get("review_tracker_bonus", 0) or 0
-        new_total = round(weighted_score + new_cv_score + total_metric_bonus + rt_bonus, 2)
-        
-        # Update employee
+    for emp in scored:
         await db.employees_v2.update_one(
-            {"_id": emp["_id"]},
-            {"$set": {
-                "cv_detractors": 0,
-                "cv_score": new_cv_score,
-                "total_score": new_total,
-                "pre_dar_score": new_total,
-                "updated_at": datetime.now(timezone.utc)
-            }}
+            {"id": emp.id, "quarter": quarter, "year": year},
+            {"$set": emp.model_dump(exclude_none=True)},
         )
-        
         updated_employees.append({
-            "name": emp.get("name"),
-            "old_detractors": old_detractors,
-            "old_cv_score": old_cv_score,
-            "new_cv_score": new_cv_score,
-            "old_total": old_total,
-            "new_total": new_total
+            "name": emp.name,
+            "new_cv_score": emp.cv_score,
+            "new_total": emp.total_score,
         })
-    
+
     return {
         "success": True,
-        "message": f"Cleared detractors for {len(updated_employees)} employees",
-        "employees_updated": updated_employees
+        "message": f"Cleared detractors for {len(updated_employees)} employees (re-scored through canonical engine)",
+        "employees_updated": updated_employees,
     }
 
 
@@ -812,29 +830,32 @@ async def preview_name_matching(quarter: str = "Q1", year: int = 2026):
     nps_lookup = {normalize_name(n["employee_name"]): n for n in nps_records}
     
     # Build mapping
+    from scoring_engine import EmployeeV2, calculate_customer_voice_score
+
     mapping_results = []
     for emp in employees:
         emp_name = emp["name"]
         aliases = emp.get("aliases", [])
         nps_data, match_reason = get_nps_for_employee_smart(emp_name, nps_lookup, aliases)
-        
+
         current_nps = emp.get("nps_score") or 0
         current_cv = emp.get("cv_score") or 0
         matched_nps = nps_data.get("nps_score") or 0
         matched_promoters = nps_data.get("promoters") or 0
         matched_detractors = nps_data.get("detractors") or 0
-        
-        # Calculate what CV score would be
-        nps_pts = 0
-        if matched_nps >= 90: nps_pts = 10
-        elif matched_nps >= 80: nps_pts = 9
-        elif matched_nps >= 70: nps_pts = 8
-        elif matched_nps >= 60: nps_pts = 7
-        elif matched_nps >= 50: nps_pts = 6
-        elif matched_nps > 0: nps_pts = round((matched_nps / 50) * 5, 1)
-        
-        projected_cv = nps_pts + (matched_promoters * 1) + (matched_detractors * -2)
-        
+
+        # Project the new CV score by replaying the canonical engine on a
+        # throwaway employee with the matched CV inputs. Guarantees the
+        # preview matches what apply_name_matching will actually write.
+        projected_emp = EmployeeV2(
+            name=emp_name,
+            nps_score=matched_nps,
+            cv_promoters=matched_promoters,
+            cv_detractors=matched_detractors,
+        )
+        calculate_customer_voice_score(projected_emp)
+        projected_cv = projected_emp.cv_score or 0
+
         mapping_results.append({
             "employee_name": emp_name,
             "current_nps": current_nps,
@@ -871,102 +892,121 @@ async def preview_name_matching(quarter: str = "Q1", year: int = 2026):
 @admin_router.post("/name-matching/apply")
 async def apply_name_matching(quarter: str = "Q1", year: int = 2026):
     """
-    Apply the smart name matching and recalculate all employee scores.
-    This will:
-    1. Match employees to CV NPS data using smart nickname matching
-    2. Update employee records with correct CV data
-    3. Recalculate all scores
+    Apply smart-name-matching to attach the right CV NPS rows to each
+    employee, then re-run the canonical scoring engine. Engine — not
+    inline math — owns the CV formula and the total-score formula so
+    this endpoint can never drift.
+
+    Pipeline:
+    1. For every active v2 row in the quarter, look up the best NPS
+       match by canonical name + aliases.
+    2. Stamp `nps_score`, `cv_promoters`, `cv_detractors`,
+       `cv_match_source` onto the row (preserve everything else).
+    3. Reload the touched rows and replay `run_full_scoring` so cv_score
+       and total_score are recomputed by the engine.
     """
     from name_matcher import get_nps_for_employee_smart, normalize_name
-    from scoring_engine import (
-        EmployeeV2, QuarterSettings,
-        calculate_lbw_total, calculate_derived_metrics,
-        calculate_customer_voice_score, calculate_review_tracker_bonus,
-        calculate_combined_cv_rt, calculate_normalized_scores,
-        calculate_bonus_points, calculate_total_score,
-        calculate_rankings, calculate_performance_tiers
-    )
-    
+    from scoring_engine import EmployeeV2, QuarterSettings, run_full_scoring
+
     db = get_db()
-    
-    # Get employees
+
     employees = await db.employees_v2.find(
         {"quarter": quarter, "year": year},
-        {"_id": 0}
-    ).to_list(1000)
-    
-    # Get CV NPS data
+        {"_id": 0},
+    ).to_list(2000)
+
     nps_records = await db.cv_nps.find(
         {"quarter": quarter, "year": year},
-        {"_id": 0}
-    ).to_list(1000)
-    
-    # Build NPS lookup
+        {"_id": 0},
+    ).to_list(2000)
     nps_lookup = {normalize_name(n["employee_name"]): n for n in nps_records}
-    
-    # Get settings
+
     settings_doc = await db.quarter_settings.find_one(
-        {"quarter": quarter, "year": year},
-        {"_id": 0}
+        {"quarter": quarter, "year": year}, {"_id": 0}
     )
-    settings = QuarterSettings(**settings_doc) if settings_doc else QuarterSettings()
-    
-    updated_count = 0
-    update_details = []
-    
+    settings_doc = settings_doc or {}
+    settings_doc.pop("id", None)
+    try:
+        settings = QuarterSettings(**settings_doc)
+    except Exception:
+        settings = QuarterSettings(quarter=quarter, year=year)
+
+    touched_ids: List[str] = []
+    update_details: List[Dict[str, Any]] = []
+
     for emp_doc in employees:
         emp_name = emp_doc["name"]
         aliases = emp_doc.get("aliases", [])
-        
-        # Get matched NPS data
-        nps_data, match_reason = get_nps_for_employee_smart(emp_name, nps_lookup, aliases)
-        
-        if nps_data:
-            nps_score = nps_data.get("nps_score") or 0
-            promoters = nps_data.get("promoters") or 0
-            detractors = nps_data.get("detractors") or 0
-            
-            # Calculate CV score using new formula
-            # CV = (Promoters × 0.5) - (Detractors × 1) [uncapped]
-            cv_score = (promoters * 0.5) - (detractors * 1)
-            
-            # Get other score components
-            weighted_score = emp_doc.get("weighted_score", 0) or 0
-            total_metric_bonus = emp_doc.get("total_metric_bonus", 0) or 0
-            rt_bonus = emp_doc.get("review_tracker_bonus", 0) or 0
-            
-            new_total = round(weighted_score + cv_score + total_metric_bonus + rt_bonus, 2)
-            
-            # Update employee
-            await db.employees_v2.update_one(
-                {"id": emp_doc["id"]},
-                {"$set": {
-                    "nps_score": nps_score,
-                    "cv_promoters": promoters,
-                    "cv_detractors": detractors,
-                    "cv_score": round(cv_score, 2),
-                    "total_score": new_total,
-                    "pre_dar_score": new_total,
-                    "cv_match_source": match_reason,
-                    "updated_at": datetime.now(timezone.utc)
-                }}
-            )
-            
-            updated_count += 1
-            update_details.append({
-                "name": emp_name,
-                "match_reason": match_reason,
+        nps_data, match_reason = get_nps_for_employee_smart(
+            emp_name, nps_lookup, aliases,
+        )
+        if not nps_data:
+            continue
+
+        nps_score = nps_data.get("nps_score") or 0
+        promoters = nps_data.get("promoters") or 0
+        detractors = nps_data.get("detractors") or 0
+
+        await db.employees_v2.update_one(
+            {"id": emp_doc["id"], "quarter": quarter, "year": year},
+            {"$set": {
                 "nps_score": nps_score,
-                "cv_score": cv_score,
-                "new_total": new_total
-            })
-    
+                "cv_promoters": promoters,
+                "cv_detractors": detractors,
+                "cv_match_source": match_reason,
+                "updated_at": datetime.now(timezone.utc),
+            }},
+        )
+        touched_ids.append(emp_doc["id"])
+        update_details.append({
+            "name": emp_name,
+            "match_reason": match_reason,
+            "nps_score": nps_score,
+            "promoters": promoters,
+            "detractors": detractors,
+        })
+
+    # Re-run canonical scoring on every touched row.
+    if touched_ids:
+        fresh = await db.employees_v2.find(
+            {"id": {"$in": touched_ids}, "quarter": quarter, "year": year},
+            {"_id": 0},
+        ).to_list(2000)
+        # Legacy bridges so the engine sees its expected inputs.
+        for r in fresh:
+            if (not (r.get("review_mentions") or 0)) and (r.get("rt_mentions") or 0):
+                r["review_mentions"] = int(r["rt_mentions"])
+            if (not (r.get("guests") or 0)) and (r.get("guest_count") or 0):
+                r["guests"] = float(r["guest_count"])
+        emp_models = []
+        for r in fresh:
+            try:
+                emp_models.append(EmployeeV2(**{
+                    k: v for k, v in r.items()
+                    if k in EmployeeV2.model_fields
+                }))
+            except Exception as e:
+                logger.warning(f"name-matching: rescore skipped {r.get('name')}: {e}")
+        scored = run_full_scoring(emp_models, settings)
+        for emp in scored:
+            await db.employees_v2.update_one(
+                {"id": emp.id, "quarter": quarter, "year": year},
+                {"$set": emp.model_dump(exclude_none=True)},
+            )
+            # Mirror the freshly scored cv_score/total_score into the
+            # detail payload for the admin to sanity-check.
+            for d in update_details:
+                if d["name"] == emp.name:
+                    d["cv_score"] = emp.cv_score
+                    d["new_total"] = emp.total_score
+                    break
+
     return {
         "success": True,
         "quarter": quarter,
         "year": year,
-        "employees_updated": updated_count,
-        "details": update_details
+        "employees_updated": len(touched_ids),
+        "details": update_details,
     }
 
 

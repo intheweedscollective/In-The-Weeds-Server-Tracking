@@ -12,6 +12,53 @@ Build a comprehensive performance review application for restaurant employees.
 
 ## Current State (2026-05-27)
 
+### P0: Stale CV Math Purge from Admin Panel — SHIPPED 2026-05-27
+
+User's auditor flagged three admin endpoints carrying hardcoded
+legacy CV math that bypassed the canonical engine and would
+silently re-rank the board mid-demo if anyone tapped them:
+
+- `POST /v2/admin/name-matching/apply` — wrote
+  `cv = promoters*0.5 - detractors*1`, dropped NPS, and rebuilt
+  `total_score` from cached components (legacy 75-pt model).
+- `POST /v2/admin/clear-all-detractors` — used `promoter * 0.5`,
+  dropped NPS contribution, recomputed total inline.
+- `GET /v2/admin/name-matching/preview` — used banded NPS→points
+  (10/9/8/7/6 thresholds) instead of NPS%/10 linear.
+
+Bonus discovery: both `apply` and `preview` imported
+`get_nps_for_employee_smart` and `normalize_name` from
+`name_matcher.py` — **functions that did not exist**. Every call to
+either endpoint would have thrown `ImportError` before even reaching
+the bad math. Pre-existing latent landmine.
+
+**Fix shipped**:
+
+1. **`clear_all_detractors`**: zeroes detractors then replays
+   `run_full_scoring` on the touched rows. Engine owns the CV /
+   total-score formula now.
+2. **`apply_name_matching`**: persists matched
+   `nps_score`/`promoters`/`detractors`/`cv_match_source` to v2,
+   then reloads and replays `run_full_scoring`. Includes the
+   `rt_mentions → review_mentions` legacy bridge introduced by
+   `demo-prep` so RT bonus computes correctly.
+3. **`preview_name_matching`**: projects CV via
+   `calculate_customer_voice_score` on a throwaway `EmployeeV2`.
+   Preview now matches what `apply` would actually write.
+4. **`name_matcher.py`**: added the two missing utilities
+   (`normalize_name`, `get_nps_for_employee_smart`) with exact /
+   alias / fuzzy(≥75) matching layered through `clean_name`.
+
+**Regression test**: `tests/test_admin_cv_routes_canonical.py` (3
+cases) — asserts each endpoint's CV output matches
+`calculate_customer_voice_score`'s output, never the legacy
+±0.5/±1 math. All 32 scoring tests still pass.
+
+**Net effect on tomorrow's demo**: if you accidentally tap "Apply
+Name Matching" mid-presentation, the board does NOT re-rank with
+wrong math — it re-runs the same canonical engine the dashboard
+already uses, so scores stay numerically consistent.
+
 ### P0: Demo-Prep One-Shot Consolidation — SHIPPED 2026-05-27
 
 User reported demo-tomorrow blockers:

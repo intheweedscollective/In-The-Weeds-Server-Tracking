@@ -313,6 +313,68 @@ def match_employees_batch(
     return results
 
 
+def normalize_name(name: str) -> str:
+    """Return a stable lowercase key for name lookups. Wraps `clean_name`
+    so admin endpoints / CV-NPS matchers all share the same canonical
+    normalisation."""
+    return clean_name(name or "").lower()
+
+
+def get_nps_for_employee_smart(
+    employee_name: str,
+    nps_lookup: Dict[str, Dict],
+    aliases: Optional[List[str]] = None,
+) -> Tuple[Optional[Dict], str]:
+    """
+    Look up the best CV NPS row for a given canonical employee name.
+
+    Args:
+      employee_name: canonical name to match.
+      nps_lookup:    pre-normalised dict mapping `normalize_name(cv_row.employee_name)`
+                     -> the raw cv_nps record.
+      aliases:       any known aliases on the canonical employee.
+
+    Returns:
+      `(matched_row, match_reason)` where `matched_row` is the cv_nps
+      record (or {} if nothing matched) and `match_reason` is one of
+      `exact_name`, `exact_alias`, `fuzzy:<score>`, or `no_match`.
+
+    Notes:
+      - Empty / blank `nps_lookup` returns `({}, "no_match")` so callers
+        can safely treat the result as a dict.
+      - Fuzzy fallback uses the same threshold (75) as `find_best_match`
+        to stay consistent with the rest of the matcher.
+    """
+    if not nps_lookup:
+        return {}, "no_match"
+
+    # 1. Exact canonical-name match.
+    key = normalize_name(employee_name)
+    if key and key in nps_lookup:
+        return nps_lookup[key], "exact_name"
+
+    # 2. Exact alias match.
+    for alias in (aliases or []):
+        akey = normalize_name(alias)
+        if akey and akey in nps_lookup:
+            return nps_lookup[akey], "exact_alias"
+
+    # 3. Fuzzy fallback against every NPS row.
+    best_score = 0.0
+    best_row: Optional[Dict] = None
+    for k, row in nps_lookup.items():
+        score = calculate_name_similarity(
+            employee_name, row.get("employee_name") or k,
+        )
+        if score > best_score:
+            best_score = score
+            best_row = row
+    if best_row and best_score >= 75.0:
+        return best_row, f"fuzzy:{best_score:.0f}"
+
+    return {}, "no_match"
+
+
 # Test function
 if __name__ == "__main__":
     # Test cases
