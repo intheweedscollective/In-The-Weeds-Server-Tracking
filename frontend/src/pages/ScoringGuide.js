@@ -160,10 +160,10 @@ export default function ScoringGuide() {
                     <td className="text-center">${(qSettings?.benchmark_ppa ?? 55).toFixed(2)}</td>
                   </tr>
                   <tr className="border-b border-slate-700">
-                    <td className="py-2 font-medium text-white">LSC (Loyalty Sales)</td>
+                    <td className="py-2 font-medium text-white">LSC (Guests per Loyalty Signup)</td>
                     <td className="text-center">{W_LSC}%</td>
                     <td className="text-center text-green-400">{W_LSC} pts</td>
-                    <td className="text-center">1:{Math.round(qSettings?.benchmark_lsc ?? 100)} ratio</td>
+                    <td className="text-center">1 signup per {Math.round(qSettings?.benchmark_lsc ?? 100)} guests</td>
                   </tr>
                   <tr className="border-b border-slate-700">
                     <td className="py-2 font-medium text-white">LBW (Liquor/Beer/Wine)</td>
@@ -430,30 +430,139 @@ export default function ScoringGuide() {
                   <div className="w-3 h-3 rounded-full bg-blue-500"></div>
                   <span className="text-white font-medium">Above Average</span>
                 </div>
-                <span className="text-blue-400">51-75%</span>
+                <span className="text-blue-400">25-50%</span>
               </div>
               <div className="flex items-center justify-between p-3 bg-amber-500/10 rounded-lg border border-amber-500/20">
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-amber-500"></div>
                   <span className="text-white font-medium">Below Average</span>
                 </div>
-                <span className="text-amber-400">26-50%</span>
+                <span className="text-amber-400">50-85%</span>
               </div>
               <div className="flex items-center justify-between p-3 bg-red-500/10 rounded-lg border border-red-500/20">
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-red-500"></div>
                   <span className="text-white font-medium">Needs Improvement</span>
                 </div>
-                <span className="text-red-400">Bottom 25%</span>
+                <span className="text-red-400">Bottom 15%</span>
               </div>
             </div>
+          </Section>
+
+          {/* Worked Example (numbers reconcile live to code) */}
+          <Section id="example" title="Worked Example — Top Performer" icon={Calculator} color="blue">
+            <p className="text-slate-300 mb-4">
+              Numbers below are computed live from the current quarter's
+              settings, so every line reconciles with what the engine
+              actually writes to <code className="text-slate-400">total_score</code>.
+              No hand-typed examples.
+            </p>
+            {(() => {
+              const PPA_PCT = 115, LSC_PCT = 110, LBW_PCT = 95, GLASS_PCT = 104;
+              const NPS = 80, PROMOTERS = 20, DETRACTORS = 2, MENTIONS = 25;
+              const cap = (v) => Math.min(v, 100);
+              const wPos =
+                (cap(PPA_PCT) * (qSettings?.weight_ppa ?? 0.25)) +
+                (cap(LSC_PCT) * (qSettings?.weight_lsc ?? 0.25)) +
+                (cap(LBW_PCT) * (qSettings?.weight_lbw ?? 0.20)) +
+                (cap(GLASS_PCT) * (qSettings?.weight_glass ?? 0.15));
+              const bonus = (pct) => Math.max(0, Math.min((pct - 100) * 0.25, 5));
+              const bPpa = bonus(PPA_PCT), bLsc = bonus(LSC_PCT);
+              const bLbw = bonus(LBW_PCT), bGlass = bonus(GLASS_PCT);
+              const bonusTotal = bPpa + bLsc + bLbw + bGlass;
+              const cv = (NPS / 10) + (PROMOTERS * CV_PROMOTER_PTS) - (DETRACTORS * CV_DETRACTOR_PTS);
+              const rt = Math.min(MENTIONS * RT_PTS, RT_CAP);
+              const total = wPos + bonusTotal + cv + rt;
+              const fmt = (n) => n.toFixed(2);
+              return (
+                <div className="space-y-3">
+                  <div className="bg-slate-800/50 rounded-lg p-3 text-sm">
+                    <div className="text-slate-400 mb-2 font-semibold">Inputs (illustrative)</div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-slate-300">
+                      <div>PPA: <span className="text-white">{PPA_PCT}%</span></div>
+                      <div>LSC: <span className="text-white">{LSC_PCT}%</span></div>
+                      <div>LBW: <span className="text-white">{LBW_PCT}%</span></div>
+                      <div>Glass: <span className="text-white">{GLASS_PCT}%</span></div>
+                      <div>NPS: <span className="text-white">{NPS}%</span></div>
+                      <div>Promoters: <span className="text-white">{PROMOTERS}</span></div>
+                      <div>Detractors: <span className="text-white">{DETRACTORS}</span></div>
+                      <div>RT Mentions: <span className="text-white">{MENTIONS}</span></div>
+                    </div>
+                  </div>
+
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-600 text-slate-300 text-xs">
+                        <th className="text-left py-2">Component</th>
+                        <th className="text-left py-2">Math</th>
+                        <th className="text-right py-2">Points</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-slate-300">
+                      <tr className="border-b border-slate-700/50">
+                        <td className="py-1.5">PPA</td>
+                        <td className="text-slate-500 text-xs">min({PPA_PCT}, 100) × {W_PPA}%</td>
+                        <td className="text-right text-green-400">{fmt(cap(PPA_PCT) * (qSettings?.weight_ppa ?? 0.25))}</td>
+                      </tr>
+                      <tr className="border-b border-slate-700/50">
+                        <td className="py-1.5">LSC</td>
+                        <td className="text-slate-500 text-xs">min({LSC_PCT}, 100) × {W_LSC}%</td>
+                        <td className="text-right text-green-400">{fmt(cap(LSC_PCT) * (qSettings?.weight_lsc ?? 0.25))}</td>
+                      </tr>
+                      <tr className="border-b border-slate-700/50">
+                        <td className="py-1.5">LBW</td>
+                        <td className="text-slate-500 text-xs">min({LBW_PCT}, 100) × {W_LBW}%</td>
+                        <td className="text-right text-green-400">{fmt(cap(LBW_PCT) * (qSettings?.weight_lbw ?? 0.20))}</td>
+                      </tr>
+                      <tr className="border-b border-slate-700/50">
+                        <td className="py-1.5">Glassware</td>
+                        <td className="text-slate-500 text-xs">min({GLASS_PCT}, 100) × {W_GLASS}%</td>
+                        <td className="text-right text-green-400">{fmt(cap(GLASS_PCT) * (qSettings?.weight_glass ?? 0.15))}</td>
+                      </tr>
+                      <tr className="border-b-2 border-slate-600 font-semibold">
+                        <td className="py-1.5">Weighted POS subtotal</td>
+                        <td></td>
+                        <td className="text-right text-green-400">{fmt(wPos)}</td>
+                      </tr>
+                      <tr className="border-b border-slate-700/50">
+                        <td className="py-1.5">Metric bonuses</td>
+                        <td className="text-slate-500 text-xs">{fmt(bPpa)} + {fmt(bLsc)} + {fmt(bLbw)} + {fmt(bGlass)}</td>
+                        <td className="text-right text-amber-400">{fmt(bonusTotal)}</td>
+                      </tr>
+                      <tr className="border-b border-slate-700/50">
+                        <td className="py-1.5">Customer Voice (uncapped)</td>
+                        <td className="text-slate-500 text-xs">{NPS}/10 + {PROMOTERS}×{CV_PROMOTER_PTS} − {DETRACTORS}×{CV_DETRACTOR_PTS}</td>
+                        <td className="text-right text-purple-400">{fmt(cv)}</td>
+                      </tr>
+                      <tr className="border-b-2 border-slate-600">
+                        <td className="py-1.5">Review Tracker (capped {RT_CAP})</td>
+                        <td className="text-slate-500 text-xs">min({MENTIONS} × {RT_PTS}, {RT_CAP})</td>
+                        <td className="text-right text-pink-400">{fmt(rt)}</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 font-bold text-white">TOTAL</td>
+                        <td></td>
+                        <td className="text-right font-bold text-blue-400 text-base">{fmt(total)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  <p className="text-xs text-slate-500">
+                    Computed in-browser from the same{" "}
+                    <code>quarter_settings</code> record the backend's{" "}
+                    <code>scoring_engine.py</code> uses. The doc can't drift
+                    from the code because both sides bind to the same source.
+                  </p>
+                </div>
+              );
+            })()}
           </Section>
 
         </div>
 
         {/* Footer */}
         <div className="text-center text-slate-500 text-sm pt-4">
-          <p>Q1 2026 Scoring Model • Bubba Gump Shrimp Co.</p>
+          <p>{year} {quarter} Scoring Model • Bubba Gump Shrimp Co.</p>
         </div>
       </div>
     </div>
