@@ -10,7 +10,79 @@ Build a comprehensive performance review application for restaurant employees.
 - **AI**: OpenAI GPT-4o (via Emergent LLM Key)
 - **Auth**: Emergent-managed Google Auth (whitelist via `ALLOWED_ADMIN_EMAILS`)
 
-## Current State (2026-05-26)
+## Current State (2026-05-27)
+
+### P0: Demo-Prep One-Shot Consolidation — SHIPPED 2026-05-27
+
+User reported demo-tomorrow blockers:
+1. Dashboard data didn't reflect Data Uploads (29 employees in
+   snapshot vs 40 in employees_v2).
+2. Some employees showed as first-name only (Julian, Kahi).
+3. Three split-personality v2 rows: same canonical person uploaded
+   under both their canonical name AND an alias (e.g. Trey/Treyanna,
+   Matt/Matthew, Keisha/Lakeisha) so the merge endpoint's
+   delete-by-id couldn't catch them.
+
+**Backend** — new admin endpoint `POST /v2/admin/demo-prep`:
+- Query params: `quarter`, `year`, `apply`, `resync_snapshot`,
+  `force_rescore`.
+- Section 1 — **Display-name backfill**: for any canonical record
+  whose `display_name` is single-word but who has a fuller candidate
+  in `report_name` (or vice versa), rewrite `name` and
+  `display_name` to the fuller version. Propagates to all
+  employees_v2 rows that share the canonical id.
+- Section 2 — **Alias-aware v2 dedup**: for each `(canonical_name,
+  alias)` pair on every active canonical employee, if v2 rows exist
+  under both names for the target quarter, sum the raw POS / CV / RT
+  metrics into the canonical-named row and delete the alias row.
+  If only the alias row exists, rename it.
+- Section 2b — **Same-name v2 dedup**: a second pass that groups by
+  name and consolidates any v2 rows that still share a canonical
+  name (also handles pathological duplicate-`id` rows by deleting
+  via Mongo's `_id` instead of the app-level `id`).
+- Section 3 — **Force rescore**: replays `run_full_scoring` on every
+  v2 row in the quarter with a `rt_mentions → review_mentions`
+  legacy-field bridge and a `guest_count → guests` bridge so
+  cleaned-up rows actually produce fresh scores.
+- Section 4 — **Resync snapshot**: pulls the freshly consolidated v2
+  rows into the current snapshot's `employees[]` array so the
+  dashboard catches up immediately.
+
+**Frontend** — new `Demo Prep` button (indigo, with wand icon) in the
+Scoring Trust modal footer. Reads the current quarter from the
+trust details, POSTs `apply=true`, surfaces a single toast
+summary: `Renamed N · Merged X alias + Y same-name dup(s) ·
+Rescored Z · Snapshot synced`.
+
+**Verified end-to-end on preview Q2 2026**:
+- Before: 40 v2 rows (3 alias-split pairs, 2 first-name-only,
+  1 same-id duplicate, 2 stale name spellings) → snapshot showed
+  31 stale employees on dashboard.
+- After: 31 clean v2 rows, snapshot.employees in lockstep with v2,
+  all 31 rescored. Top performers now: Diane Peterson 113.57,
+  Kitti Xavier 109.54, Matt Spath 107.23, Polly Blocker 101.56,
+  Trey Quick 100.99, Keisha Martin 97.03 (RT bonus correctly
+  applied — Trey 69 mentions → 20-cap; Keisha 40 → 13.2).
+
+**Production action required**: After redeploy, open the dashboard
+as admin, click the Trust badge, tap **Demo Prep**. One click handles
+all three classes of drift for the live demo data. The endpoint is
+idempotent — running it twice on already-clean data is a no-op.
+
+### P2: PDF Customer Voice mislabel — FIXED 2026-05-27
+
+The per-employee review PDF (`server.py:825`) listed
+`Customer Voice | 15%` in the KPI table, framing CV as a 15% weight
+slice. CV is an uncapped additive bonus (NPS%/10 + promoters −
+2×detractors), not a weighted percentage. Replaced the "15%" cell
+with "Bonus" so the PDF matches the engine.
+
+### P2: Phantom CV+RT cap docstring — REMOVED 2026-05-27
+
+`EmployeeV2.cv_rt_combined` field had a comment claiming "max 20 per
+quarter". The code only stores the sum; no cap is enforced (CV
+uncapped, RT independently capped at 20). Comment rewritten to
+match reality.
 
 ### P2: Self-Healing Dashboard — SHIPPED 2026-05-26
 

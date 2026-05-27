@@ -271,6 +271,46 @@ export default function ScoringTrustBadge() {
     }
   };
 
+  const runDemoPrep = async () => {
+    // Pull current dashboard quarter from the snapshot details if available.
+    const details = trust?.details || {};
+    const cq = details.quarter_settings?.current_quarter || "";
+    // Try to parse "2026 Q2" → year + quarter
+    const m = /^(\d{4})\s+(Q[1-4])$/.exec(cq);
+    if (!m) {
+      toast.error("Could not detect current quarter. Try refreshing.");
+      return;
+    }
+    const [, year, quarter] = m;
+    setNormalizing(true);
+    const toastId = toast.loading(`Demo-prep running for ${year} ${quarter}…`);
+    try {
+      const res = await api.post(
+        `/v2/admin/demo-prep?quarter=${quarter}&year=${year}&apply=true`,
+      );
+      const d = res.data;
+      const fixes = d.display_name_fixes?.length || 0;
+      const aliasDedup = d.v2_dedup_actions?.length || 0;
+      const sameNameDedup = d.same_name_dedup_actions?.length || 0;
+      const rescored = d.rescore?.rescored || 0;
+      const snapSync = d.snapshot?.ok;
+      toast.success("Demo-prep complete.", {
+        id: toastId,
+        description:
+          `Renamed ${fixes} · Merged ${aliasDedup} alias + ${sameNameDedup} same-name dup(s) · ` +
+          `Rescored ${rescored} · Snapshot ${snapSync ? "synced" : "skipped"}.`,
+      });
+      await refresh();
+    } catch (e) {
+      toast.error(
+        `Demo-prep failed: ${e?.response?.data?.detail || e.message}`,
+        { id: toastId },
+      );
+    } finally {
+      setNormalizing(false);
+    }
+  };
+
   return (
     <>
       <button
@@ -487,6 +527,17 @@ export default function ScoringTrustBadge() {
             >
               <Wand2 className="w-3.5 h-3.5" />
               {normalizing ? "Working…" : "Auto-Fix All"}
+            </button>
+            <button
+              type="button"
+              className="px-3 py-2 rounded bg-indigo-700 hover:bg-indigo-600 text-white text-sm disabled:opacity-50 flex items-center justify-center gap-1.5 w-full sm:w-auto"
+              onClick={runDemoPrep}
+              disabled={normalizing}
+              data-testid="scoring-trust-demo-prep"
+              title="Consolidate v2 alias-named rows + same-name duplicates, fix single-word display names, resync the current snapshot, and rescore everything."
+            >
+              <Wand2 className="w-3.5 h-3.5" />
+              {normalizing ? "Working…" : "Demo Prep"}
             </button>
           </DialogFooter>
         </DialogContent>

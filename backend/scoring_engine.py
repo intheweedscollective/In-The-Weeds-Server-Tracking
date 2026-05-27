@@ -164,8 +164,8 @@ class EmployeeV2(BaseModel):
     # === REVIEW TRACKER BONUS ===
     review_tracker_bonus: Optional[float] = None
     
-    # === COMBINED CV + REVIEW TRACKER (capped at 20 total) ===
-    cv_rt_combined: Optional[float] = None     # Combined CV + RT (max 20 per quarter)
+    # === COMBINED CV + REVIEW TRACKER (reference total only — NO combined cap) ===
+    cv_rt_combined: Optional[float] = None     # CV (uncapped) + RT (capped 20 on its own)
     
     # === BONUS POINTS (for exceeding benchmarks) ===
     bonus_ppa: Optional[float] = None

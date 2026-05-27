@@ -1597,3 +1597,417 @@ async def scoring_trust_score():
             "integrity": "GET /api/v2/admin/integrity for the full validation report.",
         },
     }
+
+
+
+# ---------------------------------------------------------------------------
+# Demo Prep — Consolidate v2 alias-named rows + backfill display names
+# ---------------------------------------------------------------------------
+# Fixes three categories of demo-blocking drift in a single transaction:
+#
+#   1. employees_v2 contains multiple rows for the same canonical employee
+#      because a POS upload landed under both the canonical name AND an
+#      alias (e.g. "Trey Quick" + "Treyanna Quick"). The merge endpoint
+#      deletes by *id*, so any later POS upload re-creates an alias row
+#      with a fresh id and the drift returns. This endpoint hard-resolves
+#      every alias-named v2 row in the target quarter:
+#        - If a canonical-named row also exists: merge POS/CV/RT inputs
+#          (sum guests, sales, mentions, promoters/passives/detractors),
+#          drop the alias row, rerun scoring.
+#        - If only the alias row exists: rename it to the canonical name,
+#          rerun scoring.
+#
+#   2. Backfill display_name on any canonical (and per-quarter v2) record
+#      whose display_name is a single word but whose `name` or
+#      `report_name` carries the full name.
+#
+#   3. Resync the current snapshot's employees[] from employees_v2 so
+#      the dashboard immediately reflects all post-cleanup rows.
+#
+# Default mode is dry-run. Pass `?apply=true` to persist.
+# ---------------------------------------------------------------------------
+
+# Fields that should be SUMMED when merging two POS-only / CV / RT rows
+# for the same canonical person. These are the raw inputs that flow into
+# the scoring engine — derived metrics (PPA / LBW per guest / etc.) are
+# recomputed downstream by run_full_scoring.
+_MERGE_SUM_FIELDS = (
+    "guests", "guest_count",
+    "net_sales", "food_sales", "liquor_sales", "beer_sales", "wine_sales",
+    "bar_glassware_sales", "lbw", "loyalty_sales", "lsc_count",
+    "cv_promoters", "cv_passives", "cv_detractors",
+    "rt_mentions", "review_mentions",
+)
+
+# Fields that should be taken from whichever row has a non-empty value
+# (e.g. job_title, store_id) — never summed.
+_MERGE_PICK_FIELDS = ("job_title", "store_id", "tier_label", "display_name")
+
+
+def _full_name_candidates(canonical_doc: dict) -> Optional[str]:
+    """Return the longest single-line full-name candidate from a canonical
+    employee doc (looking at name / display_name / report_name). Returns
+    None if every candidate is single-token."""
+    cands = [
+        canonical_doc.get("report_name"),
+        canonical_doc.get("name"),
+        canonical_doc.get("display_name"),
+    ]
+    multi = [c.strip() for c in cands if c and " " in str(c).strip()]
+    if not multi:
+        return None
+    # Pick the longest non-empty multi-token candidate.
+    return max(multi, key=len)
+
+
+@admin_router.post("/demo-prep")
+async def demo_prep(
+    quarter: str,
+    year: int,
+    apply: bool = False,
+    resync_snapshot: bool = True,
+    force_rescore: bool = True,
+):
+    """
+    One-shot consolidation for the live-demo quarter.
+
+    Query params:
+      • quarter           — "Q1", "Q2", "Q3", "Q4"
+      • year              — e.g. 2026
+      • apply=true        — actually write changes (default dry-run)
+      • resync_snapshot   — after dedup, repull snapshot.employees from
+                            employees_v2 so the dashboard catches up
+                            (default true)
+      • force_rescore     — rerun run_full_scoring on every active v2 row
+                            in the quarter so summed metrics reflect in
+                            scores (default true)
+
+    Returns a per-action diff for sanity-check.
+    """
+    db = get_db()
+    quarter = quarter.upper()
+
+    # ----- 0. Index canonical employees ---------------------------------
+    canonical = await db.employees.find(
+        {"status": "active"},
+        {"_id": 0, "id": 1, "name": 1, "display_name": 1,
+         "report_name": 1, "aliases": 1},
+    ).to_list(5000)
+
+    canonical_by_name: Dict[str, dict] = {}
+    alias_to_canonical_name: Dict[str, str] = {}
+    for c in canonical:
+        cn = (c.get("name") or "").strip()
+        if cn:
+            canonical_by_name[cn.lower()] = c
+        for a in (c.get("aliases") or []):
+            akey = (a or "").strip().lower()
+            if akey and akey != cn.lower():
+                alias_to_canonical_name[akey] = cn
+
+    # ----- 1. Display-name backfill -------------------------------------
+    display_fixes: List[Dict[str, Any]] = []
+    for c in canonical:
+        dn = (c.get("display_name") or "").strip()
+        nm = (c.get("name") or "").strip()
+        # If display_name is single-word but a fuller name exists elsewhere
+        # on the doc, prefer the fuller name. We only repair docs where the
+        # canonical record itself has a fuller candidate (report_name etc).
+        full = _full_name_candidates(c)
+        needs = False
+        new_dn = dn
+        new_nm = nm
+        if dn and " " not in dn and full and full != dn:
+            new_dn = full
+            needs = True
+        if nm and " " not in nm and full and full != nm:
+            new_nm = full
+            needs = True
+        if not needs:
+            continue
+        display_fixes.append({
+            "id": c["id"],
+            "from": {"name": nm, "display_name": dn},
+            "to":   {"name": new_nm, "display_name": new_dn},
+        })
+        if apply:
+            await db.employees.update_one(
+                {"id": c["id"]},
+                {"$set": {"name": new_nm, "display_name": new_dn}},
+            )
+            await db.employees_v2.update_many(
+                {"id": c["id"]},
+                {"$set": {"name": new_nm, "display_name": new_dn}},
+            )
+
+    # ----- 2. employees_v2 alias-row consolidation ----------------------
+    # Refresh canonical state — we may have just rewritten name/display_name
+    # in section 1, and the alias index needs to use the new canonical name
+    # as the merge target.
+    if display_fixes:
+        canonical = await db.employees.find(
+            {"status": "active"},
+            {"_id": 0, "id": 1, "name": 1, "display_name": 1,
+             "report_name": 1, "aliases": 1},
+        ).to_list(5000)
+        canonical_by_name = {}
+        alias_to_canonical_name = {}
+        for c in canonical:
+            cn = (c.get("name") or "").strip()
+            if cn:
+                canonical_by_name[cn.lower()] = c
+            for a in (c.get("aliases") or []):
+                akey = (a or "").strip().lower()
+                if akey and akey != cn.lower():
+                    alias_to_canonical_name[akey] = cn
+
+    # Index v2 rows for the target quarter by lowercased name.
+    v2_rows = await db.employees_v2.find(
+        {"quarter": quarter, "year": year},
+        {"_id": 0},
+    ).to_list(2000)
+    by_name: Dict[str, dict] = {}
+    for r in v2_rows:
+        key = (r.get("name") or "").strip().lower()
+        if not key:
+            continue
+        # If we already saw the name (rare exact dup), keep the higher
+        # total_score row as the "winner" and treat the other as a
+        # secondary that gets merged in too.
+        if key in by_name:
+            existing = by_name[key]
+            if (r.get("total_score") or 0) > (existing.get("total_score") or 0):
+                by_name[key] = r
+        else:
+            by_name[key] = r
+
+    dedup_actions: List[Dict[str, Any]] = []
+    rows_to_rescore: List[dict] = []
+
+    for alias_key, canonical_name in alias_to_canonical_name.items():
+        alias_row = by_name.get(alias_key)
+        if not alias_row:
+            continue
+        canonical_row = by_name.get(canonical_name.lower())
+
+        if canonical_row is None:
+            # Rename only — no metric merge required.
+            dedup_actions.append({
+                "kind": "rename",
+                "from": alias_row.get("name"),
+                "to": canonical_name,
+                "alias_id": alias_row.get("id"),
+            })
+            if apply:
+                await db.employees_v2.update_one(
+                    {"id": alias_row["id"]},
+                    {"$set": {
+                        "name": canonical_name,
+                        "display_name": canonical_name,
+                    }},
+                )
+                alias_row["name"] = canonical_name
+                alias_row["display_name"] = canonical_name
+                rows_to_rescore.append(alias_row)
+            continue
+
+        # Both rows exist — merge metrics into canonical_row, drop alias_row.
+        merged_fields = {}
+        for k in _MERGE_SUM_FIELDS:
+            a = float(alias_row.get(k) or 0)
+            b = float(canonical_row.get(k) or 0)
+            merged_fields[k] = a + b
+        for k in _MERGE_PICK_FIELDS:
+            cur = canonical_row.get(k)
+            if cur in (None, "", 0):
+                v = alias_row.get(k)
+                if v not in (None, "", 0):
+                    merged_fields[k] = v
+
+        dedup_actions.append({
+            "kind": "merge_and_drop",
+            "kept": canonical_name,
+            "kept_id": canonical_row.get("id"),
+            "dropped": alias_row.get("name"),
+            "dropped_id": alias_row.get("id"),
+            "merged_fields": merged_fields,
+        })
+        if apply:
+            await db.employees_v2.update_one(
+                {"id": canonical_row["id"]},
+                {"$set": {**merged_fields, "name": canonical_name,
+                          "display_name": canonical_name}},
+            )
+            await db.employees_v2.delete_one({"id": alias_row["id"]})
+            # Pull the freshly merged row for rescore
+            refreshed = await db.employees_v2.find_one(
+                {"id": canonical_row["id"]}, {"_id": 0}
+            )
+            if refreshed:
+                rows_to_rescore.append(refreshed)
+        # Remove the alias entry from our local index so we don't double-process
+        by_name.pop(alias_key, None)
+
+    # ----- 2b. Same-name v2 duplicate dedup ------------------------------
+    # After the alias-aware rename/merge above, multiple v2 rows can still
+    # share the same canonical name (e.g. two different upload batches
+    # both landed under "Lennie Nguyen"), and in pathological cases two
+    # rows can even share the SAME `id` field (legacy upload bug where
+    # the merge dropped one row but another upload re-created it with
+    # the same canonical id). Group by name and consolidate, using
+    # Mongo's `_id` for deletion so duplicate-`id` rows are still
+    # individually addressable.
+    name_groups: Dict[str, List[dict]] = {}
+    fresh = await db.employees_v2.find(
+        {"quarter": quarter, "year": year},
+    ).to_list(2000)  # keep _id so we can delete by ObjectId
+    for r in fresh:
+        key = (r.get("name") or "").strip().lower()
+        if key:
+            name_groups.setdefault(key, []).append(r)
+
+    same_name_dedup_actions: List[Dict[str, Any]] = []
+    for key, rows in name_groups.items():
+        if len(rows) < 2:
+            continue
+        # Pick survivor = row with highest total_score so the higher-confidence
+        # POS+CV+RT row wins job_title/store_id, then sum the rest.
+        rows.sort(key=lambda r: r.get("total_score") or 0, reverse=True)
+        survivor = rows[0]
+        merged_fields = {}
+        dropped_object_ids: List[Any] = []
+        for r in rows[1:]:
+            for f in _MERGE_SUM_FIELDS:
+                a = float(survivor.get(f) or 0)
+                b = float(r.get(f) or 0)
+                merged_fields[f] = a + b
+                survivor[f] = a + b
+            dropped_object_ids.append(r.get("_id"))
+
+        same_name_dedup_actions.append({
+            "kind": "same_name_merge",
+            "name": survivor.get("name"),
+            "kept_id": survivor.get("id"),
+            "dropped_count": len(dropped_object_ids),
+            "merged_fields": merged_fields,
+        })
+        if apply:
+            await db.employees_v2.update_one(
+                {"_id": survivor["_id"]},
+                {"$set": merged_fields},
+            )
+            await db.employees_v2.delete_many(
+                {"_id": {"$in": dropped_object_ids}}
+            )
+            refreshed = await db.employees_v2.find_one(
+                {"_id": survivor["_id"]}, {"_id": 0}
+            )
+            if refreshed:
+                rows_to_rescore = [r for r in rows_to_rescore
+                                   if r.get("id") != survivor["id"]]
+                rows_to_rescore.append(refreshed)
+
+    # ----- 3. Rescore touched rows --------------------------------------
+    rescore_summary = {"rescored": 0, "skipped": 0}
+    if apply and (rows_to_rescore or force_rescore):
+        from scoring_engine import EmployeeV2, run_full_scoring, QuarterSettings as QSModel
+        qs_doc = await db.quarter_settings.find_one(
+            {"quarter": quarter, "year": year}, {"_id": 0}
+        )
+        if qs_doc:
+            try:
+                qs_doc.pop("id", None)
+                settings = QSModel(**qs_doc)
+            except Exception:
+                settings = QSModel(quarter=quarter, year=year)
+        else:
+            settings = QSModel(quarter=quarter, year=year)
+
+        # If force_rescore, replace the queue with EVERY active v2 row in
+        # the quarter — guarantees summed metrics flow into scores even
+        # if a previous demo-prep run already consolidated rows but
+        # skipped rescoring.
+        if force_rescore:
+            rows_to_rescore = await db.employees_v2.find(
+                {"quarter": quarter, "year": year},
+                {"_id": 0},
+            ).to_list(2000)
+
+        # Legacy field bridge — `rt_mentions` is the historical column
+        # populated by the Review Tracker upload pipeline, but the scoring
+        # engine reads `review_mentions`. When `review_mentions` is empty
+        # and `rt_mentions` carries a value, copy across so RT bonus
+        # computes correctly. Same idea for guest_count → guests.
+        for r in rows_to_rescore:
+            rm = r.get("review_mentions") or 0
+            rt = r.get("rt_mentions") or 0
+            if (not rm) and rt:
+                r["review_mentions"] = int(rt)
+            g = r.get("guests") or 0
+            gc = r.get("guest_count") or 0
+            if (not g) and gc:
+                r["guests"] = float(gc)
+
+        emp_models: List[EmployeeV2] = []
+        for r in rows_to_rescore:
+            try:
+                emp_models.append(EmployeeV2(**{
+                    k: v for k, v in r.items()
+                    if k in EmployeeV2.model_fields
+                }))
+            except Exception as e:
+                logger.warning(f"demo-prep: rescore skipped {r.get('name')}: {e}")
+                rescore_summary["skipped"] += 1
+        scored = run_full_scoring(emp_models, settings)
+        for emp in scored:
+            await db.employees_v2.update_one(
+                {"id": emp.id},
+                {"$set": emp.model_dump(exclude_none=True)},
+            )
+            rescore_summary["rescored"] += 1
+
+    # ----- 4. Resync current snapshot -----------------------------------
+    snapshot_synced = {"attempted": False, "ok": False, "snapshot_id": None}
+    if apply and resync_snapshot:
+        snap = await db.snapshot_workflow.find_one(
+            {"quarter": quarter, "year": year, "is_current": True},
+            {"_id": 0, "id": 1, "status": 1},
+        )
+        if snap and snap.get("status") != "finalized":
+            snapshot_synced["attempted"] = True
+            snapshot_synced["snapshot_id"] = snap["id"]
+            try:
+                # Re-import here to avoid circular import at module load.
+                from services.employee_service import EmployeeService
+                # Pull every active v2 row for the quarter and overwrite
+                # the snapshot's employees[] array. Keep the existing rows[]
+                # frame structure untouched (it's the FK ledger).
+                v2_active = await db.employees_v2.find(
+                    {"quarter": quarter, "year": year},
+                    {"_id": 0},
+                ).to_list(2000)
+                await db.snapshot_workflow.update_one(
+                    {"id": snap["id"]},
+                    {"$set": {
+                        "employees": v2_active,
+                        "employee_count": len(v2_active),
+                        "last_save_at": datetime.now(timezone.utc).isoformat(),
+                    }},
+                )
+                snapshot_synced["ok"] = True
+                snapshot_synced["employee_count"] = len(v2_active)
+            except Exception as e:
+                logger.warning(f"demo-prep: snapshot resync failed: {e}")
+                snapshot_synced["error"] = str(e)
+
+    return {
+        "success": True,
+        "dry_run": not apply,
+        "quarter": quarter,
+        "year": year,
+        "display_name_fixes": display_fixes,
+        "v2_dedup_actions": dedup_actions,
+        "same_name_dedup_actions": same_name_dedup_actions,
+        "rescore": rescore_summary,
+        "snapshot": snapshot_synced,
+    }
