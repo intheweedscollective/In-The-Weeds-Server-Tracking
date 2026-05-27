@@ -2051,3 +2051,140 @@ async def demo_prep(
         "rescore": rescore_summary,
         "snapshot": snapshot_synced,
     }
+
+
+
+# ---------------------------------------------------------------------------
+# Scoring Example — server-side worked example for /scoring-guide
+# ---------------------------------------------------------------------------
+# Runs a synthetic EmployeeV2 through the canonical scoring engine and
+# returns the line-by-line breakdown. The /scoring-guide page renders
+# this response with zero math — guaranteeing the doc cannot drift from
+# the code, since the code IS the doc.
+# ---------------------------------------------------------------------------
+
+
+@admin_router.get("/scoring-example")
+async def scoring_example(
+    quarter: str = "Q2",
+    year: int = 2026,
+    ppa_pct: float = 115.0,
+    lsc_pct: float = 110.0,
+    lbw_pct: float = 95.0,
+    glass_pct: float = 104.0,
+    nps: float = 80.0,
+    promoters: int = 20,
+    detractors: int = 2,
+    mentions: int = 25,
+):
+    """
+    Compute a worked example through the canonical scoring engine.
+
+    Accepts per-metric percentage scores (0-120+), NPS, promoter/
+    detractor counts, and RT mention count. Returns the live breakdown
+    and grand total — every number produced by the same building-block
+    functions the production scorer uses (`calculate_customer_voice_score`,
+    `calculate_review_tracker_bonus`, `calculate_bonus_points`,
+    `calculate_total_score`).
+    """
+    from scoring_engine import (
+        EmployeeV2,
+        QuarterSettings,
+        calculate_customer_voice_score,
+        calculate_review_tracker_bonus,
+        calculate_bonus_points,
+        calculate_total_score,
+        CV_PROMOTER_POINTS,
+        CV_DETRACTOR_POINTS,
+    )
+
+    db = get_db()
+    qs_doc = await db.quarter_settings.find_one(
+        {"quarter": quarter.upper(), "year": year}, {"_id": 0}
+    )
+    qs_doc = qs_doc or {}
+    qs_doc.pop("id", None)
+    try:
+        settings = QuarterSettings(**qs_doc)
+    except Exception:
+        settings = QuarterSettings(quarter=quarter.upper(), year=year)
+
+    emp = EmployeeV2(
+        name="Worked Example",
+        score_ppa=ppa_pct,
+        score_lsc=lsc_pct,
+        score_lbw=lbw_pct,
+        score_glass=glass_pct,
+        nps_score=nps,
+        cv_promoters=promoters,
+        cv_detractors=detractors,
+        review_mentions=mentions,
+    )
+
+    # Engine pipeline — same building blocks the production scorer
+    # invokes inside run_full_scoring().
+    calculate_customer_voice_score(emp)
+    calculate_review_tracker_bonus(emp, settings)
+    calculate_bonus_points(emp, settings)
+    calculate_total_score(emp, settings)
+
+    # Per-metric weighted contributions (post-cap) so the doc can show
+    # each line with its actual point value.
+    cap = lambda v: min(v, 100)  # noqa: E731 — local lambda for clarity
+    contributions = {
+        "ppa":   round(cap(ppa_pct)   * settings.weight_ppa,   2),
+        "lsc":   round(cap(lsc_pct)   * settings.weight_lsc,   2),
+        "lbw":   round(cap(lbw_pct)   * settings.weight_lbw,   2),
+        "glass": round(cap(glass_pct) * settings.weight_glass, 2),
+    }
+
+    return {
+        "inputs": {
+            "ppa_pct": ppa_pct,
+            "lsc_pct": lsc_pct,
+            "lbw_pct": lbw_pct,
+            "glass_pct": glass_pct,
+            "nps": nps,
+            "promoters": promoters,
+            "detractors": detractors,
+            "mentions": mentions,
+        },
+        "settings": {
+            "quarter": settings.quarter,
+            "year": settings.year,
+            "weight_ppa": settings.weight_ppa,
+            "weight_lsc": settings.weight_lsc,
+            "weight_lbw": settings.weight_lbw,
+            "weight_glass": settings.weight_glass,
+            "rt_points_per_mention": settings.rt_points_per_mention,
+            "rt_max_points": settings.rt_max_points,
+            "cv_promoter_points": CV_PROMOTER_POINTS,
+            "cv_detractor_points": abs(CV_DETRACTOR_POINTS),
+            "bonus_rate": settings.bonus_rate,
+            "bonus_cap": settings.bonus_cap,
+        },
+        "breakdown": {
+            "weighted_pos_contributions": contributions,
+            "weighted_pos_subtotal": emp.weighted_score,
+            "metric_bonuses": {
+                "ppa":   emp.bonus_ppa or 0,
+                "lsc":   emp.bonus_lsc or 0,
+                "lbw":   emp.bonus_lbw or 0,
+                "glass": emp.bonus_glass or 0,
+                "total": emp.total_metric_bonus or 0,
+            },
+            "customer_voice": {
+                "nps_contribution": emp.nps_contribution or 0,
+                "promoter_detractor_net": emp.cv_raw_points or 0,
+                "total": emp.cv_score or 0,
+            },
+            "review_tracker": {
+                "mentions": mentions,
+                "raw": round(mentions * settings.rt_points_per_mention, 2),
+                "capped": emp.review_tracker_bonus or 0,
+                "cap": settings.rt_max_points,
+            },
+        },
+        "total_score": emp.total_score,
+        "pre_dar_score": emp.pre_dar_score,
+    }

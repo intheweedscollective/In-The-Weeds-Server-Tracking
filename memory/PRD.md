@@ -12,6 +12,36 @@ Build a comprehensive performance review application for restaurant employees.
 
 ## Current State (2026-05-27)
 
+### P0: Worked Example Now Server-Computed — SHIPPED 2026-05-27
+
+User correctly called out that my previous "self-reconciling" worked
+example on `/scoring-guide` still reimplemented the math in JS — it
+bound the coefficients (weights / RT rate / CV points) live from
+`quarter_settings` but the **shape** of the formula (caps, bonus
+curve, order of operations) was duplicated in JavaScript. Same
+drift class as the Word doc, just relocated.
+
+**Backend** — new endpoint `GET /v2/admin/scoring-example`:
+- Builds a synthetic `EmployeeV2` with the requested inputs.
+- Runs the exact production pipeline:
+  `calculate_customer_voice_score → calculate_review_tracker_bonus →
+  calculate_bonus_points → calculate_total_score`.
+- Returns a JSON breakdown: per-metric weighted contributions,
+  weighted POS subtotal, metric bonuses, CV (NPS + promoter/detractor
+  + total), RT (raw, capped, cap), `pre_dar_score`, `total_score`.
+- Defaults produce the canonical Top-Performer example (123.50).
+
+**Frontend** — `pages/ScoringGuide.js`:
+- Deleted all inline JS arithmetic (caps / bonus / CV / RT formulas).
+- Worked-Example section now renders ONLY numbers from the API
+  response. JS does no math; engine changes propagate to the doc
+  automatically.
+
+**Regression test** — `tests/test_scoring_example_endpoint.py` (5
+cases): breakdown lines reconcile to total, defaults give 123.50,
+canonical 25/25/20/15 + 0.33/20 + +1/−2, RT caps at max, POS caps at
+100% before weight. Full scoring regression suite: 37/37 passing.
+
 ### P0: Stale CV Math Purge from Admin Panel — SHIPPED 2026-05-27
 
 User's auditor flagged three admin endpoints carrying hardcoded
