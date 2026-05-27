@@ -236,6 +236,32 @@ def calculate_employee_scores(
     """
     # Get raw metrics
     ppa = employee.get("ppa", 0) or 0
+
+    # --- Backfill per-guest metrics from raw sales if ingest didn't set them ---
+    # The edit path pre-derives these; the upload path does not. Guard each with
+    # "only if falsy" so this is idempotent and never overrides edit-path values.
+    guest_count = employee.get("guest_count") or employee.get("guests") or 0
+    if guest_count > 0:
+        if not employee.get("glassware_per_guest"):
+            glass = (
+                employee.get("bar_glassware_sales")
+                or employee.get("glassware_sales")
+                or 0
+            )
+            employee["glassware_per_guest"] = round(glass / guest_count, 2)
+        if not employee.get("lbw_per_guest"):
+            lbw = employee.get("lbw") or (
+                (employee.get("liquor_sales") or 0)
+                + (employee.get("beer_sales") or 0)
+                + (employee.get("wine_sales") or 0)
+            )
+            employee["lbw_per_guest"] = round(lbw / guest_count, 2)
+        if not employee.get("guests_per_lsc"):
+            lsc_count = employee.get("lsc_count") or employee.get("loyalty_signups") or 0
+            if lsc_count > 0:
+                employee["guests_per_lsc"] = round(guest_count / lsc_count, 2)
+    # ---------------------------------------------------------------------------
+
     lbw_per_guest = employee.get("lbw_per_guest", 0) or 0
     glassware_per_guest = employee.get("glassware_per_guest", 0) or 0
     guests_per_lsc = employee.get("guests_per_lsc", 0) or 0
