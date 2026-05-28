@@ -37,12 +37,21 @@ auth_router = APIRouter(prefix="/auth", tags=["Auth"])
 # ---------------------------------------------------------------------------
 ALLOWED_EMAILS = {
     e.strip().lower()
-    for e in (
-        os.environ.get("ALLOWED_ADMIN_EMAILS")
-        or "owner@intheweedscollective.com"
-    ).split(",")
+    for e in (os.environ.get("ALLOWED_ADMIN_EMAILS") or "").split(",")
     if e.strip()
 }
+
+# Fail closed: if no admin emails are configured, log loudly so the operator
+# sees it. Anyone who logs in without ALLOWED_ADMIN_EMAILS set is_admin=False
+# automatically (membership check against an empty set), so the app degrades
+# safely to "read-only for everyone" rather than "open admin for everyone".
+if not ALLOWED_EMAILS:
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        "SECURITY: ALLOWED_ADMIN_EMAILS is empty — no user will be granted "
+        "admin privileges. Set ALLOWED_ADMIN_EMAILS in the backend env "
+        "(comma-separated) to enable admin access."
+    )
 
 
 class AuthUser(BaseModel):

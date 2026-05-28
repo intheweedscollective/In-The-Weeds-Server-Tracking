@@ -38,6 +38,8 @@ import SnapshotWorkflow from "./pages/SnapshotWorkflow";
 import SnapshotDetail from "./pages/SnapshotDetail";
 import QuarterlySummary from "./pages/QuarterlySummary";
 import OnboardingGuide from "./components/OnboardingGuide";
+import ProtectedAdminRoute from "./components/ProtectedAdminRoute";
+import ErrorBoundary from "./components/ErrorBoundary";
 import "./App.css";
 
 function App() {
@@ -55,46 +57,48 @@ function App() {
                 <Route
                   path="/*"
                   element={
-                    <SidebarLayout>
-                      <Routes>
-                        <Route path="/" element={<Dashboard />} />
-                        <Route path="/uploads" element={<DataUploads />} />
-                        <Route path="/data-uploads" element={<DataUploads />} />
-                        <Route path="/rankings" element={<FullRankings />} />
-                        <Route path="/leaderboard" element={<LeaderboardRankings />} />
-                        <Route path="/employees" element={<EmployeeList />} />
-                        <Route path="/reviews" element={<ReviewGeneration />} />
-                        <Route path="/review-tracker" element={<ReviewTracker />} />
-                        <Route path="/yodeck" element={<YodeckSlides />} />
-                        <Route path="/snapshots" element={<Snapshots />} />
-                        <Route path="/analytics" element={<Analytics />} />
-                        <Route path="/settings" element={<QuarterSettings />} />
-                        <Route path="/data-integrity" element={<DataIntegrity />} />
-                        <Route path="/scoring-audit" element={<ScoringAudit />} />
-                        <Route path="/cv-adjustment" element={<CVAdjustment />} />
-                        <Route path="/scoring-guide" element={<ScoringGuide />} />
-                        <Route path="/upload-tutorial" element={<DataUploadTutorial />} />
-                        <Route path="/help" element={<HelpCenter />} />
-                        <Route path="/reports" element={<Reports />} />
-                        <Route path="/quarterly-summary" element={<QuarterlySummary />} />
-                        {/* QR Track Hub - Isolated Module */}
-                        <Route path="/qr" element={<QRDashboard />} />
-                        <Route path="/qr/leaderboard" element={<QRLeaderboard />} />
-                        <Route path="/qr/daily" element={<QRDailyClicks />} />
-                        <Route path="/qr/codes" element={<QREmployees />} />
-                        <Route path="/qr/settings" element={<QRSettings />} />
-                        <Route path="/qr/ghost-heal" element={<QRGhostHeal />} />
-                        {/* Multi-Store Management */}
-                        <Route path="/global" element={<GlobalOverview />} />
-                        <Route path="/stores" element={<StoreManagement />} />
-                        <Route path="/stores/leaderboard" element={<StoreLeaderboard />} />
-                        <Route path="/stores/:storeId" element={<StoreDetails />} />
-                        {/* Snapshot Workflow */}
-                        <Route path="/snapshot-workflow" element={<SnapshotWorkflow />} />
-                        <Route path="/snapshot-workflow/:snapshotId" element={<SnapshotDetail />} />
-                      </Routes>
-                      <OnboardingGuide />
-                    </SidebarLayout>
+                    <ErrorBoundary>
+                      <SidebarLayout>
+                        <Routes>
+                          <Route path="/" element={<Dashboard />} />
+                          <Route path="/uploads" element={<ProtectedAdminRoute><DataUploads /></ProtectedAdminRoute>} />
+                          <Route path="/data-uploads" element={<ProtectedAdminRoute><DataUploads /></ProtectedAdminRoute>} />
+                          <Route path="/rankings" element={<FullRankings />} />
+                          <Route path="/leaderboard" element={<LeaderboardRankings />} />
+                          <Route path="/employees" element={<ProtectedAdminRoute><EmployeeList /></ProtectedAdminRoute>} />
+                          <Route path="/reviews" element={<ReviewGeneration />} />
+                          <Route path="/review-tracker" element={<ReviewTracker />} />
+                          <Route path="/yodeck" element={<YodeckSlides />} />
+                          <Route path="/snapshots" element={<Snapshots />} />
+                          <Route path="/analytics" element={<Analytics />} />
+                          <Route path="/settings" element={<ProtectedAdminRoute><QuarterSettings /></ProtectedAdminRoute>} />
+                          <Route path="/data-integrity" element={<ProtectedAdminRoute><DataIntegrity /></ProtectedAdminRoute>} />
+                          <Route path="/scoring-audit" element={<ProtectedAdminRoute><ScoringAudit /></ProtectedAdminRoute>} />
+                          <Route path="/cv-adjustment" element={<ProtectedAdminRoute><CVAdjustment /></ProtectedAdminRoute>} />
+                          <Route path="/scoring-guide" element={<ScoringGuide />} />
+                          <Route path="/upload-tutorial" element={<DataUploadTutorial />} />
+                          <Route path="/help" element={<HelpCenter />} />
+                          <Route path="/reports" element={<Reports />} />
+                          <Route path="/quarterly-summary" element={<QuarterlySummary />} />
+                          {/* QR Track Hub - Isolated Module */}
+                          <Route path="/qr" element={<QRDashboard />} />
+                          <Route path="/qr/leaderboard" element={<QRLeaderboard />} />
+                          <Route path="/qr/daily" element={<QRDailyClicks />} />
+                          <Route path="/qr/codes" element={<ProtectedAdminRoute><QREmployees /></ProtectedAdminRoute>} />
+                          <Route path="/qr/settings" element={<ProtectedAdminRoute><QRSettings /></ProtectedAdminRoute>} />
+                          <Route path="/qr/ghost-heal" element={<ProtectedAdminRoute><QRGhostHeal /></ProtectedAdminRoute>} />
+                          {/* Multi-Store Management */}
+                          <Route path="/global" element={<GlobalOverview />} />
+                          <Route path="/stores" element={<ProtectedAdminRoute><StoreManagement /></ProtectedAdminRoute>} />
+                          <Route path="/stores/leaderboard" element={<StoreLeaderboard />} />
+                          <Route path="/stores/:storeId" element={<StoreDetails />} />
+                          {/* Snapshot Workflow */}
+                          <Route path="/snapshot-workflow" element={<ProtectedAdminRoute><SnapshotWorkflow /></ProtectedAdminRoute>} />
+                          <Route path="/snapshot-workflow/:snapshotId" element={<ProtectedAdminRoute><SnapshotDetail /></ProtectedAdminRoute>} />
+                        </Routes>
+                        <OnboardingGuide />
+                      </SidebarLayout>
+                    </ErrorBoundary>
                   }
                 />
               </Routes>

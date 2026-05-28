@@ -10,7 +10,98 @@ Build a comprehensive performance review application for restaurant employees.
 - **AI**: OpenAI GPT-4o (via Emergent LLM Key)
 - **Auth**: Emergent-managed Google Auth (whitelist via `ALLOWED_ADMIN_EMAILS`)
 
-## Current State (2026-05-27)
+## Current State (2026-05-28)
+
+### P0: Production Readiness — Demo Hardening — SHIPPED 2026-05-28
+
+User passed a 15-item brief from Emergent's security review. Triaged
+against the demo-tomorrow constraint and shipped the high-leverage
+security + stability items; deferred CRA→Vite, deep refactors, broad
+empty-state polish.
+
+**Security fixes (P1)**:
+
+1. **Admin route gating extended to GETs on `/api/v2/admin/*`**:
+   `AdminAuthMiddleware` previously only gated `POST/PUT/PATCH/DELETE`.
+   Anonymous GET to `/api/v2/admin/scoring-trust`,
+   `/api/v2/admin/integrity`, `/api/v2/admin/alias-collisions` etc.
+   leaked data-integrity counts, alias collision names, and audit
+   findings publicly. Middleware now requires admin on every method
+   in `/api/v2/admin/*`, except the explicit public exempt list
+   (`/api/v2/admin/scoring-example` — read-only math demonstrator).
+   Verified end-to-end with curl: anon GET → 401, exempt path → 200.
+
+2. **`ALLOWED_ADMIN_EMAILS` is fail-closed**: removed the hardcoded
+   `owner@intheweedscollective.com` default fallback in
+   `routes/auth.py`. If the env var is missing/empty, no email is
+   admin, app degrades to read-only-for-everyone. Startup logs a
+   loud warning. Production redeploy will need
+   `ALLOWED_ADMIN_EMAILS` set in env (currently set in preview
+   `.env`).
+
+3. **CORS already correctly gated** by existing code:
+   `CORS_ORIGINS=*` disables credentialed CORS; specific origins
+   enable it with cookie passthrough. Preview default list includes
+   both preview + production domains.
+
+**Frontend admin gating (P2)**:
+
+4. **`SidebarLayout.jsx`** — every admin-only nav item/group now
+   carries `adminOnly: true`; the render path filters them out of
+   the DOM entirely for non-admins (Snapshot Workflow, Data
+   Uploads, Employees, Settings, QR Codes, QR Settings, Stores
+   Management, Admin group, etc.). Hidden, not disabled.
+
+5. **`components/ProtectedAdminRoute.jsx`** (new): wraps every
+   admin route in `App.js`. Loading → spinner. No session →
+   redirect to /login. Signed-in non-admin → "Admin access
+   required" screen with a back-to-dashboard link. Admin →
+   children. Applied to: `/uploads`, `/data-uploads`,
+   `/snapshot-workflow`, `/snapshot-workflow/:id`, `/employees`,
+   `/settings`, `/data-integrity`, `/scoring-audit`,
+   `/cv-adjustment`, `/qr/codes`, `/qr/settings`, `/qr/ghost-heal`,
+   `/stores`.
+
+**Stability (P4)**:
+
+6. **`components/ErrorBoundary.jsx`** (new): wraps the entire
+   SidebarLayout/Routes tree in `App.js`. Any render-time crash
+   surfaces a clean fallback ("Something went wrong loading this
+   page. Refresh or back to dashboard") with the error message in
+   a collapsible `<details>`. Console logs preserved for devtools.
+
+**API consistency (P3)**:
+
+7. **`StoreContext.jsx`** swapped from raw `fetch()` to shared
+   axios `api` client. Session cookies, withCredentials, 401/403
+   interceptors now consistent across every API call in the app.
+
+**Verified on preview**:
+- Anonymous user: sidebar shows only Dashboard / Reports /
+  Performance / Feedback / Exports / Multi-Store (Global Overview,
+  Store Leaderboard) / QR (Dashboard, Leaderboard, Clicks by Day) /
+  Upload Tutorial / Scoring Guide / Help Center / Sign In. Zero
+  admin items.
+- Anonymous trying `/uploads` → redirects to `/login`.
+- Admin: full sidebar visible, all admin pages render.
+- Anonymous `GET /api/v2/admin/scoring-trust` → 401.
+- Anonymous `GET /api/v2/admin/scoring-example` → 200 (exempt).
+
+**Deferred (out of demo-tomorrow scope)**:
+- CRA → Vite migration (P5 #10 — user explicitly excluded)
+- Deep App.js route reorganization (P5 #11)
+- Broad loading/empty-state polish across every page (P4 #9, P7 #13)
+- Audit-and-add `Depends(require_admin)` on every endpoint as
+  belt-and-suspenders (middleware already enforces; redundant)
+
+**Production redeploy checklist** (for tomorrow morning):
+- Set `ALLOWED_ADMIN_EMAILS=owner@intheweedscollective.com,…` in
+  production backend env. **This is critical** — without it, no
+  one is admin on production.
+- Set `CORS_ORIGINS=https://intheweedscollective.com` in production
+  (or leave unset — default list already includes the prod domain).
+- Smoke-check: anon `/uploads` should redirect to login; anon
+  `GET /api/v2/admin/scoring-trust` should return 401.
 
 ### P0: Worked Example Now Server-Computed — SHIPPED 2026-05-27
 

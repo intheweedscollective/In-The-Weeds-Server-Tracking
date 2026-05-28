@@ -4242,9 +4242,21 @@ app.add_middleware(NoCacheMiddleware)
 from routes.auth import _get_session_user as _auth_get_session_user, ALLOWED_EMAILS
 
 _AUTH_PROTECTED_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+# Prefixes that REQUIRE admin auth on every method (including GET).
+# These expose data-integrity counts, alias collisions, audit findings, etc.
+# that should never be readable by anonymous users.
+_AUTH_ADMIN_ALL_METHODS_PREFIXES = (
+    "/api/v2/admin/",
+)
 _AUTH_PUBLIC_PREFIXES = (
     "/api/auth/",
     "/api/health",
+)
+# Even within the admin namespace, a handful of endpoints are intentionally
+# public/read-only and must NOT require auth (e.g. the canonical scoring
+# example — it's a math demonstrator with no real data).
+_AUTH_ADMIN_EXEMPT_PATHS = (
+    "/api/v2/admin/scoring-example",
 )
 
 class AdminAuthMiddleware(BaseHTTPMiddleware):
@@ -4252,12 +4264,24 @@ class AdminAuthMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         method = request.method.upper()
 
-        # Public reads + auth flow + non-API requests pass through unchanged.
-        if (
-            method not in _AUTH_PROTECTED_METHODS
-            or not path.startswith("/api/")
-            or any(path.startswith(p) for p in _AUTH_PUBLIC_PREFIXES)
+        # Determine if this request needs auth.
+        needs_admin = False
+        if path.startswith("/api/") and not any(
+            path.startswith(p) for p in _AUTH_PUBLIC_PREFIXES
         ):
+            # 1. All writes need admin.
+            if method in _AUTH_PROTECTED_METHODS:
+                needs_admin = True
+            # 2. Admin-namespace reads ALSO need admin (data-integrity counts,
+            #    alias collisions, audit findings, etc.) — unless they're on
+            #    the explicit public-exempt list.
+            elif any(
+                path.startswith(p) for p in _AUTH_ADMIN_ALL_METHODS_PREFIXES
+            ) and not any(path == ep or path.startswith(ep + "?") or path.startswith(ep + "/")
+                          for ep in _AUTH_ADMIN_EXEMPT_PATHS):
+                needs_admin = True
+
+        if not needs_admin:
             return await call_next(request)
 
         # Protected: require valid session whose email is on the whitelist.
@@ -4274,13 +4298,13 @@ class AdminAuthMiddleware(BaseHTTPMiddleware):
             from fastapi.responses import JSONResponse
             return JSONResponse(
                 status_code=401,
-                content={"detail": "Sign in required to make changes."},
+                content={"detail": "Sign in required."},
             )
         if not user.is_admin:
             from fastapi.responses import JSONResponse
             return JSONResponse(
                 status_code=403,
-                content={"detail": f"{user.email} is not authorized to edit this app. Contact the owner to be added."},
+                content={"detail": f"{user.email} is not authorized to access this resource."},
             )
 
         return await call_next(request)

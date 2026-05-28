@@ -33,14 +33,19 @@ import { useAuth } from "../context/AuthContext";
 import { Link as RouterLink } from "react-router-dom";
 import { LogIn, LogOut } from "lucide-react";
 
-// Navigation structure with grouping
+// Navigation structure with grouping.
+//
+// `adminOnly: true` on a group hides the whole section for non-admins.
+// `adminOnly: true` on an item hides just that item. Filtering happens in
+// the render path so admin links are *absent from the DOM*, not just
+// disabled — preventing a viewer from clicking through hidden buttons.
 const navGroups = [
   {
     id: "main",
     items: [
       { path: "/", label: "Dashboard", icon: Home },
-      { path: "/snapshot-workflow", label: "Snapshot Workflow", icon: Layers },
-      { path: "/uploads", label: "Data Uploads", icon: Upload },
+      { path: "/snapshot-workflow", label: "Snapshot Workflow", icon: Layers, adminOnly: true },
+      { path: "/uploads", label: "Data Uploads", icon: Upload, adminOnly: true },
       { path: "/reports", label: "Reports", icon: FileText }
     ]
   },
@@ -72,7 +77,7 @@ const navGroups = [
     id: "team",
     label: "Team",
     items: [
-      { path: "/employees", label: "Employees", icon: Users }
+      { path: "/employees", label: "Employees", icon: Users, adminOnly: true }
     ]
   },
   {
@@ -80,7 +85,7 @@ const navGroups = [
     label: "Multi-Store",
     items: [
       { path: "/global", label: "Global Overview", icon: Globe },
-      { path: "/stores", label: "Store Management", icon: Building2 },
+      { path: "/stores", label: "Store Management", icon: Building2, adminOnly: true },
       { path: "/stores/leaderboard", label: "Store Leaderboard", icon: Trophy }
     ]
   },
@@ -91,13 +96,14 @@ const navGroups = [
       { path: "/qr", label: "QR Dashboard", icon: QrCode },
       { path: "/qr/leaderboard", label: "QR Leaderboard", icon: Trophy },
       { path: "/qr/daily", label: "Clicks by Day", icon: LineChart },
-      { path: "/qr/codes", label: "QR Codes", icon: QrCode },
-      { path: "/qr/settings", label: "QR Settings", icon: Settings }
+      { path: "/qr/codes", label: "QR Codes", icon: QrCode, adminOnly: true },
+      { path: "/qr/settings", label: "QR Settings", icon: Settings, adminOnly: true }
     ]
   },
   {
     id: "admin",
     label: "Admin",
+    adminOnly: true,
     items: [
       { path: "/scoring-audit", label: "Scoring Audit", icon: ClipboardCheck },
       { path: "/cv-adjustment", label: "CV NPS Adjustment", icon: Filter },
@@ -109,7 +115,7 @@ const navGroups = [
 const bottomNav = [
   { path: "/upload-tutorial", label: "Upload Tutorial", icon: BookOpen },
   { path: "/scoring-guide", label: "Scoring Guide", icon: Calculator },
-  { path: "/settings", label: "Settings", icon: Settings },
+  { path: "/settings", label: "Settings", icon: Settings, adminOnly: true },
   { path: "/help", label: "Help Center", icon: HelpCircle }
 ];
 
@@ -141,6 +147,19 @@ export const SidebarLayout = ({ children }) => {
   }, []);
 
   const isActive = (path) => location.pathname === path;
+  const isAdmin = !!user?.is_admin;
+
+  // Filter nav items based on admin status. Admin-only groups/items are
+  // dropped entirely from the rendered DOM (not just disabled) so a viewer
+  // can't tab/click through hidden controls.
+  const visibleGroups = navGroups
+    .filter((g) => isAdmin || !g.adminOnly)
+    .map((g) => ({
+      ...g,
+      items: g.items.filter((i) => isAdmin || !i.adminOnly),
+    }))
+    .filter((g) => g.items.length > 0);
+  const visibleBottomNav = bottomNav.filter((i) => isAdmin || !i.adminOnly);
 
   const NavLink = ({ item, showLabel = true }) => (
     <Link
@@ -191,7 +210,7 @@ export const SidebarLayout = ({ children }) => {
 
       {/* Navigation Groups */}
       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-        {navGroups.map((group) => (
+        {visibleGroups.map((group) => (
           <div key={group.id} className="mb-2">
             {group.label && !isCollapsed && (
               <button
@@ -219,7 +238,7 @@ export const SidebarLayout = ({ children }) => {
 
       {/* Bottom Navigation */}
       <div className="border-t border-border px-3 py-3 space-y-1">
-        {bottomNav.map((item) => (
+        {visibleBottomNav.map((item) => (
           <NavLink key={item.path} item={item} showLabel={!isCollapsed} />
         ))}
 
