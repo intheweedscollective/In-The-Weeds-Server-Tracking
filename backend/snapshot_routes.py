@@ -1514,16 +1514,34 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
         
         # Update existing or add new
         for new_emp in employees_data:
-            name = new_emp.get("name", "").lower().strip()
-            if name in pos_emp_lookup:
-                # Update existing employee in POS data
-                idx = pos_emp_lookup[name]
-                existing_pos_employees[idx].update(new_emp)
-                logger.info(f"confirm_pos_review: Updated POS data for '{name}'")
+            # Inline rename support: if the operator changed the name on the
+            # review screen (e.g. "Drane" → "Diane"), the payload carries
+            # `_original_name` so we can find the existing POS row by its
+            # OLD name and overwrite it instead of creating a duplicate.
+            new_name = (new_emp.get("name") or "").strip()
+            original_name = (new_emp.get("_original_name") or "").strip()
+            lookup_key = (original_name or new_name).lower()
+
+            if lookup_key in pos_emp_lookup:
+                idx = pos_emp_lookup[lookup_key]
+                # Strip the bookkeeping field before persisting.
+                clean_payload = {k: v for k, v in new_emp.items() if k != "_original_name"}
+                existing_pos_employees[idx].update(clean_payload)
+                if new_name and new_name.lower() != lookup_key:
+                    existing_pos_employees[idx]["name"] = new_name
+                    # Refresh the lookup so a later row pointing at the
+                    # new name doesn't accidentally collide.
+                    pos_emp_lookup.pop(lookup_key, None)
+                    pos_emp_lookup[new_name.lower()] = idx
+                logger.info(
+                    f"confirm_pos_review: Updated POS data for '{lookup_key}'"
+                    + (f" (renamed → '{new_name}')" if new_name.lower() != lookup_key else "")
+                )
             else:
                 # Add new employee to POS data
-                existing_pos_employees.append(new_emp)
-                logger.info(f"confirm_pos_review: Added new employee '{name}' to POS data")
+                clean_payload = {k: v for k, v in new_emp.items() if k != "_original_name"}
+                existing_pos_employees.append(clean_payload)
+                logger.info(f"confirm_pos_review: Added new employee '{new_name}' to POS data")
         
         uploads[pos_upload_idx]["parsed_data"]["employees"] = existing_pos_employees
         uploads[pos_upload_idx]["parsed_data"]["record_count"] = len(existing_pos_employees)
@@ -1560,12 +1578,32 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
         benchmarks = _build_benchmarks_dict(settings)
         
         for new_emp in employees_data:
-            name = new_emp.get("name", "").lower().strip()
-            existing = emp_lookup.get(name)
-            
-            logger.info(f"confirm_pos_review: Looking for '{name}' in lookup. Found: {existing is not None}")
-            
+            # Inline rename support — same pattern as the POS upload section
+            # above. Look up by original name when present so a typo fix
+            # ("Drane" → "Diane") rewrites the existing snapshot row instead
+            # of stranding the old one and creating a phantom duplicate.
+            new_name = (new_emp.get("name") or "").strip()
+            original_name = (new_emp.get("_original_name") or "").strip()
+            lookup_key = (original_name or new_name).lower()
+            existing = emp_lookup.get(lookup_key)
+
+            logger.info(
+                f"confirm_pos_review: Looking for '{lookup_key}' in lookup. "
+                f"Found: {existing is not None}"
+                + (f" (will rename → '{new_name}')" if existing and new_name.lower() != lookup_key else "")
+            )
+
+            # Strip bookkeeping field before applying anywhere.
+            new_emp = {k: v for k, v in new_emp.items() if k != "_original_name"}
+
             if existing:
+                # Apply rename if requested.
+                if new_name and new_name.lower() != lookup_key:
+                    existing["name"] = new_name
+                    existing["display_name"] = new_name
+                    # report_name is the original POS-spelled name and stays
+                    # as-is so future POS uploads under the bad spelling still
+                    # route to this row via the alias path.
                 # Update POS fields
                 old_ppa = existing.get("ppa")
                 old_glassware = existing.get("bar_glassware_sales")
@@ -1581,7 +1619,7 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
                 if "guests" in new_emp:
                     existing["guest_count"] = new_emp["guests"]
                 
-                logger.info(f"confirm_pos_review: Updated '{name}' PPA from {old_ppa} to {existing.get('ppa')}, glassware from {old_glassware} to {existing.get('bar_glassware_sales')}")
+                logger.info(f"confirm_pos_review: Updated '{lookup_key}' PPA from {old_ppa} to {existing.get('ppa')}, glassware from {old_glassware} to {existing.get('bar_glassware_sales')}")
                 
                 # Recalculate derived values (LBW per guest, etc.)
                 guest_count = existing.get("guest_count") or existing.get("guests") or 0
@@ -1604,7 +1642,7 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
                 # Recalculate scores
                 old_score = existing.get("total_score")
                 calculate_employee_scores(existing, benchmarks)
-                logger.info(f"confirm_pos_review: Recalculated '{name}' score from {old_score} to {existing.get('total_score')}")
+                logger.info(f"confirm_pos_review: Recalculated '{lookup_key}' score from {old_score} to {existing.get('total_score')}")
             else:
                 # NEW manually-added employee — wasn't in the snapshot before.
                 # Build a fresh row with sensible defaults so they show up in
@@ -1676,13 +1714,13 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
                     calculate_employee_scores(fresh, benchmarks)
                 except Exception as score_err:
                     logger.warning(
-                        f"confirm_pos_review: score calc for new '{name}' failed: {score_err}"
+                        f"confirm_pos_review: score calc for new '{new_name}' failed: {score_err}"
                     )
 
                 existing_employees.append(fresh)
                 # Also seed our lookup so a second mention of the same name
                 # in the same payload updates this row instead of duplicating.
-                emp_lookup[name] = fresh
+                emp_lookup[new_name.lower()] = fresh
                 logger.info(
                     f"confirm_pos_review: Added NEW manually-entered employee '{fresh['name']}' "
                     f"(guests={guest_count}, ppa={fresh.get('ppa')}, score={fresh.get('total_score')})"

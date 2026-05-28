@@ -299,6 +299,11 @@ export default function SnapshotDetail() {
     // Calculate lsc_count from loyalty_sales if not directly available (each card = $25)
     const lscCount = emp.lsc_count || Math.round((emp.loyalty_sales || 0) / 25) || 0;
     setEditValues({
+      // Name lives in the same edit form so the user can correct typos
+      // (e.g. "Drane" → "Diane") inline. Keep the original around so the
+      // backend can locate the row to rename on save.
+      name: emp.name || "",
+      _original_name: emp.name || "",
       ppa: emp.ppa || 0,
       liquor_sales: emp.liquor_sales || emp._raw?.liquor_sales || 0,
       beer_sales: emp.beer_sales || emp._raw?.beer_sales || 0,
@@ -936,7 +941,22 @@ export default function SnapshotDetail() {
               <tbody className="divide-y divide-slate-700">
                 {reviewData.map((emp, idx) => (
                   <tr key={emp.id || emp.name || `emp-${idx}`} className="hover:bg-slate-800/50 text-sm">
-                    <td className="px-2 py-2 text-white font-medium whitespace-nowrap">{emp.name?.split(' ')[0] || emp.name}</td>
+                    {editingRow === idx ? (
+                      <td className="px-2 py-1">
+                        <Input
+                          type="text"
+                          value={editValues.name || ""}
+                          onChange={(e) => setEditValues({...editValues, name: e.target.value})}
+                          placeholder="Full name"
+                          className="w-44 h-8 bg-slate-700 border-slate-600 text-white text-sm px-2"
+                          data-testid={`pos-review-name-input-${idx}`}
+                        />
+                      </td>
+                    ) : (
+                      <td className="px-2 py-2 text-white font-medium whitespace-nowrap">
+                        {emp.name || emp.display_name}
+                      </td>
+                    )}
                     {editingRow === idx ? (
                       <>
                         <td className="px-1 py-1">
