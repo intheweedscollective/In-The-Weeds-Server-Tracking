@@ -7,7 +7,7 @@ import logging
 import re
 import uuid
 from datetime import datetime, timezone
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Body, Request
 import json
 from pydantic import BaseModel
@@ -1494,6 +1494,13 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
         raise HTTPException(status_code=400, detail="No employee data provided")
     
     logger.info(f"confirm_pos_review: Received {len(employees_data)} employees to update")
+
+    # Track (misspelled, corrected) name pairs from inline renames. After
+    # we've persisted the snapshot we'll register the misspelled name as
+    # a permanent alias on the canonical employee, so future POS uploads
+    # under the same typo route automatically without the operator
+    # having to fix it again. Self-curating typo dictionary.
+    rename_pairs: List[Tuple[str, str]] = []
     
     # Find the POS upload and update it with reviewed data
     uploads = snapshot.get("uploads", [])
@@ -1533,6 +1540,8 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
                     # new name doesn't accidentally collide.
                     pos_emp_lookup.pop(lookup_key, None)
                     pos_emp_lookup[new_name.lower()] = idx
+                    if original_name and (original_name, new_name) not in rename_pairs:
+                        rename_pairs.append((original_name, new_name))
                 logger.info(
                     f"confirm_pos_review: Updated POS data for '{lookup_key}'"
                     + (f" (renamed → '{new_name}')" if new_name.lower() != lookup_key else "")
@@ -1604,6 +1613,8 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
                     # report_name is the original POS-spelled name and stays
                     # as-is so future POS uploads under the bad spelling still
                     # route to this row via the alias path.
+                    if original_name and (original_name, new_name) not in rename_pairs:
+                        rename_pairs.append((original_name, new_name))
                 # Update POS fields
                 old_ppa = existing.get("ppa")
                 old_glassware = existing.get("bar_glassware_sales")
@@ -1795,9 +1806,83 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
     except Exception as qr_err:
         logger.warning(f"confirm_pos_review: QR auto-sync failed: {qr_err}")
 
+    # Auto-add misspelled POS names as canonical aliases. After every
+    # save the operator's inline typo-fix becomes a permanent rule —
+    # next POS upload that lands under the bad spelling routes to the
+    # correct canonical employee automatically. Self-curating dictionary.
+    alias_writes = 0
+    skipped_alias_writes: List[Dict[str, str]] = []
+    if rename_pairs:
+        try:
+            # Build a name → canonical_doc index over active employees.
+            canon_index: Dict[str, Dict[str, Any]] = {}
+            async for c in db.employees.find(
+                {"status": "active"},
+                {"_id": 0, "id": 1, "name": 1, "display_name": 1,
+                 "report_name": 1, "aliases": 1},
+            ):
+                for n in (c.get("name"), c.get("display_name"),
+                          c.get("report_name"), *(c.get("aliases") or [])):
+                    if n:
+                        canon_index[n.strip().lower()] = c
+            # Snapshot every "active canonical" name lowercased so we
+            # refuse to alias-shadow another active employee's identity.
+            # (Computed implicitly via canon_index lookups below.)
+
+            seen_writes: set = set()
+            for misspelled, corrected in rename_pairs:
+                miss_key = (misspelled or "").strip().lower()
+                corr_key = (corrected or "").strip().lower()
+                if not miss_key or not corr_key or miss_key == corr_key:
+                    continue
+                if (miss_key, corr_key) in seen_writes:
+                    continue
+                seen_writes.add((miss_key, corr_key))
+
+                # Refuse to register a misspelling as an alias if some
+                # OTHER active employee already owns that name — that
+                # would route their POS rows to the wrong person.
+                target = canon_index.get(corr_key)
+                if not target:
+                    skipped_alias_writes.append({
+                        "misspelled": misspelled, "corrected": corrected,
+                        "reason": "no_canonical_match",
+                    })
+                    continue
+                existing_owner = canon_index.get(miss_key)
+                if existing_owner and existing_owner.get("id") != target.get("id"):
+                    skipped_alias_writes.append({
+                        "misspelled": misspelled, "corrected": corrected,
+                        "reason": "owned_by_other_employee",
+                        "owner_id": existing_owner.get("id"),
+                    })
+                    continue
+
+                # Idempotent — $addToSet won't create duplicates.
+                res = await db.employees.update_one(
+                    {"id": target["id"]},
+                    {"$addToSet": {"aliases": misspelled.strip()}},
+                )
+                if res.modified_count:
+                    alias_writes += 1
+                    # Locally refresh the index so a second rename in
+                    # the same payload that references this misspelling
+                    # again is treated as already-owned (no double-write).
+                    canon_index[miss_key] = target
+                    logger.info(
+                        f"confirm_pos_review: auto-aliased '{misspelled}' → "
+                        f"{target.get('name')} ({target.get('id')})"
+                    )
+        except Exception as alias_err:
+            logger.warning(
+                f"confirm_pos_review: alias auto-add failed: {alias_err}"
+            )
+
     return {
         "success": True,
-        "message": f"POS data reviewed and confirmed ({len(employees_data)} employees)"
+        "message": f"POS data reviewed and confirmed ({len(employees_data)} employees)",
+        "aliases_added": alias_writes,
+        "alias_skips": skipped_alias_writes,
     }
 
 

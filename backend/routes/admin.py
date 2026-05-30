@@ -1518,7 +1518,8 @@ async def scoring_trust_score():
     # --- 3. Alias collisions ----------------------------------------------
     collisions = []
     all_emps = await db.employees.find(
-        {}, {"_id": 0, "id": 1, "name": 1, "aliases": 1, "status": 1}
+        {}, {"_id": 0, "id": 1, "name": 1, "aliases": 1, "status": 1,
+             "current_metrics": 1}
     ).to_list(2000)
     name_to_emp = {(e.get("name") or "").lower(): e for e in all_emps}
     for e in all_emps:
@@ -1537,6 +1538,63 @@ async def scoring_trust_score():
                 "duplicate_id": other.get("id"),
                 "duplicate_name": other.get("name"),
             })
+
+    # --- 4. Metric integrity (passive corruption detection) --------------
+    # For every active employee with snapshot-mirrored metrics, verify the
+    # stored derived ratios match their inputs. A mismatch indicates either
+    # raw-data corruption (e.g. Kahi's $20B net_sales typo) or a stale
+    # ratio that never got recomputed after an edit. The Dashboard Trust
+    # badge surfaces a "Metric Integrity" tile so the owner sees the
+    # problem the moment it appears — not after a coaching meeting.
+    METRIC_TOLERANCE = 0.02   # 2% relative
+    METRIC_MIN_ABS   = 0.05   # ignore sub-5¢ rounding noise
+    metric_mismatches: List[Dict[str, Any]] = []
+    for e in all_emps:
+        if (e.get("status") or "").lower() != "active":
+            continue
+        cm = e.get("current_metrics") or {}
+        guests = cm.get("guests") or cm.get("guest_count") or 0
+        if not guests or guests <= 0:
+            continue
+
+        def _check(label: str, numerator: float, denom: float, stored):
+            if denom is None or denom <= 0:
+                return
+            if stored is None:
+                return
+            expected = round(numerator / denom, 2)
+            diff = abs(expected - stored)
+            if diff < METRIC_MIN_ABS:
+                return
+            # Use the larger of expected/stored as denominator so a
+            # 0 stored value triggers the check (relative-to-stored
+            # would dodge the corruption).
+            rel = diff / max(abs(expected), abs(stored), 1e-9)
+            if rel > METRIC_TOLERANCE:
+                metric_mismatches.append({
+                    "employee_id": e.get("id"),
+                    "name": e.get("name"),
+                    "metric": label,
+                    "stored": stored,
+                    "expected": expected,
+                    "diff": round(diff, 4),
+                    "rel_diff_pct": round(rel * 100, 2),
+                })
+
+        net_sales = cm.get("net_sales")
+        ppa = cm.get("ppa")
+        if net_sales is not None and ppa is not None:
+            _check("ppa", float(net_sales), float(guests), float(ppa))
+
+        lsc_count = cm.get("lsc_count") or 0
+        gpl = cm.get("guests_per_lsc")
+        if lsc_count and gpl is not None:
+            _check("guests_per_lsc", float(guests), float(lsc_count), float(gpl))
+
+        lbw = cm.get("lbw") or cm.get("lbw_total")
+        lbw_per_guest = cm.get("lbw_per_guest")
+        if lbw is not None and lbw_per_guest is not None:
+            _check("lbw_per_guest", float(lbw), float(guests), float(lbw_per_guest))
 
     # --- Tri-state rollup --------------------------------------------------
     # RED   = any P0 issue OR alias collision present OR ≥1 unlocked
@@ -1583,6 +1641,12 @@ async def scoring_trust_score():
             f"{len(unlocked_active_drift)} current/future quarter(s) "
             f"with scoring-constant drift"
         )
+    # Metric corruption: 5+ mismatches = blocker (data is silently lying
+    # to coaches), 1-4 = advisory.
+    if len(metric_mismatches) >= 5:
+        issues.append(
+            f"{len(metric_mismatches)} employee metric(s) drift from raw inputs"
+        )
 
     warnings = []
     if p1 > 0:
@@ -1594,6 +1658,10 @@ async def scoring_trust_score():
         )
     if p2 > 0:
         warnings.append(f"{p2} P2 integrity issue(s)")
+    if 0 < len(metric_mismatches) < 5:
+        warnings.append(
+            f"{len(metric_mismatches)} employee metric(s) drift from raw inputs"
+        )
 
     if issues:
         status = "red"
@@ -1630,11 +1698,21 @@ async def scoring_trust_score():
                 "count": len(collisions),
                 "pairs": collisions[:10],   # cap response size
             },
+            "metric_integrity": {
+                "count": len(metric_mismatches),
+                "tolerance_pct": round(METRIC_TOLERANCE * 100, 2),
+                "mismatches": metric_mismatches[:20],
+            },
         },
         "remediation": {
             "scoring_drift": "POST /api/v2/admin/normalize-quarter-settings?apply=true",
             "alias_collisions": "Open Nickname Manager and merge the collision pairs.",
             "integrity": "GET /api/v2/admin/integrity for the full validation report.",
+            "metric_integrity": (
+                "Open the affected employee in Data Uploads or POS Review "
+                "and correct the raw input (guests / net_sales / lsc_count / lbw) — "
+                "the engine recomputes derived ratios on save."
+            ),
         },
     }
 

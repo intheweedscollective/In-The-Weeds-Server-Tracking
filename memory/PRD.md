@@ -11,6 +11,53 @@ Build a comprehensive performance review application for restaurant employees.
 - **Auth**: Emergent-managed Google Auth (whitelist via `ALLOWED_ADMIN_EMAILS`)
 
 ## Current State (2026-05-28)
+### P1: Self-curating typo dictionary + passive metric integrity — SHIPPED 2026-05-30
+
+Two follow-ups shipped after the Kitti scoring bug closeout.
+
+**1. Auto-add misspelled POS names as canonical aliases at rename time.**
+   - `POST /api/v2/snapshot-workflow/snapshots/{id}/confirm-pos-review`
+     now collects every inline `_original_name → name` rename pair and,
+     after the snapshot save commits, registers the misspelling as a
+     permanent alias on the canonical employee via `$addToSet`. Future
+     POS uploads under the bad spelling route automatically — no more
+     repeated typo-fixes on every weekly upload.
+   - Guard: refuses to register an alias if the misspelled name is the
+     primary name of a DIFFERENT active employee (would shadow their
+     identity). Surfaced in `alias_skips[]` with `reason=
+     owned_by_other_employee`.
+   - Response payload extended with `aliases_added` count and
+     `alias_skips[]` array.
+
+**2. Passive scoring integrity check on Trust badge.**
+   - `GET /api/v2/admin/scoring-trust` now scans every active canonical
+     employee's `current_metrics` and verifies the stored derived ratios
+     match the raw inputs:
+       • `ppa` ≈ `net_sales / guests`
+       • `guests_per_lsc` ≈ `guests / lsc_count`
+       • `lbw_per_guest` ≈ `lbw / guests`
+     Tolerance is 2% relative + 5¢ absolute (so sub-penny rounding noise
+     doesn't trigger).
+   - Tri-state rollup: 1-4 mismatches → AMBER warning; 5+ → RED blocker.
+   - Response includes `details.metric_integrity = {count, tolerance_pct,
+     mismatches[≤20]}` and a `remediation.metric_integrity` blurb.
+   - Trust modal redesigned to 4-column grid (Quarter Settings · Data
+     Integrity · Alias Collisions · Metric Integrity) plus a new "Metric
+     Drift" block that lists each affected employee with `stored →
+     expected` and `rel_diff_pct`.
+   - Bonus discovery: the check immediately surfaced a stale duplicate
+     `Kahiaulani Ramos` canonical record still carrying the original
+     $20B `net_sales` typo (the Kahi Ramos canonical was already fixed
+     yesterday). User can now see and decide whether to merge/correct.
+
+**Tests**: `/app/backend/tests/test_alias_auto_add_and_metric_integrity.py`
+(5 cases, all passing) — covers alias write success, shadow-identity
+refusal, metric_integrity block shape, tri-state propagation, and
+remediation presence. Plus an end-to-end manual verification: injecting
+a misspelled row + firing rename returns `aliases_added=1` and the
+misspelling lands on the canonical's `aliases[]`.
+
+
 ### P0: Q2P5W4 scoring accuracy — SHIPPED 2026-05-30
 
 User reported Kitti showing 1:10 guests/LSC despite selling 42 cards to 852 guests

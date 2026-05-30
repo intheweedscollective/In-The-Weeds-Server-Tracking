@@ -372,7 +372,7 @@ export default function ScoringTrustBadge() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               <div className="rounded border border-slate-700 bg-slate-800/60 p-3">
                 <div className="text-slate-400 mb-1">Quarter Settings</div>
                 <div className="text-base font-semibold text-white">
@@ -405,7 +405,51 @@ export default function ScoringTrustBadge() {
                   </div>
                 )}
               </div>
+              <div className="rounded border border-slate-700 bg-slate-800/60 p-3" data-testid="scoring-trust-metric-integrity">
+                <div className="text-slate-400 mb-1">Metric Integrity</div>
+                <div className="text-base font-semibold text-white">
+                  {details.metric_integrity?.count ?? 0} mismatch
+                  {(details.metric_integrity?.count ?? 0) === 1 ? "" : "es"}
+                </div>
+                <div className="text-slate-500 mt-1 text-[11px]">
+                  tol ±{details.metric_integrity?.tolerance_pct ?? 2}%
+                </div>
+              </div>
             </div>
+
+            {details.metric_integrity?.mismatches?.length > 0 && (
+              <div className="rounded-md border border-amber-800/60 bg-amber-950/20 p-3" data-testid="scoring-trust-metric-mismatches">
+                <div className="text-xs font-semibold text-amber-200 mb-2">
+                  Metric Drift — derived ratios don't match raw inputs
+                </div>
+                <div className="space-y-1 max-h-44 overflow-y-auto">
+                  {details.metric_integrity.mismatches.map((m, idx) => (
+                    <div
+                      key={`${m.employee_id || m.name}-${m.metric}-${idx}`}
+                      className="flex items-center justify-between gap-3 rounded border border-slate-700 bg-slate-900/60 px-2 py-1.5 text-[12px]"
+                    >
+                      <div className="truncate">
+                        <span className="font-semibold text-slate-100">{m.name}</span>
+                        <span className="text-slate-500 mx-2">·</span>
+                        <span className="text-slate-400">{m.metric}</span>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <span className="text-rose-300 font-mono">{m.stored}</span>
+                        <span className="text-slate-500 mx-1">→</span>
+                        <span className="text-emerald-300 font-mono">{m.expected}</span>
+                        <span className="text-slate-500 ml-2 text-[10px]">
+                          ({m.rel_diff_pct}%)
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="text-[11px] text-slate-500 mt-2">
+                  Fix the raw inputs in Data Uploads → POS Review. The engine
+                  recomputes derived ratios on save.
+                </div>
+              </div>
+            )}
 
             {details.alias_collisions?.pairs?.length > 0 && (
               <div className="rounded-md border border-rose-800/60 bg-rose-950/20 p-3">
