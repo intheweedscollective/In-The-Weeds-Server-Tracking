@@ -183,7 +183,18 @@ export default function FullRankings() {
   const getTopEmployees = useCallback((metric, limit = 10) => {
     const config = V2_METRICS[metric];
     if (!config) return [];
-    const valid = employees.filter((e) => e[metric] != null);
+    const valid = employees.filter((e) => {
+      const v = e[metric];
+      if (v == null) return false;
+      // Exclude zeros entirely — a server who never sold a single LSC
+      // shouldn't rank #1 on "lower is better" rankings, and a zero on
+      // any other metric also means "no activity" and shouldn't medal.
+      if (typeof v === 'number' && v === 0) return false;
+      // Extra guard for LSC: if the underlying lsc_count is 0, the
+      // guests_per_lsc ratio is meaningless — exclude.
+      if (metric === 'guests_per_lsc' && (e.lsc_count == null || e.lsc_count === 0)) return false;
+      return true;
+    });
 
     const sorted = [...valid].sort((a, b) => {
       if (!config.higherBetter) return (a[metric] || 0) - (b[metric] || 0);

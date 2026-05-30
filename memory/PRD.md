@@ -11,6 +11,48 @@ Build a comprehensive performance review application for restaurant employees.
 - **Auth**: Emergent-managed Google Auth (whitelist via `ALLOWED_ADMIN_EMAILS`)
 
 ## Current State (2026-05-28)
+### P0: Q2P5W4 scoring accuracy — SHIPPED 2026-05-30
+
+User reported Kitti showing 1:10 guests/LSC despite selling 42 cards to 852 guests
+(actual: 20.29). Tracing surfaced 3 bugs on the live Q2P5W4 snapshot.
+
+**Fixes shipped**:
+
+1. **Kahi Ramos POS corruption**: `net_sales = $20,439,251,934.23` was making
+   his PPA show `$39,920,413.93`. Corrected to user-provided `$24,253`
+   (PPA → $47.37). Rescored via canonical `scoring_engine.run_full_scoring`
+   and propagated to `employees_v2`, `snapshot.employees[]`, and
+   `snapshot.rows[].frozen_metrics`.
+
+2. **Zero-LSC ranking exclusion**: "Top 10 - Guests/LSC" was ranking Jeden
+   White at #1 with `0.00` (he never sold a single loyalty card). Filter
+   in `getTopEmployees` now excludes any employee with `lsc_count === 0`
+   or where the metric value itself is `0`. Applied in 3 places:
+   - `frontend/src/pages/FullRankings.js`
+   - `frontend/src/components/TopPerformersGrid.jsx`
+   - `frontend/src/pages/Analytics.js`
+
+3. **rows[]/employees[] drift**:
+   - **Root cause**: `demo-prep` was updating `snapshot.employees[]` but
+     leaving `snapshot.rows[].frozen_metrics` stale. Dashboard reads via
+     `_hydrate_snapshot_employees` → `get_snapshot_with_join` → `rows[]`
+     so the stale ledger silently overrode the corrected employees blob
+     for Kitti, Diane, Kahi.
+   - **Going-forward**: `demo-prep` now calls
+     `_sync_snapshot_rows_from_employees` immediately after rewriting
+     `employees[]`, so rows[] stays in lockstep on the active snapshot.
+   - **One-shot backstop**: new `POST /api/v2/admin/sync-snapshot-rows`
+     admin endpoint. Defaults to **in_progress-only** scope (won't touch
+     completed/reviewed snapshots without `include_completed=true`).
+     Finalized snapshots are unconditionally skipped. Default is dry-run;
+     surfaces a per-snapshot diff before persisting.
+
+**Tests**: `/app/backend/tests/test_lsc_zero_filter_and_rows_sync.py`
+(5 cases, all passing) — locks in Kahi PPA sanity, Kitti gpl math,
+endpoint admin gating, default scope, and finalized-snapshot
+protection.
+
+
 
 ### P0: Production Readiness — Demo Hardening — SHIPPED 2026-05-28
 

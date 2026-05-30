@@ -2021,7 +2021,10 @@ async def demo_prep(
                 from services.employee_service import EmployeeService
                 # Pull every active v2 row for the quarter and overwrite
                 # the snapshot's employees[] array. Keep the existing rows[]
-                # frame structure untouched (it's the FK ledger).
+                # frame structure untouched (it's the FK ledger), but
+                # immediately resync its frozen_metrics from the freshly
+                # updated employees[] so the dashboard's FK-hydrated
+                # reads don't drift.
                 v2_active = await db.employees_v2.find(
                     {"quarter": quarter, "year": year},
                     {"_id": 0},
@@ -2034,6 +2037,26 @@ async def demo_prep(
                         "last_save_at": datetime.now(timezone.utc).isoformat(),
                     }},
                 )
+                # Resync rows[].frozen_metrics from the new employees[]
+                # — `_sync_snapshot_rows_from_employees` lives further
+                # down in this file and is the same helper used by the
+                # `/sync-snapshot-rows` endpoint.
+                refreshed_snap = await db.snapshot_workflow.find_one(
+                    {"id": snap["id"]}
+                )
+                if refreshed_snap and refreshed_snap.get("status") != "finalized":
+                    sync_summary = await _sync_snapshot_rows_from_employees(
+                        db, refreshed_snap
+                    )
+                    if sync_summary["rows_changed"] > 0:
+                        await db.snapshot_workflow.update_one(
+                            {"_id": refreshed_snap["_id"]},
+                            {"$set": {
+                                "rows": sync_summary["new_rows"],
+                                "updated_at": datetime.now(timezone.utc).isoformat(),
+                            }},
+                        )
+                        snapshot_synced["rows_resynced"] = sync_summary["rows_changed"]
                 snapshot_synced["ok"] = True
                 snapshot_synced["employee_count"] = len(v2_active)
             except Exception as e:
@@ -2187,4 +2210,197 @@ async def scoring_example(
         },
         "total_score": emp.total_score,
         "pre_dar_score": emp.pre_dar_score,
+    }
+
+
+
+# ---------------------------------------------------------------------------
+# Sync snapshot.rows[] from snapshot.employees[]
+# ---------------------------------------------------------------------------
+# The snapshot stores two views of the same employees: `rows[]` (the FK
+# ledger with `frozen_metrics`) and `employees[]` (the legacy blob).
+# Hydration prefers `rows[]`. Several write paths (demo-prep,
+# bulk-merge, manual employee delete) update only `employees[]` and
+# leave `rows[]` stale — that drift surfaces on the dashboard as
+# silently wrong PPA/LSC/total numbers.
+#
+# This endpoint rebuilds `rows[].frozen_metrics` (+ frozen_score/tier/
+# rank) from the current `employees[]` content for every active
+# non-finalized snapshot. Finalized snapshots are intentionally
+# skipped — they are immutable history.
+# ---------------------------------------------------------------------------
+
+
+async def _sync_snapshot_rows_from_employees(db, snapshot: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Rewrite `rows[].frozen_metrics` to match the corresponding
+    employees[] entry by canonical id. Returns a per-row diff summary.
+
+    Caller is responsible for status/finalized guard — this helper
+    assumes the snapshot is editable.
+    """
+    emps = snapshot.get("employees") or []
+    rows = snapshot.get("rows") or []
+
+    # Index employees[] by every key the FK ledger might use.
+    emps_by_id: Dict[str, Dict[str, Any]] = {}
+    emps_by_name: Dict[str, Dict[str, Any]] = {}
+    for e in emps:
+        eid = e.get("id")
+        if eid:
+            emps_by_id[eid] = e
+        for n in (e.get("name"), e.get("display_name"), e.get("report_name")):
+            if n:
+                emps_by_name.setdefault(n.strip().lower(), e)
+
+    # Build canonical id resolver so a row whose `employee_id` is a
+    # canonical id can still locate an `employees[]` blob stored under
+    # a legacy_id (or vice versa).
+    canonical_resolver: Dict[str, str] = {}
+    async for c in db.employees.find({}, {"_id": 0, "id": 1, "legacy_ids": 1}):
+        cid = c.get("id")
+        if not cid:
+            continue
+        canonical_resolver[cid] = cid
+        for lid in (c.get("legacy_ids") or []):
+            canonical_resolver[lid] = cid
+
+    diffs: List[Dict[str, Any]] = []
+    new_rows: List[Dict[str, Any]] = []
+    now = datetime.now(timezone.utc).isoformat()
+
+    for row in rows:
+        eid = row.get("employee_id") or ""
+        # Find matching employees[] blob — try id, canonical id, then names.
+        emp = (
+            emps_by_id.get(eid)
+            or emps_by_id.get(canonical_resolver.get(eid, ""))
+            or emps_by_name.get((row.get("frozen_display_name") or "").strip().lower())
+            or emps_by_name.get((row.get("frozen_report_name")  or "").strip().lower())
+        )
+        if not emp:
+            # No match — leave the row untouched so we don't accidentally
+            # wipe an active server who only exists in rows[].
+            new_rows.append(row)
+            continue
+
+        before_fm = row.get("frozen_metrics") or {}
+        new_fm = {k: v for k, v in emp.items()
+                  if k not in ("id", "name", "display_name", "report_name",
+                               "aliases")}
+
+        # Track which keys actually changed to surface in diff.
+        changed = []
+        for k in (
+            "ppa", "lbw_per_guest", "glassware_per_guest", "guests_per_lsc",
+            "lsc_count", "guests", "guest_count", "net_sales", "lbw",
+            "loyalty_sales", "score_ppa", "score_lbw", "score_glass",
+            "score_lsc", "total_score", "weighted_score", "pre_dar_score",
+            "tier_label",
+        ):
+            a = before_fm.get(k)
+            b = new_fm.get(k)
+            if a != b:
+                changed.append({"field": k, "from": a, "to": b})
+        if changed:
+            diffs.append({
+                "employee_id": eid,
+                "name": row.get("frozen_display_name"),
+                "changes": changed,
+            })
+
+        new_rows.append({
+            **row,
+            "employee_id": emp.get("id") or eid,
+            "frozen_display_name": emp.get("display_name") or emp.get("name") or row.get("frozen_display_name"),
+            "frozen_report_name":  emp.get("report_name")  or emp.get("name") or row.get("frozen_report_name"),
+            "frozen_metrics": new_fm,
+            "frozen_score":   emp.get("total_score", row.get("frozen_score")),
+            "frozen_tier":    emp.get("tier_label") or emp.get("performance_tier") or row.get("frozen_tier"),
+            "frozen_rank":    emp.get("tier_rank") or emp.get("peer_rank") or row.get("frozen_rank"),
+            "recorded_at":    now if changed else row.get("recorded_at"),
+        })
+
+    return {
+        "row_count": len(rows),
+        "rows_changed": len(diffs),
+        "diffs": diffs,
+        "new_rows": new_rows,
+    }
+
+
+@admin_router.post("/sync-snapshot-rows")
+async def sync_snapshot_rows(
+    apply: bool = False,
+    snapshot_id: Optional[str] = None,
+    include_completed: bool = False,
+):
+    """
+    Resync `snapshot.rows[].frozen_metrics` from `snapshot.employees[]`
+    for non-finalized snapshots. Default scope is `in_progress` ONLY —
+    pass `include_completed=true` to also touch `completed`/`reviewed`
+    snapshots (intentionally opt-in because the direction of truth on
+    historical snapshots is ambiguous: a corrupted employees[] blob can
+    legitimately disagree with a correct rows[] ledger).
+
+    Finalized snapshots are always skipped.
+
+    Returns a per-snapshot diff so the caller can sanity-check what
+    would change. Default is dry-run; pass `?apply=true` to persist.
+    """
+    db = get_db()
+
+    if snapshot_id:
+        query: Dict[str, Any] = {"id": snapshot_id}
+    elif include_completed:
+        query = {"status": {"$nin": ["finalized"]}}
+    else:
+        query = {"status": "in_progress"}
+
+    snapshots = await db.snapshot_workflow.find(query).to_list(200)
+    if snapshot_id and not snapshots:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+
+    results: List[Dict[str, Any]] = []
+    total_rows_changed = 0
+    snapshots_touched = 0
+
+    for snap in snapshots:
+        if snap.get("status") == "finalized":
+            continue
+        summary = await _sync_snapshot_rows_from_employees(db, snap)
+        snap_result = {
+            "snapshot_id": snap.get("id"),
+            "name": snap.get("name"),
+            "quarter": snap.get("quarter"),
+            "year": snap.get("year"),
+            "status": snap.get("status"),
+            "row_count": summary["row_count"],
+            "rows_changed": summary["rows_changed"],
+            "diffs": summary["diffs"],
+        }
+        results.append(snap_result)
+
+        if summary["rows_changed"] > 0:
+            snapshots_touched += 1
+            total_rows_changed += summary["rows_changed"]
+            if apply:
+                await db.snapshot_workflow.update_one(
+                    {"_id": snap["_id"]},
+                    {"$set": {
+                        "rows": summary["new_rows"],
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                    }},
+                )
+                logger.info(
+                    f"sync-snapshot-rows: synced {summary['rows_changed']} rows on {snap.get('name')}"
+                )
+
+    return {
+        "success": True,
+        "dry_run": not apply,
+        "snapshots_scanned": len(results),
+        "snapshots_touched": snapshots_touched,
+        "total_rows_changed": total_rows_changed,
+        "results": results,
     }
