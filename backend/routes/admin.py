@@ -2482,3 +2482,74 @@ async def sync_snapshot_rows(
         "total_rows_changed": total_rows_changed,
         "results": results,
     }
+
+
+
+# ---------------------------------------------------------------------------
+# Data Reconciliation — Manual override queue for canonical-vs-snapshot drift
+# ---------------------------------------------------------------------------
+# Surfaces every conflict that `/scoring-trust` flags as a card the
+# operator must individually adjudicate. ZERO auto-resolution. ZERO
+# batch endpoint. Every resolution writes to an append-only audit log.
+# ---------------------------------------------------------------------------
+
+from fastapi import Depends  # noqa: E402 — appended after admin_router exists
+from routes.auth import require_admin  # noqa: E402
+
+
+class ReconcilePayload(BaseModel):
+    """Single-card resolution payload. The frontend must POST one of
+    these per card — there is no bulk endpoint."""
+    conflict_id: str = Field(..., min_length=1)
+    action: str = Field(
+        ...,
+        description="keep_stored | accept_snapshot | manual_override | defer | revoke_alias",
+    )
+    value_override: Optional[float] = Field(
+        default=None,
+        description="Required when action == 'manual_override'. Operator-typed value.",
+    )
+    reason: Optional[str] = Field(
+        default=None,
+        description="Optional free-text note saved to the audit log.",
+    )
+
+
+@admin_router.get("/reconciliation/queue")
+async def reconciliation_queue():
+    """Return the active + deferred reconciliation queue, sorted so
+    the worst drift sits at the top."""
+    from services.reconciliation_service import ReconciliationService
+    svc = ReconciliationService(get_db())
+    return await svc.queue()
+
+
+@admin_router.post("/reconciliation/resolve")
+async def reconciliation_resolve(
+    payload: ReconcilePayload,
+    user=Depends(require_admin),
+):
+    """Apply one resolution. Logs the before/after to the audit
+    collection. Never auto-resolves anything else, never batches."""
+    from services.reconciliation_service import ReconciliationService
+    svc = ReconciliationService(get_db())
+    try:
+        return await svc.resolve(
+            conflict_id=payload.conflict_id,
+            action=payload.action,
+            actor=getattr(user, "email", None) or "unknown",
+            value_override=payload.value_override,
+            reason=payload.reason,
+        )
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@admin_router.get("/reconciliation/audit")
+async def reconciliation_audit(limit: int = 100):
+    """Tail of the append-only resolution log."""
+    from services.reconciliation_service import ReconciliationService
+    svc = ReconciliationService(get_db())
+    return {"entries": await svc.audit_log(limit=limit)}

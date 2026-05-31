@@ -37,6 +37,7 @@ import DataUploadTutorial from "./pages/DataUploadTutorial";
 import SnapshotWorkflow from "./pages/SnapshotWorkflow";
 import SnapshotDetail from "./pages/SnapshotDetail";
 import QuarterlySummary from "./pages/QuarterlySummary";
+import DataReconciliation from "./pages/DataReconciliation";
 import OnboardingGuide from "./components/OnboardingGuide";
 import ProtectedAdminRoute from "./components/ProtectedAdminRoute";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -73,6 +74,7 @@ function App() {
                           <Route path="/analytics" element={<Analytics />} />
                           <Route path="/settings" element={<ProtectedAdminRoute><QuarterSettings /></ProtectedAdminRoute>} />
                           <Route path="/data-integrity" element={<ProtectedAdminRoute><DataIntegrity /></ProtectedAdminRoute>} />
+                          <Route path="/data-reconciliation" element={<ProtectedAdminRoute><DataReconciliation /></ProtectedAdminRoute>} />
                           <Route path="/scoring-audit" element={<ProtectedAdminRoute><ScoringAudit /></ProtectedAdminRoute>} />
                           <Route path="/cv-adjustment" element={<ProtectedAdminRoute><CVAdjustment /></ProtectedAdminRoute>} />
                           <Route path="/scoring-guide" element={<ScoringGuide />} />

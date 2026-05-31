@@ -18,13 +18,23 @@ managers admin access.
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Optional
 
 import httpx
+from dotenv import load_dotenv
 from fastapi import APIRouter, Cookie, HTTPException, Request, Response, status
 from pydantic import BaseModel
 
 from database import get_database
+
+# Load /app/backend/.env BEFORE we read ALLOWED_ADMIN_EMAILS — supervisor
+# doesn't export the dotenv values into the uvicorn process, so without
+# this the whitelist is silently empty and the admin middleware returns
+# 403 on every protected endpoint after a hot-reload. server.py also calls
+# load_dotenv, but this module is imported earlier, so we have to do it
+# ourselves to win the race.
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 
 auth_router = APIRouter(prefix="/auth", tags=["Auth"])

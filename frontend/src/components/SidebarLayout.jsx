@@ -14,6 +14,7 @@ import {
   ChevronRight,
   ShieldCheck,
   ClipboardCheck,
+  GitMerge,
   Menu,
   X,
   Sun,
@@ -107,7 +108,8 @@ const navGroups = [
     items: [
       { path: "/scoring-audit", label: "Scoring Audit", icon: ClipboardCheck },
       { path: "/cv-adjustment", label: "CV NPS Adjustment", icon: Filter },
-      { path: "/data-integrity", label: "Data Integrity", icon: ShieldCheck }
+      { path: "/data-integrity", label: "Data Integrity", icon: ShieldCheck },
+      { path: "/data-reconciliation", label: "Data Reconciliation", icon: GitMerge }
     ]
   }
 ];

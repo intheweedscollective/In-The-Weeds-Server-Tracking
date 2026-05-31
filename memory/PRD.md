@@ -11,6 +11,56 @@ Build a comprehensive performance review application for restaurant employees.
 - **Auth**: Emergent-managed Google Auth (whitelist via `ALLOWED_ADMIN_EMAILS`)
 
 ## Current State (2026-05-28)
+### P0: Data Reconciliation Portal (manual override interface) — SHIPPED 2026-05-31
+
+User requested explicit, per-card adjudication of every conflict surfaced by
+the scoring trust badge. Hard requirement: ZERO auto-resolution, ZERO batch
+endpoints, every resolution logs to an append-only audit. Built end-to-end.
+
+**Backend** (`services/reconciliation_service.py` + 3 endpoints under `/v2/admin/reconciliation/`):
+   - `GET  /queue`            — returns `{active[], deferred[], counts}` sorted by drift severity desc.
+                                Card kinds: `metric_drift` (PPA/guests_per_lsc/lbw_per_guest
+                                vs raw inputs) and `alias_collision` (canonical aliases that
+                                shadow another active employee's primary name). Each card
+                                carries `conflict_id` (deterministic), `stored_value`,
+                                `snapshot_value`, `computed_expected`, `raw_inputs`, and
+                                `source` (snapshot id/name/quarter/year + effective_date).
+   - `POST /resolve`          — single-card payload `{conflict_id, action, value_override?, reason?}`.
+                                Actions: `keep_stored` · `accept_snapshot` · `manual_override` ·
+                                `defer` · `revoke_alias`. No batch path. Re-derives the queue
+                                on every call so client-side state can't drive a write.
+   - `GET  /audit`            — append-only log of every resolution
+                                (actor, employee, field, before, after, action, timestamp, reason).
+   - New collections: `reconciliation_deferred`, `reconciliation_audit`.
+   - Resolution writes touch both `employees.current_metrics.<field>` and `employees_v2.<field>`
+     so the dashboard hydration sees the corrected value on the next read.
+
+**Frontend** (`pages/DataReconciliation.jsx`):
+   - Route: `/data-reconciliation` (admin-protected).
+   - Sidebar nav: under "Admin" group, icon `GitMerge`.
+   - Each card displays: employee · field badge · severity badge (rose/amber by drift %) ·
+     Stored (canonical) · Expected (snapshot) · Source (snapshot name + raw inputs).
+   - 4 action buttons per card (or 3 + Revoke Alias for alias cards). Every button opens
+     a confirmation dialog with explicit before/after preview. Manual Override requires a
+     numeric input. Optional free-text "note" field gets persisted to the audit log.
+   - Deferred section renders below active with a "deferred" pill + the original defer reason.
+   - Bottom-of-page Audit Log table (last 50 resolutions) with actor, action, before→after, note.
+   - Toast confirmation on success/failure.
+
+**Auth bug fixed in passing**: `routes/auth.py` was reading `ALLOWED_ADMIN_EMAILS` at
+import time, but supervisor doesn't export the dotenv vars and `auth.py` is imported
+BEFORE `server.py` calls `load_dotenv`, so after every hot-reload the whitelist was
+silently empty and `require_admin` returned 403 on every protected endpoint. Added a
+defensive `load_dotenv(Path(__file__).resolve().parent.parent / ".env")` at the top
+of `auth.py`. This wasn't part of the user's brief — surfaced while testing.
+
+**Tests**: `/app/backend/tests/test_data_reconciliation_portal.py` (8 cases, all passing):
+queue admin-gating, priority cards presence + severity sort, defer-persistence,
+keep_stored audit shape, manual_override 400 without value, manual_override
+end-to-end (canonical write + audit before/after), unknown conflict_id 404,
+post-test cleanup.
+
+
 ### P1: Self-curating typo dictionary + passive metric integrity — SHIPPED 2026-05-30
 
 Two follow-ups shipped after the Kitti scoring bug closeout.
