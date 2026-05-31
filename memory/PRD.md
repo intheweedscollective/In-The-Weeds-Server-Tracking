@@ -11,6 +11,37 @@ Build a comprehensive performance review application for restaurant employees.
 - **Auth**: Emergent-managed Google Auth (whitelist via `ALLOWED_ADMIN_EMAILS`)
 
 ## Current State (2026-05-28)
+### P0: Reconciliation resolved-records — tightened to spec — SHIPPED 2026-05-31 (round 2)
+
+Follow-up on the previous resolution-clears fix. User requested:
+
+- Re-surface threshold dropped from 2% to **≥1%** so resolved cards stay
+  suppressed inside the noise band. Introduced
+  `RESOLVED_REFRESH_THRESHOLD = 0.01` separate from the 2% flagging
+  tolerance, so the FLAG threshold and the RE-SURFACE threshold can be
+  tuned independently.
+- `reconciliation_resolved` document schema aligned to the user's named
+  contract: `{conflict_id, resolved_at, resolution_type, resolved_value,
+  resolved_by}`. The richer internal fields (`employee_id`, `field`,
+  `kind`, `reason`, `post_expected`) are kept alongside for UI rendering
+  and the queue filter's tolerance math.
+- Records persist in MongoDB — survive backend restarts and hot reloads.
+  Verified by re-instantiating the service in a fresh Python process and
+  re-reading the queue: Kahiaulani remains hidden across multiple cold
+  starts.
+
+**Verification** (all four invariants checked end-to-end on Q2P5W4):
+  1. Resolve Kahiaulani via manual_override → card disappears from active.
+  2. New `ReconciliationService` instance reads queue → Kahi still hidden.
+  3. Second hard refresh (3rd new instance) → still hidden.
+  4. Mutate `current_metrics.ppa` by +5% → card re-surfaces as fresh drift,
+     stale resolved row deleted automatically.
+
+Screenshot confirms post-hard-reload state: 2 active · 0 deferred · 1
+resolved, Kahiaulani in the "Resolved (recently cleared)" table with
+Un-resolve action.
+
+
 ### P0: Reconciliation Portal — cards clear on resolve — SHIPPED 2026-05-31
 
 User reported: resolving a card (e.g. Kahiaulani manual override) left it

@@ -53,8 +53,15 @@ def alias_conflict_id(primary_id: str, duplicate_id: str, alias: str) -> str:
 # ---------------------------------------------------------------------------
 # Tolerances — must match `/scoring-trust` so the two views never disagree.
 # ---------------------------------------------------------------------------
-METRIC_TOLERANCE = 0.02   # 2 %
+METRIC_TOLERANCE = 0.02   # 2 % — drift threshold for FLAGGING a conflict
 METRIC_MIN_ABS   = 0.05   # 5 ¢
+
+# Once an operator has explicitly resolved a card, we suppress it on
+# subsequent refreshes UNTIL the underlying values drift by ≥1% from
+# the resolved snapshot. This is intentionally tighter than the 2%
+# flagging threshold so a resolved card never re-surfaces inside the
+# noise band — only on genuinely fresh drift.
+RESOLVED_REFRESH_THRESHOLD = 0.01  # 1 %
 
 
 class ReconciliationService:
@@ -418,15 +425,22 @@ class ReconciliationService:
             {"conflict_id": card["conflict_id"]},
             {"$set": {
                 "conflict_id": card["conflict_id"],
+                # Caller-facing schema fields — these are what the user
+                # specified for the resolved record contract:
+                "resolved_at": datetime.now(timezone.utc).isoformat(),
+                "resolution_type": action,
+                "resolved_value": post_stored,
+                "resolved_by": actor,
+                # Internal bookkeeping the queue() filter and the
+                # "recently cleared" UI table use:
                 "employee_id": card.get("employee_id"),
                 "employee_name": card.get("employee_name"),
                 "field": card.get("field"),
                 "kind": card.get("kind"),
-                "action": action,
-                "actor": actor,
+                "action": action,           # alias of resolution_type
+                "actor": actor,             # alias of resolved_by
                 "reason": reason or "",
-                "resolved_at": datetime.now(timezone.utc).isoformat(),
-                "post_stored": post_stored,
+                "post_stored": post_stored,    # alias of resolved_value
                 "post_expected": post_expected,
             }},
             upsert=True,
@@ -438,9 +452,10 @@ class ReconciliationService:
         resolved: Dict[str, Any],
     ) -> bool:
         """A resolution remains in effect as long as both the stored
-        value and the recomputed expected value are within tolerance
-        of the snapshot taken at resolution time. If either drifts by
-        more than `METRIC_TOLERANCE` relative, the card re-surfaces."""
+        value and the recomputed expected value are within
+        `RESOLVED_REFRESH_THRESHOLD` (1%) of the snapshot taken at
+        resolution time. If either drifts ≥1%, the card re-surfaces
+        as fresh drift."""
         if card.get("kind") == "alias_collision":
             # The only way an alias-collision card survives `revoke_alias`
             # is if the alias was re-added later. We compare stored
@@ -460,7 +475,7 @@ class ReconciliationService:
             if diff < METRIC_MIN_ABS:
                 return True
             rel = diff / max(abs(a_f), abs(b_f), 1e-9)
-            return rel <= METRIC_TOLERANCE
+            return rel < RESOLVED_REFRESH_THRESHOLD
 
         return (
             _within(card.get("stored_value"),       resolved.get("post_stored"))
