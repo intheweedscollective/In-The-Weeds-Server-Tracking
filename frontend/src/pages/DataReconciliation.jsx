@@ -59,7 +59,7 @@ const formatTimestamp = (iso) => {
 };
 
 export default function DataReconciliation() {
-  const [queue, setQueue] = useState({ active: [], deferred: [], counts: {} });
+  const [queue, setQueue] = useState({ active: [], deferred: [], resolved: [], counts: {} });
   const [audit, setAudit] = useState([]);
   const [loading, setLoading] = useState(true);
   const [confirmCard, setConfirmCard] = useState(null);
@@ -75,7 +75,7 @@ export default function DataReconciliation() {
         api.get("/v2/admin/reconciliation/queue"),
         api.get("/v2/admin/reconciliation/audit?limit=50"),
       ]);
-      setQueue(q.data || { active: [], deferred: [], counts: {} });
+      setQueue(q.data || { active: [], deferred: [], resolved: [], counts: {} });
       setAudit(a.data?.entries || []);
     } catch (e) {
       toast.error(`Failed to load queue: ${e?.response?.data?.detail || e.message}`);
@@ -131,6 +131,18 @@ export default function DataReconciliation() {
       toast.error(`Resolution failed: ${e?.response?.data?.detail || e.message}`);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const unresolve = async (conflict_id, name) => {
+    try {
+      await api.post(`/v2/admin/reconciliation/unresolve?conflict_id=${encodeURIComponent(conflict_id)}`);
+      toast.success(`Re-opened ${name}`, {
+        description: "Card moved back to the active queue.",
+      });
+      await fetchAll();
+    } catch (e) {
+      toast.error(`Failed to un-resolve: ${e?.response?.data?.detail || e.message}`);
     }
   };
 
@@ -394,6 +406,7 @@ export default function DataReconciliation() {
           <div className="text-xs text-slate-400 rounded border border-slate-700 bg-slate-800/40 px-3 py-2">
             <div><b className="text-rose-300">{queue.counts?.active ?? 0}</b> active</div>
             <div><b className="text-blue-300">{queue.counts?.deferred ?? 0}</b> deferred</div>
+            <div><b className="text-emerald-300">{queue.counts?.resolved ?? 0}</b> resolved</div>
           </div>
           <Button
             variant="outline"
@@ -439,6 +452,62 @@ export default function DataReconciliation() {
             <span className="text-xs text-slate-500">Persisted across sessions until you resolve them</span>
           </div>
           <div className="space-y-3">{queue.deferred.map((c) => renderCard(c, { deferred: true }))}</div>
+        </section>
+      )}
+
+      {/* Resolved (recently cleared) — gives the operator a way to recall a card */}
+      {queue.resolved.length > 0 && (
+        <section>
+          <div className="flex items-center gap-2 mb-3">
+            <Check className="w-5 h-5 text-emerald-400" />
+            <h2 className="text-xl font-serif font-bold text-foreground">Resolved (recently cleared)</h2>
+            <span className="text-xs text-slate-500">
+              Hidden from the active queue. Click "Un-resolve" to bring a card back if you changed your mind.
+            </span>
+          </div>
+          <div className="rounded-md border border-slate-700 overflow-hidden">
+            <table className="w-full text-xs" data-testid="resolved-table">
+              <thead className="bg-slate-800/60 text-slate-400">
+                <tr>
+                  <th className="text-left px-3 py-2">Resolved</th>
+                  <th className="text-left px-3 py-2">Employee</th>
+                  <th className="text-left px-3 py-2">Field</th>
+                  <th className="text-left px-3 py-2">Action</th>
+                  <th className="text-left px-3 py-2">Stored at resolution</th>
+                  <th className="text-left px-3 py-2">Note</th>
+                  <th className="text-right px-3 py-2">Recall</th>
+                </tr>
+              </thead>
+              <tbody>
+                {queue.resolved.map((r) => (
+                  <tr
+                    key={r.conflict_id}
+                    className="border-t border-slate-800 hover:bg-slate-800/30"
+                    data-testid={`resolved-row-${r.conflict_id}`}
+                  >
+                    <td className="px-3 py-2 text-slate-400 whitespace-nowrap">{formatTimestamp(r.resolved_at)}</td>
+                    <td className="px-3 py-2 text-slate-200 font-semibold">{r.employee_name}</td>
+                    <td className="px-3 py-2 text-slate-300 font-mono">{r.field}</td>
+                    <td className="px-3 py-2 text-slate-300">{ACTION_LABEL[r.action] || r.action}</td>
+                    <td className="px-3 py-2 font-mono text-emerald-300">{formatValue(r.post_stored)}</td>
+                    <td className="px-3 py-2 text-slate-400">{r.reason || "—"}</td>
+                    <td className="px-3 py-2 text-right">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-slate-600 text-slate-200 hover:bg-slate-800"
+                        onClick={() => unresolve(r.conflict_id, r.employee_name)}
+                        data-testid={`btn-unresolve-${r.conflict_id}`}
+                      >
+                        <RefreshCw className="w-3 h-3 mr-1" />
+                        Un-resolve
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       )}
 

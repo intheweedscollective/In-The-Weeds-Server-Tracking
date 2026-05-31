@@ -11,6 +11,42 @@ Build a comprehensive performance review application for restaurant employees.
 - **Auth**: Emergent-managed Google Auth (whitelist via `ALLOWED_ADMIN_EMAILS`)
 
 ## Current State (2026-05-28)
+### P0: Reconciliation Portal — cards clear on resolve — SHIPPED 2026-05-31
+
+User reported: resolving a card (e.g. Kahiaulani manual override) left it
+visible because the queue re-derives drift from raw inputs every refresh —
+if the corrupt `net_sales=$20B` isn't also fixed, `expected = $20B / 512`
+still disagrees with the corrected `stored = 47.37`, so the card flagged
+again immediately.
+
+**Fix shipped**:
+
+- New `reconciliation_resolved` collection — every actionable resolution
+  (`keep_stored` · `accept_snapshot` · `manual_override` · `revoke_alias`)
+  stamps `(conflict_id, post_stored, post_expected, action, actor, reason,
+  resolved_at)` after the write completes.
+- `queue()` builder now filters out any conflict whose `conflict_id` is in
+  `reconciliation_resolved` AND whose current `(stored, expected)` tuple
+  matches the resolution snapshot within tolerance (2% relative / 5¢ abs).
+- If the data later drifts past tolerance (e.g. raw inputs change again),
+  the stale resolution stamp is deleted and the card re-surfaces as fresh
+  drift for re-adjudication. This is non-trivial: it means a resolution
+  isn't a permanent "ignore" — it's a "hide while current values still
+  match what I just acknowledged."
+- New `POST /reconciliation/unresolve?conflict_id=…` lets the operator
+  recall a card if they change their mind. Audit log entry remains.
+- Frontend: new "Resolved (recently cleared)" table between deferred and
+  audit-log sections, with per-row **Un-resolve** button. Header counter
+  pill now reads `N active · M deferred · K resolved`.
+
+**Tests**: 10/10 passing (added 2 new cases):
+  - `test_resolve_clears_card_from_active_queue` — resolve → card moves
+    from active to resolved, un-resolve → card returns to active.
+  - `test_resolved_card_resurfaces_if_values_drift_again` — resolve,
+    then mutate the canonical raw input to a different drifty state →
+    the card re-appears in active and the stale resolved row is dropped.
+
+
 ### P0: Data Reconciliation Portal (manual override interface) — SHIPPED 2026-05-31
 
 User requested explicit, per-card adjudication of every conflict surfaced by

@@ -243,6 +243,158 @@ def test_unknown_conflict_id_returns_404():
     assert r.status_code == 404
 
 
+def test_resolve_clears_card_from_active_queue():
+    """After ANY actionable resolution, the card must disappear from
+    active[] and surface in resolved[]. This was the user's pain point —
+    fixing kahi via manual_override left the card visible because the
+    underlying raw input was still corrupt."""
+    # Recreate a fresh drift card on a sandbox employee so we don't
+    # depend on Kahi/Jose/Julian state (they may already be resolved
+    # by earlier tests in this file).
+    async def go():
+        import uuid
+        db = _db()
+        tid = str(uuid.uuid4())
+        await db.employees.insert_one({
+            "id": tid,
+            "name": f"Clear Test {tid[:6]}",
+            "status": "active",
+            "current_metrics": {
+                "guests": 200,
+                "guest_count": 200,
+                "net_sales": 9999,
+                "ppa": 12.34,  # drifts from real 49.99
+            },
+        })
+        try:
+            q1 = requests.get(
+                f"{BASE}/api/v2/admin/reconciliation/queue",
+                headers=ADMIN_HEADERS,
+                timeout=20,
+            ).json()
+            card = next(
+                (c for c in q1["active"] if c.get("employee_id") == tid),
+                None,
+            )
+            assert card is not None, "test employee not in queue"
+            initial_active = q1["counts"]["active"]
+
+            # Resolve via keep_stored — the simplest action.
+            requests.post(
+                f"{BASE}/api/v2/admin/reconciliation/resolve",
+                headers=ADMIN_HEADERS,
+                json={"conflict_id": card["conflict_id"],
+                      "action": "keep_stored", "reason": "test"},
+                timeout=20,
+            ).raise_for_status()
+
+            q2 = requests.get(
+                f"{BASE}/api/v2/admin/reconciliation/queue",
+                headers=ADMIN_HEADERS,
+                timeout=20,
+            ).json()
+            assert q2["counts"]["active"] == initial_active - 1, (
+                f"active count didn't drop: {q1['counts']['active']} -> {q2['counts']['active']}"
+            )
+            assert not any(c["conflict_id"] == card["conflict_id"]
+                           for c in q2["active"]), "card still in active!"
+            assert any(r["conflict_id"] == card["conflict_id"]
+                       for r in q2.get("resolved", [])), "card not in resolved[]"
+
+            # Un-resolve must bring it back.
+            requests.post(
+                f"{BASE}/api/v2/admin/reconciliation/unresolve"
+                f"?conflict_id={card['conflict_id']}",
+                headers=ADMIN_HEADERS,
+                timeout=20,
+            ).raise_for_status()
+            q3 = requests.get(
+                f"{BASE}/api/v2/admin/reconciliation/queue",
+                headers=ADMIN_HEADERS,
+                timeout=20,
+            ).json()
+            assert any(c["conflict_id"] == card["conflict_id"]
+                       for c in q3["active"]), "un-resolve didn't bring it back"
+        finally:
+            await db.employees.delete_one({"id": tid})
+            await db.employees_v2.delete_many({"id": tid})
+            await db.reconciliation_resolved.delete_many({})
+            await db.reconciliation_deferred.delete_many({})
+
+    asyncio.run(go())
+
+
+def test_resolved_card_resurfaces_if_values_drift_again():
+    """If the operator resolves a card and later the underlying data
+    moves materially, the card must re-surface so they can adjudicate
+    the NEW drift."""
+    async def go():
+        import uuid
+        db = _db()
+        tid = str(uuid.uuid4())
+        await db.employees.insert_one({
+            "id": tid,
+            "name": f"Resurface Test {tid[:6]}",
+            "status": "active",
+            "current_metrics": {
+                "guests": 100,
+                "guest_count": 100,
+                "net_sales": 5000,
+                "ppa": 20.00,  # drifts from real 50.00
+            },
+        })
+        try:
+            q1 = requests.get(
+                f"{BASE}/api/v2/admin/reconciliation/queue",
+                headers=ADMIN_HEADERS,
+                timeout=20,
+            ).json()
+            card = next(
+                (c for c in q1["active"] if c.get("employee_id") == tid),
+                None,
+            )
+            assert card is not None
+
+            requests.post(
+                f"{BASE}/api/v2/admin/reconciliation/resolve",
+                headers=ADMIN_HEADERS,
+                json={"conflict_id": card["conflict_id"],
+                      "action": "keep_stored"},
+                timeout=20,
+            ).raise_for_status()
+
+            q2 = requests.get(
+                f"{BASE}/api/v2/admin/reconciliation/queue",
+                headers=ADMIN_HEADERS,
+                timeout=20,
+            ).json()
+            assert not any(c["conflict_id"] == card["conflict_id"]
+                           for c in q2["active"]), "card not cleared"
+
+            # Materially change net_sales — fresh drift should re-surface.
+            await db.employees.update_one(
+                {"id": tid},
+                {"$set": {"current_metrics.net_sales": 99999}},
+            )
+
+            q3 = requests.get(
+                f"{BASE}/api/v2/admin/reconciliation/queue",
+                headers=ADMIN_HEADERS,
+                timeout=20,
+            ).json()
+            assert any(c["conflict_id"] == card["conflict_id"]
+                       for c in q3["active"]), (
+                "stale resolution didn't expire on fresh drift"
+            )
+        finally:
+            await db.employees.delete_one({"id": tid})
+            await db.employees_v2.delete_many({"id": tid})
+            await db.reconciliation_resolved.delete_many({})
+            await db.reconciliation_deferred.delete_many({})
+
+    asyncio.run(go())
+
+
 # ---------------------------------------------------------------------------
 # Cleanup — leave the deferred Julian card un-deferred so the next run
 # starts from a known state.

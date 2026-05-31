@@ -209,7 +209,9 @@ class ReconciliationService:
 
     async def queue(self) -> Dict[str, Any]:
         """Return the active + deferred queue, sorted so the most
-        severe drift sits at the top."""
+        severe drift sits at the top. Resolved conflicts are filtered
+        out unless the underlying values have moved beyond tolerance
+        since the resolution (i.e. fresh drift)."""
         metric_c = await self._build_metric_conflicts()
         alias_c  = await self._build_alias_conflicts()
         all_c    = metric_c + alias_c
@@ -219,13 +221,38 @@ class ReconciliationService:
                             {}, {"_id": 0, "conflict_id": 1}
                         )}
 
+        # Resolved registry — once the operator clicks any actionable
+        # resolution (keep_stored / accept_snapshot / manual_override /
+        # revoke_alias) we stamp the resolved tuple here so the card
+        # stays hidden. If the data moves materially after that, the
+        # card re-surfaces and the stale resolved row is dropped.
+        resolved_by_id: Dict[str, Dict[str, Any]] = {}
+        async for r in self.db.reconciliation_resolved.find({}, {"_id": 0}):
+            resolved_by_id[r["conflict_id"]] = r
+
         active:   List[Dict[str, Any]] = []
         deferred: List[Dict[str, Any]] = []
+        stale_resolved: List[str] = []  # conflict_ids whose resolution is no longer valid
+
         for c in all_c:
-            if c["conflict_id"] in deferred_ids:
+            cid = c["conflict_id"]
+            if cid in deferred_ids:
                 deferred.append(c)
-            else:
-                active.append(c)
+                continue
+            resolved = resolved_by_id.get(cid)
+            if resolved is not None:
+                if self._resolved_still_applies(c, resolved):
+                    # Cleared. Hide it.
+                    continue
+                # Values moved past tolerance since the operator
+                # acknowledged this — re-surface as new drift.
+                stale_resolved.append(cid)
+            active.append(c)
+
+        if stale_resolved:
+            await self.db.reconciliation_resolved.delete_many(
+                {"conflict_id": {"$in": stale_resolved}}
+            )
 
         # Sort severity descending so the operator's eye goes to the
         # worst offenders first.
@@ -243,15 +270,35 @@ class ReconciliationService:
                 d["deferred_at"] = rec.get("snoozed_at")
                 d["defer_reason"] = rec.get("reason")
 
+        # Build the "resolved (cleared)" section so the UI can show
+        # what's been recently dismissed and let the operator un-resolve
+        # if they changed their mind. Cap at the 50 most recent.
+        resolved_recent: List[Dict[str, Any]] = []
+        async for r in self.db.reconciliation_resolved.find(
+            {}, {"_id": 0}
+        ).sort("resolved_at", -1).limit(50):
+            resolved_recent.append(r)
+
         return {
             "active": active,
             "deferred": deferred,
+            "resolved": resolved_recent,
             "counts": {
                 "active": len(active),
                 "deferred": len(deferred),
+                "resolved": len(resolved_recent),
                 "total": len(active) + len(deferred),
             },
         }
+
+    async def unresolve(self, conflict_id: str) -> Dict[str, Any]:
+        """Operator changed their mind — drop the resolved stamp so the
+        card re-surfaces in the active queue on next refresh. The audit
+        log keeps the original resolution event."""
+        res = await self.db.reconciliation_resolved.delete_one(
+            {"conflict_id": conflict_id}
+        )
+        return {"success": True, "removed": res.deleted_count}
 
     # ------------------------------------------------------------------
     # Resolve a single card
@@ -308,15 +355,117 @@ class ReconciliationService:
 
         # Each remaining action is per-kind.
         if card["kind"] == "metric_drift":
-            return await self._apply_metric_resolution(
+            result = await self._apply_metric_resolution(
                 card, action, value_override, actor, reason
             )
         elif card["kind"] == "alias_collision":
-            return await self._apply_alias_resolution(
+            result = await self._apply_alias_resolution(
                 card, action, actor, reason
             )
+        else:
+            raise ValueError(f"unhandled card kind: {card.get('kind')}")
 
-        raise ValueError(f"unhandled card kind: {card.get('kind')}")
+        # Stamp the resolved registry so the queue filter hides this
+        # card going forward. We re-derive the post-resolution stored
+        # and expected so the "still applies" check has the authoritative
+        # tuple to compare against on the next refresh.
+        await self._stamp_resolved(card, action, actor, reason)
+        return result
+
+    async def _stamp_resolved(
+        self,
+        card: Dict[str, Any],
+        action: str,
+        actor: str,
+        reason: Optional[str],
+    ) -> None:
+        """After an actionable resolution, record the post-resolution
+        (stored, expected) tuple so the queue can hide the card until
+        a NEW drift materialises."""
+        post_stored: Any = None
+        post_expected: Any = None
+
+        if card["kind"] == "metric_drift":
+            emp = await self.db.employees.find_one(
+                {"id": card["employee_id"]},
+                {"_id": 0, "current_metrics": 1},
+            ) or {}
+            cm = emp.get("current_metrics") or {}
+            field = card["field"]
+            post_stored = cm.get(field)
+            # Recompute expected from the current raw inputs.
+            raw_inputs = card.get("raw_inputs") or {}
+            if field == "ppa":
+                num, denom = cm.get("net_sales"), cm.get("guests") or cm.get("guest_count")
+            elif field == "guests_per_lsc":
+                num, denom = cm.get("guests") or cm.get("guest_count"), cm.get("lsc_count")
+            elif field == "lbw_per_guest":
+                num, denom = cm.get("lbw") or cm.get("lbw_total"), cm.get("guests") or cm.get("guest_count")
+            else:
+                num, denom = None, None
+            try:
+                if num is not None and denom:
+                    post_expected = round(float(num) / float(denom), 2)
+            except (TypeError, ZeroDivisionError, ValueError):
+                post_expected = None
+            # If raw_inputs were null at resolution time, also remember that.
+            _ = raw_inputs
+        elif card["kind"] == "alias_collision":
+            post_stored = card.get("stored_value")
+            post_expected = None  # alias drift doesn't have a numeric expected
+
+        await self.db.reconciliation_resolved.update_one(
+            {"conflict_id": card["conflict_id"]},
+            {"$set": {
+                "conflict_id": card["conflict_id"],
+                "employee_id": card.get("employee_id"),
+                "employee_name": card.get("employee_name"),
+                "field": card.get("field"),
+                "kind": card.get("kind"),
+                "action": action,
+                "actor": actor,
+                "reason": reason or "",
+                "resolved_at": datetime.now(timezone.utc).isoformat(),
+                "post_stored": post_stored,
+                "post_expected": post_expected,
+            }},
+            upsert=True,
+        )
+
+    def _resolved_still_applies(
+        self,
+        card: Dict[str, Any],
+        resolved: Dict[str, Any],
+    ) -> bool:
+        """A resolution remains in effect as long as both the stored
+        value and the recomputed expected value are within tolerance
+        of the snapshot taken at resolution time. If either drifts by
+        more than `METRIC_TOLERANCE` relative, the card re-surfaces."""
+        if card.get("kind") == "alias_collision":
+            # The only way an alias-collision card survives `revoke_alias`
+            # is if the alias was re-added later. We compare stored
+            # alias strings; if they match exactly, the resolution holds.
+            return (resolved.get("post_stored") == card.get("stored_value"))
+
+        def _within(a, b):
+            if a is None or b is None:
+                # Either both null (e.g. raw input never populated) — still
+                # the same state. One null + one numeric = state changed.
+                return a is None and b is None
+            try:
+                a_f, b_f = float(a), float(b)
+            except (TypeError, ValueError):
+                return a == b
+            diff = abs(a_f - b_f)
+            if diff < METRIC_MIN_ABS:
+                return True
+            rel = diff / max(abs(a_f), abs(b_f), 1e-9)
+            return rel <= METRIC_TOLERANCE
+
+        return (
+            _within(card.get("stored_value"),       resolved.get("post_stored"))
+            and _within(card.get("computed_expected"), resolved.get("post_expected"))
+        )
 
     async def _apply_metric_resolution(
         self,

@@ -2553,3 +2553,16 @@ async def reconciliation_audit(limit: int = 100):
     from services.reconciliation_service import ReconciliationService
     svc = ReconciliationService(get_db())
     return {"entries": await svc.audit_log(limit=limit)}
+
+
+@admin_router.post("/reconciliation/unresolve")
+async def reconciliation_unresolve(
+    conflict_id: str,
+    user=Depends(require_admin),
+):
+    """Drop the resolved stamp so the card re-surfaces in the active
+    queue. Use this when an operator changed their mind about a
+    previous resolution. The audit log entry remains."""
+    from services.reconciliation_service import ReconciliationService
+    svc = ReconciliationService(get_db())
+    return await svc.unresolve(conflict_id)
