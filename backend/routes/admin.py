@@ -2561,11 +2561,18 @@ class ReconcilePayload(BaseModel):
     conflict_id: str = Field(..., min_length=1)
     action: str = Field(
         ...,
-        description="keep_stored | accept_snapshot | manual_override | defer | revoke_alias",
+        description=(
+            "keep_stored | accept_snapshot | manual_override | defer | "
+            "revoke_alias | merge_into | delete_legacy | promote_canonical"
+        ),
     )
     value_override: Optional[float] = Field(
         default=None,
         description="Required when action == 'manual_override'. Operator-typed value.",
+    )
+    target_canonical_id: Optional[str] = Field(
+        default=None,
+        description="Required when action == 'merge_into'. The canonical employee id that absorbs this v2 record.",
     )
     reason: Optional[str] = Field(
         default=None,
@@ -2597,6 +2604,7 @@ async def reconciliation_resolve(
             action=payload.action,
             actor=getattr(user, "email", None) or "unknown",
             value_override=payload.value_override,
+            target_canonical_id=payload.target_canonical_id,
             reason=payload.reason,
         )
     except LookupError as e:
@@ -2624,3 +2632,242 @@ async def reconciliation_unresolve(
     from services.reconciliation_service import ReconciliationService
     svc = ReconciliationService(get_db())
     return await svc.unresolve(conflict_id)
+
+
+
+# ---------------------------------------------------------------------------
+# Structural cleanup — auto-link + orphan-prune + blocklist-strip
+# ---------------------------------------------------------------------------
+# Three classes of safe structural fixes that don't need per-card
+# adjudication. The Reconciliation portal surfaces genuinely ambiguous
+# cases (typo merges, no-canon staff); this endpoint clears the
+# unambiguous ones in one pass.
+#
+#   1. Auto-link    — For every v2 row whose `name` exactly matches a
+#                     canonical employee's `name` (or any alias), but
+#                     whose v2.id isn't in that canonical's
+#                     `legacy_ids[]`, link it. Zero data change to
+#                     scoring — just bookkeeping.
+#
+#   2. Orphan prune — Snapshot.rows[] / employees[] entries whose
+#                     `employee_id` doesn't exist in `employees` and
+#                     isn't in any canonical's `legacy_ids[]`. These
+#                     point at deleted/merged records and can never
+#                     resolve. Remove them so the integrity check stops
+#                     flagging.
+#
+#   3. Blocklist strip — Names returned by the snapshot integrity check
+#                        as `blocked_but_still_present` are pruned from
+#                        the affected snapshots' rows[] + employees[].
+#
+# Default is dry-run; pass `?apply=true` to persist.
+# ---------------------------------------------------------------------------
+
+
+@admin_router.post("/structural-cleanup")
+async def structural_cleanup(
+    apply: bool = False,
+    auto_link: bool = True,
+    blocklist_strip: bool = True,
+    orphan_prune: bool = False,
+    user=Depends(require_admin),
+):
+    """Run the three safe structural cleanups in one pass. Default
+    dry-run — surfaces what would change without writing.
+
+    Phase toggles:
+      • auto_link       — link v2 rows by exact-name match into the
+                          canonical's legacy_ids[]. Safe; default ON.
+      • blocklist_strip — remove blocklisted names (Tad Hashey, Terry
+                          Kott, etc.) from non-finalized snapshots.
+                          Safe; default ON.
+      • orphan_prune    — DROP snapshot.rows[] entries that don't link
+                          to any canonical employee. Default OFF
+                          because typo v2 records (Kahiauani / Drane)
+                          look like orphans until adjudicated via the
+                          Reconciliation portal. Run this AFTER you've
+                          merged the typos.
+    """
+    db = get_db()
+
+    # ----- 0. Build canonical name index --------------------------------
+    canon_rows = await db.employees.find(
+        {}, {"_id": 0, "id": 1, "name": 1, "display_name": 1,
+             "report_name": 1, "aliases": 1, "legacy_ids": 1, "status": 1},
+    ).to_list(5000)
+    canon_by_id: Dict[str, dict] = {c["id"]: c for c in canon_rows if c.get("id")}
+    name_to_canon: Dict[str, dict] = {}
+    legacy_to_canon: Dict[str, dict] = {}
+    for c in canon_rows:
+        for nm in (c.get("name"), c.get("display_name"),
+                   c.get("report_name"), *(c.get("aliases") or [])):
+            if nm:
+                name_to_canon.setdefault(nm.strip().lower(), c)
+        for lid in (c.get("legacy_ids") or []):
+            legacy_to_canon[lid] = c
+
+    # ----- 1. Auto-link exact-name v2 rows ------------------------------
+    auto_link_plan: List[Dict[str, Any]] = []
+    if auto_link:
+        async for v2 in db.employees_v2.find({}, {"_id": 0, "id": 1, "name": 1,
+                                                  "quarter": 1, "year": 1}):
+            vid = v2.get("id")
+            nm  = (v2.get("name") or "").strip()
+            if not vid or not nm:
+                continue
+            if vid in canon_by_id or vid in legacy_to_canon:
+                continue
+            target = name_to_canon.get(nm.lower())
+            if not target:
+                continue
+            auto_link_plan.append({
+                "v2_id": vid,
+                "v2_name": nm,
+                "quarter": v2.get("quarter"),
+                "year": v2.get("year"),
+                "into_canonical_id": target["id"],
+                "into_canonical_name": target.get("name"),
+            })
+
+        if apply and auto_link_plan:
+            # Group by target id to do one $addToSet per canonical.
+            by_target: Dict[str, List[str]] = {}
+            for entry in auto_link_plan:
+                by_target.setdefault(entry["into_canonical_id"], []).append(entry["v2_id"])
+            for cid, vids in by_target.items():
+                await db.employees.update_one(
+                    {"id": cid},
+                    {"$addToSet": {"legacy_ids": {"$each": vids}}},
+                )
+
+    # ----- 2. Orphan prune — snapshot.rows + employees ------------------
+    # An "orphan" is a row whose employee_id is in neither canonical nor
+    # legacy_to_canon. Update the canonical index to include the v2 rows
+    # we'd auto-link above, since after `apply` they'd no longer be orphan.
+    if apply:
+        for entry in auto_link_plan:
+            legacy_to_canon[entry["v2_id"]] = canon_by_id.get(
+                entry["into_canonical_id"], {}
+            )
+
+    orphan_plan: List[Dict[str, Any]] = []
+    if orphan_prune:
+        async for snap in db.snapshot_workflow.find(
+            {"status": {"$ne": "finalized"}},
+            {"_id": 1, "id": 1, "name": 1, "status": 1, "rows": 1, "employees": 1,
+             "quarter": 1, "year": 1},
+        ):
+            snap_orphans: List[Dict[str, Any]] = []
+            new_rows: List[Dict[str, Any]] = []
+            for r in (snap.get("rows") or []):
+                eid = r.get("employee_id") or ""
+                if eid in canon_by_id or eid in legacy_to_canon:
+                    new_rows.append(r)
+                    continue
+                # Last-ditch: name match.
+                nm = (r.get("frozen_display_name") or "").strip().lower()
+                if nm and nm in name_to_canon:
+                    new_rows.append(r)
+                    continue
+                snap_orphans.append({
+                    "employee_id": eid,
+                    "name": r.get("frozen_display_name"),
+                    "reason": "no canonical match",
+                })
+
+            new_emps: List[Dict[str, Any]] = []
+            for e in (snap.get("employees") or []):
+                eid = e.get("id") or ""
+                if eid in canon_by_id or eid in legacy_to_canon:
+                    new_emps.append(e)
+                    continue
+                nm = (e.get("name") or "").strip().lower()
+                if nm and nm in name_to_canon:
+                    new_emps.append(e)
+                    continue
+                snap_orphans.append({
+                    "employee_id": eid,
+                    "name": e.get("name"),
+                    "reason": "no canonical match (employees[])",
+                })
+
+            if snap_orphans:
+                orphan_plan.append({
+                    "snapshot_id": snap.get("id"),
+                    "name": snap.get("name"),
+                    "status": snap.get("status"),
+                    "orphans": snap_orphans,
+                    "row_count_after":  len(new_rows),
+                    "emp_count_after":  len(new_emps),
+                })
+                if apply:
+                    await db.snapshot_workflow.update_one(
+                        {"_id": snap["_id"]},
+                        {"$set": {
+                            "rows": new_rows,
+                            "employees": new_emps,
+                            "updated_at": datetime.now(timezone.utc).isoformat(),
+                        }},
+                    )
+
+    # ----- 3. Blocklist strip -------------------------------------------
+    blocklist_plan: List[Dict[str, Any]] = []
+    if blocklist_strip:
+        blocklist_doc = await db.system_settings.find_one({"key": "blocklisted_names"})
+        blocked_names: set = set()
+        if blocklist_doc:
+            blocked_names = {(n or "").strip().lower()
+                             for n in (blocklist_doc.get("value") or [])}
+        # Fall back to hard-coded list if blocklist isn't in system_settings.
+        if not blocked_names:
+            blocked_names = {"tad hashey", "terry kott"}
+
+        async for snap in db.snapshot_workflow.find(
+            {"status": {"$ne": "finalized"}},
+            {"_id": 1, "id": 1, "name": 1, "status": 1, "rows": 1, "employees": 1},
+        ):
+            stripped_names: List[str] = []
+            new_rows = []
+            for r in (snap.get("rows") or []):
+                nm = (r.get("frozen_display_name") or "").strip().lower()
+                if nm in blocked_names:
+                    stripped_names.append(r.get("frozen_display_name") or "")
+                    continue
+                new_rows.append(r)
+            new_emps = []
+            for e in (snap.get("employees") or []):
+                nm = (e.get("name") or "").strip().lower()
+                if nm in blocked_names:
+                    stripped_names.append(e.get("name") or "")
+                    continue
+                new_emps.append(e)
+            if stripped_names:
+                blocklist_plan.append({
+                    "snapshot_id": snap.get("id"),
+                    "name": snap.get("name"),
+                    "stripped": list(set(stripped_names)),
+                })
+                if apply:
+                    await db.snapshot_workflow.update_one(
+                        {"_id": snap["_id"]},
+                        {"$set": {
+                            "rows": new_rows,
+                            "employees": new_emps,
+                            "updated_at": datetime.now(timezone.utc).isoformat(),
+                        }},
+                    )
+
+    return {
+        "success": True,
+        "dry_run": not apply,
+        "summary": {
+            "auto_link_count": len(auto_link_plan),
+            "orphan_snapshots": len(orphan_plan),
+            "orphan_total": sum(len(p["orphans"]) for p in orphan_plan),
+            "blocklist_snapshots": len(blocklist_plan),
+            "blocklist_total": sum(len(p["stripped"]) for p in blocklist_plan),
+        },
+        "auto_link": auto_link_plan,
+        "orphan_prune": orphan_plan,
+        "blocklist_strip": blocklist_plan,
+    }

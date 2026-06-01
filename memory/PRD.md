@@ -11,6 +11,76 @@ Build a comprehensive performance review application for restaurant employees.
 - **Auth**: Emergent-managed Google Auth (whitelist via `ALLOWED_ADMIN_EMAILS`)
 
 ## Current State (2026-05-28)
+### P0: Trust badge × Reconciliation portal — hybrid cleanup — SHIPPED 2026-05-31 (round 3)
+
+User question: "Why am I still seeing trust issues on the dashboard after all are resolved?"
+Two distinct problems surfaced:
+
+**Problem A** — `/scoring-trust` re-derived drift independently and ignored
+the operator's adjudications. **Fixed**: `scoring-trust` now reads
+`reconciliation_resolved` + `reconciliation_deferred` and skips any
+metric/alias drift whose conflict_id is in those registries (within the
+1% re-surface threshold). Adds `suppressed_by_reconciliation` count to
+the response so the modal can show "N cleared via Reconciliation".
+
+**Problem B** — Trust badge surfaces THREE other classes of integrity
+issue the Reconciliation portal didn't handle: `legacy_only_employees`,
+`orphaned_snapshot_refs`, `blocklist_violations`. The user picked
+"hybrid": automate the obviously-safe ones, surface the ambiguous ones
+as Reconciliation cards.
+
+**New: `POST /api/v2/admin/structural-cleanup`** (phased, dry-run default):
+   - `auto_link=true`   (default ON) — links every v2 row whose `name`
+     exactly matches a canonical employee into the canonical's
+     `legacy_ids[]`. Zero behavior change, just bookkeeping.
+     **First apply cleared 48 unlinked v2 rows.**
+   - `blocklist_strip=true` (default ON) — removes blocklisted names
+     (Tad Hashey, Terry Kott) from non-finalized snapshots' rows[] and
+     employees[]. **First apply cleared 20 entries across 10 snapshots.**
+   - `orphan_prune=false` (default OFF, intentionally) — would drop
+     snapshot rows whose employee_id is in neither canonical nor any
+     legacy_ids[]. OFF by default because typo v2 records (Kahiauani /
+     Drane) look like orphans until the user merges them via the
+     Reconciliation portal. Operator runs this AFTER adjudicating typos.
+
+**New Reconciliation card kind: `legacy_duplicate`** for the genuinely
+ambiguous v2-vs-canonical cases the auto-link can't decide. Surfaces
+each non-linked v2 row with a Levenshtein-based "suggested canonical"
+plus 4 actions:
+   - **Merge into…** (requires `target_canonical_id`) — links the v2
+     row into the canonical's `legacy_ids[]` AND adds the misspelled
+     name to the canonical's `aliases[]` so future POS uploads under
+     that spelling route automatically.
+   - **Promote to canonical** — for genuinely new staff with no
+     canonical match (e.g. Jeden White, Chase Winston). Creates a new
+     canonical employee from the v2 row.
+   - **Delete legacy** — soft-deletes the v2 row (status=inactive,
+     soft_deleted_at, soft_deleted_by).
+   - **Keep stored / Defer** — same semantics as other kinds.
+
+Frontend portal updated with a target-canonical dropdown in the Merge
+confirm dialog, pre-populated with the suggested match. Distinct orange
+"legacy duplicate" badge on the card.
+
+**First apply results on Q2P5W4 data**:
+- 48 auto-links applied
+- 9 P0 trust issues cleared from the blocklist strip
+- 7 legacy_duplicate cards now in the Reconciliation queue for the
+  operator to merge/promote/delete:
+    Thaddeus Hashey (no suggestion — was on the blocklist)
+    Kahiauani Ramos → suggested Kahiaulani Ramos
+    Kahiaulanl Ramos → suggested Kahiaulani Ramos
+    Drane Peterson → suggested Diane Peterson
+    Jeden White × 2 (no good suggestion — likely new staff)
+    Chase Winston (no good suggestion — likely new staff)
+
+**Tests**: `/app/backend/tests/test_structural_cleanup_and_legacy_cards.py`
+(8 cases, all passing) — admin gating, dry-run plan, default
+orphan_prune=OFF, queue surfacing of v2-only rows, merge requires
+target id, merge wires legacy_ids+aliases, delete_legacy soft-deletes,
+promote_canonical creates employee row.
+
+
 ### P0: Reconciliation resolved-records — tightened to spec — SHIPPED 2026-05-31 (round 2)
 
 Follow-up on the previous resolution-clears fix. User requested:

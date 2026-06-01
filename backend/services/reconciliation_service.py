@@ -50,6 +50,14 @@ def alias_conflict_id(primary_id: str, duplicate_id: str, alias: str) -> str:
     return f"alias_{h[:16]}"
 
 
+def legacy_duplicate_conflict_id(v2_id: str) -> str:
+    """Conflict id for a legacy v2 row that's a name-typo of a canonical
+    employee (e.g. 'Kahiauani Ramos' for 'Kahi Ramos'). One card per
+    legacy v2 id so the operator can merge / delete / promote individually."""
+    h = hashlib.sha1(f"legacy:{v2_id}".encode()).hexdigest()
+    return f"legacy_{h[:16]}"
+
+
 # ---------------------------------------------------------------------------
 # Tolerances — must match `/scoring-trust` so the two views never disagree.
 # ---------------------------------------------------------------------------
@@ -214,14 +222,161 @@ class ReconciliationService:
                 })
         return conflicts
 
+    async def _build_legacy_duplicate_conflicts(self) -> List[Dict[str, Any]]:
+        """Surface employees_v2 rows that don't link to any canonical
+        employee via id or legacy_ids[] AND don't share a name match
+        either. These are typos (Kahiauani / Drane / Treyanna), no-canon
+        new staff (Chase Winston, Jeden White), or duplicate quarter
+        rows that need adjudication.
+
+        Exact name matches are NOT flagged here — they're handled by
+        the structural-cleanup endpoint which auto-links the v2 row's
+        id into the canonical's legacy_ids[].
+        """
+        # Build canonical name + alias index.
+        canon_by_id: Dict[str, Dict[str, Any]] = {}
+        name_to_canon: Dict[str, Dict[str, Any]] = {}
+        async for c in self.db.employees.find(
+            {"status": "active"},
+            {"_id": 0, "id": 1, "name": 1, "aliases": 1, "legacy_ids": 1,
+             "display_name": 1, "report_name": 1},
+        ):
+            cid = c.get("id")
+            if cid:
+                canon_by_id[cid] = c
+            for nm in (c.get("name"), c.get("display_name"),
+                       c.get("report_name"), *(c.get("aliases") or [])):
+                if nm:
+                    name_to_canon.setdefault(nm.strip().lower(), c)
+
+        # Index every legacy_ids[] entry → canonical owner.
+        legacy_to_canon: Dict[str, Dict[str, Any]] = {}
+        for c in canon_by_id.values():
+            for lid in (c.get("legacy_ids") or []):
+                legacy_to_canon[lid] = c
+
+        conflicts: List[Dict[str, Any]] = []
+        # We only inspect ACTIVE v2 rows for the CURRENT quarter so we
+        # don't drown the operator in old per-quarter records. The
+        # structural-cleanup endpoint handles historical sweeps.
+        active_snap = await self.db.snapshot_workflow.find_one(
+            {"is_current": True},
+            {"_id": 0, "id": 1, "name": 1, "quarter": 1, "year": 1},
+        )
+        if not active_snap:
+            return []
+
+        async for v2 in self.db.employees_v2.find(
+            {"quarter": active_snap.get("quarter"),
+             "year": active_snap.get("year")},
+            {"_id": 0},
+        ):
+            vid = v2.get("id")
+            v_name = (v2.get("name") or "").strip()
+            if not vid or not v_name:
+                continue
+            # Already linked? Skip.
+            if vid in canon_by_id or vid in legacy_to_canon:
+                continue
+            # Exact-name match? Handled by structural-cleanup auto-link
+            # (we don't burden the operator with these).
+            if v_name.lower() in name_to_canon:
+                continue
+
+            # Find the best canonical name candidate by Levenshtein
+            # similarity so the card can suggest a merge target.
+            suggested = self._suggest_canonical(v_name, canon_by_id)
+
+            conflicts.append({
+                "conflict_id": legacy_duplicate_conflict_id(vid),
+                "kind": "legacy_duplicate",
+                "severity_pct": 60.0 if suggested else 80.0,
+                "employee_id": vid,            # v2 record's id
+                "employee_name": v_name,
+                "field": "canonical_link",
+                "stored_value": v_name,
+                "snapshot_value": (suggested or {}).get("name"),
+                "computed_expected": None,
+                "raw_inputs": {
+                    "v2_id": vid,
+                    "quarter": v2.get("quarter"),
+                    "year": v2.get("year"),
+                    "guests": v2.get("guests") or v2.get("guest_count"),
+                    "ppa": v2.get("ppa"),
+                    "lsc_count": v2.get("lsc_count"),
+                    "total_score": v2.get("total_score"),
+                },
+                "source": {
+                    "suggested_canonical_id": (suggested or {}).get("id"),
+                    "suggested_canonical_name": (suggested or {}).get("name"),
+                    "reason": (
+                        "V2 record not linked to any canonical employee"
+                        + (
+                            f" (closest: '{suggested.get('name')}')"
+                            if suggested
+                            else " and no name match found"
+                        )
+                    ).strip(),
+                },
+            })
+        return conflicts
+
+    @staticmethod
+    def _suggest_canonical(
+        v_name: str,
+        canon_by_id: Dict[str, Dict[str, Any]],
+    ) -> Optional[Dict[str, Any]]:
+        """Pick the closest canonical employee by simple
+        token-overlap + character-distance heuristic. Returns None if
+        no reasonable candidate exists."""
+        v_low = v_name.lower()
+        v_tokens = set(v_low.split())
+
+        def _dist(a: str, b: str) -> int:
+            # Tiny Levenshtein — O(len_a * len_b) is fine for short names.
+            if a == b:
+                return 0
+            la, lb = len(a), len(b)
+            if la == 0 or lb == 0:
+                return max(la, lb)
+            prev = list(range(lb + 1))
+            for i, ca in enumerate(a, start=1):
+                cur = [i] + [0] * lb
+                for j, cb in enumerate(b, start=1):
+                    cost = 0 if ca == cb else 1
+                    cur[j] = min(cur[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost)
+                prev = cur
+            return prev[lb]
+
+        best: Optional[Dict[str, Any]] = None
+        best_score: float = 0.0
+        for c in canon_by_id.values():
+            cn = (c.get("name") or "").lower()
+            if not cn:
+                continue
+            tokens = set(cn.split())
+            overlap = len(v_tokens & tokens)
+            d = _dist(v_low, cn)
+            # Score: overlap weight + inverse-distance bonus.
+            score = overlap * 10 + (max(0, 20 - d))
+            if score > best_score:
+                best_score = score
+                best = c
+        # Require a non-trivial match to surface a suggestion.
+        if best_score < 10:
+            return None
+        return best
+
+
     async def queue(self) -> Dict[str, Any]:
         """Return the active + deferred queue, sorted so the most
         severe drift sits at the top. Resolved conflicts are filtered
         out unless the underlying values have moved beyond tolerance
         since the resolution (i.e. fresh drift)."""
-        metric_c = await self._build_metric_conflicts()
-        alias_c  = await self._build_alias_conflicts()
-        all_c    = metric_c + alias_c
+        metric_c  = await self._build_metric_conflicts()
+        alias_c   = await self._build_alias_conflicts()
+        legacy_c  = await self._build_legacy_duplicate_conflicts()
+        all_c     = metric_c + alias_c + legacy_c
 
         deferred_ids = {d["conflict_id"]
                         async for d in self.db.reconciliation_deferred.find(
@@ -318,10 +473,12 @@ class ReconciliationService:
         actor: str,
         value_override: Optional[float] = None,
         reason: Optional[str] = None,
+        target_canonical_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Apply one resolution. Never batches. Always logs."""
         if action not in {"keep_stored", "accept_snapshot",
-                          "manual_override", "defer", "revoke_alias"}:
+                          "manual_override", "defer", "revoke_alias",
+                          "merge_into", "delete_legacy", "promote_canonical"}:
             raise ValueError(f"unknown action: {action}")
 
         # Re-derive the conflict so we don't trust client-side state.
@@ -368,6 +525,10 @@ class ReconciliationService:
         elif card["kind"] == "alias_collision":
             result = await self._apply_alias_resolution(
                 card, action, actor, reason
+            )
+        elif card["kind"] == "legacy_duplicate":
+            result = await self._apply_legacy_duplicate_resolution(
+                card, action, target_canonical_id, actor, reason
             )
         else:
             raise ValueError(f"unhandled card kind: {card.get('kind')}")
@@ -549,6 +710,129 @@ class ReconciliationService:
             return {"success": True, "action": action}
 
         raise ValueError(f"action {action} not valid for alias_collision")
+
+    async def _apply_legacy_duplicate_resolution(
+        self,
+        card: Dict[str, Any],
+        action: str,
+        target_canonical_id: Optional[str],
+        actor: str,
+        reason: Optional[str],
+    ) -> Dict[str, Any]:
+        """Handle a `legacy_duplicate` card. Available actions:
+
+          • keep_stored        — dismiss; nothing changes.
+          • merge_into         — link the v2 record into a canonical's
+                                 legacy_ids[] AND optionally store the v2
+                                 name as an alias if it's a typo of the
+                                 canonical name. Requires target_canonical_id.
+          • delete_legacy      — soft-delete the v2 row (status=inactive)
+                                 so it stops surfacing in the queue.
+          • promote_canonical  — for genuinely new staff with no canonical:
+                                 create a new canonical employee from the
+                                 v2 row.
+        """
+        v2_id = card["employee_id"]
+        v2_name = card["stored_value"]
+
+        if action == "keep_stored":
+            await self._audit(card, action, before=v2_name, after=v2_name,
+                              actor=actor, reason=reason)
+            return {"success": True, "action": action}
+
+        if action == "merge_into":
+            if not target_canonical_id:
+                raise ValueError(
+                    "merge_into requires target_canonical_id — pick the "
+                    "canonical employee to absorb this v2 row."
+                )
+            target = await self.db.employees.find_one(
+                {"id": target_canonical_id, "status": "active"},
+                {"_id": 0, "id": 1, "name": 1, "aliases": 1, "legacy_ids": 1},
+            )
+            if not target:
+                raise ValueError(
+                    f"target canonical id {target_canonical_id} not found "
+                    f"or not active"
+                )
+            # Link the v2 row into the canonical's legacy_ids[] AND add
+            # the misspelled name as an alias if it's not already there.
+            target_aliases = target.get("aliases") or []
+            target_legacy  = target.get("legacy_ids") or []
+            addto: Dict[str, Any] = {}
+            if v2_id not in target_legacy:
+                addto["legacy_ids"] = v2_id
+            v_norm = (v2_name or "").strip().lower()
+            t_norm = (target.get("name") or "").strip().lower()
+            if v_norm and v_norm != t_norm and v2_name not in target_aliases:
+                addto["aliases"] = v2_name
+            if addto:
+                await self.db.employees.update_one(
+                    {"id": target_canonical_id},
+                    {"$addToSet": addto},
+                )
+            await self._audit(card, action, before=v2_name,
+                              after=f"merged → {target.get('name')}",
+                              actor=actor, reason=reason)
+            return {"success": True, "action": action,
+                    "merged_into": target.get("name"),
+                    "target_id": target_canonical_id}
+
+        if action == "delete_legacy":
+            await self.db.employees_v2.update_many(
+                {"id": v2_id},
+                {"$set": {"status": "inactive",
+                          "soft_deleted_at": datetime.now(timezone.utc).isoformat(),
+                          "soft_deleted_by": actor}},
+            )
+            await self._audit(card, action, before=v2_name, after=None,
+                              actor=actor, reason=reason)
+            return {"success": True, "action": action}
+
+        if action == "promote_canonical":
+            # Use the v2's id as the canonical id so future v2 records
+            # under the same spelling auto-link. Pull the latest v2 row
+            # to seed the canonical's current_metrics block.
+            v2_row = await self.db.employees_v2.find_one(
+                {"id": v2_id}, {"_id": 0},
+            )
+            if not v2_row:
+                raise LookupError(f"v2 row {v2_id} not found")
+            existing = await self.db.employees.find_one({"id": v2_id})
+            if existing:
+                # Already exists — turn into a no-op merge_into self.
+                await self._audit(card, action, before=v2_name,
+                                  after=v2_name + " (already canonical)",
+                                  actor=actor, reason=reason)
+                return {"success": True, "action": action,
+                        "already_canonical": True}
+            await self.db.employees.insert_one({
+                "id": v2_id,
+                "name": v2_name,
+                "display_name": v2_name,
+                "status": "active",
+                "aliases": [],
+                "legacy_ids": [],
+                "current_metrics": {
+                    k: v for k, v in v2_row.items()
+                    if k in ("guests", "guest_count", "net_sales", "ppa",
+                             "lsc_count", "lbw", "lbw_per_guest",
+                             "guests_per_lsc", "glassware_per_guest",
+                             "glassware_sales", "loyalty_sales",
+                             "total_score")
+                },
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_by": actor,
+                "created_via": "reconciliation_promote_canonical",
+            })
+            await self._audit(card, action, before=v2_name,
+                              after=v2_name + " (promoted to canonical)",
+                              actor=actor, reason=reason)
+            return {"success": True, "action": action,
+                    "canonical_id": v2_id}
+
+        raise ValueError(f"action {action} not valid for legacy_duplicate")
+
 
     async def _write_metric(self, employee_id: str, field: str,
                             value: float) -> None:

@@ -29,14 +29,20 @@ const ACTIONS = {
   MANUAL:  "manual_override",
   DEFER:   "defer",
   REVOKE:  "revoke_alias",
+  MERGE:   "merge_into",
+  DELETE:  "delete_legacy",
+  PROMOTE: "promote_canonical",
 };
 
 const ACTION_LABEL = {
-  keep_stored:      "Keep stored value",
-  accept_snapshot:  "Accept snapshot value",
-  manual_override:  "Manual override",
-  defer:            "Defer",
-  revoke_alias:     "Revoke alias",
+  keep_stored:        "Keep stored value",
+  accept_snapshot:    "Accept snapshot value",
+  manual_override:    "Manual override",
+  defer:              "Defer",
+  revoke_alias:       "Revoke alias",
+  merge_into:         "Merge into canonical",
+  delete_legacy:      "Delete legacy row",
+  promote_canonical:  "Promote to new canonical",
 };
 
 const formatValue = (v) => {
@@ -67,16 +73,27 @@ export default function DataReconciliation() {
   const [overrideValue, setOverrideValue] = useState("");
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [canonicalList, setCanonicalList] = useState([]);
+  const [targetCanonicalId, setTargetCanonicalId] = useState("");
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [q, a] = await Promise.all([
+      const [q, a, c] = await Promise.all([
         api.get("/v2/admin/reconciliation/queue"),
         api.get("/v2/admin/reconciliation/audit?limit=50"),
+        // Active canonical employees for the merge_into dropdown.
+        api.get("/v2/employees?status=active").catch(() => ({ data: [] })),
       ]);
       setQueue(q.data || { active: [], deferred: [], resolved: [], counts: {} });
       setAudit(a.data?.entries || []);
+      const list = Array.isArray(c.data) ? c.data : (c.data?.employees || c.data || []);
+      setCanonicalList(
+        list
+          .filter((e) => e?.status === "active" && e?.id && e?.name)
+          .map((e) => ({ id: e.id, name: e.name }))
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      );
     } catch (e) {
       toast.error(`Failed to load queue: ${e?.response?.data?.detail || e.message}`);
     } finally {
@@ -93,6 +110,12 @@ export default function DataReconciliation() {
     setConfirmAction(action);
     setOverrideValue("");
     setReason("");
+    // Pre-fill merge target with the suggested canonical when applicable.
+    if (action === ACTIONS.MERGE) {
+      setTargetCanonicalId(card?.source?.suggested_canonical_id || "");
+    } else {
+      setTargetCanonicalId("");
+    }
   };
 
   const closeConfirm = () => {
@@ -119,6 +142,14 @@ export default function DataReconciliation() {
           return;
         }
         body.value_override = parseFloat(overrideValue);
+      }
+      if (confirmAction === ACTIONS.MERGE) {
+        if (!targetCanonicalId) {
+          toast.error("Pick a canonical employee to merge into.");
+          setSubmitting(false);
+          return;
+        }
+        body.target_canonical_id = targetCanonicalId;
       }
       const res = await api.post("/v2/admin/reconciliation/resolve", body);
       toast.success(
@@ -148,6 +179,7 @@ export default function DataReconciliation() {
 
   const renderCard = (card, opts = {}) => {
     const isAlias = card.kind === "alias_collision";
+    const isLegacy = card.kind === "legacy_duplicate";
     return (
       <div
         key={card.conflict_id}
@@ -163,20 +195,27 @@ export default function DataReconciliation() {
               <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-700/70 text-slate-300 font-mono">
                 {card.field}
               </span>
-              <span
-                className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${
-                  card.severity_pct >= 50
-                    ? "bg-rose-900/60 text-rose-200 border border-rose-700"
-                    : card.severity_pct >= 10
-                    ? "bg-amber-900/50 text-amber-200 border border-amber-700"
-                    : "bg-slate-700/70 text-slate-300 border border-slate-600"
-                }`}
-              >
-                {card.severity_pct?.toFixed?.(2) ?? card.severity_pct}% drift
-              </span>
+              {!isLegacy && (
+                <span
+                  className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${
+                    card.severity_pct >= 50
+                      ? "bg-rose-900/60 text-rose-200 border border-rose-700"
+                      : card.severity_pct >= 10
+                      ? "bg-amber-900/50 text-amber-200 border border-amber-700"
+                      : "bg-slate-700/70 text-slate-300 border border-slate-600"
+                  }`}
+                >
+                  {card.severity_pct?.toFixed?.(2) ?? card.severity_pct}% drift
+                </span>
+              )}
               {isAlias && (
                 <span className="text-[11px] px-2 py-0.5 rounded-full bg-purple-900/50 text-purple-200 border border-purple-700">
                   alias collision
+                </span>
+              )}
+              {isLegacy && (
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-orange-900/50 text-orange-200 border border-orange-700">
+                  legacy duplicate
                 </span>
               )}
               {opts.deferred && (
@@ -187,17 +226,32 @@ export default function DataReconciliation() {
             </div>
             <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
               <div className="rounded border border-slate-700 bg-slate-800/40 p-2">
-                <div className="text-[11px] text-slate-400 uppercase tracking-wide">Stored (canonical)</div>
+                <div className="text-[11px] text-slate-400 uppercase tracking-wide">
+                  {isLegacy ? "V2 record name" : "Stored (canonical)"}
+                </div>
                 <div className="text-rose-300 font-mono break-all" data-testid={`stored-${card.conflict_id}`}>
                   {formatValue(card.stored_value)}
                 </div>
               </div>
-              {!isAlias && (
+              {!isAlias && !isLegacy && (
                 <div className="rounded border border-slate-700 bg-slate-800/40 p-2">
                   <div className="text-[11px] text-slate-400 uppercase tracking-wide">Expected (from snapshot)</div>
                   <div className="text-emerald-300 font-mono break-all" data-testid={`snapshot-${card.conflict_id}`}>
                     {formatValue(card.snapshot_value)}
                   </div>
+                </div>
+              )}
+              {isLegacy && (
+                <div className="rounded border border-slate-700 bg-slate-800/40 p-2">
+                  <div className="text-[11px] text-slate-400 uppercase tracking-wide">Suggested canonical</div>
+                  <div className="text-emerald-300 font-mono break-all" data-testid={`suggest-${card.conflict_id}`}>
+                    {card.source?.suggested_canonical_name || <span className="text-slate-500">no good match</span>}
+                  </div>
+                  {card.source?.suggested_canonical_name && (
+                    <div className="text-[10.5px] text-slate-500 mt-1">
+                      You can change the target in the confirm dialog.
+                    </div>
+                  )}
                 </div>
               )}
               <div className="rounded border border-slate-700 bg-slate-800/40 p-2">
@@ -207,6 +261,18 @@ export default function DataReconciliation() {
                     <>
                       <div>Owned by: <b>{card.source?.owner_name || "—"}</b></div>
                       <div className="text-slate-500 mt-1">{card.source?.reason}</div>
+                    </>
+                  ) : isLegacy ? (
+                    <>
+                      <div className="text-slate-400">{card.source?.reason}</div>
+                      {card.raw_inputs && (
+                        <div className="text-slate-500 mt-1 font-mono text-[10.5px]">
+                          q: {card.raw_inputs.quarter}/{card.raw_inputs.year}
+                          {' · guests:'} {formatValue(card.raw_inputs.guests)}
+                          {' · ppa:'} {formatValue(card.raw_inputs.ppa)}
+                          {' · lsc:'} {formatValue(card.raw_inputs.lsc_count)}
+                        </div>
+                      )}
                     </>
                   ) : (
                     <>
@@ -243,7 +309,7 @@ export default function DataReconciliation() {
             <Check className="w-3.5 h-3.5 mr-1.5" />
             Keep Stored
           </Button>
-          {!isAlias && (
+          {!isAlias && !isLegacy && (
             <Button
               variant="outline"
               size="sm"
@@ -255,7 +321,7 @@ export default function DataReconciliation() {
               Accept Snapshot
             </Button>
           )}
-          {!isAlias && (
+          {!isAlias && !isLegacy && (
             <Button
               variant="outline"
               size="sm"
@@ -278,6 +344,40 @@ export default function DataReconciliation() {
               <X className="w-3.5 h-3.5 mr-1.5" />
               Revoke Alias
             </Button>
+          )}
+          {isLegacy && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-emerald-700 text-emerald-200 hover:bg-emerald-950/40"
+                onClick={() => openConfirm(card, ACTIONS.MERGE)}
+                data-testid={`btn-merge-${card.conflict_id}`}
+              >
+                <ChevronRight className="w-3.5 h-3.5 mr-1.5" />
+                Merge into…
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-blue-700 text-blue-200 hover:bg-blue-950/40"
+                onClick={() => openConfirm(card, ACTIONS.PROMOTE)}
+                data-testid={`btn-promote-${card.conflict_id}`}
+              >
+                <Pencil className="w-3.5 h-3.5 mr-1.5" />
+                Promote to canonical
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-rose-700 text-rose-200 hover:bg-rose-950/40"
+                onClick={() => openConfirm(card, ACTIONS.DELETE)}
+                data-testid={`btn-delete-${card.conflict_id}`}
+              >
+                <X className="w-3.5 h-3.5 mr-1.5" />
+                Delete legacy
+              </Button>
+            </>
           )}
           {!opts.deferred && (
             <Button
@@ -360,6 +460,35 @@ export default function DataReconciliation() {
               This value is written directly to <code>employees.current_metrics.{confirmCard.field}</code>
               {" "}and mirrored to <code>employees_v2</code>. Existing derived ratios are not auto-recalculated;
               fix related raw inputs in Data Uploads if needed.
+            </span>
+          </label>
+        )}
+
+        {confirmAction === ACTIONS.MERGE && (
+          <label className="block space-y-1" data-testid="merge-target-selector">
+            <span className="text-xs text-slate-400">
+              Pick the canonical employee that will absorb this v2 record
+            </span>
+            <select
+              autoFocus
+              value={targetCanonicalId}
+              onChange={(e) => setTargetCanonicalId(e.target.value)}
+              className="w-full px-3 py-2 rounded border border-slate-600 bg-slate-800 text-slate-100"
+              data-testid="merge-target-select"
+            >
+              <option value="">— Pick canonical —</option>
+              {canonicalList.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <span className="text-[11px] text-slate-500 block">
+              The v2 record's id will be added to{" "}
+              <code className="font-mono">{`{canonical}.legacy_ids[]`}</code>{" "}
+              and the misspelled name (if different) will be added to{" "}
+              <code className="font-mono">aliases[]</code> so future POS uploads
+              under this spelling route to the canonical automatically.
             </span>
           </label>
         )}
