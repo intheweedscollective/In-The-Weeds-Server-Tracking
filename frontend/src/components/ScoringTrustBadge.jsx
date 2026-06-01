@@ -414,6 +414,11 @@ export default function ScoringTrustBadge() {
                 <div className="text-slate-500 mt-1 text-[11px]">
                   tol ±{details.metric_integrity?.tolerance_pct ?? 2}%
                 </div>
+                {(details.metric_integrity?.suppressed_by_reconciliation ?? 0) > 0 && (
+                  <div className="text-emerald-400 mt-1 text-[11px]" data-testid="trust-suppressed-count">
+                    {details.metric_integrity.suppressed_by_reconciliation} cleared via Reconciliation
+                  </div>
+                )}
               </div>
             </div>
 

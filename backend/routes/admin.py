@@ -1516,6 +1516,40 @@ async def scoring_trust_score():
         deploy_gate = "ERROR"
 
     # --- 3. Alias collisions ----------------------------------------------
+    # Build the resolved/deferred registries from the Reconciliation
+    # portal so the trust badge respects every adjudication the operator
+    # has already made. Without this, the badge re-scans raw drift and
+    # silently undoes the user's manual decisions.
+    from services.reconciliation_service import (
+        alias_conflict_id, metric_conflict_id, RESOLVED_REFRESH_THRESHOLD,
+    )
+
+    resolved_records: Dict[str, Dict[str, Any]] = {
+        r["conflict_id"]: r
+        async for r in db.reconciliation_resolved.find({}, {"_id": 0})
+    }
+    deferred_ids: set = {
+        d["conflict_id"]
+        async for d in db.reconciliation_deferred.find(
+            {}, {"_id": 0, "conflict_id": 1}
+        )
+    }
+
+    def _drift_within_resolved(current_val, resolved_val) -> bool:
+        """Resolution stays in force as long as current ≈ resolved
+        (1% tol, same as ReconciliationService)."""
+        if current_val is None or resolved_val is None:
+            return current_val is None and resolved_val is None
+        try:
+            a, b = float(current_val), float(resolved_val)
+        except (TypeError, ValueError):
+            return current_val == resolved_val
+        diff = abs(a - b)
+        if diff < 0.05:
+            return True
+        rel = diff / max(abs(a), abs(b), 1e-9)
+        return rel < RESOLVED_REFRESH_THRESHOLD
+
     collisions = []
     all_emps = await db.employees.find(
         {}, {"_id": 0, "id": 1, "name": 1, "aliases": 1, "status": 1,
@@ -1531,6 +1565,13 @@ async def scoring_trust_score():
             if not other or other.get("id") == e.get("id"):
                 continue
             if (other.get("status") or "").lower() != "active":
+                continue
+            cid = alias_conflict_id(e.get("id"), other.get("id"), a)
+            # Skip if the operator already adjudicated this collision.
+            if cid in deferred_ids:
+                continue
+            res = resolved_records.get(cid)
+            if res and res.get("post_stored") == a:
                 continue
             collisions.append({
                 "primary_id": e.get("id"),
@@ -1549,6 +1590,7 @@ async def scoring_trust_score():
     METRIC_TOLERANCE = 0.02   # 2% relative
     METRIC_MIN_ABS   = 0.05   # ignore sub-5¢ rounding noise
     metric_mismatches: List[Dict[str, Any]] = []
+    suppressed_count = 0
     for e in all_emps:
         if (e.get("status") or "").lower() != "active":
             continue
@@ -1558,6 +1600,7 @@ async def scoring_trust_score():
             continue
 
         def _check(label: str, numerator: float, denom: float, stored):
+            nonlocal suppressed_count
             if denom is None or denom <= 0:
                 return
             if stored is None:
@@ -1570,16 +1613,30 @@ async def scoring_trust_score():
             # 0 stored value triggers the check (relative-to-stored
             # would dodge the corruption).
             rel = diff / max(abs(expected), abs(stored), 1e-9)
-            if rel > METRIC_TOLERANCE:
-                metric_mismatches.append({
-                    "employee_id": e.get("id"),
-                    "name": e.get("name"),
-                    "metric": label,
-                    "stored": stored,
-                    "expected": expected,
-                    "diff": round(diff, 4),
-                    "rel_diff_pct": round(rel * 100, 2),
-                })
+            if rel <= METRIC_TOLERANCE:
+                return
+
+            # Honour reconciliation decisions — the resolved-cards
+            # registry is the single source of truth for "operator
+            # already adjudicated this drift."
+            cid = metric_conflict_id(e.get("id"), label)
+            if cid in deferred_ids:
+                suppressed_count += 1
+                return
+            res = resolved_records.get(cid)
+            if res and _drift_within_resolved(stored, res.get("post_stored")):
+                suppressed_count += 1
+                return
+
+            metric_mismatches.append({
+                "employee_id": e.get("id"),
+                "name": e.get("name"),
+                "metric": label,
+                "stored": stored,
+                "expected": expected,
+                "diff": round(diff, 4),
+                "rel_diff_pct": round(rel * 100, 2),
+            })
 
         net_sales = cm.get("net_sales")
         ppa = cm.get("ppa")
@@ -1702,6 +1759,7 @@ async def scoring_trust_score():
                 "count": len(metric_mismatches),
                 "tolerance_pct": round(METRIC_TOLERANCE * 100, 2),
                 "mismatches": metric_mismatches[:20],
+                "suppressed_by_reconciliation": suppressed_count,
             },
         },
         "remediation": {
