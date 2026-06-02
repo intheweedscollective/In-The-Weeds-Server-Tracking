@@ -11,6 +11,68 @@ Build a comprehensive performance review application for restaurant employees.
 - **Auth**: Emergent-managed Google Auth (whitelist via `ALLOWED_ADMIN_EMAILS`)
 
 ## Current State (2026-05-28)
+### P0: Trust badge respects resolutions + QR ghost dismiss — SHIPPED 2026-06-02
+
+User reported "trust action still appearing after resolution" and "QR sync
+on home page also staying after resolution," both on production.
+
+**Trust badge — root causes & fixes**:
+
+1. **Orphan-check ignored legacy_ids[]**. `EmployeeValidator.check_orphaned_snapshot_refs`,
+   `check_legacy_only_employees`, and `check_snapshot_only_employees` were
+   only matching against canonical `id`. After my earlier `structural-cleanup`
+   linked 48 v2 ids into canonical `legacy_ids[]`, those rows still flagged
+   as orphan because the checks never inspected `legacy_ids`. Fixed: all
+   three checks now build a unified `resolvable_ids` set spanning both `id`
+   and `legacy_ids[]`. **Cleared 13 P0 issues immediately on apply (31 → 18).**
+
+2. **Soft-deleted v2 rows still surfaced**. `check_legacy_only_employees`
+   now skips rows with `status == "inactive"` (set by Reconciliation's
+   `delete_legacy` action).
+
+3. **Trust modal showed cryptic rollup**. The integrity tile previously
+   showed only `P0 18 · P1 0 · P2 18` with no hint of which category was
+   contributing. Now `/scoring-trust` returns `details.integrity.breakdown`
+   with per-category counts and the modal renders them with a direct
+   **→ Resolve in Data Reconciliation** link.
+
+4. **"Auto-Fix All" button violated the no-auto-fix contract**. Removed
+   entirely from the modal footer. Replaced with **Open Data Reconciliation**
+   as the primary action. Self-healing toggle's default flipped from ON
+   to OFF, copy rewritten to clarify metric drift and legacy-duplicate
+   cards always require Reconciliation adjudication.
+
+**QR Tracking pill — root cause & fix**:
+
+The dashboard header QR badge surfaced 10 ghost printed_ids with 42
+orphan scans. Healing required mapping each ghost to a current employee
+via `/qr/ghost-heal`, but historical ghosts whose owner is no longer
+employed (pre-March wipe, deleted accounts) had no recovery path —
+making the badge permanently stuck.
+
+   - New `POST /qr/admin/dismiss-ghost-ids` — operator marks one or
+     more printed_ids as unrecoverable. Writes to `qr_ghost_dismissed`
+     so dismissals persist across restarts. Each row carries
+     `dismissed_at`, `dismissed_by`, `reason` for audit.
+   - New `POST /qr/admin/undismiss-ghost-id` — reverse the decision
+     if it was a mistake.
+   - New `GET  /qr/admin/dismissed-ghost-ids` — list for audit/recall.
+   - `list_ghost_ids()` and the dashboard `/qr/admin/health` ghost
+     count both filter out dismissed printed_ids.
+   - Frontend `QRGhostHeal.jsx` gets a **Dismiss** column with a
+     per-row button and a reason prompt. After dismiss, the toast
+     reads "ghost ID dismissed · N historical scans archived without
+     re-attribution" and the table reloads.
+
+**Tests**: `/app/backend/tests/test_trust_breakdown_and_ghost_dismiss.py`
+(4 cases, all passing): trust integrity breakdown exposed, legacy_ids
+clears orphan flag, dismiss drops from health count + undismiss restores,
+dismiss validates `printed_ids` non-empty.
+
+**Production note**: this is preview-only. User needs to redeploy
+production (https://intheweedscollective.com) to see both fixes live.
+
+
 ### P0: Trust badge × Reconciliation portal — hybrid cleanup — SHIPPED 2026-05-31 (round 3)
 
 User question: "Why am I still seeing trust issues on the dashboard after all are resolved?"

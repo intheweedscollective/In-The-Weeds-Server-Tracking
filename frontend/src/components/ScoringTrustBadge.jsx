@@ -36,9 +36,11 @@ export default function ScoringTrustBadge() {
   const [normalizing, setNormalizing] = useState(false);
   const [mergingId, setMergingId] = useState(null);
   const [autoHealEnabled, setAutoHealEnabled] = useState(() => {
-    if (typeof window === "undefined") return true;
+    // OFF by default — operator must opt in. Aligns with the
+    // "no auto-fix" requirement from the Reconciliation portal brief.
+    if (typeof window === "undefined") return false;
     const v = localStorage.getItem(AUTO_HEAL_PREF_KEY);
-    return v === null ? true : v === "true";
+    return v === "true";
   });
   const autoHealRanRef = useRef(false);
 
@@ -393,6 +395,23 @@ export default function ScoringTrustBadge() {
                 <div className="text-slate-500 mt-1">
                   Gate: {details.integrity?.deploy_gate}
                 </div>
+                {details.integrity?.breakdown && Object.keys(details.integrity.breakdown).length > 0 && (
+                  <div className="mt-2 space-y-0.5 text-[10.5px] text-slate-400 font-mono" data-testid="integrity-breakdown">
+                    {Object.entries(details.integrity.breakdown).map(([k, v]) => (
+                      <div key={k}>
+                        <span className="text-slate-500">{k.replace(/_/g, ' ')}:</span>{" "}
+                        <span className="text-amber-300">{v}</span>
+                      </div>
+                    ))}
+                    <a
+                      href="/data-reconciliation"
+                      className="inline-block mt-1 text-emerald-400 hover:underline"
+                      data-testid="integrity-open-reconciliation"
+                    >
+                      → Resolve in Data Reconciliation
+                    </a>
+                  </div>
+                )}
               </div>
               <div className="rounded border border-slate-700 bg-slate-800/60 p-3">
                 <div className="text-slate-400 mb-1">Alias Collisions</div>
@@ -497,31 +516,42 @@ export default function ScoringTrustBadge() {
                 Remediation
               </div>
               <div>
-                <b>One-click fix:</b> Tap <b>"Auto-Fix All"</b> below — it
-                normalizes every quarter's scoring constants and merges any
-                outstanding alias collisions in one go.
+                <b>Metric drift &amp; alias collisions:</b> open{" "}
+                <a href="/data-reconciliation" className="text-emerald-400 hover:underline">
+                  Data Reconciliation
+                </a>{" "}— every conflict is adjudicated one card at a time. No
+                auto-fix.
               </div>
               <div>
-                <b>Integrity issues:</b> Orphan snapshot refs and blocklist
-                violations need separate cleanup — see{" "}
-                <code className="text-slate-400">/api/v2/admin/integrity</code>.
+                <b>Structural cleanup (orphan refs · blocklist · auto-link):</b>{" "}
+                run{" "}
+                <code className="text-amber-200">
+                  POST /api/v2/admin/structural-cleanup?apply=true
+                </code>
+                . Default scope is auto_link + blocklist_strip; opt in to{" "}
+                <code className="text-amber-200">orphan_prune=true</code> AFTER
+                you've adjudicated the legacy_duplicate cards in Reconciliation.
+              </div>
+              <div>
+                <b>Quarter-settings drift:</b> use{" "}
+                <code className="text-amber-200">Dry-Run Normalize</code> /{" "}
+                <code className="text-amber-200">Apply Normalize</code> below.
               </div>
             </div>
 
             <label
-              className="flex items-start gap-2 rounded-md border border-slate-700 bg-slate-800/30 p-3 text-xs text-slate-300 cursor-pointer"
+              className="flex items-start gap-2 rounded-md border border-amber-800/40 bg-amber-950/20 p-3 text-xs text-slate-300"
               data-testid="scoring-trust-auto-heal-toggle"
             >
               <input
                 type="checkbox"
-                className="mt-0.5 accent-emerald-500"
+                className="mt-0.5 accent-amber-500"
                 checked={autoHealEnabled}
                 onChange={(e) => {
                   const v = e.target.checked;
                   setAutoHealEnabled(v);
                   localStorage.setItem(AUTO_HEAL_PREF_KEY, String(v));
                   if (v) {
-                    // Re-arm: clear cooldown so the next dashboard load re-runs.
                     localStorage.removeItem(AUTO_HEAL_COOLDOWN_KEY);
                     autoHealRanRef.current = false;
                     toast.success("Self-healing enabled.");
@@ -531,10 +561,11 @@ export default function ScoringTrustBadge() {
                 }}
               />
               <span>
-                <b className="text-slate-200">Self-healing dashboard</b> — when
-                enabled (default), drift and alias collisions are auto-fixed
-                silently on dashboard load (≤ once/hour). You'll get a toast
-                summary. Disable if you'd rather review changes manually.
+                <b className="text-slate-200">Self-healing dashboard</b> —
+                disabled by default. When checked, alias-collision merges run
+                silently on dashboard load (≤ once/hour). Metric drift and
+                legacy-duplicate cards always require Reconciliation
+                adjudication — they're never auto-resolved.
               </span>
             </label>
           </div>
@@ -567,16 +598,13 @@ export default function ScoringTrustBadge() {
             >
               {normalizing ? "Working…" : "Apply Normalize"}
             </button>
-            <button
-              type="button"
-              className="px-3 py-2 rounded bg-emerald-700 hover:bg-emerald-600 text-white text-sm disabled:opacity-50 flex items-center justify-center gap-1.5 w-full sm:w-auto"
-              onClick={autoFix}
-              disabled={normalizing}
-              data-testid="scoring-trust-auto-fix"
+            <a
+              href="/data-reconciliation"
+              className="px-3 py-2 rounded bg-emerald-700 hover:bg-emerald-600 text-white text-sm flex items-center justify-center gap-1.5 w-full sm:w-auto"
+              data-testid="scoring-trust-open-reconciliation"
             >
-              <Wand2 className="w-3.5 h-3.5" />
-              {normalizing ? "Working…" : "Auto-Fix All"}
-            </button>
+              Open Data Reconciliation
+            </a>
             <button
               type="button"
               className="px-3 py-2 rounded bg-indigo-700 hover:bg-indigo-600 text-white text-sm disabled:opacity-50 flex items-center justify-center gap-1.5 w-full sm:w-auto"

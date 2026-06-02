@@ -1503,6 +1503,7 @@ async def scoring_trust_score():
 
     # --- 2. Data integrity -------------------------------------------------
     from services.validation_service import EmployeeValidator
+    integrity_breakdown: Dict[str, int] = {}
     try:
         integrity = await EmployeeValidator(db).run_all()
         integrity_summary = integrity.get("summary", {})
@@ -1510,6 +1511,19 @@ async def scoring_trust_score():
         p1 = int(integrity_summary.get("p1_issues", 0))
         p2 = int(integrity_summary.get("p2_issues", 0))
         deploy_gate = integrity_summary.get("deploy_gate", "UNKNOWN")
+        # Per-category counts so the Trust modal can show
+        # "17 orphan refs · 1 blocklist violation · 10 legacy-only" and
+        # the operator knows exactly which problems remain.
+        for k in (
+            "duplicate_canonical_ids", "orphaned_snapshot_refs",
+            "employees_missing_id", "blocklist_violations",
+            "duplicate_active_names", "inactive_in_current_snap",
+            "metric_drift", "legacy_only_employees",
+            "snapshot_only_employees",
+        ):
+            v = integrity.get(k, [])
+            if isinstance(v, list) and v:
+                integrity_breakdown[k] = len(v)
     except Exception as e:
         logger.warning(f"scoring_trust: integrity check failed: {e}")
         p0 = p1 = p2 = -1
@@ -1750,6 +1764,7 @@ async def scoring_trust_score():
                 "p1_issues": p1,
                 "p2_issues": p2,
                 "deploy_gate": deploy_gate,
+                "breakdown": integrity_breakdown,
             },
             "alias_collisions": {
                 "count": len(collisions),

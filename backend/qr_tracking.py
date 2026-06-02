@@ -1131,8 +1131,14 @@ async def qr_health_check():
         d["printed_id"]
         async for d in _db.qr_employee_id_aliases.find({}, {"_id": 0, "printed_id": 1})
     }
+    # Dismissed ghost IDs — operator marked as unrecoverable. They no
+    # longer count toward the dashboard alert.
+    dismissed_ids = {
+        d["printed_id"]
+        async for d in _db.qr_ghost_dismissed.find({}, {"_id": 0, "printed_id": 1})
+    }
     pipeline = [
-        {"$match": {"employee_id": {"$nin": list(current_ids | aliased_ids)}}},
+        {"$match": {"employee_id": {"$nin": list(current_ids | aliased_ids | dismissed_ids)}}},
         {"$group": {"_id": "$employee_id", "scans": {"$sum": 1}}},
     ]
     ghosts = []
@@ -1142,6 +1148,7 @@ async def qr_health_check():
     out["ghost_ids"] = {
         "count": len(ghosts),
         "orphan_scans": sum(g["scan_count"] for g in ghosts),
+        "dismissed_count": len(dismissed_ids),
     }
 
     out["status"] = "alert" if (long_gaps or ghosts) else "ok"
@@ -1294,6 +1301,13 @@ async def list_ghost_ids():
         doc["printed_id"]
         async for doc in _db.qr_employee_id_aliases.find({}, {"_id": 0, "printed_id": 1})
     }
+    # Operators can dismiss a ghost ID (e.g. unrecoverable historical
+    # scans from a deleted employee). Once dismissed, the ID stops
+    # surfacing in the health badge and the heal queue.
+    dismissed_ids = {
+        doc["printed_id"]
+        async for doc in _db.qr_ghost_dismissed.find({}, {"_id": 0, "printed_id": 1})
+    }
 
     pipeline = [
         {"$group": {
@@ -1313,6 +1327,8 @@ async def list_ghost_ids():
     async for row in _db.qr_click_log_immutable.aggregate(pipeline):
         eid = row["_id"]
         if not eid or eid in current_ids or eid in aliased_ids:
+            continue
+        if eid in dismissed_ids:
             continue
         # Strip "Unknown" so the admin sees only meaningful historical names.
         names = [n for n in (row.get("names") or []) if n and n != "Unknown"]
@@ -1465,6 +1481,68 @@ async def suggest_ghost_mappings():
         })
 
     return {"ghost_count": len(ghosts), "suggestions": suggestions}
+
+
+
+@qr_router.post("/admin/dismiss-ghost-ids")
+async def dismiss_ghost_ids(payload: Dict[str, Any]):
+    """
+    Mark one or more ghost printed_ids as "dismissed" so they stop
+    surfacing in the QR Health badge and the ghost-heal queue. Used for
+    ids whose owner can't be recovered (deleted employees, expired
+    cards, historical noise).
+
+    Body: { "printed_ids": ["id-1", "id-2", ...], "reason": "..." }
+
+    Dismissals are written to `qr_ghost_dismissed` so they persist
+    across restarts. To undo, hit `/admin/undismiss-ghost-id`.
+    """
+    db = _db
+    ids = payload.get("printed_ids") or []
+    if not isinstance(ids, list) or not ids:
+        raise HTTPException(status_code=400, detail="printed_ids must be a non-empty list")
+    reason = (payload.get("reason") or "").strip()
+    actor  = (payload.get("actor")  or "unknown").strip() or "unknown"
+
+    dismissed = 0
+    for pid in ids:
+        pid = (pid or "").strip()
+        if not pid:
+            continue
+        res = await db.qr_ghost_dismissed.update_one(
+            {"printed_id": pid},
+            {"$set": {
+                "printed_id":   pid,
+                "dismissed_at": datetime.now(timezone.utc).isoformat(),
+                "dismissed_by": actor,
+                "reason":       reason,
+            }},
+            upsert=True,
+        )
+        if res.upserted_id or res.modified_count:
+            dismissed += 1
+    return {"success": True, "dismissed_count": dismissed}
+
+
+@qr_router.post("/admin/undismiss-ghost-id")
+async def undismiss_ghost_id(payload: Dict[str, Any]):
+    """Reverse a previous dismiss so the ghost surfaces again."""
+    pid = (payload.get("printed_id") or "").strip()
+    if not pid:
+        raise HTTPException(status_code=400, detail="printed_id required")
+    res = await _db.qr_ghost_dismissed.delete_one({"printed_id": pid})
+    return {"success": True, "removed": res.deleted_count}
+
+
+@qr_router.get("/admin/dismissed-ghost-ids")
+async def list_dismissed_ghost_ids():
+    """List currently-dismissed ghost ids for the audit/undismiss UI."""
+    rows = []
+    async for d in _db.qr_ghost_dismissed.find(
+        {}, {"_id": 0}
+    ).sort("dismissed_at", -1):
+        rows.append(d)
+    return {"count": len(rows), "dismissed": rows}
 
 
 @qr_router.post("/admin/heal-ghost-ids")

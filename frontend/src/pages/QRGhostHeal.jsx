@@ -168,6 +168,7 @@ export default function QRGhostHeal() {
                   <th className="text-left p-3">Date Range</th>
                   <th className="text-left p-3">Map to Current Employee</th>
                   <th className="text-left p-3">Confidence</th>
+                  <th className="text-left p-3">Dismiss</th>
                 </tr>
               </thead>
               <tbody>
@@ -200,6 +201,36 @@ export default function QRGhostHeal() {
                         </select>
                       </td>
                       <td className={`p-3 text-xs uppercase ${confColor}`}>{conf}{s.source ? ` · ${s.source.replace(/_/g, " ")}` : ""}</td>
+                      <td className="p-3">
+                        <button
+                          className="px-2 py-1 text-xs rounded border border-rose-700 text-rose-200 hover:bg-rose-950/40"
+                          data-testid={`dismiss-${s.printed_id}`}
+                          title="Dismiss this ghost ID as unrecoverable — it stops counting toward the health badge."
+                          onClick={async () => {
+                            const reason = prompt(
+                              `Dismiss ghost ID ${s.printed_id.slice(0, 13)}…?\n\n` +
+                              `It will stop surfacing in the badge and this queue.\n` +
+                              `Optionally add a reason (audit only):`,
+                              "",
+                            );
+                            if (reason === null) return; // cancel
+                            try {
+                              await api.post("/qr/admin/dismiss-ghost-ids", {
+                                printed_ids: [s.printed_id],
+                                reason,
+                              });
+                              toast.success("Ghost ID dismissed", {
+                                description: `${s.scan_count} historical scans archived without re-attribution.`,
+                              });
+                              await load();
+                            } catch (err) {
+                              toast.error(`Dismiss failed: ${err?.response?.data?.detail || err.message}`);
+                            }
+                          }}
+                        >
+                          Dismiss
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
