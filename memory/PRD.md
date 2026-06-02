@@ -11,6 +11,29 @@ Build a comprehensive performance review application for restaurant employees.
 - **Auth**: Emergent-managed Google Auth (whitelist via `ALLOWED_ADMIN_EMAILS`)
 
 ## Current State (2026-05-28)
+### P1: Trust modal scroll/overflow on mobile — SHIPPED 2026-06-02
+
+User: "I can't navigate the trust pop up. The page won't let me scroll
+and I can't see all available options in the mobile view."
+
+**Root cause**: shadcn's base `DialogContent` has no `max-height` cap.
+On viewports shorter than the modal's natural content height (~900px)
+— which is every mobile — the modal overflowed off-screen and the
+footer action buttons (Refresh / Normalize / Open Data Reconciliation /
+Demo Prep) became unreachable. The body itself also had no scroll
+container.
+
+**Fix**: restructured `ScoringTrustBadge`'s DialogContent as a 3-row
+flex column:
+   - **Header** (`shrink-0` + bottom border) — non-scrolling, always pinned at top
+   - **Body** (`flex-1 overflow-y-auto`) — content scrolls inside this region
+   - **Footer** (`shrink-0` + top border) — non-scrolling, always pinned at bottom
+
+DialogContent overall capped at `max-h-[92vh]`. On a 390×844 iPhone
+viewport the modal is now 776px tall: ~80px header + 600px scrollable
+body + ~96px footer.
+
+
 ### P1: Clicks-per-day shows ALL active employees — SHIPPED 2026-06-02
 
 User: "On the clicks per day it only shows 17 employees. But I have 29 employees."
