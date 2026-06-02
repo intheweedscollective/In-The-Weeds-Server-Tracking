@@ -2026,11 +2026,15 @@ async def get_clicks_by_day(days: int = 30):
     # The QR Codes tab manipulates qr_employees directly: deleting from
     # that tab removes the doc entirely, so we use presence there as the
     # source of truth for "still tracked" alongside `employees.status`.
+    # We also keep a name → qr_employee_id map so we can backfill
+    # zero-click rows below.
     qr_tracked_names: set[str] = set()
-    async for q in _db.qr_employees.find({}, {"_id": 0, "name": 1}):
+    qr_tracked_by_name: dict[str, dict] = {}
+    async for q in _db.qr_employees.find({}, {"_id": 0, "id": 1, "name": 1}):
         n_ = (q.get("name") or "").strip().lower()
         if n_:
             qr_tracked_names.add(n_)
+            qr_tracked_by_name.setdefault(n_, q)
 
     def _is_test_name(name: str) -> bool:
         n_ = (name or "").strip().lower()
@@ -2129,6 +2133,54 @@ async def get_clicks_by_day(days: int = 30):
         if platform in bucket["totals"]:
             bucket["totals"][platform] += count
         totals_by_day[slot] += count
+
+    # ---- Backfill zero-click rows for every active+tracked employee -----
+    # Before this fix the response only included employees who had at
+    # least one scan in the window. Empty performers — the ones you
+    # most need to see for coaching — silently disappeared from the
+    # leaderboard. Now we walk the canonical active set, skip ones
+    # already covered, and emit a zero-totals row for each missing
+    # one. They sort to the bottom alongside other zero-click rows.
+    covered_canonical_ids: set[str] = {
+        b["employee_id"] for b in rows.values() if b.get("employee_id")
+    }
+    covered_names_lower: set[str] = {
+        (b.get("name") or "").strip().lower() for b in rows.values()
+    }
+    for low_name, canonical in alias_to_canonical.items():
+        if (canonical.get("status") or "").lower() != "active":
+            continue
+        cid = canonical.get("id")
+        cname = canonical.get("name") or ""
+        # Skip if we already have a row for this canonical (by id or name).
+        if cid and cid in covered_canonical_ids:
+            continue
+        if cname.strip().lower() in covered_names_lower:
+            continue
+        # Skip if employee isn't currently tracked in qr_employees by
+        # any known alias — they were deliberately removed from QR.
+        if not any(a in qr_tracked_names
+                   for a in (cname, *(canonical.get("aliases") or []))
+                   if a):
+            # Defensive: also try the canonical name's lowercase form
+            if cname.strip().lower() not in qr_tracked_names:
+                continue
+        # Skip test/demo placeholders.
+        if _is_test_name(cname):
+            continue
+        key = cid or f"name:{cname.lower()}"
+        if key in rows:
+            continue
+        rows[key] = {
+            "employee_id": cid,
+            "name": cname,
+            "totals": {"yelp": 0, "google": 0, "tripadvisor": 0},
+            "by_day": [0] * n,
+            "total": 0,
+            "active": True,
+        }
+        covered_canonical_ids.add(cid)
+        covered_names_lower.add(cname.strip().lower())
 
     rows_list = sorted(rows.values(), key=lambda r: r["total"], reverse=True)
 

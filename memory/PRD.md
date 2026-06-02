@@ -11,6 +11,33 @@ Build a comprehensive performance review application for restaurant employees.
 - **Auth**: Emergent-managed Google Auth (whitelist via `ALLOWED_ADMIN_EMAILS`)
 
 ## Current State (2026-05-28)
+### P1: Clicks-per-day shows ALL active employees — SHIPPED 2026-06-02
+
+User: "On the clicks per day it only shows 17 employees. But I have 29 employees."
+
+**Root cause**: `/qr/clicks-by-day` aggregated from `qr_click_log_immutable`
+and only emitted rows for employees with at least one scan in the window.
+Active employees with zero clicks (the exact people you most need to see
+for coaching) were silently dropped from the leaderboard.
+
+**Fix**: after the aggregation step the endpoint now walks the canonical
+`employees` table and backfills a zero-totals row for every active
+employee who is currently tracked in `qr_employees` (via name OR alias)
+and hasn't already been covered. Test/demo placeholders are still
+filtered. Backfilled rows have the same shape as scan-driven rows so
+the frontend table renders them uniformly. The default total-desc sort
+keeps top performers on top and zero-click rows at the bottom.
+
+**Tests** (`/app/backend/tests/test_clicks_by_day_backfill.py`, 2 cases):
+   - Response row count ≥ active+tracked employee count.
+   - Backfilled zero rows have the same shape as scan-driven rows
+     (matching `by_day` length, all totals zero, `active=True`).
+
+**Verified on preview**: 24 rows → **30 rows** with 6 zero-click
+employees (Keisha, Lexi, Julian, Daniel, Kitti, Kahiaulani) appearing
+at the bottom.
+
+
 ### P0: Trust badge respects resolutions + QR ghost dismiss — SHIPPED 2026-06-02
 
 User reported "trust action still appearing after resolution" and "QR sync
