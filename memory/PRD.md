@@ -11,6 +11,47 @@ Build a comprehensive performance review application for restaurant employees.
 - **Auth**: Emergent-managed Google Auth (whitelist via `ALLOWED_ADMIN_EMAILS`)
 
 ## Current State (2026-05-28)
+### P0: Reconciliation delete/merge actions now propagate to snapshots — SHIPPED 2026-06-02
+
+User: "When I delete a legacy profile, nothing happens. The error
+persists after deleting."
+
+**Root cause**: `delete_legacy` and `merge_into` only mutated
+`employees_v2` and `employees`. The same profile lived on inside
+every snapshot's embedded `rows[]` and `employees[]` arrays — so:
+   - the dashboard kept rendering the typo
+   - the trust badge kept flagging the snapshot as orphan / blocklist
+     violation
+   - delete felt like a no-op from the operator's POV
+
+**Fix in `delete_legacy`**:
+After soft-deleting the v2 row, the service now walks every
+non-finalized snapshot and removes any embedded `rows[]` /
+`employees[]` entry that matches either the v2_id OR the v2 name
+(case-insensitive). Finalized snapshots are immutable historical
+record — they're explicitly skipped. Response payload now reports
+`snapshots_touched` and `snapshot_rows_removed` so the operator
+can verify the propagation worked.
+
+**Fix in `merge_into`**:
+After linking the v2 row into the canonical's `legacy_ids[]`, the
+service now rewrites embedded snapshot rows matching the v2_id/name
+to point at the canonical's id + name. If a row for the canonical
+already existed in the same snapshot, the typo dup is dropped instead
+of relabeled. Prevents the "two rows for the same person" dashboard
+bug.
+
+**Verified live**: re-resolving Thaddeus Hashey via delete_legacy
+returned `snapshots_touched: 2, snapshot_rows_removed: 2`. Trust
+badge `blocklist_violations` count went from 1 → 0; integrity status
+no longer flags him anywhere.
+
+**Tests** (`/app/backend/tests/test_delete_legacy_propagation.py`,
+2 cases): full delete propagation across rows[]+employees[] (both
+id-match and name-match paths), AND finalized snapshots stay
+untouched even when they contain the deleted row.
+
+
 ### P1: Trust modal scroll/overflow on mobile — SHIPPED 2026-06-02
 
 User: "I can't navigate the trust pop up. The page won't let me scroll

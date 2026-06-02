@@ -771,23 +771,162 @@ class ReconciliationService:
                     {"id": target_canonical_id},
                     {"$addToSet": addto},
                 )
+
+            # Rewrite embedded snapshot rows so the typo no longer
+            # appears as a separate profile alongside the canonical.
+            # Without this, the dashboard renders both (Kahiauani Ramos
+            # AND Kahiaulani Ramos) until the snapshot is regenerated.
+            v_norm = (v2_name or "").strip().lower()
+            t_name = target.get("name") or ""
+            snapshots_touched = 0
+            rows_relabeled = 0
+            async for snap in self.db.snapshot_workflow.find(
+                {"status": {"$ne": "finalized"}},
+                {"_id": 1, "id": 1, "rows": 1, "employees": 1},
+            ):
+                changed = False
+                new_rows = []
+                seen_canonical_in_rows: set = set()
+                for r in (snap.get("rows") or []):
+                    is_match = (
+                        r.get("employee_id") == v2_id
+                        or (r.get("frozen_display_name") or "").strip().lower() == v_norm
+                    )
+                    if is_match:
+                        # If a row for the canonical already exists in
+                        # this snapshot, drop the dup; otherwise relabel
+                        # the typo row to point at the canonical.
+                        if target_canonical_id in seen_canonical_in_rows:
+                            rows_relabeled += 1
+                            changed = True
+                            continue
+                        r = {
+                            **r,
+                            "employee_id": target_canonical_id,
+                            "frozen_display_name": t_name,
+                        }
+                        seen_canonical_in_rows.add(target_canonical_id)
+                        rows_relabeled += 1
+                        changed = True
+                    else:
+                        if r.get("employee_id") == target_canonical_id:
+                            seen_canonical_in_rows.add(target_canonical_id)
+                    new_rows.append(r)
+
+                new_emps = []
+                seen_canonical_in_emps: set = set()
+                for e in (snap.get("employees") or []):
+                    is_match = (
+                        e.get("id") == v2_id
+                        or (e.get("name") or "").strip().lower() == v_norm
+                    )
+                    if is_match:
+                        if target_canonical_id in seen_canonical_in_emps:
+                            rows_relabeled += 1
+                            changed = True
+                            continue
+                        e = {
+                            **e,
+                            "id": target_canonical_id,
+                            "name": t_name,
+                            "display_name": t_name,
+                        }
+                        seen_canonical_in_emps.add(target_canonical_id)
+                        rows_relabeled += 1
+                        changed = True
+                    else:
+                        if e.get("id") == target_canonical_id:
+                            seen_canonical_in_emps.add(target_canonical_id)
+                    new_emps.append(e)
+
+                if changed:
+                    snapshots_touched += 1
+                    await self.db.snapshot_workflow.update_one(
+                        {"_id": snap["_id"]},
+                        {"$set": {
+                            "rows": new_rows,
+                            "employees": new_emps,
+                            "updated_at": datetime.now(timezone.utc).isoformat(),
+                        }},
+                    )
+
             await self._audit(card, action, before=v2_name,
                               after=f"merged → {target.get('name')}",
                               actor=actor, reason=reason)
-            return {"success": True, "action": action,
-                    "merged_into": target.get("name"),
-                    "target_id": target_canonical_id}
+            return {
+                "success": True,
+                "action": action,
+                "merged_into": target.get("name"),
+                "target_id": target_canonical_id,
+                "snapshots_touched": snapshots_touched,
+                "snapshot_rows_relabeled": rows_relabeled,
+            }
 
         if action == "delete_legacy":
+            # 1. Soft-delete the v2 row.
             await self.db.employees_v2.update_many(
                 {"id": v2_id},
                 {"$set": {"status": "inactive",
                           "soft_deleted_at": datetime.now(timezone.utc).isoformat(),
                           "soft_deleted_by": actor}},
             )
+
+            # 2. Propagate the deletion into every non-finalized snapshot.
+            # Without this, the snapshot's rows[]/employees[] still
+            # carries the typo profile by-id AND by-name, so the trust
+            # badge keeps flagging it as orphan / blocklist violation
+            # AND the dashboard still renders it. User-reported as
+            # "When I delete a legacy profile, nothing happens."
+            v_norm = (v2_name or "").strip().lower()
+            snapshots_touched = 0
+            rows_removed = 0
+            async for snap in self.db.snapshot_workflow.find(
+                {"status": {"$ne": "finalized"}},
+                {"_id": 1, "id": 1, "rows": 1, "employees": 1},
+            ):
+                new_rows = []
+                snap_rows_removed = 0
+                for r in (snap.get("rows") or []):
+                    if r.get("employee_id") == v2_id:
+                        snap_rows_removed += 1
+                        continue
+                    rnm = (r.get("frozen_display_name") or "").strip().lower()
+                    if v_norm and rnm == v_norm:
+                        snap_rows_removed += 1
+                        continue
+                    new_rows.append(r)
+
+                new_emps = []
+                for e in (snap.get("employees") or []):
+                    if e.get("id") == v2_id:
+                        snap_rows_removed += 1
+                        continue
+                    enm = (e.get("name") or "").strip().lower()
+                    if v_norm and enm == v_norm:
+                        snap_rows_removed += 1
+                        continue
+                    new_emps.append(e)
+
+                if snap_rows_removed:
+                    snapshots_touched += 1
+                    rows_removed += snap_rows_removed
+                    await self.db.snapshot_workflow.update_one(
+                        {"_id": snap["_id"]},
+                        {"$set": {
+                            "rows": new_rows,
+                            "employees": new_emps,
+                            "updated_at": datetime.now(timezone.utc).isoformat(),
+                        }},
+                    )
+
             await self._audit(card, action, before=v2_name, after=None,
                               actor=actor, reason=reason)
-            return {"success": True, "action": action}
+            return {
+                "success": True,
+                "action": action,
+                "snapshots_touched": snapshots_touched,
+                "snapshot_rows_removed": rows_removed,
+            }
 
         if action == "promote_canonical":
             # Use the v2's id as the canonical id so future v2 records
