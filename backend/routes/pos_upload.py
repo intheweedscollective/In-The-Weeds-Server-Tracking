@@ -23,6 +23,7 @@ from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from scoring_engine import QuarterSettings, EmployeeV2, run_full_scoring, validate_upload_columns, validate_upload_data
+from services.employee_v2_writer import upsert_employee_v2
 
 
 def get_db():
@@ -834,7 +835,7 @@ async def import_parsed_pdf_data(
                     "created_at": datetime.now(timezone.utc),
                     "updated_at": datetime.now(timezone.utc)
                 }
-                await get_db().employees_v2.insert_one(new_employee)
+                await upsert_employee_v2(get_db(), new_employee)
                 results["created"].append({"name": emp_name, "id": new_id})
                 name_index[emp_name_lower] = new_id
                 
@@ -1087,7 +1088,7 @@ async def import_pos_pdf_data(
                         "created_at": datetime.now(timezone.utc),
                         "updated_at": datetime.now(timezone.utc)
                     }
-                    await get_db().employees_v2.insert_one(new_employee)
+                    await upsert_employee_v2(get_db(), new_employee)
                     results["created"].append({"name": emp_name, "id": new_id})
                     
                     # Add to index for subsequent matches

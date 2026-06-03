@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 import logging
+from services.employee_v2_writer import upsert_employee_v2
 
 logger = logging.getLogger(__name__)
 
@@ -1414,7 +1415,7 @@ async def apply_data_corrections(year: int, quarter: str):
             "total_metric_bonus": 10.0,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
-        await db.employees_v2.insert_one(lennie_data)
+        await upsert_employee_v2(db, lennie_data)
         results.append("Added Lennie Nguyen: score 90.2, tier A-Server")
     else:
         results.append("Lennie Nguyen already exists - skipped")
@@ -1487,7 +1488,7 @@ async def fix_employee_data(year: int, quarter: str, employee_data: dict):
         if "id" not in employee_data:
             employee_data["id"] = str(uuid.uuid4())
         employee_data["created_at"] = datetime.now(timezone.utc).isoformat()
-        await db.employees_v2.insert_one(employee_data)
+        await upsert_employee_v2(db, employee_data)
         # Remove _id from response
         return {"success": True, "action": "created", "name": name, "id": employee_data["id"]}
 

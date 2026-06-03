@@ -11,6 +11,83 @@ Build a comprehensive performance review application for restaurant employees.
 - **Auth**: Emergent-managed Google Auth (whitelist via `ALLOWED_ADMIN_EMAILS`)
 
 ## Current State (2026-05-28)
+### P0: Permanent (name_normalized, quarter, year) uniqueness — SHIPPED 2026-06-03
+
+User: "Add the compound index to MongoDB… Swap every insert in your
+upload handler to the upsert pattern… Run the cleanup script to
+collapse existing duplicates. Done. Never think about this again."
+
+**Root cause this addresses**: every legacy_duplicate card in the
+Data Reconciliation portal traces back to two consecutive writes
+into `employees_v2` under almost-identical name spellings (case
+variants, leading whitespace, etc.) that hit `insert_one` and
+created two rows. The reconciliation queue surfaced these as
+adjudication cards, the operator deleted them, but new POS uploads
+just recreated them. Whack-a-mole.
+
+**Structural fix** — three layers:
+
+1. **Storage-layer uniqueness**: partial compound unique index on
+   `(name_normalized, quarter, year)` where
+   `name_normalized = name.strip().upper()`. Created on FastAPI
+   startup in `server.py`. Partial filter (`$type: "string", $gt: ""`)
+   so legacy / test rows with missing name_normalized aren't blocked
+   from existing — production writes always populate it via the
+   helper below, so prod data stays protected.
+
+2. **Application-layer helper**: new
+   `/app/backend/services/employee_v2_writer.py::upsert_employee_v2`
+   routes every write through `update_one(..., upsert=True)` keyed
+   on the unique tuple. `$setOnInsert` preserves `id` + `created_at`
+   on existing rows; `$set` lets new POS metrics flow into the
+   existing row. Returns the stable id so callers using the
+   "fresh insert id" pattern keep working.
+
+3. **All 16 insert sites swapped** in:
+   - `server.py` (5 sites): line 1270 POS upload, line 1651 scored
+     employee finalization, line 2621 manual create, line 2720
+     PUT-rename-clone, line 3537 bulk import.
+   - `routes/pos_upload.py` (2 sites): XLSX and PDF parser paths.
+   - `routes/admin.py` (3 sites): cv-data bulk import, bulk-import
+     endpoint, single import-raw endpoint.
+   - `routes/audit.py` (2 sites): Lennie Nguyen restore, fix-employee-data.
+   - `routes/snapshots_legacy.py` (3 sites — 1 insert_one + 2
+     insert_many): snapshot reverse-sync, snapshot upload, recalc
+     sync.
+
+**One-time cleanup**:
+`/app/backend/scripts/dedupe_by_name_quarter_year.py` (default dry-
+run; `--apply` to commit):
+- Backfills `name_normalized` on every row in `employees_v2`.
+- Groups by (name_normalized, quarter, year); for buckets with >1
+  rows picks a winner (highest `total_score`, tiebreak on most
+  non-zero metric fields, tiebreak on earliest `created_at`),
+  merges every non-zero field from losers onto the winner, unions
+  aliases + legacy_ids, deletes losers.
+- Rewrites embedded `snapshot_workflow.rows[]` and `.employees[]`
+  references from loser ids → winner id/name in every non-finalized
+  snapshot. Finalized snapshots are immutable historical record.
+
+**Ran on preview**:
+- Pre: 51 rows missing name_normalized, 2 duplicate buckets (DIANE
+  PETERSON × 4, STEADY SUE × 4 — both year=9097 test fixtures).
+- Post: 45 rows total, 45/45 with name_normalized, 0 buckets > 1.
+
+**Tests added** `/app/backend/tests/test_employees_v2_uniqueness.py`:
+- `test_unique_index_is_present` — `index_information()` shows the
+  compound index with `unique=true` and the partial filter.
+- `test_upsert_helper_collapses_case_variants` — writes "Foo" then
+  "  FOO  " and asserts only one row remains, stable id, second
+  write's metrics flow in via $set.
+- `test_raw_insert_one_of_duplicate_raises_DuplicateKeyError` — the
+  safety-net check that any future code path bypassing the helper
+  will crash loudly instead of silently creating dupes.
+- `test_legacy_duplicate_queue_does_not_resurface_after_upsert_cleanup`
+  — end-to-end queue check.
+
+All 26 reconciliation + dedupe + uniqueness tests pass.
+
+
 ### P0: Delete legacy idempotency — SHIPPED 2026-06-03
 
 User: "Delete legacy still not working for data reconciliation" — toast

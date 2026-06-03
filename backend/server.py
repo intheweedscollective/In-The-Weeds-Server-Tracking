@@ -46,6 +46,7 @@ from routes.pos_upload import pos_upload_router, pdf_jobs
 from routes.scheduler import scheduler_router
 from routes.snapshots_legacy import register_snapshots_legacy_routes
 from routes.auth import auth_router
+from services.employee_v2_writer import upsert_employee_v2
 
 # pdf_jobs is now imported from pos_upload module
 from yodeck_slides import (
@@ -1266,7 +1267,7 @@ async def unified_pos_upload(
                     "created_at": datetime.now(timezone.utc),
                     "updated_at": datetime.now(timezone.utc)
                 }
-                await db.employees_v2.insert_one(new_emp)
+                await upsert_employee_v2(db, new_emp)
                 created_count += 1
         
         # Recalculate peer ranks
@@ -1647,7 +1648,7 @@ async def upload_employees_v2(
                 doc['job_title'] = preserved_job_titles[emp_name_lower]
                 logging.info(f"Restored job title '{doc['job_title']}' for {doc['name']}")
             
-            await db.employees_v2.insert_one(doc)
+            await upsert_employee_v2(db, doc)
         
         # Populate CV data from synced Loyalty Voice data
         cv_records = await db.cv_nps.find(
@@ -2618,7 +2619,7 @@ async def create_employee(data: EmployeeCreate):
     emp_dict = employee.model_dump()
     emp_dict['tier_label'] = tier_label
     emp_dict['created_at'] = datetime.now(timezone.utc).isoformat()
-    await db.employees_v2.insert_one(emp_dict)
+    await upsert_employee_v2(db, emp_dict)
     
     # Recalculate peer rankings for all employees in this quarter
     all_employees = await db.employees_v2.find(
@@ -2717,7 +2718,7 @@ async def update_employee(employee_id: str, data: dict):
                 snap_emp_clone["aliases"] = existing_aliases
                 snap_emp_clone["created_at"] = datetime.now(timezone.utc).isoformat()
                 snap_emp_clone["updated_at"] = snap_emp_clone["created_at"]
-                await db.employees_v2.insert_one(snap_emp_clone)
+                await upsert_employee_v2(db, snap_emp_clone)
                 emp_doc = snap_emp_clone
 
         if not emp_doc:
@@ -3533,7 +3534,7 @@ async def import_all_data(data: dict):
                 emp["year"] = year
                 emp["updated_at"] = datetime.now(timezone.utc)
                 
-                await db.employees_v2.insert_one(emp)
+                await upsert_employee_v2(db, emp)
                 results["employees_imported"] += 1
             except Exception as e:
                 results["errors"].append(f"Employee {emp.get('name', '?')}: {str(e)}")
@@ -4332,6 +4333,37 @@ async def startup_event():
     from routes.scheduler import run_automated_reconciliation
     
     scheduler.start()
+
+    # Enforce the (name_normalized, quarter, year) uniqueness contract
+    # at the storage layer. This is the structural fix that prevents
+    # the legacy_duplicate cards from ever returning — a second POS
+    # upload of the same name in the same quarter can no longer create
+    # a second row, it'll upsert into the existing one. Idempotent:
+    # mongo returns ok=1 if the index already exists with the same
+    # spec, and we tolerate IndexOptionsConflict for backwards-compat.
+    #
+    # NOTE: this is a PARTIAL unique index — it only enforces uniqueness
+    # on rows where `name_normalized` is a non-empty string. Legacy
+    # rows / test fixtures / migration scripts that haven't populated
+    # `name_normalized` yet are excluded from the constraint. Production
+    # writes go through `services.employee_v2_writer.upsert_employee_v2`
+    # which always populates `name_normalized`, so real uploads stay
+    # protected. The dedupe script in `scripts/dedupe_by_name_quarter_year`
+    # backfills `name_normalized` on every existing row.
+    try:
+        await db.employees_v2.create_index(
+            [("name_normalized", 1), ("quarter", 1), ("year", 1)],
+            unique=True,
+            name="uniq_name_norm_quarter_year",
+            partialFilterExpression={
+                "name_normalized": {"$type": "string", "$gt": ""},
+                "quarter": {"$type": "string"},
+                "year": {"$type": "number"},
+            },
+        )
+        logging.info("employees_v2 unique index (name_normalized, quarter, year) ensured")
+    except Exception as idx_err:  # pragma: no cover — surface but don't crash boot
+        logging.error(f"Failed to create employees_v2 unique index: {idx_err}")
     
     # Load saved scheduler config
     config = await db.scheduler_config.find_one({"_id": "reconciliation"})

@@ -12,6 +12,7 @@ import logging
 import uuid
 import re
 import os
+from services.employee_v2_writer import upsert_employee_v2
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +147,7 @@ async def sync_employees_from_json(
             emp['quarter'] = quarter.upper()
             emp['year'] = year
             
-            await db.employees_v2.insert_one(emp)
+            await upsert_employee_v2(db, emp)
             results["imported"] += 1
         except Exception as e:
             results["errors"].append(f"{emp.get('name')}: {str(e)}")
@@ -215,7 +216,7 @@ async def bulk_import_employees(employees: List[dict], quarter: str = "Q1", year
             emp['quarter'] = quarter.upper()
             emp['year'] = year
             
-            await db.employees_v2.insert_one(emp)
+            await upsert_employee_v2(db, emp)
             imported += 1
         except Exception as e:
             errors.append(f"{emp.get('name', 'Unknown')}: {str(e)}")
@@ -246,7 +247,7 @@ async def import_employee_raw(employee: dict, quarter: str = "Q1", year: int = 2
         employee['quarter'] = quarter.upper()
         employee['year'] = year
         
-        await db.employees_v2.insert_one(employee)
+        await upsert_employee_v2(db, employee)
         
         return {
             "status": "success",
