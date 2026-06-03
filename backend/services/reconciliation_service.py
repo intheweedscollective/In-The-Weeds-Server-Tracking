@@ -268,7 +268,14 @@ class ReconciliationService:
 
         async for v2 in self.db.employees_v2.find(
             {"quarter": active_snap.get("quarter"),
-             "year": active_snap.get("year")},
+             "year": active_snap.get("year"),
+             # Soft-deleted v2 rows must NOT re-surface as legacy_duplicate
+             # cards. delete_legacy sets status="inactive" — without this
+             # filter the operator clicks Delete legacy, the row gets
+             # tombstoned, and the queue rebuilder happily re-detects it
+             # on the next refresh (user-reported as "Delete legacy still
+             # not working" — toast fires, audit logged, card returns).
+             "status": {"$ne": "inactive"}},
             {"_id": 0},
         ):
             vid = v2.get("id")
@@ -581,6 +588,15 @@ class ReconciliationService:
         elif card["kind"] == "alias_collision":
             post_stored = card.get("stored_value")
             post_expected = None  # alias drift doesn't have a numeric expected
+        elif card["kind"] == "legacy_duplicate":
+            # Legacy-duplicate resolutions have no numeric expected. We
+            # stamp the v2 record's name so _resolved_still_applies can
+            # do a string-equality check on subsequent queue rebuilds —
+            # without this the resolved row stores post_stored=None and
+            # the next queue() call compares "Thaddeus Hashey" ≠ None,
+            # judges the resolution stale, and re-surfaces the card.
+            post_stored = card.get("stored_value")
+            post_expected = None
 
         await self.db.reconciliation_resolved.update_one(
             {"conflict_id": card["conflict_id"]},

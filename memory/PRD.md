@@ -11,6 +11,53 @@ Build a comprehensive performance review application for restaurant employees.
 - **Auth**: Emergent-managed Google Auth (whitelist via `ALLOWED_ADMIN_EMAILS`)
 
 ## Current State (2026-05-28)
+### P0: Delete legacy idempotency — SHIPPED 2026-06-03
+
+User: "Delete legacy still not working for data reconciliation" — toast
+fires successfully ("Delete legacy row applied for Thaddeus Hashey"),
+audit log accumulates one entry per click, but the same card returns to
+the Active Queue on the very next refresh. Operator clicked Delete
+legacy 3+ times in a row, same result.
+
+**Two-part root cause in `/app/backend/services/reconciliation_service.py`:**
+
+1. `_build_legacy_duplicate_conflicts` (line ~269) queried
+   `employees_v2` WITHOUT filtering on status. `delete_legacy` soft-
+   deletes by setting `status="inactive"`, so the row got tombstoned
+   but the next queue rebuild re-detected it as if nothing had happened.
+
+2. `_stamp_resolved` (line ~543) had branches for `metric_drift` and
+   `alias_collision` only — there was **no `legacy_duplicate` branch**.
+   So `post_stored` was saved as `None` on the resolved row. Next call
+   to `_resolved_still_applies` compared `card.stored_value` ("Thaddeus
+   Hashey") against `resolved.post_stored` (`None`), judged the
+   resolution stale, deleted the resolved record, and re-surfaced the
+   card as "fresh drift."
+
+The two bugs reinforced each other: the queue would re-detect the
+inactive v2 row, then strip the stale resolved stamp on the way out.
+
+**Fix:**
+- `_build_legacy_duplicate_conflicts` find filter now excludes
+  `status: "inactive"`.
+- `_stamp_resolved` now stamps `post_stored=card.stored_value` for
+  `legacy_duplicate` kind, so the resolved-still-applies string-equality
+  check holds on subsequent refreshes (matters for `keep_stored` on
+  legacy cards even after delete_legacy is fixed).
+
+**Tests added** `/app/backend/tests/test_delete_legacy_idempotent.py`:
+- `test_delete_legacy_keeps_card_out_of_queue` — seeds a unique
+  unlinked v2 row in the current quarter, asserts the card surfaces,
+  calls `delete_legacy`, asserts the card is gone on TWO consecutive
+  queue refreshes (catches the resolved-row eviction regression),
+  asserts the v2 row is soft-deleted not hard-deleted.
+- `test_delete_legacy_logs_to_audit` — asserts ≥1 audit row per click.
+
+**End-to-end verified**: live preview API now returns
+`counts.active=0` (was 1 with Thaddeus Hashey stuck) and 0 active
+legacy_duplicate cards.
+
+
 ### P1: Data Reconciliation mobile layout — SHIPPED 2026-06-03
 
 User: "I still cannot navigate the data reconciliation tab" on
