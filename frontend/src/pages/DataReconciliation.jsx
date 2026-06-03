@@ -430,7 +430,7 @@ export default function DataReconciliation() {
           This action will be logged with your email and timestamp.
         </div>
 
-        <div className="grid grid-cols-2 gap-3 text-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
           <div className="rounded border border-slate-700 bg-slate-800/40 p-2">
             <div className="text-[11px] text-slate-400 uppercase">Before</div>
             <div className="text-rose-300 font-mono break-all">{formatValue(before)}</div>
@@ -518,7 +518,7 @@ export default function DataReconciliation() {
   };
 
   return (
-    <div className="space-y-6 p-6" data-testid="data-reconciliation-page">
+    <div className="space-y-6 p-4 md:p-6" data-testid="data-reconciliation-page">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-3xl font-serif font-bold text-foreground flex items-center gap-2">
@@ -594,8 +594,8 @@ export default function DataReconciliation() {
               Hidden from the active queue. Click "Un-resolve" to bring a card back if you changed your mind.
             </span>
           </div>
-          <div className="rounded-md border border-slate-700 overflow-hidden">
-            <table className="w-full text-xs" data-testid="resolved-table">
+          <div className="rounded-md border border-slate-700 overflow-x-auto -mx-4 md:mx-0">
+            <table className="w-full min-w-[820px] text-xs" data-testid="resolved-table">
               <thead className="bg-slate-800/60 text-slate-400">
                 <tr>
                   <th className="text-left px-3 py-2">Resolved</th>
@@ -650,8 +650,8 @@ export default function DataReconciliation() {
         {audit.length === 0 ? (
           <div className="text-slate-500 text-sm">No resolutions yet.</div>
         ) : (
-          <div className="rounded-md border border-slate-700 overflow-hidden">
-            <table className="w-full text-xs" data-testid="audit-log">
+          <div className="rounded-md border border-slate-700 overflow-x-auto -mx-4 md:mx-0">
+            <table className="w-full min-w-[920px] text-xs" data-testid="audit-log">
               <thead className="bg-slate-800/60 text-slate-400">
                 <tr>
                   <th className="text-left px-3 py-2">Timestamp</th>
@@ -692,7 +692,7 @@ export default function DataReconciliation() {
       {/* Confirmation dialog */}
       <Dialog open={!!confirmCard} onOpenChange={(o) => !o && closeConfirm()}>
         <DialogContent
-          className="max-w-xl bg-slate-900 border-slate-700 text-slate-100"
+          className="max-w-xl bg-slate-900 border-slate-700 text-slate-100 max-h-[90vh] overflow-y-auto"
           data-testid="reconcile-confirm-modal"
         >
           <DialogHeader>

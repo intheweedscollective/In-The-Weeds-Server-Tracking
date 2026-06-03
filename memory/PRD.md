@@ -11,6 +11,48 @@ Build a comprehensive performance review application for restaurant employees.
 - **Auth**: Emergent-managed Google Auth (whitelist via `ALLOWED_ADMIN_EMAILS`)
 
 ## Current State (2026-05-28)
+### P1: Data Reconciliation mobile layout — SHIPPED 2026-06-03
+
+User: "I still cannot navigate the data reconciliation tab" on
+mobile / phone view. The Trust Badge modal scroll fix landed earlier
+but `/data-reconciliation` itself was still broken on small screens.
+
+**Root cause**: `/app/frontend/src/pages/DataReconciliation.jsx`
+wrapped the Audit Log table (7 columns, 1158px wide) and Resolved
+table (7 columns, 613px wide) in `<div className="overflow-hidden">`.
+On a 390px viewport that clipped 5 of the 7 columns silently with no
+way to scroll horizontally — operators could only see Timestamp +
+Actor, not Employee/Field/Action/Before→After/Note. The confirmation
+modal also lacked `max-height` + `overflow-y-auto`, so the Manual
+Override / Merge dialogs ran off-screen on a phone.
+
+**Fixes**:
+- Audit Log + Resolved table wrappers: `overflow-hidden` →
+  `overflow-x-auto -mx-4 md:mx-0`. Tables now bleed edge-to-edge on
+  mobile and swipe horizontally; full-width on desktop unchanged.
+- Tables get `min-w-[820px]` / `min-w-[920px]` so columns never
+  squish — they overflow gracefully into the horizontal scroller.
+- Confirmation `DialogContent` gets `max-h-[90vh] overflow-y-auto`,
+  same fix that landed on the Trust modal.
+- Page outer padding: `p-6` → `p-4 md:p-6`.
+- Confirm body Before/After grid: `grid-cols-2` → `grid-cols-1 sm:grid-cols-2`.
+
+Verified with mobile Playwright (390x844): audit wrapper
+`scrollWidth=1158`, `clientWidth=388`, `canScrollHorizontally=true`,
+horizontally swiping reveals the previously-hidden Employee + Actor
++ Action + Before→After columns.
+
+### P0 PLATFORM BLOCKER: Production deploy not syncing from Preview
+User: "I've deployed twice to no avail." Live `intheweedscollective.com`
+keeps serving stale code (no delete-legacy propagation, no mobile
+fixes) even after pressing the Deploy button twice. This is a
+platform/infra issue — not in the codebase. Escalated to user via
+support-agent guidance: open ticket at `support@emergent.sh` with
+Job ID, custom domain, screenshots showing preview-vs-prod drift,
+and number of deploy attempts. Code is fine; pipeline isn't
+publishing the build.
+
+
 ### P0: Reconciliation delete/merge actions now propagate to snapshots — SHIPPED 2026-06-02
 
 User: "When I delete a legacy profile, nothing happens. The error
