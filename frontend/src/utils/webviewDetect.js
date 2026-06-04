@@ -31,7 +31,41 @@ const KNOWN_WEBVIEW_TOKENS = [
   { vendor: "Snapchat", re: /\bSnapchat\b/i },
   { vendor: "Pinterest", re: /\bPinterest\b/i },
   { vendor: "Slack", re: /\bSlack\b/i },
+  // Emergent's own preview viewer renders inside a wrapped webview
+  // when opened from the platform's mobile app. We don't currently
+  // detect this by UA — there isn't a reliable token — but we DO
+  // flag it heuristically via the iOS generic check below.
 ];
+
+/**
+ * Best-effort "open this URL in the real browser" launcher. iOS deep
+ * links like `x-safari-https://` were unreliable from iOS 14 onward
+ * and now flat-out fail inside many embedded webviews (including
+ * Emergent's own preview app — the user hit a "Failed to load" page).
+ *
+ * Modern approach: try in this order, stopping on first success:
+ *   1. window.open(href, '_blank', 'noopener,noreferrer')
+ *      Most webviews surface this as a system "Open in…" prompt.
+ *   2. window.open() with no target — last-ditch.
+ *
+ * No more custom-scheme URIs by default. We return a status object so
+ * the UI can advise the user to use the share-sheet if the popup
+ * approach doesn't navigate them out.
+ */
+export function openInSystemBrowser(href) {
+  if (typeof window === "undefined" || !href) {
+    return { attempted: false, method: null };
+  }
+  try {
+    const w = window.open(href, "_blank", "noopener,noreferrer");
+    if (w) return { attempted: true, method: "window.open(_blank)" };
+  } catch { /* fall through */ }
+  try {
+    window.open(href);
+    return { attempted: true, method: "window.open()" };
+  } catch { /* fall through */ }
+  return { attempted: false, method: null };
+}
 
 export function detectWebView() {
   const ua = (typeof navigator !== "undefined" ? navigator.userAgent : "") || "";
