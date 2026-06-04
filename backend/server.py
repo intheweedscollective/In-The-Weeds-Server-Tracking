@@ -28,6 +28,7 @@ import requests
 from pypdf import PdfReader, PdfWriter
 from pdf_full_rankings import build_full_rankings_pdf
 from qr_tracking import register_qr_routes
+from routes.qr_recovery import register_qr_recovery_routes
 from store_management import register_store_routes
 from snapshot_routes import snapshot_router
 from routes.quarter_settings import quarter_settings_router
@@ -46,6 +47,7 @@ from routes.pos_upload import pos_upload_router, pdf_jobs
 from routes.scheduler import scheduler_router
 from routes.snapshots_legacy import register_snapshots_legacy_routes
 from routes.auth import auth_router
+from services.employee_v2_writer import upsert_employee_v2
 
 # pdf_jobs is now imported from pos_upload module
 from yodeck_slides import (
@@ -414,14 +416,23 @@ async def recalculate_employee_tiers(quarter: str = "Q1", year: int = 2026):
 @api_router.post("/v2/employees/fix-all-scores")
 async def fix_all_employee_scores(quarter: str = "Q1", year: int = 2026):
     """
-    Recalculate ALL employee scores using the CORRECT formula.
-    
-    CORRECT FORMULA:
-    - weighted_score = PPA×25% + LSC×25% + LBW×15% + Glass×10% (POS only, 75 pts max)
-    - metric_bonus = sum of bonuses for each metric over 100%
-    - total_score = weighted_score + RT_bonus + CV_score + metric_bonus
-    
-    This fixes bugs where RT was double-counted or metric bonuses weren't calculated.
+    Recalculate ALL employee scores using the CANONICAL formula.
+
+    CANONICAL FORMULA (matches `scoring_engine.compute_total_score_dict`):
+      • weighted_score = capped_ppa × 0.25 + capped_lsc × 0.25
+                       + capped_lbw × 0.20 + capped_glass × 0.15
+                       (POS only — 85 pts max with 25/25/20/15 weighting)
+      • metric_bonus   = Σ over PPA/LSC/LBW/Glass of  min(((score-100)/20)*5, 5)
+                         (0 if score ≤ 100; up to 5 pts per metric, 20 pts cap)
+      • rt_bonus       = min(rt_mentions × 0.33, 20)
+      • total_score    = weighted_score + cv_score + metric_bonus + rt_bonus
+
+    History: pre-2026-05 this endpoint was running the legacy
+    LBW 15% / Glass 10% (75-pt max) math, which silently downgraded
+    correct scores and re-ordered the rankings. The May 2026 scoring
+    audit identified this as the main source of score drift. The
+    constants below now agree with `scoring_engine.QuarterSettings`
+    and the locked-in spec on `/app/memory/PRD.md`.
     """
     employees = await db.employees_v2.find(
         {"quarter": quarter.upper(), "year": year}
@@ -511,12 +522,13 @@ async def fix_all_employee_scores(quarter: str = "Q1", year: int = 2026):
         capped_lbw = min(score_lbw, 100)
         capped_glass = min(score_glass, 100)
         
-        # CORRECT weighted_score: POS metrics only (75 pts max)
+        # CORRECT weighted_score: POS metrics only (85 pts max with
+        # canonical 25/25/20/15 weighting — see scoring_engine.QuarterSettings).
         correct_weighted = round(
             capped_ppa * 0.25 +
             capped_lsc * 0.25 +
-            capped_lbw * 0.15 +
-            capped_glass * 0.10,
+            capped_lbw * 0.20 +
+            capped_glass * 0.15,
             2
         )
         
@@ -527,9 +539,9 @@ async def fix_all_employee_scores(quarter: str = "Q1", year: int = 2026):
         bonus_glass = round(calc_metric_bonus(score_glass), 2)
         correct_metric_bonus = round(bonus_ppa + bonus_lsc + bonus_lbw + bonus_glass, 2)
         
-        # Calculate RT bonus from rt_mentions (0.5 pts per mention, capped at 15)
+        # Calculate RT bonus from rt_mentions (0.33 pts per mention, capped at 20)
         rt_mentions = emp.get('rt_mentions', 0) or emp.get('review_mentions', 0) or 0
-        rt_bonus = min(rt_mentions * 0.3, 20)
+        rt_bonus = min(rt_mentions * 0.33, 20)
         
         # Get CV score
         cv_score = emp.get('cv_score', 0) or 0
@@ -812,7 +824,7 @@ def generate_pdf_v2(employee: EmployeeV2, settings: QuarterSettings, review_cont
         ["LBW (Liquor Beer Wine/Guest)", f"${employee.lbw_per_guest or 0:.2f}", f"{employee.score_lbw or 0:.1f}", f"+{employee.bonus_lbw or 0:.1f}", "20%", score_status(employee.score_lbw)],
         ["Glassware ($/Guest)", f"${employee.glassware_per_guest or 0:.2f}", f"{employee.score_glass or 0:.1f}", f"+{employee.bonus_glass or 0:.1f}", "15%", score_status(employee.score_glass)],
         ["LSC (Guests per Enrollment)", f"{employee.guests_per_lsc or 'N/A'}", f"{employee.score_lsc or 0:.1f}", f"+{employee.bonus_lsc or 0:.1f}", "25%", score_status(employee.score_lsc)],
-        ["Customer Voice", f"{employee.cv_score or 0:.1f} pts", f"{employee.score_cv or 0:.1f}", "-", "15%", score_status(employee.score_cv)],
+        ["Customer Voice", f"{employee.cv_score or 0:.1f} pts", f"{employee.score_cv or 0:.1f}", "-", "Bonus", score_status(employee.score_cv)],
     ]
     
     kpi_table = Table(kpi_data, colWidths=[2.3*inch, 1.1*inch, 0.8*inch, 0.7*inch, 0.7*inch, 0.9*inch])
@@ -1148,8 +1160,8 @@ async def unified_pos_upload(
             weighted_score = (
                 capped_ppa * 0.25 +
                 capped_lsc * 0.25 +
-                capped_lbw * 0.15 +
-                capped_glass * 0.10
+                capped_lbw * 0.20 +
+                capped_glass * 0.15
             )
             
             # INTELLIGENT FUZZY NAME MATCHING
@@ -1256,7 +1268,7 @@ async def unified_pos_upload(
                     "created_at": datetime.now(timezone.utc),
                     "updated_at": datetime.now(timezone.utc)
                 }
-                await db.employees_v2.insert_one(new_emp)
+                await upsert_employee_v2(db, new_emp)
                 created_count += 1
         
         # Recalculate peer ranks
@@ -1637,7 +1649,7 @@ async def upload_employees_v2(
                 doc['job_title'] = preserved_job_titles[emp_name_lower]
                 logging.info(f"Restored job title '{doc['job_title']}' for {doc['name']}")
             
-            await db.employees_v2.insert_one(doc)
+            await upsert_employee_v2(db, doc)
         
         # Populate CV data from synced Loyalty Voice data
         cv_records = await db.cv_nps.find(
@@ -2201,7 +2213,7 @@ async def _load_snapshot_first_rankings(
         bonus_cap=settings_doc.get("bonus_cap", 5.0),
         a_server_min_score=settings_doc.get("a_server_min_score", 85.0),
         b_server_min_score=settings_doc.get("b_server_min_score", 70.0),
-        rt_points_per_mention=settings_doc.get("rt_points_per_mention", 0.3),
+        rt_points_per_mention=settings_doc.get("rt_points_per_mention", 0.33),
         rt_max_points=settings_doc.get("rt_max_points", 20.0),
     )
 
@@ -2268,7 +2280,75 @@ async def _load_snapshot_first_rankings(
         if src.get("nps_manual_override"):
             rank["nps_manual_override"] = True
 
+    # Attach `score_change` + `trend` by diffing against the immediately
+    # prior quarter's snapshot. The PNG/PDF generators use this for the
+    # trend-arrow column so viewers see magnitude alongside direction.
+    await _attach_score_change(rankings, year, quarter.upper())
+
     return rankings, settings
+
+
+async def _attach_score_change(rankings: List[dict], year: int, quarter: str) -> None:
+    """Mutate `rankings` in place to add a numeric `score_change` and
+    a string `trend` ('up' / 'down' / 'flat') by diffing each rank's
+    `total_score` against the prior quarter's score for the same
+    employee (matched by id, falling back to canonical name).
+
+    Looks up the most recent completed snapshot in the prior quarter.
+    If there is none — e.g. Q1 with no Q4 data — every rank gets
+    `score_change=None` and `trend="flat"`, and the renderers skip
+    drawing the magnitude. Idempotent and safe to call repeatedly."""
+    prev_quarter_map = {"Q1": "Q4", "Q2": "Q1", "Q3": "Q2", "Q4": "Q3"}
+    prev_q = prev_quarter_map.get(quarter, "Q4")
+    prev_y = year - 1 if quarter == "Q1" else year
+
+    prev_snap = await db.snapshot_workflow.find_one(
+        {"year": prev_y, "quarter": prev_q, "status": "completed"},
+        {"_id": 0, "employees": 1, "rows": 1},
+        sort=[("effective_date", -1), ("completed_at", -1)],
+    )
+    if not prev_snap:
+        for r in rankings:
+            r.setdefault("score_change", None)
+            r.setdefault("trend", "flat")
+        return
+
+    prev_by_id: Dict[str, float] = {}
+    prev_by_name: Dict[str, float] = {}
+    for e in (prev_snap.get("employees") or []):
+        eid = e.get("id")
+        score = (e.get("total_score") or e.get("pre_dar_score") or 0) or 0
+        if eid:
+            prev_by_id[eid] = float(score)
+        nm = (e.get("name") or "").strip().lower()
+        if nm:
+            prev_by_name[nm] = float(score)
+    # Snapshot rows[] sometimes carry frozen scores for legacy snaps.
+    for row in (prev_snap.get("rows") or []):
+        eid = row.get("employee_id")
+        score = row.get("total_score") or row.get("pre_dar_score") or 0
+        if eid and eid not in prev_by_id and score:
+            prev_by_id[eid] = float(score)
+        nm = (row.get("frozen_display_name") or row.get("name") or "").strip().lower()
+        if nm and nm not in prev_by_name and score:
+            prev_by_name[nm] = float(score)
+
+    for r in rankings:
+        rid = r.get("id") or r.get("employee_id")
+        rnm = (r.get("name") or "").strip().lower()
+        prev = prev_by_id.get(rid) if rid in prev_by_id else prev_by_name.get(rnm)
+        if prev is None:
+            r.setdefault("score_change", None)
+            r.setdefault("trend", "flat")
+            continue
+        delta = float(r.get("total_score") or 0) - prev
+        r["score_change"] = round(delta, 1)
+        if delta > 0.5:
+            r["trend"] = "up"
+        elif delta < -0.5:
+            r["trend"] = "down"
+        else:
+            r["trend"] = "flat"
 
 
 @api_router.get("/v2/full-rankings/{year}/{quarter}/snapshot-png")
@@ -2299,6 +2379,60 @@ async def download_full_rankings_snapshot_png(year: int, quarter: str):
         content=png_bytes,
         media_type="image/png",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+@api_router.get("/v2/full-rankings/{year}/{quarter}/snapshot-png/preview")
+async def preview_full_rankings_snapshot_png(
+    year: int,
+    quarter: str,
+    w: int = 960,
+):
+    """
+    Inline thumbnail preview of the Server Performance Snapshot slide.
+
+    Same data + render path as `/snapshot-png`, but:
+      - Returned inline (no Content-Disposition: attachment) so the
+        browser displays it directly.
+      - Downsampled to `w` pixels wide (16:9, default 960×540) so the
+        admin UI can iterate on layout tweaks quickly without pulling
+        a full 1920×1080 PNG every time.
+    """
+    from io import BytesIO
+    from PIL import Image as PILImage
+    from png_full_rankings import build_full_rankings_png
+
+    rankings, settings = await _load_snapshot_first_rankings(year, quarter)
+
+    png_bytes = build_full_rankings_png(
+        rankings=rankings,
+        quarter=quarter.upper(),
+        year=year,
+        thresholds={
+            "a_min": settings.a_server_min_score,
+            "b_min": settings.b_server_min_score,
+        },
+    )
+
+    # Clamp preview width to a sane range, then downscale preserving 16:9.
+    target_w = max(320, min(int(w), 1920))
+    if target_w < 1920:
+        src = PILImage.open(BytesIO(png_bytes))
+        target_h = int(target_w * src.height / src.width)
+        src = src.resize((target_w, target_h), PILImage.Resampling.LANCZOS)
+        buf = BytesIO()
+        src.save(buf, format="PNG", optimize=True)
+        png_bytes = buf.getvalue()
+
+    return Response(
+        content=png_bytes,
+        media_type="image/png",
+        headers={
+            # Inline display; short cache so repeated previews are fast
+            # but admins still see edits after a backend reload.
+            "Content-Disposition": "inline",
+            "Cache-Control": "private, max-age=15",
+        },
     )
 
 
@@ -2554,7 +2688,7 @@ async def create_employee(data: EmployeeCreate):
     emp_dict = employee.model_dump()
     emp_dict['tier_label'] = tier_label
     emp_dict['created_at'] = datetime.now(timezone.utc).isoformat()
-    await db.employees_v2.insert_one(emp_dict)
+    await upsert_employee_v2(db, emp_dict)
     
     # Recalculate peer rankings for all employees in this quarter
     all_employees = await db.employees_v2.find(
@@ -2653,7 +2787,7 @@ async def update_employee(employee_id: str, data: dict):
                 snap_emp_clone["aliases"] = existing_aliases
                 snap_emp_clone["created_at"] = datetime.now(timezone.utc).isoformat()
                 snap_emp_clone["updated_at"] = snap_emp_clone["created_at"]
-                await db.employees_v2.insert_one(snap_emp_clone)
+                await upsert_employee_v2(db, snap_emp_clone)
                 emp_doc = snap_emp_clone
 
         if not emp_doc:
@@ -3259,6 +3393,63 @@ async def analyze_employees_for_cleanup():
     }
 
 
+@api_router.get("/v2/admin/alias-collisions")
+async def admin_alias_collisions():
+    """
+    Surface canonical-employee aliases that are ALSO the canonical name
+    of a separate active record. Each collision is a data-hygiene bug
+    that silently splits CV/NPS/RT data across two buckets:
+
+      e.g. "Allen Simmons" has `"craig simmons"` in aliases AND there's
+      a separate active canonical record named "Craig Simmons". POS /
+      CV / RT uploads for "Craig Simmons" land on the standalone Craig
+      record while Allen's row stays empty — which is exactly what
+      caused Allen's NPS=0 on Q2P5W2.75.
+
+    Returns one row per collision with both record ids so the user can
+    open Nickname Manager and merge them. Only flags collisions where
+    BOTH records are status=active (merged/terminated dupes are
+    expected and harmless).
+    """
+    all_emps = []
+    async for e in db.employees.find(
+        {}, {"_id": 0, "id": 1, "name": 1, "aliases": 1, "status": 1}
+    ):
+        all_emps.append(e)
+
+    name_to_emp = {(e.get("name") or "").lower(): e for e in all_emps}
+    collisions = []
+    for e in all_emps:
+        if (e.get("status") or "").lower() != "active":
+            continue
+        for a in (e.get("aliases") or []):
+            al = (a or "").strip().lower()
+            other = name_to_emp.get(al)
+            if not other or other.get("id") == e.get("id"):
+                continue
+            if (other.get("status") or "").lower() != "active":
+                continue
+            collisions.append({
+                "primary_id":    e.get("id"),
+                "primary_name":  e.get("name"),
+                "alias":         a,
+                "duplicate_id":   other.get("id"),
+                "duplicate_name": other.get("name"),
+                "duplicate_status": other.get("status"),
+                "resolution": (
+                    f"Merge '{other.get('name')}' (id {other.get('id')}) into "
+                    f"'{e.get('name')}' via Nickname Manager. The alias on the "
+                    f"primary already covers any future uploads."
+                ),
+            })
+
+    return {
+        "collisions": collisions,
+        "count": len(collisions),
+        "note": "Each active collision silently splits CV/NPS/RT data across two buckets. Merge via Nickname Manager.",
+    }
+
+
 @api_router.get("/v2/admin/integrity")
 async def employee_data_integrity():
     """
@@ -3412,7 +3603,7 @@ async def import_all_data(data: dict):
                 emp["year"] = year
                 emp["updated_at"] = datetime.now(timezone.utc)
                 
-                await db.employees_v2.insert_one(emp)
+                await upsert_employee_v2(db, emp)
                 results["employees_imported"] += 1
             except Exception as e:
                 results["errors"].append(f"Employee {emp.get('name', '?')}: {str(e)}")
@@ -4021,6 +4212,7 @@ async def fix_ppa_values(quarter: str, year: int) -> int:
 
 # Register QR tracking routes BEFORE including in app
 register_qr_routes(api_router, db)
+register_qr_recovery_routes(api_router, db)
 
 # Register store management routes
 register_store_routes(api_router, db)
@@ -4121,9 +4313,21 @@ app.add_middleware(NoCacheMiddleware)
 from routes.auth import _get_session_user as _auth_get_session_user, ALLOWED_EMAILS
 
 _AUTH_PROTECTED_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+# Prefixes that REQUIRE admin auth on every method (including GET).
+# These expose data-integrity counts, alias collisions, audit findings, etc.
+# that should never be readable by anonymous users.
+_AUTH_ADMIN_ALL_METHODS_PREFIXES = (
+    "/api/v2/admin/",
+)
 _AUTH_PUBLIC_PREFIXES = (
     "/api/auth/",
     "/api/health",
+)
+# Even within the admin namespace, a handful of endpoints are intentionally
+# public/read-only and must NOT require auth (e.g. the canonical scoring
+# example — it's a math demonstrator with no real data).
+_AUTH_ADMIN_EXEMPT_PATHS = (
+    "/api/v2/admin/scoring-example",
 )
 
 class AdminAuthMiddleware(BaseHTTPMiddleware):
@@ -4131,12 +4335,24 @@ class AdminAuthMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         method = request.method.upper()
 
-        # Public reads + auth flow + non-API requests pass through unchanged.
-        if (
-            method not in _AUTH_PROTECTED_METHODS
-            or not path.startswith("/api/")
-            or any(path.startswith(p) for p in _AUTH_PUBLIC_PREFIXES)
+        # Determine if this request needs auth.
+        needs_admin = False
+        if path.startswith("/api/") and not any(
+            path.startswith(p) for p in _AUTH_PUBLIC_PREFIXES
         ):
+            # 1. All writes need admin.
+            if method in _AUTH_PROTECTED_METHODS:
+                needs_admin = True
+            # 2. Admin-namespace reads ALSO need admin (data-integrity counts,
+            #    alias collisions, audit findings, etc.) — unless they're on
+            #    the explicit public-exempt list.
+            elif any(
+                path.startswith(p) for p in _AUTH_ADMIN_ALL_METHODS_PREFIXES
+            ) and not any(path == ep or path.startswith(ep + "?") or path.startswith(ep + "/")
+                          for ep in _AUTH_ADMIN_EXEMPT_PATHS):
+                needs_admin = True
+
+        if not needs_admin:
             return await call_next(request)
 
         # Protected: require valid session whose email is on the whitelist.
@@ -4153,13 +4369,13 @@ class AdminAuthMiddleware(BaseHTTPMiddleware):
             from fastapi.responses import JSONResponse
             return JSONResponse(
                 status_code=401,
-                content={"detail": "Sign in required to make changes."},
+                content={"detail": "Sign in required."},
             )
         if not user.is_admin:
             from fastapi.responses import JSONResponse
             return JSONResponse(
                 status_code=403,
-                content={"detail": f"{user.email} is not authorized to edit this app. Contact the owner to be added."},
+                content={"detail": f"{user.email} is not authorized to access this resource."},
             )
 
         return await call_next(request)
@@ -4187,6 +4403,37 @@ async def startup_event():
     from routes.scheduler import run_automated_reconciliation
     
     scheduler.start()
+
+    # Enforce the (name_normalized, quarter, year) uniqueness contract
+    # at the storage layer. This is the structural fix that prevents
+    # the legacy_duplicate cards from ever returning — a second POS
+    # upload of the same name in the same quarter can no longer create
+    # a second row, it'll upsert into the existing one. Idempotent:
+    # mongo returns ok=1 if the index already exists with the same
+    # spec, and we tolerate IndexOptionsConflict for backwards-compat.
+    #
+    # NOTE: this is a PARTIAL unique index — it only enforces uniqueness
+    # on rows where `name_normalized` is a non-empty string. Legacy
+    # rows / test fixtures / migration scripts that haven't populated
+    # `name_normalized` yet are excluded from the constraint. Production
+    # writes go through `services.employee_v2_writer.upsert_employee_v2`
+    # which always populates `name_normalized`, so real uploads stay
+    # protected. The dedupe script in `scripts/dedupe_by_name_quarter_year`
+    # backfills `name_normalized` on every existing row.
+    try:
+        await db.employees_v2.create_index(
+            [("name_normalized", 1), ("quarter", 1), ("year", 1)],
+            unique=True,
+            name="uniq_name_norm_quarter_year",
+            partialFilterExpression={
+                "name_normalized": {"$type": "string", "$gt": ""},
+                "quarter": {"$type": "string"},
+                "year": {"$type": "number"},
+            },
+        )
+        logging.info("employees_v2 unique index (name_normalized, quarter, year) ensured")
+    except Exception as idx_err:  # pragma: no cover — surface but don't crash boot
+        logging.error(f"Failed to create employees_v2 unique index: {idx_err}")
     
     # Load saved scheduler config
     config = await db.scheduler_config.find_one({"_id": "reconciliation"})

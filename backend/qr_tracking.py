@@ -841,29 +841,78 @@ async def update_qr_settings(settings: QRSettings):
 @qr_router.get("/stats")
 async def get_qr_stats():
     """Get QR tracking statistics"""
-    employees = await _db.qr_employees.find({}, {"_id": 0}).to_list(100)
-    
+    employees = await _db.qr_employees.find({}, {"_id": 0}).to_list(500)
+
     total_yelp = sum(e.get('yelp_clicks', 0) for e in employees)
     total_google = sum(e.get('google_clicks', 0) for e in employees)
     total_tripadvisor = sum(e.get('tripadvisor_clicks', 0) for e in employees)
     total_scans = total_yelp + total_google + total_tripadvisor
-    
-    employees.sort(key=lambda x: (x.get('yelp_clicks', 0) + x.get('google_clicks', 0) + x.get('tripadvisor_clicks', 0)), reverse=True)
+
+    def _total(e):
+        return (e.get('yelp_clicks', 0) or 0) + (e.get('google_clicks', 0) or 0) + (e.get('tripadvisor_clicks', 0) or 0)
+
+    employees.sort(key=_total, reverse=True)
     top_10 = employees[:10]
-    
+
+    # ---- Bottom 10 (engagement warning) ----
+    # Only surface ACTIVE employees here so terminated/inactive staff
+    # don't dominate the "low engagement" callout with permanent zeros.
+    # Match against canonical name + aliases (case-insensitive).
+    active_names: set[str] = set()
+    async for e in _db.employees.find({"status": "active"}, {"_id": 0, "name": 1, "aliases": 1}):
+        n = (e.get("name") or "").strip().lower()
+        if n:
+            active_names.add(n)
+        for a in (e.get("aliases") or []):
+            a = (a or "").strip().lower()
+            if a:
+                active_names.add(a)
+
+    active_qr = [e for e in employees if (e.get("name") or "").strip().lower() in active_names]
+    active_qr.sort(key=_total)  # ascending — lowest first
+    bottom_10_raw = active_qr[:10]
+
+    from datetime import datetime, timezone as _tz
+
+    def _days_since(iso_str):
+        if not iso_str:
+            return None
+        try:
+            dt = datetime.fromisoformat(str(iso_str).replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=_tz.utc)
+            delta = datetime.now(_tz.utc) - dt
+            return max(0, delta.days)
+        except Exception:
+            return None
+
+    bottom_10 = [{
+        "name": e.get("name"),
+        "yelp_clicks": e.get("yelp_clicks", 0) or 0,
+        "google_clicks": e.get("google_clicks", 0) or 0,
+        "tripadvisor_clicks": e.get("tripadvisor_clicks", 0) or 0,
+        "total": _total(e),
+        "days_since_last_scan": _days_since(e.get("last_scan_at")),
+    } for e in bottom_10_raw]
+
     return {
         "total_scans": total_scans,
         "yelp_scans": total_yelp,
         "google_scans": total_google,
         "tripadvisor_scans": total_tripadvisor,
         "total_employees": len(employees),
+        "active_employees": len(active_qr),
+        # Threshold for "engagement warning" badge on the frontend —
+        # anyone with strictly fewer clicks than this gets flagged.
+        "engagement_warning_threshold": 5,
         "top_10": [{
             "name": e.get('name'),
             "yelp_clicks": e.get('yelp_clicks', 0),
             "google_clicks": e.get('google_clicks', 0),
             "tripadvisor_clicks": e.get('tripadvisor_clicks', 0),
-            "total": e.get('yelp_clicks', 0) + e.get('google_clicks', 0) + e.get('tripadvisor_clicks', 0)
-        } for e in top_10]
+            "total": _total(e),
+        } for e in top_10],
+        "bottom_10": bottom_10,
     }
 
 @qr_router.get("/top10")
@@ -1082,8 +1131,14 @@ async def qr_health_check():
         d["printed_id"]
         async for d in _db.qr_employee_id_aliases.find({}, {"_id": 0, "printed_id": 1})
     }
+    # Dismissed ghost IDs — operator marked as unrecoverable. They no
+    # longer count toward the dashboard alert.
+    dismissed_ids = {
+        d["printed_id"]
+        async for d in _db.qr_ghost_dismissed.find({}, {"_id": 0, "printed_id": 1})
+    }
     pipeline = [
-        {"$match": {"employee_id": {"$nin": list(current_ids | aliased_ids)}}},
+        {"$match": {"employee_id": {"$nin": list(current_ids | aliased_ids | dismissed_ids)}}},
         {"$group": {"_id": "$employee_id", "scans": {"$sum": 1}}},
     ]
     ghosts = []
@@ -1093,6 +1148,7 @@ async def qr_health_check():
     out["ghost_ids"] = {
         "count": len(ghosts),
         "orphan_scans": sum(g["scan_count"] for g in ghosts),
+        "dismissed_count": len(dismissed_ids),
     }
 
     out["status"] = "alert" if (long_gaps or ghosts) else "ok"
@@ -1245,6 +1301,13 @@ async def list_ghost_ids():
         doc["printed_id"]
         async for doc in _db.qr_employee_id_aliases.find({}, {"_id": 0, "printed_id": 1})
     }
+    # Operators can dismiss a ghost ID (e.g. unrecoverable historical
+    # scans from a deleted employee). Once dismissed, the ID stops
+    # surfacing in the health badge and the heal queue.
+    dismissed_ids = {
+        doc["printed_id"]
+        async for doc in _db.qr_ghost_dismissed.find({}, {"_id": 0, "printed_id": 1})
+    }
 
     pipeline = [
         {"$group": {
@@ -1264,6 +1327,8 @@ async def list_ghost_ids():
     async for row in _db.qr_click_log_immutable.aggregate(pipeline):
         eid = row["_id"]
         if not eid or eid in current_ids or eid in aliased_ids:
+            continue
+        if eid in dismissed_ids:
             continue
         # Strip "Unknown" so the admin sees only meaningful historical names.
         names = [n for n in (row.get("names") or []) if n and n != "Unknown"]
@@ -1416,6 +1481,68 @@ async def suggest_ghost_mappings():
         })
 
     return {"ghost_count": len(ghosts), "suggestions": suggestions}
+
+
+
+@qr_router.post("/admin/dismiss-ghost-ids")
+async def dismiss_ghost_ids(payload: Dict[str, Any]):
+    """
+    Mark one or more ghost printed_ids as "dismissed" so they stop
+    surfacing in the QR Health badge and the ghost-heal queue. Used for
+    ids whose owner can't be recovered (deleted employees, expired
+    cards, historical noise).
+
+    Body: { "printed_ids": ["id-1", "id-2", ...], "reason": "..." }
+
+    Dismissals are written to `qr_ghost_dismissed` so they persist
+    across restarts. To undo, hit `/admin/undismiss-ghost-id`.
+    """
+    db = _db
+    ids = payload.get("printed_ids") or []
+    if not isinstance(ids, list) or not ids:
+        raise HTTPException(status_code=400, detail="printed_ids must be a non-empty list")
+    reason = (payload.get("reason") or "").strip()
+    actor  = (payload.get("actor")  or "unknown").strip() or "unknown"
+
+    dismissed = 0
+    for pid in ids:
+        pid = (pid or "").strip()
+        if not pid:
+            continue
+        res = await db.qr_ghost_dismissed.update_one(
+            {"printed_id": pid},
+            {"$set": {
+                "printed_id":   pid,
+                "dismissed_at": datetime.now(timezone.utc).isoformat(),
+                "dismissed_by": actor,
+                "reason":       reason,
+            }},
+            upsert=True,
+        )
+        if res.upserted_id or res.modified_count:
+            dismissed += 1
+    return {"success": True, "dismissed_count": dismissed}
+
+
+@qr_router.post("/admin/undismiss-ghost-id")
+async def undismiss_ghost_id(payload: Dict[str, Any]):
+    """Reverse a previous dismiss so the ghost surfaces again."""
+    pid = (payload.get("printed_id") or "").strip()
+    if not pid:
+        raise HTTPException(status_code=400, detail="printed_id required")
+    res = await _db.qr_ghost_dismissed.delete_one({"printed_id": pid})
+    return {"success": True, "removed": res.deleted_count}
+
+
+@qr_router.get("/admin/dismissed-ghost-ids")
+async def list_dismissed_ghost_ids():
+    """List currently-dismissed ghost ids for the audit/undismiss UI."""
+    rows = []
+    async for d in _db.qr_ghost_dismissed.find(
+        {}, {"_id": 0}
+    ).sort("dismissed_at", -1):
+        rows.append(d)
+    return {"count": len(rows), "dismissed": rows}
 
 
 @qr_router.post("/admin/heal-ghost-ids")
@@ -1750,8 +1877,10 @@ async def get_leaderboard_with_mentions(
     leaderboard and the downloadable slide. Every employee from
     qr_employees AND employees_v2 (for the given quarter/year) appears
     exactly once, with both click counts and review mention counts
-    populated. Sorted by conversion rate desc -> mentions desc -> clicks
-    desc so the same row order shows up in the UI and the PNG.
+    populated. Sorted by total clicks desc -> mentions desc.
+    Conversion rate intentionally NOT computed — clicks are the raw
+    engagement signal management wants to see; mentions are tracked
+    separately as a quality indicator.
     """
     qr_emps = await _db.qr_employees.find({}, {"_id": 0}).to_list(500)
     from services.employee_service import EmployeeService
@@ -1813,7 +1942,6 @@ async def get_leaderboard_with_mentions(
             "tripadvisor_clicks": ta,
             "total_clicks": clicks,
             "rt_mentions": m,
-            "conversion_rate": round((m / clicks * 100), 1) if clicks else 0.0,
         })
 
     # Pass 2: employees_v2 records absent from qr_employees (clicks=0)
@@ -1831,19 +1959,238 @@ async def get_leaderboard_with_mentions(
             "tripadvisor_clicks": 0,
             "total_clicks": 0,
             "rt_mentions": m,
-            "conversion_rate": 0.0,
         })
 
-    # Sort: conversion rate desc -> mentions desc -> clicks desc.
-    # Employees with 0 clicks pinned to the bottom regardless of mentions.
+    # Sort: total clicks desc -> mentions desc. Zero-click rows fall
+    # naturally to the bottom; among them mentions still rank correctly.
     merged.sort(
-        key=lambda e: (
-            -1 if e["total_clicks"] == 0 else e["conversion_rate"],
-            e["rt_mentions"],
-            e["total_clicks"],
-        ),
+        key=lambda e: (e["total_clicks"], e["rt_mentions"]),
         reverse=True,
     )
     return {"employees": merged, "quarter": quarter.upper(), "year": year, "count": len(merged)}
+
+
+@qr_router.get("/clicks-by-day")
+async def get_clicks_by_day(days: int = 30):
+    """
+    Per-server daily QR click breakdown for the last `days` days.
+
+    Source: `qr_click_log_immutable` (the append-only audit log) so
+    the matrix reflects every recorded scan even if `qr_scans` gets
+    archived or `qr_employees` counters get reset.
+
+    Days are bucketed in UTC by the date portion of `scanned_at`.
+    Names are resolved to the canonical `employees.name` when possible
+    via case-insensitive name/alias match — so historical scans logged
+    under an old/typo name still aggregate under the current canonical
+    record (no duplicate "Trey" vs "Treyanna" rows).
+
+    Response shape:
+      {
+        "days": ["2026-04-15", ...,  "2026-05-14"],   # ASC, length=days
+        "rows": [
+          {
+            "employee_id": "<canonical id or null>",
+            "name": "Trey Quick",
+            "totals": {"yelp": 0, "google": 12, "tripadvisor": 23},
+            "by_day": [0,1,0,2,...],                  # length == days
+            "total":  35,
+          },
+          ...
+        ],
+        "totals_by_day": [3,5,...],
+        "generated_at": "2026-05-14T03:11:41Z",
+        "window_days": 30
+      }
+
+    Designed for client-side polling — call every 15s for "live"
+    updates. Lightweight (single aggregation + a small post-process).
+    """
+    from datetime import datetime, timezone as _tz, timedelta
+
+    n = max(1, min(int(days), 90))
+    today = datetime.now(_tz.utc).date()
+    start = today - timedelta(days=n - 1)
+    start_iso = datetime.combine(start, datetime.min.time()).replace(tzinfo=_tz.utc).isoformat()
+
+    # ---- Build alias → canonical map (cheap; ~37 docs) -------------------
+    alias_to_canonical: dict[str, dict] = {}
+    async for e in _db.employees.find({}, {"_id": 0, "id": 1, "name": 1, "aliases": 1, "status": 1}):
+        canonical = {"id": e.get("id"), "name": e.get("name"), "status": e.get("status")}
+        for raw in [e.get("name")] + (e.get("aliases") or []):
+            key = (raw or "").strip().lower()
+            if key:
+                alias_to_canonical.setdefault(key, canonical)
+
+    # ---- Build "currently-tracked" set from qr_employees -----------------
+    # The QR Codes tab manipulates qr_employees directly: deleting from
+    # that tab removes the doc entirely, so we use presence there as the
+    # source of truth for "still tracked" alongside `employees.status`.
+    # We also keep a name → qr_employee_id map so we can backfill
+    # zero-click rows below.
+    qr_tracked_names: set[str] = set()
+    qr_tracked_by_name: dict[str, dict] = {}
+    async for q in _db.qr_employees.find({}, {"_id": 0, "id": 1, "name": 1}):
+        n_ = (q.get("name") or "").strip().lower()
+        if n_:
+            qr_tracked_names.add(n_)
+            qr_tracked_by_name.setdefault(n_, q)
+
+    def _is_test_name(name: str) -> bool:
+        n_ = (name or "").strip().lower()
+        # Filter obvious test/demo placeholders. Matches "test employee",
+        # "test user", "demo *", anything starting/ending with "test".
+        if not n_:
+            return True
+        return (
+            "test" in n_.split()
+            or n_.startswith("test ")
+            or n_.endswith(" test")
+            or n_ == "test"
+            or n_.startswith("demo ")
+            or n_ == "demo"
+        )
+
+    # ---- Aggregation in MongoDB ------------------------------------------
+    pipeline = [
+        {"$match": {"scanned_at": {"$gte": start_iso}}},
+        {
+            "$project": {
+                "_id": 0,
+                "employee_name": 1,
+                "platform": 1,
+                "day": {"$substr": ["$scanned_at", 0, 10]},  # YYYY-MM-DD
+            }
+        },
+        {
+            "$group": {
+                "_id": {"name": "$employee_name", "day": "$day", "platform": "$platform"},
+                "count": {"$sum": 1},
+            }
+        },
+    ]
+
+    # day_index for O(1) slot lookup
+    days_list = [(start + timedelta(days=i)).isoformat() for i in range(n)]
+    day_index = {d: i for i, d in enumerate(days_list)}
+
+    # rows keyed by canonical id (fallback: raw name)
+    rows: dict[str, dict] = {}
+    totals_by_day = [0] * n
+
+    async for r in _db.qr_click_log_immutable.aggregate(pipeline):
+        gid = r.get("_id") or {}
+        raw_name = (gid.get("name") or "").strip()
+        day = gid.get("day")
+        platform = (gid.get("platform") or "").lower()
+        count = int(r.get("count") or 0)
+
+        if not raw_name or day not in day_index:
+            continue
+
+        # Drop test/demo placeholder names entirely.
+        if _is_test_name(raw_name):
+            continue
+
+        canonical = alias_to_canonical.get(raw_name.lower())
+
+        # Exclude terminated/inactive employees: if the name resolves to
+        # a canonical record and that record's status is not 'active',
+        # drop the scans. (Status==None / missing also drops — only
+        # explicitly-active employees pass.)
+        if canonical and (canonical.get("status") or "").lower() != "active":
+            continue
+
+        # Exclude employees deleted from the QR Codes tab: if the raw
+        # name AND all known aliases of the canonical record are absent
+        # from `qr_employees`, the user has explicitly removed tracking
+        # for this person and historical scans should disappear.
+        if raw_name.lower() not in qr_tracked_names:
+            canonical_present = False
+            if canonical:
+                canonical_present = (canonical.get("name") or "").strip().lower() in qr_tracked_names
+            if not canonical_present:
+                continue
+
+        key = canonical["id"] if canonical else f"name:{raw_name.lower()}"
+        display_name = canonical["name"] if canonical else raw_name
+
+        bucket = rows.get(key)
+        if bucket is None:
+            bucket = {
+                "employee_id": canonical["id"] if canonical else None,
+                "name": display_name,
+                "totals": {"yelp": 0, "google": 0, "tripadvisor": 0},
+                "by_day": [0] * n,
+                "total": 0,
+                "active": True,  # Inactive rows are filtered out above.
+            }
+            rows[key] = bucket
+
+        slot = day_index[day]
+        bucket["by_day"][slot] += count
+        bucket["total"] += count
+        if platform in bucket["totals"]:
+            bucket["totals"][platform] += count
+        totals_by_day[slot] += count
+
+    # ---- Backfill zero-click rows for every active+tracked employee -----
+    # Before this fix the response only included employees who had at
+    # least one scan in the window. Empty performers — the ones you
+    # most need to see for coaching — silently disappeared from the
+    # leaderboard. Now we walk the canonical active set, skip ones
+    # already covered, and emit a zero-totals row for each missing
+    # one. They sort to the bottom alongside other zero-click rows.
+    covered_canonical_ids: set[str] = {
+        b["employee_id"] for b in rows.values() if b.get("employee_id")
+    }
+    covered_names_lower: set[str] = {
+        (b.get("name") or "").strip().lower() for b in rows.values()
+    }
+    for low_name, canonical in alias_to_canonical.items():
+        if (canonical.get("status") or "").lower() != "active":
+            continue
+        cid = canonical.get("id")
+        cname = canonical.get("name") or ""
+        # Skip if we already have a row for this canonical (by id or name).
+        if cid and cid in covered_canonical_ids:
+            continue
+        if cname.strip().lower() in covered_names_lower:
+            continue
+        # Skip if employee isn't currently tracked in qr_employees by
+        # any known alias — they were deliberately removed from QR.
+        if not any(a in qr_tracked_names
+                   for a in (cname, *(canonical.get("aliases") or []))
+                   if a):
+            # Defensive: also try the canonical name's lowercase form
+            if cname.strip().lower() not in qr_tracked_names:
+                continue
+        # Skip test/demo placeholders.
+        if _is_test_name(cname):
+            continue
+        key = cid or f"name:{cname.lower()}"
+        if key in rows:
+            continue
+        rows[key] = {
+            "employee_id": cid,
+            "name": cname,
+            "totals": {"yelp": 0, "google": 0, "tripadvisor": 0},
+            "by_day": [0] * n,
+            "total": 0,
+            "active": True,
+        }
+        covered_canonical_ids.add(cid)
+        covered_names_lower.add(cname.strip().lower())
+
+    rows_list = sorted(rows.values(), key=lambda r: r["total"], reverse=True)
+
+    return {
+        "days": days_list,
+        "rows": rows_list,
+        "totals_by_day": totals_by_day,
+        "grand_total": sum(totals_by_day),
+        "window_days": n,
+        "generated_at": datetime.now(_tz.utc).isoformat(),
+    }
 
 

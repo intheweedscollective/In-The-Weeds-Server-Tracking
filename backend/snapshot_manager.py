@@ -236,6 +236,32 @@ def calculate_employee_scores(
     """
     # Get raw metrics
     ppa = employee.get("ppa", 0) or 0
+
+    # --- Backfill per-guest metrics from raw sales if ingest didn't set them ---
+    # The edit path pre-derives these; the upload path does not. Guard each with
+    # "only if falsy" so this is idempotent and never overrides edit-path values.
+    guest_count = employee.get("guest_count") or employee.get("guests") or 0
+    if guest_count > 0:
+        if not employee.get("glassware_per_guest"):
+            glass = (
+                employee.get("bar_glassware_sales")
+                or employee.get("glassware_sales")
+                or 0
+            )
+            employee["glassware_per_guest"] = round(glass / guest_count, 2)
+        if not employee.get("lbw_per_guest"):
+            lbw = employee.get("lbw") or (
+                (employee.get("liquor_sales") or 0)
+                + (employee.get("beer_sales") or 0)
+                + (employee.get("wine_sales") or 0)
+            )
+            employee["lbw_per_guest"] = round(lbw / guest_count, 2)
+        if not employee.get("guests_per_lsc"):
+            lsc_count = employee.get("lsc_count") or employee.get("loyalty_signups") or 0
+            if lsc_count > 0:
+                employee["guests_per_lsc"] = round(guest_count / lsc_count, 2)
+    # ---------------------------------------------------------------------------
+
     lbw_per_guest = employee.get("lbw_per_guest", 0) or 0
     glassware_per_guest = employee.get("glassware_per_guest", 0) or 0
     guests_per_lsc = employee.get("guests_per_lsc", 0) or 0
@@ -286,7 +312,23 @@ def calculate_employee_scores(
     
     # Get CV/RT scores (if present)
     cv_score = employee.get("cv_score", 0) or 0
-    review_tracker_bonus = employee.get("review_tracker_bonus", 0) or 0
+    # ALWAYS recompute the RT bonus from mentions using the canonical
+    # formula here so a stale/missing `review_tracker_bonus` on the row
+    # can never silently zero out an employee's total. Drift was found
+    # in prod on 2026-05-14 where a few servers had rt_mentions populated
+    # but review_tracker_bonus=0 because the bonus was only ever derived
+    # at RT-upload time. Pulling the rate/cap from the benchmarks dict
+    # (with the canonical defaults) means re-processing a snapshot fixes
+    # any prior mismatches.
+    rt_mentions = (
+        employee.get("rt_mentions")
+        or employee.get("review_mentions")
+        or 0
+    ) or 0
+    rt_points_per_mention = benchmarks.get("rt_points_per_mention", 0.33)
+    rt_max_points = benchmarks.get("rt_max_points", 20.0)
+    review_tracker_bonus = round(min(rt_mentions * rt_points_per_mention, rt_max_points), 2)
+    employee["review_tracker_bonus"] = review_tracker_bonus
     dar_penalty = employee.get("dar_penalty", 0) or 0
     
     # Calculate total score

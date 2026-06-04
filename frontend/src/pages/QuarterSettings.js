@@ -37,6 +37,8 @@ export default function QuarterSettings() {
     weight_cv: 0.15,
     bonus_rate: 0.2,
     bonus_cap: 5.0,
+    rt_points_per_mention: 0.33,
+    rt_max_points: 20.0,
     // Server tier thresholds
     a_server_min_score: 85.0,
     b_server_min_score: 70.0
@@ -65,6 +67,8 @@ export default function QuarterSettings() {
           weight_cv: response.data.weight_cv || 0.15,
           bonus_rate: response.data.bonus_rate,
           bonus_cap: response.data.bonus_cap,
+          rt_points_per_mention: response.data.rt_points_per_mention ?? 0.33,
+          rt_max_points: response.data.rt_max_points ?? 20.0,
           a_server_min_score: response.data.a_server_min_score || 80.0,
           b_server_min_score: response.data.b_server_min_score || 70.1
         });
@@ -86,6 +90,8 @@ export default function QuarterSettings() {
             weight_cv: 0.15,
             bonus_rate: 0.2,
             bonus_cap: 5.0,
+            rt_points_per_mention: 0.33,
+            rt_max_points: 20.0,
             a_server_min_score: 80.0,
             b_server_min_score: 70.0
           });
@@ -136,6 +142,8 @@ export default function QuarterSettings() {
         weight_cv: response.data.weight_cv || 0.15,
         bonus_rate: response.data.bonus_rate,
         bonus_cap: response.data.bonus_cap,
+        rt_points_per_mention: response.data.rt_points_per_mention ?? 0.33,
+        rt_max_points: response.data.rt_max_points ?? 20.0,
         a_server_min_score: response.data.a_server_min_score || 80.0,
         b_server_min_score: response.data.b_server_min_score || 70.1
       });
@@ -538,7 +546,7 @@ export default function QuarterSettings() {
                 Formula: NPS%/10 + (Promoters × {formData.cv_promoter_points ?? 1}) − (Detractors × {formData.cv_detractor_points ?? 2})
               </p>
               <p className="text-xs text-blue-700 mt-1">
-                The Review Tracker bonus ({formData.rt_points_per_mention ?? 0.3} pts/mention, max {Math.round(formData.rt_max_points ?? 20)}) is a SEPARATE bonus added on top of CV.
+                The Review Tracker bonus ({formData.rt_points_per_mention ?? 0.33} pts/mention, max {Math.round(formData.rt_max_points ?? 20)}) is a SEPARATE bonus added on top of CV.
               </p>
             </div>
           </div>
@@ -575,6 +583,48 @@ export default function QuarterSettings() {
                   disabled={settings?.is_locked}
                   className="border-2"
                 />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Review Tracker Bonus Settings */}
+        <div className="bubba-card mb-8" data-testid="rt-settings-card">
+          <div className="tape tape-green" style={{ top: '-8px', left: '50%', transform: 'translateX(-50%) rotate(-1.5deg)' }} />
+          <div className="p-6 pt-8">
+            <h2 className="text-lg font-serif font-bold text-foreground mb-4">Review Tracker Bonus</h2>
+            <p className="text-sm text-slate-400 mb-4">
+              RT bonus = <strong>MIN(mentions × rate, cap)</strong>. Each positive mention on Yelp/Google/TripAdvisor adds {formData.rt_points_per_mention ?? 0.33} pts up to a {Math.round(formData.rt_max_points ?? 20)}-pt cap. Canonical Q2+ spec: 0.33 / 20.
+            </p>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Points per Mention</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.rt_points_per_mention ?? 0.33}
+                  onChange={(e) => setFormData(prev => ({ ...prev, rt_points_per_mention: parseFloat(e.target.value) || 0 }))}
+                  disabled={settings?.is_locked}
+                  className="border-2"
+                  data-testid="rt-points-per-mention-input"
+                />
+                <p className="text-xs text-gray-400">Canonical: 0.33 (was 0.5 for Q1 2026 legacy)</p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Maximum Bonus (cap)</label>
+                <Input
+                  type="number"
+                  step="1"
+                  min="0"
+                  value={formData.rt_max_points ?? 20}
+                  onChange={(e) => setFormData(prev => ({ ...prev, rt_max_points: parseFloat(e.target.value) || 0 }))}
+                  disabled={settings?.is_locked}
+                  className="border-2"
+                  data-testid="rt-max-points-input"
+                />
+                <p className="text-xs text-gray-400">Canonical: 20 pts (was 15 for Q1 2026 legacy)</p>
               </div>
             </div>
           </div>

@@ -115,10 +115,19 @@ class EmployeeValidator:
         ]
 
     async def check_orphaned_snapshot_refs(self) -> List[Dict[str, Any]]:
-        canonical_ids = set()
-        async for e in self.db.employees.find({}, {"_id": 0, "id": 1}):
+        # A snapshot row referencing a v2 id that has been linked into a
+        # canonical's `legacy_ids[]` is NOT orphaned — that's exactly
+        # what the legacy index is for. Build a single resolvable-ids
+        # set that includes both canonical ids and every legacy_id.
+        resolvable_ids: set = set()
+        async for e in self.db.employees.find(
+            {}, {"_id": 0, "id": 1, "legacy_ids": 1}
+        ):
             if e.get("id"):
-                canonical_ids.add(e["id"])
+                resolvable_ids.add(e["id"])
+            for lid in (e.get("legacy_ids") or []):
+                if lid:
+                    resolvable_ids.add(lid)
 
         orphans: List[Dict[str, Any]] = []
         async for snap in self.db.snapshot_workflow.find(
@@ -127,7 +136,7 @@ class EmployeeValidator:
         ):
             for row in snap.get("rows", []):
                 ref = row.get("employee_id")
-                if ref and ref not in canonical_ids:
+                if ref and ref not in resolvable_ids:
                     orphans.append({
                         "snapshot_id": snap.get("id"),
                         "snapshot_name": snap.get("name"),
@@ -138,16 +147,24 @@ class EmployeeValidator:
     async def check_legacy_only_employees(self) -> List[Dict[str, Any]]:
         canonical_ids = set()
         canonical_names = set()
-        async for e in self.db.employees.find({}, {"_id": 0, "id": 1, "name": 1, "aliases": 1}):
+        async for e in self.db.employees.find(
+            {}, {"_id": 0, "id": 1, "name": 1, "aliases": 1, "legacy_ids": 1}
+        ):
             if e.get("id"):
                 canonical_ids.add(e["id"])
+            for lid in (e.get("legacy_ids") or []):
+                if lid:
+                    canonical_ids.add(lid)
             if e.get("name"):
                 canonical_names.add(_ci(e["name"]))
             for a in e.get("aliases") or []:
                 canonical_names.add(_ci(a))
 
         out: List[Dict[str, Any]] = []
-        async for e in self.db.employees_v2.find({}, {"_id": 0, "id": 1, "name": 1, "quarter": 1, "year": 1}):
+        async for e in self.db.employees_v2.find({}, {"_id": 0, "id": 1, "name": 1, "quarter": 1, "year": 1, "status": 1}):
+            # Skip soft-deleted v2 rows (resolved via Reconciliation).
+            if (e.get("status") or "").lower() == "inactive":
+                continue
             eid = e.get("id")
             name = _ci(e.get("name") or "")
             if eid and eid in canonical_ids:
@@ -165,9 +182,14 @@ class EmployeeValidator:
     async def check_snapshot_only_employees(self) -> List[Dict[str, Any]]:
         canonical_ids = set()
         canonical_names = set()
-        async for e in self.db.employees.find({}, {"_id": 0, "id": 1, "name": 1, "aliases": 1}):
+        async for e in self.db.employees.find(
+            {}, {"_id": 0, "id": 1, "name": 1, "aliases": 1, "legacy_ids": 1}
+        ):
             if e.get("id"):
                 canonical_ids.add(e["id"])
+            for lid in (e.get("legacy_ids") or []):
+                if lid:
+                    canonical_ids.add(lid)
             if e.get("name"):
                 canonical_names.add(_ci(e["name"]))
             for a in e.get("aliases") or []:

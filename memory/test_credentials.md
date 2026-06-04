@@ -27,6 +27,19 @@ Just hit any public URL without signing in. The sidebar will show
 - `POST /api/v2/quarter-settings/{year}/{quarter}/unlock`
 - `POST /api/v2/snapshots/...`
 - `POST /api/qr/admin/heal-ghost-ids` (re-attributes ghost-UUID scans)
+- `GET /api/v2/admin/*` (entire admin namespace gated on all methods,
+  except the explicit public exempt `/api/v2/admin/scoring-example`)
+
+## Ready-to-use admin session token (for testing agents)
+
+A long-lived (~4h) session is pre-seeded so the testing agent can hit
+gated endpoints without going through Google OAuth:
+
+```
+Authorization: Bearer test-agent-name-score-9fe6f8f7-933c-40f6-b3db-bbe3c034f896
+```
+
+Maps to `owner@intheweedscollective.com` (is_admin=true).
 
 ## How to seed a test admin session (for backend smoke tests)
 See `/app/backend/tests/test_qr_ghost_heal.py` for the canonical pattern:

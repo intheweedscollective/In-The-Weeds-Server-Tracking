@@ -73,7 +73,7 @@ const faqs = [
       },
       {
         q: "How does Review Tracker bonus work?",
-        a: "Each positive mention on external review platforms (Google, Yelp, TripAdvisor, etc.) earns RT bonus points. Q2+ rule: +0.3 pts per mention, capped at 20 points (~67 mentions). Q1 2026 used the legacy +0.5 pts/mention with a 15 pt cap. Upload RT data via the Data Uploads page."
+        a: "Each positive mention on external review platforms (Google, Yelp, TripAdvisor, etc.) earns RT bonus points. Q2+ rule: +0.33 pts per mention, capped at 20 points (~61 mentions). Q1 2026 used the legacy +0.5 pts/mention with a 15 pt cap. Upload RT data via the Data Uploads page."
       },
       {
         q: "What are the Server Tier thresholds?",

@@ -18,13 +18,23 @@ managers admin access.
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Optional
 
 import httpx
+from dotenv import load_dotenv
 from fastapi import APIRouter, Cookie, HTTPException, Request, Response, status
 from pydantic import BaseModel
 
 from database import get_database
+
+# Load /app/backend/.env BEFORE we read ALLOWED_ADMIN_EMAILS — supervisor
+# doesn't export the dotenv values into the uvicorn process, so without
+# this the whitelist is silently empty and the admin middleware returns
+# 403 on every protected endpoint after a hot-reload. server.py also calls
+# load_dotenv, but this module is imported earlier, so we have to do it
+# ourselves to win the race.
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 
 auth_router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -37,12 +47,21 @@ auth_router = APIRouter(prefix="/auth", tags=["Auth"])
 # ---------------------------------------------------------------------------
 ALLOWED_EMAILS = {
     e.strip().lower()
-    for e in (
-        os.environ.get("ALLOWED_ADMIN_EMAILS")
-        or "owner@intheweedscollective.com"
-    ).split(",")
+    for e in (os.environ.get("ALLOWED_ADMIN_EMAILS") or "").split(",")
     if e.strip()
 }
+
+# Fail closed: if no admin emails are configured, log loudly so the operator
+# sees it. Anyone who logs in without ALLOWED_ADMIN_EMAILS set is_admin=False
+# automatically (membership check against an empty set), so the app degrades
+# safely to "read-only for everyone" rather than "open admin for everyone".
+if not ALLOWED_EMAILS:
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        "SECURITY: ALLOWED_ADMIN_EMAILS is empty — no user will be granted "
+        "admin privileges. Set ALLOWED_ADMIN_EMAILS in the backend env "
+        "(comma-separated) to enable admin access."
+    )
 
 
 class AuthUser(BaseModel):

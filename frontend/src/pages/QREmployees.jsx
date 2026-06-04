@@ -224,6 +224,62 @@ export default function QREmployees() {
           </div>
         </div>
 
+        {/* QR base URL warning — printed QR codes embed this URL forever.
+            If we're on a preview / dev origin, surface a loud reminder so
+            staff don't accidentally print 200 stickers that point at a
+            preview environment that'll be torn down later. */}
+        {(() => {
+          const baseHost = (() => {
+            try { return new URL(BACKEND_URL).host; } catch { return BACKEND_URL; }
+          })();
+          const isProd = /intheweedscollective\.com$/i.test(baseHost);
+          const isPreview = /\.preview\.emergentagent\.com$/i.test(baseHost) ||
+                            /\.emergent\.host$/i.test(baseHost);
+          const exampleUrl = `${BACKEND_URL}/api/qr/go/{employee_id}`;
+          return (
+            <div
+              data-testid="qr-base-url-banner"
+              className={`mb-6 rounded-xl border p-4 ${
+                isProd
+                  ? "border-emerald-700/40 bg-emerald-950/30 text-emerald-100"
+                  : "border-amber-500/50 bg-amber-950/30 text-amber-100"
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div className={`mt-0.5 shrink-0 ${isProd ? "text-emerald-300" : "text-amber-300"}`}>
+                  {isProd ? (
+                    <QrCode className="w-5 h-5" />
+                  ) : (
+                    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-300 text-amber-950 font-bold text-xs">!</span>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1 text-sm">
+                  <p className="font-semibold">
+                    {isProd ? (
+                      <>Generating production QR codes</>
+                    ) : isPreview ? (
+                      <>Heads up — you're on the <b>preview</b> environment</>
+                    ) : (
+                      <>Heads up — non-production QR base URL</>
+                    )}
+                  </p>
+                  <p className={`text-xs mt-1 leading-relaxed ${isProd ? "text-emerald-200/80" : "text-amber-200/85"}`}>
+                    Every QR code below embeds this base URL permanently. Print on <b>{baseHost || "(unknown host)"}</b>{" "}
+                    {isProd ? (
+                      <>and the stickers will work for your customers indefinitely.</>
+                    ) : (
+                      <>and the printed codes will <b>stop working</b> once this environment is torn down. Deploy to <code className="font-mono">intheweedscollective.com</code> and regenerate before printing.</>
+                    )}
+                  </p>
+                  <p data-testid="qr-base-url-preview" className="mt-2 font-mono text-[11px] break-all opacity-80">
+                    {exampleUrl}
+                  </p>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Add Employee */}
         <div className="bg-white/5 rounded-xl p-3 md:p-4 mb-6 flex gap-2 md:gap-3">
           <Input

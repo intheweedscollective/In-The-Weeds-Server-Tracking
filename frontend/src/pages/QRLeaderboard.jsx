@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { Trophy, Star, Medal, Crown, Download, MessageSquare, MousePointerClick, Percent } from "lucide-react"; // eslint-disable-line no-unused-vars
+import { Link } from "react-router-dom";
+import { Trophy, Medal, Crown, Download, LineChart } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { Button } from "../components/ui/button";
@@ -15,8 +16,9 @@ export default function QRLeaderboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // New endpoint that merges clicks + RT mentions and pre-sorts by
-        // conversion rate desc, mentions desc, clicks desc.
+        // Merged clicks + RT mentions, pre-sorted by total clicks desc
+        // -> mentions desc on the backend. Conversion rate intentionally
+        // removed (easily skewed by self-scans, no operational value).
         const res = await api.get(
           `/qr/leaderboard-data?quarter=${quarter}&year=${year}`
         );
@@ -77,9 +79,20 @@ export default function QRLeaderboard() {
             <Trophy className="w-7 h-7 sm:w-10 sm:h-10 text-yellow-400" />
           </div>
           <p className="text-slate-400 text-xs sm:text-base">
-            Sorted by conversion rate (mentions ÷ clicks)
+            Sorted by total clicks (review mentions shown as a quality indicator)
           </p>
-          <div className="mt-3 sm:mt-4 flex justify-center">
+          <div className="mt-3 sm:mt-4 flex flex-wrap items-center justify-center gap-2">
+            <Button
+              asChild
+              variant="outline"
+              className="border-slate-600 text-slate-200 hover:bg-slate-800 text-xs sm:text-sm"
+              data-testid="qr-leaderboard-daily-link"
+            >
+              <Link to="/qr/daily">
+                <LineChart className="w-4 h-4 mr-2" />
+                Clicks by Day
+              </Link>
+            </Button>
             <Button
               onClick={downloadSlide}
               disabled={downloading || employees.length === 0}
@@ -101,7 +114,6 @@ export default function QRLeaderboard() {
             const tripadvisor = emp.tripadvisor_clicks || 0;
             const totalClicks = emp.total_clicks ?? (yelp + google + tripadvisor);
             const mentions = emp.rt_mentions || 0;
-            const conv = emp.conversion_rate ?? (totalClicks > 0 ? (mentions / totalClicks) * 100 : 0);
 
             return (
               <div
@@ -124,23 +136,23 @@ export default function QRLeaderboard() {
                       </p>
                       {rank <= 3 && (
                         <p className="text-[10px] sm:text-sm text-slate-400">
-                          {rank === 1 ? "Top Conversion" : rank === 2 ? "2nd" : "3rd"}
+                          {rank === 1 ? "Top Scanner" : rank === 2 ? "2nd" : "3rd"}
                         </p>
                       )}
                     </div>
                   </div>
-                  {/* Mobile-only: conversion shown beside name */}
+                  {/* Mobile-only: total clicks shown beside name */}
                   <div className="sm:hidden text-right flex-shrink-0">
-                    <p className="text-xl font-bold text-blue-400 leading-none">
-                      {conv.toFixed(1)}%
+                    <p className="text-xl font-bold text-amber-400 leading-none">
+                      {totalClicks}
                     </p>
-                    <p className="text-[10px] text-blue-300">Conv</p>
+                    <p className="text-[10px] text-amber-300">Clicks</p>
                   </div>
                 </div>
 
                 {/* Stats row — 4-col grid on mobile, single horizontal row on sm+ */}
                 <div className="mt-3 grid grid-cols-4 gap-1 sm:flex sm:gap-6 sm:justify-end sm:mt-0 sm:pt-0">
-                  <div className="text-center sm:order-1">
+                  <div className="text-center sm:order-1 hidden sm:block">
                     <p className="text-base sm:text-xl font-bold text-amber-400 leading-none">{totalClicks}</p>
                     <p className="text-[9px] sm:text-xs text-slate-500 mt-1">Clicks</p>
                   </div>
@@ -153,13 +165,12 @@ export default function QRLeaderboard() {
                     <p className="text-[9px] sm:text-xs text-slate-500 mt-1">Yelp</p>
                   </div>
                   <div className="text-center sm:order-4">
-                    <p className="text-base sm:text-xl font-bold text-green-400 leading-none">{google + tripadvisor}</p>
-                    <p className="text-[9px] sm:text-xs text-slate-500 mt-1">Goog/TA</p>
+                    <p className="text-base sm:text-xl font-bold text-blue-400 leading-none">{google}</p>
+                    <p className="text-[9px] sm:text-xs text-slate-500 mt-1">Google</p>
                   </div>
-                  {/* Desktop-only conversion pill */}
-                  <div className="hidden sm:block text-center min-w-[90px] bg-blue-500/20 rounded-lg px-3 py-1.5 sm:order-5">
-                    <p className="text-xl font-bold text-blue-400 leading-none">{conv.toFixed(1)}%</p>
-                    <p className="text-xs text-blue-300 mt-0.5">Conversion</p>
+                  <div className="text-center sm:order-5">
+                    <p className="text-base sm:text-xl font-bold text-green-400 leading-none">{tripadvisor}</p>
+                    <p className="text-[9px] sm:text-xs text-slate-500 mt-1">TripAd</p>
                   </div>
                 </div>
               </div>

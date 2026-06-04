@@ -20,7 +20,13 @@ export const TopPerformersGrid = ({ employees }) => {
   const getTopEmployees = (metric, limit = 10) => {
     const config = V2_METRICS[metric];
     if (!config) return [];
-    const valid = employees.filter((e) => e[metric] != null);
+    const valid = employees.filter((e) => {
+      const v = e[metric];
+      if (v == null) return false;
+      if (typeof v === 'number' && v === 0) return false;
+      if (metric === 'guests_per_lsc' && (e.lsc_count == null || e.lsc_count === 0)) return false;
+      return true;
+    });
 
     const sorted = [...valid].sort((a, b) => {
       if (!config.higherBetter) return (a[metric] || 0) - (b[metric] || 0);

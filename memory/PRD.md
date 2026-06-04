@@ -10,7 +10,1579 @@ Build a comprehensive performance review application for restaurant employees.
 - **AI**: OpenAI GPT-4o (via Emergent LLM Key)
 - **Auth**: Emergent-managed Google Auth (whitelist via `ALLOWED_ADMIN_EMAILS`)
 
+## Current State (2026-05-28)
+### P2: QR Click Recovery file-upload portal — SHIPPED 2026-06-04
+
+User context: pre-2026-03-31 QR scan events were lost during a
+destructive v1 pipeline wipe. Atlas backup retention does NOT reach
+that far back on the current cluster tier — so the raw data is
+permanently gone. This tool is the catch-all import path for any
+pre-March data the operator later sources from POS reports / external
+analytics / staff-memory reconstructions.
+
+**User decisions captured in scope**:
+- Atlas backups confirmed unavailable (M5 tier retention too short).
+- Both `staging` and `merge` modes available.
+- DO NOT auto-rebuild `qr_employees.{yelp,google,tripadvisor}_clicks`
+  totals — operator wants to review raw events first.
+- Admin API endpoint + file-upload UI.
+
+**Backend** — new `/app/backend/routes/qr_recovery.py`:
+- `POST /api/v2/admin/qr-recovery/import` (multipart, JSON file +
+  `mode={staging|merge}` + `dry_run`). Validates per-row required
+  fields (`id`, `employee_id`, `platform`, `scanned_at`), enforces
+  `platform ∈ {yelp, google, tripadvisor}`, validates ISO-8601
+  timestamps, dedupes intra-file and against the target collection(s).
+  Tags every recovered row with `recovered_via` / `recovered_at` so
+  audit traces survive across collections.
+- `GET /api/v2/admin/qr-recovery/staging-summary` — counts in
+  `qr_scans_pre_march_recovered`, breakdown by platform, earliest /
+  latest timestamps, would-be-skipped-on-promote count.
+- `POST /api/v2/admin/qr-recovery/promote-staging` — moves staging
+  rows into BOTH `qr_scans` and `qr_click_log_immutable`, deduping
+  on `id`. Idempotent (re-runs are no-ops). Staging NOT cleared.
+- `POST /api/v2/admin/qr-recovery/clear-staging` — wipes staging.
+- `GET /api/v2/admin/qr-recovery/audit` — append-only log of every
+  recovery action, newest first.
+- All endpoints gated on `require_admin`. Every action writes to
+  `qr_recovery_audit` with actor email + timestamp + filename +
+  counters so provenance is permanently traceable.
+
+**Frontend** — new `/app/frontend/src/pages/QRRecovery.jsx`:
+- Drag-and-drop / file-picker for `.json` uploads.
+- Mode toggle (Staging recommended / Direct merge) with inline
+  copy explaining target collections.
+- Dry-run button → counts preview WITHOUT writing.
+- Real import button → writes + refreshes the page panels.
+- Staging panel: rows count, by-platform breakdown, earliest/latest
+  dates, would-be-skipped-on-promote count, Promote + Clear buttons.
+- Recovery audit table (mobile-friendly horizontal scroll).
+- Inline schema reference with copy-pasteable JSON example.
+- Wired into App.js as `/qr/recovery` (admin-only); sidebar link
+  "QR Recovery" with Database icon under the QR section.
+
+**Tests added** `/app/backend/tests/test_qr_recovery.py` — 12/12 pass:
+- Auth gating: anonymous requests get 401 on import + summary.
+- Dry-run writes zero rows.
+- Staging mode writes only to staging, NOT to live collections.
+- Re-import of same payload skips all rows as duplicates.
+- Promote staging moves rows into qr_scans + qr_click_log_immutable.
+- Promote is idempotent (second run writes nothing).
+- Clear-staging wipes.
+- Direct-merge mode dedupes against live collections.
+- Malformed rows (bad platform, bad timestamp, wrong type) are
+  reported individually with reasons, not crashed on.
+- Invalid JSON returns 400 with parse-error details.
+- Top-level-not-an-array returns 400.
+- Staging summary reports correct counts, platform breakdown, and
+  earliest/latest dates.
+- Audit log records every action.
+
+**Smoke-tested live**: page renders on desktop + mobile (390×844),
+sidebar link visible to admin, audit table reflects real entries
+from test runs, dropzone accepts files.
+
+
+### P1+P2 batch: webview escape, QR base-URL warning, trend magnitudes — SHIPPED 2026-06-04
+
+Three queued improvements landed together:
+
+#### P1 — Webview Google login escape
+
+User flow: staff tap a shared link from inside Instagram/Facebook
+DMs, hit "Sign in with Google", Google returns
+`403 disallowed_useragent`, staff give up.
+
+**Fix**:
+- `/app/frontend/src/utils/webviewDetect.js` — UA-based detector
+  flags Facebook (FBAN/FBAV/FBIOS), Messenger, Instagram, LinkedIn,
+  Line, TikTok, KakaoTalk, WeChat, Twitter, Snapchat, Pinterest,
+  Slack by their known tokens; falls back to a generic heuristic
+  for iOS (missing `Safari/`) and Android (`; wv)` marker).
+  Exports `buildEscapeUrl` that returns the platform-correct deep
+  link (`x-safari-https://...` on iOS, `intent://...` on Android).
+- `/app/frontend/src/pages/Login.jsx` — banner above the Sign-in
+  button appears when webview is detected. Sign-in click is
+  intercepted with the banner instead of launching the doomed
+  OAuth flow. Two CTAs: "Open in Safari/Chrome" (deep-link) and
+  "Copy link" (fallback for OSes that refuse the deep-link).
+
+**Verified** with mobile Playwright (390×844):
+- Default iOS Safari UA → no banner (0 count).
+- Instagram UA `Mozilla/5.0 (iPhone; ...) Instagram 295.0.0.31.119`
+  → banner appears, vendor displayed as "Instagram", "Open in
+  Safari" button rendered, current URL printed in monospace below.
+
+#### P2 — QR Codes base-URL warning
+
+User concern: printing 200 QR-code stickers that embed a temporary
+preview URL forever.
+
+**Fix**: `/app/frontend/src/pages/QREmployees.jsx` — banner above
+the Add Employee row. Detects the host portion of
+`REACT_APP_BACKEND_URL`:
+- `intheweedscollective.com` → green "Generating production QR
+  codes" reassurance.
+- `*.preview.emergentagent.com` / `*.emergent.host` → amber
+  warning "Heads up — you're on the preview environment" with
+  explicit "stickers will stop working" copy.
+- Anything else → amber non-production warning.
+Always shows an example tracking URL
+(`${BACKEND_URL}/api/qr/go/{employee_id}`) in monospace so the
+operator can sanity-check before printing.
+
+**Verified**: banner renders on preview with hostname
+`staff-score-engine.preview.emergentagent.com` and the deploy-first
+nudge.
+
+#### P2 — Trend magnitudes on PNG/PDF slide exports
+
+Before: leaderboard PNG showed a bare arrow (`↑` / `↓` / `→` /
+`🔥`). Full-rankings PDF/PNG showed only a polygon arrow that
+defaulted to "up" because nothing populated `score_change`.
+
+**Fix**:
+- `/app/backend/server.py` — new `_attach_score_change(rankings,
+  year, quarter)` helper. Loads the prior quarter's most-recent
+  completed snapshot (`prev_quarter_map`), builds an id-first /
+  name-fallback score lookup, computes signed deltas, sets
+  `trend` ∈ {"up","down","flat"} with a ±0.5 dead-band, and
+  attaches `score_change` (rounded to 1dp) to every rank.
+  Called at the end of `_load_snapshot_first_rankings` so both
+  PNG and PDF endpoints get the data automatically.
+- `/app/backend/yodeck_slides.py` — leaderboard PNG (line ~2207)
+  now renders `f"{arrow} {change:+.1f}"` instead of just the arrow.
+  Sub-0.05 changes drop the noisy "0.0" suffix.
+- `/app/backend/pdf_full_rankings.py` + `png_full_rankings.py` —
+  trend cell encoding extended from `__TREND__:<shape>` to
+  `__TREND__:<shape>|<delta>`. Renderer parses the delta, draws
+  the polygon at 32% of the cell (instead of dead-center), then
+  draws the signed magnitude label to the right of it. Skips the
+  label when `score_change` is None (no prior quarter) or below
+  the ±0.05 noise floor.
+- Trend column widened from 6% → 8% of table width (2% stolen
+  from Name which was 13%) so "+19.3" / "-22.5" labels don't
+  clip at the right edge.
+
+**Verified**: regenerated PNG (294 KB) — vision audit confirmed
+every visible row shows arrow + full magnitude with no clipping
+(samples: "-6.0", "-7.9", "-19.3", "+22.5", "-15.X").
+
+All three changes verified live on the preview environment. 25/26
+existing reconciliation+dedupe tests pass (the one failure is a
+pre-existing stale fixture from a prior session, unaffected by
+today's work).
+
+
+### P0: Permanent (name_normalized, quarter, year) uniqueness — SHIPPED 2026-06-03
+
+User: "Add the compound index to MongoDB… Swap every insert in your
+upload handler to the upsert pattern… Run the cleanup script to
+collapse existing duplicates. Done. Never think about this again."
+
+**Root cause this addresses**: every legacy_duplicate card in the
+Data Reconciliation portal traces back to two consecutive writes
+into `employees_v2` under almost-identical name spellings (case
+variants, leading whitespace, etc.) that hit `insert_one` and
+created two rows. The reconciliation queue surfaced these as
+adjudication cards, the operator deleted them, but new POS uploads
+just recreated them. Whack-a-mole.
+
+**Structural fix** — three layers:
+
+1. **Storage-layer uniqueness**: partial compound unique index on
+   `(name_normalized, quarter, year)` where
+   `name_normalized = name.strip().upper()`. Created on FastAPI
+   startup in `server.py`. Partial filter (`$type: "string", $gt: ""`)
+   so legacy / test rows with missing name_normalized aren't blocked
+   from existing — production writes always populate it via the
+   helper below, so prod data stays protected.
+
+2. **Application-layer helper**: new
+   `/app/backend/services/employee_v2_writer.py::upsert_employee_v2`
+   routes every write through `update_one(..., upsert=True)` keyed
+   on the unique tuple. `$setOnInsert` preserves `id` + `created_at`
+   on existing rows; `$set` lets new POS metrics flow into the
+   existing row. Returns the stable id so callers using the
+   "fresh insert id" pattern keep working.
+
+3. **All 16 insert sites swapped** in:
+   - `server.py` (5 sites): line 1270 POS upload, line 1651 scored
+     employee finalization, line 2621 manual create, line 2720
+     PUT-rename-clone, line 3537 bulk import.
+   - `routes/pos_upload.py` (2 sites): XLSX and PDF parser paths.
+   - `routes/admin.py` (3 sites): cv-data bulk import, bulk-import
+     endpoint, single import-raw endpoint.
+   - `routes/audit.py` (2 sites): Lennie Nguyen restore, fix-employee-data.
+   - `routes/snapshots_legacy.py` (3 sites — 1 insert_one + 2
+     insert_many): snapshot reverse-sync, snapshot upload, recalc
+     sync.
+
+**One-time cleanup**:
+`/app/backend/scripts/dedupe_by_name_quarter_year.py` (default dry-
+run; `--apply` to commit):
+- Backfills `name_normalized` on every row in `employees_v2`.
+- Groups by (name_normalized, quarter, year); for buckets with >1
+  rows picks a winner (highest `total_score`, tiebreak on most
+  non-zero metric fields, tiebreak on earliest `created_at`),
+  merges every non-zero field from losers onto the winner, unions
+  aliases + legacy_ids, deletes losers.
+- Rewrites embedded `snapshot_workflow.rows[]` and `.employees[]`
+  references from loser ids → winner id/name in every non-finalized
+  snapshot. Finalized snapshots are immutable historical record.
+
+**Ran on preview**:
+- Pre: 51 rows missing name_normalized, 2 duplicate buckets (DIANE
+  PETERSON × 4, STEADY SUE × 4 — both year=9097 test fixtures).
+- Post: 45 rows total, 45/45 with name_normalized, 0 buckets > 1.
+
+**Tests added** `/app/backend/tests/test_employees_v2_uniqueness.py`:
+- `test_unique_index_is_present` — `index_information()` shows the
+  compound index with `unique=true` and the partial filter.
+- `test_upsert_helper_collapses_case_variants` — writes "Foo" then
+  "  FOO  " and asserts only one row remains, stable id, second
+  write's metrics flow in via $set.
+- `test_raw_insert_one_of_duplicate_raises_DuplicateKeyError` — the
+  safety-net check that any future code path bypassing the helper
+  will crash loudly instead of silently creating dupes.
+- `test_legacy_duplicate_queue_does_not_resurface_after_upsert_cleanup`
+  — end-to-end queue check.
+
+All 26 reconciliation + dedupe + uniqueness tests pass.
+
+
+### P0: Delete legacy idempotency — SHIPPED 2026-06-03
+
+User: "Delete legacy still not working for data reconciliation" — toast
+fires successfully ("Delete legacy row applied for Thaddeus Hashey"),
+audit log accumulates one entry per click, but the same card returns to
+the Active Queue on the very next refresh. Operator clicked Delete
+legacy 3+ times in a row, same result.
+
+**Two-part root cause in `/app/backend/services/reconciliation_service.py`:**
+
+1. `_build_legacy_duplicate_conflicts` (line ~269) queried
+   `employees_v2` WITHOUT filtering on status. `delete_legacy` soft-
+   deletes by setting `status="inactive"`, so the row got tombstoned
+   but the next queue rebuild re-detected it as if nothing had happened.
+
+2. `_stamp_resolved` (line ~543) had branches for `metric_drift` and
+   `alias_collision` only — there was **no `legacy_duplicate` branch**.
+   So `post_stored` was saved as `None` on the resolved row. Next call
+   to `_resolved_still_applies` compared `card.stored_value` ("Thaddeus
+   Hashey") against `resolved.post_stored` (`None`), judged the
+   resolution stale, deleted the resolved record, and re-surfaced the
+   card as "fresh drift."
+
+The two bugs reinforced each other: the queue would re-detect the
+inactive v2 row, then strip the stale resolved stamp on the way out.
+
+**Fix:**
+- `_build_legacy_duplicate_conflicts` find filter now excludes
+  `status: "inactive"`.
+- `_stamp_resolved` now stamps `post_stored=card.stored_value` for
+  `legacy_duplicate` kind, so the resolved-still-applies string-equality
+  check holds on subsequent refreshes (matters for `keep_stored` on
+  legacy cards even after delete_legacy is fixed).
+
+**Tests added** `/app/backend/tests/test_delete_legacy_idempotent.py`:
+- `test_delete_legacy_keeps_card_out_of_queue` — seeds a unique
+  unlinked v2 row in the current quarter, asserts the card surfaces,
+  calls `delete_legacy`, asserts the card is gone on TWO consecutive
+  queue refreshes (catches the resolved-row eviction regression),
+  asserts the v2 row is soft-deleted not hard-deleted.
+- `test_delete_legacy_logs_to_audit` — asserts ≥1 audit row per click.
+
+**End-to-end verified**: live preview API now returns
+`counts.active=0` (was 1 with Thaddeus Hashey stuck) and 0 active
+legacy_duplicate cards.
+
+
+### P1: Data Reconciliation mobile layout — SHIPPED 2026-06-03
+
+User: "I still cannot navigate the data reconciliation tab" on
+mobile / phone view. The Trust Badge modal scroll fix landed earlier
+but `/data-reconciliation` itself was still broken on small screens.
+
+**Root cause**: `/app/frontend/src/pages/DataReconciliation.jsx`
+wrapped the Audit Log table (7 columns, 1158px wide) and Resolved
+table (7 columns, 613px wide) in `<div className="overflow-hidden">`.
+On a 390px viewport that clipped 5 of the 7 columns silently with no
+way to scroll horizontally — operators could only see Timestamp +
+Actor, not Employee/Field/Action/Before→After/Note. The confirmation
+modal also lacked `max-height` + `overflow-y-auto`, so the Manual
+Override / Merge dialogs ran off-screen on a phone.
+
+**Fixes**:
+- Audit Log + Resolved table wrappers: `overflow-hidden` →
+  `overflow-x-auto -mx-4 md:mx-0`. Tables now bleed edge-to-edge on
+  mobile and swipe horizontally; full-width on desktop unchanged.
+- Tables get `min-w-[820px]` / `min-w-[920px]` so columns never
+  squish — they overflow gracefully into the horizontal scroller.
+- Confirmation `DialogContent` gets `max-h-[90vh] overflow-y-auto`,
+  same fix that landed on the Trust modal.
+- Page outer padding: `p-6` → `p-4 md:p-6`.
+- Confirm body Before/After grid: `grid-cols-2` → `grid-cols-1 sm:grid-cols-2`.
+
+Verified with mobile Playwright (390x844): audit wrapper
+`scrollWidth=1158`, `clientWidth=388`, `canScrollHorizontally=true`,
+horizontally swiping reveals the previously-hidden Employee + Actor
++ Action + Before→After columns.
+
+### P0 PLATFORM BLOCKER: Production deploy not syncing from Preview
+User: "I've deployed twice to no avail." Live `intheweedscollective.com`
+keeps serving stale code (no delete-legacy propagation, no mobile
+fixes) even after pressing the Deploy button twice. This is a
+platform/infra issue — not in the codebase. Escalated to user via
+support-agent guidance: open ticket at `support@emergent.sh` with
+Job ID, custom domain, screenshots showing preview-vs-prod drift,
+and number of deploy attempts. Code is fine; pipeline isn't
+publishing the build.
+
+
+### P0: Reconciliation delete/merge actions now propagate to snapshots — SHIPPED 2026-06-02
+
+User: "When I delete a legacy profile, nothing happens. The error
+persists after deleting."
+
+**Root cause**: `delete_legacy` and `merge_into` only mutated
+`employees_v2` and `employees`. The same profile lived on inside
+every snapshot's embedded `rows[]` and `employees[]` arrays — so:
+   - the dashboard kept rendering the typo
+   - the trust badge kept flagging the snapshot as orphan / blocklist
+     violation
+   - delete felt like a no-op from the operator's POV
+
+**Fix in `delete_legacy`**:
+After soft-deleting the v2 row, the service now walks every
+non-finalized snapshot and removes any embedded `rows[]` /
+`employees[]` entry that matches either the v2_id OR the v2 name
+(case-insensitive). Finalized snapshots are immutable historical
+record — they're explicitly skipped. Response payload now reports
+`snapshots_touched` and `snapshot_rows_removed` so the operator
+can verify the propagation worked.
+
+**Fix in `merge_into`**:
+After linking the v2 row into the canonical's `legacy_ids[]`, the
+service now rewrites embedded snapshot rows matching the v2_id/name
+to point at the canonical's id + name. If a row for the canonical
+already existed in the same snapshot, the typo dup is dropped instead
+of relabeled. Prevents the "two rows for the same person" dashboard
+bug.
+
+**Verified live**: re-resolving Thaddeus Hashey via delete_legacy
+returned `snapshots_touched: 2, snapshot_rows_removed: 2`. Trust
+badge `blocklist_violations` count went from 1 → 0; integrity status
+no longer flags him anywhere.
+
+**Tests** (`/app/backend/tests/test_delete_legacy_propagation.py`,
+2 cases): full delete propagation across rows[]+employees[] (both
+id-match and name-match paths), AND finalized snapshots stay
+untouched even when they contain the deleted row.
+
+
+### P1: Trust modal scroll/overflow on mobile — SHIPPED 2026-06-02
+
+User: "I can't navigate the trust pop up. The page won't let me scroll
+and I can't see all available options in the mobile view."
+
+**Root cause**: shadcn's base `DialogContent` has no `max-height` cap.
+On viewports shorter than the modal's natural content height (~900px)
+— which is every mobile — the modal overflowed off-screen and the
+footer action buttons (Refresh / Normalize / Open Data Reconciliation /
+Demo Prep) became unreachable. The body itself also had no scroll
+container.
+
+**Fix**: restructured `ScoringTrustBadge`'s DialogContent as a 3-row
+flex column:
+   - **Header** (`shrink-0` + bottom border) — non-scrolling, always pinned at top
+   - **Body** (`flex-1 overflow-y-auto`) — content scrolls inside this region
+   - **Footer** (`shrink-0` + top border) — non-scrolling, always pinned at bottom
+
+DialogContent overall capped at `max-h-[92vh]`. On a 390×844 iPhone
+viewport the modal is now 776px tall: ~80px header + 600px scrollable
+body + ~96px footer.
+
+
+### P1: Clicks-per-day shows ALL active employees — SHIPPED 2026-06-02
+
+User: "On the clicks per day it only shows 17 employees. But I have 29 employees."
+
+**Root cause**: `/qr/clicks-by-day` aggregated from `qr_click_log_immutable`
+and only emitted rows for employees with at least one scan in the window.
+Active employees with zero clicks (the exact people you most need to see
+for coaching) were silently dropped from the leaderboard.
+
+**Fix**: after the aggregation step the endpoint now walks the canonical
+`employees` table and backfills a zero-totals row for every active
+employee who is currently tracked in `qr_employees` (via name OR alias)
+and hasn't already been covered. Test/demo placeholders are still
+filtered. Backfilled rows have the same shape as scan-driven rows so
+the frontend table renders them uniformly. The default total-desc sort
+keeps top performers on top and zero-click rows at the bottom.
+
+**Tests** (`/app/backend/tests/test_clicks_by_day_backfill.py`, 2 cases):
+   - Response row count ≥ active+tracked employee count.
+   - Backfilled zero rows have the same shape as scan-driven rows
+     (matching `by_day` length, all totals zero, `active=True`).
+
+**Verified on preview**: 24 rows → **30 rows** with 6 zero-click
+employees (Keisha, Lexi, Julian, Daniel, Kitti, Kahiaulani) appearing
+at the bottom.
+
+
+### P0: Trust badge respects resolutions + QR ghost dismiss — SHIPPED 2026-06-02
+
+User reported "trust action still appearing after resolution" and "QR sync
+on home page also staying after resolution," both on production.
+
+**Trust badge — root causes & fixes**:
+
+1. **Orphan-check ignored legacy_ids[]**. `EmployeeValidator.check_orphaned_snapshot_refs`,
+   `check_legacy_only_employees`, and `check_snapshot_only_employees` were
+   only matching against canonical `id`. After my earlier `structural-cleanup`
+   linked 48 v2 ids into canonical `legacy_ids[]`, those rows still flagged
+   as orphan because the checks never inspected `legacy_ids`. Fixed: all
+   three checks now build a unified `resolvable_ids` set spanning both `id`
+   and `legacy_ids[]`. **Cleared 13 P0 issues immediately on apply (31 → 18).**
+
+2. **Soft-deleted v2 rows still surfaced**. `check_legacy_only_employees`
+   now skips rows with `status == "inactive"` (set by Reconciliation's
+   `delete_legacy` action).
+
+3. **Trust modal showed cryptic rollup**. The integrity tile previously
+   showed only `P0 18 · P1 0 · P2 18` with no hint of which category was
+   contributing. Now `/scoring-trust` returns `details.integrity.breakdown`
+   with per-category counts and the modal renders them with a direct
+   **→ Resolve in Data Reconciliation** link.
+
+4. **"Auto-Fix All" button violated the no-auto-fix contract**. Removed
+   entirely from the modal footer. Replaced with **Open Data Reconciliation**
+   as the primary action. Self-healing toggle's default flipped from ON
+   to OFF, copy rewritten to clarify metric drift and legacy-duplicate
+   cards always require Reconciliation adjudication.
+
+**QR Tracking pill — root cause & fix**:
+
+The dashboard header QR badge surfaced 10 ghost printed_ids with 42
+orphan scans. Healing required mapping each ghost to a current employee
+via `/qr/ghost-heal`, but historical ghosts whose owner is no longer
+employed (pre-March wipe, deleted accounts) had no recovery path —
+making the badge permanently stuck.
+
+   - New `POST /qr/admin/dismiss-ghost-ids` — operator marks one or
+     more printed_ids as unrecoverable. Writes to `qr_ghost_dismissed`
+     so dismissals persist across restarts. Each row carries
+     `dismissed_at`, `dismissed_by`, `reason` for audit.
+   - New `POST /qr/admin/undismiss-ghost-id` — reverse the decision
+     if it was a mistake.
+   - New `GET  /qr/admin/dismissed-ghost-ids` — list for audit/recall.
+   - `list_ghost_ids()` and the dashboard `/qr/admin/health` ghost
+     count both filter out dismissed printed_ids.
+   - Frontend `QRGhostHeal.jsx` gets a **Dismiss** column with a
+     per-row button and a reason prompt. After dismiss, the toast
+     reads "ghost ID dismissed · N historical scans archived without
+     re-attribution" and the table reloads.
+
+**Tests**: `/app/backend/tests/test_trust_breakdown_and_ghost_dismiss.py`
+(4 cases, all passing): trust integrity breakdown exposed, legacy_ids
+clears orphan flag, dismiss drops from health count + undismiss restores,
+dismiss validates `printed_ids` non-empty.
+
+**Production note**: this is preview-only. User needs to redeploy
+production (https://intheweedscollective.com) to see both fixes live.
+
+
+### P0: Trust badge × Reconciliation portal — hybrid cleanup — SHIPPED 2026-05-31 (round 3)
+
+User question: "Why am I still seeing trust issues on the dashboard after all are resolved?"
+Two distinct problems surfaced:
+
+**Problem A** — `/scoring-trust` re-derived drift independently and ignored
+the operator's adjudications. **Fixed**: `scoring-trust` now reads
+`reconciliation_resolved` + `reconciliation_deferred` and skips any
+metric/alias drift whose conflict_id is in those registries (within the
+1% re-surface threshold). Adds `suppressed_by_reconciliation` count to
+the response so the modal can show "N cleared via Reconciliation".
+
+**Problem B** — Trust badge surfaces THREE other classes of integrity
+issue the Reconciliation portal didn't handle: `legacy_only_employees`,
+`orphaned_snapshot_refs`, `blocklist_violations`. The user picked
+"hybrid": automate the obviously-safe ones, surface the ambiguous ones
+as Reconciliation cards.
+
+**New: `POST /api/v2/admin/structural-cleanup`** (phased, dry-run default):
+   - `auto_link=true`   (default ON) — links every v2 row whose `name`
+     exactly matches a canonical employee into the canonical's
+     `legacy_ids[]`. Zero behavior change, just bookkeeping.
+     **First apply cleared 48 unlinked v2 rows.**
+   - `blocklist_strip=true` (default ON) — removes blocklisted names
+     (Tad Hashey, Terry Kott) from non-finalized snapshots' rows[] and
+     employees[]. **First apply cleared 20 entries across 10 snapshots.**
+   - `orphan_prune=false` (default OFF, intentionally) — would drop
+     snapshot rows whose employee_id is in neither canonical nor any
+     legacy_ids[]. OFF by default because typo v2 records (Kahiauani /
+     Drane) look like orphans until the user merges them via the
+     Reconciliation portal. Operator runs this AFTER adjudicating typos.
+
+**New Reconciliation card kind: `legacy_duplicate`** for the genuinely
+ambiguous v2-vs-canonical cases the auto-link can't decide. Surfaces
+each non-linked v2 row with a Levenshtein-based "suggested canonical"
+plus 4 actions:
+   - **Merge into…** (requires `target_canonical_id`) — links the v2
+     row into the canonical's `legacy_ids[]` AND adds the misspelled
+     name to the canonical's `aliases[]` so future POS uploads under
+     that spelling route automatically.
+   - **Promote to canonical** — for genuinely new staff with no
+     canonical match (e.g. Jeden White, Chase Winston). Creates a new
+     canonical employee from the v2 row.
+   - **Delete legacy** — soft-deletes the v2 row (status=inactive,
+     soft_deleted_at, soft_deleted_by).
+   - **Keep stored / Defer** — same semantics as other kinds.
+
+Frontend portal updated with a target-canonical dropdown in the Merge
+confirm dialog, pre-populated with the suggested match. Distinct orange
+"legacy duplicate" badge on the card.
+
+**First apply results on Q2P5W4 data**:
+- 48 auto-links applied
+- 9 P0 trust issues cleared from the blocklist strip
+- 7 legacy_duplicate cards now in the Reconciliation queue for the
+  operator to merge/promote/delete:
+    Thaddeus Hashey (no suggestion — was on the blocklist)
+    Kahiauani Ramos → suggested Kahiaulani Ramos
+    Kahiaulanl Ramos → suggested Kahiaulani Ramos
+    Drane Peterson → suggested Diane Peterson
+    Jeden White × 2 (no good suggestion — likely new staff)
+    Chase Winston (no good suggestion — likely new staff)
+
+**Tests**: `/app/backend/tests/test_structural_cleanup_and_legacy_cards.py`
+(8 cases, all passing) — admin gating, dry-run plan, default
+orphan_prune=OFF, queue surfacing of v2-only rows, merge requires
+target id, merge wires legacy_ids+aliases, delete_legacy soft-deletes,
+promote_canonical creates employee row.
+
+
+### P0: Reconciliation resolved-records — tightened to spec — SHIPPED 2026-05-31 (round 2)
+
+Follow-up on the previous resolution-clears fix. User requested:
+
+- Re-surface threshold dropped from 2% to **≥1%** so resolved cards stay
+  suppressed inside the noise band. Introduced
+  `RESOLVED_REFRESH_THRESHOLD = 0.01` separate from the 2% flagging
+  tolerance, so the FLAG threshold and the RE-SURFACE threshold can be
+  tuned independently.
+- `reconciliation_resolved` document schema aligned to the user's named
+  contract: `{conflict_id, resolved_at, resolution_type, resolved_value,
+  resolved_by}`. The richer internal fields (`employee_id`, `field`,
+  `kind`, `reason`, `post_expected`) are kept alongside for UI rendering
+  and the queue filter's tolerance math.
+- Records persist in MongoDB — survive backend restarts and hot reloads.
+  Verified by re-instantiating the service in a fresh Python process and
+  re-reading the queue: Kahiaulani remains hidden across multiple cold
+  starts.
+
+**Verification** (all four invariants checked end-to-end on Q2P5W4):
+  1. Resolve Kahiaulani via manual_override → card disappears from active.
+  2. New `ReconciliationService` instance reads queue → Kahi still hidden.
+  3. Second hard refresh (3rd new instance) → still hidden.
+  4. Mutate `current_metrics.ppa` by +5% → card re-surfaces as fresh drift,
+     stale resolved row deleted automatically.
+
+Screenshot confirms post-hard-reload state: 2 active · 0 deferred · 1
+resolved, Kahiaulani in the "Resolved (recently cleared)" table with
+Un-resolve action.
+
+
+### P0: Reconciliation Portal — cards clear on resolve — SHIPPED 2026-05-31
+
+User reported: resolving a card (e.g. Kahiaulani manual override) left it
+visible because the queue re-derives drift from raw inputs every refresh —
+if the corrupt `net_sales=$20B` isn't also fixed, `expected = $20B / 512`
+still disagrees with the corrected `stored = 47.37`, so the card flagged
+again immediately.
+
+**Fix shipped**:
+
+- New `reconciliation_resolved` collection — every actionable resolution
+  (`keep_stored` · `accept_snapshot` · `manual_override` · `revoke_alias`)
+  stamps `(conflict_id, post_stored, post_expected, action, actor, reason,
+  resolved_at)` after the write completes.
+- `queue()` builder now filters out any conflict whose `conflict_id` is in
+  `reconciliation_resolved` AND whose current `(stored, expected)` tuple
+  matches the resolution snapshot within tolerance (2% relative / 5¢ abs).
+- If the data later drifts past tolerance (e.g. raw inputs change again),
+  the stale resolution stamp is deleted and the card re-surfaces as fresh
+  drift for re-adjudication. This is non-trivial: it means a resolution
+  isn't a permanent "ignore" — it's a "hide while current values still
+  match what I just acknowledged."
+- New `POST /reconciliation/unresolve?conflict_id=…` lets the operator
+  recall a card if they change their mind. Audit log entry remains.
+- Frontend: new "Resolved (recently cleared)" table between deferred and
+  audit-log sections, with per-row **Un-resolve** button. Header counter
+  pill now reads `N active · M deferred · K resolved`.
+
+**Tests**: 10/10 passing (added 2 new cases):
+  - `test_resolve_clears_card_from_active_queue` — resolve → card moves
+    from active to resolved, un-resolve → card returns to active.
+  - `test_resolved_card_resurfaces_if_values_drift_again` — resolve,
+    then mutate the canonical raw input to a different drifty state →
+    the card re-appears in active and the stale resolved row is dropped.
+
+
+### P0: Data Reconciliation Portal (manual override interface) — SHIPPED 2026-05-31
+
+User requested explicit, per-card adjudication of every conflict surfaced by
+the scoring trust badge. Hard requirement: ZERO auto-resolution, ZERO batch
+endpoints, every resolution logs to an append-only audit. Built end-to-end.
+
+**Backend** (`services/reconciliation_service.py` + 3 endpoints under `/v2/admin/reconciliation/`):
+   - `GET  /queue`            — returns `{active[], deferred[], counts}` sorted by drift severity desc.
+                                Card kinds: `metric_drift` (PPA/guests_per_lsc/lbw_per_guest
+                                vs raw inputs) and `alias_collision` (canonical aliases that
+                                shadow another active employee's primary name). Each card
+                                carries `conflict_id` (deterministic), `stored_value`,
+                                `snapshot_value`, `computed_expected`, `raw_inputs`, and
+                                `source` (snapshot id/name/quarter/year + effective_date).
+   - `POST /resolve`          — single-card payload `{conflict_id, action, value_override?, reason?}`.
+                                Actions: `keep_stored` · `accept_snapshot` · `manual_override` ·
+                                `defer` · `revoke_alias`. No batch path. Re-derives the queue
+                                on every call so client-side state can't drive a write.
+   - `GET  /audit`            — append-only log of every resolution
+                                (actor, employee, field, before, after, action, timestamp, reason).
+   - New collections: `reconciliation_deferred`, `reconciliation_audit`.
+   - Resolution writes touch both `employees.current_metrics.<field>` and `employees_v2.<field>`
+     so the dashboard hydration sees the corrected value on the next read.
+
+**Frontend** (`pages/DataReconciliation.jsx`):
+   - Route: `/data-reconciliation` (admin-protected).
+   - Sidebar nav: under "Admin" group, icon `GitMerge`.
+   - Each card displays: employee · field badge · severity badge (rose/amber by drift %) ·
+     Stored (canonical) · Expected (snapshot) · Source (snapshot name + raw inputs).
+   - 4 action buttons per card (or 3 + Revoke Alias for alias cards). Every button opens
+     a confirmation dialog with explicit before/after preview. Manual Override requires a
+     numeric input. Optional free-text "note" field gets persisted to the audit log.
+   - Deferred section renders below active with a "deferred" pill + the original defer reason.
+   - Bottom-of-page Audit Log table (last 50 resolutions) with actor, action, before→after, note.
+   - Toast confirmation on success/failure.
+
+**Auth bug fixed in passing**: `routes/auth.py` was reading `ALLOWED_ADMIN_EMAILS` at
+import time, but supervisor doesn't export the dotenv vars and `auth.py` is imported
+BEFORE `server.py` calls `load_dotenv`, so after every hot-reload the whitelist was
+silently empty and `require_admin` returned 403 on every protected endpoint. Added a
+defensive `load_dotenv(Path(__file__).resolve().parent.parent / ".env")` at the top
+of `auth.py`. This wasn't part of the user's brief — surfaced while testing.
+
+**Tests**: `/app/backend/tests/test_data_reconciliation_portal.py` (8 cases, all passing):
+queue admin-gating, priority cards presence + severity sort, defer-persistence,
+keep_stored audit shape, manual_override 400 without value, manual_override
+end-to-end (canonical write + audit before/after), unknown conflict_id 404,
+post-test cleanup.
+
+
+### P1: Self-curating typo dictionary + passive metric integrity — SHIPPED 2026-05-30
+
+Two follow-ups shipped after the Kitti scoring bug closeout.
+
+**1. Auto-add misspelled POS names as canonical aliases at rename time.**
+   - `POST /api/v2/snapshot-workflow/snapshots/{id}/confirm-pos-review`
+     now collects every inline `_original_name → name` rename pair and,
+     after the snapshot save commits, registers the misspelling as a
+     permanent alias on the canonical employee via `$addToSet`. Future
+     POS uploads under the bad spelling route automatically — no more
+     repeated typo-fixes on every weekly upload.
+   - Guard: refuses to register an alias if the misspelled name is the
+     primary name of a DIFFERENT active employee (would shadow their
+     identity). Surfaced in `alias_skips[]` with `reason=
+     owned_by_other_employee`.
+   - Response payload extended with `aliases_added` count and
+     `alias_skips[]` array.
+
+**2. Passive scoring integrity check on Trust badge.**
+   - `GET /api/v2/admin/scoring-trust` now scans every active canonical
+     employee's `current_metrics` and verifies the stored derived ratios
+     match the raw inputs:
+       • `ppa` ≈ `net_sales / guests`
+       • `guests_per_lsc` ≈ `guests / lsc_count`
+       • `lbw_per_guest` ≈ `lbw / guests`
+     Tolerance is 2% relative + 5¢ absolute (so sub-penny rounding noise
+     doesn't trigger).
+   - Tri-state rollup: 1-4 mismatches → AMBER warning; 5+ → RED blocker.
+   - Response includes `details.metric_integrity = {count, tolerance_pct,
+     mismatches[≤20]}` and a `remediation.metric_integrity` blurb.
+   - Trust modal redesigned to 4-column grid (Quarter Settings · Data
+     Integrity · Alias Collisions · Metric Integrity) plus a new "Metric
+     Drift" block that lists each affected employee with `stored →
+     expected` and `rel_diff_pct`.
+   - Bonus discovery: the check immediately surfaced a stale duplicate
+     `Kahiaulani Ramos` canonical record still carrying the original
+     $20B `net_sales` typo (the Kahi Ramos canonical was already fixed
+     yesterday). User can now see and decide whether to merge/correct.
+
+**Tests**: `/app/backend/tests/test_alias_auto_add_and_metric_integrity.py`
+(5 cases, all passing) — covers alias write success, shadow-identity
+refusal, metric_integrity block shape, tri-state propagation, and
+remediation presence. Plus an end-to-end manual verification: injecting
+a misspelled row + firing rename returns `aliases_added=1` and the
+misspelling lands on the canonical's `aliases[]`.
+
+
+### P0: Q2P5W4 scoring accuracy — SHIPPED 2026-05-30
+
+User reported Kitti showing 1:10 guests/LSC despite selling 42 cards to 852 guests
+(actual: 20.29). Tracing surfaced 3 bugs on the live Q2P5W4 snapshot.
+
+**Fixes shipped**:
+
+1. **Kahi Ramos POS corruption**: `net_sales = $20,439,251,934.23` was making
+   his PPA show `$39,920,413.93`. Corrected to user-provided `$24,253`
+   (PPA → $47.37). Rescored via canonical `scoring_engine.run_full_scoring`
+   and propagated to `employees_v2`, `snapshot.employees[]`, and
+   `snapshot.rows[].frozen_metrics`.
+
+2. **Zero-LSC ranking exclusion**: "Top 10 - Guests/LSC" was ranking Jeden
+   White at #1 with `0.00` (he never sold a single loyalty card). Filter
+   in `getTopEmployees` now excludes any employee with `lsc_count === 0`
+   or where the metric value itself is `0`. Applied in 3 places:
+   - `frontend/src/pages/FullRankings.js`
+   - `frontend/src/components/TopPerformersGrid.jsx`
+   - `frontend/src/pages/Analytics.js`
+
+3. **rows[]/employees[] drift**:
+   - **Root cause**: `demo-prep` was updating `snapshot.employees[]` but
+     leaving `snapshot.rows[].frozen_metrics` stale. Dashboard reads via
+     `_hydrate_snapshot_employees` → `get_snapshot_with_join` → `rows[]`
+     so the stale ledger silently overrode the corrected employees blob
+     for Kitti, Diane, Kahi.
+   - **Going-forward**: `demo-prep` now calls
+     `_sync_snapshot_rows_from_employees` immediately after rewriting
+     `employees[]`, so rows[] stays in lockstep on the active snapshot.
+   - **One-shot backstop**: new `POST /api/v2/admin/sync-snapshot-rows`
+     admin endpoint. Defaults to **in_progress-only** scope (won't touch
+     completed/reviewed snapshots without `include_completed=true`).
+     Finalized snapshots are unconditionally skipped. Default is dry-run;
+     surfaces a per-snapshot diff before persisting.
+
+**Tests**: `/app/backend/tests/test_lsc_zero_filter_and_rows_sync.py`
+(5 cases, all passing) — locks in Kahi PPA sanity, Kitti gpl math,
+endpoint admin gating, default scope, and finalized-snapshot
+protection.
+
+
+
+### P0: Production Readiness — Demo Hardening — SHIPPED 2026-05-28
+
+User passed a 15-item brief from Emergent's security review. Triaged
+against the demo-tomorrow constraint and shipped the high-leverage
+security + stability items; deferred CRA→Vite, deep refactors, broad
+empty-state polish.
+
+**Security fixes (P1)**:
+
+1. **Admin route gating extended to GETs on `/api/v2/admin/*`**:
+   `AdminAuthMiddleware` previously only gated `POST/PUT/PATCH/DELETE`.
+   Anonymous GET to `/api/v2/admin/scoring-trust`,
+   `/api/v2/admin/integrity`, `/api/v2/admin/alias-collisions` etc.
+   leaked data-integrity counts, alias collision names, and audit
+   findings publicly. Middleware now requires admin on every method
+   in `/api/v2/admin/*`, except the explicit public exempt list
+   (`/api/v2/admin/scoring-example` — read-only math demonstrator).
+   Verified end-to-end with curl: anon GET → 401, exempt path → 200.
+
+2. **`ALLOWED_ADMIN_EMAILS` is fail-closed**: removed the hardcoded
+   `owner@intheweedscollective.com` default fallback in
+   `routes/auth.py`. If the env var is missing/empty, no email is
+   admin, app degrades to read-only-for-everyone. Startup logs a
+   loud warning. Production redeploy will need
+   `ALLOWED_ADMIN_EMAILS` set in env (currently set in preview
+   `.env`).
+
+3. **CORS already correctly gated** by existing code:
+   `CORS_ORIGINS=*` disables credentialed CORS; specific origins
+   enable it with cookie passthrough. Preview default list includes
+   both preview + production domains.
+
+**Frontend admin gating (P2)**:
+
+4. **`SidebarLayout.jsx`** — every admin-only nav item/group now
+   carries `adminOnly: true`; the render path filters them out of
+   the DOM entirely for non-admins (Snapshot Workflow, Data
+   Uploads, Employees, Settings, QR Codes, QR Settings, Stores
+   Management, Admin group, etc.). Hidden, not disabled.
+
+5. **`components/ProtectedAdminRoute.jsx`** (new): wraps every
+   admin route in `App.js`. Loading → spinner. No session →
+   redirect to /login. Signed-in non-admin → "Admin access
+   required" screen with a back-to-dashboard link. Admin →
+   children. Applied to: `/uploads`, `/data-uploads`,
+   `/snapshot-workflow`, `/snapshot-workflow/:id`, `/employees`,
+   `/settings`, `/data-integrity`, `/scoring-audit`,
+   `/cv-adjustment`, `/qr/codes`, `/qr/settings`, `/qr/ghost-heal`,
+   `/stores`.
+
+**Stability (P4)**:
+
+6. **`components/ErrorBoundary.jsx`** (new): wraps the entire
+   SidebarLayout/Routes tree in `App.js`. Any render-time crash
+   surfaces a clean fallback ("Something went wrong loading this
+   page. Refresh or back to dashboard") with the error message in
+   a collapsible `<details>`. Console logs preserved for devtools.
+
+**API consistency (P3)**:
+
+7. **`StoreContext.jsx`** swapped from raw `fetch()` to shared
+   axios `api` client. Session cookies, withCredentials, 401/403
+   interceptors now consistent across every API call in the app.
+
+**Verified on preview**:
+- Anonymous user: sidebar shows only Dashboard / Reports /
+  Performance / Feedback / Exports / Multi-Store (Global Overview,
+  Store Leaderboard) / QR (Dashboard, Leaderboard, Clicks by Day) /
+  Upload Tutorial / Scoring Guide / Help Center / Sign In. Zero
+  admin items.
+- Anonymous trying `/uploads` → redirects to `/login`.
+- Admin: full sidebar visible, all admin pages render.
+- Anonymous `GET /api/v2/admin/scoring-trust` → 401.
+- Anonymous `GET /api/v2/admin/scoring-example` → 200 (exempt).
+
+**Deferred (out of demo-tomorrow scope)**:
+- CRA → Vite migration (P5 #10 — user explicitly excluded)
+- Deep App.js route reorganization (P5 #11)
+- Broad loading/empty-state polish across every page (P4 #9, P7 #13)
+- Audit-and-add `Depends(require_admin)` on every endpoint as
+  belt-and-suspenders (middleware already enforces; redundant)
+
+**Production redeploy checklist** (for tomorrow morning):
+- Set `ALLOWED_ADMIN_EMAILS=owner@intheweedscollective.com,…` in
+  production backend env. **This is critical** — without it, no
+  one is admin on production.
+- Set `CORS_ORIGINS=https://intheweedscollective.com` in production
+  (or leave unset — default list already includes the prod domain).
+- Smoke-check: anon `/uploads` should redirect to login; anon
+  `GET /api/v2/admin/scoring-trust` should return 401.
+
+### P0: Worked Example Now Server-Computed — SHIPPED 2026-05-27
+
+User correctly called out that my previous "self-reconciling" worked
+example on `/scoring-guide` still reimplemented the math in JS — it
+bound the coefficients (weights / RT rate / CV points) live from
+`quarter_settings` but the **shape** of the formula (caps, bonus
+curve, order of operations) was duplicated in JavaScript. Same
+drift class as the Word doc, just relocated.
+
+**Backend** — new endpoint `GET /v2/admin/scoring-example`:
+- Builds a synthetic `EmployeeV2` with the requested inputs.
+- Runs the exact production pipeline:
+  `calculate_customer_voice_score → calculate_review_tracker_bonus →
+  calculate_bonus_points → calculate_total_score`.
+- Returns a JSON breakdown: per-metric weighted contributions,
+  weighted POS subtotal, metric bonuses, CV (NPS + promoter/detractor
+  + total), RT (raw, capped, cap), `pre_dar_score`, `total_score`.
+- Defaults produce the canonical Top-Performer example (123.50).
+
+**Frontend** — `pages/ScoringGuide.js`:
+- Deleted all inline JS arithmetic (caps / bonus / CV / RT formulas).
+- Worked-Example section now renders ONLY numbers from the API
+  response. JS does no math; engine changes propagate to the doc
+  automatically.
+
+**Regression test** — `tests/test_scoring_example_endpoint.py` (5
+cases): breakdown lines reconcile to total, defaults give 123.50,
+canonical 25/25/20/15 + 0.33/20 + +1/−2, RT caps at max, POS caps at
+100% before weight. Full scoring regression suite: 37/37 passing.
+
+### P0: Stale CV Math Purge from Admin Panel — SHIPPED 2026-05-27
+
+User's auditor flagged three admin endpoints carrying hardcoded
+legacy CV math that bypassed the canonical engine and would
+silently re-rank the board mid-demo if anyone tapped them:
+
+- `POST /v2/admin/name-matching/apply` — wrote
+  `cv = promoters*0.5 - detractors*1`, dropped NPS, and rebuilt
+  `total_score` from cached components (legacy 75-pt model).
+- `POST /v2/admin/clear-all-detractors` — used `promoter * 0.5`,
+  dropped NPS contribution, recomputed total inline.
+- `GET /v2/admin/name-matching/preview` — used banded NPS→points
+  (10/9/8/7/6 thresholds) instead of NPS%/10 linear.
+
+Bonus discovery: both `apply` and `preview` imported
+`get_nps_for_employee_smart` and `normalize_name` from
+`name_matcher.py` — **functions that did not exist**. Every call to
+either endpoint would have thrown `ImportError` before even reaching
+the bad math. Pre-existing latent landmine.
+
+**Fix shipped**:
+
+1. **`clear_all_detractors`**: zeroes detractors then replays
+   `run_full_scoring` on the touched rows. Engine owns the CV /
+   total-score formula now.
+2. **`apply_name_matching`**: persists matched
+   `nps_score`/`promoters`/`detractors`/`cv_match_source` to v2,
+   then reloads and replays `run_full_scoring`. Includes the
+   `rt_mentions → review_mentions` legacy bridge introduced by
+   `demo-prep` so RT bonus computes correctly.
+3. **`preview_name_matching`**: projects CV via
+   `calculate_customer_voice_score` on a throwaway `EmployeeV2`.
+   Preview now matches what `apply` would actually write.
+4. **`name_matcher.py`**: added the two missing utilities
+   (`normalize_name`, `get_nps_for_employee_smart`) with exact /
+   alias / fuzzy(≥75) matching layered through `clean_name`.
+
+**Regression test**: `tests/test_admin_cv_routes_canonical.py` (3
+cases) — asserts each endpoint's CV output matches
+`calculate_customer_voice_score`'s output, never the legacy
+±0.5/±1 math. All 32 scoring tests still pass.
+
+**Net effect on tomorrow's demo**: if you accidentally tap "Apply
+Name Matching" mid-presentation, the board does NOT re-rank with
+wrong math — it re-runs the same canonical engine the dashboard
+already uses, so scores stay numerically consistent.
+
+### P0: Demo-Prep One-Shot Consolidation — SHIPPED 2026-05-27
+
+User reported demo-tomorrow blockers:
+1. Dashboard data didn't reflect Data Uploads (29 employees in
+   snapshot vs 40 in employees_v2).
+2. Some employees showed as first-name only (Julian, Kahi).
+3. Three split-personality v2 rows: same canonical person uploaded
+   under both their canonical name AND an alias (e.g. Trey/Treyanna,
+   Matt/Matthew, Keisha/Lakeisha) so the merge endpoint's
+   delete-by-id couldn't catch them.
+
+**Backend** — new admin endpoint `POST /v2/admin/demo-prep`:
+- Query params: `quarter`, `year`, `apply`, `resync_snapshot`,
+  `force_rescore`.
+- Section 1 — **Display-name backfill**: for any canonical record
+  whose `display_name` is single-word but who has a fuller candidate
+  in `report_name` (or vice versa), rewrite `name` and
+  `display_name` to the fuller version. Propagates to all
+  employees_v2 rows that share the canonical id.
+- Section 2 — **Alias-aware v2 dedup**: for each `(canonical_name,
+  alias)` pair on every active canonical employee, if v2 rows exist
+  under both names for the target quarter, sum the raw POS / CV / RT
+  metrics into the canonical-named row and delete the alias row.
+  If only the alias row exists, rename it.
+- Section 2b — **Same-name v2 dedup**: a second pass that groups by
+  name and consolidates any v2 rows that still share a canonical
+  name (also handles pathological duplicate-`id` rows by deleting
+  via Mongo's `_id` instead of the app-level `id`).
+- Section 3 — **Force rescore**: replays `run_full_scoring` on every
+  v2 row in the quarter with a `rt_mentions → review_mentions`
+  legacy-field bridge and a `guest_count → guests` bridge so
+  cleaned-up rows actually produce fresh scores.
+- Section 4 — **Resync snapshot**: pulls the freshly consolidated v2
+  rows into the current snapshot's `employees[]` array so the
+  dashboard catches up immediately.
+
+**Frontend** — new `Demo Prep` button (indigo, with wand icon) in the
+Scoring Trust modal footer. Reads the current quarter from the
+trust details, POSTs `apply=true`, surfaces a single toast
+summary: `Renamed N · Merged X alias + Y same-name dup(s) ·
+Rescored Z · Snapshot synced`.
+
+**Verified end-to-end on preview Q2 2026**:
+- Before: 40 v2 rows (3 alias-split pairs, 2 first-name-only,
+  1 same-id duplicate, 2 stale name spellings) → snapshot showed
+  31 stale employees on dashboard.
+- After: 31 clean v2 rows, snapshot.employees in lockstep with v2,
+  all 31 rescored. Top performers now: Diane Peterson 113.57,
+  Kitti Xavier 109.54, Matt Spath 107.23, Polly Blocker 101.56,
+  Trey Quick 100.99, Keisha Martin 97.03 (RT bonus correctly
+  applied — Trey 69 mentions → 20-cap; Keisha 40 → 13.2).
+
+**Production action required**: After redeploy, open the dashboard
+as admin, click the Trust badge, tap **Demo Prep**. One click handles
+all three classes of drift for the live demo data. The endpoint is
+idempotent — running it twice on already-clean data is a no-op.
+
+### P2: PDF Customer Voice mislabel — FIXED 2026-05-27
+
+The per-employee review PDF (`server.py:825`) listed
+`Customer Voice | 15%` in the KPI table, framing CV as a 15% weight
+slice. CV is an uncapped additive bonus (NPS%/10 + promoters −
+2×detractors), not a weighted percentage. Replaced the "15%" cell
+with "Bonus" so the PDF matches the engine.
+
+### P2: Phantom CV+RT cap docstring — REMOVED 2026-05-27
+
+`EmployeeV2.cv_rt_combined` field had a comment claiming "max 20 per
+quarter". The code only stores the sum; no cap is enforced (CV
+uncapped, RT independently capped at 20). Comment rewritten to
+match reality.
+
+### P2: Self-Healing Dashboard — SHIPPED 2026-05-26
+
+User requested true zero-touch operation: the scoring engine should heal
+itself in the background instead of waiting for an admin to open the
+trust modal and click a button. Plus, the native browser
+`window.confirm` / `alert()` dialogs on mobile Safari were clunky.
+
+**Delivered**:
+
+1. **Toasts replace native dialogs** — every `alert()` / `confirm()`
+   in `ScoringTrustBadge` swapped for `sonner` toasts (loading state,
+   success with description, error). No more iOS modal pop-ups.
+
+2. **"Auto-Fix All" button** — single green CTA in the modal footer
+   with wand icon. Runs normalize + every collision merge in series,
+   single success toast at the end. Existing granular buttons
+   (Refresh / Dry-Run / Apply Normalize) preserved for power users.
+
+3. **Silent auto-heal on dashboard load**:
+   - Fires on `ScoringTrustBadge` mount for any admin user whose
+     trust check reports `drift_count > 0` OR `collisions > 0`.
+   - Throttled to **once per hour** via
+     `localStorage["scoring_trust_auto_heal_last_run"]` (so it
+     doesn't hammer the API on rapid page navigation).
+   - Bounded to one run per component mount via a `useRef` guard.
+   - On success, shows a single toast: *"Scoring engine auto-healed.
+     Normalized N quarter(s) · Merged X collision(s)"*.
+   - If both deltas are 0, no toast — fully silent.
+
+4. **Opt-out toggle** — checkbox inside the trust modal labeled
+   "Self-healing dashboard" (on by default). Preference stored in
+   `localStorage["scoring_trust_auto_heal"]`. Toggling on
+   re-arms the cooldown so the next dashboard load triggers a fresh
+   heal pass. Toggling off shows an explanatory toast.
+
+**Verified end-to-end on preview**: seeded 2 fake alias collisions,
+loaded dashboard as admin → toast fired with
+"Normalized 0 · Merged 2 collision(s)" → opening modal confirmed
+"0 active" collisions. No user input required.
+
+### P0: Resolved 3 Alias Collisions — SHIPPED 2026-05-24
+
+Per the previous session's audit checklist, executed the 3 outstanding
+canonical-vs-alias merges on preview using the existing
+`/v2/employees/merge` endpoint:
+
+| Survivor          | Duplicate (merged in) | QR clicks rolled |
+|-------------------|-----------------------|------------------|
+| Allen Simmons     | Craig Simmons         | 5 added          |
+| Ikey Ostgarden    | Eric Ostgarden        | 1 added / 2 arch.|
+| TK Kozan          | Thomas Kozan          | 1 archived       |
+
+After the merge: `/v2/admin/alias-collisions` returns 0 active
+collisions (was 3). Each duplicate's name is now an alias on the
+survivor so any future POS / CV / RT upload for either name lands on
+one canonical record.
+
+**Production action required**: Same merges must be applied to
+production. Easiest path: open the **Scoring Trust Score** modal from
+the dashboard header as admin → click **"Merge"** next to each
+collision pair. The badge now surfaces every pair with its own
+one-click merge button (no need to bounce to Nickname Manager).
+
+### P2: Trust Modal — One-click Collision Merge — SHIPPED 2026-05-24
+
+Extended the `ScoringTrustBadge` modal with a per-pair merge action:
+
+- Backend `/v2/admin/scoring-trust` now returns `primary_id` and
+  `duplicate_id` on each collision pair (was just names).
+- Frontend renders a "Resolve Alias Collisions" panel inside the
+  modal when `count > 0`. Each pair shows
+  `duplicate → primary` with a red **Merge** button that POSTs to
+  `/v2/employees/merge` (with a `window.confirm` safety dialog).
+- After merge, the modal auto-refreshes its data and the pair
+  disappears.
+
+### P2: Scoring Trust Score (Dashboard widget) — SHIPPED 2026-05-24
+
+User requested a single trust-signal widget on the dashboard so the RD
+can see at a glance that the scoring math is bulletproof before a demo.
+
+**Backend** — `GET /api/v2/admin/scoring-trust` (`routes/admin.py`):
+- Rolls up three signals into one tri-state result:
+  1. **Quarter-settings drift** — any stored quarter that diverges
+     from `CANONICAL_ENGINE_CONSTANTS` (weights, RT, CV points,
+     bonus rate). Splits drift into "unlocked active" (current or
+     future, blocker-level) vs "historical/locked" (advisory).
+  2. **Data integrity** — re-runs `EmployeeValidator.run_all()` and
+     surfaces P0/P1/P2 counts + deploy gate state.
+  3. **Alias collisions** — active canonical records whose aliases
+     collide with another active record's canonical name.
+- Returns `status: green | amber | red` + `issues[]` (blockers),
+  `warnings[]` (advisory), per-signal `details`, `remediation` hints.
+
+**Frontend** — `components/ScoringTrustBadge.jsx`:
+- Compact shield-icon pill in the dashboard header (green ✓ / amber ! /
+  red ✕) next to the existing QRHealthBadge.
+- Click opens a shadcn `Dialog` with the three rolled-up signals,
+  inline remediation tips, and three actions: **Refresh**, **Dry-Run
+  Normalize**, **Apply Normalize** (the latter two POST to
+  `/v2/admin/normalize-quarter-settings`).
+- **Admin-only**: silently hides for anonymous viewers via
+  `useAuth().user.is_admin`.
+
+**Verified on preview**: Badge renders red ("Action Required") because
+preview DB has the existing 40 P0 integrity issues + 3 alias collisions
+(Allen↔Craig, Ikey↔Eric, TK↔Thomas — exactly the ones the user already
+plans to merge via Nickname Manager). Modal opens, all 3 stat cards
+populate, action buttons wired.
+
+### P0: Scoring Audit Closeout — Quarter Settings Normalizer — SHIPPED 2026-05-24
+
+User requested a full pass on `Performance_Hub_Scoring_Audit.docx`.
+Previous session shipped most of the P0 work (fix-all-scores canonical
+weights, single-source scoring formula, RT auto-derive, integrity gate).
+This session closes out the remaining items:
+
+**P0 — Canonical engine constants across every stored quarter**:
+- New admin endpoint `POST /api/v2/admin/normalize-quarter-settings`
+  (`routes/admin.py`). Default is dry-run; pass `?apply=true` to
+  persist. Query params: `apply`, `include_locked`, `lock_after`,
+  `normalize_benchmarks`.
+- Engine constants normalized by default (weights 25/25/20/15, RT
+  0.33/cap 20, CV +1/-2, bonus rate 0.25/cap 5). Benchmarks left alone
+  unless `?normalize_benchmarks=true` (so admin-customized Q3 2026
+  benchmarks like PPA $62 / LBW $9.5 stay intact).
+- Locked quarters are surfaced in the report but skipped unless
+  `?include_locked=true`.
+
+**Preview DB result** (ran `apply=true`): 4 quarters, 15 field writes.
+Before/after:
+| Year/Q   | rt_rate | rt_cap | cv_promoter | cv_detractor | bonus_rate |
+|----------|---------|--------|-------------|--------------|------------|
+| 2025 Q4  | 0.5→0.33| 15→20  | None→1.0    | None→2.0     | 0.2→0.25   |
+| 2026 Q1  | 0.5→0.33| 15→20  | None→1.0    | None→2.0     | 0.2→0.25   |
+| 2026 Q2  | OK      | OK     | None→1.0    | None→2.0     | OK         |
+| 2026 Q3  | OK      | OK     | None→1.0    | None→2.0     | 0.2→0.25   |
+
+**Production action required**: After redeploy, run
+`POST /api/v2/admin/normalize-quarter-settings?apply=true` as admin
+(dry-run with `apply=false` first to preview).
+
+**P2 — Doc drift fixed**:
+- `SCORING_BREAKDOWN.md` rewritten from scratch to match canonical
+  model (25/25/20/15, RT 0.33/cap 20, CV +1/-2 uncapped, glass
+  benchmark $1.35). Old version had LBW 15%/Glass 10%/$1.25 glass/
+  RT 0.5/cap 15 — all wrong. Also clarified server class vs ranking
+  tier (the audit-flagged P1 tier-system confusion).
+- Stale docstrings in `scoring_engine.py` updated:
+  `calculate_total_score` (LBW 15/Glass 10 → 20/15), the rate=0.3
+  module comment → 0.33, `calculate_combined_cv_rt` clarified to say
+  there is **no combined CV+RT cap** (the audit-flagged P1 question —
+  user confirmed CV uncapped, RT capped at 20 independently),
+  `QuarterSettings` model docstring, and the `cv_score` field comment.
+
+**Regression test**: `tests/test_normalize_quarter_settings.py`
+(5 cases): dry-run safety, engine-constant write-through,
+benchmarks-only-with-flag, locked-skipped-then-forced, lock_after
+side-effect. Uses sentinel year 9099 to avoid DB pollution.
+
+**All scoring regression tests still pass**: 29/29 across
+`test_canonical_scoring_constants`, `test_rt_bonus_auto_derive`,
+`test_rows_sync_after_process`, `test_integrity_gate_pre_score`,
+`test_process_snapshot_none_safety`, `test_normalize_quarter_settings`,
+`test_scoring_engine_unified`.
+
+**Audit items still open** (deferred by user this session):
+- QR Base URL preview banner — disregarded for now
+- Phase 3 Stage C `employees_v2` drop — still waiting prod stability
+
 ## Current State (2026-05-14)
+
+### P1: Snapshot Slide Trend Indicators "Tofu Box" — FIXED 2026-05-23
+
+**Symptom**: Every row on the Snapshot PNG slide (and PDF) showed a
+small empty rectangle (□) in the Trend column instead of the
+expected ▲/▼/— glyphs.
+
+**Root cause**: The slide renderers used Unicode U+25B2 / U+25BC /
+U+2014 as text glyphs. The PNG path uses `Aptos-Narrow-Bold.ttf`
+which doesn't ship those geometric-shape codepoints; ReportLab's
+default Helvetica on the PDF path is similarly limited. PIL/
+ReportLab both fell back to the standard "missing glyph" tofu box.
+
+**Fix**: Replaced text-glyph rendering with **polygon primitives**
+in both generators. The trend cell now passes a sentinel value
+(`"__TREND__:up|down|flat"`) which the rendering loop intercepts:
+PNG uses `draw.polygon`, PDF uses `c.beginPath` / `c.drawPath`.
+No font dependency for the indicator.
+
+**Verified** by generating both a PNG and a PDF with mixed trends.
+AI inspection confirms green up-triangles, red down-triangles,
+neutral dashes, all centered correctly. No tofu remaining.
+
+### P0: Snapshot Detail Top Performers ↔ Rankings Mismatch — FIXED 2026-05-23
+
+`GET /v2/snapshot-workflow/snapshots/{id}` now hydrates `employees[]`
+from the same `_hydrate_snapshot_employees(rows)` pipeline used by
+the Rankings tab when the snapshot is `completed`. Snapshot Detail's
+Top Performers card and the Reports/Yodeck top performers now match
+the Rankings tab exactly. Falls back to embedded `employees[]` if
+hydration fails (e.g. for partially-completed snapshots).
+
+### P0: Edit-Revert Real Root Cause + Dedupe Script — SHIPPED 2026-05-22
+
+**Symptom**: After my earlier rows-mirror fix, edits in Data Uploads
+**still** reverted. The hydration path overlays `employees_v2` data
+on top of `rows[].frozen_metrics`. My PUT only synced display_name/
+report_name/job_title to v2 — never `rt_mentions`, `cv_score`,
+`guest_count`, etc. The overlay then re-applied the old values from
+v2, making the edit appear to revert.
+
+**Even worse**: `employees_v2` had 13 orphan dupe rows (legacy
+Phase-1 migration leftovers). My old fuzzy `$or` name match updated
+whichever row Mongo picked first — sometimes the orphan, leaving the
+canonical-id row stale. Specifically Keisha's canonical row
+(id=29acf3c5…) had `rt_mentions: 20` while the orphan row
+(id=25fc877b…, name="Lakeisha Martin") had `rt_mentions: 0`. The
+hydration overlay read the canonical-id row → reverted to 20.
+
+**Fix (3 parts)**:
+
+1. **Expand the PUT sync_fields list** to cover every field the
+   overlay can stomp: all POS metrics, CV/NPS, RT, derived scores,
+   tier. ~40 fields (was 4).
+
+2. **Match v2 STRICTLY by canonical id** (no more name regex `$or`).
+   Falls back to upsert if no v2 row exists for this canonical id in
+   the quarter — anchors the identity for future overlays.
+
+3. **New script** `scripts/dedupe_employees_v2.py`:
+   - Loads every canonical `employees` doc and builds a name +
+     legacy_ids → canonical id map.
+   - Walks `employees_v2`, rewrites any row whose id is a legacy id
+     (or whose name matches an alias on a canonical) to the
+     canonical id.
+   - Collapses duplicates per (canonical_id, quarter, year), keeping
+     the richest row (highest total_score / most non-zero metrics).
+   - Run with `--apply`; default is dry-run.
+
+**Verified end-to-end on Keisha in preview**:
+  - Before: v2 rt_mentions=20, edit to 99 → reverted to 20.
+  - After: PUT updates v2 to 99 → re-fetch via `_hydrate_snapshot_employees` returns 99 → score 119.8 with RT bonus 20.
+
+**Preview cleanup ran**: 13 v2 rows had wrong canonical ids
+(rewrote → canonical), 14 dupe rows collapsed. As a side effect this
+also fixes the Allen/Craig + Eric/Ikey + Thomas/TK NPS missing
+problem — those alias-collision dupes are now canonical-id-linked,
+so CV/RT data lands on the right bucket automatically.
+
+**Production action required**: After redeploy, run:
+```bash
+cd /app/backend && python3 -m scripts.dedupe_employees_v2 --apply
+```
+(or hit an admin endpoint if you'd like me to wrap it.) This is a
+one-time data cleanup; the new PUT logic prevents new dupes.
+
+### P0: Edit-Revert + Alias Collision Detector — SHIPPED 2026-05-14 (final-final)
+
+**Issue #1 — Data Uploads edits silently revert**:
+  - **Root cause**: PUT `/v2/employees/{id}` updated `employees[]`
+    only, never touched `rows[].frozen_metrics`. Re-fetch of
+    `current-rankings` (hydrated from `rows[]`) returned the stale
+    pre-edit value, making the UI appear to "revert" the change. Same
+    `rows[] vs employees[]` divergence as the process-time bug, just
+    on the edit path.
+  - **Fix**: PUT now mirrors the new employee dict into the matching
+    `rows[]` entry (by id, with display_name/report_name fallback) in
+    the same atomic `$set`. If no matching row exists, a fresh one is
+    appended.
+
+**Issue #2 — Allen/Craig NPS missing (and similar)**:
+  - **Root cause**: `employees` collection has 3 active alias/canonical
+    *collisions* — names that appear as the canonical name of one
+    active record AND as an alias on another:
+      - "Craig Simmons" — both a standalone canonical AND an alias on
+        Allen Simmons
+      - "Eric Ostgarden" — alias on Ikey + standalone
+      - "Thomas Kozan" — alias on TK + standalone
+    POS / CV / RT uploads that use the "alias-side" name (Craig) get
+    routed to the standalone canonical, splitting data across two
+    buckets. Allen's NPS stays empty even though Craig's row got the
+    uploaded data.
+  - **Code-side improvements**:
+    - `merge_snapshot_data` now builds an alias→canonical-name map
+      from `employees` up front and consults it inside
+      `find_employee_match` BEFORE the heuristic nickname expansion.
+      So when CV/RT data comes in for "Craig Simmons" it tries to
+      route to "Allen Simmons" first.
+    - New admin endpoint `GET /api/v2/admin/alias-collisions` lists
+      every active collision with a one-click "merge X into Y" hint.
+      Verified on preview: 3 collisions surfaced.
+  - **Action required** (manual, in Nickname Manager):
+    1. Merge Craig Simmons → Allen Simmons
+    2. Merge Eric Ostgarden → Ikey Ostgarden
+    3. Merge Thomas Kozan → TK Kozan
+  - **Note**: code-side alias resolution only helps when the alias-side
+    name appears in `employees_dict` via Allen's POS row. If POS lists
+    BOTH "Allen Simmons" and "Craig Simmons" as separate rows (which
+    Q2P5W2.75 does), they create two POS buckets and the CV data still
+    lands on Craig's POS bucket. The Nickname Manager merge is the
+    only true fix.
+
+### P0: Rows[] Grow-To-Match-Employees[] — FIXED 2026-05-14 (final)
+
+**Symptom (prod after first fix)**: Even after the rows-sync fix, the
+Rankings tab still showed inconsistent scores. The first fix only
+**updated** existing rows; it didn't address that `rows[]` and
+`employees[]` had **different employee sets**.
+
+On Q2P5W2.75 (preview, identical structure to prod):
+  - **In employees[] but no row**: Julian Taveras, Kahi,
+    Kahiauani Ramos, Lennie Nguyen (added by POS merge after first
+    save; ranked correctly in Top Performers, absent from Rankings)
+  - **In rows[] but no employee record**: Tad Hashey (deleted from
+    canonical, stuck in Rankings with stale `score=56.76`)
+
+**Fix**: in `/process` after the existing sync pass, also:
+  1. **Drop** rows whose `employee_id`/name match nothing in
+     `employees[]` (prevents stale ghost rows polluting Rankings).
+  2. **Grow** `rows[]` by appending a fresh row for every scored
+     employee not already covered.
+
+Result: `rows[]` length equals `employees[]` length after every
+process run. The two views can no longer disagree on **set** or
+**order**.
+
+**Verified** on the same Q2P5W2.75 snapshot: 27 stale rows → 29
+synced rows (4 grown, 1 ghost dropped), matching the 29 scored
+employees exactly. Lennie/Kahi/Kahiauani/Julian Taveras now all
+appear in rankings.
+
+Regression test `test_rows_grow_to_include_new_employees` covers
+the grow path. 24 scoring-related tests pass.
+
+### P0: Rankings vs Top Performers Mismatch — FIXED 2026-05-14 (late)
+
+**Symptom (prod Q2P5W2.75)**: Top Performers widget on the Snapshot
+detail page showed *Trey / Diane / Kitti / Jose / Keisha* with full
+RT + CV bonuses. The Rankings tab showed *Keisha / Cory / Jose /
+Ethan / Adriana* with rt_b=0 across the board. Two views, same
+snapshot, totally different numbers.
+
+**Root cause**: `/process` updated `snapshot.employees[]` with the
+freshly-scored data but never refreshed `snapshot.rows[]
+.frozen_metrics`. The Top Performers widget reads `employees[]`
+directly; the Rankings tab reads `rows[]` via
+`_hydrate_snapshot_employees`. The two paths diverged the moment any
+bonus changed (RT rate fix earlier today exposed this).
+
+**Fix**: after `assign_performance_tiers`, mirror each scored
+employee back into the matching `rows[]` entry (by employee_id, with
+display_name/report_name fallback for ID drift). `rows[]` is now
+written in the same `$set` as `employees[]` so the two views can't
+diverge again.
+
+**Verified** by simulating the new flow against the actual preview
+snapshot — `rows[]` and `employees[]` now produce identical top-5
+rankings (Trey 112.61, Diane 112.12, Kitti 111.41, Jose 110.28,
+Keisha 105.36).
+
+**Regression test**: `tests/test_rows_sync_after_process.py`
+(4 cases — fresh-bonus-mirror, name-fallback when ID drifts,
+no-match preservation, top-5 order parity). 23 scoring-related
+tests pass.
+
+### P1: Editable RT Bonus in Quarter Settings — SHIPPED 2026-05-14 (late)
+
+**Issue**: Quarter Settings UI was missing inputs for
+`rt_points_per_mention` and `rt_max_points`. The fields existed in
+the DB and were used everywhere else, but admins couldn't edit them
+through the UI — only the underlying defaults could be changed.
+
+**Root cause**: Pydantic models in
+`routes/quarter_settings.py` (`QuarterSettingsCreate` and
+`QuarterSettingsUpdate`) didn't declare the two RT fields, so even if
+the frontend had sent them, the PUT request would have stripped them.
+
+**Fix**:
+- Added `rt_points_per_mention` and `rt_max_points` to both Pydantic
+  models with canonical defaults (0.33 / 20).
+- Added a dedicated **Review Tracker Bonus** card to
+  `pages/QuarterSettings.js` with both inputs, locked state respected,
+  inline copy showing the formula and canonical values.
+- Threaded the two fields through `formData` init and both `setFormData`
+  paths so existing/new quarters round-trip correctly.
+
+### P0: RT Bonus Auto-Derived From Mentions — SHIPPED 2026-05-14 (late)
+
+**Symptom (prod, Q2P5W2.75)**: Specific employees showed `rt_mentions`
+populated but `review_tracker_bonus` zero (Trey Quick: 34 mentions,
+bonus 0) or off-ratio (Kahi: 3 mentions, bonus 0.3 → implied 0.1
+rate). Other employees showed mention × old-0.3-rate values that
+didn't reflect the new 0.33 spec.
+
+**Root cause**: `snapshot_manager.calculate_employee_scores` read
+`review_tracker_bonus` directly from the employee row instead of
+deriving it from `rt_mentions × rt_points_per_mention`. The bonus
+was only ever set by the RT-upload merge path, so rows that were
+edited, migrated, or processed without an RT upload kept whatever
+stale value was last stored.
+
+**Fix**:
+- `calculate_employee_scores` now ALWAYS recomputes
+  `review_tracker_bonus = round(min(rt_mentions × rate, cap), 2)`
+  using the rate/cap from the benchmarks dict (canonical defaults
+  0.33 / 20). Single source of truth.
+- New `_build_benchmarks_dict(settings)` helper in
+  `snapshot_routes.py` returns a complete benchmarks dict from
+  quarter settings (incl. weights + RT rate/cap). Replaced 3 inline
+  dicts (`/process`, `/confirm-pos-review`, `/recompute`) so every
+  scoring path sees the same config.
+- Regression test `tests/test_rt_bonus_auto_derive.py` covers stale
+  zero, wrong-ratio, cap, no-mentions, legacy field name (5 cases).
+
+**Verified on the actual stuck Q2P5W2.75 snapshot**:
+- Trey Quick: rtb 0 → **11.22** (34 × 0.33)
+- Kahi: rtb 0.3 → **0.99** (3 × 0.33)
+- All 30 employees recompute correctly at 0.33 rate.
+
+19 scoring-related tests pass.
+
+### P0: Canonical Scoring Audit + Fix — SHIPPED 2026-05-14
+
+User-confirmed canonical spec:
+  • Weights: **PPA 25%, LSC 25%, LBW 20%, GLASS 15%** (total 85%)
+  • Metric Bonus: **0.25 pts per 1% above benchmark, cap 5 pts/metric**
+  • Review Tracker: **0.33 pts per mention, cap 20 pts**
+
+**Drift discovered & fixed**:
+
+| File | Was | Now |
+|---|---|---|
+| `server.py:516–519` (inline weighted) | `LBW * 0.15 + GLASS * 0.10` | `LBW * 0.20 + GLASS * 0.15` |
+| `server.py:1148–1153` (matching path) | same bug | fixed |
+| `routes/audit.py:864` (audit recalc) | same bug | fixed |
+| `scoring_engine.py:62-63` constants | 0.3 / 20 | **0.33** / 20 |
+| `scoring_engine.py:231` QS default | 0.3 | **0.33** |
+| `server.py:533` inline RT calc | 0.3 | **0.33** |
+| `snapshot_routes.py:706,2419,3811` | 0.3 | **0.33** |
+| `audit_system.py:331,335,338` | 0.3 | **0.33** |
+| `pdf_full_rankings.py` slide | 0.3 | **0.33** |
+| `png_full_rankings.py` slide | 0.3 | **0.33** |
+| 7 frontend `?? 0.3` defaults | 0.3 | **0.33** |
+| Help / docs copy (HelpTooltip, HelpCenter) | 0.3 | **0.33** |
+
+**DB updates (preview only)**:
+  • `quarter_settings` for Q2 2026 and Q3 2026 → `rt_points_per_mention: 0.33`.
+  • Q1 2026 and Q4 2025 left frozen on legacy v2 RT model (0.5/15 cap).
+
+**Lock-down test**: `tests/test_canonical_scoring_constants.py` asserts
+weights, bonus rate/cap, and RT rate/cap match the canonical spec.
+Any future drift fails CI immediately. 14 tests pass.
+
+**⚠️ Production note**: production DB still has `rt_points_per_mention: 0.3` for Q2/Q3 2026. Users **must** open Quarter Settings on production and update those two quarters to `0.33` (or re-save the form). Stored DB values override code defaults.
+
+### P0: Snapshot Integrity Gate Always-Fires — FIXED 2026-05-14
+
+- **Symptom**: "Save & Process Snapshot" 500'd on production with
+  the gate's "30% all-POS-at-zero" failure for **every** snapshot,
+  even ones with perfectly valid POS data.
+- **Root cause** (user-spotted): the gate checked
+  `score_ppa`/`score_lbw`/`score_glass`/`score_lsc`, but those
+  fields are computed by `calculate_employee_scores()` which runs
+  AFTER the gate. At gate-evaluation time every row's
+  `score_*` defaults to 0, so the gate misfired on 100% of rows.
+- **Fix** (`snapshot_routes.py::process_snapshot`): swapped the
+  check to the RAW POS metrics (`ppa`, `lbw_per_guest`,
+  `glassware_per_guest`, `guests_per_lsc`) — these are populated by
+  `merge_snapshot_data` before the gate runs. Genuinely broken
+  uploads still trigger the gate; valid snapshots now pass.
+- **Test**: `tests/test_integrity_gate_pre_score.py` locks the
+  regression (3 cases: old-buggy-flags-everything, fixed-passes-on-
+  valid, fixed-still-flags-truly-blank).
+- **Verified**: re-ran the gate against the actual preview
+  in-progress snapshot — 0% all-zero rows (was effectively 100%
+  before), gate cleanly passes.
+
+### P0: "Process Snapshot" Silent 500 — FIXED 2026-05-14
+
+- **Symptom (prod)**: clicking "Save & Process Snapshot" on Data
+  Uploads briefly spun then died with `API ERROR 500` + an unhandled
+  promise rejection in the console; nothing visibly changed.
+- **Root cause**: `merge_snapshot_data` in `snapshot_routes.py`
+  called `.lower().strip()` on `emp.get("display_name", "")`.
+  `dict.get(k, default)` only returns the default for *missing*
+  keys — when `display_name`/`report_name` was present with `None`
+  (common in legacy `employees_v2` rows that survived migration),
+  `.lower()` raised `AttributeError`. The outer try/except converted
+  this to a 500 and left the snapshot stuck.
+- **Fix**: coerce with `(emp.get(k) or "")` for `name`,
+  `display_name`, and `report_name` so `None` becomes `""` before
+  any string method is called.
+- **Test**: `tests/test_process_snapshot_none_safety.py` reproduces
+  the crash with a minimal snapshot (`display_name: None`) and locks
+  the regression. Both cases pass.
+- **Verified**: re-ran `merge_snapshot_data` against the actual
+  preview snapshot that crashed before — now merges 25 employees
+  cleanly.
+
+### P3: Conversion Removed + Clicks-by-Day View — SHIPPED 2026-05-14
+
+**Conversion removal** — Conversion ratio (mentions ÷ clicks) was
+easily skewed by self-scans and added no operational value:
+
+- `qr_tracking.py::/leaderboard-data` no longer emits
+  `conversion_rate`; sorted by `total_clicks desc → rt_mentions desc`.
+- `qr_leaderboard_slide.py` Yodeck/print slide: removed "CONVERSION"
+  left-panel stat block and "Conv %" table column. Clicks + Mentions
+  columns widened to fill the freed space. Visual inspection
+  confirmed clean layout.
+- `QRLeaderboard.jsx` page: subtitle/mobile/desktop pills swapped
+  from "Top Conversion" / "Conv" to clicks-driven labels; per-row
+  desktop column now shows Yelp / Google / TripAd separately.
+
+**Clicks-by-day per server (live)** —
+
+- **Backend** — new `GET /api/qr/clicks-by-day?days=N` (clamped
+  1–90) in `qr_tracking.py`. Aggregates
+  `qr_click_log_immutable` by `employee_name + day + platform`,
+  resolves names to canonical `employees` via alias map, and returns:
+  `{days[], rows[{employee_id, name, totals:{yelp,google,tripadvisor}, by_day[], total, active}], totals_by_day[], grand_total, generated_at, window_days}`.
+  **Filters applied** (added 2026-05-14 evening):
+  - Test/demo placeholder names (`"Test Employee"`, `demo *`, etc.)
+    excluded entirely.
+  - Inactive/terminated employees (`employees.status != 'active'`)
+    excluded — deleting their canonical profile makes them disappear.
+  - Employees deleted from the QR Codes tab (absent from
+    `qr_employees`) excluded too — works for raw scan name and any
+    alias of the canonical record.
+- **Frontend** — new page `/qr/daily` (`QRDailyClicks.jsx`) with a
+  servers × days heatmap matrix, daily total row, weekend
+  highlighting, intensity legend, window selector (7/14/30/60 days),
+  and a LIVE pulse indicator. Polls every 15s with delta-pulse
+  animation when new scans arrive. Linked from sidebar
+  ("Clicks by Day") and from the QR Leaderboard page header.
+
+### P3: Dashboard QR Engagement Warning (Bottom 10) — SHIPPED 2026-05-14
+
+- **Backend** — `/api/qr/stats` extended with `bottom_10`,
+  `active_employees`, and `engagement_warning_threshold` (5). Bottom
+  list filters `qr_employees` against `employees` where
+  `status == 'active'` (matched on canonical name + aliases,
+  case-insensitive), sorts ascending by total clicks, returns first
+  10 with `days_since_last_scan` derived from `last_scan_at`.
+  Verified via curl: 10 active employees flagged.
+- **Frontend** — new `QRBottomClicksCard.jsx` (amber-bordered card,
+  AlertTriangle iconography, coaching-tone copy) rendered side-by-
+  side with `QRTopClicksCard` on the Dashboard in a 2-col grid.
+  Rows under threshold get an amber warning badge; rows show
+  "Last scan Nd ago" or "No scans yet".
+- **Decision**: Earlier plan to add a QR Engagement Bonus column to
+  the leaderboard was abandoned — easy to self-skew, so we surface
+  engagement as a management signal instead of a score input.
+
+### P3: Slide Preview Endpoint + Modal — SHIPPED 2026-05-14
+
+- Added inline thumbnail endpoint:
+  `GET /api/v2/full-rankings/{year}/{quarter}/snapshot-png/preview?w=1280`
+  Same data + render path as `/snapshot-png` but Pillow-downsampled
+  to the requested width (clamped 320–1920) and returned inline
+  (`Content-Disposition: inline`, short cache).
+- Frontend (`FullRankings.js`): new "Preview Slide" button next to
+  the PNG/PDF download buttons opens a shadcn `Dialog` showing the
+  rendered slide in a 16:9 canvas, with Refresh and Download Full
+  PNG actions.
+- Per-snapshot preview also added on the **Snapshot Workflow** list
+  page (`SnapshotWorkflow.js`). New backend endpoint
+  `GET /api/v2/snapshot-workflow/snapshots/{id}/slide/preview?w=1280`
+  serves an inline 1280×720 thumbnail per snapshot. Each card on the
+  list now has an Eye-icon Preview button (testid
+  `preview-snapshot-{id}`) that opens a modal with Refresh and
+  Download Full PNG. Verified via curl: HTTP 200, 1280×720 PNG.
 
 ### P0: Snapshot PNG Logo Clipping Fix — SHIPPED 2026-05-14
 

@@ -29,6 +29,7 @@ from scoring_engine import (
     calculate_customer_voice_score, calculate_review_tracker_bonus, calculate_combined_cv_rt
 )
 from snapshot_slides import get_available_backgrounds
+from services.employee_v2_writer import upsert_employee_v2, upsert_employees_v2_bulk
 
 # Create router
 snapshots_legacy_router = APIRouter(tags=["snapshots-legacy"])
@@ -177,7 +178,7 @@ def register_snapshots_legacy_routes(router: APIRouter, db):
                     "created_at": datetime.now(timezone.utc),
                     "updated_at": datetime.now(timezone.utc)
                 }
-                await db.employees_v2.insert_one(new_emp)
+                await upsert_employee_v2(db, new_emp)
                 updated_count += 1
         
         # Recalculate ranks after update
@@ -931,7 +932,7 @@ def register_snapshots_legacy_routes(router: APIRouter, db):
                             main_emp['created_at'] = datetime.now(timezone.utc).isoformat()
                         main_employees.append(main_emp)
                     
-                    await db.employees_v2.insert_many(main_employees)
+                    await upsert_employees_v2_bulk(db, main_employees)
                     logging.info(f"Synced {len(main_employees)} employees to employees_v2 (snapshot_date: {current_snapshot_date})")
                 
                 return {
@@ -1183,7 +1184,7 @@ def register_snapshots_legacy_routes(router: APIRouter, db):
                     
                     main_employees.append(main_emp)
                 
-                await db.employees_v2.insert_many(main_employees)
+                await upsert_employees_v2_bulk(db, main_employees)
                 logging.info(f"Synced {len(main_employees)} recalculated employees to employees_v2 (snapshot_date: {current_snapshot_date})")
             
             return {

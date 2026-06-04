@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useLocation } from "react-router-dom";
-import { Trophy, Calendar, Filter, ChevronDown, ChevronUp, Download, FileText, FileDown, Medal, Award, Star, Users, Image, MessageCircle, RefreshCw, Edit3, Check, X, Search, TrendingUp, TrendingDown, Target, ArrowUp, Info } from "lucide-react";
+import { Trophy, Calendar, Filter, ChevronDown, ChevronUp, Download, FileText, FileDown, Medal, Award, Star, Users, Image, MessageCircle, RefreshCw, Edit3, Check, X, Search, TrendingUp, TrendingDown, Target, ArrowUp, Info, Eye } from "lucide-react";
 import { toast } from "sonner";
 import api from "../lib/api";
 import { getCurrentQuarter } from "../lib/quarterUtils";
 import { Button } from "../components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../components/ui/tooltip";
 import { formatNumber, formatCurrency } from "../utils/formatters";
@@ -45,6 +46,9 @@ export default function FullRankings() {
   const [downloadingPrintable, setDownloadingPrintable] = useState(false);
   const [downloadingSnapshotPdf, setDownloadingSnapshotPdf] = useState(false);
   const [downloadingSnapshotPng, setDownloadingSnapshotPng] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [downloadingReview, setDownloadingReview] = useState(null);
   const currentQ = getCurrentQuarter();
   const [selectedYear, setSelectedYear] = useState(currentQ.year);
@@ -179,7 +183,18 @@ export default function FullRankings() {
   const getTopEmployees = useCallback((metric, limit = 10) => {
     const config = V2_METRICS[metric];
     if (!config) return [];
-    const valid = employees.filter((e) => e[metric] != null);
+    const valid = employees.filter((e) => {
+      const v = e[metric];
+      if (v == null) return false;
+      // Exclude zeros entirely — a server who never sold a single LSC
+      // shouldn't rank #1 on "lower is better" rankings, and a zero on
+      // any other metric also means "no activity" and shouldn't medal.
+      if (typeof v === 'number' && v === 0) return false;
+      // Extra guard for LSC: if the underlying lsc_count is 0, the
+      // guests_per_lsc ratio is meaningless — exclude.
+      if (metric === 'guests_per_lsc' && (e.lsc_count == null || e.lsc_count === 0)) return false;
+      return true;
+    });
 
     const sorted = [...valid].sort((a, b) => {
       if (!config.higherBetter) return (a[metric] || 0) - (b[metric] || 0);
@@ -397,6 +412,34 @@ export default function FullRankings() {
     }
   };
 
+  const handlePreviewSlide = async () => {
+    // Fetch a downsampled (960×540) inline thumbnail of the snapshot
+    // slide so layout tweaks can be eyeballed without downloading the
+    // full 1920×1080 PNG. Backend response sets Content-Disposition: inline.
+    setPreviewLoading(true);
+    setPreviewOpen(true);
+    try {
+      const apiPath = `/v2/full-rankings/${selectedYear}/${selectedQuarter}/snapshot-png/preview?w=1280&t=${Date.now()}`;
+      const response = await api.get(apiPath, { responseType: 'blob' });
+      const blob = new Blob([response.data], { type: 'image/png' });
+      if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(window.URL.createObjectURL(blob));
+    } catch (error) {
+      toast.error("Failed to load slide preview");
+      setPreviewOpen(false);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handleClosePreview = () => {
+    setPreviewOpen(false);
+    if (previewUrl) {
+      window.URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
+  };
+
   const handleDownloadSnapshotPng = async () => {
     // 1920×1080 PNG version of the Server Performance Snapshot for digital
     // signage (Yodeck etc., which doesn't render PDFs natively).
@@ -593,6 +636,27 @@ export default function FullRankings() {
                 <>
                   <FileDown className="w-4 h-4" />
                   Performance Snapshot PDF
+                </>
+              )}
+            </Button>
+
+            <Button
+              onClick={handlePreviewSlide}
+              disabled={previewLoading || rankings.length === 0}
+              variant="outline"
+              className="border-slate-400 text-slate-200 hover:bg-slate-700/40 flex items-center gap-2"
+              data-testid="preview-snapshot-slide-btn"
+              title="Quick visual preview of the Performance Snapshot slide layout. Renders a 1280-wide thumbnail inline so you can verify branding, logo placement, and table formatting without downloading the full 1920×1080 PNG."
+            >
+              {previewLoading ? (
+                <>
+                  <div className="animate-spin h-4 w-4 border-2 border-slate-300 border-t-transparent rounded-full" />
+                  Loading...
+                </>
+              ) : (
+                <>
+                  <Eye className="w-4 h-4" />
+                  Preview Slide
                 </>
               )}
             </Button>
@@ -802,7 +866,7 @@ export default function FullRankings() {
                           <TooltipContent className="bg-slate-800 text-white p-3 max-w-xs">
                             <div className="text-xs space-y-1">
                               <div className="font-bold mb-1">Review Tracker Bonus:</div>
-                              <div>• Each mention = +{quarterSettings?.rt_points_per_mention ?? 0.3} pts</div>
+                              <div>• Each mention = +{quarterSettings?.rt_points_per_mention ?? 0.33} pts</div>
                               <div>• Capped at {Math.round(quarterSettings?.rt_max_points ?? 20)} pts max</div>
                               <div className="mt-1 text-slate-400">From ReviewTrackers.com</div>
                             </div>
@@ -965,7 +1029,7 @@ export default function FullRankings() {
                                 <TooltipContent className="bg-slate-800 text-white p-3 max-w-xs border border-slate-600">
                                   <div className="text-xs">
                                     <div className="font-bold text-primary mb-1">Review Tracker</div>
-                                    <div>{employee.review_mentions || 0} mentions × {quarterSettings?.rt_points_per_mention ?? 0.3} pts = +{formatNumber(employee.review_bonus || 0)} pts (max {Math.round(quarterSettings?.rt_max_points ?? 20)})</div>
+                                    <div>{employee.review_mentions || 0} mentions × {quarterSettings?.rt_points_per_mention ?? 0.33} pts = +{formatNumber(employee.review_bonus || 0)} pts (max {Math.round(quarterSettings?.rt_max_points ?? 20)})</div>
                                   </div>
                                 </TooltipContent>
                               </Tooltip>
@@ -1363,7 +1427,7 @@ export default function FullRankings() {
                                             ? (benchmarks.benchmark_lsc || 100) / emp.guests_per_lsc * 100
                                             : 0;
 
-                                          const rtCoef = benchmarks.rt_points_per_mention || 0.3;
+                                          const rtCoef = benchmarks.rt_points_per_mention || 0.33;
                                           const rtCap  = benchmarks.rt_max_points || 20;
                                           const currentRt = Math.min((emp.review_mentions || emp.rt_mentions || 0) * rtCoef, rtCap);
 
@@ -1620,7 +1684,7 @@ export default function FullRankings() {
                         <td className="py-3 px-2 text-center">
                           {(() => {
                             const m = employee.rt_mentions || employee.review_mentions || 0;
-                            const coef = quarterSettings?.rt_points_per_mention ?? 0.3;
+                            const coef = quarterSettings?.rt_points_per_mention ?? 0.33;
                             const cap  = quarterSettings?.rt_max_points ?? 20;
                             const bonus = Math.min(m * coef, cap);
                             return (
@@ -1654,6 +1718,70 @@ export default function FullRankings() {
           </div>
         </div>
       </div>
+
+      {/* Slide Preview Modal */}
+      <Dialog
+        open={previewOpen}
+        onOpenChange={(open) => { if (!open) handleClosePreview(); }}
+      >
+        <DialogContent
+          className="max-w-5xl bg-slate-900 border-slate-700 text-slate-100"
+          data-testid="slide-preview-dialog"
+        >
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="w-5 h-5 text-cyan-400" />
+              Performance Snapshot Preview — {selectedQuarter} {selectedYear}
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Inline 1280-wide thumbnail of the slide. Use this to verify branding, logo placement, and table layout before downloading the full 1920×1080 PNG.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div
+            className="relative w-full bg-slate-950 rounded-md border border-slate-800 overflow-hidden flex items-center justify-center"
+            style={{ aspectRatio: "16 / 9" }}
+            data-testid="slide-preview-canvas"
+          >
+            {previewLoading && (
+              <div className="absolute inset-0 flex items-center justify-center text-slate-300">
+                <div className="animate-spin h-8 w-8 border-2 border-cyan-400 border-t-transparent rounded-full mr-3" />
+                Rendering preview…
+              </div>
+            )}
+            {!previewLoading && previewUrl && (
+              <img
+                src={previewUrl}
+                alt={`${selectedQuarter} ${selectedYear} snapshot preview`}
+                className="w-full h-full object-contain"
+                data-testid="slide-preview-image"
+              />
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
+            <Button
+              variant="outline"
+              className="border-slate-600 text-slate-200 hover:bg-slate-800"
+              onClick={handlePreviewSlide}
+              disabled={previewLoading}
+              data-testid="slide-preview-refresh-btn"
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${previewLoading ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+            <Button
+              className="bg-cyan-600 hover:bg-cyan-700 text-white"
+              onClick={() => { handleClosePreview(); handleDownloadSnapshotPng(); }}
+              disabled={previewLoading || downloadingSnapshotPng}
+              data-testid="slide-preview-download-btn"
+            >
+              <Image className="w-4 h-4 mr-2" />
+              Download Full PNG
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

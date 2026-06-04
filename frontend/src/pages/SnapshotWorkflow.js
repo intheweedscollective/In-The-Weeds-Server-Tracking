@@ -34,6 +34,9 @@ export default function SnapshotWorkflow() {
   const [creating, setCreating] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [previewTarget, setPreviewTarget] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   
   // Create form state
   const currentQ = getCurrentQuarter();
@@ -69,6 +72,65 @@ export default function SnapshotWorkflow() {
     };
     load();
   }, [fetchSnapshots]);
+
+  const handlePreviewSlide = async (snapshot) => {
+    // Fetch downsampled (1280-wide) inline thumbnail of the snapshot
+    // slide so admins can verify the rendered output before downloading
+    // the full-resolution PNG.
+    setPreviewTarget(snapshot);
+    setPreviewLoading(true);
+    try {
+      const res = await api.get(
+        `/v2/snapshot-workflow/snapshots/${snapshot.id}/slide/preview?w=1280&t=${Date.now()}`,
+        { responseType: "blob" }
+      );
+      const blob = new Blob([res.data], { type: "image/png" });
+      if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(window.URL.createObjectURL(blob));
+    } catch (error) {
+      toast({
+        title: "Preview Failed",
+        description: error.response?.data?.detail || "Could not render slide preview",
+        variant: "destructive",
+      });
+      setPreviewTarget(null);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handleClosePreview = () => {
+    setPreviewTarget(null);
+    if (previewUrl) {
+      window.URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
+  };
+
+  const handleDownloadFromPreview = async () => {
+    if (!previewTarget) return;
+    try {
+      const res = await api.get(
+        `/v2/snapshot-workflow/snapshots/${previewTarget.id}/slide?format=16:9`,
+        { responseType: "blob" }
+      );
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `${previewTarget.name || "snapshot"}-performance-slide.png`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast({ title: "Slide Downloaded" });
+    } catch (error) {
+      toast({
+        title: "Download Failed",
+        description: error.response?.data?.detail || "Could not download slide",
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleDeleteSnapshot = async () => {
     if (!deleteTarget) return;
@@ -124,13 +186,20 @@ export default function SnapshotWorkflow() {
       // Navigate to the new snapshot detail page
       navigate(`/snapshot-workflow/${res.data.snapshot.id}`);
     } catch (error) {
-      toast({ 
-        title: "Error", 
-        description: error.response?.data?.detail || "Failed to create snapshot",
-        variant: "destructive"
-      });
+      // 401s are handled globally by the axios interceptor (toast + delayed
+      // redirect to /login). Only show our own error toast for non-auth
+      // failures — otherwise the user sees two stacked toasts and the
+      // create dialog stays open with the spinner running.
+      if (error.response?.status !== 401) {
+        toast({ 
+          title: "Error", 
+          description: error.response?.data?.detail || "Failed to create snapshot",
+          variant: "destructive"
+        });
+      }
+    } finally {
+      setCreating(false);
     }
-    setCreating(false);
   };
 
   const getStatusBadge = (status) => {
@@ -408,6 +477,19 @@ export default function SnapshotWorkflow() {
                         {getStatusBadge(snapshot.status)}
                       </div>
                       <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-slate-400 hover:text-cyan-400 hover:bg-cyan-900/20"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handlePreviewSlide(snapshot);
+                          }}
+                          data-testid={`preview-snapshot-${snapshot.id}`}
+                          title="Preview slide"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
                         {snapshot.status !== 'completed' && (
                           <Button
                             variant="ghost"
@@ -462,6 +544,70 @@ export default function SnapshotWorkflow() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Slide Preview Dialog */}
+        <Dialog
+          open={!!previewTarget}
+          onOpenChange={(open) => { if (!open) handleClosePreview(); }}
+        >
+          <DialogContent
+            className="max-w-5xl bg-slate-900 border-slate-700 text-slate-100"
+            data-testid="snapshot-slide-preview-dialog"
+          >
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Eye className="w-5 h-5 text-cyan-400" />
+                Slide Preview — {previewTarget?.name}
+              </DialogTitle>
+              <DialogDescription className="text-slate-400">
+                Inline 1280-wide thumbnail of the snapshot slide. Verify branding and layout, then download the full-resolution PNG.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div
+              className="relative w-full bg-slate-950 rounded-md border border-slate-800 overflow-hidden flex items-center justify-center"
+              style={{ aspectRatio: "16 / 9" }}
+              data-testid="snapshot-slide-preview-canvas"
+            >
+              {previewLoading && (
+                <div className="absolute inset-0 flex items-center justify-center text-slate-300">
+                  <Loader2 className="w-7 h-7 animate-spin text-cyan-400 mr-3" />
+                  Rendering preview…
+                </div>
+              )}
+              {!previewLoading && previewUrl && (
+                <img
+                  src={previewUrl}
+                  alt={`${previewTarget?.name || "snapshot"} preview`}
+                  className="w-full h-full object-contain"
+                  data-testid="snapshot-slide-preview-image"
+                />
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
+              <Button
+                variant="outline"
+                className="border-slate-600 text-slate-200 hover:bg-slate-800"
+                onClick={() => previewTarget && handlePreviewSlide(previewTarget)}
+                disabled={previewLoading}
+                data-testid="snapshot-slide-preview-refresh-btn"
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${previewLoading ? "animate-spin" : ""}`} />
+                Refresh
+              </Button>
+              <Button
+                className="bg-cyan-600 hover:bg-cyan-700 text-white"
+                onClick={handleDownloadFromPreview}
+                disabled={previewLoading}
+                data-testid="snapshot-slide-preview-download-btn"
+              >
+                <FileText className="w-4 h-4 mr-2" />
+                Download Full PNG
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

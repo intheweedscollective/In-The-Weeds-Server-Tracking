@@ -42,7 +42,7 @@ LOGO_PATH = "/app/backend/assets/bubba_gump_logo.png"
 
 # RT formula: 0.5 pts per name mention, capped at 15.
 def _rt_value(mentions: float) -> float:
-    return min(0.3 * (mentions or 0), 20.0)
+    return min(0.33 * (mentions or 0), 20.0)
 
 
 # ---------------------------------------------------------------------------
@@ -252,7 +252,10 @@ def _draw_table(
 
     headers = ["Rank", "Name", "Trend", "PPA", "LBW", "GLASS",
                "LSC", "CV", "RT", "Metric Bonus", "Score"]
-    col_props = [0.06, 0.13, 0.06, 0.085, 0.085, 0.085,
+    # Trend column widened from 6% → 8% so the magnitude label
+    # ("+19.3") fits next to the polygon without clipping. The 2% was
+    # taken from Name, which had slack at 13%.
+    col_props = [0.06, 0.11, 0.08, 0.085, 0.085, 0.085,
                  0.085, 0.085, 0.085, 0.105, 0.085]
     col_widths = [int(p * table_w) for p in col_props]
     col_widths[-1] += table_w - sum(col_widths)
@@ -307,17 +310,22 @@ def _draw_table(
 
         trend_dir = (emp.get("trend") or "up").lower()
         if trend_dir in ("up", "improving", "improved"):
-            trend_glyph, trend_col = "\u25B2", REF_COLORS["trend_up"]
+            trend_shape, trend_col = "up", REF_COLORS["trend_up"]
         elif trend_dir in ("down", "declining"):
-            trend_glyph, trend_col = "\u25BC", REF_COLORS["red"]
+            trend_shape, trend_col = "down", REF_COLORS["red"]
         else:
-            trend_glyph, trend_col = "\u2014", REF_COLORS["trend_flat"]
+            trend_shape, trend_col = "flat", REF_COLORS["trend_flat"]
 
+        # NOTE: trend cell is drawn as a polygon, not text — Aptos-Narrow
+        # doesn't ship the U+25B2/U+25BC/U+2014 glyphs so they previously
+        # rendered as "tofu" (□) on mobile-shared screenshots. Reserve a
+        # sentinel value the rendering loop intercepts.
         # (text, fill_color or None for white-bg, align, font, override_text, is_white_bg)
         cells: List[Tuple[str, str | None, str, ImageFont.FreeTypeFont, str | None, bool]] = [
             (pos_label,            None,                                       "center", rank_font,  REF_COLORS["text_dark"], True),
             (name,                 None,                                       "left",   name_font,  REF_COLORS["text_dark"], True),
-            (trend_glyph,          None,                                       "center", trend_font, trend_col,                True),
+            (f"__TREND__:{trend_shape}|{emp.get('score_change')}",
+                                   None,                                       "center", trend_font, trend_col,                True),
             (f"{ppa_pct:.0f}%",    _ref_cell_color(ppa_pct,    "percentage"),  "center", cell_font,  None,                     False),
             (f"{lbw_pct:.0f}%",    _ref_cell_color(lbw_pct,    "percentage"),  "center", cell_font,  None,                     False),
             (f"{glass_pct:.0f}%",  _ref_cell_color(glass_pct,  "percentage"),  "center", cell_font,  None,                     False),
@@ -348,7 +356,56 @@ def _draw_table(
                 tcolor = REF_COLORS["text_dark"]
 
             ty = cy + row_h // 2
-            if align == "center":
+            if isinstance(text, str) and text.startswith("__TREND__:"):
+                # Draw the trend indicator as a polygon so we don't
+                # depend on the font shipping U+25B2 / U+25BC / U+2014.
+                # Payload encoding: "__TREND__:<shape>|<delta>" — the
+                # numeric magnitude is appended so we can render the
+                # "+4.2" / "-1.7" label right next to the polygon.
+                payload = text.split(":", 1)[1]
+                if "|" in payload:
+                    shape, delta_str = payload.split("|", 1)
+                else:
+                    shape, delta_str = payload, ""
+                try:
+                    delta_val = float(delta_str) if delta_str not in ("", "None") else None
+                except (TypeError, ValueError):
+                    delta_val = None
+                size = max(8, min(row_h - 10, 18))
+                half = size // 2
+                # Polygon sits in the left-third of the cell so there's
+                # horizontal room for the magnitude label to its right.
+                cx = x + int(w * 0.32)
+                trend_color = tcolor  # already set to trend_up/red/flat above
+                if shape == "up":
+                    draw.polygon(
+                        [(cx, ty - half), (cx - half, ty + half), (cx + half, ty + half)],
+                        fill=trend_color,
+                    )
+                elif shape == "down":
+                    draw.polygon(
+                        [(cx - half, ty - half), (cx + half, ty - half), (cx, ty + half)],
+                        fill=trend_color,
+                    )
+                else:  # flat
+                    bar_h = max(2, size // 5)
+                    draw.rectangle(
+                        (cx - half, ty - bar_h // 2, cx + half, ty + bar_h // 2),
+                        fill=trend_color,
+                    )
+                # Magnitude label — show only when we actually diffed
+                # against a prior quarter and the delta is meaningful.
+                if delta_val is not None and abs(delta_val) >= 0.05:
+                    label = f"{delta_val:+.1f}"
+                    _draw_text(
+                        draw,
+                        (cx + half + 6, ty),
+                        label,
+                        trend_font,
+                        trend_color,
+                        anchor="lm",
+                    )
+            elif align == "center":
                 _draw_text(draw, (x + w // 2, ty), text, font, tcolor, anchor="mm")
             elif align == "left":
                 _draw_text(draw, (x + 12, ty), text, font, tcolor, anchor="lm")

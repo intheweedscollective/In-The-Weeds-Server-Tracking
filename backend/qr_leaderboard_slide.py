@@ -88,7 +88,6 @@ def generate_qr_leaderboard_slide(
     Each row shows:
       * Total QR Clicks (Yelp + Google + TripAdvisor combined)
       * Review Mentions (Review Tracker mentions, all platforms combined)
-      * Conversion (mentions / clicks * 100)
 
     Lists ALL employees, falling into a 2-column grid when there are more than
     14 rows so the slide never truncates.
@@ -115,20 +114,11 @@ def generate_qr_leaderboard_slide(
             + (e.get("rt_tripadvisor_mentions") or 0)
         )
 
-    def conversion_rate(e):
-        c = total_clicks(e)
-        return (total_mentions(e) / c * 100) if c else 0.0
-
-    # Sort: highest conversion rate first; tie-breaker mentions desc;
-    # second tie-breaker clicks desc. Employees with 0 clicks land at the
-    # bottom regardless of mentions so we don't reward inactive QRs.
+    # Sort: total clicks desc -> mentions desc. Conversion ratio dropped
+    # because it's easily skewed by self-scans and doesn't add value.
     employees = sorted(
         employees,
-        key=lambda e: (
-            -1 if total_clicks(e) == 0 else conversion_rate(e),
-            total_mentions(e),
-            total_clicks(e),
-        ),
+        key=lambda e: (total_clicks(e), total_mentions(e)),
         reverse=True,
     )
 
@@ -162,7 +152,6 @@ def generate_qr_leaderboard_slide(
     # Aggregate stats on left panel
     grand_clicks = sum(total_clicks(e) for e in employees)
     grand_mentions = sum(total_mentions(e) for e in employees)
-    conv = (grand_mentions / grand_clicks * 100) if grand_clicks else 0
 
     stats_y = y + 95
     f_stat_label = _font(16, bold=True)
@@ -174,7 +163,6 @@ def generate_qr_leaderboard_slide(
 
     stat_block("TOTAL CLICKS", str(grand_clicks), VIOLET, stats_y)
     stat_block("REVIEW MENTIONS", str(grand_mentions), EMERALD, stats_y + 90)
-    stat_block("CONVERSION", f"{conv:.1f}%", GOLD, stats_y + 180)
 
     # Legend at the bottom of the panel
     legend_y = height - 130
@@ -214,15 +202,13 @@ def generate_qr_leaderboard_slide(
     BAND_NAME = 1
     BAND_CLK = 2
     BAND_MEN = 3
-    BAND_CONV = 4
 
     def band_x(col_origin: float, band: int) -> float:
-        # Within each column: rank | name | clicks | mentions | conv
+        # Within each column: rank | name | clicks | mentions
         rank_w = 40
-        name_w = col_w - rank_w - 70 - 70 - 80
-        clk_w = 70
-        men_w = 70
-        conv_w = 80
+        name_w = col_w - rank_w - 110 - 110
+        clk_w = 110
+        men_w = 110
         if band == BAND_RANK:
             return col_origin + rank_w / 2
         if band == BAND_NAME:
@@ -231,8 +217,6 @@ def generate_qr_leaderboard_slide(
             return col_origin + rank_w + name_w + clk_w / 2
         if band == BAND_MEN:
             return col_origin + rank_w + name_w + clk_w + men_w / 2
-        if band == BAND_CONV:
-            return col_origin + rank_w + name_w + clk_w + men_w + conv_w / 2
         return col_origin
 
     # ----- Header rows for each column ------------------------------------
@@ -250,8 +234,6 @@ def generate_qr_leaderboard_slide(
                        f_col_head, VIOLET)
         _draw_centered(draw, "Mentions", band_x(col_origin, BAND_MEN), head_y + 12,
                        f_col_head, EMERALD)
-        _draw_centered(draw, "Conv %", band_x(col_origin, BAND_CONV), head_y + 12,
-                       f_col_head, GOLD)
 
     # ----- Rows -----------------------------------------------------------
     if not employees:
@@ -266,7 +248,6 @@ def generate_qr_leaderboard_slide(
     f_row_name = _font(int(row_h * 0.5), bold=True)
     f_row_num = _font(int(row_h * 0.55), bold=True)
     f_row_rank = _font(int(row_h * 0.45), bold=True)
-    f_row_conv = _font(int(row_h * 0.45), bold=True)
 
     name_truncate_chars = 22 if use_two_col else 36
 
@@ -318,16 +299,11 @@ def generate_qr_leaderboard_slide(
         # Numbers
         clk = total_clicks(emp)
         men = total_mentions(emp)
-        cnv = (men / clk * 100) if clk else 0
 
         _draw_centered(draw, str(clk), band_x(col_origin, BAND_CLK), cy + row_h / 2 - 2,
                        f_row_num, VIOLET)
         _draw_centered(draw, str(men), band_x(col_origin, BAND_MEN), cy + row_h / 2 - 2,
                        f_row_num, EMERALD if men else TEXT_DIM)
-        conv_color = GREEN_500 if cnv >= 30 else YELLOW_500 if cnv >= 10 else RED if clk else TEXT_DIM
-        conv_text = f"{cnv:.1f}%" if clk else "—"
-        _draw_centered(draw, conv_text, band_x(col_origin, BAND_CONV), cy + row_h / 2 - 2,
-                       f_row_conv, conv_color)
 
     out = io.BytesIO()
     img.save(out, format="PNG", optimize=True)

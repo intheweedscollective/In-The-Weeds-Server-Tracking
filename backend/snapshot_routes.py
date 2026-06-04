@@ -7,7 +7,7 @@ import logging
 import re
 import uuid
 from datetime import datetime, timezone
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Body, Request
 import json
 from pydantic import BaseModel
@@ -116,8 +116,20 @@ async def get_snapshot(snapshot_id: str):
         raise HTTPException(status_code=404, detail="Snapshot not found")
     
     current_id = await get_current_snapshot_id(db)
-    
-    return format_snapshot_response(snapshot, is_current=(snapshot_id == current_id))
+
+    # For completed snapshots, replace `employees[]` in the response with
+    # the hydrated `rows[]` data. Without this, the Snapshot Detail page's
+    # Top Performers card reads from a potentially stale `snapshot.employees`
+    # while the Rankings tab uses the freshly-hydrated rows[] pipeline —
+    # producing different top 5s for the same snapshot (the prod bug user
+    # reported on the "reports tab"). Single source of truth.
+    response = format_snapshot_response(snapshot, is_current=(snapshot_id == current_id))
+    if snapshot.get("status") == SnapshotStatus.COMPLETED.value and snapshot.get("rows"):
+        try:
+            response["employees"] = await _hydrate_snapshot_employees(db, snapshot)
+        except Exception as e:
+            logger.warning(f"Hydrate failed for {snapshot_id}, falling back to embedded employees: {e}")
+    return response
 
 
 @snapshot_router.patch("/snapshots/{snapshot_id}", response_model=Dict[str, Any])
@@ -702,20 +714,15 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
     # Recalculate RT bonus if rt_mentions updated
     if "rt_mentions" in updates or "review_mentions" in updates:
         rt_mentions = emp.get("rt_mentions", 0) or 0
-        # RT Bonus = mentions × 0.5, capped at 15 pts
-        emp["review_tracker_bonus"] = min(rt_mentions * 0.3, 20)
+        # RT Bonus = mentions × 0.33, capped at 20 pts (canonical v3 rule)
+        emp["review_tracker_bonus"] = min(rt_mentions * 0.33, 20)
         logger.info(f"Recalculated RT bonus for {emp.get('name')}: mentions={rt_mentions}, bonus={emp['review_tracker_bonus']}")
     
     # Recalculate scores using the scoring formula
     from snapshot_manager import calculate_employee_scores, assign_performance_tiers
     
     # Default benchmarks
-    benchmarks = {
-        "ppa": 55.0,
-        "lbw": 8.0,
-        "glass": 1.35,
-        "lsc": 100.0
-    }
+    benchmarks = _build_benchmarks_dict(None)
     
     # Update this employee's scores
     scored_emp = calculate_employee_scores(emp, benchmarks)
@@ -725,43 +732,133 @@ async def update_snapshot_employee(employee_id: str, updates: dict):
     employees = assign_performance_tiers(employees)
     
     # Update the snapshot using MongoDB _id for reliable update
+    # ALSO mirror the change into rows[].frozen_metrics so the
+    # Rankings/Data-Uploads views (which hydrate from rows[]) reflect
+    # the edit immediately. Without this mirror, the next re-fetch from
+    # `/current-rankings` re-reads stale frozen_metrics and the UI
+    # appears to "revert" the edit — same divergence as the Top
+    # Performers vs Rankings bug, just on the edit path.
+    updated_emp = employees[emp_idx]
+    rows = snapshot.get("rows") or []
+    emp_id = updated_emp.get("id")
+    emp_lower = (emp_id or "").lower().strip()
+    emp_name_lower = (updated_emp.get("name") or "").lower().strip()
+    emp_display_lower = (updated_emp.get("display_name") or "").lower().strip()
+    emp_report_lower = (updated_emp.get("report_name") or "").lower().strip()
+    row_mirror_done = False
+    for i, row in enumerate(rows):
+        row_eid = (row.get("employee_id") or "").lower().strip()
+        row_disp = (row.get("frozen_display_name") or "").lower().strip()
+        row_rep  = (row.get("frozen_report_name") or "").lower().strip()
+        if not (
+            (emp_lower and row_eid == emp_lower)
+            or (emp_name_lower and row_disp == emp_name_lower)
+            or (emp_display_lower and row_disp == emp_display_lower)
+            or (emp_report_lower and row_rep == emp_report_lower)
+        ):
+            continue
+        rows[i] = {
+            "employee_id": emp_id or row.get("employee_id"),
+            "frozen_display_name": updated_emp.get("display_name") or updated_emp.get("name") or row.get("frozen_display_name"),
+            "frozen_report_name":  updated_emp.get("report_name")  or updated_emp.get("name") or row.get("frozen_report_name"),
+            "frozen_metrics": {k: v for k, v in updated_emp.items() if k not in ("id", "name", "display_name", "report_name", "aliases")},
+            "frozen_score":  updated_emp.get("total_score", 0),
+            "frozen_tier":   updated_emp.get("tier_label") or updated_emp.get("performance_tier"),
+            "frozen_rank":   updated_emp.get("tier_rank") or updated_emp.get("peer_rank"),
+            "recorded_at":   row.get("recorded_at") or datetime.now(timezone.utc).isoformat(),
+        }
+        row_mirror_done = True
+        break
+    if not row_mirror_done and emp_id:
+        # No matching row existed (e.g. employee added via POS merge
+        # after snapshot save). Add a fresh row so Rankings sees them.
+        rows.append({
+            "employee_id": emp_id,
+            "frozen_display_name": updated_emp.get("display_name") or updated_emp.get("name"),
+            "frozen_report_name":  updated_emp.get("report_name")  or updated_emp.get("name"),
+            "frozen_metrics": {k: v for k, v in updated_emp.items() if k not in ("id", "name", "display_name", "report_name", "aliases")},
+            "frozen_score":  updated_emp.get("total_score", 0),
+            "frozen_tier":   updated_emp.get("tier_label") or updated_emp.get("performance_tier"),
+            "frozen_rank":   updated_emp.get("tier_rank") or updated_emp.get("peer_rank"),
+            "recorded_at":   datetime.now(timezone.utc).isoformat(),
+        })
+
     await db.snapshot_workflow.update_one(
         {"_id": snapshot_mongo_id},
         {
             "$set": {
                 "employees": employees,
+                "rows": rows,
                 "updated_at": datetime.now(timezone.utc).isoformat()
             }
         }
     )
     
-    # ALSO sync critical fields back to employees_v2 to prevent data drift
-    # This ensures fix-snapshot-names won't overwrite with stale data
+    # ALSO sync critical fields back to employees_v2 to prevent data drift.
+    # `_hydrate_snapshot_employees` overlays metrics from employees_v2 on
+    # top of rows[].frozen_metrics, so an edit that doesn't write through
+    # to v2 silently reverts the next time the page re-fetches. The
+    # complete list below covers every field the overlay can stomp
+    # (CV/RT/POS/bonus) plus the identity fields we already synced.
     updated_emp = employees[emp_idx]
-    sync_fields = ["display_name", "report_name", "job_title", "name"]
-    sync_data = {k: updated_emp.get(k) for k in sync_fields if updated_emp.get(k)}
+    sync_fields = [
+        # Identity (existing behaviour)
+        "name", "display_name", "report_name", "job_title",
+        # Raw POS metrics (what user actually types in Data Uploads)
+        "guest_count", "guests", "net_sales", "ppa",
+        "liquor_sales", "beer_sales", "wine_sales", "lbw", "lbw_total",
+        "bar_glassware_sales", "glassware_sales", "glassware_per_guest",
+        "lbw_per_guest",
+        "loyalty_sales", "lsc_count", "guests_per_lsc",
+        # CV / NPS — overlay path
+        "nps_score", "nps_score_pts", "cv_promoters", "cv_passives",
+        "cv_detractors", "cv_score", "cv_responses", "cv_raw_points",
+        "nps_contribution",
+        # Review Tracker — overlay path
+        "rt_mentions", "review_mentions", "review_tracker_bonus",
+        # Derived scores / bonuses
+        "score_ppa", "score_lbw", "score_glass", "score_lsc",
+        "bonus_ppa", "bonus_lbw", "bonus_glass", "bonus_lsc",
+        "total_metric_bonus", "metric_bonus",
+        "weighted_score", "pre_dar_score", "total_score",
+        "performance_tier", "tier_label", "peer_rank",
+    ]
+    sync_data = {k: updated_emp.get(k) for k in sync_fields
+                 if updated_emp.get(k) is not None}
     
     if sync_data:
         # Try multiple matching strategies to find the employee in employees_v2
         report_name = updated_emp.get("report_name", "").strip()
         display_name = updated_emp.get("display_name", "").strip()
         
-        # Update employees_v2 with the corrected data
+        # Match employees_v2 STRICTLY by canonical id. Production has
+        # legacy dupe v2 rows (e.g. "Lakeisha Martin" alongside Keisha's
+        # canonical) — the old name-regex `$or` was updating whichever
+        # row Mongo picked first, leaving the canonical row stale and
+        # silently reverting the edit. Canonical id is the only safe key.
         update_result = await db.employees_v2.update_one(
             {
-                "$or": [
-                    {"name": {"$regex": f"^{report_name}$", "$options": "i"}},
-                    {"report_name": {"$regex": f"^{report_name}$", "$options": "i"}},
-                    {"display_name": display_name},
-                    {"name": {"$regex": f"^{display_name}", "$options": "i"}}
-                ],
+                "id": employee_id,
                 "year": snapshot.get("year", 2026),
                 "quarter": snapshot.get("quarter", "Q1").upper()
             },
             {"$set": sync_data}
         )
         if update_result.modified_count > 0:
-            logger.info(f"Synced employee {employee_id} data back to employees_v2")
+            logger.info(f"Synced employee {employee_id} data back to employees_v2 ({len(sync_data)} fields)")
+        elif update_result.matched_count == 0:
+            # No v2 row exists for this canonical id in this quarter —
+            # upsert one so future overlays read the correct values.
+            sync_data["id"] = employee_id
+            sync_data["quarter"] = snapshot.get("quarter", "Q1").upper()
+            sync_data["year"] = snapshot.get("year", 2026)
+            sync_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+            await db.employees_v2.update_one(
+                {"id": employee_id, "quarter": sync_data["quarter"], "year": sync_data["year"]},
+                {"$set": sync_data, "$setOnInsert": {"created_at": sync_data["updated_at"]}},
+                upsert=True,
+            )
+            logger.info(f"Upserted employee {employee_id} into employees_v2 (no existing row matched)")
     
     # Get the updated employee data
     updated_emp = next((e for e in employees if e.get("id") == employee_id or e.get("name", "").lower() == employee_id.lower()), scored_emp)
@@ -1095,7 +1192,7 @@ async def rebuild_snapshot_from_pos():
     
     # Calculate scores
     from snapshot_manager import calculate_employee_scores, assign_performance_tiers
-    benchmarks = {"ppa": 55.0, "lbw": 8.0, "glass": 1.35, "lsc": 100.0}
+    benchmarks = _build_benchmarks_dict(None)
     
     scored_employees = []
     for emp in new_employees:
@@ -1397,6 +1494,13 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
         raise HTTPException(status_code=400, detail="No employee data provided")
     
     logger.info(f"confirm_pos_review: Received {len(employees_data)} employees to update")
+
+    # Track (misspelled, corrected) name pairs from inline renames. After
+    # we've persisted the snapshot we'll register the misspelled name as
+    # a permanent alias on the canonical employee, so future POS uploads
+    # under the same typo route automatically without the operator
+    # having to fix it again. Self-curating typo dictionary.
+    rename_pairs: List[Tuple[str, str]] = []
     
     # Find the POS upload and update it with reviewed data
     uploads = snapshot.get("uploads", [])
@@ -1417,16 +1521,36 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
         
         # Update existing or add new
         for new_emp in employees_data:
-            name = new_emp.get("name", "").lower().strip()
-            if name in pos_emp_lookup:
-                # Update existing employee in POS data
-                idx = pos_emp_lookup[name]
-                existing_pos_employees[idx].update(new_emp)
-                logger.info(f"confirm_pos_review: Updated POS data for '{name}'")
+            # Inline rename support: if the operator changed the name on the
+            # review screen (e.g. "Drane" → "Diane"), the payload carries
+            # `_original_name` so we can find the existing POS row by its
+            # OLD name and overwrite it instead of creating a duplicate.
+            new_name = (new_emp.get("name") or "").strip()
+            original_name = (new_emp.get("_original_name") or "").strip()
+            lookup_key = (original_name or new_name).lower()
+
+            if lookup_key in pos_emp_lookup:
+                idx = pos_emp_lookup[lookup_key]
+                # Strip the bookkeeping field before persisting.
+                clean_payload = {k: v for k, v in new_emp.items() if k != "_original_name"}
+                existing_pos_employees[idx].update(clean_payload)
+                if new_name and new_name.lower() != lookup_key:
+                    existing_pos_employees[idx]["name"] = new_name
+                    # Refresh the lookup so a later row pointing at the
+                    # new name doesn't accidentally collide.
+                    pos_emp_lookup.pop(lookup_key, None)
+                    pos_emp_lookup[new_name.lower()] = idx
+                    if original_name and (original_name, new_name) not in rename_pairs:
+                        rename_pairs.append((original_name, new_name))
+                logger.info(
+                    f"confirm_pos_review: Updated POS data for '{lookup_key}'"
+                    + (f" (renamed → '{new_name}')" if new_name.lower() != lookup_key else "")
+                )
             else:
                 # Add new employee to POS data
-                existing_pos_employees.append(new_emp)
-                logger.info(f"confirm_pos_review: Added new employee '{name}' to POS data")
+                clean_payload = {k: v for k, v in new_emp.items() if k != "_original_name"}
+                existing_pos_employees.append(clean_payload)
+                logger.info(f"confirm_pos_review: Added new employee '{new_name}' to POS data")
         
         uploads[pos_upload_idx]["parsed_data"]["employees"] = existing_pos_employees
         uploads[pos_upload_idx]["parsed_data"]["record_count"] = len(existing_pos_employees)
@@ -1460,20 +1584,37 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
             {"year": snapshot.get("year", 2026), "quarter": snapshot.get("quarter", "Q1").upper()},
             {"_id": 0}
         )
-        benchmarks = {
-            "ppa": settings.get("benchmark_ppa", 55.0) if settings else 55.0,
-            "lbw": settings.get("benchmark_lbw", 8.0) if settings else 8.0,
-            "glass": settings.get("benchmark_glass", 1.35) if settings else 1.35,
-            "lsc": settings.get("benchmark_lsc", 100.0) if settings else 100.0,
-        }
+        benchmarks = _build_benchmarks_dict(settings)
         
         for new_emp in employees_data:
-            name = new_emp.get("name", "").lower().strip()
-            existing = emp_lookup.get(name)
-            
-            logger.info(f"confirm_pos_review: Looking for '{name}' in lookup. Found: {existing is not None}")
-            
+            # Inline rename support — same pattern as the POS upload section
+            # above. Look up by original name when present so a typo fix
+            # ("Drane" → "Diane") rewrites the existing snapshot row instead
+            # of stranding the old one and creating a phantom duplicate.
+            new_name = (new_emp.get("name") or "").strip()
+            original_name = (new_emp.get("_original_name") or "").strip()
+            lookup_key = (original_name or new_name).lower()
+            existing = emp_lookup.get(lookup_key)
+
+            logger.info(
+                f"confirm_pos_review: Looking for '{lookup_key}' in lookup. "
+                f"Found: {existing is not None}"
+                + (f" (will rename → '{new_name}')" if existing and new_name.lower() != lookup_key else "")
+            )
+
+            # Strip bookkeeping field before applying anywhere.
+            new_emp = {k: v for k, v in new_emp.items() if k != "_original_name"}
+
             if existing:
+                # Apply rename if requested.
+                if new_name and new_name.lower() != lookup_key:
+                    existing["name"] = new_name
+                    existing["display_name"] = new_name
+                    # report_name is the original POS-spelled name and stays
+                    # as-is so future POS uploads under the bad spelling still
+                    # route to this row via the alias path.
+                    if original_name and (original_name, new_name) not in rename_pairs:
+                        rename_pairs.append((original_name, new_name))
                 # Update POS fields
                 old_ppa = existing.get("ppa")
                 old_glassware = existing.get("bar_glassware_sales")
@@ -1489,7 +1630,7 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
                 if "guests" in new_emp:
                     existing["guest_count"] = new_emp["guests"]
                 
-                logger.info(f"confirm_pos_review: Updated '{name}' PPA from {old_ppa} to {existing.get('ppa')}, glassware from {old_glassware} to {existing.get('bar_glassware_sales')}")
+                logger.info(f"confirm_pos_review: Updated '{lookup_key}' PPA from {old_ppa} to {existing.get('ppa')}, glassware from {old_glassware} to {existing.get('bar_glassware_sales')}")
                 
                 # Recalculate derived values (LBW per guest, etc.)
                 guest_count = existing.get("guest_count") or existing.get("guests") or 0
@@ -1512,7 +1653,7 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
                 # Recalculate scores
                 old_score = existing.get("total_score")
                 calculate_employee_scores(existing, benchmarks)
-                logger.info(f"confirm_pos_review: Recalculated '{name}' score from {old_score} to {existing.get('total_score')}")
+                logger.info(f"confirm_pos_review: Recalculated '{lookup_key}' score from {old_score} to {existing.get('total_score')}")
             else:
                 # NEW manually-added employee — wasn't in the snapshot before.
                 # Build a fresh row with sensible defaults so they show up in
@@ -1584,13 +1725,13 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
                     calculate_employee_scores(fresh, benchmarks)
                 except Exception as score_err:
                     logger.warning(
-                        f"confirm_pos_review: score calc for new '{name}' failed: {score_err}"
+                        f"confirm_pos_review: score calc for new '{new_name}' failed: {score_err}"
                     )
 
                 existing_employees.append(fresh)
                 # Also seed our lookup so a second mention of the same name
                 # in the same payload updates this row instead of duplicating.
-                emp_lookup[name] = fresh
+                emp_lookup[new_name.lower()] = fresh
                 logger.info(
                     f"confirm_pos_review: Added NEW manually-entered employee '{fresh['name']}' "
                     f"(guests={guest_count}, ppa={fresh.get('ppa')}, score={fresh.get('total_score')})"
@@ -1665,9 +1806,83 @@ async def confirm_pos_review(snapshot_id: str, data: Dict[str, Any]):
     except Exception as qr_err:
         logger.warning(f"confirm_pos_review: QR auto-sync failed: {qr_err}")
 
+    # Auto-add misspelled POS names as canonical aliases. After every
+    # save the operator's inline typo-fix becomes a permanent rule —
+    # next POS upload that lands under the bad spelling routes to the
+    # correct canonical employee automatically. Self-curating dictionary.
+    alias_writes = 0
+    skipped_alias_writes: List[Dict[str, str]] = []
+    if rename_pairs:
+        try:
+            # Build a name → canonical_doc index over active employees.
+            canon_index: Dict[str, Dict[str, Any]] = {}
+            async for c in db.employees.find(
+                {"status": "active"},
+                {"_id": 0, "id": 1, "name": 1, "display_name": 1,
+                 "report_name": 1, "aliases": 1},
+            ):
+                for n in (c.get("name"), c.get("display_name"),
+                          c.get("report_name"), *(c.get("aliases") or [])):
+                    if n:
+                        canon_index[n.strip().lower()] = c
+            # Snapshot every "active canonical" name lowercased so we
+            # refuse to alias-shadow another active employee's identity.
+            # (Computed implicitly via canon_index lookups below.)
+
+            seen_writes: set = set()
+            for misspelled, corrected in rename_pairs:
+                miss_key = (misspelled or "").strip().lower()
+                corr_key = (corrected or "").strip().lower()
+                if not miss_key or not corr_key or miss_key == corr_key:
+                    continue
+                if (miss_key, corr_key) in seen_writes:
+                    continue
+                seen_writes.add((miss_key, corr_key))
+
+                # Refuse to register a misspelling as an alias if some
+                # OTHER active employee already owns that name — that
+                # would route their POS rows to the wrong person.
+                target = canon_index.get(corr_key)
+                if not target:
+                    skipped_alias_writes.append({
+                        "misspelled": misspelled, "corrected": corrected,
+                        "reason": "no_canonical_match",
+                    })
+                    continue
+                existing_owner = canon_index.get(miss_key)
+                if existing_owner and existing_owner.get("id") != target.get("id"):
+                    skipped_alias_writes.append({
+                        "misspelled": misspelled, "corrected": corrected,
+                        "reason": "owned_by_other_employee",
+                        "owner_id": existing_owner.get("id"),
+                    })
+                    continue
+
+                # Idempotent — $addToSet won't create duplicates.
+                res = await db.employees.update_one(
+                    {"id": target["id"]},
+                    {"$addToSet": {"aliases": misspelled.strip()}},
+                )
+                if res.modified_count:
+                    alias_writes += 1
+                    # Locally refresh the index so a second rename in
+                    # the same payload that references this misspelling
+                    # again is treated as already-owned (no double-write).
+                    canon_index[miss_key] = target
+                    logger.info(
+                        f"confirm_pos_review: auto-aliased '{misspelled}' → "
+                        f"{target.get('name')} ({target.get('id')})"
+                    )
+        except Exception as alias_err:
+            logger.warning(
+                f"confirm_pos_review: alias auto-add failed: {alias_err}"
+            )
+
     return {
         "success": True,
-        "message": f"POS data reviewed and confirmed ({len(employees_data)} employees)"
+        "message": f"POS data reviewed and confirmed ({len(employees_data)} employees)",
+        "aliases_added": alias_writes,
+        "alias_skips": skipped_alias_writes,
     }
 
 
@@ -1702,8 +1917,33 @@ _SYNCABLE_FIELDS = (
     "total_metric_bonus", "metric_bonus",
     "weighted_score", "pre_dar_score", "total_score",
     "performance_tier", "peer_rank",
-    "display_name", "report_name", "job_title",
+    "name", "display_name", "report_name", "job_title",
 )
+
+
+def _build_benchmarks_dict(settings: Optional[Dict[str, Any]]) -> Dict[str, float]:
+    """
+    Canonical benchmarks dict used by every call to
+    `calculate_employee_scores`. Single source of truth so adding a new
+    config knob (e.g. RT rate) only needs to happen in one place.
+
+    Falls back to the v3 canonical defaults (PPA 25, LSC 25, LBW 20,
+    GLASS 15 weights, RT 0.33 pts/mention with 20-pt cap) when a quarter
+    has no stored settings yet.
+    """
+    s = settings or {}
+    return {
+        "ppa":   s.get("benchmark_ppa",   55.0),
+        "lbw":   s.get("benchmark_lbw",   8.0),
+        "glass": s.get("benchmark_glass", 1.35),
+        "lsc":   s.get("benchmark_lsc",   100.0),
+        "weight_ppa":   s.get("weight_ppa",   0.25),
+        "weight_lsc":   s.get("weight_lsc",   0.25),
+        "weight_lbw":   s.get("weight_lbw",   0.20),
+        "weight_glass": s.get("weight_glass", 0.15),
+        "rt_points_per_mention": s.get("rt_points_per_mention", 0.33),
+        "rt_max_points":         s.get("rt_max_points",         20.0),
+    }
 
 
 async def _propagate_snapshot_to_employees_v2(
@@ -1974,12 +2214,7 @@ async def process_snapshot(snapshot_id: str, force: bool = False):
             {"_id": 0}
         )
         
-        benchmarks = {
-            "ppa": settings.get("benchmark_ppa", 55.0) if settings else 55.0,
-            "lbw": settings.get("benchmark_lbw", 8.0) if settings else 8.0,
-            "glass": settings.get("benchmark_glass", 1.35) if settings else 1.35,
-            "lsc": settings.get("benchmark_lsc", 100.0) if settings else 100.0,
-        }
+        benchmarks = _build_benchmarks_dict(settings)
         
         # Merge data from all uploads
         employees = await merge_snapshot_data(snapshot)
@@ -2004,12 +2239,17 @@ async def process_snapshot(snapshot_id: str, force: bool = False):
                 )
             zero_pos = sum(
                 1 for e in employees
+                # Check raw POS metrics here — the gate runs BEFORE
+                # `calculate_employee_scores`, so `score_ppa` etc are
+                # not populated yet. Using the score fields made every
+                # row look "all zero" and the gate always fired, which
+                # silently 500'd "Process Snapshot" without ?force=true.
                 if not any((e.get(k) or 0) for k in
-                           ("score_ppa", "score_lbw", "score_glass", "score_lsc"))
+                           ("ppa", "lbw_per_guest", "glassware_per_guest", "guests_per_lsc"))
             )
             if (zero_pos / n) > 0.30:
                 gate_failures.append(
-                    f"{zero_pos}/{n} employees have ALL POS scores at zero. "
+                    f"{zero_pos}/{n} employees have ALL POS metrics at zero. "
                     f"Likely parser failure or wrong file format."
                 )
             # Compare row count to the previous completed snapshot.
@@ -2062,6 +2302,79 @@ async def process_snapshot(snapshot_id: str, force: bool = False):
         
         # Assign tiers and ranks
         employees = assign_performance_tiers(employees)
+
+        # ---- Sync rows[] frozen_metrics from employees[] -----------------
+        # `snapshot.rows[]` is the FK-based store that the Full Rankings
+        # page reads via `_hydrate_snapshot_employees`. Without this sync,
+        # `rows[].frozen_metrics` keeps the score state captured when the
+        # snapshot was first saved (no RT bonus, no CV bonus, stale total
+        # score) while `employees[]` has the freshly-computed values.
+        # That mismatch was visible in prod on Q2P5W2.75: Top Performers
+        # widget (reads employees[]) showed Trey/Diane/Kitti while the
+        # Rankings tab (reads rows[]) showed Keisha/Cory/Jose. Always
+        # mirror the canonical scored state into rows[] here.
+        emp_by_id = {e.get("id"): e for e in employees if e.get("id")}
+        # Also build a name-based fallback for older snapshots whose
+        # rows[] reference IDs that don't match the current employees[]
+        # (e.g. after a canonical merge).
+        emp_by_name = {}
+        for e in employees:
+            for nm in (e.get("name"), e.get("display_name"), e.get("report_name")):
+                k = (nm or "").strip().lower()
+                if k:
+                    emp_by_name.setdefault(k, e)
+
+        synced_rows = []
+        consumed_emp_ids: set = set()
+        for row in (snapshot.get("rows") or []):
+            eid = row.get("employee_id")
+            scored = emp_by_id.get(eid)
+            if scored is None:
+                fallback = (row.get("frozen_display_name") or row.get("frozen_report_name") or "").strip().lower()
+                scored = emp_by_name.get(fallback) if fallback else None
+            if scored is None:
+                # Drop rows that no longer have a matching employee in
+                # `employees[]`. Prior behaviour kept them and they
+                # silently polluted Rankings with stale scores while
+                # Top Performers correctly omitted them — same
+                # divergence the user reported. If a row's person is
+                # genuinely still active, they'll be added back via the
+                # "grow" pass below from `employees[]`.
+                continue
+            consumed_emp_ids.add(scored.get("id"))
+            synced_rows.append({
+                "employee_id": scored.get("id") or eid,
+                "frozen_display_name": scored.get("display_name") or scored.get("name") or row.get("frozen_display_name"),
+                "frozen_report_name":  scored.get("report_name")  or scored.get("name") or row.get("frozen_report_name"),
+                "frozen_metrics": {k: v for k, v in scored.items() if k not in ("id", "name", "display_name", "report_name", "aliases")},
+                "frozen_score": scored.get("total_score", 0),
+                "frozen_tier":  scored.get("tier_label") or scored.get("performance_tier"),
+                "frozen_rank":  scored.get("tier_rank") or scored.get("peer_rank"),
+                "recorded_at":  row.get("recorded_at") or datetime.now(timezone.utc).isoformat(),
+            })
+
+        # ---- Grow rows[] to cover every scored employee --------------------
+        # Employees added via the POS/CV/RT merge after the snapshot was
+        # first saved (e.g. Lennie/Kahi/Kahiauani/Julian Taveras on the
+        # Q2P5W2.75 incident) had no `rows[]` entry, so the Rankings tab
+        # ignored them while Top Performers (which reads `employees[]`)
+        # showed them. Append a fresh row for every employee not already
+        # covered above.
+        now_iso = datetime.now(timezone.utc).isoformat()
+        for emp in employees:
+            eid = emp.get("id")
+            if not eid or eid in consumed_emp_ids:
+                continue
+            synced_rows.append({
+                "employee_id": eid,
+                "frozen_display_name": emp.get("display_name") or emp.get("name"),
+                "frozen_report_name":  emp.get("report_name")  or emp.get("name"),
+                "frozen_metrics": {k: v for k, v in emp.items() if k not in ("id", "name", "display_name", "report_name", "aliases")},
+                "frozen_score": emp.get("total_score", 0),
+                "frozen_tier":  emp.get("tier_label") or emp.get("performance_tier"),
+                "frozen_rank":  emp.get("tier_rank") or emp.get("peer_rank"),
+                "recorded_at":  now_iso,
+            })
         
         # Update snapshot as completed
         now = datetime.now(timezone.utc).isoformat()
@@ -2071,6 +2384,7 @@ async def process_snapshot(snapshot_id: str, force: bool = False):
                 "$set": {
                     "status": SnapshotStatus.COMPLETED.value,
                     "employees": employees,
+                    "rows": synced_rows,
                     "employee_count": len(employees),
                     "benchmarks_used": benchmarks,
                     "completed_at": now,
@@ -2411,7 +2725,7 @@ async def _hydrate_snapshot_employees(db, snapshot: Dict[str, Any]) -> List[Dict
         {"year": snapshot.get("year"), "quarter": snapshot.get("quarter")},
         {"_id": 0, "rt_points_per_mention": 1, "rt_max_points": 1},
     ) or {}
-    rt_coef = qs_doc.get("rt_points_per_mention", 0.3) or 0.3
+    rt_coef = qs_doc.get("rt_points_per_mention", 0.33) or 0.33
     rt_cap  = qs_doc.get("rt_max_points", 20.0) or 20.0
     for emp in sorted_employees:
         m = emp.get("rt_mentions") or emp.get("review_mentions") or 0
@@ -2614,6 +2928,102 @@ async def generate_snapshot_workflow_slide(
     except Exception as e:
         logger.error(f"Error generating slide: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to generate slide: {str(e)}")
+
+
+@snapshot_router.get("/snapshots/{snapshot_id}/slide/preview")
+async def preview_snapshot_workflow_slide(
+    snapshot_id: str,
+    background: str = "dark",
+    w: int = 1280,
+):
+    """
+    Inline thumbnail preview of the per-snapshot PNG slide.
+
+    Same data + render path as `/snapshots/{snapshot_id}/slide`, but:
+      - Returned inline (no attachment) for browser display.
+      - Pillow-downsampled to `w` pixels wide (clamped 320–1920) so
+        the snapshot list UI can show a quick preview without
+        pulling the full-resolution slide.
+    """
+    from io import BytesIO
+    from PIL import Image as PILImage
+    from snapshot_slides import generate_snapshot_slide
+    from fastapi.responses import Response
+
+    db = get_db()
+
+    snapshot = await db.snapshot_workflow.find_one({"id": snapshot_id}, {"_id": 0})
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+
+    sorted_employees = await _hydrate_snapshot_employees(db, snapshot)
+    if not sorted_employees:
+        raise HTTPException(status_code=400, detail="Snapshot has no employee data")
+
+    slide_employees = []
+    for i, emp in enumerate(sorted_employees):
+        slide_employees.append({
+            "rank": i + 1,
+            "name": emp.get("name", "Unknown"),
+            "total_score": emp.get("total_score", 0) or 0,
+            "ppa": emp.get("ppa", 0) or 0,
+            "lbw_per_guest": emp.get("lbw_per_guest", 0) or 0,
+            "guests_per_lsc": emp.get("guests_per_lsc", 0) or 0,
+            "glassware_per_guest": emp.get("glassware_per_guest", 0) or 0,
+            "job_title": emp.get("job_title", "Server"),
+            "tier_label": emp.get("tier_label") or emp.get("performance_tier", "Server"),
+            "score_ppa": emp.get("score_ppa", 0) or 0,
+            "score_lbw": emp.get("score_lbw", 0) or 0,
+            "score_glass": emp.get("score_glass", 0) or 0,
+            "score_lsc": emp.get("score_lsc", 0) or 0,
+            "cv_score": emp.get("cv_score", 0) or 0,
+            "cv_promoters": emp.get("cv_promoters", 0) or 0,
+            "cv_detractors": emp.get("cv_detractors", 0) or 0,
+            "nps_score": emp.get("nps_score", 0) or 0,
+            "rt_mentions": emp.get("rt_mentions", 0) or 0,
+            "review_tracker_bonus": emp.get("review_tracker_bonus", 0) or 0,
+            "total_metric_bonus": emp.get("total_metric_bonus", 0) or 0,
+        })
+
+    benchmarks = snapshot.get("benchmarks", {
+        "ppa": 55.0,
+        "lbw_per_guest": 6.0,
+        "guests_per_lsc": 35.0,
+        "glassware_per_guest": 1.2,
+    })
+    title = f"{snapshot.get('quarter', 'Q1')} {snapshot.get('year', 2026)} Server Performance Snapshot"
+    snapshot_date = snapshot.get("effective_date", "")
+
+    try:
+        slide_bytes = generate_snapshot_slide(
+            employees=slide_employees,
+            benchmarks=benchmarks,
+            snapshot_date=snapshot_date,
+            background=background,
+            title=title,
+        )
+    except Exception as e:
+        logger.error(f"Error generating slide preview: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate slide: {str(e)}")
+
+    # Downsample preserving aspect ratio for inline display.
+    target_w = max(320, min(int(w), 1920))
+    src = PILImage.open(BytesIO(slide_bytes))
+    if target_w < src.width:
+        target_h = int(target_w * src.height / src.width)
+        src = src.resize((target_w, target_h), PILImage.Resampling.LANCZOS)
+        buf = BytesIO()
+        src.save(buf, format="PNG", optimize=True)
+        slide_bytes = buf.getvalue()
+
+    return Response(
+        content=slide_bytes,
+        media_type="image/png",
+        headers={
+            "Content-Disposition": "inline",
+            "Cache-Control": "private, max-age=15",
+        },
+    )
 
 
 @snapshot_router.post("/snapshots/{snapshot_id}/sync-from-employees")
@@ -2992,7 +3402,7 @@ async def fix_snapshot_employee_ids(snapshot_id: str):
     ) if "snapshot_benchmarks" in await db.list_collection_names() else None
     if not benchmarks:
         # Use the same defaults as snapshot_manager
-        benchmarks = {"ppa": 55.0, "lbw": 8.0, "glass": 1.35, "lsc": 100.0}
+        benchmarks = _build_benchmarks_dict(None)
 
     rescored = []
     for emp in employees_v2:
@@ -3304,15 +3714,31 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
 
     def find_employee_match(external_name: str, employees_dict: dict) -> Optional[str]:
         """Fuzzy-match a name from CV / RT against the POS-keyed employees
-        dict. Tries: (1) direct lower-case key match, (2) nickname
-        expansion of first name + exact last-name match, (3) reverse
-        nickname (POS uses formal name, external file uses nickname),
-        (4) first-name prefix on a unique last name."""
+        dict. Tries: (1) direct lower-case key match, (2) canonical
+        alias resolution (so "Craig Simmons" → Allen Simmons via the
+        `aliases` field), (3) nickname expansion of first name + exact
+        last-name match, (4) reverse nickname (POS uses formal name,
+        external file uses nickname), (5) first-name prefix on a unique
+        last name."""
         if not external_name:
             return None
         ext = external_name.strip().lower()
         if ext in employees_dict:
             return ext
+
+        # Canonical alias resolution comes BEFORE nickname tables because
+        # admins maintain the canonical aliases explicitly. A configured
+        # alias on the canonical record is the strongest possible signal.
+        canonical = _resolve_via_alias(ext)
+        if canonical:
+            canonical_lower = canonical.strip().lower()
+            if canonical_lower in employees_dict:
+                return canonical_lower
+            # Also try first-name-only key
+            first_only = canonical_lower.split()[0] if canonical_lower else ""
+            if first_only and first_only in employees_dict:
+                return first_only
+
         parts = ext.split()
         if len(parts) < 2:
             return None
@@ -3335,6 +3761,42 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
         return None
 
     employees = {}
+
+    # ------------------------------------------------------------------
+    # Canonical-alias resolver. CV / RT files often use a different name
+    # than the POS report (e.g. "Craig Simmons" from CV but POS lists
+    # "Allen Simmons" with "craig simmons" in his aliases). Build a
+    # lowercase alias → canonical-name map up front so we can route
+    # incoming CV/RT rows to the right POS employee even when the
+    # nickname tables don't cover the link. We also de-dupe aliases
+    # that exist as their own separate canonical record: if "Craig
+    # Simmons" lives as both a standalone record AND an alias on
+    # Allen, the alias on Allen wins and the standalone record is
+    # ignored for matching purposes (otherwise CV data flows to the
+    # ghost canonical and Allen's row stays empty). This matches the
+    # user-spotted Q2P5W2.75 prod bug where CV/NPS for Craig went to a
+    # phantom record and Allen showed NPS=0 despite uploaded data.
+    # ------------------------------------------------------------------
+    db = get_db()
+    alias_to_canonical_name: dict[str, str] = {}
+    canonical_names_set: set[str] = set()
+    async for ce in db.employees.find({}, {"_id": 0, "name": 1, "aliases": 1}):
+        cname = (ce.get("name") or "").strip()
+        if not cname:
+            continue
+        canonical_names_set.add(cname.lower())
+        for alias in (ce.get("aliases") or []):
+            a = (alias or "").strip().lower()
+            if a and a != cname.lower():
+                # First write wins — if two canonicals claim the same
+                # alias, the earlier doc keeps it.
+                alias_to_canonical_name.setdefault(a, cname)
+
+    def _resolve_via_alias(external_name: str) -> Optional[str]:
+        """Return the canonical name that lists `external_name` as an alias, if any."""
+        if not external_name:
+            return None
+        return alias_to_canonical_name.get(external_name.strip().lower())
 
     # ------------------------------------------------------------------
     # Terminated / deleted employees blocklist.
@@ -3371,11 +3833,15 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
     # Use multiple keys for flexible matching (full name, first name, report_name)
     existing_employees = {}
     for emp in snapshot.get("employees", []):
-        name = emp.get("name", "").lower().strip()
-        display_name = emp.get("display_name", "").lower().strip()
-        report_name = emp.get("report_name", "").lower().strip()
+        # `.get(..., "")` only kicks in for missing keys; if the value is
+        # explicitly None (which legacy v2 records sometimes have for
+        # `display_name`/`report_name`), the default isn't used. Coerce
+        # via `or ""` so .lower()/.strip()/.split() never crash on None.
+        name = (emp.get("name") or "").lower().strip()
+        display_name = (emp.get("display_name") or "").lower().strip()
+        report_name = (emp.get("report_name") or "").lower().strip()
         first_name = name.split()[0] if name else ""
-        
+
         # Add to lookup with multiple keys
         if name: existing_employees[name] = emp
         if display_name and display_name != name: existing_employees[display_name] = emp
@@ -3402,7 +3868,7 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
         if upload_type == UploadType.POS_REPORT.value:
             # POS data creates the base employee records
             for emp_data in parsed_data.get("employees", []):
-                name = emp_data.get("name", "").strip()
+                name = (emp_data.get("name") or "").strip()
                 if not name:
                     continue
                 # Skip employees the user has explicitly deleted from this
@@ -3510,8 +3976,9 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
                 
                 # PRESERVE job_title from existing employee - THIS IS CRITICAL
                 # Only use POS job_title if no existing job_title or it's generic "Server"
-                existing_job = existing_emp.get("job_title", "Server").lower() if existing_emp else "server"
-                pos_job = emp_data.get("job_title", "Server")
+                # Use `or "Server"` so a literal None in the doc doesn't crash .lower().
+                existing_job = ((existing_emp.get("job_title") or "Server") if existing_emp else "Server").lower()
+                pos_job = emp_data.get("job_title") or "Server"
                 
                 # If existing job is trainer/bartender, preserve it (don't override with POS data)
                 if existing_job in ["trainer", "bartender"]:
@@ -3591,15 +4058,15 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
             # Use fuzzy matcher so nickname-only names ('Keisha', 'Lennie')
             # still classify as individual data and trigger the per-row merge.
             has_individual_data = any(
-                (emp.get("name", "").strip().lower() != "unknown")
-                and find_employee_match(emp.get("name", ""), employees)
+                ((emp.get("name") or "").strip().lower() != "unknown")
+                and find_employee_match(emp.get("name") or "", employees)
                 for emp in cv_employees
             )
             
             if has_individual_data:
                 # Individual employee CV data - merge directly
                 for cv_data in cv_employees:
-                    raw_name = cv_data.get("name", "").strip()
+                    raw_name = (cv_data.get("name") or "").strip()
                     if not raw_name or raw_name.lower() == "unknown":
                         continue
                     # Fuzzy match against POS-keyed employees (handles
@@ -3644,7 +4111,7 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
             else:
                 # Store-level CV data (all attributed to "Unknown") 
                 # Distribute proportionally based on guest count
-                unknown_data = next((e for e in cv_employees if e.get("name", "").strip().lower() == "unknown"), None)
+                unknown_data = next((e for e in cv_employees if (e.get("name") or "").strip().lower() == "unknown"), None)
                 if unknown_data:
                     total_promoters = unknown_data.get("promoters", 0) or 0
                     total_passives = unknown_data.get("passives", 0) or 0  
@@ -3696,13 +4163,13 @@ async def merge_snapshot_data(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
             # Merge RT data with the shared fuzzy matcher (nickname_map +
             # reverse mapping defined at the top of merge_snapshot_data).
             for rt_data in parsed_data.get("employees", []):
-                rt_name = rt_data.get("name", "").strip()
+                rt_name = (rt_data.get("name") or "").strip()
                 matched_name = find_employee_match(rt_name, employees)
 
                 if matched_name:
                     mentions = rt_data.get("mentions", 0)
                     employees[matched_name]["rt_mentions"] = mentions
-                    employees[matched_name]["review_tracker_bonus"] = round(min(mentions * 0.3, 20), 1)  # Cap at 15
+                    employees[matched_name]["review_tracker_bonus"] = round(min(mentions * 0.33, 20), 1)  # Cap at 20 (canonical v3)
     
     # Defensive dedupe: guarantee unique employees by display_name so the
     # Employees tab never shows duplicates even if upstream data drifted.
@@ -4217,7 +4684,7 @@ async def rescore_all_employees(year: int = 2026, quarter: str = "Q1"):
             {"quarter": q, "year": year}
         )
     if not benchmarks:
-        benchmarks = {"ppa": 55.0, "lbw": 8.0, "glass": 1.35, "lsc": 100.0}
+        benchmarks = _build_benchmarks_dict(None)
 
     rescored = 0
     over_100_before = 0

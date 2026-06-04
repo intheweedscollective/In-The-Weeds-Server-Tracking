@@ -11,6 +11,8 @@ import { getCurrentQuarter } from "../lib/quarterUtils";
 export default function ScoringGuide() {
   const [expandedSections, setExpandedSections] = useState(new Set(['overview']));
   const [qSettings, setQSettings] = useState(null);
+  const [example, setExample] = useState(null);
+  const [exampleError, setExampleError] = useState(null);
   const { quarter, year } = getCurrentQuarter();
 
   useEffect(() => {
@@ -19,8 +21,19 @@ export default function ScoringGuide() {
       .catch(() => setQSettings(null));
   }, [year, quarter]);
 
+  // Worked example is computed SERVER-SIDE through scoring_engine.py so
+  // the doc can't drift from the engine. The JS renders only.
+  useEffect(() => {
+    api.get(`/v2/admin/scoring-example?quarter=${quarter}&year=${year}`)
+      .then((r) => { setExample(r.data); setExampleError(null); })
+      .catch((e) => {
+        setExample(null);
+        setExampleError(e?.response?.data?.detail || e.message || "Unable to load worked example.");
+      });
+  }, [year, quarter]);
+
   // Dynamic scoring constants (fall back to current Q2 v3 defaults).
-  const RT_PTS = qSettings?.rt_points_per_mention ?? 0.3;
+  const RT_PTS = qSettings?.rt_points_per_mention ?? 0.33;
   const RT_CAP = qSettings?.rt_max_points ?? 20;
   const RT_MAX_MENTIONS = Math.ceil(RT_CAP / RT_PTS);
   const CV_PROMOTER_PTS = qSettings?.cv_promoter_points ?? 1;
@@ -160,10 +173,10 @@ export default function ScoringGuide() {
                     <td className="text-center">${(qSettings?.benchmark_ppa ?? 55).toFixed(2)}</td>
                   </tr>
                   <tr className="border-b border-slate-700">
-                    <td className="py-2 font-medium text-white">LSC (Loyalty Sales)</td>
+                    <td className="py-2 font-medium text-white">LSC (Guests per Loyalty Signup)</td>
                     <td className="text-center">{W_LSC}%</td>
                     <td className="text-center text-green-400">{W_LSC} pts</td>
-                    <td className="text-center">1:{Math.round(qSettings?.benchmark_lsc ?? 100)} ratio</td>
+                    <td className="text-center">1 signup per {Math.round(qSettings?.benchmark_lsc ?? 100)} guests</td>
                   </tr>
                   <tr className="border-b border-slate-700">
                     <td className="py-2 font-medium text-white">LBW (Liquor/Beer/Wine)</td>
@@ -430,30 +443,173 @@ export default function ScoringGuide() {
                   <div className="w-3 h-3 rounded-full bg-blue-500"></div>
                   <span className="text-white font-medium">Above Average</span>
                 </div>
-                <span className="text-blue-400">51-75%</span>
+                <span className="text-blue-400">25-50%</span>
               </div>
               <div className="flex items-center justify-between p-3 bg-amber-500/10 rounded-lg border border-amber-500/20">
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-amber-500"></div>
                   <span className="text-white font-medium">Below Average</span>
                 </div>
-                <span className="text-amber-400">26-50%</span>
+                <span className="text-amber-400">50-85%</span>
               </div>
               <div className="flex items-center justify-between p-3 bg-red-500/10 rounded-lg border border-red-500/20">
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-red-500"></div>
                   <span className="text-white font-medium">Needs Improvement</span>
                 </div>
-                <span className="text-red-400">Bottom 25%</span>
+                <span className="text-red-400">Bottom 15%</span>
               </div>
             </div>
+          </Section>
+
+          {/* Worked Example — computed server-side by scoring_engine.py */}
+          <Section id="example" title="Worked Example — Top Performer" icon={Calculator} color="blue">
+            <p className="text-slate-300 mb-4">
+              Numbers below are computed live on the backend by{" "}
+              <code className="text-slate-400">scoring_engine.py</code>{" "}
+              — the same code that scores your real employees. The
+              frontend only renders.
+            </p>
+            {exampleError && (
+              <div className="rounded border border-rose-700 bg-rose-950/40 p-3 text-rose-100 text-sm">
+                Couldn't load the worked example: {exampleError}
+              </div>
+            )}
+            {!example && !exampleError && (
+              <div className="text-slate-500 text-sm">Loading…</div>
+            )}
+            {example && (
+              <div className="space-y-3">
+                <div className="bg-slate-800/50 rounded-lg p-3 text-sm">
+                  <div className="text-slate-400 mb-2 font-semibold">
+                    Inputs ({example.settings.quarter} {example.settings.year} settings)
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-slate-300">
+                    <div>PPA: <span className="text-white">{example.inputs.ppa_pct}%</span></div>
+                    <div>LSC: <span className="text-white">{example.inputs.lsc_pct}%</span></div>
+                    <div>LBW: <span className="text-white">{example.inputs.lbw_pct}%</span></div>
+                    <div>Glass: <span className="text-white">{example.inputs.glass_pct}%</span></div>
+                    <div>NPS: <span className="text-white">{example.inputs.nps}%</span></div>
+                    <div>Promoters: <span className="text-white">{example.inputs.promoters}</span></div>
+                    <div>Detractors: <span className="text-white">{example.inputs.detractors}</span></div>
+                    <div>RT Mentions: <span className="text-white">{example.inputs.mentions}</span></div>
+                  </div>
+                </div>
+
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-600 text-slate-300 text-xs">
+                      <th className="text-left py-2">Component</th>
+                      <th className="text-left py-2">Math</th>
+                      <th className="text-right py-2">Points</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-slate-300">
+                    <tr className="border-b border-slate-700/50">
+                      <td className="py-1.5">PPA</td>
+                      <td className="text-slate-500 text-xs">
+                        min({example.inputs.ppa_pct}, 100) × {(example.settings.weight_ppa * 100).toFixed(0)}%
+                      </td>
+                      <td className="text-right text-green-400">
+                        {example.breakdown.weighted_pos_contributions.ppa.toFixed(2)}
+                      </td>
+                    </tr>
+                    <tr className="border-b border-slate-700/50">
+                      <td className="py-1.5">LSC</td>
+                      <td className="text-slate-500 text-xs">
+                        min({example.inputs.lsc_pct}, 100) × {(example.settings.weight_lsc * 100).toFixed(0)}%
+                      </td>
+                      <td className="text-right text-green-400">
+                        {example.breakdown.weighted_pos_contributions.lsc.toFixed(2)}
+                      </td>
+                    </tr>
+                    <tr className="border-b border-slate-700/50">
+                      <td className="py-1.5">LBW</td>
+                      <td className="text-slate-500 text-xs">
+                        min({example.inputs.lbw_pct}, 100) × {(example.settings.weight_lbw * 100).toFixed(0)}%
+                      </td>
+                      <td className="text-right text-green-400">
+                        {example.breakdown.weighted_pos_contributions.lbw.toFixed(2)}
+                      </td>
+                    </tr>
+                    <tr className="border-b border-slate-700/50">
+                      <td className="py-1.5">Glassware</td>
+                      <td className="text-slate-500 text-xs">
+                        min({example.inputs.glass_pct}, 100) × {(example.settings.weight_glass * 100).toFixed(0)}%
+                      </td>
+                      <td className="text-right text-green-400">
+                        {example.breakdown.weighted_pos_contributions.glass.toFixed(2)}
+                      </td>
+                    </tr>
+                    <tr className="border-b-2 border-slate-600 font-semibold">
+                      <td className="py-1.5">Weighted POS subtotal</td>
+                      <td></td>
+                      <td className="text-right text-green-400">
+                        {example.breakdown.weighted_pos_subtotal.toFixed(2)}
+                      </td>
+                    </tr>
+                    <tr className="border-b border-slate-700/50">
+                      <td className="py-1.5">Metric bonuses</td>
+                      <td className="text-slate-500 text-xs">
+                        {example.breakdown.metric_bonuses.ppa.toFixed(2)}
+                        {" + "}{example.breakdown.metric_bonuses.lsc.toFixed(2)}
+                        {" + "}{example.breakdown.metric_bonuses.lbw.toFixed(2)}
+                        {" + "}{example.breakdown.metric_bonuses.glass.toFixed(2)}
+                      </td>
+                      <td className="text-right text-amber-400">
+                        {example.breakdown.metric_bonuses.total.toFixed(2)}
+                      </td>
+                    </tr>
+                    <tr className="border-b border-slate-700/50">
+                      <td className="py-1.5">Customer Voice (uncapped)</td>
+                      <td className="text-slate-500 text-xs">
+                        NPS {example.inputs.nps}/10 + {example.inputs.promoters}×
+                        {example.settings.cv_promoter_points} − {example.inputs.detractors}×
+                        {example.settings.cv_detractor_points}
+                      </td>
+                      <td className="text-right text-purple-400">
+                        {example.breakdown.customer_voice.total.toFixed(2)}
+                      </td>
+                    </tr>
+                    <tr className="border-b-2 border-slate-600">
+                      <td className="py-1.5">Review Tracker (cap {example.settings.rt_max_points})</td>
+                      <td className="text-slate-500 text-xs">
+                        min({example.inputs.mentions} × {example.settings.rt_points_per_mention}, {example.settings.rt_max_points})
+                      </td>
+                      <td className="text-right text-pink-400">
+                        {example.breakdown.review_tracker.capped.toFixed(2)}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="py-2 font-bold text-white">TOTAL</td>
+                      <td></td>
+                      <td className="text-right font-bold text-blue-400 text-base">
+                        {example.total_score.toFixed(2)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                <p className="text-xs text-slate-500">
+                  Computed by{" "}
+                  <code>GET /api/v2/admin/scoring-example</code> which runs
+                  the same{" "}
+                  <code>calculate_customer_voice_score</code>{" / "}
+                  <code>calculate_review_tracker_bonus</code>{" / "}
+                  <code>calculate_bonus_points</code>{" / "}
+                  <code>calculate_total_score</code> pipeline as production
+                  scoring. The doc and the engine are literally the same
+                  code path.
+                </p>
+              </div>
+            )}
           </Section>
 
         </div>
 
         {/* Footer */}
         <div className="text-center text-slate-500 text-sm pt-4">
-          <p>Q1 2026 Scoring Model • Bubba Gump Shrimp Co.</p>
+          <p>{year} {quarter} Scoring Model • Bubba Gump Shrimp Co.</p>
         </div>
       </div>
     </div>

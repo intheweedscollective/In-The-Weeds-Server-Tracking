@@ -1,6 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-
-const BACKEND_URL = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
+import api from '../lib/api';
 
 // Store context for global store selection
 const StoreContext = createContext(null);
@@ -36,11 +35,13 @@ export function StoreProvider({ children }) {
 
   const loadStores = async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/v2/stores?include_stats=true`);
-      const data = await response.json();
-      setStores(data.stores || []);
-      setRegions(data.regions || []);
+      // Use the shared axios client so cookies/auth headers stay consistent
+      // with the rest of the app (was raw fetch — risk of stale session).
+      const { data } = await api.get('/v2/stores?include_stats=true');
+      setStores(data?.stores || []);
+      setRegions(data?.regions || []);
     } catch (error) {
+
       console.error('Failed to load stores:', error);
     } finally {
       setLoading(false);

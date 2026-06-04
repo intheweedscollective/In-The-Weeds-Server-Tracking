@@ -32,7 +32,7 @@ LOGO_PATH = "/app/backend/assets/bubba_gump_logo.png"
 
 
 def _rt_value(mentions: float) -> float:
-    return min(0.3 * (mentions or 0), 20.0)
+    return min(0.33 * (mentions or 0), 20.0)
 
 
 def get_cell_color(value: float, metric_type: str = "percentage") -> str:
@@ -160,7 +160,10 @@ def build_full_rankings_pdf(
 
     headers = ["Rank", "Name", "Trend", "PPA", "LBW", "GLASS",
                "LSC", "CV", "RT", "Metric Bonus", "Score"]
-    col_props = [0.06, 0.13, 0.06, 0.085, 0.085, 0.085,
+    # Trend column widened from 6% → 8% so the magnitude label
+    # ("+19.3") fits next to the polygon without clipping. The 2% was
+    # taken from Name, which had slack at 13%.
+    col_props = [0.06, 0.11, 0.08, 0.085, 0.085, 0.085,
                  0.085, 0.085, 0.085, 0.105, 0.085]
     col_widths = [p * table_width for p in col_props]
     col_widths[-1] += table_width - sum(col_widths)
@@ -211,16 +214,22 @@ def build_full_rankings_pdf(
 
         trend_dir = (emp.get("trend") or "up").lower()
         if trend_dir in ("up", "improving", "improved"):
-            trend_glyph, trend_col = "\u25B2", COLORS["trend_up"]
+            trend_shape, trend_col = "up", COLORS["trend_up"]
         elif trend_dir in ("down", "declining"):
-            trend_glyph, trend_col = "\u25BC", COLORS["red"]
+            trend_shape, trend_col = "down", COLORS["red"]
         else:
-            trend_glyph, trend_col = "\u2014", COLORS["trend_flat"]
+            trend_shape, trend_col = "flat", COLORS["trend_flat"]
+
+        # NOTE: trend cell renders as a polygon, not text — Helvetica
+        # doesn't ship U+25B2/U+25BC/U+2014, so glyphs came out as
+        # tofu boxes on screenshots. See `png_full_rankings.py` for
+        # the matching fix on the PNG export path.
 
         row_data = [
             (pos_label,            None,                                      "center", COLORS["text_dark"], True),
             (name,                 None,                                      "left",   COLORS["text_dark"], True),
-            (trend_glyph,          None,                                      "center", trend_col,           True),
+            (f"__TREND__:{trend_shape}|{emp.get('score_change')}",
+                                   None,                                      "center", trend_col,           True),
             (f"{ppa_pct:.0f}%",    get_cell_color(ppa_pct,    "percentage"),  "center", None,                False),
             (f"{lbw_pct:.0f}%",    get_cell_color(lbw_pct,    "percentage"),  "center", None,                False),
             (f"{glass_pct:.0f}%",  get_cell_color(glass_pct,  "percentage"),  "center", None,                False),
@@ -253,7 +262,53 @@ def build_full_rankings_pdf(
             c.setFillColor(colors.HexColor(text_color))
             c.setFont("Helvetica-Bold", 9.5)
             ty = cy + row_h / 2 - 0.05 * inch
-            if align == "center":
+            if isinstance(text, str) and text.startswith("__TREND__:"):
+                # Polygon-drawn trend indicator: doesn't depend on font
+                # glyph availability. Same approach as PNG generator.
+                # Encoded as "__TREND__:<shape>|<delta>" so we can draw
+                # the magnitude (e.g. "+4.2") right next to the arrow.
+                payload = text.split(":", 1)[1]
+                if "|" in payload:
+                    shape, delta_str = payload.split("|", 1)
+                else:
+                    shape, delta_str = payload, ""
+                try:
+                    delta_val = float(delta_str) if delta_str not in ("", "None") else None
+                except (TypeError, ValueError):
+                    delta_val = None
+                # Polygon sits in the left third of the cell; magnitude
+                # label sits to the right of it, vertically centered.
+                size = min(row_h, 0.18 * inch)
+                half = size / 2
+                cx = x_pos + w * 0.32  # nudge polygon left to make room for the label
+                cy_mid = cy + row_h / 2
+                c.setFillColor(colors.HexColor(override_text or COLORS["trend_up"]))
+                if shape == "up":
+                    p = c.beginPath()
+                    p.moveTo(cx, cy_mid + half)
+                    p.lineTo(cx - half, cy_mid - half)
+                    p.lineTo(cx + half, cy_mid - half)
+                    p.close()
+                    c.drawPath(p, stroke=0, fill=1)
+                elif shape == "down":
+                    p = c.beginPath()
+                    p.moveTo(cx, cy_mid - half)
+                    p.lineTo(cx - half, cy_mid + half)
+                    p.lineTo(cx + half, cy_mid + half)
+                    p.close()
+                    c.drawPath(p, stroke=0, fill=1)
+                else:  # flat
+                    bar_h = max(1.5, size / 5)
+                    c.rect(cx - half, cy_mid - bar_h / 2, size, bar_h, fill=1, stroke=0)
+                # Magnitude — show only when we actually have a prior
+                # value (no prior quarter = blank, not "+0.0").
+                if delta_val is not None and abs(delta_val) >= 0.05:
+                    label = f"{delta_val:+.1f}"
+                    c.setFont("Helvetica-Bold", 8.5)
+                    c.setFillColor(colors.HexColor(override_text or COLORS["trend_up"]))
+                    c.drawString(cx + half + 0.04 * inch,
+                                 cy_mid - 0.05 * inch, label)
+            elif align == "center":
                 c.drawCentredString(x_pos + w / 2, ty, str(text))
             elif align == "left":
                 c.drawString(x_pos + 0.08 * inch, ty, str(text))
