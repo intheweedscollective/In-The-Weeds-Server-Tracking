@@ -27,7 +27,8 @@ import {
   Calculator,
   Layers,
   LineChart,
-  Globe
+  Globe,
+  Database
 } from "lucide-react";
 import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
@@ -98,7 +99,8 @@ const navGroups = [
       { path: "/qr/leaderboard", label: "QR Leaderboard", icon: Trophy },
       { path: "/qr/daily", label: "Clicks by Day", icon: LineChart },
       { path: "/qr/codes", label: "QR Codes", icon: QrCode, adminOnly: true },
-      { path: "/qr/settings", label: "QR Settings", icon: Settings, adminOnly: true }
+      { path: "/qr/settings", label: "QR Settings", icon: Settings, adminOnly: true },
+      { path: "/qr/recovery", label: "QR Recovery", icon: Database, adminOnly: true }
     ]
   },
   {

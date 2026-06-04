@@ -38,6 +38,7 @@ import SnapshotWorkflow from "./pages/SnapshotWorkflow";
 import SnapshotDetail from "./pages/SnapshotDetail";
 import QuarterlySummary from "./pages/QuarterlySummary";
 import DataReconciliation from "./pages/DataReconciliation";
+import QRRecovery from "./pages/QRRecovery";
 import OnboardingGuide from "./components/OnboardingGuide";
 import ProtectedAdminRoute from "./components/ProtectedAdminRoute";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -89,6 +90,7 @@ function App() {
                           <Route path="/qr/codes" element={<ProtectedAdminRoute><QREmployees /></ProtectedAdminRoute>} />
                           <Route path="/qr/settings" element={<ProtectedAdminRoute><QRSettings /></ProtectedAdminRoute>} />
                           <Route path="/qr/ghost-heal" element={<ProtectedAdminRoute><QRGhostHeal /></ProtectedAdminRoute>} />
+                          <Route path="/qr/recovery" element={<ProtectedAdminRoute><QRRecovery /></ProtectedAdminRoute>} />
                           {/* Multi-Store Management */}
                           <Route path="/global" element={<GlobalOverview />} />
                           <Route path="/stores" element={<ProtectedAdminRoute><StoreManagement /></ProtectedAdminRoute>} />

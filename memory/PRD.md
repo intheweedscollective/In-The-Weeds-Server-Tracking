@@ -11,6 +11,78 @@ Build a comprehensive performance review application for restaurant employees.
 - **Auth**: Emergent-managed Google Auth (whitelist via `ALLOWED_ADMIN_EMAILS`)
 
 ## Current State (2026-05-28)
+### P2: QR Click Recovery file-upload portal — SHIPPED 2026-06-04
+
+User context: pre-2026-03-31 QR scan events were lost during a
+destructive v1 pipeline wipe. Atlas backup retention does NOT reach
+that far back on the current cluster tier — so the raw data is
+permanently gone. This tool is the catch-all import path for any
+pre-March data the operator later sources from POS reports / external
+analytics / staff-memory reconstructions.
+
+**User decisions captured in scope**:
+- Atlas backups confirmed unavailable (M5 tier retention too short).
+- Both `staging` and `merge` modes available.
+- DO NOT auto-rebuild `qr_employees.{yelp,google,tripadvisor}_clicks`
+  totals — operator wants to review raw events first.
+- Admin API endpoint + file-upload UI.
+
+**Backend** — new `/app/backend/routes/qr_recovery.py`:
+- `POST /api/v2/admin/qr-recovery/import` (multipart, JSON file +
+  `mode={staging|merge}` + `dry_run`). Validates per-row required
+  fields (`id`, `employee_id`, `platform`, `scanned_at`), enforces
+  `platform ∈ {yelp, google, tripadvisor}`, validates ISO-8601
+  timestamps, dedupes intra-file and against the target collection(s).
+  Tags every recovered row with `recovered_via` / `recovered_at` so
+  audit traces survive across collections.
+- `GET /api/v2/admin/qr-recovery/staging-summary` — counts in
+  `qr_scans_pre_march_recovered`, breakdown by platform, earliest /
+  latest timestamps, would-be-skipped-on-promote count.
+- `POST /api/v2/admin/qr-recovery/promote-staging` — moves staging
+  rows into BOTH `qr_scans` and `qr_click_log_immutable`, deduping
+  on `id`. Idempotent (re-runs are no-ops). Staging NOT cleared.
+- `POST /api/v2/admin/qr-recovery/clear-staging` — wipes staging.
+- `GET /api/v2/admin/qr-recovery/audit` — append-only log of every
+  recovery action, newest first.
+- All endpoints gated on `require_admin`. Every action writes to
+  `qr_recovery_audit` with actor email + timestamp + filename +
+  counters so provenance is permanently traceable.
+
+**Frontend** — new `/app/frontend/src/pages/QRRecovery.jsx`:
+- Drag-and-drop / file-picker for `.json` uploads.
+- Mode toggle (Staging recommended / Direct merge) with inline
+  copy explaining target collections.
+- Dry-run button → counts preview WITHOUT writing.
+- Real import button → writes + refreshes the page panels.
+- Staging panel: rows count, by-platform breakdown, earliest/latest
+  dates, would-be-skipped-on-promote count, Promote + Clear buttons.
+- Recovery audit table (mobile-friendly horizontal scroll).
+- Inline schema reference with copy-pasteable JSON example.
+- Wired into App.js as `/qr/recovery` (admin-only); sidebar link
+  "QR Recovery" with Database icon under the QR section.
+
+**Tests added** `/app/backend/tests/test_qr_recovery.py` — 12/12 pass:
+- Auth gating: anonymous requests get 401 on import + summary.
+- Dry-run writes zero rows.
+- Staging mode writes only to staging, NOT to live collections.
+- Re-import of same payload skips all rows as duplicates.
+- Promote staging moves rows into qr_scans + qr_click_log_immutable.
+- Promote is idempotent (second run writes nothing).
+- Clear-staging wipes.
+- Direct-merge mode dedupes against live collections.
+- Malformed rows (bad platform, bad timestamp, wrong type) are
+  reported individually with reasons, not crashed on.
+- Invalid JSON returns 400 with parse-error details.
+- Top-level-not-an-array returns 400.
+- Staging summary reports correct counts, platform breakdown, and
+  earliest/latest dates.
+- Audit log records every action.
+
+**Smoke-tested live**: page renders on desktop + mobile (390×844),
+sidebar link visible to admin, audit table reflects real entries
+from test runs, dropzone accepts files.
+
+
 ### P1+P2 batch: webview escape, QR base-URL warning, trend magnitudes — SHIPPED 2026-06-04
 
 Three queued improvements landed together:

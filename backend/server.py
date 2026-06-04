@@ -28,6 +28,7 @@ import requests
 from pypdf import PdfReader, PdfWriter
 from pdf_full_rankings import build_full_rankings_pdf
 from qr_tracking import register_qr_routes
+from routes.qr_recovery import register_qr_recovery_routes
 from store_management import register_store_routes
 from snapshot_routes import snapshot_router
 from routes.quarter_settings import quarter_settings_router
@@ -4211,6 +4212,7 @@ async def fix_ppa_values(quarter: str, year: int) -> int:
 
 # Register QR tracking routes BEFORE including in app
 register_qr_routes(api_router, db)
+register_qr_recovery_routes(api_router, db)
 
 # Register store management routes
 register_store_routes(api_router, db)
