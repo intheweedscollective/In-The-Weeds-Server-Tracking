@@ -29,7 +29,7 @@ from pypdf import PdfReader, PdfWriter
 from pdf_full_rankings import build_full_rankings_pdf
 from qr_tracking import register_qr_routes
 from routes.qr_recovery import register_qr_recovery_routes
-from routes.version import version_router
+from routes.version import version_router, write_version_file
 from store_management import register_store_routes
 from snapshot_routes import snapshot_router
 from routes.quarter_settings import quarter_settings_router
@@ -4405,6 +4405,13 @@ async def startup_event():
     from routes.scheduler import run_automated_reconciliation
     
     scheduler.start()
+
+    # Bake the current git SHA into a JSON file that the production
+    # container can read after .git is stripped. Without this the
+    # /api/version endpoint shows "unknown" in prod — exactly what
+    # the operator saw on the live diagnostic copy-out. Idempotent:
+    # written every preview boot, picked up by the next deploy.
+    write_version_file()
 
     # Enforce the (name_normalized, quarter, year) uniqueness contract
     # at the storage layer. This is the structural fix that prevents
