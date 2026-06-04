@@ -11,6 +11,52 @@ Build a comprehensive performance review application for restaurant employees.
 - **Auth**: Emergent-managed Google Auth (whitelist via `ALLOWED_ADMIN_EMAILS`)
 
 ## Current State (2026-05-28)
+### Version chip — SHIPPED 2026-06-04
+
+User asked for a "did my deploy actually land?" indicator after three
+sessions blocked on the stuck deploy pipeline. Now every page shows
+a tiny build-version chip pinned bottom-right (just above the
+Emergent platform badge).
+
+**Backend** `/app/backend/routes/version.py`:
+- `GET /api/version` returns `{sha, sha_full, branch, committed_at,
+  subject, started_at, hostname, env}`.
+- Shells out to `git rev-parse --short HEAD` / `git log -1` from
+  `/app` once, caches in-process (container's commit is immutable
+  for its lifetime). Degrades to `sha="unknown"` if git is stripped
+  in prod.
+- Public — same info we want pasted into support emails. No secrets.
+
+**Frontend** `/app/frontend/src/components/VersionChip.jsx` mounted
+in `App.js`:
+- Collapsed: 28×28 backdrop-blur pill with the short SHA + a
+  coloured env dot (green=prod, amber=preview, slate=other).
+- Click → card with Branch, Commit subject, Committed timestamp,
+  Deployed (process-start) timestamp + hint, Host, Env badge.
+- "Copy diagnostic" button writes a multi-line block to the
+  clipboard (SHA, branch, commit, timestamps, host, page URL, UA)
+  formatted for pasting directly into support@emergent.sh emails.
+- "Refresh" button re-fetches `/api/version` on demand.
+- Polls every 5 minutes so if a deploy lands while the page is
+  open, the SHA updates without a manual reload.
+- Positioned `bottom-14 right-3 z-[60]` so it stacks ABOVE the
+  Emergent platform badge instead of fighting it for clicks.
+
+**Verified live on preview**:
+- `/api/version` returns `sha="97cd509"`, `env="preview"`,
+  `branch="main"`.
+- Chip renders on desktop (1280×800) AND mobile (390×844).
+- Click expands cleanly, all fields populated, Copy works.
+
+**Operator workflow this unlocks**:
+1. User clicks Deploy.
+2. Refreshes `intheweedscollective.com`.
+3. Glances at the chip — if SHA hasn't changed, the deploy is
+   stuck. Click → Copy diagnostic → paste into support email.
+4. If SHA HAS changed, deploy landed and any reported bugs are
+   real bugs, not stale code.
+
+
 ### P2: QR Click Recovery file-upload portal — SHIPPED 2026-06-04
 
 User context: pre-2026-03-31 QR scan events were lost during a
