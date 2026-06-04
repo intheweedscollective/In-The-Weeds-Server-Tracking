@@ -160,7 +160,10 @@ def build_full_rankings_pdf(
 
     headers = ["Rank", "Name", "Trend", "PPA", "LBW", "GLASS",
                "LSC", "CV", "RT", "Metric Bonus", "Score"]
-    col_props = [0.06, 0.13, 0.06, 0.085, 0.085, 0.085,
+    # Trend column widened from 6% → 8% so the magnitude label
+    # ("+19.3") fits next to the polygon without clipping. The 2% was
+    # taken from Name, which had slack at 13%.
+    col_props = [0.06, 0.11, 0.08, 0.085, 0.085, 0.085,
                  0.085, 0.085, 0.085, 0.105, 0.085]
     col_widths = [p * table_width for p in col_props]
     col_widths[-1] += table_width - sum(col_widths)
@@ -225,7 +228,8 @@ def build_full_rankings_pdf(
         row_data = [
             (pos_label,            None,                                      "center", COLORS["text_dark"], True),
             (name,                 None,                                      "left",   COLORS["text_dark"], True),
-            (f"__TREND__:{trend_shape}", None,                                  "center", trend_col,           True),
+            (f"__TREND__:{trend_shape}|{emp.get('score_change')}",
+                                   None,                                      "center", trend_col,           True),
             (f"{ppa_pct:.0f}%",    get_cell_color(ppa_pct,    "percentage"),  "center", None,                False),
             (f"{lbw_pct:.0f}%",    get_cell_color(lbw_pct,    "percentage"),  "center", None,                False),
             (f"{glass_pct:.0f}%",  get_cell_color(glass_pct,  "percentage"),  "center", None,                False),
@@ -261,11 +265,23 @@ def build_full_rankings_pdf(
             if isinstance(text, str) and text.startswith("__TREND__:"):
                 # Polygon-drawn trend indicator: doesn't depend on font
                 # glyph availability. Same approach as PNG generator.
-                shape = text.split(":", 1)[1]
-                cx = x_pos + w / 2
-                cy_mid = cy + row_h / 2
+                # Encoded as "__TREND__:<shape>|<delta>" so we can draw
+                # the magnitude (e.g. "+4.2") right next to the arrow.
+                payload = text.split(":", 1)[1]
+                if "|" in payload:
+                    shape, delta_str = payload.split("|", 1)
+                else:
+                    shape, delta_str = payload, ""
+                try:
+                    delta_val = float(delta_str) if delta_str not in ("", "None") else None
+                except (TypeError, ValueError):
+                    delta_val = None
+                # Polygon sits in the left third of the cell; magnitude
+                # label sits to the right of it, vertically centered.
                 size = min(row_h, 0.18 * inch)
                 half = size / 2
+                cx = x_pos + w * 0.32  # nudge polygon left to make room for the label
+                cy_mid = cy + row_h / 2
                 c.setFillColor(colors.HexColor(override_text or COLORS["trend_up"]))
                 if shape == "up":
                     p = c.beginPath()
@@ -284,6 +300,14 @@ def build_full_rankings_pdf(
                 else:  # flat
                     bar_h = max(1.5, size / 5)
                     c.rect(cx - half, cy_mid - bar_h / 2, size, bar_h, fill=1, stroke=0)
+                # Magnitude — show only when we actually have a prior
+                # value (no prior quarter = blank, not "+0.0").
+                if delta_val is not None and abs(delta_val) >= 0.05:
+                    label = f"{delta_val:+.1f}"
+                    c.setFont("Helvetica-Bold", 8.5)
+                    c.setFillColor(colors.HexColor(override_text or COLORS["trend_up"]))
+                    c.drawString(cx + half + 0.04 * inch,
+                                 cy_mid - 0.05 * inch, label)
             elif align == "center":
                 c.drawCentredString(x_pos + w / 2, ty, str(text))
             elif align == "left":

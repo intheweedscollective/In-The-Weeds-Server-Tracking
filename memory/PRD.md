@@ -11,6 +11,97 @@ Build a comprehensive performance review application for restaurant employees.
 - **Auth**: Emergent-managed Google Auth (whitelist via `ALLOWED_ADMIN_EMAILS`)
 
 ## Current State (2026-05-28)
+### P1+P2 batch: webview escape, QR base-URL warning, trend magnitudes — SHIPPED 2026-06-04
+
+Three queued improvements landed together:
+
+#### P1 — Webview Google login escape
+
+User flow: staff tap a shared link from inside Instagram/Facebook
+DMs, hit "Sign in with Google", Google returns
+`403 disallowed_useragent`, staff give up.
+
+**Fix**:
+- `/app/frontend/src/utils/webviewDetect.js` — UA-based detector
+  flags Facebook (FBAN/FBAV/FBIOS), Messenger, Instagram, LinkedIn,
+  Line, TikTok, KakaoTalk, WeChat, Twitter, Snapchat, Pinterest,
+  Slack by their known tokens; falls back to a generic heuristic
+  for iOS (missing `Safari/`) and Android (`; wv)` marker).
+  Exports `buildEscapeUrl` that returns the platform-correct deep
+  link (`x-safari-https://...` on iOS, `intent://...` on Android).
+- `/app/frontend/src/pages/Login.jsx` — banner above the Sign-in
+  button appears when webview is detected. Sign-in click is
+  intercepted with the banner instead of launching the doomed
+  OAuth flow. Two CTAs: "Open in Safari/Chrome" (deep-link) and
+  "Copy link" (fallback for OSes that refuse the deep-link).
+
+**Verified** with mobile Playwright (390×844):
+- Default iOS Safari UA → no banner (0 count).
+- Instagram UA `Mozilla/5.0 (iPhone; ...) Instagram 295.0.0.31.119`
+  → banner appears, vendor displayed as "Instagram", "Open in
+  Safari" button rendered, current URL printed in monospace below.
+
+#### P2 — QR Codes base-URL warning
+
+User concern: printing 200 QR-code stickers that embed a temporary
+preview URL forever.
+
+**Fix**: `/app/frontend/src/pages/QREmployees.jsx` — banner above
+the Add Employee row. Detects the host portion of
+`REACT_APP_BACKEND_URL`:
+- `intheweedscollective.com` → green "Generating production QR
+  codes" reassurance.
+- `*.preview.emergentagent.com` / `*.emergent.host` → amber
+  warning "Heads up — you're on the preview environment" with
+  explicit "stickers will stop working" copy.
+- Anything else → amber non-production warning.
+Always shows an example tracking URL
+(`${BACKEND_URL}/api/qr/go/{employee_id}`) in monospace so the
+operator can sanity-check before printing.
+
+**Verified**: banner renders on preview with hostname
+`staff-score-engine.preview.emergentagent.com` and the deploy-first
+nudge.
+
+#### P2 — Trend magnitudes on PNG/PDF slide exports
+
+Before: leaderboard PNG showed a bare arrow (`↑` / `↓` / `→` /
+`🔥`). Full-rankings PDF/PNG showed only a polygon arrow that
+defaulted to "up" because nothing populated `score_change`.
+
+**Fix**:
+- `/app/backend/server.py` — new `_attach_score_change(rankings,
+  year, quarter)` helper. Loads the prior quarter's most-recent
+  completed snapshot (`prev_quarter_map`), builds an id-first /
+  name-fallback score lookup, computes signed deltas, sets
+  `trend` ∈ {"up","down","flat"} with a ±0.5 dead-band, and
+  attaches `score_change` (rounded to 1dp) to every rank.
+  Called at the end of `_load_snapshot_first_rankings` so both
+  PNG and PDF endpoints get the data automatically.
+- `/app/backend/yodeck_slides.py` — leaderboard PNG (line ~2207)
+  now renders `f"{arrow} {change:+.1f}"` instead of just the arrow.
+  Sub-0.05 changes drop the noisy "0.0" suffix.
+- `/app/backend/pdf_full_rankings.py` + `png_full_rankings.py` —
+  trend cell encoding extended from `__TREND__:<shape>` to
+  `__TREND__:<shape>|<delta>`. Renderer parses the delta, draws
+  the polygon at 32% of the cell (instead of dead-center), then
+  draws the signed magnitude label to the right of it. Skips the
+  label when `score_change` is None (no prior quarter) or below
+  the ±0.05 noise floor.
+- Trend column widened from 6% → 8% of table width (2% stolen
+  from Name which was 13%) so "+19.3" / "-22.5" labels don't
+  clip at the right edge.
+
+**Verified**: regenerated PNG (294 KB) — vision audit confirmed
+every visible row shows arrow + full magnitude with no clipping
+(samples: "-6.0", "-7.9", "-19.3", "+22.5", "-15.X").
+
+All three changes verified live on the preview environment. 25/26
+existing reconciliation+dedupe tests pass (the one failure is a
+pre-existing stale fixture from a prior session, unaffected by
+today's work).
+
+
 ### P0: Permanent (name_normalized, quarter, year) uniqueness — SHIPPED 2026-06-03
 
 User: "Add the compound index to MongoDB… Swap every insert in your

@@ -2197,23 +2197,31 @@ def generate_leaderboard_slide(
                   fill=score_color, anchor="mm")
         col_x += col_widths[5]
         
-        # Momentum indicator
+        # Momentum indicator — emit arrow + signed point delta so the
+        # viewer sees magnitude, not just direction. "↑ 4.2" reads
+        # better than a bare arrow on a 4K screen at 6ft away.
         if previous_scores:
             prev_score = previous_scores.get(emp.get("employee_id"), 0)
             change = final_score - prev_score
             if change >= 5:
-                trend_text = "🔥"
+                arrow = "🔥"
             elif change > 0:
-                trend_text = "↑"
+                arrow = "↑"
             elif change < -2:
-                trend_text = "↓"
+                arrow = "↓"
             else:
-                trend_text = "→"
+                arrow = "→"
+            # Magnitude rendered as a signed number with one decimal so
+            # tiny drifts (+0.3) stay visible without cluttering the slide.
+            if abs(change) < 0.05:
+                trend_text = arrow  # essentially flat — drop the noisy "0.0"
+            else:
+                trend_text = f"{arrow} {change:+.1f}"
             
             trend_color = LEADERBOARD_COLORS["orange"] if change >= 5 else (
                 LEADERBOARD_COLORS["green"] if change > 0 else (
                 LEADERBOARD_COLORS["red"] if change < -2 else LEADERBOARD_COLORS["textMuted"]))
-            draw.text((col_x + col_widths[6]//2, rank_y), trend_text, font=get_font(20), 
+            draw.text((col_x + col_widths[6]//2, rank_y), trend_text, font=get_font(18), 
                       fill=trend_color, anchor="mm")
     
     # Footer

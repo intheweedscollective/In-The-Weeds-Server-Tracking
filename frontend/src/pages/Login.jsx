@@ -1,7 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { LogIn } from "lucide-react";
+import { LogIn, ExternalLink, Copy, AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
+import { detectWebView, buildEscapeUrl } from "../utils/webviewDetect";
 
 /**
  * Splash / login page. Shown to anyone hitting /login.
@@ -18,6 +20,10 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Detect once on mount — UA doesn't change after page load.
+  const webview = useMemo(() => detectWebView(), []);
+  const [showWebViewWarn, setShowWebViewWarn] = useState(webview.isWebView);
+
   // If they're already signed in, send them straight to wherever they wanted.
   useEffect(() => {
     if (!loading && user) {
@@ -28,11 +34,39 @@ export default function Login() {
   }, [user, loading, navigate, location.search]);
 
   const handleSignIn = () => {
+    // If we're inside a known webview, intercept and force the user
+    // out to their real browser — Google will 403 the OAuth handshake
+    // with `disallowed_useragent` otherwise. We give them a one-tap
+    // escape AND a copyable link as a fallback.
+    if (webview.isWebView) {
+      setShowWebViewWarn(true);
+      return;
+    }
     // Preserve the destination (next param) so AuthCallback can route back.
     const params = new URLSearchParams(location.search);
     const next = params.get("next") || "/";
     const redirectUrl = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
     window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
+  };
+
+  const escapeUrl = useMemo(
+    () => buildEscapeUrl(window.location.href, webview),
+    [webview],
+  );
+
+  const handleEscape = () => {
+    // Try the intent / x-safari URL first. If the OS refuses to handle
+    // it the page just stays — the user can still tap the copy button.
+    window.location.href = escapeUrl;
+  };
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      toast.success("Link copied — paste it into Safari or Chrome.");
+    } catch {
+      toast.error("Couldn't copy. Long-press the link and choose Copy.");
+    }
   };
 
   return (
@@ -87,6 +121,52 @@ export default function Login() {
             <GoogleMark />
             <span>Sign in with Google</span>
           </button>
+
+          {/* In-app webview warning: Google refuses OAuth from FB / IG /
+              SFSafariViewController etc. Without this, the user just
+              hits a confusing 403 disallowed_useragent screen. */}
+          {showWebViewWarn && (
+            <div
+              data-testid="webview-warning"
+              className="mt-5 rounded-2xl border border-amber-500/40 bg-amber-950/30 p-4 text-left"
+            >
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-300 mt-0.5 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-amber-100">
+                    You're inside {webview.vendor || "an in-app browser"}.
+                  </p>
+                  <p className="text-xs text-amber-200/80 mt-1 leading-relaxed">
+                    Google won't allow sign-in from here (it shows a
+                    "disallowed_useragent" error). Tap the button below to
+                    open this page in {webview.isIOS ? "Safari" : webview.isAndroid ? "Chrome" : "your real browser"} and sign in
+                    there instead.
+                  </p>
+                  <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                    <button
+                      data-testid="webview-open-external-btn"
+                      onClick={handleEscape}
+                      className="flex-1 inline-flex items-center justify-center gap-2 rounded-full bg-amber-400 text-amber-950 text-sm font-semibold py-2.5 px-4 hover:bg-amber-300 active:scale-[0.99] transition-all"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      Open in {webview.isIOS ? "Safari" : webview.isAndroid ? "Chrome" : "browser"}
+                    </button>
+                    <button
+                      data-testid="webview-copy-link-btn"
+                      onClick={handleCopyLink}
+                      className="inline-flex items-center justify-center gap-2 rounded-full border border-amber-400/40 text-amber-100 text-sm font-medium py-2.5 px-4 hover:bg-amber-900/30 transition-all"
+                    >
+                      <Copy className="w-4 h-4" />
+                      Copy link
+                    </button>
+                  </div>
+                  <p className="text-[10.5px] text-amber-300/60 mt-2 font-mono break-all">
+                    {window.location.href}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="mt-6 flex items-center justify-center gap-2 text-xs text-slate-500">
             <LogIn className="w-3.5 h-3.5" />

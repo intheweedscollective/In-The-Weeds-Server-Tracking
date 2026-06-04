@@ -2279,7 +2279,75 @@ async def _load_snapshot_first_rankings(
         if src.get("nps_manual_override"):
             rank["nps_manual_override"] = True
 
+    # Attach `score_change` + `trend` by diffing against the immediately
+    # prior quarter's snapshot. The PNG/PDF generators use this for the
+    # trend-arrow column so viewers see magnitude alongside direction.
+    await _attach_score_change(rankings, year, quarter.upper())
+
     return rankings, settings
+
+
+async def _attach_score_change(rankings: List[dict], year: int, quarter: str) -> None:
+    """Mutate `rankings` in place to add a numeric `score_change` and
+    a string `trend` ('up' / 'down' / 'flat') by diffing each rank's
+    `total_score` against the prior quarter's score for the same
+    employee (matched by id, falling back to canonical name).
+
+    Looks up the most recent completed snapshot in the prior quarter.
+    If there is none — e.g. Q1 with no Q4 data — every rank gets
+    `score_change=None` and `trend="flat"`, and the renderers skip
+    drawing the magnitude. Idempotent and safe to call repeatedly."""
+    prev_quarter_map = {"Q1": "Q4", "Q2": "Q1", "Q3": "Q2", "Q4": "Q3"}
+    prev_q = prev_quarter_map.get(quarter, "Q4")
+    prev_y = year - 1 if quarter == "Q1" else year
+
+    prev_snap = await db.snapshot_workflow.find_one(
+        {"year": prev_y, "quarter": prev_q, "status": "completed"},
+        {"_id": 0, "employees": 1, "rows": 1},
+        sort=[("effective_date", -1), ("completed_at", -1)],
+    )
+    if not prev_snap:
+        for r in rankings:
+            r.setdefault("score_change", None)
+            r.setdefault("trend", "flat")
+        return
+
+    prev_by_id: Dict[str, float] = {}
+    prev_by_name: Dict[str, float] = {}
+    for e in (prev_snap.get("employees") or []):
+        eid = e.get("id")
+        score = (e.get("total_score") or e.get("pre_dar_score") or 0) or 0
+        if eid:
+            prev_by_id[eid] = float(score)
+        nm = (e.get("name") or "").strip().lower()
+        if nm:
+            prev_by_name[nm] = float(score)
+    # Snapshot rows[] sometimes carry frozen scores for legacy snaps.
+    for row in (prev_snap.get("rows") or []):
+        eid = row.get("employee_id")
+        score = row.get("total_score") or row.get("pre_dar_score") or 0
+        if eid and eid not in prev_by_id and score:
+            prev_by_id[eid] = float(score)
+        nm = (row.get("frozen_display_name") or row.get("name") or "").strip().lower()
+        if nm and nm not in prev_by_name and score:
+            prev_by_name[nm] = float(score)
+
+    for r in rankings:
+        rid = r.get("id") or r.get("employee_id")
+        rnm = (r.get("name") or "").strip().lower()
+        prev = prev_by_id.get(rid) if rid in prev_by_id else prev_by_name.get(rnm)
+        if prev is None:
+            r.setdefault("score_change", None)
+            r.setdefault("trend", "flat")
+            continue
+        delta = float(r.get("total_score") or 0) - prev
+        r["score_change"] = round(delta, 1)
+        if delta > 0.5:
+            r["trend"] = "up"
+        elif delta < -0.5:
+            r["trend"] = "down"
+        else:
+            r["trend"] = "flat"
 
 
 @api_router.get("/v2/full-rankings/{year}/{quarter}/snapshot-png")
