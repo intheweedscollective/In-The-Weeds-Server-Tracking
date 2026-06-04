@@ -11,6 +11,64 @@ Build a comprehensive performance review application for restaurant employees.
 - **Auth**: Emergent-managed Google Auth (whitelist via `ALLOWED_ADMIN_EMAILS`)
 
 ## Current State (2026-05-28)
+### P0: Orphan snapshot ref card type — SHIPPED 2026-06-04
+
+User report: "Data reconciliation not functioning appropriately."
+Screenshot showed Trust Score dashboard reporting **16 P0 orphaned
+snapshot refs** as deploy blockers — but the Data Reconciliation
+queue showed **0 active cards**. The operator had no way to act on
+the issue from the adjudication portal.
+
+**Root cause**: my v1 of `reconciliation_service.py` only built
+`metric_drift`, `alias_collision`, and `legacy_duplicate` cards.
+Orphan snapshot refs (a `snapshot.rows[i].employee_id` that no
+canonical employee resolves to via id OR `legacy_ids[]`) were
+detected by the Trust gate's `EmployeeValidator.check_orphaned_snapshot_refs`
+but invisible to the reconciliation portal.
+
+**Fix**:
+- New card builder `_build_orphan_snapshot_conflicts()` in
+  `reconciliation_service.py`. Mirrors the Trust gate's logic
+  EXACTLY: builds resolvable_ids from `employees.{id, legacy_ids[]}`,
+  scans ALL snapshots, dedupes per `(snapshot_id, missing_employee_id)`
+  tuple. Result: 1:1 alignment between Trust Score and Queue counts
+  (verified: integrity says 16 → queue shows 16).
+- For each orphan, attempts to find a name-match canonical (by
+  `name`, `display_name`, `report_name`, or any alias) and surfaces
+  it as `source.suggested_canonical_id` / `_name`.
+- Severity 100% for current-snapshot orphans, 75% for historical.
+- New resolve actions `relink_orphan` (rewrites the snapshot row's
+  `employee_id` + `frozen_display_name` to the suggested or
+  operator-overridden canonical) and `remove_orphan` (drops the row
+  entirely; safe because orphan placeholder rows carry no score data
+  — surfaced in the card UI).
+- Frontend: new `isOrphan` branch in `DataReconciliation.jsx` with
+  fuchsia "orphan snapshot ref" badge, Suggested-Canonical column,
+  source block showing snapshot name + dead UUID prefix + null-score
+  reassurance ("✓ Row has no score data — safe to remove"), and
+  two action buttons (Relink disabled when no suggestion).
+
+**End-to-end verified live on preview**:
+- Queue: 16 orphan cards (matches integrity 16).
+- Relinked one (Cory West) → queue 15, integrity 15, snapshot row
+  rewritten from dead UUID to canonical UUID.
+- Removed one → queue 14, integrity 14, row dropped from snapshot.
+- Audit log has one row per resolution.
+
+**Tests added** `/app/backend/tests/test_orphan_snapshot_ref.py` —
+6/6 pass:
+- `test_orphan_card_surfaces_with_suggestion`
+- `test_orphan_count_matches_integrity` (the 1:1 alignment that
+  closes the original user complaint)
+- `test_relink_orphan_rewrites_snapshot_row`
+- `test_relink_orphan_with_explicit_target` (override suggestion)
+- `test_remove_orphan_drops_row`
+- `test_resolve_writes_audit_entry`
+
+All other reconciliation tests still pass (19/20 — the 1 failure is
+the pre-existing Kahiaulani stale-fixture from prior sessions).
+
+
 ### Version chip — SHIPPED 2026-06-04
 
 User asked for a "did my deploy actually land?" indicator after three

@@ -32,6 +32,8 @@ const ACTIONS = {
   MERGE:   "merge_into",
   DELETE:  "delete_legacy",
   PROMOTE: "promote_canonical",
+  RELINK:  "relink_orphan",
+  REMOVE:  "remove_orphan",
 };
 
 const ACTION_LABEL = {
@@ -43,6 +45,8 @@ const ACTION_LABEL = {
   merge_into:         "Merge into canonical",
   delete_legacy:      "Delete legacy row",
   promote_canonical:  "Promote to new canonical",
+  relink_orphan:      "Relink to canonical",
+  remove_orphan:      "Remove orphan row",
 };
 
 const formatValue = (v) => {
@@ -180,6 +184,7 @@ export default function DataReconciliation() {
   const renderCard = (card, opts = {}) => {
     const isAlias = card.kind === "alias_collision";
     const isLegacy = card.kind === "legacy_duplicate";
+    const isOrphan = card.kind === "orphan_snapshot_ref";
     return (
       <div
         key={card.conflict_id}
@@ -195,7 +200,7 @@ export default function DataReconciliation() {
               <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-700/70 text-slate-300 font-mono">
                 {card.field}
               </span>
-              {!isLegacy && (
+              {!isLegacy && !isOrphan && (
                 <span
                   className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${
                     card.severity_pct >= 50
@@ -218,6 +223,11 @@ export default function DataReconciliation() {
                   legacy duplicate
                 </span>
               )}
+              {isOrphan && (
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-fuchsia-900/50 text-fuchsia-200 border border-fuchsia-700">
+                  orphan snapshot ref
+                </span>
+              )}
               {opts.deferred && (
                 <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-900/50 text-blue-200 border border-blue-700">
                   deferred
@@ -227,13 +237,13 @@ export default function DataReconciliation() {
             <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
               <div className="rounded border border-slate-700 bg-slate-800/40 p-2">
                 <div className="text-[11px] text-slate-400 uppercase tracking-wide">
-                  {isLegacy ? "V2 record name" : "Stored (canonical)"}
+                  {isLegacy ? "V2 record name" : isOrphan ? "Frozen display name" : "Stored (canonical)"}
                 </div>
                 <div className="text-rose-300 font-mono break-all" data-testid={`stored-${card.conflict_id}`}>
                   {formatValue(card.stored_value)}
                 </div>
               </div>
-              {!isAlias && !isLegacy && (
+              {!isAlias && !isLegacy && !isOrphan && (
                 <div className="rounded border border-slate-700 bg-slate-800/40 p-2">
                   <div className="text-[11px] text-slate-400 uppercase tracking-wide">Expected (from snapshot)</div>
                   <div className="text-emerald-300 font-mono break-all" data-testid={`snapshot-${card.conflict_id}`}>
@@ -241,7 +251,7 @@ export default function DataReconciliation() {
                   </div>
                 </div>
               )}
-              {isLegacy && (
+              {(isLegacy || isOrphan) && (
                 <div className="rounded border border-slate-700 bg-slate-800/40 p-2">
                   <div className="text-[11px] text-slate-400 uppercase tracking-wide">Suggested canonical</div>
                   <div className="text-emerald-300 font-mono break-all" data-testid={`suggest-${card.conflict_id}`}>
@@ -274,6 +284,24 @@ export default function DataReconciliation() {
                         </div>
                       )}
                     </>
+                  ) : isOrphan ? (
+                    <>
+                      <div>
+                        <b>{card.raw_inputs?.snapshot_name || "—"}</b>
+                        <span className="text-slate-500"> · {card.raw_inputs?.snapshot_quarter} {card.raw_inputs?.snapshot_year}</span>
+                      </div>
+                      <div className="text-slate-500 mt-1 text-[11px]">{card.source?.reason}</div>
+                      <div className="text-slate-500 mt-1 font-mono text-[10.5px]">
+                        dead id: {String(card.raw_inputs?.missing_employee_id || "").slice(0, 8)}…
+                        {' · row score:'} {formatValue(card.raw_inputs?.row_total_score)}
+                        {' · ppa:'} {formatValue(card.raw_inputs?.row_ppa)}
+                      </div>
+                      {!card.raw_inputs?.row_total_score && (
+                        <div className="text-[10.5px] text-emerald-400/80 mt-1">
+                          ✓ Row has no score data — safe to remove without losing historical numbers.
+                        </div>
+                      )}
+                    </>
                   ) : (
                     <>
                       <div>{card.source?.snapshot_name || "—"}</div>
@@ -299,17 +327,19 @@ export default function DataReconciliation() {
         </div>
 
         <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-800">
-          <Button
-            variant="outline"
-            size="sm"
-            className="border-slate-600 text-slate-200 hover:bg-slate-800"
-            onClick={() => openConfirm(card, ACTIONS.KEEP)}
-            data-testid={`btn-keep-${card.conflict_id}`}
-          >
-            <Check className="w-3.5 h-3.5 mr-1.5" />
-            Keep Stored
-          </Button>
-          {!isAlias && !isLegacy && (
+          {!isOrphan && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-slate-600 text-slate-200 hover:bg-slate-800"
+              onClick={() => openConfirm(card, ACTIONS.KEEP)}
+              data-testid={`btn-keep-${card.conflict_id}`}
+            >
+              <Check className="w-3.5 h-3.5 mr-1.5" />
+              Keep Stored
+            </Button>
+          )}
+          {!isAlias && !isLegacy && !isOrphan && (
             <Button
               variant="outline"
               size="sm"
@@ -321,7 +351,7 @@ export default function DataReconciliation() {
               Accept Snapshot
             </Button>
           )}
-          {!isAlias && !isLegacy && (
+          {!isAlias && !isLegacy && !isOrphan && (
             <Button
               variant="outline"
               size="sm"
@@ -376,6 +406,36 @@ export default function DataReconciliation() {
               >
                 <X className="w-3.5 h-3.5 mr-1.5" />
                 Delete legacy
+              </Button>
+            </>
+          )}
+          {isOrphan && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-emerald-700 text-emerald-200 hover:bg-emerald-950/40"
+                onClick={() => openConfirm(card, ACTIONS.RELINK)}
+                data-testid={`btn-relink-${card.conflict_id}`}
+                disabled={!card.source?.suggested_canonical_id}
+                title={
+                  card.source?.suggested_canonical_id
+                    ? "Rewrite the snapshot row to point at the suggested canonical employee"
+                    : "No canonical match found — use Remove orphan instead"
+                }
+              >
+                <ChevronRight className="w-3.5 h-3.5 mr-1.5" />
+                Relink to canonical
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-rose-700 text-rose-200 hover:bg-rose-950/40"
+                onClick={() => openConfirm(card, ACTIONS.REMOVE)}
+                data-testid={`btn-remove-${card.conflict_id}`}
+              >
+                <X className="w-3.5 h-3.5 mr-1.5" />
+                Remove orphan row
               </Button>
             </>
           )}
