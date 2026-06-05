@@ -2617,8 +2617,26 @@ async def _hydrate_snapshot_employees(db, snapshot: Dict[str, Any]) -> List[Dict
                 if not overlay:
                     continue
                 if v2.get("id"):
+                    # SOURCE-OF-TRUTH PRECEDENCE (fixed 2026-06-05):
+                    #   employees_v2 row > canonical.current_metrics
+                    # Reason: POS / LSC / RT uploads write authoritative
+                    # quarter scoring data into `employees_v2` rows.
+                    # `employees.current_metrics` is a sync mirror that
+                    # has gone stale on at least 3 known canonicals
+                    # (Jose / Diane / Kitti — operator-reported, see
+                    # canonical_metrics_drift cards in the data
+                    # reconciliation portal). When canonical wins, the
+                    # slide renders the same employee twice with
+                    # different scores (one from v2, one from stale
+                    # canonical), and the stale row has insane
+                    # per-guest ratios because canonical.guests = 50
+                    # vs v2.guests = 775.
+                    #
+                    # `{**existing, **overlay}` = canonical fills in
+                    # fields v2 didn't include (CV / NPS sometimes), v2
+                    # wins for everything it carries.
                     existing = canonical_overlay_by_id.get(v2["id"]) or {}
-                    merged = {**overlay, **existing}
+                    merged = {**existing, **overlay}
                     canonical_overlay_by_id[v2["id"]] = merged
                 # Index by the v2 row's own name + display_name AND by
                 # every canonical-known alias that resolves to the same
@@ -2635,17 +2653,20 @@ async def _hydrate_snapshot_employees(db, snapshot: Dict[str, Any]) -> List[Dict
                     None,
                 )
                 if v2_canonical_id:
-                    # Also register by the canonical id directly.
+                    # Same precedence rule — v2 wins, canonical fills gaps.
                     existing = canonical_overlay_by_id.get(v2_canonical_id) or {}
-                    canonical_overlay_by_id[v2_canonical_id] = {**overlay, **existing}
+                    canonical_overlay_by_id[v2_canonical_id] = {**existing, **overlay}
                     # And spread the overlay across every alias name
                     # known for that canonical employee.
                     for alias_key in name_to_canonical_aliases.get(v2_canonical_id, []):
                         v2_names.add(alias_key)
                 for n in v2_names:
                     if n:
+                        # v2 wins here too — name-based overlay was the
+                        # OTHER path that surfaced the stale canonical
+                        # numbers on the slide.
                         existing = canonical_overlay_by_name.get(n) or {}
-                        canonical_overlay_by_name[n] = {**overlay, **existing}
+                        canonical_overlay_by_name[n] = {**existing, **overlay}
 
     # 3. Filter terminated/merged + stamp canonical_id
     deleted_names = {(n or "").strip().lower()
@@ -2708,6 +2729,52 @@ async def _hydrate_snapshot_employees(db, snapshot: Dict[str, Any]) -> List[Dict
             current = emp.get(k)
             if current in (None, 0, 0.0):
                 emp[k] = v
+
+    # 4b. Deduplicate by canonical_id (fall back to name when no
+    # canonical_id is set). Snapshots produced before the canonical
+    # FK-join cleanup occasionally contain two rows for the same
+    # person — typically because a rename / merge left an orphan
+    # snapshot row pointing at a dead UUID AND a fresh row pointing
+    # at the new canonical id. Both end up resolving to the same
+    # canonical, but the slide renderer shows them as two separate
+    # leaderboard entries (operator reported "Diane appears twice"
+    # and "Jose appears twice with one row having absurd 1944% LBW").
+    #
+    # Resolution: keep the highest-scored row for each canonical
+    # identity. Highest score is the right tiebreaker — orphan rows
+    # left over from a rename either have null score (rendered as 0)
+    # or stale uncorrected data, and the correctly-recomputed row
+    # always carries the real numbers.
+    seen_by_identity: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    deduped: List[Dict[str, Any]] = []
+    for emp in filtered:
+        identity_key = (
+            "cid:" + emp["canonical_id"]
+            if emp.get("canonical_id")
+            else "name:" + (emp.get("name") or emp.get("display_name") or "").strip().lower()
+        )
+        if not identity_key or identity_key == "name:":
+            deduped.append(emp)
+            continue
+        prior = seen_by_identity.get(identity_key)
+        if prior is None:
+            seen_by_identity[(identity_key, "")] = emp
+            seen_by_identity[identity_key] = emp
+            deduped.append(emp)
+            continue
+        # We've already kept a row with this identity. Compare scores
+        # and swap if the new row is better — modify in place so we
+        # don't re-sort the deduped list.
+        prior_score = (prior.get("final_score")
+                       or prior.get("total_score") or 0) or 0
+        new_score = (emp.get("final_score")
+                     or emp.get("total_score") or 0) or 0
+        if new_score > prior_score:
+            # Replace prior's fields with the better row's content
+            # (in place to preserve list ordering — we sort below).
+            prior.clear()
+            prior.update(emp)
+    filtered = deduped
 
     # 5. Sort by tier then score (same as /current-rankings)
     TIER_ORDER = {

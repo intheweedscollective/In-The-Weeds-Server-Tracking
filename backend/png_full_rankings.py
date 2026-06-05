@@ -421,6 +421,7 @@ def build_full_rankings_png(
     quarter: str,
     year: int,
     thresholds: Dict[str, float] | None = None,
+    prior_meta: Dict[str, Any] | None = None,
 ) -> bytes:
     """Render the Server Performance Snapshot as a 1920×1080 PNG (16:9)."""
     img = Image.new("RGB", (SLIDE_WIDTH, SLIDE_HEIGHT), REF_COLORS["background"])
@@ -428,6 +429,33 @@ def build_full_rankings_png(
 
     _draw_sidebar(img, draw, quarter)
     _draw_table(draw, rankings)
+
+    # Trend reference caption — answers "what does +4.2 compare to?"
+    # The operator asked for this directly: the trend arrows lacked a
+    # citation, so a viewer had no idea whether the delta was vs last
+    # week, last quarter, or all-time. Caption sits below the table at
+    # 9.5pt grey so it's discoverable but doesn't compete with data.
+    if prior_meta and prior_meta.get("available"):
+        date_str = (
+            (prior_meta.get("effective_date") or
+             prior_meta.get("completed_at") or "")[:10]
+            or "—"
+        )
+        caption = (
+            f"Trend column compares vs prior snapshot:  "
+            f"{prior_meta.get('quarter', '')} {prior_meta.get('year', '')}  "
+            f"· {prior_meta.get('snapshot_name') or 'snapshot'}  · {date_str}"
+        )
+    else:
+        caption = "Trend column: no prior-quarter snapshot available for comparison"
+    _draw_text(
+        draw,
+        (SLIDE_WIDTH // 2, SLIDE_HEIGHT - 28),
+        caption,
+        _load_font(16, False),
+        REF_COLORS.get("text_white", "#A0AEC0"),
+        anchor="mm",
+    )
 
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)

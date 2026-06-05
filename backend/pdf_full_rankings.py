@@ -83,6 +83,7 @@ def build_full_rankings_pdf(
     quarter: str,
     year: int,
     thresholds: Dict[str, float],
+    prior_meta: Dict[str, Any] | None = None,
 ) -> bytes:
     buffer = io.BytesIO()
     page_width = 16 * inch
@@ -315,6 +316,24 @@ def build_full_rankings_pdf(
             else:
                 c.drawRightString(x_pos + w - 0.08 * inch, ty, str(text))
             x_pos += w
+
+    # Trend reference caption — answers "what does +4.2 compare to?"
+    # Same content as the PNG renderer for consistency.
+    if prior_meta and prior_meta.get("available"):
+        date_str = (
+            (prior_meta.get("effective_date") or
+             prior_meta.get("completed_at") or "")[:10] or "—"
+        )
+        caption = (
+            f"Trend column compares vs prior snapshot:  "
+            f"{prior_meta.get('quarter', '')} {prior_meta.get('year', '')}  "
+            f"· {prior_meta.get('snapshot_name') or 'snapshot'}  · {date_str}"
+        )
+    else:
+        caption = "Trend column: no prior-quarter snapshot available for comparison"
+    c.setFont("Helvetica", 8.5)
+    c.setFillColor(colors.HexColor(COLORS.get("text_muted", "#A0AEC0")))
+    c.drawCentredString(page_width / 2, 0.25 * inch, caption)
 
     c.save()
     buffer.seek(0)

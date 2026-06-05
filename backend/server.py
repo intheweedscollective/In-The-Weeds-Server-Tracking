@@ -2284,12 +2284,14 @@ async def _load_snapshot_first_rankings(
     # Attach `score_change` + `trend` by diffing against the immediately
     # prior quarter's snapshot. The PNG/PDF generators use this for the
     # trend-arrow column so viewers see magnitude alongside direction.
-    await _attach_score_change(rankings, year, quarter.upper())
+    prior_meta = await _attach_score_change(rankings, year, quarter.upper())
 
-    return rankings, settings
+    return rankings, settings, prior_meta
 
 
-async def _attach_score_change(rankings: List[dict], year: int, quarter: str) -> None:
+async def _attach_score_change(
+    rankings: List[dict], year: int, quarter: str,
+) -> Dict[str, Any]:
     """Mutate `rankings` in place to add a numeric `score_change` and
     a string `trend` ('up' / 'down' / 'flat') by diffing each rank's
     `total_score` against the prior quarter's score for the same
@@ -2298,21 +2300,27 @@ async def _attach_score_change(rankings: List[dict], year: int, quarter: str) ->
     Looks up the most recent completed snapshot in the prior quarter.
     If there is none — e.g. Q1 with no Q4 data — every rank gets
     `score_change=None` and `trend="flat"`, and the renderers skip
-    drawing the magnitude. Idempotent and safe to call repeatedly."""
+    drawing the magnitude.
+
+    Returns a `prior_meta` dict with the prior snapshot's identity so
+    the PNG/PDF renderers can cite it as the trend reference point
+    on the slide ("Trend vs Q1 2026 snapshot · 2026-04-12").
+    Returns `{"available": False}` when no prior snapshot exists."""
     prev_quarter_map = {"Q1": "Q4", "Q2": "Q1", "Q3": "Q2", "Q4": "Q3"}
     prev_q = prev_quarter_map.get(quarter, "Q4")
     prev_y = year - 1 if quarter == "Q1" else year
 
     prev_snap = await db.snapshot_workflow.find_one(
         {"year": prev_y, "quarter": prev_q, "status": "completed"},
-        {"_id": 0, "employees": 1, "rows": 1},
+        {"_id": 0, "employees": 1, "rows": 1, "name": 1,
+         "effective_date": 1, "completed_at": 1, "id": 1},
         sort=[("effective_date", -1), ("completed_at", -1)],
     )
     if not prev_snap:
         for r in rankings:
             r.setdefault("score_change", None)
             r.setdefault("trend", "flat")
-        return
+        return {"available": False}
 
     prev_by_id: Dict[str, float] = {}
     prev_by_name: Dict[str, float] = {}
@@ -2351,6 +2359,16 @@ async def _attach_score_change(rankings: List[dict], year: int, quarter: str) ->
         else:
             r["trend"] = "flat"
 
+    return {
+        "available":      True,
+        "snapshot_id":    prev_snap.get("id"),
+        "snapshot_name":  prev_snap.get("name"),
+        "quarter":        prev_q,
+        "year":           prev_y,
+        "effective_date": prev_snap.get("effective_date"),
+        "completed_at":   prev_snap.get("completed_at"),
+    }
+
 
 @api_router.get("/v2/full-rankings/{year}/{quarter}/snapshot-png")
 async def download_full_rankings_snapshot_png(year: int, quarter: str):
@@ -2363,7 +2381,7 @@ async def download_full_rankings_snapshot_png(year: int, quarter: str):
     """
     from png_full_rankings import build_full_rankings_png
 
-    rankings, settings = await _load_snapshot_first_rankings(year, quarter)
+    rankings, settings, prior_meta = await _load_snapshot_first_rankings(year, quarter)
 
     png_bytes = build_full_rankings_png(
         rankings=rankings,
@@ -2373,6 +2391,7 @@ async def download_full_rankings_snapshot_png(year: int, quarter: str):
             "a_min": settings.a_server_min_score,
             "b_min": settings.b_server_min_score,
         },
+        prior_meta=prior_meta,
     )
 
     filename = f"Server_Performance_Snapshot_{quarter.upper()}_{year}.png"
@@ -2403,7 +2422,7 @@ async def preview_full_rankings_snapshot_png(
     from PIL import Image as PILImage
     from png_full_rankings import build_full_rankings_png
 
-    rankings, settings = await _load_snapshot_first_rankings(year, quarter)
+    rankings, settings, prior_meta = await _load_snapshot_first_rankings(year, quarter)
 
     png_bytes = build_full_rankings_png(
         rankings=rankings,
@@ -2413,6 +2432,7 @@ async def preview_full_rankings_snapshot_png(
             "a_min": settings.a_server_min_score,
             "b_min": settings.b_server_min_score,
         },
+        prior_meta=prior_meta,
     )
 
     # Clamp preview width to a sane range, then downscale preserving 16:9.
@@ -2448,7 +2468,7 @@ async def download_full_rankings_snapshot_pdf(year: int, quarter: str):
     on the active snapshot always render correctly. `employees_v2` is
     only used as a fallback when no snapshot exists.
     """
-    rankings, settings = await _load_snapshot_first_rankings(year, quarter)
+    rankings, settings, prior_meta = await _load_snapshot_first_rankings(year, quarter)
 
     pdf_bytes = build_full_rankings_pdf(
         rankings=rankings,
@@ -2458,6 +2478,7 @@ async def download_full_rankings_snapshot_pdf(year: int, quarter: str):
             "a_min": settings.a_server_min_score,
             "b_min": settings.b_server_min_score,
         },
+        prior_meta=prior_meta,
     )
 
     filename = f"Server_Performance_Snapshot_{quarter.upper()}_{year}.pdf"
