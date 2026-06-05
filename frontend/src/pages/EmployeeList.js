@@ -349,7 +349,33 @@ export default function EmployeeList() {
       setShowEditModal(false);
       fetchEmployees();
     } catch (error) {
-      toast.error(error.response?.data?.detail || "Error saving employee");
+      // Surface the real failure mode instead of a generic "Error saving
+      // employee". Production has been hitting this and the old generic
+      // toast swallowed every clue. We now show:
+      //   * server detail if FastAPI returned one,
+      //   * HTTP status,
+      //   * the validation errors array if Pydantic rejected the body,
+      //   * a network-error hint if the request never reached the server.
+      let msg = "Error saving employee";
+      if (error.response) {
+        const status = error.response.status;
+        const body = error.response.data;
+        let detail = body?.detail;
+        if (Array.isArray(detail)) {
+          // Pydantic 422 — pull out the first useful field error.
+          detail = detail
+            .map((d) => `${(d.loc || []).slice(1).join(".") || "field"}: ${d.msg}`)
+            .join("; ");
+        }
+        msg = `${status} — ${detail || body?.message || error.response.statusText || "server rejected the update"}`;
+      } else if (error.request) {
+        msg = "No response from server. Check your connection and try again.";
+      } else if (error.message) {
+        msg = error.message;
+      }
+      toast.error(msg, { duration: 8000, description: `PUT /v2/employees/${editingEmployee?.id || "new"}` });
+      // Surface in console too so we get a clickable stack trace.
+      console.error("[EmployeeList] saveEmployee failed", error);
     } finally {
       setSaving(false);
     }

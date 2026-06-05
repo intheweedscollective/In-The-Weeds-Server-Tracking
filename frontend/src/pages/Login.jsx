@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { LogIn, ExternalLink, Copy, AlertTriangle } from "lucide-react";
+import { LogIn, Copy, AlertTriangle, Share2, Check } from "lucide-react";
 import { toast } from "sonner";
-import { detectWebView, buildEscapeUrl } from "../utils/webviewDetect";
+import { detectWebView, openInSystemBrowser } from "../utils/webviewDetect";
 
 /**
  * Splash / login page. Shown to anyone hitting /login.
@@ -49,23 +49,41 @@ export default function Login() {
     window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
   };
 
-  const escapeUrl = useMemo(
-    () => buildEscapeUrl(window.location.href, webview),
-    [webview],
-  );
+  const escapeUrl = window.location.href;
+  const [copied, setCopied] = useState(false);
 
   const handleEscape = () => {
-    // Try the intent / x-safari URL first. If the OS refuses to handle
-    // it the page just stays — the user can still tap the copy button.
-    window.location.href = escapeUrl;
+    // Try a real popup first — most embedded webviews surface this as
+    // a native "Open in Safari / Open in Chrome" system prompt instead
+    // of trying to handle a custom URL scheme themselves. The previous
+    // approach used `x-safari-https://` which Apple has restricted in
+    // iOS 14+ — the user reported a "Failed to load" page when their
+    // webview tried to navigate to that scheme directly.
+    const res = openInSystemBrowser(escapeUrl);
+    if (!res.attempted) {
+      toast.error(
+        "Couldn't open a new tab. Tap the share icon (↑) at the top, then 'Open in Safari'.",
+        { duration: 8000 },
+      );
+    }
   };
 
   const handleCopyLink = async () => {
     try {
-      await navigator.clipboard.writeText(window.location.href);
-      toast.success("Link copied — paste it into Safari or Chrome.");
+      await navigator.clipboard.writeText(escapeUrl);
+      setCopied(true);
+      toast.success("Link copied. Now open Safari or Chrome and paste.");
+      setTimeout(() => setCopied(false), 2500);
     } catch {
-      toast.error("Couldn't copy. Long-press the link and choose Copy.");
+      // Some webviews (including Emergent's own preview viewer) block
+      // clipboard access for security. Fall back to a prompt the user
+      // can long-press and copy from.
+      try {
+        // eslint-disable-next-line no-alert
+        window.prompt("Long-press to select, then Copy:", escapeUrl);
+      } catch {
+        toast.error("Long-press the URL below and choose Copy.");
+      }
     }
   };
 
@@ -123,48 +141,75 @@ export default function Login() {
           </button>
 
           {/* In-app webview warning: Google refuses OAuth from FB / IG /
-              SFSafariViewController etc. Without this, the user just
-              hits a confusing 403 disallowed_useragent screen. */}
+              SFSafariViewController / Emergent's preview viewer etc.
+              Without this, the user hits a "disallowed_useragent" or
+              "Failed to load" error. iOS deep-link schemes proved
+              unreliable in v1 — Copy-Link is now the primary path,
+              with the system share-sheet as the explicit fallback. */}
           {showWebViewWarn && (
             <div
               data-testid="webview-warning"
               className="mt-5 rounded-2xl border border-amber-500/40 bg-amber-950/30 p-4 text-left"
             >
-              <div className="flex items-start gap-3">
+              <div className="flex items-start gap-3 mb-3">
                 <AlertTriangle className="w-5 h-5 text-amber-300 mt-0.5 shrink-0" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-amber-100">
                     You're inside {webview.vendor || "an in-app browser"}.
                   </p>
                   <p className="text-xs text-amber-200/80 mt-1 leading-relaxed">
-                    Google won't allow sign-in from here (it shows a
-                    "disallowed_useragent" error). Tap the button below to
-                    open this page in {webview.isIOS ? "Safari" : webview.isAndroid ? "Chrome" : "your real browser"} and sign in
-                    there instead.
-                  </p>
-                  <div className="mt-3 flex flex-col sm:flex-row gap-2">
-                    <button
-                      data-testid="webview-open-external-btn"
-                      onClick={handleEscape}
-                      className="flex-1 inline-flex items-center justify-center gap-2 rounded-full bg-amber-400 text-amber-950 text-sm font-semibold py-2.5 px-4 hover:bg-amber-300 active:scale-[0.99] transition-all"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                      Open in {webview.isIOS ? "Safari" : webview.isAndroid ? "Chrome" : "browser"}
-                    </button>
-                    <button
-                      data-testid="webview-copy-link-btn"
-                      onClick={handleCopyLink}
-                      className="inline-flex items-center justify-center gap-2 rounded-full border border-amber-400/40 text-amber-100 text-sm font-medium py-2.5 px-4 hover:bg-amber-900/30 transition-all"
-                    >
-                      <Copy className="w-4 h-4" />
-                      Copy link
-                    </button>
-                  </div>
-                  <p className="text-[10.5px] text-amber-300/60 mt-2 font-mono break-all">
-                    {window.location.href}
+                    Google blocks sign-in from here. Use one of the two paths below to
+                    open this page in {webview.isIOS ? "Safari" : webview.isAndroid ? "Chrome" : "your real browser"} and sign in there.
                   </p>
                 </div>
               </div>
+
+              {/* Path A — primary, most reliable */}
+              <div className="rounded-xl bg-slate-900/60 border border-amber-500/30 p-3 mb-2">
+                <div className="text-[10.5px] uppercase tracking-wider text-amber-300/80 font-semibold mb-1.5">
+                  Path A · Copy + paste (most reliable)
+                </div>
+                <button
+                  data-testid="webview-copy-link-btn"
+                  onClick={handleCopyLink}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-amber-400 text-amber-950 text-sm font-bold py-3 px-4 hover:bg-amber-300 active:scale-[0.99] transition-all"
+                >
+                  {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  {copied ? "Copied — now open Safari" : "Copy login link"}
+                </button>
+                <p className="text-[11px] text-amber-200/70 mt-2 leading-relaxed">
+                  After tapping, open <b>{webview.isIOS ? "Safari" : webview.isAndroid ? "Chrome" : "your browser"}</b>, paste into the address bar, and sign in.
+                </p>
+              </div>
+
+              {/* Path B — iOS-specific share-sheet hint */}
+              {webview.isIOS && (
+                <div className="rounded-xl bg-slate-900/40 border border-slate-700 p-3 mb-2">
+                  <div className="text-[10.5px] uppercase tracking-wider text-slate-300/80 font-semibold mb-1.5 flex items-center gap-1.5">
+                    <Share2 className="w-3 h-3" />
+                    Path B · Use the share menu
+                  </div>
+                  <p className="text-[11.5px] text-slate-200 leading-relaxed">
+                    Tap the <b>share icon (↑)</b> at the top of this preview, then choose
+                    <b> "Open in Safari"</b> from the system menu. That opens this exact
+                    page in real Safari where Google sign-in will work.
+                  </p>
+                </div>
+              )}
+
+              {/* Path C — best-effort programmatic, kept as a fallback. */}
+              <button
+                data-testid="webview-open-external-btn"
+                onClick={handleEscape}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-full border border-slate-600 text-slate-200 text-xs font-medium py-2 px-4 hover:bg-slate-800 transition-all"
+              >
+                Or try: open in a new tab
+              </button>
+
+              {/* Always show the URL so the user can long-press → Copy as a manual fallback. */}
+              <p className="text-[10.5px] text-amber-300/60 mt-3 font-mono break-all leading-tight select-all">
+                {escapeUrl}
+              </p>
             </div>
           )}
 

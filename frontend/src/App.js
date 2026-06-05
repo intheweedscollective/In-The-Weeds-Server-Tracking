@@ -42,6 +42,7 @@ import QRRecovery from "./pages/QRRecovery";
 import OnboardingGuide from "./components/OnboardingGuide";
 import ProtectedAdminRoute from "./components/ProtectedAdminRoute";
 import ErrorBoundary from "./components/ErrorBoundary";
+import VersionChip from "./components/VersionChip";
 import "./App.css";
 
 function App() {
@@ -108,6 +109,11 @@ function App() {
               </Routes>
             </BrowserRouter>
             <Toaster position="top-right" richColors />
+            {/* Build-version chip — pinned bottom-right on every page
+                so operators can verify deploys actually landed at a
+                glance. Sits outside the BrowserRouter so it's
+                independent of the current route. */}
+            <VersionChip />
           </div>
         </StoreProvider>
       </AuthProvider>

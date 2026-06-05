@@ -11,6 +11,110 @@ Build a comprehensive performance review application for restaurant employees.
 - **Auth**: Emergent-managed Google Auth (whitelist via `ALLOWED_ADMIN_EMAILS`)
 
 ## Current State (2026-05-28)
+### P0: Orphan snapshot ref card type — SHIPPED 2026-06-04
+
+User report: "Data reconciliation not functioning appropriately."
+Screenshot showed Trust Score dashboard reporting **16 P0 orphaned
+snapshot refs** as deploy blockers — but the Data Reconciliation
+queue showed **0 active cards**. The operator had no way to act on
+the issue from the adjudication portal.
+
+**Root cause**: my v1 of `reconciliation_service.py` only built
+`metric_drift`, `alias_collision`, and `legacy_duplicate` cards.
+Orphan snapshot refs (a `snapshot.rows[i].employee_id` that no
+canonical employee resolves to via id OR `legacy_ids[]`) were
+detected by the Trust gate's `EmployeeValidator.check_orphaned_snapshot_refs`
+but invisible to the reconciliation portal.
+
+**Fix**:
+- New card builder `_build_orphan_snapshot_conflicts()` in
+  `reconciliation_service.py`. Mirrors the Trust gate's logic
+  EXACTLY: builds resolvable_ids from `employees.{id, legacy_ids[]}`,
+  scans ALL snapshots, dedupes per `(snapshot_id, missing_employee_id)`
+  tuple. Result: 1:1 alignment between Trust Score and Queue counts
+  (verified: integrity says 16 → queue shows 16).
+- For each orphan, attempts to find a name-match canonical (by
+  `name`, `display_name`, `report_name`, or any alias) and surfaces
+  it as `source.suggested_canonical_id` / `_name`.
+- Severity 100% for current-snapshot orphans, 75% for historical.
+- New resolve actions `relink_orphan` (rewrites the snapshot row's
+  `employee_id` + `frozen_display_name` to the suggested or
+  operator-overridden canonical) and `remove_orphan` (drops the row
+  entirely; safe because orphan placeholder rows carry no score data
+  — surfaced in the card UI).
+- Frontend: new `isOrphan` branch in `DataReconciliation.jsx` with
+  fuchsia "orphan snapshot ref" badge, Suggested-Canonical column,
+  source block showing snapshot name + dead UUID prefix + null-score
+  reassurance ("✓ Row has no score data — safe to remove"), and
+  two action buttons (Relink disabled when no suggestion).
+
+**End-to-end verified live on preview**:
+- Queue: 16 orphan cards (matches integrity 16).
+- Relinked one (Cory West) → queue 15, integrity 15, snapshot row
+  rewritten from dead UUID to canonical UUID.
+- Removed one → queue 14, integrity 14, row dropped from snapshot.
+- Audit log has one row per resolution.
+
+**Tests added** `/app/backend/tests/test_orphan_snapshot_ref.py` —
+6/6 pass:
+- `test_orphan_card_surfaces_with_suggestion`
+- `test_orphan_count_matches_integrity` (the 1:1 alignment that
+  closes the original user complaint)
+- `test_relink_orphan_rewrites_snapshot_row`
+- `test_relink_orphan_with_explicit_target` (override suggestion)
+- `test_remove_orphan_drops_row`
+- `test_resolve_writes_audit_entry`
+
+All other reconciliation tests still pass (19/20 — the 1 failure is
+the pre-existing Kahiaulani stale-fixture from prior sessions).
+
+
+### Version chip — SHIPPED 2026-06-04
+
+User asked for a "did my deploy actually land?" indicator after three
+sessions blocked on the stuck deploy pipeline. Now every page shows
+a tiny build-version chip pinned bottom-right (just above the
+Emergent platform badge).
+
+**Backend** `/app/backend/routes/version.py`:
+- `GET /api/version` returns `{sha, sha_full, branch, committed_at,
+  subject, started_at, hostname, env}`.
+- Shells out to `git rev-parse --short HEAD` / `git log -1` from
+  `/app` once, caches in-process (container's commit is immutable
+  for its lifetime). Degrades to `sha="unknown"` if git is stripped
+  in prod.
+- Public — same info we want pasted into support emails. No secrets.
+
+**Frontend** `/app/frontend/src/components/VersionChip.jsx` mounted
+in `App.js`:
+- Collapsed: 28×28 backdrop-blur pill with the short SHA + a
+  coloured env dot (green=prod, amber=preview, slate=other).
+- Click → card with Branch, Commit subject, Committed timestamp,
+  Deployed (process-start) timestamp + hint, Host, Env badge.
+- "Copy diagnostic" button writes a multi-line block to the
+  clipboard (SHA, branch, commit, timestamps, host, page URL, UA)
+  formatted for pasting directly into support@emergent.sh emails.
+- "Refresh" button re-fetches `/api/version` on demand.
+- Polls every 5 minutes so if a deploy lands while the page is
+  open, the SHA updates without a manual reload.
+- Positioned `bottom-14 right-3 z-[60]` so it stacks ABOVE the
+  Emergent platform badge instead of fighting it for clicks.
+
+**Verified live on preview**:
+- `/api/version` returns `sha="97cd509"`, `env="preview"`,
+  `branch="main"`.
+- Chip renders on desktop (1280×800) AND mobile (390×844).
+- Click expands cleanly, all fields populated, Copy works.
+
+**Operator workflow this unlocks**:
+1. User clicks Deploy.
+2. Refreshes `intheweedscollective.com`.
+3. Glances at the chip — if SHA hasn't changed, the deploy is
+   stuck. Click → Copy diagnostic → paste into support email.
+4. If SHA HAS changed, deploy landed and any reported bugs are
+   real bugs, not stale code.
+
+
 ### P2: QR Click Recovery file-upload portal — SHIPPED 2026-06-04
 
 User context: pre-2026-03-31 QR scan events were lost during a
@@ -2245,3 +2349,42 @@ The app uses TWO separate snapshot implementations:
    - Uses `db.snapshot_workflow` collection
    - Serves `/snapshot-workflow` and `/snapshot-workflow/:id` pages
    - Full finalization, POS import, and scoring pipeline
+
+
+---
+
+## 2026-02-05 — Canonical Drift & Alias Cross-Assignment Cards
+
+### Implemented
+- New reconciliation card: `canonical_metrics_drift`
+  - Compares `employees.current_metrics` vs `employees_v2` for the active quarter only (`snapshot_workflow.is_current=True`).
+  - Six scoring fields: guests, total_score, ppa, lbw, glassware_sales, lsc_count.
+  - `guests` uses absolute threshold (`METRICS_DRIFT_GUEST_ABS=10`); other fields use relative `METRIC_TOLERANCE=2%` + `METRIC_MIN_ABS`.
+  - Resolutions: `sync_canonical_from_v2` (field-level `$set` on scoring fields ONLY — CV/NPS/RT untouched) and `keep_canonical_drift` (silence via SHA1 hash of canonical scoring subset; resurfaces on any canonical change).
+- New reconciliation card: `alias_cross_assignment`
+  - Detects any alias claimed by ≥2 active canonical employees (routing-collision bug).
+  - Resolutions: `revoke_alias_from {target_canonical_id}` ($pullAll case-insensitive) and `keep_stored` (claimant-set hash silence).
+  - Real production data surfaced 29 drift cards + 1 cross-assignment card on first run.
+- Frontend `DataReconciliation.jsx`:
+  - Per-kind badges, drifted-field table, claimants list, revoke-from selector, sync preview dialog.
+- pytest coverage: `test_canonical_metrics_drift.py` (5 tests) + `test_alias_cross_assignment.py` (5 tests) — all green.
+
+### Part 2 Recommendation — Deprecating `canonical.current_metrics`
+**Verdict: KEEP `current_metrics` as a computed cache; do NOT remove.**
+
+Rationale:
+1. **Mirror enables fast indexable queries** the dashboard and ranking endpoints depend on (single-collection lookups on `employees.status` + `current_metrics.*`). Removing it would force every read path to JOIN onto `employees_v2` filtered by active quarter — slower and more error-prone.
+2. **Quarter-locking semantics**: `employees_v2` holds quarterly rows; we want a quarter-agnostic "current" view that the dashboard can stamp without re-deriving on every call. The cache is that view.
+3. **Drift is now adjudicable, not hidden.** The new `canonical_metrics_drift` card eliminates the *invisibility* of mirror drift — every divergence is enumerated, scored, and either synced or explicitly silenced with a hash signature. That removes the operational risk that motivated the deprecation question.
+4. **CV / NPS / RT enter via separate pipelines** that only write to `employees.current_metrics`. Removing the mirror would force those pipelines to write into `employees_v2` per quarter — major refactor for marginal benefit.
+
+Recommended posture going forward:
+- Keep `employees_v2` as the **single source of truth for scoring math** (already true).
+- Treat `employees.current_metrics` as a **derived cache** that the operator can resync from v2 with one click via the new card.
+- Defer any structural deprecation until/unless a refactor of dashboard query patterns is undertaken independently.
+
+### Next Action Items
+- Store vs Store comparison dashboard (P3)
+- "Import Report" toast surfacing `rejected_rows` on POS upload (P3)
+- Refactor: split `snapshot_routes.py` (>5500 lines) and `server.py` (>4400 lines)
+
