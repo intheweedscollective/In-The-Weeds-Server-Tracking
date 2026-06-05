@@ -2579,7 +2579,9 @@ class ReconcilePayload(BaseModel):
         ...,
         description=(
             "keep_stored | accept_snapshot | manual_override | defer | "
-            "revoke_alias | merge_into | delete_legacy | promote_canonical"
+            "revoke_alias | merge_into | delete_legacy | promote_canonical | "
+            "relink_orphan | remove_orphan | sync_canonical_from_v2 | "
+            "keep_canonical_drift | revoke_alias_from"
         ),
     )
     value_override: Optional[float] = Field(

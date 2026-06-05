@@ -2349,3 +2349,42 @@ The app uses TWO separate snapshot implementations:
    - Uses `db.snapshot_workflow` collection
    - Serves `/snapshot-workflow` and `/snapshot-workflow/:id` pages
    - Full finalization, POS import, and scoring pipeline
+
+
+---
+
+## 2026-02-05 — Canonical Drift & Alias Cross-Assignment Cards
+
+### Implemented
+- New reconciliation card: `canonical_metrics_drift`
+  - Compares `employees.current_metrics` vs `employees_v2` for the active quarter only (`snapshot_workflow.is_current=True`).
+  - Six scoring fields: guests, total_score, ppa, lbw, glassware_sales, lsc_count.
+  - `guests` uses absolute threshold (`METRICS_DRIFT_GUEST_ABS=10`); other fields use relative `METRIC_TOLERANCE=2%` + `METRIC_MIN_ABS`.
+  - Resolutions: `sync_canonical_from_v2` (field-level `$set` on scoring fields ONLY — CV/NPS/RT untouched) and `keep_canonical_drift` (silence via SHA1 hash of canonical scoring subset; resurfaces on any canonical change).
+- New reconciliation card: `alias_cross_assignment`
+  - Detects any alias claimed by ≥2 active canonical employees (routing-collision bug).
+  - Resolutions: `revoke_alias_from {target_canonical_id}` ($pullAll case-insensitive) and `keep_stored` (claimant-set hash silence).
+  - Real production data surfaced 29 drift cards + 1 cross-assignment card on first run.
+- Frontend `DataReconciliation.jsx`:
+  - Per-kind badges, drifted-field table, claimants list, revoke-from selector, sync preview dialog.
+- pytest coverage: `test_canonical_metrics_drift.py` (5 tests) + `test_alias_cross_assignment.py` (5 tests) — all green.
+
+### Part 2 Recommendation — Deprecating `canonical.current_metrics`
+**Verdict: KEEP `current_metrics` as a computed cache; do NOT remove.**
+
+Rationale:
+1. **Mirror enables fast indexable queries** the dashboard and ranking endpoints depend on (single-collection lookups on `employees.status` + `current_metrics.*`). Removing it would force every read path to JOIN onto `employees_v2` filtered by active quarter — slower and more error-prone.
+2. **Quarter-locking semantics**: `employees_v2` holds quarterly rows; we want a quarter-agnostic "current" view that the dashboard can stamp without re-deriving on every call. The cache is that view.
+3. **Drift is now adjudicable, not hidden.** The new `canonical_metrics_drift` card eliminates the *invisibility* of mirror drift — every divergence is enumerated, scored, and either synced or explicitly silenced with a hash signature. That removes the operational risk that motivated the deprecation question.
+4. **CV / NPS / RT enter via separate pipelines** that only write to `employees.current_metrics`. Removing the mirror would force those pipelines to write into `employees_v2` per quarter — major refactor for marginal benefit.
+
+Recommended posture going forward:
+- Keep `employees_v2` as the **single source of truth for scoring math** (already true).
+- Treat `employees.current_metrics` as a **derived cache** that the operator can resync from v2 with one click via the new card.
+- Defer any structural deprecation until/unless a refactor of dashboard query patterns is undertaken independently.
+
+### Next Action Items
+- Store vs Store comparison dashboard (P3)
+- "Import Report" toast surfacing `rejected_rows` on POS upload (P3)
+- Refactor: split `snapshot_routes.py` (>5500 lines) and `server.py` (>4400 lines)
+

@@ -24,29 +24,35 @@ import {
 } from "../components/ui/dialog";
 
 const ACTIONS = {
-  KEEP:    "keep_stored",
-  ACCEPT:  "accept_snapshot",
-  MANUAL:  "manual_override",
-  DEFER:   "defer",
-  REVOKE:  "revoke_alias",
-  MERGE:   "merge_into",
-  DELETE:  "delete_legacy",
-  PROMOTE: "promote_canonical",
-  RELINK:  "relink_orphan",
-  REMOVE:  "remove_orphan",
+  KEEP:        "keep_stored",
+  ACCEPT:      "accept_snapshot",
+  MANUAL:      "manual_override",
+  DEFER:       "defer",
+  REVOKE:      "revoke_alias",
+  MERGE:       "merge_into",
+  DELETE:      "delete_legacy",
+  PROMOTE:     "promote_canonical",
+  RELINK:      "relink_orphan",
+  REMOVE:      "remove_orphan",
+  SYNC_V2:     "sync_canonical_from_v2",
+  KEEP_DRIFT:  "keep_canonical_drift",
+  REVOKE_FROM: "revoke_alias_from",
 };
 
 const ACTION_LABEL = {
-  keep_stored:        "Keep stored value",
-  accept_snapshot:    "Accept snapshot value",
-  manual_override:    "Manual override",
-  defer:              "Defer",
-  revoke_alias:       "Revoke alias",
-  merge_into:         "Merge into canonical",
-  delete_legacy:      "Delete legacy row",
-  promote_canonical:  "Promote to new canonical",
-  relink_orphan:      "Relink to canonical",
-  remove_orphan:      "Remove orphan row",
+  keep_stored:             "Keep stored value",
+  accept_snapshot:         "Accept snapshot value",
+  manual_override:         "Manual override",
+  defer:                   "Defer",
+  revoke_alias:            "Revoke alias",
+  merge_into:              "Merge into canonical",
+  delete_legacy:           "Delete legacy row",
+  promote_canonical:       "Promote to new canonical",
+  relink_orphan:           "Relink to canonical",
+  remove_orphan:           "Remove orphan row",
+  sync_canonical_from_v2:  "Sync canonical from v2",
+  keep_canonical_drift:    "Keep canonical (silence)",
+  revoke_alias_from:       "Revoke alias from…",
 };
 
 const formatValue = (v) => {
@@ -117,6 +123,12 @@ export default function DataReconciliation() {
     // Pre-fill merge target with the suggested canonical when applicable.
     if (action === ACTIONS.MERGE) {
       setTargetCanonicalId(card?.source?.suggested_canonical_id || "");
+    } else if (action === ACTIONS.REVOKE_FROM) {
+      // Default to first claimant so the operator only has to override
+      // when the wrong owner is preselected. They MUST review before
+      // confirming — there is no auto-pick logic.
+      const claimants = card?.raw_inputs?.claimants || [];
+      setTargetCanonicalId(claimants[0]?.canonical_id || "");
     } else {
       setTargetCanonicalId("");
     }
@@ -155,6 +167,14 @@ export default function DataReconciliation() {
         }
         body.target_canonical_id = targetCanonicalId;
       }
+      if (confirmAction === ACTIONS.REVOKE_FROM) {
+        if (!targetCanonicalId) {
+          toast.error("Pick the canonical to strip the alias from.");
+          setSubmitting(false);
+          return;
+        }
+        body.target_canonical_id = targetCanonicalId;
+      }
       const res = await api.post("/v2/admin/reconciliation/resolve", body);
       toast.success(
         `${ACTION_LABEL[confirmAction]} applied for ${confirmCard.employee_name}`,
@@ -185,6 +205,10 @@ export default function DataReconciliation() {
     const isAlias = card.kind === "alias_collision";
     const isLegacy = card.kind === "legacy_duplicate";
     const isOrphan = card.kind === "orphan_snapshot_ref";
+    const isCanonDrift = card.kind === "canonical_metrics_drift";
+    const isAliasCross = card.kind === "alias_cross_assignment";
+    const drifted = card?.raw_inputs?.drifted_fields || [];
+    const claimants = card?.raw_inputs?.claimants || [];
     return (
       <div
         key={card.conflict_id}
@@ -200,7 +224,7 @@ export default function DataReconciliation() {
               <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-700/70 text-slate-300 font-mono">
                 {card.field}
               </span>
-              {!isLegacy && !isOrphan && (
+              {!isLegacy && !isOrphan && !isCanonDrift && !isAliasCross && (
                 <span
                   className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${
                     card.severity_pct >= 50
@@ -211,6 +235,16 @@ export default function DataReconciliation() {
                   }`}
                 >
                   {card.severity_pct?.toFixed?.(2) ?? card.severity_pct}% drift
+                </span>
+              )}
+              {isCanonDrift && (
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-rose-900/60 text-rose-200 border border-rose-700 font-semibold">
+                  canonical drift · {drifted.length} field{drifted.length !== 1 ? "s" : ""}
+                </span>
+              )}
+              {isAliasCross && (
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-rose-900/60 text-rose-200 border border-rose-700 font-semibold">
+                  alias claimed by {claimants.length} canonicals
                 </span>
               )}
               {isAlias && (
@@ -318,6 +352,62 @@ export default function DataReconciliation() {
                 </div>
               </div>
             </div>
+            {isCanonDrift && (
+              <div className="mt-2 rounded border border-rose-800/60 bg-rose-950/20 p-3 text-sm">
+                <div className="text-[11px] text-slate-400 uppercase tracking-wide mb-2">
+                  Drifted scoring fields · canonical vs v2 ({card.source?.quarter}/{card.source?.year})
+                </div>
+                <table className="w-full text-xs" data-testid={`drift-table-${card.conflict_id}`}>
+                  <thead className="text-slate-500">
+                    <tr>
+                      <th className="text-left py-1">Field</th>
+                      <th className="text-right py-1">Canonical</th>
+                      <th className="text-right py-1">v2 (truth)</th>
+                      <th className="text-right py-1">Δ</th>
+                      <th className="text-right py-1">%</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {drifted.map((d) => (
+                      <tr key={d.field} className="border-t border-slate-800">
+                        <td className="py-1 font-mono text-slate-300">{d.field}</td>
+                        <td className="py-1 text-right font-mono text-rose-300">{formatValue(d.canonical)}</td>
+                        <td className="py-1 text-right font-mono text-emerald-300">{formatValue(d.v2)}</td>
+                        <td className="py-1 text-right font-mono text-amber-300">{formatValue(d.abs_diff)}</td>
+                        <td className="py-1 text-right font-mono text-amber-300">{d.rel_pct?.toFixed?.(1) ?? d.rel_pct}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="text-[10.5px] text-slate-500 mt-2">
+                  Sync action overwrites ONLY these scoring fields on
+                  <code className="mx-1 font-mono">employees.current_metrics</code>.
+                  CV / NPS / RT are untouched.
+                </div>
+              </div>
+            )}
+            {isAliasCross && (
+              <div className="mt-2 rounded border border-rose-800/60 bg-rose-950/20 p-3 text-sm" data-testid={`claimants-${card.conflict_id}`}>
+                <div className="text-[11px] text-slate-400 uppercase tracking-wide mb-2">
+                  Canonicals claiming alias <code className="font-mono text-rose-300">{card.stored_value}</code>
+                </div>
+                <ul className="space-y-1">
+                  {claimants.map((c) => (
+                    <li
+                      key={c.canonical_id}
+                      className="flex items-center justify-between gap-2 text-xs"
+                      data-testid={`claimant-${card.conflict_id}-${c.canonical_id}`}
+                    >
+                      <span className="text-slate-200 font-semibold">{c.canonical_name}</span>
+                      <span className="text-slate-500 font-mono text-[10.5px]">{String(c.canonical_id).slice(0, 8)}…</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="text-[10.5px] text-slate-500 mt-2">
+                  Pick the canonical to strip the alias from in the confirm dialog. All others keep the alias.
+                </div>
+              </div>
+            )}
             {opts.deferred && card.defer_reason && (
               <div className="mt-2 text-xs text-blue-300 italic">
                 Deferred: "{card.defer_reason}" · {formatTimestamp(card.deferred_at)}
@@ -327,7 +417,7 @@ export default function DataReconciliation() {
         </div>
 
         <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-800">
-          {!isOrphan && (
+          {!isOrphan && !isCanonDrift && !isAliasCross && (
             <Button
               variant="outline"
               size="sm"
@@ -339,7 +429,7 @@ export default function DataReconciliation() {
               Keep Stored
             </Button>
           )}
-          {!isAlias && !isLegacy && !isOrphan && (
+          {!isAlias && !isLegacy && !isOrphan && !isCanonDrift && !isAliasCross && (
             <Button
               variant="outline"
               size="sm"
@@ -351,7 +441,7 @@ export default function DataReconciliation() {
               Accept Snapshot
             </Button>
           )}
-          {!isAlias && !isLegacy && !isOrphan && (
+          {!isAlias && !isLegacy && !isOrphan && !isCanonDrift && !isAliasCross && (
             <Button
               variant="outline"
               size="sm"
@@ -439,6 +529,42 @@ export default function DataReconciliation() {
               </Button>
             </>
           )}
+          {isCanonDrift && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-emerald-700 text-emerald-200 hover:bg-emerald-950/40"
+                onClick={() => openConfirm(card, ACTIONS.SYNC_V2)}
+                data-testid={`btn-sync-v2-${card.conflict_id}`}
+              >
+                <ChevronRight className="w-3.5 h-3.5 mr-1.5" />
+                Sync canonical from v2
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-slate-600 text-slate-300 hover:bg-slate-800"
+                onClick={() => openConfirm(card, ACTIONS.KEEP_DRIFT)}
+                data-testid={`btn-keep-drift-${card.conflict_id}`}
+              >
+                <Check className="w-3.5 h-3.5 mr-1.5" />
+                Keep canonical (silence)
+              </Button>
+            </>
+          )}
+          {isAliasCross && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-rose-700 text-rose-200 hover:bg-rose-950/40"
+              onClick={() => openConfirm(card, ACTIONS.REVOKE_FROM)}
+              data-testid={`btn-revoke-from-${card.conflict_id}`}
+            >
+              <X className="w-3.5 h-3.5 mr-1.5" />
+              Revoke alias from…
+            </Button>
+          )}
           {!opts.deferred && (
             <Button
               variant="outline"
@@ -460,6 +586,8 @@ export default function DataReconciliation() {
   const renderConfirmBody = () => {
     if (!confirmCard || !confirmAction) return null;
     const isAlias = confirmCard.kind === "alias_collision";
+    const isCanonDrift = confirmCard.kind === "canonical_metrics_drift";
+    const isAliasCross = confirmCard.kind === "alias_cross_assignment";
 
     const beforeAfter = () => {
       switch (confirmAction) {
@@ -476,6 +604,18 @@ export default function DataReconciliation() {
           return [confirmCard.stored_value, "(no change — moved to deferred)"];
         case ACTIONS.REVOKE:
           return [confirmCard.stored_value, "(alias removed)"];
+        case ACTIONS.SYNC_V2:
+          return ["(canonical drift)", "(synced from v2 — see diff below)"];
+        case ACTIONS.KEEP_DRIFT:
+          return ["(canonical drift)", "(silenced until canonical changes)"];
+        case ACTIONS.REVOKE_FROM: {
+          const claimants = confirmCard.raw_inputs?.claimants || [];
+          const t = claimants.find((c) => c.canonical_id === targetCanonicalId);
+          return [
+            `${confirmCard.stored_value} on ${t?.canonical_name || "—"}`,
+            "(alias removed from this canonical)",
+          ];
+        }
         default:
           return [null, null];
       }
@@ -553,7 +693,64 @@ export default function DataReconciliation() {
           </label>
         )}
 
-        {!isAlias && confirmCard.raw_inputs && (
+        {confirmAction === ACTIONS.REVOKE_FROM && (
+          <label className="block space-y-1" data-testid="revoke-from-selector">
+            <span className="text-xs text-slate-400">
+              Pick the canonical to strip <code className="font-mono">{confirmCard.stored_value}</code> from
+            </span>
+            <select
+              autoFocus
+              value={targetCanonicalId}
+              onChange={(e) => setTargetCanonicalId(e.target.value)}
+              className="w-full px-3 py-2 rounded border border-slate-600 bg-slate-800 text-slate-100"
+              data-testid="revoke-from-select"
+            >
+              <option value="">— Pick claimant to strip —</option>
+              {(confirmCard.raw_inputs?.claimants || []).map((c) => (
+                <option key={c.canonical_id} value={c.canonical_id}>
+                  {c.canonical_name}
+                </option>
+              ))}
+            </select>
+            <span className="text-[11px] text-slate-500 block">
+              The alias will be removed from this canonical's{" "}
+              <code className="font-mono">aliases[]</code> only. All other
+              claimants keep the alias. Resolve again to strip more if
+              needed.
+            </span>
+          </label>
+        )}
+
+        {confirmAction === ACTIONS.SYNC_V2 && (
+          <div className="rounded-md border border-emerald-800/60 bg-emerald-950/20 p-3 text-xs" data-testid="sync-preview">
+            <div className="text-emerald-300 font-semibold mb-1">Fields about to be overwritten</div>
+            <table className="w-full">
+              <thead className="text-slate-500">
+                <tr>
+                  <th className="text-left py-1">Field</th>
+                  <th className="text-right py-1">Canonical → v2</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(confirmCard.raw_inputs?.drifted_fields || []).map((d) => (
+                  <tr key={d.field} className="border-t border-slate-800">
+                    <td className="py-1 font-mono">{d.field}</td>
+                    <td className="py-1 text-right font-mono">
+                      <span className="text-rose-300">{formatValue(d.canonical)}</span>
+                      <span className="text-slate-500 mx-1">→</span>
+                      <span className="text-emerald-300">{formatValue(d.v2)}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="text-[10.5px] text-slate-500 mt-2">
+              CV / NPS / RT and any other keys in <code className="font-mono">current_metrics</code> are NOT touched.
+            </div>
+          </div>
+        )}
+
+        {!isAlias && !isCanonDrift && !isAliasCross && confirmCard.raw_inputs && (
           <div className="rounded-md border border-slate-700 bg-slate-800/30 p-2 text-[11px] text-slate-400">
             Snapshot says: {Object.entries(confirmCard.raw_inputs)
               .map(([k, v]) => `${k}=${formatValue(v)}`).join(" · ")}
