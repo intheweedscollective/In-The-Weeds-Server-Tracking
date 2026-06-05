@@ -416,6 +416,20 @@ class ReconciliationService:
             tokens = set(cn.split())
             overlap = len(v_tokens & tokens)
             d = _dist(v_low, cn)
+            # Credible-candidate filter. Pure Levenshtein on two short
+            # multi-token names is too noisy — "lindsey gonzales" vs
+            # "lennie nguyen" lands at distance ~10 by accident and the
+            # old `score = overlap*10 + max(0, 20-d)` formula would clear
+            # the threshold purely on that bonus, producing a totally
+            # bogus merge suggestion. Require either:
+            #   - at least one shared full token (last name typically),
+            #     which is how real typos look ("kahiauani ramos" shares
+            #     "ramos" with "kahiaulani ramos"), OR
+            #   - a tight whole-string Levenshtein (≤ 4) which catches
+            #     genuine misspellings of a single-token name (e.g.
+            #     "treyana" → "treyanna").
+            if overlap == 0 and d > 4:
+                continue
             # Score: overlap weight + inverse-distance bonus.
             score = overlap * 10 + (max(0, 20 - d))
             if score > best_score:
