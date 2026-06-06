@@ -2811,11 +2811,29 @@ async def _hydrate_snapshot_employees(db, snapshot: Dict[str, Any]) -> List[Dict
             emp["cv_raw_points"] = round(prom - 2 * det, 2)
             emp["cv_score"] = round(emp["nps_contribution"] + emp["cv_raw_points"], 2)
 
+        # Recompute per-metric bonuses directly from the current score_*
+        # values so the slide can never display a stale bonus_* frozen
+        # at a prior data snapshot. Operator-reported (Q2P6W1, 2026-02-05):
+        # Allen Simmons showed score_glass=134 but bonus_glass=1.3 because
+        # an earlier POS upload only refreshed score_* and reused the
+        # stale total_metric_bonus. The fix in unified_pos_upload prevents
+        # NEW writes; this overlay heals the EXISTING data on read so
+        # already-frozen snapshots render correctly.
+        def _calc_bonus(s):
+            if s is None or s <= 100:
+                return 0.0
+            try:
+                return min((float(s) - 100.0) / 20.0 * 5.0, 5.0)
+            except (TypeError, ValueError):
+                return 0.0
+        emp["bonus_ppa"]   = round(_calc_bonus(emp.get("score_ppa")),   2)
+        emp["bonus_lbw"]   = round(_calc_bonus(emp.get("score_lbw")),   2)
+        emp["bonus_glass"] = round(_calc_bonus(emp.get("score_glass")), 2)
+        emp["bonus_lsc"]   = round(_calc_bonus(emp.get("score_lsc")),   2)
+
         emp["total_metric_bonus"] = round(
-            (emp.get("bonus_ppa")   or 0)
-            + (emp.get("bonus_lbw") or 0)
-            + (emp.get("bonus_glass") or 0)
-            + (emp.get("bonus_lsc") or 0),
+            emp["bonus_ppa"] + emp["bonus_lbw"]
+            + emp["bonus_glass"] + emp["bonus_lsc"],
             2,
         )
 

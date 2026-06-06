@@ -1186,8 +1186,26 @@ async def unified_pos_upload(
                 cv_score = match.get("cv_score", 0) or 0
                 rt_mentions = match.get("rt_mentions", 0) or 0
                 rt_contribution = min(rt_mentions * 0.3, 20)
-                total_metric_bonus = match.get("total_metric_bonus", 0) or 0
-                
+                # RECOMPUTE metric bonuses from the freshly-derived scores.
+                # Operator-reported (Q2P6W1, 2026-02-05): Allen's score_glass
+                # rose to 134% on a new POS upload but his bonus_glass stayed
+                # at the prior 1.3 because this branch read
+                # `match.total_metric_bonus` (stale) and never recomputed the
+                # per-metric bonuses. Result on the slide: a +30% glassware
+                # row with only 1.3 of the available 5 bonus pts. The
+                # bonus formula is the canonical one from scoring_engine.
+                def _calc_metric_bonus(s):
+                    if s is None or s <= 100:
+                        return 0.0
+                    return min((float(s) - 100.0) / 20.0 * 5.0, 5.0)
+                bonus_ppa   = round(_calc_metric_bonus(score_ppa), 2)
+                bonus_lbw   = round(_calc_metric_bonus(score_lbw), 2)
+                bonus_glass = round(_calc_metric_bonus(score_glass), 2)
+                bonus_lsc   = round(_calc_metric_bonus(score_lsc), 2)
+                total_metric_bonus = round(
+                    bonus_ppa + bonus_lbw + bonus_glass + bonus_lsc, 2
+                )
+
                 # Recalculate weighted with RT
                 weighted_with_rt = weighted_score + rt_contribution
                 total_score = weighted_with_rt + cv_score + total_metric_bonus
@@ -1214,6 +1232,14 @@ async def unified_pos_upload(
                     "score_lbw": round(score_lbw, 2),
                     "score_glass": round(score_glass, 2),
                     "score_lsc": round(score_lsc, 2),
+                    # Write the freshly-recomputed bonuses so the dashboard
+                    # and the next snapshot freeze always see them in step
+                    # with the latest score_*.
+                    "bonus_ppa": bonus_ppa,
+                    "bonus_lbw": bonus_lbw,
+                    "bonus_glass": bonus_glass,
+                    "bonus_lsc": bonus_lsc,
+                    "total_metric_bonus": total_metric_bonus,
                     "weighted_score": round(weighted_with_rt, 2),
                     "total_score": round(total_score, 2),
                     "pre_dar_score": round(total_score, 2),

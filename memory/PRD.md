@@ -2408,3 +2408,21 @@ When canonical lookup misses, render the row using its own `frozen_display_name`
 
 ### Known follow-up
 `/api/v2/admin/integrity` (employees_v2-based orphan detection) and the recon queue's orphan card (canonical+legacy_ids-based) use different orphan definitions so their counts can disagree — backlog.
+
+
+
+## 2026-02-05 — P0 Hotfix: Stale Metric Bonus After POS Re-Upload
+
+### Bug
+Q2P6W1: Allen Simmons showed glassware at +30% over benchmark (score_glass=134.07) but only **bonus_glass=1.3**. Canonical formula yields 5.0 at any score ≥ 120. Same pattern across Cory West, Trey Quick, Kitti Xavier, Jamie Rousseau, Bruce Diesel Rabago, Arianna Pena.
+
+### Root cause
+`server.unified_pos_upload` recomputed `score_*` from fresh POS data but reused the prior `total_metric_bonus` from the matched record and never wrote new `bonus_*` fields. Score updated, bonus stayed frozen at the previous upload's value.
+
+### Fix (two layers)
+1. **`server.unified_pos_upload`** — recompute all four `bonus_*` from the freshly-derived `score_*` using canonical `min((score-100)/20*5, 5.0)` and write them. Future re-uploads can't go stale.
+2. **`_hydrate_snapshot_employees`** — recompute `bonus_*` from current `score_*` on every slide/dashboard read. Heals already-frozen snapshots without a data migration.
+
+### Verified
+- Live preview: every employee with score_glass ≥ 120 now hydrates with bonus_glass=5.0; sliding-scale (Trey Quick PPA=104.84 → bonus_ppa=1.21) matches.
+- 3 new tests in `test_bonus_recompute_on_hydrate.py`, all pass.
