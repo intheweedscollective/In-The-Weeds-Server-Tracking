@@ -2388,3 +2388,23 @@ Recommended posture going forward:
 - "Import Report" toast surfacing `rejected_rows` on POS upload (P3)
 - Refactor: split `snapshot_routes.py` (>5500 lines) and `server.py` (>4400 lines)
 
+
+
+
+## 2026-02-05 — P0 Hotfix: Dashboard Hiding Half the Employees
+
+### Bug
+After saving snapshot Q2P6W1, the dashboard showed 19 of 33 employees. Missing names included Cory West, Kitti Xavier, Tarek Araman, Rachael Escobar, Jamie Rousseau, Starwars Mckinnon-Herrera, Jose Plancarte Villa, Robert Mckinnon, etc.
+
+### Root cause
+`EmployeeService.get_snapshot_with_join` had a silent-drop on thin rows whose `employee_id` didn't resolve to a canonical or any canonical's `legacy_ids[]`. POS uploads create v2 rows for un-promoted staff; those rows pointed at v2 ids the canonical index didn't know, so the FK-join `continue`'d past them.
+
+### Fix
+When canonical lookup misses, render the row using its own `frozen_display_name` + `frozen_metrics` and stamp `canonical_id=None`. Terminated/merged canonical filtering still applies when canonical IS available. `deleted_names` filter still applies regardless.
+
+### Verified
+- Live preview data: 33 thin rows → **32 employees returned (was 19)**
+- 4 new tests in `test_snapshot_join_orphan_recovery.py`, all pass
+
+### Known follow-up
+`/api/v2/admin/integrity` (employees_v2-based orphan detection) and the recon queue's orphan card (canonical+legacy_ids-based) use different orphan definitions so their counts can disagree — backlog.
