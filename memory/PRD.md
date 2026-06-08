@@ -2426,3 +2426,20 @@ Q2P6W1: Allen Simmons showed glassware at +30% over benchmark (score_glass=134.0
 ### Verified
 - Live preview: every employee with score_glass ≥ 120 now hydrates with bonus_glass=5.0; sliding-scale (Trey Quick PPA=104.84 → bonus_ppa=1.21) matches.
 - 3 new tests in `test_bonus_recompute_on_hydrate.py`, all pass.
+
+
+
+## 2026-06-08 — Restore Accidentally-Deleted Employee Endpoint
+
+### Context
+Operator accidentally hit `delete_legacy` on Matt Spath via the Reconciliation portal on 2026-06-06. The action only soft-deletes (`employees.status=terminated`, `employees_v2.status=inactive`) but there was no operator-facing way to reverse it.
+
+### Implemented
+- `POST /api/v2/admin/restore-deleted-employee/{canonical_id}?reason=...` (admin-gated)
+- Flips canonical `status → active` and ALL matching v2 rows (by `id` + every `legacy_ids[]`) from non-active back to `active`. Multi-quarter safe.
+- Idempotent — re-runs leave already-active rows untouched.
+- Writes `reconciliation_audit` row of `kind=restore_canonical` so the operation appears in the audit ledger.
+
+### Verified
+- Restored Matt Spath on preview (`f94c77c3-b021-4316-a2c7-c0f87d2c3d49`): canonical terminated→active, Q2/2026 v2 row (score 79.07) inactive→active.
+- 5 pytest cases in `test_restore_deleted_employee.py` — all green.
