@@ -85,15 +85,18 @@ export default function DataReconciliation() {
   const [submitting, setSubmitting] = useState(false);
   const [canonicalList, setCanonicalList] = useState([]);
   const [targetCanonicalId, setTargetCanonicalId] = useState("");
+  const [deletedEmployees, setDeletedEmployees] = useState([]);
+  const [restoringId, setRestoringId] = useState(null);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [q, a, c] = await Promise.all([
+      const [q, a, c, d] = await Promise.all([
         api.get("/v2/admin/reconciliation/queue"),
         api.get("/v2/admin/reconciliation/audit?limit=50"),
         // Active canonical employees for the merge_into dropdown.
         api.get("/v2/employees?status=active").catch(() => ({ data: [] })),
+        api.get("/v2/admin/deleted-employees").catch(() => ({ data: { deleted_employees: [] } })),
       ]);
       setQueue(q.data || { active: [], deferred: [], resolved: [], counts: {} });
       setAudit(a.data?.entries || []);
@@ -104,6 +107,7 @@ export default function DataReconciliation() {
           .map((e) => ({ id: e.id, name: e.name }))
           .sort((a, b) => a.name.localeCompare(b.name)),
       );
+      setDeletedEmployees(d.data?.deleted_employees || []);
     } catch (e) {
       toast.error(`Failed to load queue: ${e?.response?.data?.detail || e.message}`);
     } finally {
@@ -113,6 +117,42 @@ export default function DataReconciliation() {
 
   useEffect(() => {
     fetchAll();
+  }, [fetchAll]);
+
+  const handleRestoreDeleted = useCallback(async (entry) => {
+    const name = entry.canonical_name || "this employee";
+    if (!window.confirm(
+      `Restore ${name}?\n\nThis will set the canonical back to ACTIVE and reactivate every soft-deleted v2 row (${entry.inactive_v2_count} quarter${entry.inactive_v2_count === 1 ? "" : "s"}). The action is logged in the audit ledger.`,
+    )) {
+      return;
+    }
+    setRestoringId(entry.canonical_id);
+    try {
+      const reason = window.prompt(
+        `(optional) Reason for restoring ${name} — leave blank to skip:`,
+        "",
+      );
+      const res = await api.post(
+        `/v2/admin/restore-deleted-employee/${entry.canonical_id}` +
+          (reason ? `?reason=${encodeURIComponent(reason)}` : ""),
+      );
+      const body = res.data || {};
+      toast.success(
+        `Restored ${body.canonical_name || name}` +
+          (body.v2_rows_reactivated
+            ? ` — reactivated ${body.v2_rows_reactivated} quarter row${
+                body.v2_rows_reactivated === 1 ? "" : "s"
+              }`
+            : ""),
+      );
+      await fetchAll();
+    } catch (e) {
+      toast.error(
+        `Restore failed: ${e?.response?.data?.detail || e.message}`,
+      );
+    } finally {
+      setRestoringId(null);
+    }
   }, [fetchAll]);
 
   const openConfirm = (card, action) => {
@@ -807,6 +847,95 @@ export default function DataReconciliation() {
           </Button>
         </div>
       </div>
+
+      {/* Recently Deleted — restore accidentally removed employees */}
+      {deletedEmployees.length > 0 && (
+        <section data-testid="deleted-employees-panel">
+          <div className="flex items-center gap-2 mb-3">
+            <History className="w-5 h-5 text-rose-300" />
+            <h2 className="text-xl font-serif font-bold text-foreground">
+              Recently Deleted
+            </h2>
+            <span className="text-xs text-slate-500">
+              Restore an employee that was removed via the recon portal.
+              No data is destroyed — only flipped to inactive.
+            </span>
+          </div>
+          <div className="rounded-md border border-rose-900/40 bg-rose-950/10 divide-y divide-slate-800">
+            {deletedEmployees.map((entry) => {
+              const last = entry.last_audit;
+              return (
+                <div
+                  key={entry.canonical_id}
+                  className="flex items-center justify-between gap-3 px-4 py-3"
+                  data-testid={`deleted-row-${entry.canonical_id}`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-semibold text-slate-100 truncate">
+                      {entry.canonical_name}
+                      {entry.aliases?.length > 0 && (
+                        <span className="ml-2 text-[11px] text-slate-500 font-normal">
+                          aka {entry.aliases.slice(0, 3).join(", ")}
+                          {entry.aliases.length > 3 && " …"}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">
+                      canonical status:{" "}
+                      <span className={
+                        entry.canonical_status === "terminated"
+                          ? "text-rose-300"
+                          : entry.canonical_status === "merged"
+                          ? "text-amber-300"
+                          : "text-slate-300"
+                      }>
+                        {entry.canonical_status}
+                      </span>
+                      {entry.inactive_v2_count > 0 && (
+                        <>
+                          {" · "}
+                          <span className="text-rose-300">
+                            {entry.inactive_v2_count} inactive v2 row
+                            {entry.inactive_v2_count === 1 ? "" : "s"}
+                          </span>
+                        </>
+                      )}
+                      {last && (
+                        <>
+                          {" · last action: "}
+                          <span className="text-slate-300">{last.action}</span>
+                          {last.actor && ` by ${last.actor}`}
+                          {last.logged_at && ` (${formatTimestamp(last.logged_at)})`}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleRestoreDeleted(entry)}
+                    disabled={restoringId === entry.canonical_id}
+                    className="border-emerald-700 text-emerald-200 hover:bg-emerald-950/40 shrink-0"
+                    data-testid={`btn-restore-${entry.canonical_id}`}
+                  >
+                    {restoringId === entry.canonical_id ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                        Restoring…
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                        Restore
+                      </>
+                    )}
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* Active queue */}
       <section>
