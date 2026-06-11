@@ -2443,3 +2443,27 @@ Operator accidentally hit `delete_legacy` on Matt Spath via the Reconciliation p
 ### Verified
 - Restored Matt Spath on preview (`f94c77c3-b021-4316-a2c7-c0f87d2c3d49`): canonical terminated→active, Q2/2026 v2 row (score 79.07) inactive→active.
 - 5 pytest cases in `test_restore_deleted_employee.py` — all green.
+
+
+## 2026-06-11 — Store Health Index Reweighting
+
+### Operator request
+- Upsell Performance should include PPA, LBW AND Glassware (equal thirds) — PPA reflects upsell ability on items we don't track line-by-line (apps, desserts, retail).
+- Bell-curve grading vs concept averages; explicit credit for stores at the high end of concept.
+- Guest Experience weights flipped to **RT 70% + CV 30%** (was NPS 70% + RT 30%). Store Health Index only — scoring engine untouched.
+- Sales Execution stays as-is (PPA scores against per-store benchmark).
+
+### Implemented (`routes/insights.py`, `pages/ScoringGuide.js`)
+- New piecewise-linear bell helper `bell(x, low, avg, high)`:
+  - x ≤ low → 0..60, low..avg → 60..80, avg..high → 80..100, x > high → 100 (cap)
+- Upsell Performance = mean(bell(PPA), bell(LBW/g), bell(Glass/g))
+- PPA bell config (from operator, stored in `quarter_settings` for override): low $35.40 / avg $45.71 / high $55.72
+- LBW/Glass bell config defaults to per-store benchmark ±20% until operator supplies concept-level stats
+- API response now exposes `categories.upsell_performance.breakdown` with each leg's store value, concept low/avg/high, and resulting score for full transparency
+- Removed `labor_efficiency` category (was using placeholder values; operator wants 4-category model)
+- Weights restored to 25/25/20/30
+- 4 new pytest cases in `test_store_health_bell_curve.py` — all green
+
+### Verified
+- Live preview: store_health=78.7, Sales=87.6, Upsell=77.7 (PPA leg 86 / LBW leg 63.8 / Glass leg 83.4), Loyalty=84.8, Guest=68.2
+

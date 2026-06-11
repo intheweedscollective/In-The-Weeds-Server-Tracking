@@ -30,110 +30,149 @@ def get_db():
 async def get_store_health_score(quarter: str = "Q1", year: int = 2026):
     """
     Get Store Health Score - Executive-level view of store performance.
-    
+
     Aligned to Bubba Gump Daily Flash Report corporate metrics.
-    
-    Categories & Weights (updated based on Flash Report analysis):
-    - Sales Execution (PPA): 20% - Per Person Average performance
-    - Upsell Performance: 20% - LBW Mix + Glassware
-    - Loyalty Engagement: 25% - LSC Ratio (BEST IN CONCEPT metric)
-    - Labor Efficiency: 15% - Hourly Labor % vs target
-    - Guest Experience: 20% - CV + Reviews
+
+    Categories & Weights:
+    - Sales Execution (25%): Average PPA scores (per-store benchmark, untouched)
+    - Upsell Performance (25%): Bell-curved PPA + LBW + Glassware vs CONCEPT
+      averages — equal-thirds. Gives extra credit to the few stores
+      at the high end of concept.
+    - Loyalty Engagement (20%): Average LSC scores
+    - Guest Experience (30%): RT mentions (70%) + CV / NPS (30%)
     """
     employees = await get_db().employees_v2.find(
         {"quarter": quarter.upper(), "year": year}
     ).to_list(500)
-    
+
     if not employees:
         return {
             "store_health_score": 0,
             "categories": {},
             "message": "No employee data found"
         }
-    
+
     # Get settings for benchmarks and concept averages
     settings = await get_db().quarter_settings.find_one({"year": year, "quarter": quarter.upper()})
-    
+    settings = settings or {}
+
     # Calculate category scores (normalized to 0-100 scale)
     def avg_score(field, default=0):
         values = [e.get(field, default) or default for e in employees]
         return sum(values) / len(values) if values else 0
-    
-    # ========== SALES EXECUTION (20%) ==========
-    # Based on PPA performance vs benchmark
+
+    # ------------------------------------------------------------------
+    # Bell-curve scoring vs concept low/avg/high.
+    # Piecewise-linear (cheap to reason about, no std-dev needed):
+    #   x <= low         →   0..60   (steep penalty for the lower tail)
+    #   low < x <= avg   →   60..80  (concept-average store lands at 80)
+    #   avg < x <= high  →   80..100 (rewards push toward concept best)
+    #   x >  high        →   100     (capped — no infinite bonus)
+    # This matches operator-stated intent: "give credit to the few
+    # teams at the high end" — top quartile gets visibly more than
+    # the median.
+    # ------------------------------------------------------------------
+    def bell(x: Optional[float], low: float, avg: float, high: float) -> float:
+        if x is None or x <= 0:
+            return 0.0
+        if x >= high:
+            return 100.0
+        if x >= avg:
+            span = max(high - avg, 1e-9)
+            return 80.0 + (x - avg) / span * 20.0
+        if x >= low:
+            span = max(avg - low, 1e-9)
+            return 60.0 + (x - low) / span * 20.0
+        # below the floor — still award something so a near-floor
+        # store doesn't crater an otherwise healthy index.
+        return max(0.0, (x / max(low, 1e-9)) * 60.0)
+
+    # ========== SALES EXECUTION (25%) ==========
+    # Untouched — keeps using the existing per-store PPA score.
     sales_execution = min(avg_score("score_ppa"), 100)
-    
-    # Get store PPA for vs concept comparison
+
+    # Concept-PPA stats for the comparison block (and for Upsell's PPA leg).
     store_avg_ppa = avg_score("ppa")
-    concept_avg_ppa = settings.get("concept_avg_ppa", 45.33) if settings else 45.33
-    ppa_vs_concept = ((store_avg_ppa - concept_avg_ppa) / concept_avg_ppa * 100) if concept_avg_ppa > 0 else 0
-    
-    # ========== UPSELL PERFORMANCE (20%) ==========
-    # LBW + Glassware scores averaged
-    lbw_avg = min(avg_score("score_lbw"), 100)
-    glass_avg = min(avg_score("score_glass"), 100)
-    upsell_performance = (lbw_avg + glass_avg) / 2
-    
-    # ========== LOYALTY ENGAGEMENT (25%) ==========
-    # LSC performance - THIS IS YOUR BEST IN CONCEPT METRIC
+    concept_avg_ppa  = settings.get("concept_avg_ppa", 45.71)
+    concept_low_ppa  = settings.get("concept_low_ppa", 35.40)
+    concept_high_ppa = settings.get("concept_high_ppa", 55.72)
+    ppa_vs_concept = (
+        ((store_avg_ppa - concept_avg_ppa) / concept_avg_ppa * 100)
+        if concept_avg_ppa > 0 else 0
+    )
+
+    # ========== UPSELL PERFORMANCE (25%) ==========
+    # Equal-thirds of bell-curved PPA + LBW/g + Glass/g vs concept.
+    # PPA included here too (per operator: high PPA reflects upsell
+    # ability even on items we don't track line-by-line like apps
+    # and desserts).
+    store_avg_lbw_pg   = avg_score("lbw_per_guest")
+    store_avg_glass_pg = avg_score("glassware_per_guest")
+
+    # Concept bounds for LBW and Glass: default to per-store benchmark
+    # ±20% when the operator hasn't supplied explicit concept stats.
+    # They can override these from quarter_settings whenever the Daily
+    # Flash gives us new concept-wide numbers.
+    bench_lbw   = settings.get("benchmark_lbw",   8.0) or 8.0
+    bench_glass = settings.get("benchmark_glass", 1.35) or 1.35
+    concept_avg_lbw    = settings.get("concept_avg_lbw",    bench_lbw)
+    concept_low_lbw    = settings.get("concept_low_lbw",    bench_lbw * 0.80)
+    concept_high_lbw   = settings.get("concept_high_lbw",   bench_lbw * 1.20)
+    concept_avg_glass  = settings.get("concept_avg_glass",  bench_glass)
+    concept_low_glass  = settings.get("concept_low_glass",  bench_glass * 0.80)
+    concept_high_glass = settings.get("concept_high_glass", bench_glass * 1.20)
+
+    ppa_leg   = bell(store_avg_ppa,      concept_low_ppa,   concept_avg_ppa,   concept_high_ppa)
+    lbw_leg   = bell(store_avg_lbw_pg,   concept_low_lbw,   concept_avg_lbw,   concept_high_lbw)
+    glass_leg = bell(store_avg_glass_pg, concept_low_glass, concept_avg_glass, concept_high_glass)
+    upsell_performance = round((ppa_leg + lbw_leg + glass_leg) / 3.0, 2)
+
+    # ========== LOYALTY ENGAGEMENT (20%) ==========
     loyalty_engagement = min(avg_score("score_lsc"), 100)
-    
-    # Calculate LSC ratio for display
+
     total_guests = sum(e.get("guests", 0) or 0 for e in employees)
     total_lsc = sum(e.get("lsc_count", 0) or 0 for e in employees)
     store_lsc_ratio = round(total_guests / total_lsc) if total_lsc > 0 else 0
-    concept_lsc_ratio = settings.get("concept_lsc_ratio", 181) if settings else 181
+    concept_lsc_ratio = settings.get("concept_lsc_ratio", 181)
     lsc_vs_concept = round(concept_lsc_ratio / store_lsc_ratio, 1) if store_lsc_ratio > 0 else 0
-    
-    # ========== LABOR EFFICIENCY (15% - NEW) ==========
-    # Based on labor % vs target (lower is better)
-    # Target labor % from settings, default 17% (concept average)
-    target_labor_pct = settings.get("target_labor_pct", 17.0) if settings else 17.0
-    concept_labor_pct = settings.get("concept_labor_pct", 17.01) if settings else 17.01
-    
-    # Get store's actual labor % if tracked, otherwise estimate from employee efficiency
-    # For now, use the setting or estimate based on productivity scores
-    store_labor_pct = settings.get("store_labor_pct", 15.06) if settings else 15.06
-    
-    # Labor efficiency: 100 if at or below target, decreases as labor % increases above target
-    # Each 1% above target = -10 points
-    labor_efficiency = max(0, min(100, 100 - ((store_labor_pct - target_labor_pct) * 10)))
-    labor_vs_concept = round(concept_labor_pct - store_labor_pct, 2)
-    
-    # ========== GUEST EXPERIENCE (20%) ==========
-    # NPS + RT combined
+
+    # ========== GUEST EXPERIENCE (30%) ==========
+    # NEW WEIGHTING (operator request 2026-06-11):
+    #   RT mentions ......... 70%
+    #   CV / NPS ............ 30%
+    # (Was 70% NPS + 30% RT. Flip applies to Store Health Index only
+    # — individual scoring engine weights are untouched.)
     nps_avg = avg_score("nps_score")
-    nps_normalized = max(0, (nps_avg + 100) / 2)  # Convert -100..100 to 0..100
-    
+    nps_normalized = max(0, (nps_avg + 100) / 2)  # -100..100 → 0..100
+
     rt_mentions_avg = avg_score("rt_mentions")
     rt_normalized = min((rt_mentions_avg / 30) * 100, 100)  # 30 mentions = 100
-    
-    guest_experience = (nps_normalized * 0.7) + (rt_normalized * 0.3)
-    
+
+    guest_experience = (rt_normalized * 0.7) + (nps_normalized * 0.3)
+
     # ========== OVERALL STORE HEALTH SCORE ==========
-    # NEW WEIGHTS aligned to Flash Report priorities:
-    # - Sales: 20% (was 25%)
-    # - Upsell: 20% (was 25%)
-    # - Loyalty: 25% (was 20%) - INCREASED for Best in Concept strength
-    # - Labor: 15% (NEW)
-    # - Guest: 20% (was 30%)
+    # Weights restored to the 4-category model the explainer shows:
+    #   Sales 25% · Upsell 25% · Loyalty 20% · Guest 30%
     store_health = (
-        sales_execution * 0.20 +
-        upsell_performance * 0.20 +
-        loyalty_engagement * 0.25 +
-        labor_efficiency * 0.15 +
-        guest_experience * 0.20
+        sales_execution     * 0.25 +
+        upsell_performance  * 0.25 +
+        loyalty_engagement  * 0.20 +
+        guest_experience    * 0.30
     )
-    
-    # Build benchmarks dict
+
+    # Build benchmarks dict (existing per-store benches + new concept bell-curve config).
     benchmarks = {
-        "ppa": settings.get("benchmark_ppa", 55) if settings else 55,
-        "lbw": settings.get("benchmark_lbw", 8) if settings else 8,
-        "glass": settings.get("benchmark_glass", 1.35) if settings else 1.35,
-        "lsc": settings.get("benchmark_lsc", 100) if settings else 100,
-        "labor_pct": target_labor_pct
+        "ppa": settings.get("benchmark_ppa", 55),
+        "lbw": bench_lbw,
+        "glass": bench_glass,
+        "lsc": settings.get("benchmark_lsc", 100),
+        "concept": {
+            "ppa":   {"low": concept_low_ppa,   "avg": concept_avg_ppa,   "high": concept_high_ppa},
+            "lbw":   {"low": concept_low_lbw,   "avg": concept_avg_lbw,   "high": concept_high_lbw},
+            "glass": {"low": concept_low_glass, "avg": concept_avg_glass, "high": concept_high_glass},
+        },
     }
-    
+
     # Concept comparison data
     concept_comparison = {
         "ppa": {
@@ -148,54 +187,48 @@ async def get_store_health_score(quarter: str = "Q1", year: int = 2026):
             "multiplier": f"{lsc_vs_concept}x better" if lsc_vs_concept > 1 else "at concept",
             "status": "above" if lsc_vs_concept > 1 else "at" if lsc_vs_concept == 1 else "below"
         },
-        "labor_pct": {
-            "store": store_labor_pct,
-            "concept": concept_labor_pct,
-            "diff_pp": labor_vs_concept,
-            "status": "better" if labor_vs_concept > 0 else "worse"
-        }
     }
-    
+
     return {
         "store_health_score": round(store_health, 1),
         "categories": {
             "sales_execution": {
                 "score": round(sales_execution, 1),
-                "weight": 20,
+                "weight": 25,
                 "label": "Sales Execution",
-                "source": "PPA Performance",
+                "source": "Average PPA scores",
                 "trend": "up" if sales_execution >= 80 else "stable" if sales_execution >= 60 else "down",
                 "vs_concept": f"+{ppa_vs_concept:.1f}%" if ppa_vs_concept > 0 else f"{ppa_vs_concept:.1f}%"
             },
             "upsell_performance": {
                 "score": round(upsell_performance, 1),
-                "weight": 20,
-                "label": "Upsell Performance", 
-                "source": "LBW + Glassware",
-                "trend": "up" if upsell_performance >= 80 else "stable" if upsell_performance >= 60 else "down"
+                "weight": 25,
+                "label": "Upsell Performance",
+                "source": "Bell-curve: PPA + LBW + Glassware vs concept (equal thirds)",
+                "trend": "up" if upsell_performance >= 80 else "stable" if upsell_performance >= 60 else "down",
+                "breakdown": {
+                    "ppa":   {"store": round(store_avg_ppa, 2),      "score": round(ppa_leg, 1),
+                              "concept": {"low": concept_low_ppa, "avg": concept_avg_ppa, "high": concept_high_ppa}},
+                    "lbw":   {"store": round(store_avg_lbw_pg, 2),   "score": round(lbw_leg, 1),
+                              "concept": {"low": concept_low_lbw, "avg": concept_avg_lbw, "high": concept_high_lbw}},
+                    "glass": {"store": round(store_avg_glass_pg, 2), "score": round(glass_leg, 1),
+                              "concept": {"low": concept_low_glass, "avg": concept_avg_glass, "high": concept_high_glass}},
+                }
             },
             "loyalty_engagement": {
                 "score": round(loyalty_engagement, 1),
-                "weight": 25,
+                "weight": 20,
                 "label": "Loyalty Engagement",
                 "source": f"LSC Ratio 1:{store_lsc_ratio}",
                 "trend": "up" if loyalty_engagement >= 80 else "stable" if loyalty_engagement >= 60 else "down",
                 "vs_concept": f"{lsc_vs_concept}x better" if lsc_vs_concept > 1 else "at concept",
                 "best_in_concept": lsc_vs_concept >= 2.0
             },
-            "labor_efficiency": {
-                "score": round(labor_efficiency, 1),
-                "weight": 15,
-                "label": "Labor Efficiency",
-                "source": f"{store_labor_pct}% vs {target_labor_pct}% target",
-                "trend": "up" if labor_efficiency >= 80 else "stable" if labor_efficiency >= 60 else "down",
-                "vs_concept": f"{labor_vs_concept:+.2f}pp" if labor_vs_concept != 0 else "at concept"
-            },
             "guest_experience": {
                 "score": round(guest_experience, 1),
-                "weight": 20,
+                "weight": 30,
                 "label": "Guest Experience",
-                "source": "CV + Reviews",
+                "source": "RT mentions (70%) + CV / NPS (30%)",
                 "trend": "up" if guest_experience >= 80 else "stable" if guest_experience >= 60 else "down"
             }
         },
@@ -207,7 +240,6 @@ async def get_store_health_score(quarter: str = "Q1", year: int = 2026):
         "awards": {
             "best_in_concept_lsc": lsc_vs_concept >= 2.0,
             "above_concept_ppa": ppa_vs_concept > 10,
-            "labor_efficient": labor_vs_concept > 1.0
         }
     }
 

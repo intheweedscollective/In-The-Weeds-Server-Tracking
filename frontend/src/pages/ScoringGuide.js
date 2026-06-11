@@ -388,7 +388,13 @@ export default function ScoringGuide() {
                   <tr className="border-b border-slate-700">
                     <td className="py-2 font-medium text-white">Upsell Performance</td>
                     <td className="text-center">25%</td>
-                    <td>Average LBW + Glassware</td>
+                    <td>
+                      Bell-curve: PPA + LBW + Glassware vs concept (equal thirds)
+                      <div className="text-xs text-slate-500 mt-1">
+                        Concept PPA bench: $35.40 low · $45.71 avg · $55.72 high.
+                        Stores at the high end of the concept range earn full credit.
+                      </div>
+                    </td>
                   </tr>
                   <tr className="border-b border-slate-700">
                     <td className="py-2 font-medium text-white">Loyalty Engagement</td>
@@ -398,7 +404,7 @@ export default function ScoringGuide() {
                   <tr>
                     <td className="py-2 font-medium text-white">Guest Experience</td>
                     <td className="text-center">30%</td>
-                    <td>NPS (70%) + RT mentions (30%)</td>
+                    <td>RT mentions (70%) + CV / NPS (30%)</td>
                   </tr>
                 </tbody>
               </table>
