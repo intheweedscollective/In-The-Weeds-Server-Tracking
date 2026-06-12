@@ -2469,7 +2469,15 @@ Operator accidentally hit `delete_legacy` on Matt Spath via the Reconciliation p
 
 
 
-## 2026-06-12 — PPA Ranking Report + Yodeck Slide
+## 2026-06-12 — PPA Ranking Report + Yodeck Slide + 2 New Recon Cards
+
+### Recon cards added
+Operator-reported: "Kahi" appeared 3x on the PPA slide but no recon card surfaced.
+
+- **`duplicate_snapshot_rows`** — flags any snapshot whose `rows[]` array carries the same `employee_id` more than once. Resolutions: `dedupe_snapshot_rows` (keep first occurrence, drop the rest — guests/sales NOT summed to avoid inflation), `keep_stored` (silence with duplicate-count hash).
+- **`canonical_name_collision`** — flags ≥2 active canonicals with EXACT same name OR with nickname-prefix on the same last name (Kahi ⊂ Kahiaulani, Mike ⊂ Michael, Sam ⊂ Samantha; min first-name length 3). Resolutions: `merge_canonical_into {keeper}` (other canonicals → status=merged; their aliases + legacy_ids fold into the keeper; their own ids appended to keeper's legacy_ids so old v2 rows still resolve), `keep_stored` (silence with claimant-id hash).
+- **Tests:** `test_duplicate_rows_and_name_collision.py` — 7 cases, all green.
+- **Live preview:** queue now surfaces 1 duplicate_snapshot_rows + 1 canonical_name_collision card for Kahi.
 
 ### Operator request
 "Report under the Reports tab that has all PPA listed from top to bottom for each employee." Plus follow-up: "Can you make a yodeck slide as well."

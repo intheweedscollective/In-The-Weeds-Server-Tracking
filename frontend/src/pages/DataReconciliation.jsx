@@ -37,6 +37,8 @@ const ACTIONS = {
   SYNC_V2:     "sync_canonical_from_v2",
   KEEP_DRIFT:  "keep_canonical_drift",
   REVOKE_FROM: "revoke_alias_from",
+  DEDUPE_ROWS: "dedupe_snapshot_rows",
+  MERGE_CANON: "merge_canonical_into",
 };
 
 const ACTION_LABEL = {
@@ -53,6 +55,8 @@ const ACTION_LABEL = {
   sync_canonical_from_v2:  "Sync canonical from v2",
   keep_canonical_drift:    "Keep canonical (silence)",
   revoke_alias_from:       "Revoke alias from…",
+  dedupe_snapshot_rows:    "Dedupe snapshot rows",
+  merge_canonical_into:    "Merge canonicals into…",
 };
 
 const formatValue = (v) => {
@@ -169,6 +173,11 @@ export default function DataReconciliation() {
       // confirming — there is no auto-pick logic.
       const claimants = card?.raw_inputs?.claimants || [];
       setTargetCanonicalId(claimants[0]?.canonical_id || "");
+    } else if (action === ACTIONS.MERGE_CANON) {
+      // Same pattern as REVOKE_FROM — pre-populate to first claimant
+      // (the "keeper") but force the operator to confirm.
+      const claimants = card?.raw_inputs?.claimants || [];
+      setTargetCanonicalId(claimants[0]?.canonical_id || "");
     } else {
       setTargetCanonicalId("");
     }
@@ -215,6 +224,14 @@ export default function DataReconciliation() {
         }
         body.target_canonical_id = targetCanonicalId;
       }
+      if (confirmAction === ACTIONS.MERGE_CANON) {
+        if (!targetCanonicalId) {
+          toast.error("Pick a KEEPER canonical to merge the others into.");
+          setSubmitting(false);
+          return;
+        }
+        body.target_canonical_id = targetCanonicalId;
+      }
       const res = await api.post("/v2/admin/reconciliation/resolve", body);
       toast.success(
         `${ACTION_LABEL[confirmAction]} applied for ${confirmCard.employee_name}`,
@@ -247,6 +264,8 @@ export default function DataReconciliation() {
     const isOrphan = card.kind === "orphan_snapshot_ref";
     const isCanonDrift = card.kind === "canonical_metrics_drift";
     const isAliasCross = card.kind === "alias_cross_assignment";
+    const isDupRows = card.kind === "duplicate_snapshot_rows";
+    const isNameDup = card.kind === "canonical_name_collision";
     const drifted = card?.raw_inputs?.drifted_fields || [];
     const claimants = card?.raw_inputs?.claimants || [];
     return (
@@ -264,7 +283,7 @@ export default function DataReconciliation() {
               <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-700/70 text-slate-300 font-mono">
                 {card.field}
               </span>
-              {!isLegacy && !isOrphan && !isCanonDrift && !isAliasCross && (
+              {!isLegacy && !isOrphan && !isCanonDrift && !isAliasCross && !isDupRows && !isNameDup && (
                 <span
                   className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${
                     card.severity_pct >= 50
@@ -275,6 +294,18 @@ export default function DataReconciliation() {
                   }`}
                 >
                   {card.severity_pct?.toFixed?.(2) ?? card.severity_pct}% drift
+                </span>
+              )}
+              {isDupRows && (
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-rose-900/60 text-rose-200 border border-rose-700 font-semibold">
+                  {card.raw_inputs?.duplicate_count || 0} duplicate rows
+                </span>
+              )}
+              {isNameDup && (
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-rose-900/60 text-rose-200 border border-rose-700 font-semibold">
+                  {card.raw_inputs?.match_type === "nickname_prefix"
+                    ? "nickname match"
+                    : `${claimants.length} canonicals share name`}
                 </span>
               )}
               {isCanonDrift && (
@@ -448,6 +479,55 @@ export default function DataReconciliation() {
                 </div>
               </div>
             )}
+            {isDupRows && (
+              <div className="mt-2 rounded border border-rose-800/60 bg-rose-950/20 p-3 text-sm" data-testid={`dup-rows-${card.conflict_id}`}>
+                <div className="text-[11px] text-slate-400 uppercase tracking-wide mb-2">
+                  Duplicate rows in snapshot
+                  <code className="ml-2 font-mono text-rose-300">{card.raw_inputs?.snapshot_name}</code>
+                </div>
+                <div className="text-xs text-slate-200">
+                  <code className="font-mono text-rose-300">{card.employee_name}</code> appears{" "}
+                  <span className="text-rose-300 font-semibold">
+                    {card.raw_inputs?.duplicate_count}
+                  </span>{" "}
+                  times at row indices{" "}
+                  <code className="font-mono">{(card.raw_inputs?.duplicate_indices || []).join(", ")}</code>
+                </div>
+                <div className="text-[10.5px] text-slate-500 mt-2">
+                  Dedupe keeps the first occurrence and removes the rest. We do NOT sum
+                  guests/sales — duplicate rows almost always carry identical numbers.
+                </div>
+              </div>
+            )}
+            {isNameDup && (
+              <div className="mt-2 rounded border border-rose-800/60 bg-rose-950/20 p-3 text-sm" data-testid={`name-dup-${card.conflict_id}`}>
+                <div className="text-[11px] text-slate-400 uppercase tracking-wide mb-2">
+                  Canonicals to merge
+                  {card.raw_inputs?.match_type === "nickname_prefix" && (
+                    <span className="ml-2 text-amber-400">· nickname/prefix match — verify these are the same person</span>
+                  )}
+                </div>
+                <ul className="space-y-1">
+                  {claimants.map((c) => (
+                    <li
+                      key={c.canonical_id}
+                      className="flex items-center justify-between gap-2 text-xs"
+                      data-testid={`name-dup-claimant-${card.conflict_id}-${c.canonical_id}`}
+                    >
+                      <span className="text-slate-200 font-semibold">{c.canonical_name}</span>
+                      <span className="text-slate-500 text-[10.5px]">
+                        {(c.aliases && c.aliases.length) ? `aliases: ${c.aliases.join(", ")}` : "no aliases"}
+                      </span>
+                      <span className="text-slate-500 font-mono text-[10.5px]">{String(c.canonical_id).slice(0, 8)}…</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="text-[10.5px] text-slate-500 mt-2">
+                  Pick a KEEPER in the confirm dialog. Every other claimant becomes <code className="font-mono">status=merged</code>,
+                  its aliases &amp; legacy ids fold into the keeper, and the keeper's display name stays untouched.
+                </div>
+              </div>
+            )}
             {opts.deferred && card.defer_reason && (
               <div className="mt-2 text-xs text-blue-300 italic">
                 Deferred: "{card.defer_reason}" · {formatTimestamp(card.deferred_at)}
@@ -457,7 +537,7 @@ export default function DataReconciliation() {
         </div>
 
         <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-800">
-          {!isOrphan && !isCanonDrift && !isAliasCross && (
+          {!isOrphan && !isCanonDrift && !isAliasCross && !isDupRows && !isNameDup && (
             <Button
               variant="outline"
               size="sm"
@@ -469,7 +549,7 @@ export default function DataReconciliation() {
               Keep Stored
             </Button>
           )}
-          {!isAlias && !isLegacy && !isOrphan && !isCanonDrift && !isAliasCross && (
+          {!isAlias && !isLegacy && !isOrphan && !isCanonDrift && !isAliasCross && !isDupRows && !isNameDup && (
             <Button
               variant="outline"
               size="sm"
@@ -481,7 +561,7 @@ export default function DataReconciliation() {
               Accept Snapshot
             </Button>
           )}
-          {!isAlias && !isLegacy && !isOrphan && !isCanonDrift && !isAliasCross && (
+          {!isAlias && !isLegacy && !isOrphan && !isCanonDrift && !isAliasCross && !isDupRows && !isNameDup && (
             <Button
               variant="outline"
               size="sm"
@@ -605,6 +685,54 @@ export default function DataReconciliation() {
               Revoke alias from…
             </Button>
           )}
+          {isDupRows && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-emerald-700 text-emerald-200 hover:bg-emerald-950/40"
+                onClick={() => openConfirm(card, ACTIONS.DEDUPE_ROWS)}
+                data-testid={`btn-dedupe-${card.conflict_id}`}
+              >
+                <ChevronRight className="w-3.5 h-3.5 mr-1.5" />
+                Dedupe rows
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-slate-600 text-slate-300 hover:bg-slate-800"
+                onClick={() => openConfirm(card, ACTIONS.KEEP)}
+                data-testid={`btn-dup-keep-${card.conflict_id}`}
+              >
+                <Check className="w-3.5 h-3.5 mr-1.5" />
+                Keep duplicates (silence)
+              </Button>
+            </>
+          )}
+          {isNameDup && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-emerald-700 text-emerald-200 hover:bg-emerald-950/40"
+                onClick={() => openConfirm(card, ACTIONS.MERGE_CANON)}
+                data-testid={`btn-merge-canon-${card.conflict_id}`}
+              >
+                <ChevronRight className="w-3.5 h-3.5 mr-1.5" />
+                Merge canonicals…
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-slate-600 text-slate-300 hover:bg-slate-800"
+                onClick={() => openConfirm(card, ACTIONS.KEEP)}
+                data-testid={`btn-name-keep-${card.conflict_id}`}
+              >
+                <Check className="w-3.5 h-3.5 mr-1.5" />
+                Keep separate (silence)
+              </Button>
+            </>
+          )}
           {!opts.deferred && (
             <Button
               variant="outline"
@@ -628,6 +756,8 @@ export default function DataReconciliation() {
     const isAlias = confirmCard.kind === "alias_collision";
     const isCanonDrift = confirmCard.kind === "canonical_metrics_drift";
     const isAliasCross = confirmCard.kind === "alias_cross_assignment";
+    const isDupRows = confirmCard.kind === "duplicate_snapshot_rows";
+    const isNameDup = confirmCard.kind === "canonical_name_collision";
 
     const beforeAfter = () => {
       switch (confirmAction) {
@@ -654,6 +784,20 @@ export default function DataReconciliation() {
           return [
             `${confirmCard.stored_value} on ${t?.canonical_name || "—"}`,
             "(alias removed from this canonical)",
+          ];
+        }
+        case ACTIONS.DEDUPE_ROWS:
+          return [
+            `${confirmCard.raw_inputs?.duplicate_count} copies`,
+            "1 copy (first occurrence kept)",
+          ];
+        case ACTIONS.MERGE_CANON: {
+          const claimants = confirmCard.raw_inputs?.claimants || [];
+          const keeper = claimants.find((c) => c.canonical_id === targetCanonicalId);
+          const losers = claimants.filter((c) => c.canonical_id !== targetCanonicalId);
+          return [
+            `${claimants.length} separate canonicals`,
+            `Keep ${keeper?.canonical_name || "—"} · merge: ${losers.map((l) => l.canonical_name).join(", ") || "—"}`,
           ];
         }
         default:
@@ -790,7 +934,69 @@ export default function DataReconciliation() {
           </div>
         )}
 
-        {!isAlias && !isCanonDrift && !isAliasCross && confirmCard.raw_inputs && (
+        {confirmAction === ACTIONS.MERGE_CANON && (
+          <label className="block space-y-1" data-testid="merge-canon-selector">
+            <span className="text-xs text-slate-400">
+              Pick the KEEPER — the canonical to retain
+            </span>
+            <select
+              autoFocus
+              value={targetCanonicalId}
+              onChange={(e) => setTargetCanonicalId(e.target.value)}
+              className="w-full px-3 py-2 rounded border border-slate-600 bg-slate-800 text-slate-100"
+              data-testid="merge-canon-select"
+            >
+              <option value="">— Pick keeper —</option>
+              {(confirmCard.raw_inputs?.claimants || []).map((c) => (
+                <option key={c.canonical_id} value={c.canonical_id}>
+                  {c.canonical_name}
+                  {c.aliases?.length ? ` (aliases: ${c.aliases.join(", ")})` : ""}
+                </option>
+              ))}
+            </select>
+            <span className="text-[11px] text-slate-500 block">
+              The other claimants will be set to{" "}
+              <code className="font-mono">status=merged</code>, their aliases &amp;{" "}
+              <code className="font-mono">legacy_ids[]</code> fold into the keeper,
+              and old v2 rows under their ids will still resolve via the FK-join.
+              The keeper's display name is untouched.
+            </span>
+          </label>
+        )}
+
+        {confirmAction === ACTIONS.DEDUPE_ROWS && (
+          <div className="rounded-md border border-emerald-800/60 bg-emerald-950/20 p-3 text-xs" data-testid="dedupe-preview">
+            <div className="text-emerald-300 font-semibold mb-1">Snapshot edit preview</div>
+            <div className="text-slate-200">
+              Snapshot{" "}
+              <code className="font-mono text-emerald-300">
+                {confirmCard.raw_inputs?.snapshot_name}
+              </code>
+              's <code className="font-mono">rows[]</code> currently has{" "}
+              <span className="text-rose-300 font-semibold">
+                {confirmCard.raw_inputs?.duplicate_count}
+              </span>{" "}
+              entries for <code className="font-mono">{confirmCard.employee_name}</code>.
+            </div>
+            <div className="text-slate-200 mt-1">
+              Keeping row at index{" "}
+              <code className="font-mono">
+                {(confirmCard.raw_inputs?.duplicate_indices || [])[0]}
+              </code>
+              ; removing{" "}
+              <code className="font-mono">
+                {(confirmCard.raw_inputs?.duplicate_indices || []).slice(1).join(", ")}
+              </code>
+              .
+            </div>
+            <div className="text-[10.5px] text-slate-500 mt-2">
+              Guests / sales are NOT summed — duplicate rows almost always carry
+              identical numbers and merging would inflate totals.
+            </div>
+          </div>
+        )}
+
+        {!isAlias && !isCanonDrift && !isAliasCross && !isDupRows && !isNameDup && confirmCard.raw_inputs && (
           <div className="rounded-md border border-slate-700 bg-slate-800/30 p-2 text-[11px] text-slate-400">
             Snapshot says: {Object.entries(confirmCard.raw_inputs)
               .map(([k, v]) => `${k}=${formatValue(v)}`).join(" · ")}

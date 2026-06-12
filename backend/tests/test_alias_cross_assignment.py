@@ -22,8 +22,8 @@ from motor.motor_asyncio import AsyncIOMotorClient
 load_dotenv("/app/backend/.env")
 
 BASE = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
-TOKEN = "test-agent-name-score-9fe6f8f7-933c-40f6-b3db-bbe3c034f896"
-ADMIN = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
+from conftest import ADMIN_TOKEN
+ADMIN = {"Authorization": f"Bearer {ADMIN_TOKEN}", "Content-Type": "application/json"}
 
 
 def _db():
