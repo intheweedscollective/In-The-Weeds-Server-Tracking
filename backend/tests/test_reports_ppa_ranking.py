@@ -225,3 +225,36 @@ def test_pdf_filename_has_quarter_and_year():
     cd = r.headers.get("content-disposition", "")
     assert "ppa_ranking_" in cd
     assert ".pdf" in cd
+
+
+# ---------------------------------------------------------------------------
+# Yodeck slide endpoint
+# ---------------------------------------------------------------------------
+
+
+def test_slide_endpoint_returns_1920x1080_png():
+    r = requests.get(
+        f"{BASE}/api/v2/reports/ppa-ranking/slide",
+        timeout=20,
+    )
+    assert r.status_code == 200, r.text[:300]
+    assert r.headers["content-type"] == "image/png"
+    # PNG magic bytes
+    assert r.content[:8] == b"\x89PNG\r\n\x1a\n"
+    # Sanity: dimensions should be exactly 1920x1080
+    from PIL import Image
+    from io import BytesIO
+    img = Image.open(BytesIO(r.content))
+    assert img.size == (1920, 1080), (
+        f"slide must be 1920x1080 for Yodeck, got {img.size}"
+    )
+
+
+def test_slide_filename_has_quarter_and_year():
+    r = requests.get(
+        f"{BASE}/api/v2/reports/ppa-ranking/slide",
+        timeout=20,
+    )
+    cd = r.headers.get("content-disposition", "")
+    assert "ppa_ranking_" in cd
+    assert ".png" in cd

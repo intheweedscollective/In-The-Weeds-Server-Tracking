@@ -2469,20 +2469,22 @@ Operator accidentally hit `delete_legacy` on Matt Spath via the Reconciliation p
 
 
 
-## 2026-06-12 — PPA Ranking Report
+## 2026-06-12 — PPA Ranking Report + Yodeck Slide
 
 ### Operator request
-"Report under the Reports tab that has all PPA listed from top to bottom for each employee."
-Columns: Name, PPA, Rank, Tier. ± vs **location average** (mean of all current-quarter PPAs). Active quarter only. On-screen table + branded PDF.
+"Report under the Reports tab that has all PPA listed from top to bottom for each employee." Plus follow-up: "Can you make a yodeck slide as well."
+
+Columns: Name, PPA, Rank, Tier. ± vs **location average** (mean of all current-quarter PPAs). Active quarter only. On-screen table + branded PDF + Yodeck slide.
 
 ### Implemented
 - **Backend:** new `routes/reports_ppa.py`
   - `GET /api/v2/reports/ppa-ranking` (JSON) — sorted desc, includes per-row vs_location $ and %.
-  - `GET /api/v2/reports/ppa-ranking/pdf` — branded printable PDF (reportlab, navy + amber palette matching slide deck).
-  - Defaults to the active snapshot (`is_current=True`) when quarter/year not specified.
-  - Excludes employees with null/zero PPA from both ranking and average calculation.
-- **Frontend:** `components/PPARankingCard.jsx` — expandable card mounted on `/reports` above the Downloadable Reports section. Shows the location-avg callout, server count, sortable table with green/rose ± indicators, and a Download PDF button.
-- **Tests:** `test_reports_ppa_ranking.py` — 7 cases (sort, average math, vs_location arithmetic, default resolution, synthetic deterministic fixture, PDF magic bytes, PDF filename) — all green.
+  - `GET /api/v2/reports/ppa-ranking/pdf` — branded printable PDF (reportlab, navy + amber palette).
+  - `GET /api/v2/reports/ppa-ranking/slide` — 1920×1080 PNG Yodeck slide, two-column layout, same palette as the PDF for visual continuity.
+  - Defaults to the active snapshot when quarter/year not specified.
+- **Yodeck generator:** `yodeck_slides.generate_ppa_ranking_slide()` — two-column layout, location-avg callout pill, color-coded ± (emerald above, rose below).
+- **Frontend:** `components/PPARankingCard.jsx` — expandable card on `/reports` with sortable table + two download buttons (Yodeck Slide PNG, PDF).
+- **Tests:** `test_reports_ppa_ranking.py` — 9 cases (sort, average math, vs_location arithmetic, default resolution, synthetic deterministic fixture, PDF magic bytes, PDF filename, PNG magic bytes + 1920×1080 dimensions, PNG filename) — all green.
 
 ### Verified
 - Live preview (Q2/2026): 32 servers ranked, location avg $49.13. Top: Bruce Diesel Rabago $54.19 (+10.3%), Trey Quick $54.05 (+10.0%). PDF magic bytes confirm `%PDF-1.4`, ~5.4 KB.

@@ -306,3 +306,25 @@ async def get_ppa_ranking_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@reports_router.get("/ppa-ranking/slide")
+async def get_ppa_ranking_slide(
+    quarter: Optional[str] = None,
+    year: Optional[int] = None,
+):
+    """Return the PPA ranking as a 1920x1080 Yodeck slide (PNG)."""
+    data = await _build_ppa_ranking(quarter, year)
+    from yodeck_slides import generate_ppa_ranking_slide
+    png_bytes = generate_ppa_ranking_slide(
+        rows=data["rows"],
+        location_avg=data["location_average_ppa"],
+        quarter=data["quarter"],
+        year=data["year"],
+    )
+    filename = f"ppa_ranking_{data['quarter']}_{data['year']}.png"
+    return Response(
+        content=png_bytes,
+        media_type="image/png",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

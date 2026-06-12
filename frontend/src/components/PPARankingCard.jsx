@@ -11,7 +11,7 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
-import { DollarSign, ChevronDown, ChevronUp, FileText } from "lucide-react";
+import { DollarSign, ChevronDown, ChevronUp, FileText, Image as ImageIcon } from "lucide-react";
 import { Button } from "./ui/button";
 import api from "../lib/api";
 
@@ -21,7 +21,7 @@ export default function PPARankingCard() {
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);
-  const [downloading, setDownloading] = useState(false);
+  const [downloading, setDownloading] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -39,25 +39,29 @@ export default function PPARankingCard() {
     if (expanded && !data) load();
   }, [expanded, data, load]);
 
-  const downloadPDF = async () => {
-    setDownloading(true);
+  const downloadAsset = async (kind) => {
+    // kind = "pdf" | "slide"
+    setDownloading(kind);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/v2/reports/ppa-ranking/pdf`);
-      if (!res.ok) throw new Error("PDF generation failed");
+      const ext = kind === "pdf" ? "pdf" : "png";
+      const res = await fetch(
+        `${BACKEND_URL}/api/v2/reports/ppa-ranking/${kind}`,
+      );
+      if (!res.ok) throw new Error(`${kind} generation failed`);
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `ppa_ranking_${data?.quarter || "current"}_${data?.year || ""}.pdf`;
+      a.download = `ppa_ranking_${data?.quarter || "current"}_${data?.year || ""}.${ext}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
     } catch (e) {
       console.error(e);
-      alert("PDF download failed. Try again.");
+      alert(`${kind.toUpperCase()} download failed. Try again.`);
     } finally {
-      setDownloading(false);
+      setDownloading(null);
     }
   };
 
@@ -116,17 +120,30 @@ export default function PPARankingCard() {
                 <span className="text-slate-500">No data</span>
               )}
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              className="border-red-700 text-red-200 hover:bg-red-950/40"
-              onClick={downloadPDF}
-              disabled={!data || downloading || !data?.rows?.length}
-              data-testid="ppa-ranking-download-pdf"
-            >
-              <FileText className="w-3.5 h-3.5 mr-1.5" />
-              {downloading ? "Building PDF…" : "Download PDF"}
-            </Button>
+            <div className="flex gap-2 shrink-0">
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-amber-700 text-amber-200 hover:bg-amber-950/40"
+                onClick={() => downloadAsset("slide")}
+                disabled={!data || downloading === "slide" || !data?.rows?.length}
+                data-testid="ppa-ranking-download-slide"
+              >
+                <ImageIcon className="w-3.5 h-3.5 mr-1.5" />
+                {downloading === "slide" ? "Building…" : "Yodeck Slide"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-red-700 text-red-200 hover:bg-red-950/40"
+                onClick={() => downloadAsset("pdf")}
+                disabled={!data || downloading === "pdf" || !data?.rows?.length}
+                data-testid="ppa-ranking-download-pdf"
+              >
+                <FileText className="w-3.5 h-3.5 mr-1.5" />
+                {downloading === "pdf" ? "Building PDF…" : "PDF"}
+              </Button>
+            </div>
           </div>
 
           {/* Table */}
