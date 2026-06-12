@@ -4286,6 +4286,10 @@ api_router.include_router(pos_upload_router)
 api_router.include_router(scheduler_router)
 api_router.include_router(auth_router)
 
+# PPA Ranking report (Reports tab).
+from routes.reports_ppa import reports_router as reports_ppa_router  # noqa: E402
+api_router.include_router(reports_ppa_router)
+
 # Register legacy snapshots routes (uses db.snapshots collection)
 register_snapshots_legacy_routes(api_router, db)
 

@@ -2467,3 +2467,23 @@ Operator accidentally hit `delete_legacy` on Matt Spath via the Reconciliation p
 ### Verified
 - Live preview: store_health=78.7, Sales=87.6, Upsell=77.7 (PPA leg 86 / LBW leg 63.8 / Glass leg 83.4), Loyalty=84.8, Guest=68.2
 
+
+
+## 2026-06-12 — PPA Ranking Report
+
+### Operator request
+"Report under the Reports tab that has all PPA listed from top to bottom for each employee."
+Columns: Name, PPA, Rank, Tier. ± vs **location average** (mean of all current-quarter PPAs). Active quarter only. On-screen table + branded PDF.
+
+### Implemented
+- **Backend:** new `routes/reports_ppa.py`
+  - `GET /api/v2/reports/ppa-ranking` (JSON) — sorted desc, includes per-row vs_location $ and %.
+  - `GET /api/v2/reports/ppa-ranking/pdf` — branded printable PDF (reportlab, navy + amber palette matching slide deck).
+  - Defaults to the active snapshot (`is_current=True`) when quarter/year not specified.
+  - Excludes employees with null/zero PPA from both ranking and average calculation.
+- **Frontend:** `components/PPARankingCard.jsx` — expandable card mounted on `/reports` above the Downloadable Reports section. Shows the location-avg callout, server count, sortable table with green/rose ± indicators, and a Download PDF button.
+- **Tests:** `test_reports_ppa_ranking.py` — 7 cases (sort, average math, vs_location arithmetic, default resolution, synthetic deterministic fixture, PDF magic bytes, PDF filename) — all green.
+
+### Verified
+- Live preview (Q2/2026): 32 servers ranked, location avg $49.13. Top: Bruce Diesel Rabago $54.19 (+10.3%), Trey Quick $54.05 (+10.0%). PDF magic bytes confirm `%PDF-1.4`, ~5.4 KB.
+
