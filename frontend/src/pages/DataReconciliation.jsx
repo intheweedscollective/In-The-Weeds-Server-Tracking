@@ -848,19 +848,30 @@ export default function DataReconciliation() {
         </div>
       </div>
 
-      {/* Recently Deleted — restore accidentally removed employees */}
-      {deletedEmployees.length > 0 && (
-        <section data-testid="deleted-employees-panel">
-          <div className="flex items-center gap-2 mb-3">
-            <History className="w-5 h-5 text-rose-300" />
-            <h2 className="text-xl font-serif font-bold text-foreground">
-              Recently Deleted
-            </h2>
-            <span className="text-xs text-slate-500">
-              Restore an employee that was removed via the recon portal.
-              No data is destroyed — only flipped to inactive.
-            </span>
+      {/* Recently Deleted — restore accidentally removed employees.
+          Render the panel header even when empty so the operator can
+          confirm the new build is live (otherwise the section just
+          vanishes and looks like the deploy didn't ship). */}
+      <section data-testid="deleted-employees-panel">
+        <div className="flex items-center gap-2 mb-3">
+          <History className="w-5 h-5 text-rose-300" />
+          <h2 className="text-xl font-serif font-bold text-foreground">
+            Recently Deleted
+          </h2>
+          <span className="text-xs text-slate-500">
+            Restore an employee that was removed via the recon portal.
+            No data is destroyed — only flipped to inactive.
+          </span>
+        </div>
+        {deletedEmployees.length === 0 ? (
+          <div
+            className="rounded-md border border-slate-800 bg-slate-900/40 px-4 py-3 text-xs text-slate-500"
+            data-testid="deleted-employees-empty"
+          >
+            No soft-deleted employees right now — anyone removed via the
+            portal will appear here with a one-click Restore button.
           </div>
+        ) : (
           <div className="rounded-md border border-rose-900/40 bg-rose-950/10 divide-y divide-slate-800">
             {deletedEmployees.map((entry) => {
               const last = entry.last_audit;
@@ -934,8 +945,8 @@ export default function DataReconciliation() {
               );
             })}
           </div>
-        </section>
-      )}
+        )}
+      </section>
 
       {/* Active queue */}
       <section>
