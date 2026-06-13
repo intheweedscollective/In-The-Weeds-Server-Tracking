@@ -2321,17 +2321,27 @@ async def _attach_score_change(
     """Mutate `rankings` in place to add a numeric `score_change` and
     a string `trend` ('up' / 'down' / 'flat') by diffing each rank's
     `total_score` against the prior quarter's score for the same
-    employee (matched by id, falling back to canonical name).
+    employee.
+
+    Identity resolution: id drifts between quarters whenever the
+    operator runs a recon merge, fixes a typo, or onboards a new
+    employee who absorbs an old legacy id. We therefore resolve EACH
+    side of the comparison through the canonical map
+    (`legacy_ids[]` + `merged_into` chain) so the same person matches
+    even when the Q1 snapshot stored a different raw id than the Q2
+    snapshot.
+
+    Operator-reported (2026-06-13): the Trend column on the Q2P6W1
+    snapshot was empty for almost every row because id matching only
+    found 8 of 30 employees; name matching caught 16 more but missed
+    6 (new hires + renames). Resolving via canonical fixes both sides
+    at once.
 
     Looks up the most recent completed snapshot in the prior quarter.
     If there is none — e.g. Q1 with no Q4 data — every rank gets
     `score_change=None` and `trend="flat"`, and the renderers skip
     drawing the magnitude.
-
-    Returns a `prior_meta` dict with the prior snapshot's identity so
-    the PNG/PDF renderers can cite it as the trend reference point
-    on the slide ("Trend vs Q1 2026 snapshot · 2026-04-12").
-    Returns `{"available": False}` when no prior snapshot exists."""
+    """
     prev_quarter_map = {"Q1": "Q4", "Q2": "Q1", "Q3": "Q2", "Q4": "Q3"}
     prev_q = prev_quarter_map.get(quarter, "Q4")
     prev_y = year - 1 if quarter == "Q1" else year
@@ -2348,30 +2358,68 @@ async def _attach_score_change(
             r.setdefault("trend", "flat")
         return {"available": False}
 
-    prev_by_id: Dict[str, float] = {}
-    prev_by_name: Dict[str, float] = {}
-    for e in (prev_snap.get("employees") or []):
-        eid = e.get("id")
-        score = (e.get("total_score") or e.get("pre_dar_score") or 0) or 0
+    # Canonical-resolution map: every employee_id → its current
+    # canonical_id (following legacy_ids[] and merged_into chains).
+    id_to_canon: Dict[str, str] = {}
+    async for c in db.employees.find(
+        {},
+        {"_id": 0, "id": 1, "legacy_ids": 1, "merged_into": 1},
+    ):
+        cid_local = c.get("id")
+        if not cid_local:
+            continue
+        target = c.get("merged_into") or cid_local
+        id_to_canon[cid_local] = target
+        for lid in (c.get("legacy_ids") or []):
+            if lid:
+                id_to_canon[lid] = target
+
+    # Index prior snapshot scores by canonical identity (preferred) AND
+    # by normalised name (fallback for snapshots stored before the
+    # canonical map covered an id). Keep the name table because it
+    # still catches renames that share an old id.
+    prev_by_canon: Dict[str, float] = {}
+    prev_by_name:  Dict[str, float] = {}
+
+    def _store(eid: Optional[str], name: Optional[str], score: float):
+        if score <= 0:
+            return
         if eid:
-            prev_by_id[eid] = float(score)
-        nm = (e.get("name") or "").strip().lower()
+            canon = id_to_canon.get(eid, eid)
+            prev_by_canon.setdefault(canon, float(score))
+        nm = (name or "").strip().lower()
         if nm:
-            prev_by_name[nm] = float(score)
-    # Snapshot rows[] sometimes carry frozen scores for legacy snaps.
+            prev_by_name.setdefault(nm, float(score))
+
+    for e in (prev_snap.get("employees") or []):
+        _store(
+            e.get("id"),
+            e.get("name"),
+            (e.get("total_score") or e.get("pre_dar_score") or 0) or 0,
+        )
     for row in (prev_snap.get("rows") or []):
-        eid = row.get("employee_id")
-        score = row.get("total_score") or row.get("pre_dar_score") or 0
-        if eid and eid not in prev_by_id and score:
-            prev_by_id[eid] = float(score)
-        nm = (row.get("frozen_display_name") or row.get("name") or "").strip().lower()
-        if nm and nm not in prev_by_name and score:
-            prev_by_name[nm] = float(score)
+        _store(
+            row.get("employee_id"),
+            row.get("frozen_display_name") or row.get("name"),
+            row.get("frozen_score")
+            or row.get("total_score")
+            or row.get("pre_dar_score")
+            or 0,
+        )
 
     for r in rankings:
         rid = r.get("id") or r.get("employee_id")
-        rnm = (r.get("name") or "").strip().lower()
-        prev = prev_by_id.get(rid) if rid in prev_by_id else prev_by_name.get(rnm)
+        rnm = (r.get("name") or r.get("display_name") or "").strip().lower()
+        # Resolve the CURRENT side through the canonical map too — a
+        # current ranking row stamped with a legacy id still finds its
+        # canonical-keyed prior score.
+        canon = id_to_canon.get(rid, rid) if rid else None
+        prev = None
+        if canon and canon in prev_by_canon:
+            prev = prev_by_canon[canon]
+        elif rnm and rnm in prev_by_name:
+            prev = prev_by_name[rnm]
+
         if prev is None:
             r.setdefault("score_change", None)
             r.setdefault("trend", "flat")

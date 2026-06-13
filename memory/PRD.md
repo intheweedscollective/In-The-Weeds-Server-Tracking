@@ -2496,3 +2496,23 @@ Columns: Name, PPA, Rank, Tier. ± vs **location average** (mean of all current-
 ### Verified
 - Live preview (Q2/2026): 32 servers ranked, location avg $49.13. Top: Bruce Diesel Rabago $54.19 (+10.3%), Trey Quick $54.05 (+10.0%). PDF magic bytes confirm `%PDF-1.4`, ~5.4 KB.
 
+
+
+## 2026-06-13 — Trend Column Fix (canonical-resolving match)
+
+### Bug
+Operator-reported (preview, Q2P6W1): snapshot detail page Trend column showed "—" for almost every row. Only Adriana had a "▲ +8.6". Footer correctly said *"Trend column compares vs prior snapshot: Q1 2026 · Q1P3W5 · 2026-03-29"*.
+
+### Root cause
+`server._attach_score_change` matched current rankings to prior-snapshot scores by raw `employee_id` (with a name fallback). Ids drift between quarters via typo merges, canonical merges, and legacy renames — on this snapshot only 8/30 matched by id, 16/30 by name fallback, 6/30 not at all.
+
+### Fix
+Build the same `id → canonical_id` map used by the recon cards (follows `legacy_ids[]` AND `merged_into` chains) and apply it to BOTH sides of the comparison:
+- Prior snapshot scores indexed by canonical (not raw id).
+- Current ranking rows resolved through the canonical map before lookup.
+- Name fallback retained for completeness.
+
+### Verified
+- Live preview: trend resolution jumped from 1/29 to 24/29. The 5 still "—" are genuinely new hires (Cory West, Kahi Ramos under that spelling, Arianna Pena, Jeden White, Bruce Diesel Rabago) — correct behavior.
+- New test `test_trend_canonical_resolution.py` pins all three resolution paths (legacy_ids, merged_into, genuinely new) — green.
+
