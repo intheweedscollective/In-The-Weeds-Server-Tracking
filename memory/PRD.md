@@ -2516,3 +2516,26 @@ Build the same `id → canonical_id` map used by the recon cards (follows `legac
 - Live preview: trend resolution jumped from 1/29 to 24/29. The 5 still "—" are genuinely new hires (Cory West, Kahi Ramos under that spelling, Arianna Pena, Jeden White, Bruce Diesel Rabago) — correct behavior.
 - New test `test_trend_canonical_resolution.py` pins all three resolution paths (legacy_ids, merged_into, genuinely new) — green.
 
+
+
+---
+
+## 2026-02 — Trend indicators removed from snapshot exports
+Operator decision (after multiple attempts to make orphan-employee matching across quarters reliable): "I either need them gone or working." Choice: gone.
+
+**Removed from:**
+- `png_full_rankings.py`: Trend column (header, col_props slot, cell, polygon renderer, prior-snapshot caption).
+- `pdf_full_rankings.py`: same — Trend column gone, ReportLab polygon path deleted.
+- `yodeck_slides.py`: TREND column removed from the leaderboard slide (col_widths, col_headers, momentum-indicator block).
+- `server.py`: `_attach_score_change` function deleted entirely. `_load_snapshot_first_rankings` now returns `prior_meta={"available": False}` (kept in the return tuple for caller-signature stability — renderers ignore it).
+
+**Test cleanup:**
+- Deleted `tests/test_trend_canonical_resolution.py` (test against a now-deleted function).
+- Fixed `tests/test_trust_breakdown_and_ghost_dismiss.py` — stale hardcoded `Bearer test-agent-name-score-...` token replaced with the conftest `ADMIN_TOKEN`. 4/4 pass.
+- Fixed `tests/test_phase3_stage_a.py` — `asyncio.get_event_loop()` → `asyncio.new_event_loop()` (Py3.11 raises RuntimeError when no loop exists in MainThread). 3/3 pass.
+
+**Verified:**
+- Snapshot PNG renders 200 OK; columns flow Rank → Name → PPA … Score with no trend slot or caption. Layout proportions rebalanced (0.08 trend width redistributed across the 8 value columns).
+- Snapshot PDF: 200 OK, 413KB.
+- Yodeck leaderboard: TREND column gone.
+- Combined `pytest` run of the two previously-flaky test files: 7 passed in 7.66s.

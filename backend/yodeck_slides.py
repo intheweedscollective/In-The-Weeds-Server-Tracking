@@ -2084,9 +2084,11 @@ def generate_leaderboard_slide(
     row_height = 60
     max_rows = 12
     
-    # Column headers
-    col_widths = [80, 280, 120, 120, 100, 140, 80]  # Rank, Name, Operational, Guest Rep, Bonus, Score, Trend
-    col_headers = ["RANK", "EMPLOYEE", "OPS SCORE", "GUEST REP", "BONUS", "FINAL SCORE", "TREND"]
+    # Column headers (Trend column removed per operator request 2026-02 —
+    # cross-quarter momentum was unreliable for orphan employees and was
+    # showing as "—" for most rows on mobile-shared screenshots).
+    col_widths = [80, 280, 120, 120, 100, 140]  # Rank, Name, Operational, Guest Rep, Bonus, Score
+    col_headers = ["RANK", "EMPLOYEE", "OPS SCORE", "GUEST REP", "BONUS", "FINAL SCORE"]
     
     header_y_table = table_y
     x = table_x
@@ -2196,33 +2198,6 @@ def generate_leaderboard_slide(
         draw.text((col_x + col_widths[5]//2, rank_y), f"{final_score:.1f}", font=font_score,
                   fill=score_color, anchor="mm")
         col_x += col_widths[5]
-        
-        # Momentum indicator — emit arrow + signed point delta so the
-        # viewer sees magnitude, not just direction. "↑ 4.2" reads
-        # better than a bare arrow on a 4K screen at 6ft away.
-        if previous_scores:
-            prev_score = previous_scores.get(emp.get("employee_id"), 0)
-            change = final_score - prev_score
-            if change >= 5:
-                arrow = "🔥"
-            elif change > 0:
-                arrow = "↑"
-            elif change < -2:
-                arrow = "↓"
-            else:
-                arrow = "→"
-            # Magnitude rendered as a signed number with one decimal so
-            # tiny drifts (+0.3) stay visible without cluttering the slide.
-            if abs(change) < 0.05:
-                trend_text = arrow  # essentially flat — drop the noisy "0.0"
-            else:
-                trend_text = f"{arrow} {change:+.1f}"
-            
-            trend_color = LEADERBOARD_COLORS["orange"] if change >= 5 else (
-                LEADERBOARD_COLORS["green"] if change > 0 else (
-                LEADERBOARD_COLORS["red"] if change < -2 else LEADERBOARD_COLORS["textMuted"]))
-            draw.text((col_x + col_widths[6]//2, rank_y), trend_text, font=get_font(18), 
-                      fill=trend_color, anchor="mm")
     
     # Footer
     footer_y = height - 50

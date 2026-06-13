@@ -2307,141 +2307,14 @@ async def _load_snapshot_first_rankings(
         if src.get("nps_manual_override"):
             rank["nps_manual_override"] = True
 
-    # Attach `score_change` + `trend` by diffing against the immediately
-    # prior quarter's snapshot. The PNG/PDF generators use this for the
-    # trend-arrow column so viewers see magnitude alongside direction.
-    prior_meta = await _attach_score_change(rankings, year, quarter.upper())
+    # Trend / score-change column was removed from snapshot exports
+    # (operator request 2026-02): orphan-employee matching across quarters
+    # was unreliable, so the column is gone rather than partially-wrong.
+    # `prior_meta` is kept in the return signature to avoid a wide refactor
+    # of the three callers; renderers ignore it now.
+    prior_meta: Dict[str, Any] = {"available": False}
 
     return rankings, settings, prior_meta
-
-
-async def _attach_score_change(
-    rankings: List[dict], year: int, quarter: str,
-) -> Dict[str, Any]:
-    """Mutate `rankings` in place to add a numeric `score_change` and
-    a string `trend` ('up' / 'down' / 'flat') by diffing each rank's
-    `total_score` against the prior quarter's score for the same
-    employee.
-
-    Identity resolution: id drifts between quarters whenever the
-    operator runs a recon merge, fixes a typo, or onboards a new
-    employee who absorbs an old legacy id. We therefore resolve EACH
-    side of the comparison through the canonical map
-    (`legacy_ids[]` + `merged_into` chain) so the same person matches
-    even when the Q1 snapshot stored a different raw id than the Q2
-    snapshot.
-
-    Operator-reported (2026-06-13): the Trend column on the Q2P6W1
-    snapshot was empty for almost every row because id matching only
-    found 8 of 30 employees; name matching caught 16 more but missed
-    6 (new hires + renames). Resolving via canonical fixes both sides
-    at once.
-
-    Looks up the most recent completed snapshot in the prior quarter.
-    If there is none — e.g. Q1 with no Q4 data — every rank gets
-    `score_change=None` and `trend="flat"`, and the renderers skip
-    drawing the magnitude.
-    """
-    prev_quarter_map = {"Q1": "Q4", "Q2": "Q1", "Q3": "Q2", "Q4": "Q3"}
-    prev_q = prev_quarter_map.get(quarter, "Q4")
-    prev_y = year - 1 if quarter == "Q1" else year
-
-    prev_snap = await db.snapshot_workflow.find_one(
-        {"year": prev_y, "quarter": prev_q, "status": "completed"},
-        {"_id": 0, "employees": 1, "rows": 1, "name": 1,
-         "effective_date": 1, "completed_at": 1, "id": 1},
-        sort=[("effective_date", -1), ("completed_at", -1)],
-    )
-    if not prev_snap:
-        for r in rankings:
-            r.setdefault("score_change", None)
-            r.setdefault("trend", "flat")
-        return {"available": False}
-
-    # Canonical-resolution map: every employee_id → its current
-    # canonical_id (following legacy_ids[] and merged_into chains).
-    id_to_canon: Dict[str, str] = {}
-    async for c in db.employees.find(
-        {},
-        {"_id": 0, "id": 1, "legacy_ids": 1, "merged_into": 1},
-    ):
-        cid_local = c.get("id")
-        if not cid_local:
-            continue
-        target = c.get("merged_into") or cid_local
-        id_to_canon[cid_local] = target
-        for lid in (c.get("legacy_ids") or []):
-            if lid:
-                id_to_canon[lid] = target
-
-    # Index prior snapshot scores by canonical identity (preferred) AND
-    # by normalised name (fallback for snapshots stored before the
-    # canonical map covered an id). Keep the name table because it
-    # still catches renames that share an old id.
-    prev_by_canon: Dict[str, float] = {}
-    prev_by_name:  Dict[str, float] = {}
-
-    def _store(eid: Optional[str], name: Optional[str], score: float):
-        if score <= 0:
-            return
-        if eid:
-            canon = id_to_canon.get(eid, eid)
-            prev_by_canon.setdefault(canon, float(score))
-        nm = (name or "").strip().lower()
-        if nm:
-            prev_by_name.setdefault(nm, float(score))
-
-    for e in (prev_snap.get("employees") or []):
-        _store(
-            e.get("id"),
-            e.get("name"),
-            (e.get("total_score") or e.get("pre_dar_score") or 0) or 0,
-        )
-    for row in (prev_snap.get("rows") or []):
-        _store(
-            row.get("employee_id"),
-            row.get("frozen_display_name") or row.get("name"),
-            row.get("frozen_score")
-            or row.get("total_score")
-            or row.get("pre_dar_score")
-            or 0,
-        )
-
-    for r in rankings:
-        rid = r.get("id") or r.get("employee_id")
-        rnm = (r.get("name") or r.get("display_name") or "").strip().lower()
-        # Resolve the CURRENT side through the canonical map too — a
-        # current ranking row stamped with a legacy id still finds its
-        # canonical-keyed prior score.
-        canon = id_to_canon.get(rid, rid) if rid else None
-        prev = None
-        if canon and canon in prev_by_canon:
-            prev = prev_by_canon[canon]
-        elif rnm and rnm in prev_by_name:
-            prev = prev_by_name[rnm]
-
-        if prev is None:
-            r.setdefault("score_change", None)
-            r.setdefault("trend", "flat")
-            continue
-        delta = float(r.get("total_score") or 0) - prev
-        r["score_change"] = round(delta, 1)
-        if delta > 0.5:
-            r["trend"] = "up"
-        elif delta < -0.5:
-            r["trend"] = "down"
-        else:
-            r["trend"] = "flat"
-
-    return {
-        "available":      True,
-        "snapshot_id":    prev_snap.get("id"),
-        "snapshot_name":  prev_snap.get("name"),
-        "quarter":        prev_q,
-        "year":           prev_y,
-        "effective_date": prev_snap.get("effective_date"),
-        "completed_at":   prev_snap.get("completed_at"),
-    }
 
 
 @api_router.get("/v2/full-rankings/{year}/{quarter}/snapshot-png")
