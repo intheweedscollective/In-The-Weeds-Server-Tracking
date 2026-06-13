@@ -199,6 +199,142 @@ def test_dedupe_card_disappears_after_resolution(duplicate_rows_snapshot):
     assert still_there is None
 
 
+@pytest.fixture
+def post_merge_legacy_id_duplicates(loop):
+    """Operator-reported regression (2026-06-12): after a
+    merge_canonical_into action, the snapshot still pointed at the
+    OLD legacy ids, and the dedupe card missed them because they
+    looked like distinct employee_ids. The detection must follow
+    legacy_ids[]/merged_into to resolve duplicates by canonical.
+
+    Setup:
+      - Keeper canonical 'K' with legacy_ids=[L1] (a merged absorbed id)
+      - A merged canonical 'M' that has merged_into=K
+      - Snapshot rows[] carries three rows: one with K's id, one with
+        L1 (legacy), one with M's id (merged-pre-keeper).
+    All three should be flagged as duplicates of K.
+    """
+    db = _db()
+    snap_id = f"post-merge-{uuid.uuid4().hex[:8]}"
+    keeper = f"keeper-{uuid.uuid4().hex[:6]}"
+    legacy = f"legacy-{uuid.uuid4().hex[:6]}"
+    merged = f"merged-{uuid.uuid4().hex[:6]}"
+
+    async def _seed():
+        prior = await db.snapshot_workflow.find_one(
+            {"is_current": True}, {"_id": 0, "id": 1},
+        )
+        if prior:
+            await db.snapshot_workflow.update_one(
+                {"id": prior["id"]}, {"$set": {"is_current": False}},
+            )
+        await db.employees.insert_many([
+            {"id": keeper, "name": "Kahi Keeper",
+             "status": "active", "aliases": [], "legacy_ids": [legacy]},
+            {"id": merged, "name": "Kahi Old", "status": "merged",
+             "merged_into": keeper, "aliases": [], "legacy_ids": []},
+        ])
+        await db.snapshot_workflow.insert_one({
+            "id": snap_id, "name": "Post-merge dup test",
+            "quarter": "QM", "year": 2999,
+            "status": "completed", "is_current": True,
+            "rows": [
+                {"employee_id": keeper,
+                 "frozen_display_name": "Kahi Keeper",
+                 "frozen_score": 80,
+                 "frozen_metrics": {"ppa": 50}},
+                {"employee_id": legacy,
+                 "frozen_display_name": "Kahi Keeper",
+                 "frozen_score": 80,
+                 "frozen_metrics": {"ppa": 50}},
+                {"employee_id": merged,
+                 "frozen_display_name": "Kahi Old",
+                 "frozen_score": 80,
+                 "frozen_metrics": {"ppa": 50}},
+                {"employee_id": "unrelated",
+                 "frozen_display_name": "Someone Else",
+                 "frozen_score": 70, "frozen_metrics": {"ppa": 45}},
+            ],
+            "employees": [], "deleted_names": [],
+        })
+        return prior
+
+    prior = loop.run_until_complete(_seed())
+    yield snap_id, keeper, legacy, merged
+
+    async def _wipe():
+        await db.snapshot_workflow.delete_one({"id": snap_id})
+        await db.employees.delete_many(
+            {"id": {"$in": [keeper, merged]}}
+        )
+        await db.reconciliation_audit.delete_many({"employee_id": keeper})
+        await db.reconciliation_resolved.delete_many({"employee_id": keeper})
+        if prior:
+            await db.snapshot_workflow.update_one(
+                {"id": prior["id"]}, {"$set": {"is_current": True}},
+            )
+    loop.run_until_complete(_wipe())
+
+
+def test_duplicate_detection_follows_legacy_ids_and_merged_into(
+    post_merge_legacy_id_duplicates,
+):
+    """Three rows pointing at three different ids (keeper, its legacy,
+    a merged canonical) must all resolve to the same canonical card."""
+    snap_id, keeper, legacy, merged = post_merge_legacy_id_duplicates
+    card = next(
+        (c for c in _queue().get("active", [])
+         if c["kind"] == "duplicate_snapshot_rows"
+            and c["raw_inputs"]["resolved_canonical_id"] == keeper),
+        None,
+    )
+    assert card, (
+        "duplicate_snapshot_rows card missing — detection did not follow "
+        "legacy_ids / merged_into to resolve to keeper"
+    )
+    assert card["raw_inputs"]["duplicate_count"] == 3
+    underlying = set(card["raw_inputs"]["underlying_employee_ids"])
+    assert underlying == {keeper, legacy, merged}
+    assert card["raw_inputs"]["duplicate_indices"] == [0, 1, 2]
+
+
+def test_dedupe_removes_legacy_id_dupes(loop, post_merge_legacy_id_duplicates):
+    """Dedupe must remove the legacy/merged rows and keep only the
+    first occurrence (the keeper's row at index 0)."""
+    snap_id, keeper, legacy, merged = post_merge_legacy_id_duplicates
+    card = next(
+        c for c in _queue()["active"]
+        if c["kind"] == "duplicate_snapshot_rows"
+           and c["raw_inputs"]["resolved_canonical_id"] == keeper
+    )
+    r = requests.post(
+        f"{BASE}/api/v2/admin/reconciliation/resolve",
+        headers=ADMIN,
+        json={"conflict_id": card["conflict_id"],
+              "action": "dedupe_snapshot_rows",
+              "reason": "post-merge regression"},
+        timeout=15,
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["duplicate_copies_removed"] == 2
+
+    async def _check():
+        snap = await _db().snapshot_workflow.find_one(
+            {"id": snap_id}, {"_id": 0, "rows": 1},
+        )
+        rows = snap["rows"]
+        # Now should be 2 rows total: keeper + "unrelated".
+        assert len(rows) == 2
+        # First row stays the keeper.
+        assert rows[0]["employee_id"] == keeper
+        # No legacy or merged rows remain.
+        eids = {r["employee_id"] for r in rows}
+        assert legacy not in eids
+        assert merged not in eids
+    loop.run_until_complete(_check())
+
+
 # ===========================================================================
 # canonical_name_collision
 # ===========================================================================

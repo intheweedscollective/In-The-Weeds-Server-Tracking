@@ -916,22 +916,40 @@ class ReconciliationService:
         self,
     ) -> List[Dict[str, Any]]:
         """Surface snapshots whose `rows[]` array contains the same
-        `employee_id` multiple times.
+        canonical identity multiple times.
 
-        Operator-reported (2026-06-12): Kahi Ramos appeared three
-        times on the PPA slide because the active snapshot's `rows[]`
-        carried her canonical id three times. The hydrator faithfully
-        rendered each row, but the underlying duplication was invisible
-        — no recon card existed for it.
+        Detection: build an `employee_id → resolved canonical_id` map
+        that follows BOTH `legacy_ids[]` and `merged_into`. Two rows
+        whose raw employee_ids map to the same canonical are duplicates
+        from the report's perspective even if the ids look different —
+        which is exactly what happens after a canonical merge, when old
+        legacy ids remain in the snapshot.
 
         Resolutions:
           * dedupe_snapshot_rows — keep the first occurrence per
-            employee_id, remove the rest from `rows[]`. Sums of guests
-            / sales are NOT folded — if the row was duplicated by
-            accident every copy carries the same numbers; merging them
-            would inflate the totals.
+            resolved canonical, remove the rest from `rows[]`. Guests/
+            sales are NOT summed (avoid inflation).
           * keep_stored — leave the duplicates in place (silence).
         """
+        # Build employee_id → resolved canonical_id mapping. Includes:
+        #  - every canonical's own id
+        #  - every entry in their legacy_ids[]
+        #  - merged canonicals → follow merged_into to the keeper
+        id_to_canon: Dict[str, str] = {}
+        async for c in self.db.employees.find(
+            {},
+            {"_id": 0, "id": 1, "status": 1, "legacy_ids": 1,
+             "merged_into": 1},
+        ):
+            cid = c.get("id")
+            if not cid:
+                continue
+            target = c.get("merged_into") or cid
+            id_to_canon[cid] = target
+            for lid in (c.get("legacy_ids") or []):
+                if lid:
+                    id_to_canon[lid] = target
+
         conflicts: List[Dict[str, Any]] = []
         async for snap in self.db.snapshot_workflow.find(
             {"is_current": True},
@@ -940,27 +958,41 @@ class ReconciliationService:
             rows = snap.get("rows") or []
             if not rows:
                 continue
-            # Count occurrences per employee_id.
-            counts: Dict[str, List[int]] = {}
+            # Group row indices by RESOLVED canonical (fall back to raw
+            # employee_id when no canonical match — that case is handled
+            # by `orphan_snapshot_ref`, but exact-id dupes still surface).
+            by_canon: Dict[str, List[int]] = {}
             for idx, r in enumerate(rows):
                 eid = r.get("employee_id")
                 if not eid:
                     continue
-                counts.setdefault(eid, []).append(idx)
-            for eid, idxs in counts.items():
+                resolved = id_to_canon.get(eid, eid)
+                by_canon.setdefault(resolved, []).append(idx)
+            for resolved_id, idxs in by_canon.items():
                 if len(idxs) < 2:
                     continue
-                # Use the first row's display name for the card title.
                 first = rows[idxs[0]]
                 display = (first.get("frozen_display_name")
                            or first.get("frozen_report_name")
-                           or eid)
-                cid = duplicate_snapshot_rows_conflict_id(snap["id"], eid)
+                           or resolved_id)
+                # Collect distinct raw employee_ids that resolved to
+                # this canonical — the card explains "rows pointing at
+                # ids X and Y both resolve to the same person."
+                underlying_ids = sorted({
+                    rows[i].get("employee_id") for i in idxs
+                    if rows[i].get("employee_id")
+                })
+                cid = duplicate_snapshot_rows_conflict_id(snap["id"], resolved_id)
+                multi_id_note = (
+                    f" via {len(underlying_ids)} different employee_ids "
+                    f"that all resolve to the same canonical"
+                    if len(underlying_ids) > 1 else ""
+                )
                 conflicts.append({
                     "conflict_id": cid,
                     "kind": "duplicate_snapshot_rows",
-                    "severity_pct": 100.0,  # always loud — distorts every report
-                    "employee_id": eid,
+                    "severity_pct": 100.0,
+                    "employee_id": resolved_id,
                     "employee_name": display,
                     "field": "snapshot.rows[]",
                     "stored_value": f"{len(idxs)} copies",
@@ -973,13 +1005,15 @@ class ReconciliationService:
                         "year":          snap.get("year"),
                         "duplicate_indices": idxs,
                         "duplicate_count":   len(idxs),
+                        "resolved_canonical_id": resolved_id,
+                        "underlying_employee_ids": underlying_ids,
                     },
                     "source": {
                         "reason": (
                             f"'{display}' appears {len(idxs)} times in the "
-                            f"active snapshot's rows[] — every report that "
-                            f"reads from the snapshot will show duplicate "
-                            f"entries until deduped."
+                            f"active snapshot's rows[]" + multi_id_note +
+                            ". Every report that reads from the snapshot "
+                            f"will show duplicate entries until deduped."
                         ),
                         "snapshot_id":   snap["id"],
                         "snapshot_name": snap.get("name"),
@@ -2290,8 +2324,11 @@ class ReconciliationService:
 
         # action == "dedupe_snapshot_rows"
         # Re-read the snapshot fresh so we don't race against any
-        # concurrent edits, then rebuild the rows[] array by keeping the
-        # first occurrence of each (this employee_id) and dropping the rest.
+        # concurrent edits. Rebuild rows[] by walking each row and
+        # checking the RESOLVED canonical (via the same legacy_ids /
+        # merged_into map the builder uses). Keep the first row per
+        # resolved canonical for THIS card's target; drop the rest.
+        # Other employees' rows are untouched.
         snap = await self.db.snapshot_workflow.find_one(
             {"id": snap_id},
             {"_id": 0, "rows": 1, "id": 1},
@@ -2299,16 +2336,36 @@ class ReconciliationService:
         if not snap:
             raise ValueError(f"snapshot {snap_id} no longer exists")
         rows = snap.get("rows") or []
-        # Track only the FIRST index seen per the duplicated eid (other
-        # employee_ids are untouched).
-        kept_first_for_eid: bool = False
+
+        # Rebuild the id → canonical map.
+        id_to_canon: Dict[str, str] = {}
+        async for c in self.db.employees.find(
+            {},
+            {"_id": 0, "id": 1, "legacy_ids": 1, "merged_into": 1},
+        ):
+            cid_local = c.get("id")
+            if not cid_local:
+                continue
+            target = c.get("merged_into") or cid_local
+            id_to_canon[cid_local] = target
+            for lid in (c.get("legacy_ids") or []):
+                if lid:
+                    id_to_canon[lid] = target
+
+        target_canon = card.get("employee_id")
+        # Walk rows once. For rows whose resolved canonical matches
+        # target_canon, keep only the first occurrence and drop the
+        # rest. Untouched for other employees.
+        kept_first_for_target: bool = False
         new_rows: List[Dict[str, Any]] = []
         removed = 0
         for r in rows:
-            if r.get("employee_id") == eid:
-                if not kept_first_for_eid:
+            eid = r.get("employee_id")
+            resolved = id_to_canon.get(eid, eid) if eid else None
+            if resolved == target_canon:
+                if not kept_first_for_target:
                     new_rows.append(r)
-                    kept_first_for_eid = True
+                    kept_first_for_target = True
                 else:
                     removed += 1
                     continue
