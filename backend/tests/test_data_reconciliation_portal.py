@@ -18,11 +18,12 @@ from datetime import datetime, timezone
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
 
+from conftest import ADMIN_TOKEN
+
 load_dotenv("/app/backend/.env")
 
 BASE = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
-TOKEN = "test-agent-name-score-9fe6f8f7-933c-40f6-b3db-bbe3c034f896"
-ADMIN_HEADERS = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
+ADMIN_HEADERS = {"Authorization": f"Bearer {ADMIN_TOKEN}", "Content-Type": "application/json"}
 
 
 def _db():

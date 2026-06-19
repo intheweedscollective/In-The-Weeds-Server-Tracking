@@ -402,8 +402,13 @@ export default function DataReconciliation() {
                         {' · ppa:'} {formatValue(card.raw_inputs?.row_ppa)}
                       </div>
                       {!card.raw_inputs?.row_total_score && (
-                        <div className="text-[10.5px] text-emerald-400/80 mt-1">
+                        <div className="text-[10.5px] text-emerald-400/80 mt-1" data-testid="orphan-safe-to-remove">
                           ✓ Row has no score data — safe to remove without losing historical numbers.
+                        </div>
+                      )}
+                      {!!card.raw_inputs?.row_total_score && (
+                        <div className="text-[10.5px] text-amber-400 mt-1" data-testid="orphan-has-real-data">
+                          ⚠ Row holds a real score ({formatValue(card.raw_inputs?.row_total_score)}). Prefer <b>Relink</b> — <b>Remove</b> will drop the row from this snapshot.
                         </div>
                       )}
                     </>

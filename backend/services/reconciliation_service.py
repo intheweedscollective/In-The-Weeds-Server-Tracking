@@ -567,6 +567,27 @@ class ReconciliationService:
                 # snapshot are more urgent than in older finalized
                 # snapshots.
                 sev = 100.0 if snap.get("is_current") else 75.0
+                # Snapshot rows in the current schema bury the score
+                # inside `frozen_metrics`/`frozen_score`. Older rows
+                # used the flat `total_score` field. Read BOTH so the
+                # card honestly reflects whether the row carries data
+                # — historically we only read `total_score` and the
+                # UI mis-labeled real rows as "safe to remove".
+                row_score = (
+                    row.get("frozen_score")
+                    or row.get("total_score")
+                    or (row.get("frozen_metrics") or {}).get("total_score")
+                    or (row.get("frozen_metrics") or {}).get("pre_dar_score")
+                )
+                row_ppa_val = (
+                    row.get("ppa")
+                    or (row.get("frozen_metrics") or {}).get("ppa")
+                )
+                row_guests_val = (
+                    row.get("guests") or row.get("guest_count")
+                    or (row.get("frozen_metrics") or {}).get("guests")
+                    or (row.get("frozen_metrics") or {}).get("guest_count")
+                )
                 conflicts.append({
                     "conflict_id": cid,
                     "kind": "orphan_snapshot_ref",
@@ -583,13 +604,13 @@ class ReconciliationService:
                         "snapshot_quarter": snap.get("quarter"),
                         "snapshot_year":    snap.get("year"),
                         "missing_employee_id": rid,
-                        # Row almost always has no score data (it's a
-                        # placeholder left behind by a rename) — surface
-                        # that explicitly so the operator knows
-                        # remove_orphan won't lose actual numbers.
-                        "row_total_score": row.get("total_score"),
-                        "row_ppa":         row.get("ppa"),
-                        "row_guests":      row.get("guests") or row.get("guest_count"),
+                        # Honestly surface what the row actually
+                        # contains. The auto-resolver uses the same
+                        # source-of-truth (`frozen_score`) so the UI
+                        # claim matches what the sweeper sees.
+                        "row_total_score": row_score,
+                        "row_ppa":         row_ppa_val,
+                        "row_guests":      row_guests_val,
                     },
                     "source": {
                         "suggested_canonical_id": (target or {}).get("id"),
@@ -1228,6 +1249,13 @@ class ReconciliationService:
         severe drift sits at the top. Resolved conflicts are filtered
         out unless the underlying values have moved beyond tolerance
         since the resolution (i.e. fresh drift)."""
+        # Operator policy 2026-02: auto-resolve orphan snapshot rows
+        # whose entire score payload is null/zero. They're placeholder
+        # husks left behind by renames/merges — manually clicking
+        # "Remove" on each one is just noise. Rows that carry ANY
+        # actual data still surface as manual cards.
+        await self._auto_resolve_zero_impact_orphans()
+
         metric_c    = await self._build_metric_conflicts()
         alias_c     = await self._build_alias_conflicts()
         legacy_c    = await self._build_legacy_duplicate_conflicts()
@@ -1969,6 +1997,151 @@ class ReconciliationService:
     # ------------------------------------------------------------------
     # Orphan snapshot ref resolution
     # ------------------------------------------------------------------
+
+    # Predicate fields that, when ALL falsy on an orphan row, mark the
+    # row as "no score impact" and therefore safe to auto-remove.
+    # Operator-authorized 2026-02; any future score-relevant field
+    # added to a snapshot row MUST be appended here so the auto-sweep
+    # doesn't silently drop real data.
+    _ORPHAN_ZERO_IMPACT_FIELDS = (
+        "total_score", "pre_dar_score", "frozen_score",
+        "weighted_score", "ppa", "per_guest_avg",
+        "guests", "guest_count",
+        "cv_score", "nps_score", "review_tracker_bonus",
+        "metric_bonus", "total_metric_bonus",
+    )
+
+    @classmethod
+    def _orphan_row_has_no_impact(cls, row: Dict[str, Any]) -> bool:
+        """True iff every score-bearing field on the row is null or 0.
+
+        Used by the auto-resolver at queue-build time so placeholder
+        rows left behind by renames/merges disappear without operator
+        intervention. Any non-zero numeric in any of the listed fields
+        keeps the row visible as a manual card.
+
+        Looks both at the row's flat fields AND inside its
+        `frozen_metrics` blob, because the snapshot schema migrated
+        from flat → frozen and orphan placeholders can land in either
+        shape depending on when they were created.
+        """
+        # Flat fields take priority — the auto-sweeper is conservative
+        # and bails on the first truthy value it finds.
+        for f in cls._ORPHAN_ZERO_IMPACT_FIELDS:
+            v = row.get(f)
+            if v is None:
+                continue
+            try:
+                if float(v) != 0.0:
+                    return False
+            except (TypeError, ValueError):
+                if v:
+                    return False
+        # And the same fields nested inside `frozen_metrics` — this is
+        # where the live snapshot schema currently puts the real
+        # scoring numbers.
+        frozen = row.get("frozen_metrics") or {}
+        if isinstance(frozen, dict):
+            for f in cls._ORPHAN_ZERO_IMPACT_FIELDS:
+                v = frozen.get(f)
+                if v is None:
+                    continue
+                try:
+                    if float(v) != 0.0:
+                        return False
+                except (TypeError, ValueError):
+                    if v:
+                        return False
+        return True
+
+    async def _auto_resolve_zero_impact_orphans(self) -> int:
+        """Sweep ALL snapshots and remove orphan rows (snapshot rows
+        whose `employee_id` doesn't resolve to any canonical via id OR
+        `legacy_ids[]`) provided the row carries no score data.
+
+        Returns the number of rows removed. Each removal lands in
+        `reconciliation_audit` with action `auto_remove_orphan` so the
+        operator can reconstruct what was dropped and when.
+        """
+        # Build the resolvable-id set EXACTLY as the orphan card
+        # builder / Trust gate does, so the predicate stays consistent.
+        resolvable_ids: set = set()
+        async for e in self.db.employees.find(
+            {}, {"_id": 0, "id": 1, "legacy_ids": 1}
+        ):
+            if e.get("id"):
+                resolvable_ids.add(e["id"])
+            for lid in (e.get("legacy_ids") or []):
+                if lid:
+                    resolvable_ids.add(lid)
+
+        removed_total = 0
+        async for snap in self.db.snapshot_workflow.find(
+            {}, {"_id": 1, "id": 1, "name": 1, "rows": 1, "employees": 1,
+                 "quarter": 1, "year": 1, "status": 1, "is_current": 1},
+        ):
+            rows = snap.get("rows") or []
+            emps = snap.get("employees") or []
+            if not rows and not emps:
+                continue
+
+            removed_ids: List[str] = []
+            removed_rows_for_audit: List[Dict[str, Any]] = []
+            new_rows: List[Dict[str, Any]] = []
+            for row in rows:
+                rid = row.get("employee_id")
+                if (rid and rid not in resolvable_ids
+                        and self._orphan_row_has_no_impact(row)):
+                    removed_ids.append(rid)
+                    removed_rows_for_audit.append(row)
+                    continue
+                new_rows.append(row)
+
+            if not removed_ids:
+                continue
+
+            # Mirror the removal into snapshot.employees[] (legacy
+            # array) so downstream readers don't resurrect the orphan.
+            removed_id_set = set(removed_ids)
+            new_emps = [e for e in emps if e.get("id") not in removed_id_set]
+
+            await self.db.snapshot_workflow.update_one(
+                {"_id": snap["_id"]},
+                {"$set": {
+                    "rows": new_rows,
+                    "employees": new_emps,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }},
+            )
+
+            for row in removed_rows_for_audit:
+                rid = row.get("employee_id")
+                synthetic_card = {
+                    "conflict_id": orphan_ref_conflict_id(
+                        snap.get("id") or "", rid or ""
+                    ),
+                    "kind": "orphan_snapshot_ref",
+                    "employee_id": rid,
+                    "employee_name": (
+                        row.get("frozen_display_name")
+                        or row.get("name") or "(no name)"
+                    ),
+                    "field": "snapshot_row",
+                }
+                await self._audit(
+                    synthetic_card,
+                    "auto_remove_orphan",
+                    before=row,
+                    after=None,
+                    actor="system:auto-resolve",
+                    reason=(
+                        "row carried no score data "
+                        "(per operator policy 2026-02)"
+                    ),
+                )
+            removed_total += len(removed_ids)
+
+        return removed_total
 
     async def _apply_orphan_resolution(
         self,

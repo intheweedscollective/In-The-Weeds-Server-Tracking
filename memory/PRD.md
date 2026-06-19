@@ -2539,3 +2539,30 @@ Operator decision (after multiple attempts to make orphan-employee matching acro
 - Snapshot PDF: 200 OK, 413KB.
 - Yodeck leaderboard: TREND column gone.
 - Combined `pytest` run of the two previously-flaky test files: 7 passed in 7.66s.
+
+
+---
+
+## 2026-02 — Auto-resolve zero-impact orphan snapshot rows (POLICY EXCEPTION)
+Operator request: "automatically resolve all orphaned rows that do not have an impact on score or historic data." This is a deliberate, narrow exception to the prior strict NO-AUTO-FIX rule.
+
+### What auto-resolves
+At every `GET /api/v2/admin/reconciliation/queue` call, `ReconciliationService.queue()` first invokes `_auto_resolve_zero_impact_orphans()`. The sweep removes any snapshot row that:
+- has an `employee_id` that doesn't resolve to a canonical via `id` OR `legacy_ids[]`, **AND**
+- has all of `total_score`, `pre_dar_score`, `frozen_score`, `weighted_score`, `ppa`, `per_guest_avg`, `guests`, `guest_count`, `cv_score`, `nps_score`, `review_tracker_bonus`, `metric_bonus`, `total_metric_bonus` falsy (null or 0) — checked both at the row's top level **and** inside `frozen_metrics`.
+
+Every removal is audited to `reconciliation_audit` with `action="auto_remove_orphan"` and `actor="system:auto-resolve"` so the full history can be reconstructed.
+
+### Sister bug fixed (latent data-loss risk)
+While integrating I discovered the orphan card builder was reading flat `total_score` from snapshot rows, but the live schema buries the score in `frozen_score` / `frozen_metrics.total_score`. Result: **all 34 production orphan rows** were displaying `score=None` AND showing "✓ Row has no score data — safe to remove" — but they actually carry real scores (80–118 range). The operator clicking Remove would have silently destroyed real historical data.
+
+Fix:
+- `_build_orphan_snapshot_conflicts` now reads `frozen_score` / `frozen_metrics.total_score` for `raw_inputs.row_total_score`, and equivalent fallbacks for `row_ppa` / `row_guests`. Cards now honestly reflect what the row contains.
+- `DataReconciliation.jsx`: added an amber `⚠ Row holds a real score (X). Prefer Relink…` warning that fires whenever `row_total_score` is non-null. The original green "safe to remove" badge still shows for genuinely empty rows.
+
+### Tests
+- `tests/test_auto_resolve_zero_impact_orphans.py`: 3 tests — predicate covers flat + nested `frozen_metrics`, sweep removes empty orphans, sweep preserves orphans with real data, and queue() triggers the sweep automatically.
+- `tests/test_data_reconciliation_portal.py`: replaced stale hardcoded token with conftest `ADMIN_TOKEN`. 10/10 pass.
+
+### Verified end-to-end
+On live preview data: 34 orphan rows in production. Auto-resolver correctly removed **0** of them (all 34 carry real `frozen_score` data — predicate is doing its job). Cards now display `score=91.31, ppa=48.51, guests=2112` etc. instead of `None / None / None`. No safe-to-auto-remove rows exist in production today — the feature is dormant until renames leave behind genuinely empty placeholders.
