@@ -258,6 +258,100 @@ def review_tracker_bonus(mentions: int) -> float:
     return round(min((mentions or 0) * 0.33, 20.0), 1)
 
 
+async def load_live_normalized_percentages(db) -> Dict[str, Dict[str, float]]:
+    """Path C1 source: call the LIVE internal ranking pipeline directly
+    so we get the same dedup/normalization the API endpoint serves,
+    without going through the external ingress (which is auth-gated).
+    """
+    sys.path.insert(0, "/app/backend")
+    from server import _load_snapshot_first_rankings  # type: ignore
+
+    rankings, _settings, _prior_meta = await _load_snapshot_first_rankings(
+        2026, "Q2",
+    )
+    out: Dict[str, Dict[str, float]] = {}
+    for r in rankings:
+        if r.get("no_pos_data_this_period"):
+            continue
+        nm = (r.get("name") or r.get("display_name") or "").strip().lower()
+        if not nm:
+            continue
+        out[nm] = {
+            "lbw_pct":   float(r.get("lbw_percentage") or 0),
+            "glass_pct": float(r.get("glassware_percentage") or 0),
+            "lsc_pct":   float(r.get("lsc_percentage") or 0),
+        }
+    return out
+
+
+def resolve_live_percentages_for(
+    canonical_legal: str,
+    live_pcts: Dict[str, Dict[str, float]],
+) -> Optional[Dict[str, float]]:
+    """Look up the live percentages for this canonical legal name,
+    trying the legal name first then each override alias. Returns
+    None when nothing matches — caller must treat that as a hard
+    miss (parity check will catch it)."""
+    # Direct legal-name match.
+    hit = live_pcts.get(_norm(canonical_legal))
+    if hit:
+        return hit
+    # Alias-driven match (mirrors the live ranking's first-name
+    # display: "Kahi", "Lennie", "TK", etc.).
+    for variant in Q2_ALIAS_OVERRIDE.get(canonical_legal, []):
+        # Try full variant, then first-name only.
+        for candidate in (variant, variant.split()[0] if variant else ""):
+            hit = live_pcts.get(_norm(candidate))
+            if hit:
+                return hit
+    # Also try the legal first name (live ranking uses first-name-only).
+    first = canonical_legal.split()[0] if canonical_legal else ""
+    if first:
+        hit = live_pcts.get(_norm(first))
+        if hit:
+            return hit
+    return None
+
+
+def _path_c1_lbw_glass_lsc_for(
+    canonical_legal: str,
+    live_pcts: Dict[str, Dict[str, float]],
+) -> Dict[str, Any]:
+    """Path C1 enrichment: store the live ranking endpoint's already-
+    merged LBW%/Glass%/LSC% DIRECTLY on the staged record. We do NOT
+    back-solve per-guest raws (back-solving fabricates raw data and
+    can't uniquely invert a capped/transformed normalization).
+
+    The scorer wrapper injects these straight onto
+    `EmployeeV2.score_lbw / score_glass / score_lsc` AFTER
+    `calculate_normalized_scores` runs, bypassing the raw→percentage
+    step for these three only. Steps 7+ (`calculate_bonus_points`,
+    `calculate_total_score`) consume the injected values unmodified.
+
+    Each value carries `source="live_derived"` so it's never confused
+    with an independently reconciled number.
+    """
+    hit = resolve_live_percentages_for(canonical_legal, live_pcts)
+    if hit is None:
+        return {
+            "lbw_percentage":       None,
+            "glassware_percentage": None,
+            "lsc_percentage":       None,
+            "lbw_pct_source":       "MISS",
+            "glass_pct_source":     "MISS",
+            "lsc_pct_source":       "MISS",
+        }
+    return {
+        # Direct injection — no transformation.
+        "lbw_percentage":       hit["lbw_pct"],
+        "glassware_percentage": hit["glass_pct"],
+        "lsc_percentage":       hit["lsc_pct"],
+        "lbw_pct_source":       "live_derived",
+        "glass_pct_source":     "live_derived",
+        "lsc_pct_source":       "live_derived",
+    }
+
+
 # --------------------------------------------------------------------
 # Stager
 # --------------------------------------------------------------------
@@ -266,6 +360,18 @@ async def stage(db) -> Dict[str, Any]:
     nps_rows = load_nps_optional()
     rt_rows  = load_rt_optional()
     resolver = build_override_resolver()
+
+    # Path C1: live percentages source — direct call into the same
+    # internal pipeline the API endpoint serves (no auth-gated HTTP).
+    live_pcts: Dict[str, Dict[str, float]] = {}
+    try:
+        live_pcts = await load_live_normalized_percentages(db)
+        print(f"loaded LIVE normalized %s for {len(live_pcts)} ranking rows "
+              f"(Path C1, internal call)")
+    except Exception as e:
+        print(f"WARN: live ranking pipeline call failed: {e!r}. "
+              f"LBW/Glass/LSC per_guest will default to 0 and parity "
+              f"check WILL fail.")
 
     # Validate POS truth doesn't already contain anything from
     # EXCLUDE_FROM_REBUILD — if it did, we'd silently include them.
@@ -367,13 +473,14 @@ async def stage(db) -> Dict[str, Any]:
             "report_name":   canonical_legal,
             "aliases":       Q2_ALIAS_OVERRIDE.get(canonical_legal, []),
             "alias_source":  "Q2_ALIAS_OVERRIDE" if canonical_legal in Q2_ALIAS_OVERRIDE else "none",
-            "job_title":     "Server",  # snapshot-first; live record stays untouched
+            "job_title":     "Server",
             "quarter":       QUARTER,
             "year":          YEAR,
             "net_sales":     net_sales,
             "guests":        guests,
             "guest_count":   guests,
             "ppa":           ppa,
+            **_path_c1_lbw_glass_lsc_for(canonical_legal, live_pcts),
             **cv_block,
             **rt_block,
         })
