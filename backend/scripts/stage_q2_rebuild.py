@@ -118,16 +118,58 @@ def load_pos_truth() -> List[Dict[str, Any]]:
 
 
 def load_nps_optional() -> Optional[List[Dict[str, Any]]]:
-    """Returns None when the NPS source file isn't yet on disk.
-    Caller flags those rows as PENDING_SOURCE_FILE rather than
-    inventing zeros.
+    """Read the aggregated NPS report (xlsx). Returns rows shaped as
+    {server_name, received, avg_rating, nps_score}. The file is a
+    per-server roll-up — it does NOT carry transaction-level
+    promoter/passive/detractor counts, so we cannot derive the live
+    `cv_score = nps_score_pts + (promoters - 2*detractors)` formula.
+    We populate `nps_score`, `nps_score_pts = nps_score/10`, and
+    `cv_responses`. cv_promoters/passives/detractors stay None and
+    cv_source is stamped `aggregate_only` so the operator can see what
+    was sourced.
     """
-    if not os.path.exists(NPS_CSV):
+    candidates = [
+        "/app/data/6.15_nps_Server_Performance_Report_copy.xlsx",
+        "/app/data/q2_nps_truth.xlsx",
+        "/app/data/q2_nps_truth.csv",
+    ]
+    path = next((p for p in candidates if os.path.exists(p)), None)
+    if path is None:
         return None
     out: List[Dict[str, Any]] = []
-    with open(NPS_CSV, newline="") as fh:
-        for row in csv.DictReader(fh):
-            out.append({k: row.get(k) for k in row.keys()})
+    if path.endswith(".xlsx"):
+        import openpyxl
+        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        ws = wb.active
+        rows_iter = ws.iter_rows(values_only=True)
+        header = next(rows_iter, None)
+        if not header:
+            return out
+        idx = {str(h).strip().lower(): i for i, h in enumerate(header) if h}
+        # Tolerant header lookup so the operator can re-export with
+        # slight column-name drift without breaking the stager.
+        def _col(*aliases):
+            for a in aliases:
+                if a in idx:
+                    return idx[a]
+            return None
+        c_name = _col("name", "server_name", "server")
+        c_recv = _col("received", "responses", "total")
+        c_avg  = _col("avg rating", "avg_rating", "rating")
+        c_nps  = _col("nps", "nps_score")
+        for r in rows_iter:
+            if not r or c_name is None or r[c_name] is None:
+                continue
+            out.append({
+                "server_name": str(r[c_name]).strip(),
+                "received":    r[c_recv] if c_recv is not None else None,
+                "avg_rating":  r[c_avg]  if c_avg  is not None else None,
+                "nps_score":   r[c_nps]  if c_nps  is not None else None,
+            })
+    else:
+        with open(path, newline="") as fh:
+            for row in csv.DictReader(fh):
+                out.append({k: row.get(k) for k in row.keys()})
     return out
 
 
@@ -139,6 +181,81 @@ def load_rt_optional() -> Optional[List[Dict[str, Any]]]:
         for row in csv.DictReader(fh):
             out.append({k: row.get(k) for k in row.keys()})
     return out
+
+
+def extract_rt_mentions_per_canonical(
+    rt_rows: List[Dict[str, Any]],
+    canonical_legals: List[str],
+) -> Dict[str, int]:
+    """Faithful re-implementation of the LIVE mention extractor from
+    snapshot_routes.py:4620-4805. Same algorithm, same dedup rule
+    (`mentioned_in_review`), same `\\b<variant>\\b` regex shape.
+
+    Seeded with the operator-authoritative Q2_ALIAS_OVERRIDE map
+    instead of the hard-coded `name_variations` block — that's the
+    only change. Returns {canonical_legal_name: mention_count}.
+    """
+    import re
+
+    # Build first-name → [variant first-names] from override + canonical.
+    # The live extractor uses first-name string matching; mirror that.
+    variants_by_canonical: Dict[str, List[str]] = {}
+    for legal in canonical_legals:
+        first = legal.split()[0].lower() if legal else ""
+        if not first:
+            continue
+        variants = {first}
+        # Each override variant contributes its FIRST token too — that
+        # matches how the live extractor treats nicknames (which are
+        # first-name-shaped: "Kahi", "TK", "Trey", ...).
+        for v in Q2_ALIAS_OVERRIDE.get(legal, []):
+            vf = v.split()[0].lower() if v else ""
+            if vf and len(vf) >= 2:
+                variants.add(vf)
+        # Drop variants < 3 chars — matches the live extractor's
+        # `len(first_name) < 3` skip at line 4751 to suppress noise
+        # from "TK"/"AJ"-style 2-letter strings. ACCEPTING that this
+        # means short-name aliases like "TK" / "Tk" / "Ikey" won't
+        # match — log it explicitly so the operator can override.
+        variants = {v for v in variants if len(v) >= 3}
+        variants_by_canonical[legal] = sorted(variants)
+
+    # Pre-compile patterns once.
+    patterns_by_canonical: Dict[str, List[re.Pattern]] = {
+        legal: [re.compile(r"\b" + re.escape(v) + r"\b") for v in vs]
+        for legal, vs in variants_by_canonical.items()
+    }
+
+    mentions: Dict[str, int] = {legal: 0 for legal in canonical_legals}
+
+    for row in rt_rows:
+        # Live extractor reads the `Review` column (line 4735) with
+        # fallback to lowercase variants and "Content".
+        review_text = (
+            row.get("Review") or row.get("review")
+            or row.get("Content") or row.get("content") or ""
+        )
+        if not review_text or not str(review_text).strip():
+            continue
+        review_lower = str(review_text).lower()
+
+        # Dedup within a single review (live extractor lines 4742, 4770).
+        mentioned_in_review: set = set()
+        for legal, pats in patterns_by_canonical.items():
+            if legal in mentioned_in_review:
+                continue
+            if any(p.search(review_lower) for p in pats):
+                mentions[legal] += 1
+                mentioned_in_review.add(legal)
+
+    return mentions
+
+
+def review_tracker_bonus(mentions: int) -> float:
+    """Mirror of the live formula at snapshot_routes.py:4332 —
+    `min(mentions * 0.33, 20)` rounded to 1dp. Reproducing it here so
+    the staging script doesn't depend on importing snapshot_routes."""
+    return round(min((mentions or 0) * 0.33, 20.0), 1)
 
 
 # --------------------------------------------------------------------
@@ -159,6 +276,22 @@ async def stage(db) -> Dict[str, Any]:
         print(f"WARN: POS truth contains names on the EXCLUDE list: "
               f"{excluded_present} — these will still be skipped.")
 
+    # Pre-extract RT mentions for ALL canonical legals in one pass,
+    # so the per-employee loop just looks up the count. This matches
+    # the live algorithm shape (one pass over reviews, dedup per review).
+    canonical_legals: List[str] = []
+    for pos in pos_rows:
+        legal = pos["server_name"].strip()
+        if legal in EXCLUDE_FROM_REBUILD:
+            continue
+        canon = resolver.get(_norm(legal), legal)
+        if canon not in canonical_legals:
+            canonical_legals.append(canon)
+    rt_mentions_by_legal: Dict[str, int] = (
+        extract_rt_mentions_per_canonical(rt_rows, canonical_legals)
+        if rt_rows is not None else {}
+    )
+
     # Build the staged employees[].
     staged_employees: List[Dict[str, Any]] = []
     duplicate_guard: Dict[str, int] = {}
@@ -167,90 +300,65 @@ async def stage(db) -> Dict[str, Any]:
         legal = pos["server_name"].strip()
         if legal in EXCLUDE_FROM_REBUILD:
             continue
-        # Canonicalize via the override map; if the CSV name isn't in
-        # the map at all, the legal name from the CSV IS the legal name.
         canonical_legal = resolver.get(_norm(legal), legal)
 
-        # Duplicate guard: enforce ONE row per canonical legal name.
+        # Duplicate guard.
         if _norm(canonical_legal) in duplicate_guard:
             duplicate_guard[_norm(canonical_legal)] += 1
             continue
         duplicate_guard[_norm(canonical_legal)] = 1
 
-        # POS metrics — straight from the truth CSV.
         net_sales = pos["net_sales"] or 0
         guests    = int(pos["guests"] or 0)
         ppa       = pos["ppa"]
 
-        # CV (NPS) join — exact legal-name match in the NPS report.
+        # ---- CV (NPS) join ---------------------------------------
         cv_block: Dict[str, Any] = {
-            "cv_source": "PENDING_SOURCE_FILE" if nps_rows is None else "matched",
-            "cv_promoters": None,
-            "cv_passives": None,
+            "cv_source":     "PENDING_SOURCE_FILE" if nps_rows is None else "matched",
+            "cv_promoters":  None,
+            "cv_passives":   None,
             "cv_detractors": None,
-            "nps_score": None,
+            "cv_responses":  None,
+            "nps_score":     None,
+            "nps_score_pts": None,
+            "cv_score":      None,
         }
         if nps_rows is not None:
             match = next(
                 (r for r in nps_rows
-                 if _norm(r.get("server_name") or r.get("name")) == _norm(canonical_legal)),
+                 if _norm(r.get("server_name")) == _norm(canonical_legal)),
                 None,
             )
             if match:
-                cv_block["cv_promoters"]  = _fnum(match.get("promoters"))
-                cv_block["cv_passives"]   = _fnum(match.get("passives"))
-                cv_block["cv_detractors"] = _fnum(match.get("detractors"))
-                cv_block["nps_score"]     = _fnum(match.get("nps_score")
-                                                   or match.get("nps"))
+                nps_v   = _fnum(match.get("nps_score"))
+                recv_v  = _fnum(match.get("received"))
+                cv_block["nps_score"]     = nps_v
+                cv_block["cv_responses"]  = int(recv_v) if recv_v is not None else None
+                # Live calc: `nps_score_pts = nps_score / 10`.
+                cv_block["nps_score_pts"] = (round(nps_v / 10, 2)
+                                              if nps_v is not None else None)
+                # Without transaction-level data we can't compute the
+                # promoter-bonus portion. Surface what we have and
+                # tag the source so the operator sees the limitation.
+                cv_block["cv_score"]      = cv_block["nps_score_pts"]
+                cv_block["cv_source"]     = "aggregate_only"
             else:
                 cv_block["cv_source"] = "no_nps_row"
 
-        # RT mentions — the live app reads a pre-counted `mentions`
-        # field per row from the parsed RT file (snapshot_routes.py
-        # ~line 4330). It does NOT extract counts from raw review
-        # text. So once the RT CSV is delivered, we'll:
-        #   1. confirm whether the file has a `mentions` column
-        #      already (pre-counted) — if yes, sum across rows whose
-        #      `server_name` (canonicalized via the override map)
-        #      equals this employee, and
-        #   2. if the file is raw review text instead, halt and ask
-        #      the operator which column to count against, rather
-        #      than inventing an extractor.
-        rt_block: Dict[str, Any] = {
-            "rt_source": "PENDING_SOURCE_FILE" if rt_rows is None else "computed",
-            "rt_mentions": None,
-        }
-        if rt_rows is not None:
-            # Detect schema: pre-counted vs raw-text.
-            first = rt_rows[0] if rt_rows else {}
-            has_mentions_col = any(
-                k.lower() in ("mentions", "mention_count", "count")
-                for k in first.keys()
-            )
-            if has_mentions_col:
-                # Sum mentions across rows that map to this canonical.
-                mention_key = next(
-                    k for k in first.keys()
-                    if k.lower() in ("mentions", "mention_count", "count")
-                )
-                name_key = next(
-                    (k for k in first.keys()
-                     if k.lower() in ("name", "server_name", "server", "employee")),
-                    None,
-                )
-                if name_key is None:
-                    rt_block["rt_source"] = "rt_csv_missing_name_column"
-                else:
-                    total = 0
-                    for r in rt_rows:
-                        rn = _norm(r.get(name_key))
-                        if resolver.get(rn, r.get(name_key) or "") == canonical_legal:
-                            v = _fnum(r.get(mention_key))
-                            if v is not None:
-                                total += v
-                    rt_block["rt_mentions"] = int(total)
-            else:
-                rt_block["rt_source"] = "rt_csv_is_raw_text_HALT"
+        # ---- RT mentions ----------------------------------------
+        if rt_rows is None:
+            rt_block = {
+                "rt_source":            "PENDING_SOURCE_FILE",
+                "rt_mentions":          None,
+                "review_tracker_bonus": None,
+            }
+        else:
+            m = rt_mentions_by_legal.get(canonical_legal, 0)
+            rt_block = {
+                "rt_source":            "computed",
+                "rt_mentions":          int(m),
+                "review_tracker_bonus": review_tracker_bonus(m),
+            }
 
         staged_employees.append({
             "id":            str(uuid.uuid4()),
