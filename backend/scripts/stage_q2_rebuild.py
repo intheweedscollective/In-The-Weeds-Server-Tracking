@@ -117,16 +117,17 @@ def load_pos_truth() -> List[Dict[str, Any]]:
     return out
 
 
-def load_nps_optional() -> Optional[List[Dict[str, Any]]]:
-    """Read the aggregated NPS report (xlsx). Returns rows shaped as
-    {server_name, received, avg_rating, nps_score}. The file is a
-    per-server roll-up — it does NOT carry transaction-level
-    promoter/passive/detractor counts, so we cannot derive the live
-    `cv_score = nps_score_pts + (promoters - 2*detractors)` formula.
-    We populate `nps_score`, `nps_score_pts = nps_score/10`, and
-    `cv_responses`. cv_promoters/passives/detractors stay None and
-    cv_source is stamped `aggregate_only` so the operator can see what
-    was sourced.
+async def load_nps_optional() -> Optional[List[Dict[str, Any]]]:
+    """Read the aggregated NPS report (xlsx) via the LIVE `parse_cv_file`
+    parser so the cv_promoters/cv_passives/cv_detractors derivation is
+    byte-identical to what the production NPS upload path produces.
+
+    The live parser at snapshot_routes.py:4398 owns the legacy
+    estimation rule that turns (Name, Received, NPS) into
+    (promoters, passives, detractors). Reusing it here = no formula
+    change, just the same code on the same input.
+
+    Returns parser output rows; None when the file is absent.
     """
     candidates = [
         "/app/data/6.15_nps_Server_Performance_Report_copy.xlsx",
@@ -136,41 +137,12 @@ def load_nps_optional() -> Optional[List[Dict[str, Any]]]:
     path = next((p for p in candidates if os.path.exists(p)), None)
     if path is None:
         return None
-    out: List[Dict[str, Any]] = []
-    if path.endswith(".xlsx"):
-        import openpyxl
-        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
-        ws = wb.active
-        rows_iter = ws.iter_rows(values_only=True)
-        header = next(rows_iter, None)
-        if not header:
-            return out
-        idx = {str(h).strip().lower(): i for i, h in enumerate(header) if h}
-        # Tolerant header lookup so the operator can re-export with
-        # slight column-name drift without breaking the stager.
-        def _col(*aliases):
-            for a in aliases:
-                if a in idx:
-                    return idx[a]
-            return None
-        c_name = _col("name", "server_name", "server")
-        c_recv = _col("received", "responses", "total")
-        c_avg  = _col("avg rating", "avg_rating", "rating")
-        c_nps  = _col("nps", "nps_score")
-        for r in rows_iter:
-            if not r or c_name is None or r[c_name] is None:
-                continue
-            out.append({
-                "server_name": str(r[c_name]).strip(),
-                "received":    r[c_recv] if c_recv is not None else None,
-                "avg_rating":  r[c_avg]  if c_avg  is not None else None,
-                "nps_score":   r[c_nps]  if c_nps  is not None else None,
-            })
-    else:
-        with open(path, newline="") as fh:
-            for row in csv.DictReader(fh):
-                out.append({k: row.get(k) for k in row.keys()})
-    return out
+    with open(path, "rb") as fh:
+        contents = fh.read()
+    sys.path.insert(0, "/app/backend")
+    from snapshot_routes import parse_cv_file  # type: ignore
+    parsed = await parse_cv_file(os.path.basename(path), contents)
+    return parsed.get("employees") or []
 
 
 def load_rt_optional() -> Optional[List[Dict[str, Any]]]:
@@ -357,7 +329,7 @@ def _path_c1_lbw_glass_lsc_for(
 # --------------------------------------------------------------------
 async def stage(db) -> Dict[str, Any]:
     pos_rows = load_pos_truth()
-    nps_rows = load_nps_optional()
+    nps_rows = await load_nps_optional()
     rt_rows  = load_rt_optional()
     resolver = build_override_resolver()
 
@@ -419,35 +391,32 @@ async def stage(db) -> Dict[str, Any]:
         ppa       = pos["ppa"]
 
         # ---- CV (NPS) join ---------------------------------------
+        # Pull promoter/passive/detractor counts from the LIVE parser
+        # output (parse_cv_file) — identical derivation to production.
+        # Then the canonical scorer computes cv_score itself; we DON'T
+        # pre-compute it here.
         cv_block: Dict[str, Any] = {
-            "cv_source":     "PENDING_SOURCE_FILE" if nps_rows is None else "matched",
+            "cv_source":     "PENDING_SOURCE_FILE" if nps_rows is None else "live_parser",
             "cv_promoters":  None,
             "cv_passives":   None,
             "cv_detractors": None,
             "cv_responses":  None,
             "nps_score":     None,
-            "nps_score_pts": None,
-            "cv_score":      None,
         }
         if nps_rows is not None:
             match = next(
                 (r for r in nps_rows
-                 if _norm(r.get("server_name")) == _norm(canonical_legal)),
+                 if _norm(r.get("name")) == _norm(canonical_legal)),
                 None,
             )
             if match:
-                nps_v   = _fnum(match.get("nps_score"))
-                recv_v  = _fnum(match.get("received"))
-                cv_block["nps_score"]     = nps_v
-                cv_block["cv_responses"]  = int(recv_v) if recv_v is not None else None
-                # Live calc: `nps_score_pts = nps_score / 10`.
-                cv_block["nps_score_pts"] = (round(nps_v / 10, 2)
-                                              if nps_v is not None else None)
-                # Without transaction-level data we can't compute the
-                # promoter-bonus portion. Surface what we have and
-                # tag the source so the operator sees the limitation.
-                cv_block["cv_score"]      = cv_block["nps_score_pts"]
-                cv_block["cv_source"]     = "aggregate_only"
+                cv_block["nps_score"]     = _fnum(match.get("nps_score"))
+                cv_block["cv_responses"]  = (int(match.get("responses"))
+                                              if match.get("responses") is not None else None)
+                cv_block["cv_promoters"]  = int(match.get("promoters") or 0)
+                cv_block["cv_passives"]   = int(match.get("passives") or 0)
+                cv_block["cv_detractors"] = int(match.get("detractors") or 0)
+                cv_block["cv_source"]     = "live_parser"
             else:
                 cv_block["cv_source"] = "no_nps_row"
 
