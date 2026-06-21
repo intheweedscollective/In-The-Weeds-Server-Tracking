@@ -2837,6 +2837,81 @@ async def _hydrate_snapshot_employees(db, snapshot: Dict[str, Any]) -> List[Dict
             2,
         )
 
+    # 7. Phantom rows for active canonical employees absent from this
+    #    snapshot. Operator-reported 2026-02: "Now I'm missing employees" —
+    #    the snapshot legitimately only contains people who appeared in
+    #    the current week's POS upload, so anyone off-rotation / on
+    #    vacation / data-missing was invisible. Surfacing them as
+    #    zero-score rows with `no_pos_data_this_period=True` lets the
+    #    dashboard render them muted and answers the operator's "where
+    #    is X?" question without inventing data.
+    #
+    #    Skip when the snapshot is FINALIZED (the historical PDF must
+    #    match the moment-in-time freeze, no phantoms allowed).
+    if not snapshot_finalized:
+        present_canonical_ids = {
+            e.get("canonical_id") for e in sorted_employees if e.get("canonical_id")
+        }
+        present_names_lc = {
+            (e.get("name") or "").lower().strip() for e in sorted_employees
+        }
+        async for ce in db.employees.find(
+            {"status": "active"},
+            {"_id": 0, "id": 1, "name": 1, "display_name": 1, "job_title": 1,
+             "aliases": 1, "legacy_ids": 1, "current_metrics": 1},
+        ):
+            cid = ce.get("id")
+            name = ce.get("display_name") or ce.get("name") or ""
+            nm_lc = name.lower().strip()
+            if cid in present_canonical_ids or nm_lc in present_names_lc:
+                continue
+            # Aliases catch the case where the snapshot row carries an
+            # alias spelling but the canonical record's `name` differs.
+            if any(
+                (a or "").lower().strip() in present_names_lc
+                for a in (ce.get("aliases") or [])
+            ):
+                continue
+            jt = (ce.get("job_title") or "Server").strip()
+            # Normalise tier label so the front-end sorter & tier
+            # bucket maths recognise the row (same map used above).
+            tier = "Trainer" if jt.lower() == "trainer" else (
+                "Bartender" if jt.lower() == "bartender" else "C-Server"
+            )
+            sorted_employees.append({
+                "id":             cid,
+                "canonical_id":   cid,
+                "name":           name,
+                "display_name":   name,
+                "job_title":      jt,
+                "tier_label":     tier,
+                "no_pos_data_this_period": True,
+                # Zero everything so the row sorts to the bottom of its
+                # tier and never accidentally counts as a real score.
+                "final_score":    0.0,
+                "total_score":    0.0,
+                "score_ppa":      0.0,
+                "score_lbw":      0.0,
+                "score_glass":    0.0,
+                "score_lsc":      0.0,
+                "ppa_pct":        0.0,
+                "lbw_pct":        0.0,
+                "glassware_pct":  0.0,
+                "lsc_pct":        0.0,
+                "bonus_ppa":      0.0,
+                "bonus_lbw":      0.0,
+                "bonus_glass":    0.0,
+                "bonus_lsc":      0.0,
+                "metric_bonus":   0.0,
+                "total_metric_bonus": 0.0,
+                "cv_score":       0.0,
+                "review_tracker_bonus": 0.0,
+                "review_mentions": 0,
+                "rt_mentions":    0,
+                "guests":         0,
+                "guest_count":    0,
+            })
+
     return sorted_employees
 
 

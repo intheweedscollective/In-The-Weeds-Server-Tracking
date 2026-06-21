@@ -2566,3 +2566,30 @@ Fix:
 
 ### Verified end-to-end
 On live preview data: 34 orphan rows in production. Auto-resolver correctly removed **0** of them (all 34 carry real `frozen_score` data — predicate is doing its job). Cards now display `score=91.31, ppa=48.51, guests=2112` etc. instead of `None / None / None`. No safe-to-auto-remove rows exist in production today — the feature is dormant until renames leave behind genuinely empty placeholders.
+
+
+---
+
+## 2026-02 — "Missing employees" on dashboard → phantom roster rows
+
+### Operator report
+Production dashboard showing only 20 employees in the rankings. Expected ~29. Diagnosed live data:
+
+- Snapshot `Q2P6W2` has 31 POS rows that correctly collapse to **20 unique canonical people** after dedup (Treyanna→Trey, Craig→Allen, Lakeisha→Keisha, Eric→Ikey, Glennice/Glennlce→Lennie, Kahiaulani/Kahiauani→Kahi, Abigail→Abby, TK×2). All collapses are prior approved canonical merges.
+- However **10 active canonical employees were silently absent** because they didn't appear in the current week's POS upload: Robert Mckinnon, Polly Blocker, Eddie Garcia, Lexi Crandall, Julian Taveras (trainer), Kelsey Corkum, Diane Peterson (trainer), Daniel Mayorga (trainer), Tarek Araman, Dylan Franklin.
+- 2 stale test fixtures (`Kahiaulani Ramos 00d955`, `Wrong Owner 4b7c87`) polluting the canonical table.
+
+**NOT caused by auto_remove_orphan code: 0 audit entries.** The auto-sweep was a strict no-op on live data.
+
+### Fix
+1. **Phantom rows in `_hydrate_snapshot_employees`**: append zero-score rows for every `status="active"` canonical employee not present (matched by `canonical_id` / name / aliases). Each carries `no_pos_data_this_period=True`. Skipped for `finalized` snapshots so historical PDFs stay pinned.
+2. **`EmployeeV2.no_pos_data_this_period: bool = False`** field added so the flag survives `EmployeeV2(**emp_data)` (`extra="ignore"`).
+3. **`generate_hierarchy_rankings`** propagates the flag onto output rankings.
+4. **`FullRankings.js`**: phantom rows render with `opacity-50 italic` + slate "No data this period" badge. `data-no-pos-data` attribute for testability.
+5. **Test fixture cleanup**: soft-deleted `Kahiaulani Ramos 00d955` and `Wrong Owner 4b7c87`.
+
+### Tests
+`tests/test_phantom_roster_rows.py` — 2 tests (phantom appears for missing active canonical, finalized emits zero phantoms). Regression: 15/15 pass.
+
+### Verified
+`GET /api/v2/full-rankings/2026/Q2` now returns **30 employees** (20 real + 10 phantoms with the exact missing names).
