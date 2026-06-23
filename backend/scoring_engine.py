@@ -1225,11 +1225,11 @@ def generate_hierarchy_rankings(employees: List[EmployeeV2], settings: QuarterSe
             "ppa_percentage": emp.score_ppa or 0,
             "lbw_percentage": emp.score_lbw or 0,
             "glassware_percentage": emp.score_glass or 0,
-            # LSC display caps at 100 to reflect actual scoring contribution.
-            # Raw uncapped value is preserved on `score_lsc` and the
-            # `lsc_percentage_uncapped` diagnostic key. The +5 bonus
-            # (calculate_bonus_points) is the only sanctioned overflow.
-            "lsc_percentage": min((emp.score_lsc or 0), 100),
+            # LSC display is uncapped — surfaces the true LSC % so the
+            # downstream +5 metric bonus (sanctioned overflow above 100%)
+            # is transparent to employees. Scoring math (lsc_points.earned
+            # below) still clamps at 100; this field is display-only.
+            "lsc_percentage": emp.score_lsc or 0,
             "lsc_percentage_uncapped": emp.score_lsc or 0,
             "score_ppa": emp.score_ppa or 0,
             "score_lbw": emp.score_lbw or 0,

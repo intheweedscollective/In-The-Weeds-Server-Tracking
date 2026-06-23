@@ -10,6 +10,46 @@ Build a comprehensive performance review application for restaurant employees.
 - **AI**: OpenAI GPT-4o (via Emergent LLM Key)
 - **Auth**: Emergent-managed Google Auth (whitelist via `ALLOWED_ADMIN_EMAILS`)
 
+## P0: LSC% display column uncapped — SHIPPED 2026-02
+
+**User report**: Yodeck/Full Rankings PNG LSC% column visually clamped
+at 100% even when employees scored well above benchmark (e.g. Kitti's
+true LSC was 433%, but the column always showed "100%"). This hid the
+fact that the metric bonus they earned came from over-100% performance,
+making the +5 bonus look unexplained to staff.
+
+**Reconciliation of contradictory paths** (per operator request):
+- `yodeck_slides.py:1181` (`generate_complete_rankings_slide`) does
+  read `score_lsc` uncapped — but that path feeds `snapshot_slides`
+  which only renders a tier-column layout (rank labels + first
+  names), no LSC% column.
+- The actual screenshotted column comes from **`png_full_rankings.py:301`**
+  and **`pdf_full_rankings.py:210`**, both of which read
+  `emp.get("lsc_percentage")` — the field clamped at
+  `min(score_lsc, 100)` in `scoring_engine.py:1232`.
+
+**Fix**: One-line revert at `scoring_engine.py:1232` to emit
+`lsc_percentage = emp.score_lsc or 0` (uncapped). The companion
+`lsc_percentage_uncapped` diagnostic key is retained as a no-op
+alias for any consumers that hardcoded against it.
+
+**Proof** (Q2 2026 live snapshot, via `/api/v2/full-rankings/2026/Q2`):
+- Kitti: `lsc_percentage` 100 → 433.46, `total_score` 120.62 →
+  120.62 (unchanged), `lsc_points.earned` 30.0 → 30.0 (scoring
+  math untouched — `min(score_lsc,100)*0.25 + bonus_lsc` clamp
+  preserved at line 1257).
+- All 29 employees: total_score delta = 0.0000 across the board.
+- 10 previously-clamped rows now show uncapped values:
+  Keisha 212%, Diane 322%, Cory 176%, Robert 165%, Polly 144%,
+  Rachael 140%, Ethan 137%, Jose 111%, Kitti 433%.
+- Regenerated PNG OCR'd → Kitti's LSC cell renders "433%".
+
+**Scope reaffirmed**: Display-layer change only. Scoring weights,
+benchmarks, and per-metric bonus caps untouched.
+
+---
+
+
 ## Current State (2026-05-28)
 ### P0: Orphan snapshot ref card type — SHIPPED 2026-06-04
 
