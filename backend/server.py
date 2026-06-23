@@ -1186,8 +1186,26 @@ async def unified_pos_upload(
                 cv_score = match.get("cv_score", 0) or 0
                 rt_mentions = match.get("rt_mentions", 0) or 0
                 rt_contribution = min(rt_mentions * 0.3, 20)
-                total_metric_bonus = match.get("total_metric_bonus", 0) or 0
-                
+                # RECOMPUTE metric bonuses from the freshly-derived scores.
+                # Operator-reported (Q2P6W1, 2026-02-05): Allen's score_glass
+                # rose to 134% on a new POS upload but his bonus_glass stayed
+                # at the prior 1.3 because this branch read
+                # `match.total_metric_bonus` (stale) and never recomputed the
+                # per-metric bonuses. Result on the slide: a +30% glassware
+                # row with only 1.3 of the available 5 bonus pts. The
+                # bonus formula is the canonical one from scoring_engine.
+                def _calc_metric_bonus(s):
+                    if s is None or s <= 100:
+                        return 0.0
+                    return min((float(s) - 100.0) / 20.0 * 5.0, 5.0)
+                bonus_ppa   = round(_calc_metric_bonus(score_ppa), 2)
+                bonus_lbw   = round(_calc_metric_bonus(score_lbw), 2)
+                bonus_glass = round(_calc_metric_bonus(score_glass), 2)
+                bonus_lsc   = round(_calc_metric_bonus(score_lsc), 2)
+                total_metric_bonus = round(
+                    bonus_ppa + bonus_lbw + bonus_glass + bonus_lsc, 2
+                )
+
                 # Recalculate weighted with RT
                 weighted_with_rt = weighted_score + rt_contribution
                 total_score = weighted_with_rt + cv_score + total_metric_bonus
@@ -1214,6 +1232,14 @@ async def unified_pos_upload(
                     "score_lbw": round(score_lbw, 2),
                     "score_glass": round(score_glass, 2),
                     "score_lsc": round(score_lsc, 2),
+                    # Write the freshly-recomputed bonuses so the dashboard
+                    # and the next snapshot freeze always see them in step
+                    # with the latest score_*.
+                    "bonus_ppa": bonus_ppa,
+                    "bonus_lbw": bonus_lbw,
+                    "bonus_glass": bonus_glass,
+                    "bonus_lsc": bonus_lsc,
+                    "total_metric_bonus": total_metric_bonus,
                     "weighted_score": round(weighted_with_rt, 2),
                     "total_score": round(total_score, 2),
                     "pre_dar_score": round(total_score, 2),
@@ -2281,93 +2307,14 @@ async def _load_snapshot_first_rankings(
         if src.get("nps_manual_override"):
             rank["nps_manual_override"] = True
 
-    # Attach `score_change` + `trend` by diffing against the immediately
-    # prior quarter's snapshot. The PNG/PDF generators use this for the
-    # trend-arrow column so viewers see magnitude alongside direction.
-    prior_meta = await _attach_score_change(rankings, year, quarter.upper())
+    # Trend / score-change column was removed from snapshot exports
+    # (operator request 2026-02): orphan-employee matching across quarters
+    # was unreliable, so the column is gone rather than partially-wrong.
+    # `prior_meta` is kept in the return signature to avoid a wide refactor
+    # of the three callers; renderers ignore it now.
+    prior_meta: Dict[str, Any] = {"available": False}
 
     return rankings, settings, prior_meta
-
-
-async def _attach_score_change(
-    rankings: List[dict], year: int, quarter: str,
-) -> Dict[str, Any]:
-    """Mutate `rankings` in place to add a numeric `score_change` and
-    a string `trend` ('up' / 'down' / 'flat') by diffing each rank's
-    `total_score` against the prior quarter's score for the same
-    employee (matched by id, falling back to canonical name).
-
-    Looks up the most recent completed snapshot in the prior quarter.
-    If there is none — e.g. Q1 with no Q4 data — every rank gets
-    `score_change=None` and `trend="flat"`, and the renderers skip
-    drawing the magnitude.
-
-    Returns a `prior_meta` dict with the prior snapshot's identity so
-    the PNG/PDF renderers can cite it as the trend reference point
-    on the slide ("Trend vs Q1 2026 snapshot · 2026-04-12").
-    Returns `{"available": False}` when no prior snapshot exists."""
-    prev_quarter_map = {"Q1": "Q4", "Q2": "Q1", "Q3": "Q2", "Q4": "Q3"}
-    prev_q = prev_quarter_map.get(quarter, "Q4")
-    prev_y = year - 1 if quarter == "Q1" else year
-
-    prev_snap = await db.snapshot_workflow.find_one(
-        {"year": prev_y, "quarter": prev_q, "status": "completed"},
-        {"_id": 0, "employees": 1, "rows": 1, "name": 1,
-         "effective_date": 1, "completed_at": 1, "id": 1},
-        sort=[("effective_date", -1), ("completed_at", -1)],
-    )
-    if not prev_snap:
-        for r in rankings:
-            r.setdefault("score_change", None)
-            r.setdefault("trend", "flat")
-        return {"available": False}
-
-    prev_by_id: Dict[str, float] = {}
-    prev_by_name: Dict[str, float] = {}
-    for e in (prev_snap.get("employees") or []):
-        eid = e.get("id")
-        score = (e.get("total_score") or e.get("pre_dar_score") or 0) or 0
-        if eid:
-            prev_by_id[eid] = float(score)
-        nm = (e.get("name") or "").strip().lower()
-        if nm:
-            prev_by_name[nm] = float(score)
-    # Snapshot rows[] sometimes carry frozen scores for legacy snaps.
-    for row in (prev_snap.get("rows") or []):
-        eid = row.get("employee_id")
-        score = row.get("total_score") or row.get("pre_dar_score") or 0
-        if eid and eid not in prev_by_id and score:
-            prev_by_id[eid] = float(score)
-        nm = (row.get("frozen_display_name") or row.get("name") or "").strip().lower()
-        if nm and nm not in prev_by_name and score:
-            prev_by_name[nm] = float(score)
-
-    for r in rankings:
-        rid = r.get("id") or r.get("employee_id")
-        rnm = (r.get("name") or "").strip().lower()
-        prev = prev_by_id.get(rid) if rid in prev_by_id else prev_by_name.get(rnm)
-        if prev is None:
-            r.setdefault("score_change", None)
-            r.setdefault("trend", "flat")
-            continue
-        delta = float(r.get("total_score") or 0) - prev
-        r["score_change"] = round(delta, 1)
-        if delta > 0.5:
-            r["trend"] = "up"
-        elif delta < -0.5:
-            r["trend"] = "down"
-        else:
-            r["trend"] = "flat"
-
-    return {
-        "available":      True,
-        "snapshot_id":    prev_snap.get("id"),
-        "snapshot_name":  prev_snap.get("name"),
-        "quarter":        prev_q,
-        "year":           prev_y,
-        "effective_date": prev_snap.get("effective_date"),
-        "completed_at":   prev_snap.get("completed_at"),
-    }
 
 
 @api_router.get("/v2/full-rankings/{year}/{quarter}/snapshot-png")
@@ -3129,6 +3076,13 @@ async def update_employee(employee_id: str, data: dict):
             for k, v in snap_update.items()
         }
         # Also stamp top-level frozen_display_name when name changed.
+        # KNOWN GAP (backlog): this write does NOT route through
+        # identity_maps.ALIAS_DISPLAY_MAP. An admin renaming a canonical
+        # in the Employees page can repopulate frozen rows with the new
+        # legal name (or whatever they type), bypassing the nickname
+        # mapping. Fix is a small change here to wrap `display` in
+        # `ALIAS_DISPLAY_MAP.get(display, display)` before write — left
+        # unchanged in the display-layer rollout per operator decision.
         if display:
             rows_update["rows.$[r].frozen_display_name"] = display
         # And bubble the new total to the row's frozen_score for slide ranking.
@@ -4259,6 +4213,10 @@ api_router.include_router(insights_router)
 api_router.include_router(pos_upload_router)
 api_router.include_router(scheduler_router)
 api_router.include_router(auth_router)
+
+# PPA Ranking report (Reports tab).
+from routes.reports_ppa import reports_router as reports_ppa_router  # noqa: E402
+api_router.include_router(reports_ppa_router)
 
 # Register legacy snapshots routes (uses db.snapshots collection)
 register_snapshots_legacy_routes(api_router, db)

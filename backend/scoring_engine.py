@@ -135,6 +135,15 @@ class EmployeeV2(BaseModel):
     # === DAR FIELDS (admin-only, not in upload) ===
     dar_written_warnings: int = 0
     dar_suspensions: int = 0
+
+    # === SNAPSHOT-FIRST ROSTER COVERAGE (added 2026-02) ===
+    # When True, this row is a "phantom" stamped by the snapshot
+    # hydrator for an active canonical employee who DIDN'T appear in
+    # the current POS upload. All score fields are 0 and the frontend
+    # renders the row muted ("No data this period"). Lets the operator
+    # see roster coverage at a glance instead of silently dropping
+    # rostered employees who happened to be off-rotation.
+    no_pos_data_this_period: bool = False
     
     # === LEGACY OPTIONAL FIELDS ===
     review_tracker: Optional[str] = None
@@ -1215,7 +1224,12 @@ def generate_hierarchy_rankings(employees: List[EmployeeV2], settings: QuarterSe
             "ppa_percentage": emp.score_ppa or 0,
             "lbw_percentage": emp.score_lbw or 0,
             "glassware_percentage": emp.score_glass or 0,
+            # LSC display is uncapped — surfaces the true LSC % so the
+            # downstream +5 metric bonus (sanctioned overflow above 100%)
+            # is transparent to employees. Scoring math (lsc_points.earned
+            # below) still clamps at 100; this field is display-only.
             "lsc_percentage": emp.score_lsc or 0,
+            "lsc_percentage_uncapped": emp.score_lsc or 0,
             "score_ppa": emp.score_ppa or 0,
             "score_lbw": emp.score_lbw or 0,
             "score_glass": emp.score_glass or 0,
@@ -1247,7 +1261,12 @@ def generate_hierarchy_rankings(employees: List[EmployeeV2], settings: QuarterSe
                 "possible": 20
             },
             "performance_tier": emp.performance_tier,
-            "peer_rank": emp.peer_rank  # Overall rank by score among ALL peers
+            "peer_rank": emp.peer_rank,  # Overall rank by score among ALL peers
+            # Surface phantom-row flag so the frontend can render
+            # "No data this period" rows muted at the bottom of each
+            # tier. Always emitted (default False) so the key is
+            # stable across all rankings.
+            "no_pos_data_this_period": bool(getattr(emp, "no_pos_data_this_period", False)),
         })
     
     return results

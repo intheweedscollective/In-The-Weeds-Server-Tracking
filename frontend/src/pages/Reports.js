@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { FileText, Download, BarChart3, Trophy, QrCode, Star, TrendingUp, Calendar } from "lucide-react";
 import { Button } from "../components/ui/button";
 import QRTopClicksCard from "../components/QRTopClicksCard";
+import PPARankingCard from "../components/PPARankingCard";
 import api from "../lib/api";
 import { getCurrentQuarter } from "../lib/quarterUtils";
 import { getDisplayFirstName } from "../utils/displayName";
@@ -206,6 +207,9 @@ export default function Reports() {
               )}
             </div>
           </div>
+
+          {/* PPA Ranking Report */}
+          <PPARankingCard />
 
           {/* Download Reports Section */}
           <div className="bg-slate-800 rounded-2xl border border-slate-700 p-5">

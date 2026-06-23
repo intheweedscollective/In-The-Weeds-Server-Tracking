@@ -747,25 +747,39 @@ class EmployeeService:
         if thin_rows:
             for r in thin_rows:
                 canon = canon_by_id.get(r.get("employee_id"))
-                if not canon:
-                    continue
-                if canon.get("status") in ("terminated", "merged"):
+                # When the row's employee_id doesn't resolve to a
+                # canonical (or any canonical's legacy_ids[]), we used
+                # to `continue` here — silently dropping the row from
+                # the dashboard. That hid >40% of employees on
+                # snapshots that included un-promoted v2 staff
+                # (operator-reported: Q2P6W1 showed 19 of 33 rows).
+                # The Reconciliation portal's `orphan_snapshot_ref` /
+                # `legacy_duplicate` cards exist precisely to fix the
+                # underlying canonical-link gap. The dashboard's job
+                # is to render every uploaded row faithfully until
+                # then — using the snapshot's own frozen data when
+                # canonical isn't available.
+                if canon and canon.get("status") in ("terminated", "merged"):
                     continue
                 display = (
                     r.get("frozen_display_name")
-                    or canon.get("display_name")
-                    or canon.get("name")
+                    or (canon and (canon.get("display_name")
+                                    or canon.get("name")))
                 )
+                if not display:
+                    # Row carries no displayable identity AND no
+                    # canonical — nothing renderable. Skip.
+                    continue
                 if (display or "").strip().lower() in deleted:
                     continue
                 merged = {
                     **(r.get("frozen_metrics") or {}),
-                    "id": canon["id"],
-                    "canonical_id": canon["id"],
+                    "id": (canon and canon["id"]) or r.get("employee_id"),
+                    "canonical_id": canon["id"] if canon else None,
                     "name": display,
                     "display_name": display,
                     "report_name": r.get("frozen_report_name")
-                                   or canon.get("report_name"),
+                                   or (canon and canon.get("report_name")),
                     "total_score": r.get("frozen_score"),
                     "performance_tier": r.get("frozen_tier"),
                     "peer_rank": r.get("frozen_rank"),

@@ -904,6 +904,11 @@ export default function FullRankings() {
                   {filteredRankings.map((employee, index) => {
                     const tierStyle = getTierStyle(employee.tier_label);
                     const isExpanded = expandedRow === employee.employee_id;
+                    // Phantom row: active rostered employee with no
+                    // POS data this period. Visually muted so the
+                    // operator can see roster coverage at a glance
+                    // without confusing zero-rows with real low scores.
+                    const noData = !!employee.no_pos_data_this_period;
                     
                     // Find the employee ranked just above this one for "To Pass" comparison
                     // Use original rankings to ensure we find them even when filtered
@@ -913,8 +918,9 @@ export default function FullRankings() {
                       <>
                         <tr 
                           key={employee.employee_id}
-                          className={`${index % 2 === 0 ? 'bg-slate-800' : 'bg-background'} hover:bg-slate-700 transition-colors cursor-pointer`}
+                          className={`${index % 2 === 0 ? 'bg-slate-800' : 'bg-background'} ${noData ? 'opacity-50 italic' : ''} hover:bg-slate-700 transition-colors cursor-pointer`}
                           data-testid={`ranking-row-${employee.position}`}
+                          data-no-pos-data={noData ? "true" : "false"}
                         >
                           {/* Position */}
                           <td className="px-4 py-4">
@@ -933,7 +939,15 @@ export default function FullRankings() {
                                 <span className="font-semibold text-foreground" data-testid={`employee-name-${employee.position}`}>
                                   {getDisplayFirstName(employee)}
                                 </span>
-                                {(() => {
+                                {noData ? (
+                                  <span
+                                    className="inline-flex items-center justify-center px-1.5 py-0.5 bg-slate-600 text-slate-100 text-[10px] font-bold rounded"
+                                    title="Active employee with no POS data for this period"
+                                    data-testid={`no-data-badge-${employee.position}`}
+                                  >
+                                    No data this period
+                                  </span>
+                                ) : (() => {
                                   const percentile = Math.round((1 - (employee.position - 1) / totalEmployees) * 100);
                                   if (percentile >= 90) return <span className="inline-flex items-center justify-center w-16 px-1.5 py-0.5 bg-green-600 text-white text-xs font-bold rounded">Top 10%</span>;
                                   if (percentile >= 75) return <span className="inline-flex items-center justify-center w-16 px-1.5 py-0.5 bg-blue-600 text-white text-xs font-bold rounded">Top 25%</span>;

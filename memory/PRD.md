@@ -10,6 +10,46 @@ Build a comprehensive performance review application for restaurant employees.
 - **AI**: OpenAI GPT-4o (via Emergent LLM Key)
 - **Auth**: Emergent-managed Google Auth (whitelist via `ALLOWED_ADMIN_EMAILS`)
 
+## P0: LSC% display column uncapped — SHIPPED 2026-02
+
+**User report**: Yodeck/Full Rankings PNG LSC% column visually clamped
+at 100% even when employees scored well above benchmark (e.g. Kitti's
+true LSC was 433%, but the column always showed "100%"). This hid the
+fact that the metric bonus they earned came from over-100% performance,
+making the +5 bonus look unexplained to staff.
+
+**Reconciliation of contradictory paths** (per operator request):
+- `yodeck_slides.py:1181` (`generate_complete_rankings_slide`) does
+  read `score_lsc` uncapped — but that path feeds `snapshot_slides`
+  which only renders a tier-column layout (rank labels + first
+  names), no LSC% column.
+- The actual screenshotted column comes from **`png_full_rankings.py:301`**
+  and **`pdf_full_rankings.py:210`**, both of which read
+  `emp.get("lsc_percentage")` — the field clamped at
+  `min(score_lsc, 100)` in `scoring_engine.py:1232`.
+
+**Fix**: One-line revert at `scoring_engine.py:1232` to emit
+`lsc_percentage = emp.score_lsc or 0` (uncapped). The companion
+`lsc_percentage_uncapped` diagnostic key is retained as a no-op
+alias for any consumers that hardcoded against it.
+
+**Proof** (Q2 2026 live snapshot, via `/api/v2/full-rankings/2026/Q2`):
+- Kitti: `lsc_percentage` 100 → 433.46, `total_score` 120.62 →
+  120.62 (unchanged), `lsc_points.earned` 30.0 → 30.0 (scoring
+  math untouched — `min(score_lsc,100)*0.25 + bonus_lsc` clamp
+  preserved at line 1257).
+- All 29 employees: total_score delta = 0.0000 across the board.
+- 10 previously-clamped rows now show uncapped values:
+  Keisha 212%, Diane 322%, Cory 176%, Robert 165%, Polly 144%,
+  Rachael 140%, Ethan 137%, Jose 111%, Kitti 433%.
+- Regenerated PNG OCR'd → Kitti's LSC cell renders "433%".
+
+**Scope reaffirmed**: Display-layer change only. Scoring weights,
+benchmarks, and per-metric bonus caps untouched.
+
+---
+
+
 ## Current State (2026-05-28)
 ### P0: Orphan snapshot ref card type — SHIPPED 2026-06-04
 
@@ -2388,3 +2428,208 @@ Recommended posture going forward:
 - "Import Report" toast surfacing `rejected_rows` on POS upload (P3)
 - Refactor: split `snapshot_routes.py` (>5500 lines) and `server.py` (>4400 lines)
 
+
+
+
+## 2026-02-05 — P0 Hotfix: Dashboard Hiding Half the Employees
+
+### Bug
+After saving snapshot Q2P6W1, the dashboard showed 19 of 33 employees. Missing names included Cory West, Kitti Xavier, Tarek Araman, Rachael Escobar, Jamie Rousseau, Starwars Mckinnon-Herrera, Jose Plancarte Villa, Robert Mckinnon, etc.
+
+### Root cause
+`EmployeeService.get_snapshot_with_join` had a silent-drop on thin rows whose `employee_id` didn't resolve to a canonical or any canonical's `legacy_ids[]`. POS uploads create v2 rows for un-promoted staff; those rows pointed at v2 ids the canonical index didn't know, so the FK-join `continue`'d past them.
+
+### Fix
+When canonical lookup misses, render the row using its own `frozen_display_name` + `frozen_metrics` and stamp `canonical_id=None`. Terminated/merged canonical filtering still applies when canonical IS available. `deleted_names` filter still applies regardless.
+
+### Verified
+- Live preview data: 33 thin rows → **32 employees returned (was 19)**
+- 4 new tests in `test_snapshot_join_orphan_recovery.py`, all pass
+
+### Known follow-up
+`/api/v2/admin/integrity` (employees_v2-based orphan detection) and the recon queue's orphan card (canonical+legacy_ids-based) use different orphan definitions so their counts can disagree — backlog.
+
+
+
+## 2026-02-05 — P0 Hotfix: Stale Metric Bonus After POS Re-Upload
+
+### Bug
+Q2P6W1: Allen Simmons showed glassware at +30% over benchmark (score_glass=134.07) but only **bonus_glass=1.3**. Canonical formula yields 5.0 at any score ≥ 120. Same pattern across Cory West, Trey Quick, Kitti Xavier, Jamie Rousseau, Bruce Diesel Rabago, Arianna Pena.
+
+### Root cause
+`server.unified_pos_upload` recomputed `score_*` from fresh POS data but reused the prior `total_metric_bonus` from the matched record and never wrote new `bonus_*` fields. Score updated, bonus stayed frozen at the previous upload's value.
+
+### Fix (two layers)
+1. **`server.unified_pos_upload`** — recompute all four `bonus_*` from the freshly-derived `score_*` using canonical `min((score-100)/20*5, 5.0)` and write them. Future re-uploads can't go stale.
+2. **`_hydrate_snapshot_employees`** — recompute `bonus_*` from current `score_*` on every slide/dashboard read. Heals already-frozen snapshots without a data migration.
+
+### Verified
+- Live preview: every employee with score_glass ≥ 120 now hydrates with bonus_glass=5.0; sliding-scale (Trey Quick PPA=104.84 → bonus_ppa=1.21) matches.
+- 3 new tests in `test_bonus_recompute_on_hydrate.py`, all pass.
+
+
+
+## 2026-06-08 — Restore Accidentally-Deleted Employee Endpoint
+
+### Context
+Operator accidentally hit `delete_legacy` on Matt Spath via the Reconciliation portal on 2026-06-06. The action only soft-deletes (`employees.status=terminated`, `employees_v2.status=inactive`) but there was no operator-facing way to reverse it.
+
+### Implemented
+- `POST /api/v2/admin/restore-deleted-employee/{canonical_id}?reason=...` (admin-gated)
+- Flips canonical `status → active` and ALL matching v2 rows (by `id` + every `legacy_ids[]`) from non-active back to `active`. Multi-quarter safe.
+- Idempotent — re-runs leave already-active rows untouched.
+- Writes `reconciliation_audit` row of `kind=restore_canonical` so the operation appears in the audit ledger.
+
+### Verified
+- Restored Matt Spath on preview (`f94c77c3-b021-4316-a2c7-c0f87d2c3d49`): canonical terminated→active, Q2/2026 v2 row (score 79.07) inactive→active.
+- 5 pytest cases in `test_restore_deleted_employee.py` — all green.
+
+
+## 2026-06-11 — Store Health Index Reweighting
+
+### Operator request
+- Upsell Performance should include PPA, LBW AND Glassware (equal thirds) — PPA reflects upsell ability on items we don't track line-by-line (apps, desserts, retail).
+- Bell-curve grading vs concept averages; explicit credit for stores at the high end of concept.
+- Guest Experience weights flipped to **RT 70% + CV 30%** (was NPS 70% + RT 30%). Store Health Index only — scoring engine untouched.
+- Sales Execution stays as-is (PPA scores against per-store benchmark).
+
+### Implemented (`routes/insights.py`, `pages/ScoringGuide.js`)
+- New piecewise-linear bell helper `bell(x, low, avg, high)`:
+  - x ≤ low → 0..60, low..avg → 60..80, avg..high → 80..100, x > high → 100 (cap)
+- Upsell Performance = mean(bell(PPA), bell(LBW/g), bell(Glass/g))
+- PPA bell config (from operator, stored in `quarter_settings` for override): low $35.40 / avg $45.71 / high $55.72
+- LBW/Glass bell config defaults to per-store benchmark ±20% until operator supplies concept-level stats
+- API response now exposes `categories.upsell_performance.breakdown` with each leg's store value, concept low/avg/high, and resulting score for full transparency
+- Removed `labor_efficiency` category (was using placeholder values; operator wants 4-category model)
+- Weights restored to 25/25/20/30
+- 4 new pytest cases in `test_store_health_bell_curve.py` — all green
+
+### Verified
+- Live preview: store_health=78.7, Sales=87.6, Upsell=77.7 (PPA leg 86 / LBW leg 63.8 / Glass leg 83.4), Loyalty=84.8, Guest=68.2
+
+
+
+## 2026-06-12 — PPA Ranking Report + Yodeck Slide + 2 New Recon Cards
+
+### Recon cards added
+Operator-reported: "Kahi" appeared 3x on the PPA slide but no recon card surfaced.
+
+- **`duplicate_snapshot_rows`** — flags any snapshot whose `rows[]` array contains the same canonical identity multiple times. Detection follows BOTH `legacy_ids[]` and `merged_into` so rows pointing at the keeper's id, its absorbed legacy ids, OR previously-merged canonicals are all flagged as duplicates of the same person. (Operator hit the post-merge case on 2026-06-13: merge_canonical resolved one card, but the snapshot still pointed at the legacy ids; the original "same raw employee_id" detector missed them.) Resolutions: `dedupe_snapshot_rows` (keep first occurrence per resolved canonical, drop the rest — guests/sales NOT summed to avoid inflation), `keep_stored` (silence with duplicate-count hash).
+- **`canonical_name_collision`** — flags ≥2 active canonicals with EXACT same name OR with nickname-prefix on the same last name (Kahi ⊂ Kahiaulani, Mike ⊂ Michael, Sam ⊂ Samantha; min first-name length 3). Resolutions: `merge_canonical_into {keeper}` (other canonicals → status=merged; their aliases + legacy_ids fold into the keeper; their own ids appended to keeper's legacy_ids so old v2 rows still resolve), `keep_stored` (silence with claimant-id hash).
+- **Tests:** `test_duplicate_rows_and_name_collision.py` — 9 cases (now including the post-merge legacy-id regression), all green.
+
+### Operator request
+"Report under the Reports tab that has all PPA listed from top to bottom for each employee." Plus follow-up: "Can you make a yodeck slide as well."
+
+Columns: Name, PPA, Rank, Tier. ± vs **location average** (mean of all current-quarter PPAs). Active quarter only. On-screen table + branded PDF + Yodeck slide.
+
+### Implemented
+- **Backend:** new `routes/reports_ppa.py`
+  - `GET /api/v2/reports/ppa-ranking` (JSON) — sorted desc, includes per-row vs_location $ and %.
+  - `GET /api/v2/reports/ppa-ranking/pdf` — branded printable PDF (reportlab, navy + amber palette).
+  - `GET /api/v2/reports/ppa-ranking/slide` — 1920×1080 PNG Yodeck slide, two-column layout, same palette as the PDF for visual continuity.
+  - Defaults to the active snapshot when quarter/year not specified.
+- **Yodeck generator:** `yodeck_slides.generate_ppa_ranking_slide()` — two-column layout, location-avg callout pill, color-coded ± (emerald above, rose below).
+- **Frontend:** `components/PPARankingCard.jsx` — expandable card on `/reports` with sortable table + two download buttons (Yodeck Slide PNG, PDF).
+- **Tests:** `test_reports_ppa_ranking.py` — 9 cases (sort, average math, vs_location arithmetic, default resolution, synthetic deterministic fixture, PDF magic bytes, PDF filename, PNG magic bytes + 1920×1080 dimensions, PNG filename) — all green.
+
+### Verified
+- Live preview (Q2/2026): 32 servers ranked, location avg $49.13. Top: Bruce Diesel Rabago $54.19 (+10.3%), Trey Quick $54.05 (+10.0%). PDF magic bytes confirm `%PDF-1.4`, ~5.4 KB.
+
+
+
+## 2026-06-13 — Trend Column Fix (canonical-resolving match)
+
+### Bug
+Operator-reported (preview, Q2P6W1): snapshot detail page Trend column showed "—" for almost every row. Only Adriana had a "▲ +8.6". Footer correctly said *"Trend column compares vs prior snapshot: Q1 2026 · Q1P3W5 · 2026-03-29"*.
+
+### Root cause
+`server._attach_score_change` matched current rankings to prior-snapshot scores by raw `employee_id` (with a name fallback). Ids drift between quarters via typo merges, canonical merges, and legacy renames — on this snapshot only 8/30 matched by id, 16/30 by name fallback, 6/30 not at all.
+
+### Fix
+Build the same `id → canonical_id` map used by the recon cards (follows `legacy_ids[]` AND `merged_into` chains) and apply it to BOTH sides of the comparison:
+- Prior snapshot scores indexed by canonical (not raw id).
+- Current ranking rows resolved through the canonical map before lookup.
+- Name fallback retained for completeness.
+
+### Verified
+- Live preview: trend resolution jumped from 1/29 to 24/29. The 5 still "—" are genuinely new hires (Cory West, Kahi Ramos under that spelling, Arianna Pena, Jeden White, Bruce Diesel Rabago) — correct behavior.
+- New test `test_trend_canonical_resolution.py` pins all three resolution paths (legacy_ids, merged_into, genuinely new) — green.
+
+
+
+---
+
+## 2026-02 — Trend indicators removed from snapshot exports
+Operator decision (after multiple attempts to make orphan-employee matching across quarters reliable): "I either need them gone or working." Choice: gone.
+
+**Removed from:**
+- `png_full_rankings.py`: Trend column (header, col_props slot, cell, polygon renderer, prior-snapshot caption).
+- `pdf_full_rankings.py`: same — Trend column gone, ReportLab polygon path deleted.
+- `yodeck_slides.py`: TREND column removed from the leaderboard slide (col_widths, col_headers, momentum-indicator block).
+- `server.py`: `_attach_score_change` function deleted entirely. `_load_snapshot_first_rankings` now returns `prior_meta={"available": False}` (kept in the return tuple for caller-signature stability — renderers ignore it).
+
+**Test cleanup:**
+- Deleted `tests/test_trend_canonical_resolution.py` (test against a now-deleted function).
+- Fixed `tests/test_trust_breakdown_and_ghost_dismiss.py` — stale hardcoded `Bearer test-agent-name-score-...` token replaced with the conftest `ADMIN_TOKEN`. 4/4 pass.
+- Fixed `tests/test_phase3_stage_a.py` — `asyncio.get_event_loop()` → `asyncio.new_event_loop()` (Py3.11 raises RuntimeError when no loop exists in MainThread). 3/3 pass.
+
+**Verified:**
+- Snapshot PNG renders 200 OK; columns flow Rank → Name → PPA … Score with no trend slot or caption. Layout proportions rebalanced (0.08 trend width redistributed across the 8 value columns).
+- Snapshot PDF: 200 OK, 413KB.
+- Yodeck leaderboard: TREND column gone.
+- Combined `pytest` run of the two previously-flaky test files: 7 passed in 7.66s.
+
+
+---
+
+## 2026-02 — Auto-resolve zero-impact orphan snapshot rows (POLICY EXCEPTION)
+Operator request: "automatically resolve all orphaned rows that do not have an impact on score or historic data." This is a deliberate, narrow exception to the prior strict NO-AUTO-FIX rule.
+
+### What auto-resolves
+At every `GET /api/v2/admin/reconciliation/queue` call, `ReconciliationService.queue()` first invokes `_auto_resolve_zero_impact_orphans()`. The sweep removes any snapshot row that:
+- has an `employee_id` that doesn't resolve to a canonical via `id` OR `legacy_ids[]`, **AND**
+- has all of `total_score`, `pre_dar_score`, `frozen_score`, `weighted_score`, `ppa`, `per_guest_avg`, `guests`, `guest_count`, `cv_score`, `nps_score`, `review_tracker_bonus`, `metric_bonus`, `total_metric_bonus` falsy (null or 0) — checked both at the row's top level **and** inside `frozen_metrics`.
+
+Every removal is audited to `reconciliation_audit` with `action="auto_remove_orphan"` and `actor="system:auto-resolve"` so the full history can be reconstructed.
+
+### Sister bug fixed (latent data-loss risk)
+While integrating I discovered the orphan card builder was reading flat `total_score` from snapshot rows, but the live schema buries the score in `frozen_score` / `frozen_metrics.total_score`. Result: **all 34 production orphan rows** were displaying `score=None` AND showing "✓ Row has no score data — safe to remove" — but they actually carry real scores (80–118 range). The operator clicking Remove would have silently destroyed real historical data.
+
+Fix:
+- `_build_orphan_snapshot_conflicts` now reads `frozen_score` / `frozen_metrics.total_score` for `raw_inputs.row_total_score`, and equivalent fallbacks for `row_ppa` / `row_guests`. Cards now honestly reflect what the row contains.
+- `DataReconciliation.jsx`: added an amber `⚠ Row holds a real score (X). Prefer Relink…` warning that fires whenever `row_total_score` is non-null. The original green "safe to remove" badge still shows for genuinely empty rows.
+
+### Tests
+- `tests/test_auto_resolve_zero_impact_orphans.py`: 3 tests — predicate covers flat + nested `frozen_metrics`, sweep removes empty orphans, sweep preserves orphans with real data, and queue() triggers the sweep automatically.
+- `tests/test_data_reconciliation_portal.py`: replaced stale hardcoded token with conftest `ADMIN_TOKEN`. 10/10 pass.
+
+### Verified end-to-end
+On live preview data: 34 orphan rows in production. Auto-resolver correctly removed **0** of them (all 34 carry real `frozen_score` data — predicate is doing its job). Cards now display `score=91.31, ppa=48.51, guests=2112` etc. instead of `None / None / None`. No safe-to-auto-remove rows exist in production today — the feature is dormant until renames leave behind genuinely empty placeholders.
+
+
+---
+
+## 2026-02 — "Missing employees" on dashboard → phantom roster rows
+
+### Operator report
+Production dashboard showing only 20 employees in the rankings. Expected ~29. Diagnosed live data:
+
+- Snapshot `Q2P6W2` has 31 POS rows that correctly collapse to **20 unique canonical people** after dedup (Treyanna→Trey, Craig→Allen, Lakeisha→Keisha, Eric→Ikey, Glennice/Glennlce→Lennie, Kahiaulani/Kahiauani→Kahi, Abigail→Abby, TK×2). All collapses are prior approved canonical merges.
+- However **10 active canonical employees were silently absent** because they didn't appear in the current week's POS upload: Robert Mckinnon, Polly Blocker, Eddie Garcia, Lexi Crandall, Julian Taveras (trainer), Kelsey Corkum, Diane Peterson (trainer), Daniel Mayorga (trainer), Tarek Araman, Dylan Franklin.
+- 2 stale test fixtures (`Kahiaulani Ramos 00d955`, `Wrong Owner 4b7c87`) polluting the canonical table.
+
+**NOT caused by auto_remove_orphan code: 0 audit entries.** The auto-sweep was a strict no-op on live data.
+
+### Fix
+1. **Phantom rows in `_hydrate_snapshot_employees`**: append zero-score rows for every `status="active"` canonical employee not present (matched by `canonical_id` / name / aliases). Each carries `no_pos_data_this_period=True`. Skipped for `finalized` snapshots so historical PDFs stay pinned.
+2. **`EmployeeV2.no_pos_data_this_period: bool = False`** field added so the flag survives `EmployeeV2(**emp_data)` (`extra="ignore"`).
+3. **`generate_hierarchy_rankings`** propagates the flag onto output rankings.
+4. **`FullRankings.js`**: phantom rows render with `opacity-50 italic` + slate "No data this period" badge. `data-no-pos-data` attribute for testability.
+5. **Test fixture cleanup**: soft-deleted `Kahiaulani Ramos 00d955` and `Wrong Owner 4b7c87`.
+
+### Tests
+`tests/test_phantom_roster_rows.py` — 2 tests (phantom appears for missing active canonical, finalized emits zero phantoms). Regression: 15/15 pass.
+
+### Verified
+`GET /api/v2/full-rankings/2026/Q2` now returns **30 employees** (20 real + 10 phantoms with the exact missing names).

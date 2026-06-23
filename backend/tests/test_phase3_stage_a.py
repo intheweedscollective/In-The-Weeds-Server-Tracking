@@ -27,7 +27,10 @@ def _client():
 
 
 def _run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    # asyncio.get_event_loop() raises in pytest workers on Python 3.10+
+    # because no loop exists in the main thread. Use a fresh loop per
+    # call so tests stay isolated even when run in sequence.
+    return asyncio.new_event_loop().run_until_complete(coro)
 
 
 def test_materialize_builds_rows_with_canonical_fk():

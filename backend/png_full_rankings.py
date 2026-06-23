@@ -250,13 +250,13 @@ def _draw_table(
     table_y = 60
     table_w = SLIDE_WIDTH - table_x - 40
 
-    headers = ["Rank", "Name", "Trend", "PPA", "LBW", "GLASS",
+    headers = ["Rank", "Name", "PPA", "LBW", "GLASS",
                "LSC", "CV", "RT", "Metric Bonus", "Score"]
-    # Trend column widened from 6% → 8% so the magnitude label
-    # ("+19.3") fits next to the polygon without clipping. The 2% was
-    # taken from Name, which had slack at 13%.
-    col_props = [0.06, 0.11, 0.08, 0.085, 0.085, 0.085,
-                 0.085, 0.085, 0.085, 0.105, 0.085]
+    # Proportions sum to 0.95 (last column absorbs the 5% slack via the
+    # `col_widths[-1] += ...` line below). Removed the 0.08 Trend slot
+    # and spread it evenly across the eight value columns.
+    col_props = [0.06, 0.11, 0.095, 0.095, 0.095,
+                 0.095, 0.095, 0.095, 0.115, 0.095]
     col_widths = [int(p * table_w) for p in col_props]
     col_widths[-1] += table_w - sum(col_widths)
 
@@ -283,7 +283,6 @@ def _draw_table(
     name_font  = _load_font(max(14, row_h - 16), True)
     cell_font  = _load_font(max(13, row_h - 18), True)
     rank_font  = _load_font(max(15, row_h - 16), True)
-    trend_font = _load_font(max(18, row_h - 12), True)
 
     cy = body_top
     for emp in rankings:
@@ -308,24 +307,10 @@ def _draw_table(
         # Metric Bonus = bonus generated only by exceeding POS-metric benchmarks.
         metric_bonus = emp.get("metric_bonus", 0) or 0
 
-        trend_dir = (emp.get("trend") or "up").lower()
-        if trend_dir in ("up", "improving", "improved"):
-            trend_shape, trend_col = "up", REF_COLORS["trend_up"]
-        elif trend_dir in ("down", "declining"):
-            trend_shape, trend_col = "down", REF_COLORS["red"]
-        else:
-            trend_shape, trend_col = "flat", REF_COLORS["trend_flat"]
-
-        # NOTE: trend cell is drawn as a polygon, not text — Aptos-Narrow
-        # doesn't ship the U+25B2/U+25BC/U+2014 glyphs so they previously
-        # rendered as "tofu" (□) on mobile-shared screenshots. Reserve a
-        # sentinel value the rendering loop intercepts.
         # (text, fill_color or None for white-bg, align, font, override_text, is_white_bg)
         cells: List[Tuple[str, str | None, str, ImageFont.FreeTypeFont, str | None, bool]] = [
             (pos_label,            None,                                       "center", rank_font,  REF_COLORS["text_dark"], True),
             (name,                 None,                                       "left",   name_font,  REF_COLORS["text_dark"], True),
-            (f"__TREND__:{trend_shape}|{emp.get('score_change')}",
-                                   None,                                       "center", trend_font, trend_col,                True),
             (f"{ppa_pct:.0f}%",    _ref_cell_color(ppa_pct,    "percentage"),  "center", cell_font,  None,                     False),
             (f"{lbw_pct:.0f}%",    _ref_cell_color(lbw_pct,    "percentage"),  "center", cell_font,  None,                     False),
             (f"{glass_pct:.0f}%",  _ref_cell_color(glass_pct,  "percentage"),  "center", cell_font,  None,                     False),
@@ -356,56 +341,7 @@ def _draw_table(
                 tcolor = REF_COLORS["text_dark"]
 
             ty = cy + row_h // 2
-            if isinstance(text, str) and text.startswith("__TREND__:"):
-                # Draw the trend indicator as a polygon so we don't
-                # depend on the font shipping U+25B2 / U+25BC / U+2014.
-                # Payload encoding: "__TREND__:<shape>|<delta>" — the
-                # numeric magnitude is appended so we can render the
-                # "+4.2" / "-1.7" label right next to the polygon.
-                payload = text.split(":", 1)[1]
-                if "|" in payload:
-                    shape, delta_str = payload.split("|", 1)
-                else:
-                    shape, delta_str = payload, ""
-                try:
-                    delta_val = float(delta_str) if delta_str not in ("", "None") else None
-                except (TypeError, ValueError):
-                    delta_val = None
-                size = max(8, min(row_h - 10, 18))
-                half = size // 2
-                # Polygon sits in the left-third of the cell so there's
-                # horizontal room for the magnitude label to its right.
-                cx = x + int(w * 0.32)
-                trend_color = tcolor  # already set to trend_up/red/flat above
-                if shape == "up":
-                    draw.polygon(
-                        [(cx, ty - half), (cx - half, ty + half), (cx + half, ty + half)],
-                        fill=trend_color,
-                    )
-                elif shape == "down":
-                    draw.polygon(
-                        [(cx - half, ty - half), (cx + half, ty - half), (cx, ty + half)],
-                        fill=trend_color,
-                    )
-                else:  # flat
-                    bar_h = max(2, size // 5)
-                    draw.rectangle(
-                        (cx - half, ty - bar_h // 2, cx + half, ty + bar_h // 2),
-                        fill=trend_color,
-                    )
-                # Magnitude label — show only when we actually diffed
-                # against a prior quarter and the delta is meaningful.
-                if delta_val is not None and abs(delta_val) >= 0.05:
-                    label = f"{delta_val:+.1f}"
-                    _draw_text(
-                        draw,
-                        (cx + half + 6, ty),
-                        label,
-                        trend_font,
-                        trend_color,
-                        anchor="lm",
-                    )
-            elif align == "center":
+            if align == "center":
                 _draw_text(draw, (x + w // 2, ty), text, font, tcolor, anchor="mm")
             elif align == "left":
                 _draw_text(draw, (x + 12, ty), text, font, tcolor, anchor="lm")
@@ -429,33 +365,6 @@ def build_full_rankings_png(
 
     _draw_sidebar(img, draw, quarter)
     _draw_table(draw, rankings)
-
-    # Trend reference caption — answers "what does +4.2 compare to?"
-    # The operator asked for this directly: the trend arrows lacked a
-    # citation, so a viewer had no idea whether the delta was vs last
-    # week, last quarter, or all-time. Caption sits below the table at
-    # 9.5pt grey so it's discoverable but doesn't compete with data.
-    if prior_meta and prior_meta.get("available"):
-        date_str = (
-            (prior_meta.get("effective_date") or
-             prior_meta.get("completed_at") or "")[:10]
-            or "—"
-        )
-        caption = (
-            f"Trend column compares vs prior snapshot:  "
-            f"{prior_meta.get('quarter', '')} {prior_meta.get('year', '')}  "
-            f"· {prior_meta.get('snapshot_name') or 'snapshot'}  · {date_str}"
-        )
-    else:
-        caption = "Trend column: no prior-quarter snapshot available for comparison"
-    _draw_text(
-        draw,
-        (SLIDE_WIDTH // 2, SLIDE_HEIGHT - 28),
-        caption,
-        _load_font(16, False),
-        REF_COLORS.get("text_white", "#A0AEC0"),
-        anchor="mm",
-    )
 
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)

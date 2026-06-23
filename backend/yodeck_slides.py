@@ -959,7 +959,9 @@ def generate_top_10_by_metric_slide(
             draw.text((badge_x, badge_y), rank_text, font=font_badge, fill="#FFFFFF", anchor="mm")
             
             # Employee name - First name only, centered in name column
-            full_name = emp.get("name", "Unknown")
+            # Prefer display_name (nickname via ALIAS_DISPLAY_MAP) over
+            # the canonical legal name so cards render "Keisha"/"TK"/"Kahi".
+            full_name = emp.get("display_name") or emp.get("name") or "Unknown"
             name = full_name.split()[0] if full_name else "Unknown"  # First name only
             if len(name) > 10:
                 name = name[:9] + ".."
@@ -1104,7 +1106,8 @@ def generate_top_10_slide(
             name_x = left_margin + int(100 * font_scale)
         
         # Employee name - First name only
-        full_name = emp.get("name", "Unknown")
+        # Prefer display_name (nickname via ALIAS_DISPLAY_MAP).
+        full_name = emp.get("display_name") or emp.get("name") or "Unknown"
         name = full_name.split()[0] if full_name else "Unknown"  # First name only
         if len(name) > 18:
             name = name[:17] + ".."
@@ -1266,7 +1269,8 @@ def generate_tier_slide(
         draw.text((120, y + 12), position, font=font_rank, fill=tier_color)
         
         # Name - First name only
-        full_name = emp.get("name", "Unknown")
+        # Prefer display_name (nickname via ALIAS_DISPLAY_MAP).
+        full_name = emp.get("display_name") or emp.get("name") or "Unknown"
         name = full_name.split()[0][:20] if full_name else "Unknown"  # First name only
         draw.text((220, y + 14), name, font=font_name, fill=colors["text_white"])
         
@@ -1737,7 +1741,8 @@ def generate_printable_rankings_slide(
                      font=font_rank, fill=(255, 255, 255), anchor="mm")
             
             # Draw name text
-            name = emp.get("name", "Unknown")
+            # Prefer display_name (nickname via ALIAS_DISPLAY_MAP).
+            name = emp.get("display_name") or emp.get("name") or "Unknown"
             if len(name) > 12:
                 name = name[:11] + "."
             draw.text((x + rank_col_w + name_col_w // 2, row_y + rh // 2), name.upper(), 
@@ -2067,7 +2072,11 @@ def generate_leaderboard_slide(
         # Title
         draw.text((panel_x + 15, card_y + 10), title, font=font_label, fill=LEADERBOARD_COLORS["textMuted"])
         # Leader name
-        leader_name = (leader.get("name", "N/A")[:20] if leader else "N/A")
+        # Prefer display_name (nickname via ALIAS_DISPLAY_MAP).
+        leader_name = (
+            (leader.get("display_name") or leader.get("name") or "N/A")[:20]
+            if leader else "N/A"
+        )
         draw.text((panel_x + 15, card_y + 30), leader_name, font=get_font(16, bold=True), fill=LEADERBOARD_COLORS["textPrimary"])
         # Value
         if leader:
@@ -2084,9 +2093,11 @@ def generate_leaderboard_slide(
     row_height = 60
     max_rows = 12
     
-    # Column headers
-    col_widths = [80, 280, 120, 120, 100, 140, 80]  # Rank, Name, Operational, Guest Rep, Bonus, Score, Trend
-    col_headers = ["RANK", "EMPLOYEE", "OPS SCORE", "GUEST REP", "BONUS", "FINAL SCORE", "TREND"]
+    # Column headers (Trend column removed per operator request 2026-02 —
+    # cross-quarter momentum was unreliable for orphan employees and was
+    # showing as "—" for most rows on mobile-shared screenshots).
+    col_widths = [80, 280, 120, 120, 100, 140]  # Rank, Name, Operational, Guest Rep, Bonus, Score
+    col_headers = ["RANK", "EMPLOYEE", "OPS SCORE", "GUEST REP", "BONUS", "FINAL SCORE"]
     
     header_y_table = table_y
     x = table_x
@@ -2139,8 +2150,9 @@ def generate_leaderboard_slide(
         draw.text((rank_x, rank_y), str(position), font=font_rank, fill=rank_text_color, anchor="mm")
         
         # Employee name
+        # Prefer display_name (nickname via ALIAS_DISPLAY_MAP).
         name_x = table_x + col_widths[0] + 20
-        name = emp.get("name", "Unknown")[:22]
+        name = (emp.get("display_name") or emp.get("name") or "Unknown")[:22]
         draw.text((name_x, rank_y - 10), name, font=font_name, fill=LEADERBOARD_COLORS["textPrimary"], anchor="lm")
         
         # Tier badge
@@ -2196,33 +2208,6 @@ def generate_leaderboard_slide(
         draw.text((col_x + col_widths[5]//2, rank_y), f"{final_score:.1f}", font=font_score,
                   fill=score_color, anchor="mm")
         col_x += col_widths[5]
-        
-        # Momentum indicator — emit arrow + signed point delta so the
-        # viewer sees magnitude, not just direction. "↑ 4.2" reads
-        # better than a bare arrow on a 4K screen at 6ft away.
-        if previous_scores:
-            prev_score = previous_scores.get(emp.get("employee_id"), 0)
-            change = final_score - prev_score
-            if change >= 5:
-                arrow = "🔥"
-            elif change > 0:
-                arrow = "↑"
-            elif change < -2:
-                arrow = "↓"
-            else:
-                arrow = "→"
-            # Magnitude rendered as a signed number with one decimal so
-            # tiny drifts (+0.3) stay visible without cluttering the slide.
-            if abs(change) < 0.05:
-                trend_text = arrow  # essentially flat — drop the noisy "0.0"
-            else:
-                trend_text = f"{arrow} {change:+.1f}"
-            
-            trend_color = LEADERBOARD_COLORS["orange"] if change >= 5 else (
-                LEADERBOARD_COLORS["green"] if change > 0 else (
-                LEADERBOARD_COLORS["red"] if change < -2 else LEADERBOARD_COLORS["textMuted"]))
-            draw.text((col_x + col_widths[6]//2, rank_y), trend_text, font=get_font(18), 
-                      fill=trend_color, anchor="mm")
     
     # Footer
     footer_y = height - 50
@@ -2234,3 +2219,174 @@ def generate_leaderboard_slide(
     img.save(buffer, format='PNG', optimize=True)
     buffer.seek(0)
     return buffer.getvalue()
+
+
+
+# ============================================================================
+# PPA RANKING SLIDE (Yodeck digital signage)
+# ============================================================================
+# Operator request (2026-06): Yodeck slide companion to the PPA Ranking
+# Report. Two-column layout sized for the full active-quarter roster
+# (≤ ~40 names) at 1920x1080, with the location average as the headline
+# callout and color-coded ± vs that average on every row.
+# ============================================================================
+
+def generate_ppa_ranking_slide(
+    rows: List[Dict[str, Any]],
+    location_avg: float,
+    quarter: str,
+    year: int,
+) -> bytes:
+    """Two-column PPA ranking slide for Yodeck.
+
+    Args:
+        rows: list of dicts with keys: rank, name, tier, ppa, vs_location,
+              vs_location_pct
+        location_avg: store/location mean PPA for the active quarter
+        quarter, year: header labels
+    """
+    width, height = SLIDE_WIDTH, SLIDE_HEIGHT
+
+    # Palette — matches the PDF (navy + amber accent) so the slide and
+    # the printable look like siblings.
+    BG_TOP    = (10, 22, 40)      # deep navy
+    BG_BOT    = (5,  12, 24)
+    PANEL     = (20, 38, 60)
+    AMBER     = (245, 158, 11)
+    INK       = (226, 232, 240)
+    MUTED     = (148, 163, 184)
+    EMERALD   = (16,  185, 129)
+    ROSE      = (244, 63,  94)
+
+    # Background gradient
+    img = Image.new("RGB", (width, height), BG_TOP)
+    draw = ImageDraw.Draw(img)
+    for y in range(height):
+        t = y / max(height - 1, 1)
+        r = int(BG_TOP[0] + (BG_BOT[0] - BG_TOP[0]) * t)
+        g = int(BG_TOP[1] + (BG_BOT[1] - BG_TOP[1]) * t)
+        b = int(BG_TOP[2] + (BG_BOT[2] - BG_TOP[2]) * t)
+        draw.line([(0, y), (width, y)], fill=(r, g, b))
+
+    # Header band
+    font_title    = get_font(58, bold=True)
+    font_subtitle = get_font(26, bold=False)
+    font_callout  = get_font(34, bold=True)
+
+    draw.text((width // 2, 60), "PPA RANKING",
+              font=font_title, fill=INK, anchor="mt")
+    draw.text((width // 2, 130),
+              f"{quarter} {year}   ·   In the Weeds Collective",
+              font=font_subtitle, fill=MUTED, anchor="mt")
+
+    # Location-average callout pill
+    callout_text = (f"Location Average:  ${location_avg:.2f}"
+                    f"      ·      {len(rows)} servers ranked")
+    bbox = draw.textbbox((0, 0), callout_text, font=font_callout)
+    txt_w = bbox[2] - bbox[0]
+    pill_w = txt_w + 80
+    pill_h = 64
+    pill_x = (width - pill_w) // 2
+    pill_y = 178
+    draw.rounded_rectangle(
+        [pill_x, pill_y, pill_x + pill_w, pill_y + pill_h],
+        radius=pill_h // 2,
+        fill=PANEL, outline=AMBER, width=3,
+    )
+    draw.text((width // 2, pill_y + pill_h // 2), callout_text,
+              font=font_callout, fill=AMBER, anchor="mm")
+
+    # Two-column data layout
+    table_top = 280
+    table_bottom = height - 80
+    table_height = table_bottom - table_top
+    col_margin = 60                                    # outer + inner gutter
+    inner_gutter = 40
+    col_w = (width - col_margin * 2 - inner_gutter) // 2
+
+    # Split rows across two columns balancing count.
+    half = (len(rows) + 1) // 2
+    columns = [rows[:half], rows[half:]]
+
+    # Choose row height that lets the taller column fit. Min 28 px,
+    # max 44 px — keeps text legible on a TV while accommodating up
+    # to ~40 names per column if needed.
+    max_rows = max(len(c) for c in columns) if columns and columns[0] else 1
+    row_h = min(44, max(28, table_height // max(max_rows + 1, 1)))
+    font_row    = get_font(max(16, min(22, row_h - 12)), bold=True)
+    font_header = get_font(18, bold=True)
+
+    # Column headers
+    for ci, col_rows in enumerate(columns):
+        if not col_rows:
+            continue
+        x0 = col_margin + ci * (col_w + inner_gutter)
+        x1 = x0 + col_w
+        # Header row
+        hdr_y = table_top
+        draw.rounded_rectangle([x0, hdr_y, x1, hdr_y + row_h],
+                               radius=8, fill=PANEL,
+                               outline=AMBER, width=2)
+        # Column positions
+        # rank | name | tier | ppa | ±
+        rank_x = x0 + 18
+        name_x = x0 + 60
+        tier_x = x0 + col_w - 280
+        ppa_x  = x0 + col_w - 165
+        diff_x = x0 + col_w - 18                      # right-aligned
+
+        cy = hdr_y + row_h // 2
+        draw.text((rank_x, cy), "#",     font=font_header, fill=AMBER, anchor="lm")
+        draw.text((name_x, cy), "NAME",  font=font_header, fill=AMBER, anchor="lm")
+        draw.text((tier_x, cy), "TIER",  font=font_header, fill=AMBER, anchor="lm")
+        draw.text((ppa_x,  cy), "PPA",   font=font_header, fill=AMBER, anchor="lm")
+        draw.text((diff_x, cy), "± LOC", font=font_header, fill=AMBER, anchor="rm")
+
+        # Data rows
+        for i, r in enumerate(col_rows):
+            ry = hdr_y + (i + 1) * row_h
+            # Alternating row band for readability on TV.
+            if i % 2 == 0:
+                draw.rectangle([x0, ry, x1, ry + row_h],
+                               fill=(15, 28, 48))
+            cy = ry + row_h // 2
+
+            # Truncate long names to fit the column.
+            name = r.get("name") or "—"
+            # Conservative single-character width estimate at this size.
+            max_name_chars = max(8, (tier_x - name_x) // 11)
+            if len(name) > max_name_chars:
+                name = name[: max_name_chars - 1] + "…"
+
+            tier = r.get("tier") or "—"
+
+            # Color the ± cell green/rose by sign — same as the PDF.
+            diff = r.get("vs_location", 0) or 0
+            diff_color = (EMERALD if diff > 0
+                          else ROSE if diff < 0
+                          else MUTED)
+            sign = "+" if diff > 0 else ("−" if diff < 0 else "")
+            diff_text = f"{sign}${abs(diff):.2f}"
+
+            ppa = r.get("ppa", 0) or 0
+
+            draw.text((rank_x, cy), f"{r.get('rank', i+1)}",
+                      font=font_row, fill=MUTED, anchor="lm")
+            draw.text((name_x, cy), name,
+                      font=font_row, fill=INK, anchor="lm")
+            draw.text((tier_x, cy), tier,
+                      font=font_row, fill=MUTED, anchor="lm")
+            draw.text((ppa_x,  cy), f"${ppa:.2f}",
+                      font=font_row, fill=INK, anchor="lm")
+            draw.text((diff_x, cy), diff_text,
+                      font=font_row, fill=diff_color, anchor="rm")
+
+    # Footer
+    footer = (f"Generated for In the Weeds Collective   ·   "
+              f"+ above location average   ·   − below location average")
+    draw.text((width // 2, height - 38), footer,
+              font=get_font(18), fill=MUTED, anchor="mm")
+
+    out = io.BytesIO()
+    img.save(out, format="PNG", optimize=True)
+    return out.getvalue()

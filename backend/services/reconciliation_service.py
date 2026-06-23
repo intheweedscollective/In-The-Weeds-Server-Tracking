@@ -92,6 +92,29 @@ def alias_cross_assignment_conflict_id(alias: str) -> str:
     return f"alias_cross_{h[:16]}"
 
 
+def duplicate_snapshot_rows_conflict_id(snapshot_id: str,
+                                        employee_id: str) -> str:
+    """Conflict id for a snapshot whose `rows[]` array contains the
+    same `employee_id` multiple times. One card per
+    (snapshot, employee) tuple — distinct from `orphan_snapshot_ref`
+    which is the unmatched-FK case."""
+    h = hashlib.sha1(
+        f"dup_rows:{snapshot_id}:{employee_id}".encode()
+    ).hexdigest()
+    return f"dup_rows_{h[:16]}"
+
+
+def canonical_name_collision_conflict_id(name_norm: str) -> str:
+    """Conflict id for ≥2 active canonical employees sharing the same
+    (lower-cased, stripped) name. Distinct from `alias_cross_assignment`
+    — there both canonicals carry the SAME alias; here they have the
+    same canonical name itself."""
+    h = hashlib.sha1(
+        f"canon_name_dup:{(name_norm or '').strip().lower()}".encode()
+    ).hexdigest()
+    return f"canon_name_dup_{h[:16]}"
+
+
 # ---------------------------------------------------------------------------
 # Tolerances — must match `/scoring-trust` so the two views never disagree.
 # ---------------------------------------------------------------------------
@@ -416,6 +439,20 @@ class ReconciliationService:
             tokens = set(cn.split())
             overlap = len(v_tokens & tokens)
             d = _dist(v_low, cn)
+            # Credible-candidate filter. Pure Levenshtein on two short
+            # multi-token names is too noisy — "lindsey gonzales" vs
+            # "lennie nguyen" lands at distance ~10 by accident and the
+            # old `score = overlap*10 + max(0, 20-d)` formula would clear
+            # the threshold purely on that bonus, producing a totally
+            # bogus merge suggestion. Require either:
+            #   - at least one shared full token (last name typically),
+            #     which is how real typos look ("kahiauani ramos" shares
+            #     "ramos" with "kahiaulani ramos"), OR
+            #   - a tight whole-string Levenshtein (≤ 4) which catches
+            #     genuine misspellings of a single-token name (e.g.
+            #     "treyana" → "treyanna").
+            if overlap == 0 and d > 4:
+                continue
             # Score: overlap weight + inverse-distance bonus.
             score = overlap * 10 + (max(0, 20 - d))
             if score > best_score:
@@ -530,6 +567,27 @@ class ReconciliationService:
                 # snapshot are more urgent than in older finalized
                 # snapshots.
                 sev = 100.0 if snap.get("is_current") else 75.0
+                # Snapshot rows in the current schema bury the score
+                # inside `frozen_metrics`/`frozen_score`. Older rows
+                # used the flat `total_score` field. Read BOTH so the
+                # card honestly reflects whether the row carries data
+                # — historically we only read `total_score` and the
+                # UI mis-labeled real rows as "safe to remove".
+                row_score = (
+                    row.get("frozen_score")
+                    or row.get("total_score")
+                    or (row.get("frozen_metrics") or {}).get("total_score")
+                    or (row.get("frozen_metrics") or {}).get("pre_dar_score")
+                )
+                row_ppa_val = (
+                    row.get("ppa")
+                    or (row.get("frozen_metrics") or {}).get("ppa")
+                )
+                row_guests_val = (
+                    row.get("guests") or row.get("guest_count")
+                    or (row.get("frozen_metrics") or {}).get("guests")
+                    or (row.get("frozen_metrics") or {}).get("guest_count")
+                )
                 conflicts.append({
                     "conflict_id": cid,
                     "kind": "orphan_snapshot_ref",
@@ -546,13 +604,13 @@ class ReconciliationService:
                         "snapshot_quarter": snap.get("quarter"),
                         "snapshot_year":    snap.get("year"),
                         "missing_employee_id": rid,
-                        # Row almost always has no score data (it's a
-                        # placeholder left behind by a rename) — surface
-                        # that explicitly so the operator knows
-                        # remove_orphan won't lose actual numbers.
-                        "row_total_score": row.get("total_score"),
-                        "row_ppa":         row.get("ppa"),
-                        "row_guests":      row.get("guests") or row.get("guest_count"),
+                        # Honestly surface what the row actually
+                        # contains. The auto-resolver uses the same
+                        # source-of-truth (`frozen_score`) so the UI
+                        # claim matches what the sweeper sees.
+                        "row_total_score": row_score,
+                        "row_ppa":         row_ppa_val,
+                        "row_guests":      row_guests_val,
                     },
                     "source": {
                         "suggested_canonical_id": (target or {}).get("id"),
@@ -875,19 +933,339 @@ class ReconciliationService:
         return conflicts
 
 
+    async def _build_duplicate_snapshot_rows_conflicts(
+        self,
+    ) -> List[Dict[str, Any]]:
+        """Surface snapshots whose `rows[]` array contains the same
+        canonical identity multiple times.
+
+        Detection: build an `employee_id → resolved canonical_id` map
+        that follows BOTH `legacy_ids[]` and `merged_into`. Two rows
+        whose raw employee_ids map to the same canonical are duplicates
+        from the report's perspective even if the ids look different —
+        which is exactly what happens after a canonical merge, when old
+        legacy ids remain in the snapshot.
+
+        Resolutions:
+          * dedupe_snapshot_rows — keep the first occurrence per
+            resolved canonical, remove the rest from `rows[]`. Guests/
+            sales are NOT summed (avoid inflation).
+          * keep_stored — leave the duplicates in place (silence).
+        """
+        # Build employee_id → resolved canonical_id mapping. Includes:
+        #  - every canonical's own id
+        #  - every entry in their legacy_ids[]
+        #  - merged canonicals → follow merged_into to the keeper
+        id_to_canon: Dict[str, str] = {}
+        async for c in self.db.employees.find(
+            {},
+            {"_id": 0, "id": 1, "status": 1, "legacy_ids": 1,
+             "merged_into": 1},
+        ):
+            cid = c.get("id")
+            if not cid:
+                continue
+            target = c.get("merged_into") or cid
+            id_to_canon[cid] = target
+            for lid in (c.get("legacy_ids") or []):
+                if lid:
+                    id_to_canon[lid] = target
+
+        conflicts: List[Dict[str, Any]] = []
+        async for snap in self.db.snapshot_workflow.find(
+            {"is_current": True},
+            {"_id": 0, "id": 1, "name": 1, "quarter": 1, "year": 1, "rows": 1},
+        ):
+            rows = snap.get("rows") or []
+            if not rows:
+                continue
+            # Group row indices by RESOLVED canonical (fall back to raw
+            # employee_id when no canonical match — that case is handled
+            # by `orphan_snapshot_ref`, but exact-id dupes still surface).
+            by_canon: Dict[str, List[int]] = {}
+            for idx, r in enumerate(rows):
+                eid = r.get("employee_id")
+                if not eid:
+                    continue
+                resolved = id_to_canon.get(eid, eid)
+                by_canon.setdefault(resolved, []).append(idx)
+            for resolved_id, idxs in by_canon.items():
+                if len(idxs) < 2:
+                    continue
+                first = rows[idxs[0]]
+                display = (first.get("frozen_display_name")
+                           or first.get("frozen_report_name")
+                           or resolved_id)
+                # Collect distinct raw employee_ids that resolved to
+                # this canonical — the card explains "rows pointing at
+                # ids X and Y both resolve to the same person."
+                underlying_ids = sorted({
+                    rows[i].get("employee_id") for i in idxs
+                    if rows[i].get("employee_id")
+                })
+                cid = duplicate_snapshot_rows_conflict_id(snap["id"], resolved_id)
+                multi_id_note = (
+                    f" via {len(underlying_ids)} different employee_ids "
+                    f"that all resolve to the same canonical"
+                    if len(underlying_ids) > 1 else ""
+                )
+                conflicts.append({
+                    "conflict_id": cid,
+                    "kind": "duplicate_snapshot_rows",
+                    "severity_pct": 100.0,
+                    "employee_id": resolved_id,
+                    "employee_name": display,
+                    "field": "snapshot.rows[]",
+                    "stored_value": f"{len(idxs)} copies",
+                    "snapshot_value": "1 copy",
+                    "computed_expected": None,
+                    "raw_inputs": {
+                        "snapshot_id":   snap["id"],
+                        "snapshot_name": snap.get("name"),
+                        "quarter":       snap.get("quarter"),
+                        "year":          snap.get("year"),
+                        "duplicate_indices": idxs,
+                        "duplicate_count":   len(idxs),
+                        "resolved_canonical_id": resolved_id,
+                        "underlying_employee_ids": underlying_ids,
+                    },
+                    "source": {
+                        "reason": (
+                            f"'{display}' appears {len(idxs)} times in the "
+                            f"active snapshot's rows[]" + multi_id_note +
+                            ". Every report that reads from the snapshot "
+                            f"will show duplicate entries until deduped."
+                        ),
+                        "snapshot_id":   snap["id"],
+                        "snapshot_name": snap.get("name"),
+                        "quarter":       snap.get("quarter"),
+                        "year":          snap.get("year"),
+                    },
+                })
+        return conflicts
+
+    async def _build_canonical_name_collision_conflicts(
+        self,
+    ) -> List[Dict[str, Any]]:
+        """Flag any case where ≥2 active canonical employees share the
+        same (lower-cased, stripped) name. These are duplicate identities
+        that should be merged via the existing `merge_into` flow.
+
+        Operator-reported (2026-06-12): "Kahi Ramos" and
+        "Kahiaulani Ramos" both exist as active canonicals even though
+        Kahi is the nickname for Kahiaulani (and the user said so a few
+        sessions ago). No recon card surfaced this because neither
+        carried the other's name as an alias.
+
+        Resolutions:
+          * merge_canonical_into {target_canonical_id} — pick the
+            "keeper" canonical; the other one is set status=merged,
+            its aliases[] and legacy_ids[] are appended to the keeper,
+            and the keeper's name is left untouched. The recon-portal
+            `merge_into` flow already exists for the legacy_duplicate
+            case; this card type reuses the action verb but acts on the
+            employee record itself rather than a v2 row.
+          * keep_stored — silence; stamps a hash of the canonical-id set
+            so the card stays hidden until a NEW canonical with the same
+            name appears.
+
+        NOTE on near-matches: we only flag EXACT name matches here, not
+        fuzzy ones. Fuzzy matches (e.g. "Kahi Ramos" vs "Kahiaulani
+        Ramos") are intentionally NOT auto-detected — the operator's
+        domain knowledge (nicknames) is required and the merge would be
+        wrong for unrelated people who share a last name. The Kahi case
+        will get fully resolved when the operator merges one into the
+        other via the audit ledger's manual flow.
+        """
+        rows = await self.db.employees.find(
+            {"status": "active"},
+            {"_id": 0, "id": 1, "name": 1, "display_name": 1,
+             "aliases": 1},
+        ).to_list(5000)
+
+        # Group canonicals by lower-stripped name.
+        by_name: Dict[str, List[Dict[str, Any]]] = {}
+        for r in rows:
+            n = (r.get("name") or "").strip().lower()
+            if not n:
+                continue
+            by_name.setdefault(n, []).append(r)
+
+        # ALSO surface "nickname-of" matches: two canonicals share the
+        # same last name AND one first-name is a prefix of the other
+        # (Kahi ⊂ Kahiaulani, Mike ⊂ Michael, Sam ⊂ Samantha). Limited
+        # to prefix matches with len ≥ 3 so we don't false-flag random
+        # initials.
+        # Group by (last_name, first_name) so we can find prefix pairs.
+        def _split(n):
+            parts = n.strip().split()
+            if not parts:
+                return "", ""
+            return parts[0], " ".join(parts[1:])
+        by_last: Dict[str, List[Dict[str, Any]]] = {}
+        for r in rows:
+            n = (r.get("name") or "").strip().lower()
+            if not n or " " not in n:
+                continue
+            first, last = _split(n)
+            if not last:
+                continue
+            by_last.setdefault(last, []).append({**r, "_first": first, "_last": last})
+
+        # Build groups for prefix collisions. Group key = (last_name,
+        # min-first-name) so all canonicals where first_name starts with
+        # the same root are clustered.
+        prefix_groups: Dict[str, List[Dict[str, Any]]] = {}
+        for last, peers in by_last.items():
+            if len(peers) < 2:
+                continue
+            # Compare every pair within the same last name.
+            seen: Dict[str, List[Dict[str, Any]]] = {}
+            for p in peers:
+                first = p["_first"]
+                if len(first) < 3:
+                    continue
+                # Find any longer first-name that this one is a prefix of.
+                # Group key = shortest first-name in the family.
+                root = first
+                for q in peers:
+                    if q is p:
+                        continue
+                    other_first = q["_first"]
+                    if len(other_first) >= len(first) and other_first.startswith(first):
+                        root = first  # we are the shorter
+                        break
+                    elif len(first) >= len(other_first) and first.startswith(other_first):
+                        root = other_first
+                        break
+                else:
+                    continue
+                seen.setdefault(f"{last}|{root}", []).append(p)
+            for key, group in seen.items():
+                if len(group) >= 2:
+                    prefix_groups[key] = group
+
+        conflicts: List[Dict[str, Any]] = []
+        emitted_keys: set = set()
+        # Emit exact-name collisions first.
+        for norm, matches in by_name.items():
+            if len(matches) < 2:
+                continue
+            ids = sorted(m["id"] for m in matches)
+            cid_hash = hashlib.sha1("|".join(ids).encode()).hexdigest()
+            primary = matches[0]
+            emitted_keys.add(f"exact:{norm}")
+            conflicts.append({
+                "conflict_id": canonical_name_collision_conflict_id(norm),
+                "kind": "canonical_name_collision",
+                "severity_pct": 100.0,
+                "employee_id": primary["id"],
+                "employee_name": primary.get("name"),
+                "field": "name",
+                "stored_value": primary.get("name"),
+                "snapshot_value": None,
+                "computed_expected": None,
+                "raw_inputs": {
+                    "match_type":      "exact",
+                    "name_normalised": norm,
+                    "claimants": [
+                        {"canonical_id":   m["id"],
+                         "canonical_name": m.get("name"),
+                         "display_name":   m.get("display_name"),
+                         "aliases":        m.get("aliases") or []}
+                        for m in matches
+                    ],
+                    "claim_hash": cid_hash,
+                },
+                "source": {
+                    "reason": (
+                        f"{len(matches)} active canonical employees share "
+                        f"the exact name '{primary.get('name')}'. Pick a "
+                        f"keeper and merge the others into it so reports "
+                        f"stop double-counting."
+                    ),
+                    "claimants": [m.get("name") for m in matches],
+                },
+            })
+        # Then emit nickname-prefix collisions, skipping anything already
+        # covered by an exact match.
+        for key, group in prefix_groups.items():
+            last, root = key.split("|", 1)
+            # Skip if any of these canonicals already in an exact group.
+            already = False
+            for g in group:
+                en = (g.get("name") or "").strip().lower()
+                if f"exact:{en}" in emitted_keys:
+                    already = True
+                    break
+            if already:
+                continue
+            ids = sorted(g["id"] for g in group)
+            cid_hash = hashlib.sha1(("prefix|" + "|".join(ids)).encode()).hexdigest()
+            primary = group[0]
+            display_root = f"{root.title()} {last.title()}"
+            conflicts.append({
+                "conflict_id": canonical_name_collision_conflict_id(
+                    f"prefix:{key}",
+                ),
+                "kind": "canonical_name_collision",
+                # Slightly lower severity than exact match — still a
+                # merge candidate but operator should review nicknames.
+                "severity_pct": 90.0,
+                "employee_id": primary["id"],
+                "employee_name": primary.get("name"),
+                "field": "name",
+                "stored_value": display_root,
+                "snapshot_value": None,
+                "computed_expected": None,
+                "raw_inputs": {
+                    "match_type":      "nickname_prefix",
+                    "name_root":       display_root,
+                    "claimants": [
+                        {"canonical_id":   g["id"],
+                         "canonical_name": g.get("name"),
+                         "display_name":   g.get("display_name"),
+                         "aliases":        g.get("aliases") or []}
+                        for g in group
+                    ],
+                    "claim_hash": cid_hash,
+                },
+                "source": {
+                    "reason": (
+                        f"{len(group)} active canonical employees share the "
+                        f"same last name and one first name is a prefix of "
+                        f"the other (likely nickname-vs-full-name, e.g. "
+                        f"Kahi/Kahiaulani). Verify they're the same person "
+                        f"before merging — if they are, pick a keeper."
+                    ),
+                    "claimants": [g.get("name") for g in group],
+                },
+            })
+        return conflicts
+
+
     async def queue(self) -> Dict[str, Any]:
         """Return the active + deferred queue, sorted so the most
         severe drift sits at the top. Resolved conflicts are filtered
         out unless the underlying values have moved beyond tolerance
         since the resolution (i.e. fresh drift)."""
+        # Operator policy 2026-02: auto-resolve orphan snapshot rows
+        # whose entire score payload is null/zero. They're placeholder
+        # husks left behind by renames/merges — manually clicking
+        # "Remove" on each one is just noise. Rows that carry ANY
+        # actual data still surface as manual cards.
+        await self._auto_resolve_zero_impact_orphans()
+
         metric_c    = await self._build_metric_conflicts()
         alias_c     = await self._build_alias_conflicts()
         legacy_c    = await self._build_legacy_duplicate_conflicts()
         orphan_c    = await self._build_orphan_snapshot_conflicts()
         canon_c     = await self._build_canonical_metrics_drift_conflicts()
         alias_xc    = await self._build_alias_cross_assignment_conflicts()
+        dup_rows_c  = await self._build_duplicate_snapshot_rows_conflicts()
+        name_dup_c  = await self._build_canonical_name_collision_conflicts()
         all_c       = (metric_c + alias_c + legacy_c + orphan_c
-                       + canon_c + alias_xc)
+                       + canon_c + alias_xc + dup_rows_c + name_dup_c)
 
         deferred_ids = {d["conflict_id"]
                         async for d in self.db.reconciliation_deferred.find(
@@ -992,7 +1370,9 @@ class ReconciliationService:
                           "merge_into", "delete_legacy", "promote_canonical",
                           "relink_orphan", "remove_orphan",
                           "sync_canonical_from_v2", "keep_canonical_drift",
-                          "revoke_alias_from"}:
+                          "revoke_alias_from",
+                          "dedupe_snapshot_rows",
+                          "merge_canonical_into"}:
             raise ValueError(f"unknown action: {action}")
 
         # Re-derive the conflict so we don't trust client-side state.
@@ -1054,6 +1434,14 @@ class ReconciliationService:
             )
         elif card["kind"] == "alias_cross_assignment":
             result = await self._apply_alias_cross_assignment_resolution(
+                card, action, target_canonical_id, actor, reason
+            )
+        elif card["kind"] == "duplicate_snapshot_rows":
+            result = await self._apply_duplicate_snapshot_rows_resolution(
+                card, action, actor, reason
+            )
+        elif card["kind"] == "canonical_name_collision":
+            result = await self._apply_canonical_name_collision_resolution(
                 card, action, target_canonical_id, actor, reason
             )
         else:
@@ -1150,6 +1538,22 @@ class ReconciliationService:
             # only re-surfaces if a NEW canonical adds the alias.
             post_stored = card.get("raw_inputs", {}).get("claim_hash")
             post_expected = None
+        elif card["kind"] == "duplicate_snapshot_rows":
+            # After `dedupe_snapshot_rows` the snapshot's rows[] no
+            # longer carries the duplicate count → next queue build
+            # naturally omits the card. For `keep_stored` we stamp
+            # the duplicate count so the card re-surfaces only if a
+            # NEW duplicate appears (e.g. snapshot re-saved with even
+            # more copies).
+            post_stored = card.get("raw_inputs", {}).get("duplicate_count")
+            post_expected = None
+        elif card["kind"] == "canonical_name_collision":
+            # `merge_canonical_into` removes one canonical from the
+            # active set → name no longer collides. For `keep_stored`
+            # we stamp the claimant-id-set hash so the card stays
+            # silenced unless a NEW canonical with the same name appears.
+            post_stored = card.get("raw_inputs", {}).get("claim_hash")
+            post_expected = None
 
         await self.db.reconciliation_resolved.update_one(
             {"conflict_id": card["conflict_id"]},
@@ -1205,6 +1609,19 @@ class ReconciliationService:
             # Stays silenced as long as the claimant set is identical
             # to the one the operator dismissed. A new canonical adding
             # the alias changes the hash and re-surfaces the card.
+            current_hash = (card.get("raw_inputs") or {}).get("claim_hash")
+            return (resolved.get("post_stored") == current_hash
+                    and current_hash is not None)
+
+        if card.get("kind") == "duplicate_snapshot_rows":
+            # Stays silenced as long as the duplicate count is the same.
+            # If more copies appear later, count changes and the card
+            # re-surfaces.
+            current_count = (card.get("raw_inputs") or {}).get("duplicate_count")
+            return (resolved.get("post_stored") == current_count
+                    and current_count is not None)
+
+        if card.get("kind") == "canonical_name_collision":
             current_hash = (card.get("raw_inputs") or {}).get("claim_hash")
             return (resolved.get("post_stored") == current_hash
                     and current_hash is not None)
@@ -1581,6 +1998,151 @@ class ReconciliationService:
     # Orphan snapshot ref resolution
     # ------------------------------------------------------------------
 
+    # Predicate fields that, when ALL falsy on an orphan row, mark the
+    # row as "no score impact" and therefore safe to auto-remove.
+    # Operator-authorized 2026-02; any future score-relevant field
+    # added to a snapshot row MUST be appended here so the auto-sweep
+    # doesn't silently drop real data.
+    _ORPHAN_ZERO_IMPACT_FIELDS = (
+        "total_score", "pre_dar_score", "frozen_score",
+        "weighted_score", "ppa", "per_guest_avg",
+        "guests", "guest_count",
+        "cv_score", "nps_score", "review_tracker_bonus",
+        "metric_bonus", "total_metric_bonus",
+    )
+
+    @classmethod
+    def _orphan_row_has_no_impact(cls, row: Dict[str, Any]) -> bool:
+        """True iff every score-bearing field on the row is null or 0.
+
+        Used by the auto-resolver at queue-build time so placeholder
+        rows left behind by renames/merges disappear without operator
+        intervention. Any non-zero numeric in any of the listed fields
+        keeps the row visible as a manual card.
+
+        Looks both at the row's flat fields AND inside its
+        `frozen_metrics` blob, because the snapshot schema migrated
+        from flat → frozen and orphan placeholders can land in either
+        shape depending on when they were created.
+        """
+        # Flat fields take priority — the auto-sweeper is conservative
+        # and bails on the first truthy value it finds.
+        for f in cls._ORPHAN_ZERO_IMPACT_FIELDS:
+            v = row.get(f)
+            if v is None:
+                continue
+            try:
+                if float(v) != 0.0:
+                    return False
+            except (TypeError, ValueError):
+                if v:
+                    return False
+        # And the same fields nested inside `frozen_metrics` — this is
+        # where the live snapshot schema currently puts the real
+        # scoring numbers.
+        frozen = row.get("frozen_metrics") or {}
+        if isinstance(frozen, dict):
+            for f in cls._ORPHAN_ZERO_IMPACT_FIELDS:
+                v = frozen.get(f)
+                if v is None:
+                    continue
+                try:
+                    if float(v) != 0.0:
+                        return False
+                except (TypeError, ValueError):
+                    if v:
+                        return False
+        return True
+
+    async def _auto_resolve_zero_impact_orphans(self) -> int:
+        """Sweep ALL snapshots and remove orphan rows (snapshot rows
+        whose `employee_id` doesn't resolve to any canonical via id OR
+        `legacy_ids[]`) provided the row carries no score data.
+
+        Returns the number of rows removed. Each removal lands in
+        `reconciliation_audit` with action `auto_remove_orphan` so the
+        operator can reconstruct what was dropped and when.
+        """
+        # Build the resolvable-id set EXACTLY as the orphan card
+        # builder / Trust gate does, so the predicate stays consistent.
+        resolvable_ids: set = set()
+        async for e in self.db.employees.find(
+            {}, {"_id": 0, "id": 1, "legacy_ids": 1}
+        ):
+            if e.get("id"):
+                resolvable_ids.add(e["id"])
+            for lid in (e.get("legacy_ids") or []):
+                if lid:
+                    resolvable_ids.add(lid)
+
+        removed_total = 0
+        async for snap in self.db.snapshot_workflow.find(
+            {}, {"_id": 1, "id": 1, "name": 1, "rows": 1, "employees": 1,
+                 "quarter": 1, "year": 1, "status": 1, "is_current": 1},
+        ):
+            rows = snap.get("rows") or []
+            emps = snap.get("employees") or []
+            if not rows and not emps:
+                continue
+
+            removed_ids: List[str] = []
+            removed_rows_for_audit: List[Dict[str, Any]] = []
+            new_rows: List[Dict[str, Any]] = []
+            for row in rows:
+                rid = row.get("employee_id")
+                if (rid and rid not in resolvable_ids
+                        and self._orphan_row_has_no_impact(row)):
+                    removed_ids.append(rid)
+                    removed_rows_for_audit.append(row)
+                    continue
+                new_rows.append(row)
+
+            if not removed_ids:
+                continue
+
+            # Mirror the removal into snapshot.employees[] (legacy
+            # array) so downstream readers don't resurrect the orphan.
+            removed_id_set = set(removed_ids)
+            new_emps = [e for e in emps if e.get("id") not in removed_id_set]
+
+            await self.db.snapshot_workflow.update_one(
+                {"_id": snap["_id"]},
+                {"$set": {
+                    "rows": new_rows,
+                    "employees": new_emps,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }},
+            )
+
+            for row in removed_rows_for_audit:
+                rid = row.get("employee_id")
+                synthetic_card = {
+                    "conflict_id": orphan_ref_conflict_id(
+                        snap.get("id") or "", rid or ""
+                    ),
+                    "kind": "orphan_snapshot_ref",
+                    "employee_id": rid,
+                    "employee_name": (
+                        row.get("frozen_display_name")
+                        or row.get("name") or "(no name)"
+                    ),
+                    "field": "snapshot_row",
+                }
+                await self._audit(
+                    synthetic_card,
+                    "auto_remove_orphan",
+                    before=row,
+                    after=None,
+                    actor="system:auto-resolve",
+                    reason=(
+                        "row carried no score data "
+                        "(per operator policy 2026-02)"
+                    ),
+                )
+            removed_total += len(removed_ids)
+
+        return removed_total
+
     async def _apply_orphan_resolution(
         self,
         card: Dict[str, Any],
@@ -1889,6 +2451,251 @@ class ReconciliationService:
             "revoked_from": target.get("name"),
             "revoked_from_id": target_canonical_id,
             "stripped_variants": to_pull,
+        }
+
+
+    # ------------------------------------------------------------------
+    # Duplicate snapshot rows resolution
+    # ------------------------------------------------------------------
+
+    async def _apply_duplicate_snapshot_rows_resolution(
+        self,
+        card: Dict[str, Any],
+        action: str,
+        actor: str,
+        reason: Optional[str],
+    ) -> Dict[str, Any]:
+        """Resolve a `duplicate_snapshot_rows` card. Available actions:
+
+          * dedupe_snapshot_rows — Rewrite the snapshot's `rows[]`,
+            keeping only the FIRST occurrence per `employee_id`. The
+            other copies are removed. We do NOT sum guests/sales —
+            duplicate rows almost always carry identical numbers, and
+            merging would inflate totals.
+          * keep_stored — silence; stamps the current duplicate count
+            so the card re-surfaces only if MORE copies appear later.
+        """
+        if action not in ("dedupe_snapshot_rows", "keep_stored"):
+            raise ValueError(
+                f"duplicate_snapshot_rows does not support action {action!r}"
+            )
+
+        raw = card.get("raw_inputs") or {}
+        snap_id = raw.get("snapshot_id")
+        eid = card.get("employee_id")
+        indices = raw.get("duplicate_indices") or []
+
+        if action == "keep_stored":
+            await self._audit(
+                card, action,
+                before={"snapshot_id": snap_id, "duplicate_count": len(indices)},
+                after={"snapshot_id": snap_id, "duplicate_count": len(indices)},
+                actor=actor, reason=reason,
+            )
+            return {"success": True, "action": action,
+                    "silenced_until_more_duplicates_appear": True}
+
+        # action == "dedupe_snapshot_rows"
+        # Re-read the snapshot fresh so we don't race against any
+        # concurrent edits. Rebuild rows[] by walking each row and
+        # checking the RESOLVED canonical (via the same legacy_ids /
+        # merged_into map the builder uses). Keep the first row per
+        # resolved canonical for THIS card's target; drop the rest.
+        # Other employees' rows are untouched.
+        snap = await self.db.snapshot_workflow.find_one(
+            {"id": snap_id},
+            {"_id": 0, "rows": 1, "id": 1},
+        )
+        if not snap:
+            raise ValueError(f"snapshot {snap_id} no longer exists")
+        rows = snap.get("rows") or []
+
+        # Rebuild the id → canonical map.
+        id_to_canon: Dict[str, str] = {}
+        async for c in self.db.employees.find(
+            {},
+            {"_id": 0, "id": 1, "legacy_ids": 1, "merged_into": 1},
+        ):
+            cid_local = c.get("id")
+            if not cid_local:
+                continue
+            target = c.get("merged_into") or cid_local
+            id_to_canon[cid_local] = target
+            for lid in (c.get("legacy_ids") or []):
+                if lid:
+                    id_to_canon[lid] = target
+
+        target_canon = card.get("employee_id")
+        # Walk rows once. For rows whose resolved canonical matches
+        # target_canon, keep only the first occurrence and drop the
+        # rest. Untouched for other employees.
+        kept_first_for_target: bool = False
+        new_rows: List[Dict[str, Any]] = []
+        removed = 0
+        for r in rows:
+            eid = r.get("employee_id")
+            resolved = id_to_canon.get(eid, eid) if eid else None
+            if resolved == target_canon:
+                if not kept_first_for_target:
+                    new_rows.append(r)
+                    kept_first_for_target = True
+                else:
+                    removed += 1
+                    continue
+            else:
+                new_rows.append(r)
+        if removed == 0:
+            raise ValueError(
+                "snapshot has no duplicate rows for this employee — "
+                "the queue may be stale, please refresh"
+            )
+        await self.db.snapshot_workflow.update_one(
+            {"id": snap_id},
+            {"$set": {"rows": new_rows}},
+        )
+        await self._audit(
+            card, action,
+            before={"row_count": len(rows), "duplicate_copies": removed + 1},
+            after={"row_count": len(new_rows), "duplicate_copies": 1},
+            actor=actor, reason=reason,
+        )
+        return {
+            "success": True,
+            "action": action,
+            "snapshot_id": snap_id,
+            "duplicate_copies_removed": removed,
+            "rows_before": len(rows),
+            "rows_after": len(new_rows),
+        }
+
+    # ------------------------------------------------------------------
+    # Canonical name collision resolution
+    # ------------------------------------------------------------------
+
+    async def _apply_canonical_name_collision_resolution(
+        self,
+        card: Dict[str, Any],
+        action: str,
+        target_canonical_id: Optional[str],
+        actor: str,
+        reason: Optional[str],
+    ) -> Dict[str, Any]:
+        """Resolve a `canonical_name_collision` card. Available actions:
+
+          * merge_canonical_into — Pick a KEEPER from the claimant
+            list. Every OTHER claimant is set to status=merged, its
+            aliases[] and legacy_ids[] are appended to the keeper, and
+            its own id is added to the keeper's legacy_ids[] so the
+            FK-join still finds the old v2 rows under the keeper.
+          * keep_stored — silence; stamps the claimant-id-set hash.
+        """
+        if action not in ("merge_canonical_into", "keep_stored"):
+            raise ValueError(
+                f"canonical_name_collision does not support action {action!r}"
+            )
+
+        claimants = (card.get("raw_inputs") or {}).get("claimants") or []
+        claimant_ids = {c.get("canonical_id") for c in claimants}
+
+        if action == "keep_stored":
+            await self._audit(
+                card, action,
+                before={"name": card.get("stored_value"),
+                        "claimants": [c.get("canonical_name") for c in claimants]},
+                after={"name": card.get("stored_value"),
+                       "claimants": [c.get("canonical_name") for c in claimants]},
+                actor=actor, reason=reason,
+            )
+            return {"success": True, "action": action,
+                    "silenced_until_claimants_change": True}
+
+        # action == "merge_canonical_into"
+        if not target_canonical_id:
+            raise ValueError(
+                "merge_canonical_into requires target_canonical_id — pick "
+                "the KEEPER from the claimant list. Every other claimant "
+                "will be merged into this one."
+            )
+        if target_canonical_id not in claimant_ids:
+            raise ValueError(
+                f"target_canonical_id {target_canonical_id} is not in "
+                f"the claimant set {sorted(claimant_ids)}"
+            )
+
+        keeper = await self.db.employees.find_one(
+            {"id": target_canonical_id},
+            {"_id": 0},
+        )
+        if not keeper:
+            raise ValueError(f"keeper {target_canonical_id} not found")
+
+        merged_ids: List[str] = []
+        new_aliases = list(keeper.get("aliases") or [])
+        new_legacy = list(keeper.get("legacy_ids") or [])
+
+        for c in claimants:
+            cid = c.get("canonical_id")
+            if cid == target_canonical_id:
+                continue
+            other = await self.db.employees.find_one(
+                {"id": cid}, {"_id": 0},
+            )
+            if not other:
+                continue
+            # Fold their aliases (deduped, case-insensitive).
+            existing_lower = {a.strip().lower() for a in new_aliases}
+            for a in (other.get("aliases") or []):
+                if (a or "").strip().lower() not in existing_lower:
+                    new_aliases.append(a)
+                    existing_lower.add(a.strip().lower())
+            # Pull in their old name as an alias if it's different from
+            # the keeper's (operator-friendly: nicknames preserved).
+            on = (other.get("name") or "").strip()
+            kn = (keeper.get("name") or "").strip()
+            if on and on.lower() != kn.lower() and on.lower() not in existing_lower:
+                new_aliases.append(on)
+                existing_lower.add(on.lower())
+            # Fold legacy_ids[] (including their own id so the FK-join
+            # still resolves any v2 rows that lived under the old id).
+            for lid in (other.get("legacy_ids") or []):
+                if lid and lid not in new_legacy:
+                    new_legacy.append(lid)
+            if cid and cid not in new_legacy:
+                new_legacy.append(cid)
+            # Mark the other canonical merged.
+            await self.db.employees.update_one(
+                {"id": cid},
+                {"$set": {
+                    "status": "merged",
+                    "merged_into": target_canonical_id,
+                    "merged_at": datetime.now(timezone.utc).isoformat(),
+                }},
+            )
+            merged_ids.append(cid)
+
+        # Write the new aliases/legacy_ids onto the keeper.
+        await self.db.employees.update_one(
+            {"id": target_canonical_id},
+            {"$set": {"aliases": new_aliases, "legacy_ids": new_legacy}},
+        )
+
+        await self._audit(
+            card, action,
+            before={"keeper": keeper.get("name"),
+                    "merged_in": [c.get("canonical_name") for c in claimants
+                                  if c.get("canonical_id") != target_canonical_id]},
+            after={"keeper": keeper.get("name"),
+                   "aliases": new_aliases,
+                   "legacy_ids_added": merged_ids},
+            actor=actor, reason=reason,
+        )
+        return {
+            "success": True,
+            "action": action,
+            "keeper_id": target_canonical_id,
+            "keeper_name": keeper.get("name"),
+            "merged_canonical_ids": merged_ids,
+            "merged_canonical_count": len(merged_ids),
         }
 
 

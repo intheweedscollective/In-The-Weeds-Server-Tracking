@@ -6,6 +6,7 @@ import { getCurrentQuarter } from "../lib/quarterUtils";
 import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Input } from "../components/ui/input";
+import PPARankingCard from "../components/PPARankingCard";
 
 const BACKEND_URL = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/+$/, "");
 
@@ -293,6 +294,11 @@ export default function YodeckSlides() {
               </Button>
             )}
           </div>
+        </div>
+
+        {/* PPA Ranking Report — operator-facing PPA leaderboard with PDF + slide download */}
+        <div className="mb-8">
+          <PPARankingCard />
         </div>
 
         {/* Theme Settings Panel */}

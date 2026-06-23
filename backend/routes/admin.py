@@ -2581,7 +2581,8 @@ class ReconcilePayload(BaseModel):
             "keep_stored | accept_snapshot | manual_override | defer | "
             "revoke_alias | merge_into | delete_legacy | promote_canonical | "
             "relink_orphan | remove_orphan | sync_canonical_from_v2 | "
-            "keep_canonical_drift | revoke_alias_from"
+            "keep_canonical_drift | revoke_alias_from | "
+            "dedupe_snapshot_rows | merge_canonical_into"
         ),
     )
     value_override: Optional[float] = Field(
@@ -2888,4 +2889,244 @@ async def structural_cleanup(
         "auto_link": auto_link_plan,
         "orphan_prune": orphan_plan,
         "blocklist_strip": blocklist_plan,
+    }
+
+
+
+# ---------------------------------------------------------------------------
+# Restore Accidentally Deleted Employee
+# ---------------------------------------------------------------------------
+# Operator-facing emergency tool. The Reconciliation portal's
+# `delete_legacy` action soft-deletes by flipping
+# `employees.status = "terminated"` and
+# `employees_v2.status = "inactive"` — no rows are actually destroyed.
+# This endpoint reverses that flip and writes an audit row so the
+# undo is itself adjudicable.
+#
+# Looked-up by canonical id (the stable `employees.id`). Bringing
+# back ALL the v2 rows for the canonical across every quarter so the
+# operator doesn't need to know which quarter the row was deleted in.
+# ---------------------------------------------------------------------------
+
+
+@admin_router.get("/deleted-employees")
+async def list_deleted_employees(user=Depends(require_admin)):
+    """List every canonical that's been soft-deleted (`status` is
+    `terminated` or `merged`) or whose v2 rows are all soft-deleted
+    (`status=inactive`). The frontend renders this in the
+    "Recently Deleted" panel so the operator can pick one to
+    restore without needing to know any ids.
+
+    For each entry returns:
+      - canonical_id, canonical_name, canonical_status
+      - aliases (so the operator can recognise nicknames)
+      - inactive_v2_rows: [{quarter, year, total_score, deleted_at}]
+      - last_audit: when/why it was last deleted via the recon portal
+        (so the operator can see "deleted 2 days ago by owner@…")
+    """
+    db = get_db()
+
+    # Canonicals that are themselves flipped.
+    canon_filter = {"status": {"$in": ["terminated", "merged"]}}
+    canons = await db.employees.find(
+        canon_filter,
+        {"_id": 0, "id": 1, "name": 1, "display_name": 1, "aliases": 1,
+         "legacy_ids": 1, "status": 1, "updated_at": 1, "restored_at": 1},
+    ).to_list(2000)
+
+    # Also surface canonicals whose v2 rows were nuked even though the
+    # canonical itself is still marked active (rare, but possible if
+    # someone hit delete_legacy on a v2 row and the canonical sync
+    # didn't propagate). Group by canonical id via legacy_ids[].
+    canon_by_id: Dict[str, Dict[str, Any]] = {c["id"]: c for c in canons}
+    canon_lookup_active = await db.employees.find(
+        {"status": "active"},
+        {"_id": 0, "id": 1, "name": 1, "display_name": 1, "aliases": 1,
+         "legacy_ids": 1, "status": 1},
+    ).to_list(5000)
+    legacy_to_active_canon: Dict[str, Dict[str, Any]] = {}
+    for c in canon_lookup_active:
+        legacy_to_active_canon[c["id"]] = c
+        for lid in (c.get("legacy_ids") or []):
+            legacy_to_active_canon[lid] = c
+
+    # All inactive v2 rows.
+    extra_active_canons: Dict[str, Dict[str, Any]] = {}
+    async for v2 in db.employees_v2.find(
+        {"status": "inactive"},
+        {"_id": 0, "id": 1, "name": 1, "quarter": 1, "year": 1,
+         "total_score": 1, "updated_at": 1, "status": 1},
+    ):
+        vid = v2.get("id")
+        # If this v2 maps to an ACTIVE canonical (not already in our
+        # terminated/merged list), surface it as a partial-delete
+        # case the operator should see.
+        active = legacy_to_active_canon.get(vid)
+        if active and active["id"] not in canon_by_id:
+            extra_active_canons.setdefault(active["id"], {**active})
+
+    # Build the result rows.
+    result = []
+    for c in list(canons) + list(extra_active_canons.values()):
+        cid = c["id"]
+        legacy_ids = list(c.get("legacy_ids") or [])
+        v2_match = {"$or": [
+            {"id": cid},
+            {"id": {"$in": legacy_ids}} if legacy_ids else {"id": cid},
+        ]}
+        v2_rows = await db.employees_v2.find(
+            v2_match,
+            {"_id": 0, "id": 1, "quarter": 1, "year": 1, "status": 1,
+             "total_score": 1, "updated_at": 1},
+        ).to_list(50)
+        inactive_rows = [
+            {"id": r["id"], "quarter": r.get("quarter"),
+             "year": r.get("year"),
+             "status": r.get("status"),
+             "total_score": r.get("total_score"),
+             "deleted_at": (r.get("updated_at").isoformat()
+                            if hasattr(r.get("updated_at"), "isoformat")
+                            else r.get("updated_at"))}
+            for r in v2_rows if r.get("status") != "active"
+        ]
+        # Most recent destructive recon action for this employee, if any.
+        last_audit = await db.reconciliation_audit.find_one(
+            {"employee_id": cid,
+             "action": {"$in": ["delete_legacy", "remove_orphan",
+                                "revoke_alias_from", "revoke_alias",
+                                "promote_canonical"]}},
+            {"_id": 0, "action": 1, "actor": 1, "logged_at": 1, "reason": 1},
+            sort=[("logged_at", -1)],
+        )
+        result.append({
+            "canonical_id": cid,
+            "canonical_name": c.get("name"),
+            "display_name": c.get("display_name"),
+            "aliases": c.get("aliases") or [],
+            "canonical_status": c.get("status"),
+            "inactive_v2_rows": inactive_rows,
+            "inactive_v2_count": len(inactive_rows),
+            "last_audit": last_audit,
+        })
+
+    # Order: most-recently-deleted first based on last_audit.logged_at.
+    def _sort_key(r):
+        la = r.get("last_audit") or {}
+        return la.get("logged_at") or ""
+    result.sort(key=_sort_key, reverse=True)
+
+    return {
+        "count": len(result),
+        "deleted_employees": result,
+    }
+
+
+@admin_router.post("/restore-deleted-employee/{canonical_id}")
+async def restore_deleted_employee(
+    canonical_id: str,
+    reason: Optional[str] = None,
+    user=Depends(require_admin),
+):
+    """Reverse a previous soft-delete on a canonical employee.
+
+    Sets the canonical row back to `status=active` and every
+    matching v2 row (by id AND legacy_ids[]) back to
+    `status=active` regardless of quarter/year.
+
+    Writes a `reconciliation_audit` row of kind=`restore_canonical`
+    so the operation appears in the audit ledger and is itself
+    visible to any future Undo workflow.
+    """
+    db = get_db()
+
+    canon = await db.employees.find_one(
+        {"id": canonical_id},
+        {"_id": 0},
+    )
+    if not canon:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No canonical employee with id={canonical_id}",
+        )
+
+    # Collect every v2 row keyed to this canonical so the response
+    # tells the operator exactly which quarters got reactivated.
+    legacy_ids = list(canon.get("legacy_ids") or [])
+    v2_match: Dict[str, Any] = {
+        "$or": [
+            {"id": canonical_id},
+            {"id": {"$in": legacy_ids}} if legacy_ids else {"id": canonical_id},
+        ]
+    }
+    v2_rows = await db.employees_v2.find(
+        v2_match,
+        {"_id": 0, "id": 1, "name": 1, "quarter": 1, "year": 1,
+         "status": 1, "total_score": 1},
+    ).to_list(500)
+
+    before_state = {
+        "canonical_status": canon.get("status"),
+        "v2_rows": [
+            {"id": r["id"], "quarter": r.get("quarter"),
+             "year": r.get("year"), "status": r.get("status"),
+             "total_score": r.get("total_score")}
+            for r in v2_rows
+        ],
+    }
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Flip canonical row.
+    await db.employees.update_one(
+        {"id": canonical_id},
+        {"$set": {"status": "active", "restored_at": now}},
+    )
+
+    # Flip every v2 row regardless of quarter so the operator never has
+    # to remember which one was nuked. Only touches rows whose status is
+    # NOT already "active" so we don't stomp on legitimate live rows.
+    v2_update_result = await db.employees_v2.update_many(
+        {**v2_match, "status": {"$ne": "active"}},
+        {"$set": {"status": "active", "restored_at": now}},
+    )
+
+    # Audit ledger entry. Mirrors the reconciliation_audit schema so the
+    # existing UI can render this row alongside delete_legacy actions.
+    actor = (user.get("email") if isinstance(user, dict) else None) \
+        or getattr(user, "email", None) \
+        or "admin"
+    await db.reconciliation_audit.insert_one({
+        "conflict_id": f"restore_{canonical_id[:16]}",
+        "kind": "restore_canonical",
+        "employee_id": canonical_id,
+        "employee_name": canon.get("name"),
+        "field": "status",
+        "action": "restore_canonical",
+        "before": before_state,
+        "after": {
+            "canonical_status": "active",
+            "v2_rows_reactivated": v2_update_result.modified_count,
+        },
+        "actor": actor,
+        "reason": reason or "",
+        "logged_at": now,
+    })
+
+    return {
+        "success": True,
+        "canonical_id": canonical_id,
+        "canonical_name": canon.get("name"),
+        "canonical_status_before": canon.get("status"),
+        "canonical_status_after": "active",
+        "v2_rows_total": len(v2_rows),
+        "v2_rows_reactivated": v2_update_result.modified_count,
+        "v2_rows": [
+            {"id": r["id"], "name": r.get("name"),
+             "quarter": r.get("quarter"), "year": r.get("year"),
+             "previous_status": r.get("status"),
+             "total_score": r.get("total_score")}
+            for r in v2_rows
+        ],
+        "actor": actor,
+        "logged_at": now,
     }
