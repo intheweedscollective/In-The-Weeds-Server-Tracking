@@ -26,8 +26,69 @@ from snapshot_manager import (
     calculate_employee_scores,
     assign_performance_tiers,
 )
+from identity_maps import ALIAS_DISPLAY_MAP, Q2_ALIAS_OVERRIDE
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# _build_canonical_display_map — shared identity-resolution helper.
+#
+# Returns three dicts that ALL key on lowercased name strings:
+#   canonical_display  : key -> canonical legal name (proper case)
+#   canonical_status   : key -> 'active' / 'merged' / 'terminated' / etc.
+#   canonical_id_by_name: key -> canonical id
+#
+# Identity sources are merged in this priority order (setdefault — first
+# write wins, never overwritten — so identity-resolution stays stable
+# across rebuilds):
+#   1. db.employees canonical records — every canonical's name +
+#      display_name + each entry in `aliases` keys onto the canonical's
+#      display_name (which post name-flip = legal name).
+#   2. identity_maps.Q2_ALIAS_OVERRIDE — each variant in each list
+#      (including raw POS typos like "Kahiaulanl Ramos" and short-form
+#      nicknames like "TK") keys onto its legal-name key. This is the
+#      pure-data backstop that does not depend on db.employees having
+#      been kept up-to-date.
+#
+# Used by both _hydrate_snapshot_employees (read time) and
+# process_snapshot (freeze time) so identity-resolution is computed once
+# and cannot drift between the two boundaries.
+# ---------------------------------------------------------------------------
+async def _build_canonical_display_map(db):
+    canonical_display: Dict[str, str] = {}
+    canonical_status: Dict[str, str] = {}
+    canonical_id_by_name: Dict[str, str] = {}
+
+    # Source 1: db.employees canonicals.
+    async for ce in db.employees.find(
+        {}, {"_id": 1, "id": 1, "name": 1, "display_name": 1,
+             "aliases": 1, "status": 1}
+    ):
+        legal = (ce.get("display_name") or ce.get("name") or "").strip()
+        if not legal:
+            continue
+        status = ce.get("status") or "active"
+        cid = ce.get("id") or str(ce.get("_id"))
+        for n in [ce.get("name"), ce.get("display_name"),
+                  *(ce.get("aliases") or [])]:
+            key = (n or "").strip().lower()
+            if key:
+                canonical_display.setdefault(key, legal)
+                canonical_status.setdefault(key, status)
+                canonical_id_by_name.setdefault(key, cid)
+        # Also key by canonical id.
+        canonical_display[cid] = legal
+        canonical_status[cid] = status
+
+    # Source 2: identity_maps.Q2_ALIAS_OVERRIDE variants — the load-bearing
+    # pure-data backstop for raw POS typos and short-form nicknames.
+    for legal, variants in Q2_ALIAS_OVERRIDE.items():
+        canonical_display.setdefault(legal.strip().lower(), legal)
+        for v in variants:
+            canonical_display.setdefault(v.strip().lower(), legal)
+
+    return canonical_display, canonical_status, canonical_id_by_name
 
 # Router will be included in main server.py
 snapshot_router = APIRouter(prefix="/v2/snapshot-workflow", tags=["Snapshot Workflow"])
@@ -2324,6 +2385,35 @@ async def process_snapshot(snapshot_id: str, force: bool = False):
                 if k:
                     emp_by_name.setdefault(k, e)
 
+        # Build the shared identity map ONCE for this freeze. Used to
+        # resolve raw POS spellings (typos, nicknames) to canonical legal
+        # names before applying ALIAS_DISPLAY_MAP. Same helper the hydrator
+        # uses, so identity resolution at read-time and freeze-time can
+        # never drift.
+        freeze_canonical_display, _fs, _fid = await _build_canonical_display_map(db)
+
+        def _resolve_legal_and_display(scored_or_emp, row_fallback=None):
+            """Return (legal_name, frozen_display_name). legal_name is the
+            canonical legal name resolved from raw POS spelling; the
+            display value is the nickname via ALIAS_DISPLAY_MAP with the
+            legal name as fallback. Reporting fields must use legal_name.
+            """
+            raw_name = (
+                scored_or_emp.get("name")
+                or scored_or_emp.get("display_name")
+                or scored_or_emp.get("report_name")
+                or (row_fallback or "")
+            )
+            key = (raw_name or "").strip().lower()
+            legal = (
+                freeze_canonical_display.get(scored_or_emp.get("id") or "")
+                or freeze_canonical_display.get(scored_or_emp.get("canonical_id") or "")
+                or freeze_canonical_display.get(key)
+                or raw_name
+            )
+            display = ALIAS_DISPLAY_MAP.get(legal, legal)
+            return legal, display
+
         synced_rows = []
         consumed_emp_ids: set = set()
         for row in (snapshot.get("rows") or []):
@@ -2342,10 +2432,21 @@ async def process_snapshot(snapshot_id: str, force: bool = False):
                 # "grow" pass below from `employees[]`.
                 continue
             consumed_emp_ids.add(scored.get("id"))
+            legal_name, display_name = _resolve_legal_and_display(
+                scored, row.get("frozen_display_name") or row.get("frozen_report_name")
+            )
             synced_rows.append({
                 "employee_id": scored.get("id") or eid,
-                "frozen_display_name": scored.get("display_name") or scored.get("name") or row.get("frozen_display_name"),
-                "frozen_report_name":  scored.get("report_name")  or scored.get("name") or row.get("frozen_report_name"),
+                # Render-boundary nickname (or legal-as-fallback).
+                "frozen_display_name": display_name,
+                # Reporting / export source — stays legal. Same value as
+                # frozen_legal_name; kept under the legacy field name for
+                # compatibility with existing report consumers.
+                "frozen_report_name":  legal_name,
+                # Explicit reporting / subtitle source for downstream
+                # consumers that want the canonical legal name without
+                # re-deriving.
+                "frozen_legal_name":   legal_name,
                 "frozen_metrics": {k: v for k, v in scored.items() if k not in ("id", "name", "display_name", "report_name", "aliases")},
                 "frozen_score": scored.get("total_score", 0),
                 "frozen_tier":  scored.get("tier_label") or scored.get("performance_tier"),
@@ -2365,10 +2466,12 @@ async def process_snapshot(snapshot_id: str, force: bool = False):
             eid = emp.get("id")
             if not eid or eid in consumed_emp_ids:
                 continue
+            legal_name, display_name = _resolve_legal_and_display(emp)
             synced_rows.append({
                 "employee_id": eid,
-                "frozen_display_name": emp.get("display_name") or emp.get("name"),
-                "frozen_report_name":  emp.get("report_name")  or emp.get("name"),
+                "frozen_display_name": display_name,
+                "frozen_report_name":  legal_name,
+                "frozen_legal_name":   legal_name,
                 "frozen_metrics": {k: v for k, v in emp.items() if k not in ("id", "name", "display_name", "report_name", "aliases")},
                 "frozen_score": emp.get("total_score", 0),
                 "frozen_tier":  emp.get("tier_label") or emp.get("performance_tier"),
@@ -2530,10 +2633,13 @@ async def _hydrate_snapshot_employees(db, snapshot: Dict[str, Any]) -> List[Dict
     else:
         employees = snapshot.get("employees", [])
 
-    # 2. Build canonical index (status + display_name + current_metrics overlay)
-    canonical_status: Dict[str, str] = {}
-    canonical_display: Dict[str, str] = {}
-    canonical_id_by_name: Dict[str, str] = {}
+    # 2. Build canonical index using the shared helper — single source of
+    # truth that BOTH hydrator and freeze-site identity-resolution share.
+    # Merges db.employees canonicals/aliases with Q2_ALIAS_OVERRIDE variants
+    # so a raw POS spelling (e.g. "Kahiaulanl Ramos") resolves to its legal
+    # name. See _build_canonical_display_map() at top of this file.
+    canonical_display, canonical_status, canonical_id_by_name = \
+        await _build_canonical_display_map(db)
     canonical_overlay_by_id: Dict[str, Dict[str, Any]] = {}
     canonical_overlay_by_name: Dict[str, Dict[str, Any]] = {}
 
@@ -2549,37 +2655,28 @@ async def _hydrate_snapshot_employees(db, snapshot: Dict[str, Any]) -> List[Dict
         "lsc_count", "score_lsc", "guests_per_lsc",
         "guests", "guest_count",
     )
+    # Second iteration purely for the current_metrics overlay (the helper
+    # above covers identity-only fields). Keeping this separate so the
+    # identity map's source-of-truth rule remains: it comes ONLY from the
+    # helper.
     async for ce in svc.col.find(
         {},
-        {"_id": 0, "id": 1, "name": 1, "display_name": 1, "status": 1,
-         "aliases": 1, "legacy_ids": 1, "current_metrics": 1},
+        {"_id": 0, "id": 1, "name": 1, "display_name": 1, "legacy_ids": 1,
+         "aliases": 1, "current_metrics": 1},
     ):
         cm = ce.get("current_metrics") or {}
-        # Skip zeros/Nones — they're not useful as an overlay and would
-        # incorrectly block the v2 fallback for fields that haven't been
-        # synced into current_metrics yet.
         overlay = {k: cm.get(k) for k in overlay_fields
                    if cm.get(k) not in (None, 0, 0.0)}
+        if not overlay:
+            continue
         if ce.get("id"):
-            canonical_status[ce["id"]] = ce.get("status", "active")
-            if ce.get("display_name"):
-                canonical_display[ce["id"]] = ce["display_name"]
-            if overlay:
-                canonical_overlay_by_id[ce["id"]] = overlay
+            canonical_overlay_by_id[ce["id"]] = overlay
         for lid in ce.get("legacy_ids") or []:
-            canonical_status[lid] = ce.get("status", "active")
-            if ce.get("display_name"):
-                canonical_display[lid] = ce["display_name"]
-            if overlay:
-                canonical_overlay_by_id[lid] = overlay
+            canonical_overlay_by_id[lid] = overlay
         for n in [ce.get("name"), ce.get("display_name"),
                   *(ce.get("aliases") or [])]:
             if n:
-                key = n.lower().strip()
-                canonical_status.setdefault(key, ce.get("status", "active"))
-                if ce.get("display_name"):
-                    canonical_display.setdefault(key, ce["display_name"])
-                canonical_id_by_name.setdefault(key, ce.get("id"))
+                canonical_overlay_by_name.setdefault(n.lower().strip(), overlay)
 
     # 2b. Build employees_v2 overlay for the snapshot's quarter/year. The
     # legacy v2 collection still holds CV/RT data when current_metrics
@@ -2692,18 +2789,31 @@ async def _hydrate_snapshot_employees(db, snapshot: Dict[str, Any]) -> List[Dict
             emp["canonical_id"] = cid
         filtered.append(emp)
 
-    # 4. Overlay display_names + canonical CV/RT inputs (only for non-finalized)
+    # 4. Overlay display_names + canonical CV/RT inputs
     for emp in filtered:
-        # display_name overlay
+        # display_name overlay — RENDER BOUNDARY.
+        # 1. Resolve the canonical legal name from the shared identity map.
+        # 2. emp["name"] keeps the legal name (dedup at line 2754 keys on it;
+        #    identity-resolution unchanged).
+        # 3. emp["legal_name"] explicit field for subtitle/tooltip + report
+        #    consumers — never has to re-derive.
+        # 4. emp["display_name"] is the rendered nickname via
+        #    ALIAS_DISPLAY_MAP. Fallback is the legal name itself so every
+        #    employee renders something — never blank, never "None".
+        #    Applies to BOTH finalized and non-finalized — already-frozen
+        #    rows pick up the nickname at read time without re-freezing.
         candidates = [
             canonical_display.get(emp.get("canonical_id") or ""),
             canonical_display.get(emp.get("id") or ""),
             canonical_display.get((emp.get("name") or "").lower().strip()),
         ]
-        preferred = next((c for c in candidates if c), None)
-        if preferred:
-            emp["name"] = preferred
-            emp["display_name"] = preferred
+        canonical_legal_name = next((c for c in candidates if c), None)
+        if canonical_legal_name:
+            emp["name"] = canonical_legal_name
+            emp["legal_name"] = canonical_legal_name
+            emp["display_name"] = ALIAS_DISPLAY_MAP.get(
+                canonical_legal_name, canonical_legal_name
+            )
 
         if snapshot_finalized:
             continue

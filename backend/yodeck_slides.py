@@ -959,7 +959,9 @@ def generate_top_10_by_metric_slide(
             draw.text((badge_x, badge_y), rank_text, font=font_badge, fill="#FFFFFF", anchor="mm")
             
             # Employee name - First name only, centered in name column
-            full_name = emp.get("name", "Unknown")
+            # Prefer display_name (nickname via ALIAS_DISPLAY_MAP) over
+            # the canonical legal name so cards render "Keisha"/"TK"/"Kahi".
+            full_name = emp.get("display_name") or emp.get("name") or "Unknown"
             name = full_name.split()[0] if full_name else "Unknown"  # First name only
             if len(name) > 10:
                 name = name[:9] + ".."
@@ -1104,7 +1106,8 @@ def generate_top_10_slide(
             name_x = left_margin + int(100 * font_scale)
         
         # Employee name - First name only
-        full_name = emp.get("name", "Unknown")
+        # Prefer display_name (nickname via ALIAS_DISPLAY_MAP).
+        full_name = emp.get("display_name") or emp.get("name") or "Unknown"
         name = full_name.split()[0] if full_name else "Unknown"  # First name only
         if len(name) > 18:
             name = name[:17] + ".."
@@ -1266,7 +1269,8 @@ def generate_tier_slide(
         draw.text((120, y + 12), position, font=font_rank, fill=tier_color)
         
         # Name - First name only
-        full_name = emp.get("name", "Unknown")
+        # Prefer display_name (nickname via ALIAS_DISPLAY_MAP).
+        full_name = emp.get("display_name") or emp.get("name") or "Unknown"
         name = full_name.split()[0][:20] if full_name else "Unknown"  # First name only
         draw.text((220, y + 14), name, font=font_name, fill=colors["text_white"])
         
@@ -1737,7 +1741,8 @@ def generate_printable_rankings_slide(
                      font=font_rank, fill=(255, 255, 255), anchor="mm")
             
             # Draw name text
-            name = emp.get("name", "Unknown")
+            # Prefer display_name (nickname via ALIAS_DISPLAY_MAP).
+            name = emp.get("display_name") or emp.get("name") or "Unknown"
             if len(name) > 12:
                 name = name[:11] + "."
             draw.text((x + rank_col_w + name_col_w // 2, row_y + rh // 2), name.upper(), 
@@ -2067,7 +2072,11 @@ def generate_leaderboard_slide(
         # Title
         draw.text((panel_x + 15, card_y + 10), title, font=font_label, fill=LEADERBOARD_COLORS["textMuted"])
         # Leader name
-        leader_name = (leader.get("name", "N/A")[:20] if leader else "N/A")
+        # Prefer display_name (nickname via ALIAS_DISPLAY_MAP).
+        leader_name = (
+            (leader.get("display_name") or leader.get("name") or "N/A")[:20]
+            if leader else "N/A"
+        )
         draw.text((panel_x + 15, card_y + 30), leader_name, font=get_font(16, bold=True), fill=LEADERBOARD_COLORS["textPrimary"])
         # Value
         if leader:
@@ -2141,8 +2150,9 @@ def generate_leaderboard_slide(
         draw.text((rank_x, rank_y), str(position), font=font_rank, fill=rank_text_color, anchor="mm")
         
         # Employee name
+        # Prefer display_name (nickname via ALIAS_DISPLAY_MAP).
         name_x = table_x + col_widths[0] + 20
-        name = emp.get("name", "Unknown")[:22]
+        name = (emp.get("display_name") or emp.get("name") or "Unknown")[:22]
         draw.text((name_x, rank_y - 10), name, font=font_name, fill=LEADERBOARD_COLORS["textPrimary"], anchor="lm")
         
         # Tier badge

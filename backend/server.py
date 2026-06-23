@@ -3076,6 +3076,13 @@ async def update_employee(employee_id: str, data: dict):
             for k, v in snap_update.items()
         }
         # Also stamp top-level frozen_display_name when name changed.
+        # KNOWN GAP (backlog): this write does NOT route through
+        # identity_maps.ALIAS_DISPLAY_MAP. An admin renaming a canonical
+        # in the Employees page can repopulate frozen rows with the new
+        # legal name (or whatever they type), bypassing the nickname
+        # mapping. Fix is a small change here to wrap `display` in
+        # `ALIAS_DISPLAY_MAP.get(display, display)` before write — left
+        # unchanged in the display-layer rollout per operator decision.
         if display:
             rows_update["rows.$[r].frozen_display_name"] = display
         # And bubble the new total to the row's frozen_score for slide ranking.
