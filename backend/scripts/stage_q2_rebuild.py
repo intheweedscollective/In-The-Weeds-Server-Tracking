@@ -39,7 +39,11 @@ from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 
-load_dotenv("/app/backend/.env")
+# NOTE: load_dotenv was previously called at module level here. It now
+# lives inside main() so this module is import-safe (zero side effects
+# at import time). See identity_maps.py for the load-bearing identity
+# map below.
+from identity_maps import Q2_ALIAS_OVERRIDE  # noqa: E402
 
 # ---- Locked source-file paths --------------------------------------
 POS_CSV  = "/app/data/q2_pos_truth.csv"
@@ -51,18 +55,9 @@ STAGED_NAME  = "Q2_REBUILD_STAGED"
 YEAR = 2026
 QUARTER = "Q2"
 
-# ---- Alias override (operator-authoritative for Q2 rebuild) --------
-# Format: legal_name -> [variants treated as the same person]
-Q2_ALIAS_OVERRIDE: Dict[str, List[str]] = {
-    "Kahiaulani Ramos":  ["Kahiaulanl Ramos", "Kahiauani Ramos", "Kahi Ramos", "Kahi"],
-    "Glennice Nguyen":   ["Glennlce Nguyen",  "Lennie Nguyen",   "Lennie"],
-    "Thomas Kozan":      ["TK Kozan",         "TK"],
-    "Lakeisha Martin":   ["Keisha Martin",    "Keisha"],
-    "Abigail Ostrowski": ["Abby Ostrowski",   "Abby"],
-    "Treyanna Quick":    ["Trey Quick",       "Trey"],
-    "Eric Ostgarden":    ["Ikey Ostgarden",   "Ikey"],
-    "Craig Simmons":     ["Allen Simmons",    "Allen"],
-}
+# Q2_ALIAS_OVERRIDE is imported from identity_maps above — the explicit
+# source of truth lives there, so DISPLAY_NICKNAMES and the merge logic
+# can never drift apart.
 
 EXCLUDE_FROM_REBUILD = {"Matthew Spath", "Lindsey Gonzales", "Drift Test 32f9f1"}
 
@@ -507,6 +502,8 @@ async def stage(db) -> Dict[str, Any]:
 
 
 async def main():
+    # Load env at runtime — keeps this module side-effect-free at import.
+    load_dotenv("/app/backend/.env")
     db = AsyncIOMotorClient(os.environ["MONGO_URL"])[os.environ["DB_NAME"]]
 
     # ---- BEFORE counts (live snapshot, untouched) ------------------
