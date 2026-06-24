@@ -2188,7 +2188,53 @@ async def get_full_hierarchy_rankings(year: int, quarter: str, tier_filter: Opti
     
     # Generate hierarchy-based rankings
     rankings = generate_hierarchy_rankings(employees, settings)
-    
+
+    # Snapshot-first display consistency (Q2 2026, operator-directed):
+    # mirror the overlay applied in `_load_snapshot_first_rankings` so the
+    # JSON endpoint, the PNG generator, and `/current-rankings` all emit
+    # the SAME values for every score column — the values frozen on the
+    # snapshot row. `generate_hierarchy_rankings` recomputes
+    # review_tracker_bonus, cv_score and bonus aliases from EmployeeV2
+    # attributes, which can desynchronise displayed columns from the
+    # frozen total_score when an operator deliberately set a non-formula
+    # value (e.g. Kelsey's manual rt_bonus=0 despite rt_mentions=15).
+    # Source from the frozen row as-is — no recompute, no back-solve.
+    if snapshot:
+        raw_by_id = {d.get("id"): d for d in employees_docs if d.get("id")}
+        raw_by_name = {(d.get("name") or "").lower(): d for d in employees_docs}
+        FROZEN_DISPLAY_FIELDS = (
+            "cv_score", "nps_score", "cv_promoters", "cv_detractors",
+            "review_tracker_bonus", "review_bonus", "review_mentions",
+            "rt_mentions",
+            "total_metric_bonus", "metric_bonus",
+            "bonus_ppa", "bonus_lbw", "bonus_glass", "bonus_lsc",
+            "score_ppa", "score_lbw", "score_glass", "score_lsc",
+            "weighted_score", "pre_dar_score", "total_score",
+            "nps_manual_override",
+        )
+        for rank in rankings:
+            src = (
+                raw_by_id.get(rank.get("employee_id"))
+                or raw_by_name.get((rank.get("name") or "").lower())
+                or {}
+            )
+            for k in FROZEN_DISPLAY_FIELDS:
+                if k in src and src[k] is not None:
+                    rank[k] = src[k]
+            # Re-sync convenience aliases with the overlaid values.
+            if "total_metric_bonus" in rank and "review_tracker_bonus" in rank:
+                rank["bonus_points"] = round(
+                    (rank.get("total_metric_bonus") or 0)
+                    + (rank.get("review_tracker_bonus") or 0),
+                    2,
+                )
+            if "review_tracker_bonus" in rank and "cv_score" in rank:
+                rank["combined_review_bonus"] = round(
+                    (rank.get("review_tracker_bonus") or 0)
+                    + (rank.get("cv_score") or 0),
+                    2,
+                )
+
     # Apply tier filter if provided
     if tier_filter:
         rankings = [r for r in rankings if r["tier_label"].lower() == tier_filter.lower()]
@@ -2292,20 +2338,54 @@ async def _load_snapshot_first_rankings(
 
     rankings = generate_hierarchy_rankings(employees, settings)
 
-    # generate_hierarchy_rankings recalculates cv_score / metric_bonus
-    # internally from raw inputs — re-overlay the snapshot's authoritative
-    # values (incl. manual overrides) on top so the slide reflects the
-    # exact numbers the dashboard / current-rankings page shows.
+    # Snapshot-first display consistency (Q2 2026, operator-directed):
+    # `generate_hierarchy_rankings` recomputes review_tracker_bonus from
+    # rt_mentions and re-derives a few other display fields from EmployeeV2
+    # attributes. For the snapshot path that desynchronises columns from
+    # the frozen `total_score` whenever an operator deliberately set a
+    # non-formula value (e.g. Kelsey's manual rt_bonus=0 despite
+    # rt_mentions=15). Overlay every score-column field from the frozen
+    # snapshot row so the display reconciles to the frozen total exactly.
+    # Source from the frozen row as-is — no recompute, no back-solve.
     raw_by_name = {(r.get("name") or "").lower(): r for r in raw_rows}
+    # Engine output uses short first names; match on employee_id (carried
+    # through via EmployeeV2.id) and fall back to name for safety.
+    raw_by_id = {r.get("id"): r for r in raw_rows if r.get("id")}
+    FROZEN_DISPLAY_FIELDS = (
+        "cv_score", "nps_score", "cv_promoters", "cv_detractors",
+        "review_tracker_bonus", "review_bonus", "review_mentions",
+        "rt_mentions",
+        "total_metric_bonus", "metric_bonus",
+        "bonus_ppa", "bonus_lbw", "bonus_glass", "bonus_lsc",
+        "score_ppa", "score_lbw", "score_glass", "score_lsc",
+        "weighted_score", "pre_dar_score", "total_score",
+        "nps_manual_override",
+    )
     for rank in rankings:
-        src = raw_by_name.get((rank.get("name") or "").lower()) or {}
-        if src.get("nps_manual_override"):
-            rank["cv_score"] = src.get("cv_score", rank.get("cv_score"))
-            rank["nps_score"] = src.get("nps_score", rank.get("nps_score"))
-        # RT bonus and metric bonus are derived from clean inputs in both
-        # paths — but copy the override flag through for slide consumers.
-        if src.get("nps_manual_override"):
-            rank["nps_manual_override"] = True
+        src = (
+            raw_by_id.get(rank.get("employee_id"))
+            or raw_by_name.get((rank.get("name") or "").lower())
+            or {}
+        )
+        for k in FROZEN_DISPLAY_FIELDS:
+            if k in src and src[k] is not None:
+                rank[k] = src[k]
+        # bonus_points and combined_review_bonus are convenience aliases
+        # built from the above — keep them in sync with the frozen values
+        # we just overlaid so consumers reading either alias see the
+        # same numbers.
+        if "total_metric_bonus" in rank and "review_tracker_bonus" in rank:
+            rank["bonus_points"] = round(
+                (rank.get("total_metric_bonus") or 0)
+                + (rank.get("review_tracker_bonus") or 0),
+                2,
+            )
+        if "review_tracker_bonus" in rank and "cv_score" in rank:
+            rank["combined_review_bonus"] = round(
+                (rank.get("review_tracker_bonus") or 0)
+                + (rank.get("cv_score") or 0),
+                2,
+            )
 
     # Trend / score-change column was removed from snapshot exports
     # (operator request 2026-02): orphan-employee matching across quarters

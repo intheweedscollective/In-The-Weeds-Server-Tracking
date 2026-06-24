@@ -2644,14 +2644,14 @@ async def _hydrate_snapshot_employees(db, snapshot: Dict[str, Any]) -> List[Dict
     canonical_overlay_by_name: Dict[str, Dict[str, Any]] = {}
 
     svc = EmployeeService(db)
+    # Consistency rule (Q2 2026, operator-directed): every displayed score
+    # column for a server must come from the SAME frozen snapshot row that
+    # `total_score` was computed on. No CV / NPS / RT / bonus overlay from
+    # any other employees_v2 row or from canonical.current_metrics — those
+    # fields stay as frozen, even if zero or negative. Only POS gap-fill
+    # fields remain (legacy snapshots occasionally lacked LSC/guest values
+    # and filling those does not affect any score column).
     overlay_fields = (
-        "cv_score", "nps_score", "cv_promoters", "cv_passives", "cv_detractors",
-        "rt_mentions", "review_mentions", "review_tracker_bonus",
-        "total_metric_bonus",
-        "bonus_ppa", "bonus_lbw", "bonus_glass", "bonus_lsc",
-        # POS metrics often missing from snapshot rows[] when the snapshot
-        # was created before all data sources ingested. Pulling them from
-        # v2 fixes LSC = 0% on the snapshot PNG for Trainers/Bartenders.
         "lsc_count", "score_lsc", "guests_per_lsc",
         "guests", "guest_count",
     )
@@ -2897,55 +2897,26 @@ async def _hydrate_snapshot_employees(db, snapshot: Dict[str, Any]) -> List[Dict
         return (TIER_ORDER.get(tier, 99), -score)
     sorted_employees = sorted(filtered, key=_sort_key)
 
-    # 6. On-the-fly recompute (RT bonus, CV score, metric bonus)
-    qs_doc = await db.quarter_settings.find_one(
-        {"year": snapshot.get("year"), "quarter": snapshot.get("quarter")},
-        {"_id": 0, "rt_points_per_mention": 1, "rt_max_points": 1},
-    ) or {}
-    rt_coef = qs_doc.get("rt_points_per_mention", 0.33) or 0.33
-    rt_cap  = qs_doc.get("rt_max_points", 20.0) or 20.0
+    # 6. Read-time consistency pass.
+    #
+    # Per Q2 2026 consistency rule (operator-directed): do NOT recompute
+    # CV / RT / bonus_* fields on read. Whatever the frozen snapshot row
+    # carries is what is displayed, so weighted_POS + CV + RT +
+    # total_metric_bonus reconciles against the frozen total_score for
+    # every row. The previous on-the-fly recompute block was removed
+    # because it pulled NPS / promoter / detractor inputs from OTHER
+    # employees_v2 rows via the canonical overlay and then re-derived
+    # cv_score against that mixed set of inputs — silently desynchronising
+    # the displayed CV column from the frozen total_score (observed on
+    # Keisha: CV displayed +8.0 while frozen total used cv=-2.0).
+    #
+    # The only read-time touch is a guarded mirror so older consumers
+    # that still read `review_mentions` see the same value as
+    # `rt_mentions`. Set only when missing — never overwrites a frozen
+    # value.
     for emp in sorted_employees:
-        m = emp.get("rt_mentions") or emp.get("review_mentions") or 0
-        emp["review_tracker_bonus"] = round(min(m * rt_coef, rt_cap), 2)
-        emp["review_mentions"] = m
-
-        if not emp.get("nps_manual_override"):
-            nps = emp.get("nps_score") or 0
-            try:
-                nps_c = max(0.0, min(float(nps), 100.0))
-            except (TypeError, ValueError):
-                nps_c = 0.0
-            prom = emp.get("cv_promoters") or 0
-            det = emp.get("cv_detractors") or 0
-            emp["nps_contribution"] = round(nps_c / 10.0, 2)
-            emp["cv_raw_points"] = round(prom - 2 * det, 2)
-            emp["cv_score"] = round(emp["nps_contribution"] + emp["cv_raw_points"], 2)
-
-        # Recompute per-metric bonuses directly from the current score_*
-        # values so the slide can never display a stale bonus_* frozen
-        # at a prior data snapshot. Operator-reported (Q2P6W1, 2026-02-05):
-        # Allen Simmons showed score_glass=134 but bonus_glass=1.3 because
-        # an earlier POS upload only refreshed score_* and reused the
-        # stale total_metric_bonus. The fix in unified_pos_upload prevents
-        # NEW writes; this overlay heals the EXISTING data on read so
-        # already-frozen snapshots render correctly.
-        def _calc_bonus(s):
-            if s is None or s <= 100:
-                return 0.0
-            try:
-                return min((float(s) - 100.0) / 20.0 * 5.0, 5.0)
-            except (TypeError, ValueError):
-                return 0.0
-        emp["bonus_ppa"]   = round(_calc_bonus(emp.get("score_ppa")),   2)
-        emp["bonus_lbw"]   = round(_calc_bonus(emp.get("score_lbw")),   2)
-        emp["bonus_glass"] = round(_calc_bonus(emp.get("score_glass")), 2)
-        emp["bonus_lsc"]   = round(_calc_bonus(emp.get("score_lsc")),   2)
-
-        emp["total_metric_bonus"] = round(
-            emp["bonus_ppa"] + emp["bonus_lbw"]
-            + emp["bonus_glass"] + emp["bonus_lsc"],
-            2,
-        )
+        if emp.get("review_mentions") in (None,):
+            emp["review_mentions"] = emp.get("rt_mentions") or 0
 
     # 7. Phantom rows for active canonical employees absent from this
     #    snapshot. Operator-reported 2026-02: "Now I'm missing employees" —
